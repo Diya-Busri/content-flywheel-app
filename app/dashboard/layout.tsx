@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import CancellationPopup from "@/components/cancellation-popup";
 import WelcomeMessagePopup from "@/components/welcome-message-popup";
 import PaymentSuccessPopup from "@/components/payment-success-popup";
+import { DashboardReviewPopup } from "@/components/dashboard-review-popup";
 
 /**
  * Check if a free user with an expired billing cycle needs their credits downgraded
@@ -107,6 +108,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       {profile.status === "canceled" && (
         <CancellationPopup profile={profile} />
       )}
+
+      {/* Review popup: test button + show after 3 videos / 5 more after Maybe Later */}
+      <DashboardReviewPopup profile={profile} />
       
       {/* Sidebar component with profile data and user email */}
       <Sidebar 

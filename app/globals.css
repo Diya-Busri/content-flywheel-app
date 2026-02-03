@@ -63,8 +63,19 @@
   * {
     @apply border-border;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Offset for sticky navbar when scrolling to section anchors */
+  [id="features"],
+  [id="how-it-works"],
+  [id="pricing-preview"],
+  [id="reviews"],
+  [id="faq"] {
+    scroll-margin-top: 5rem;
   }
 }
 

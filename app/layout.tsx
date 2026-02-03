@@ -61,12 +61,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <ClerkProvider>
-      <html lang="en">
-        <body className={inter.className}>
+      <html lang="en" suppressHydrationWarning>
+        <body className={`${inter.className} transition-colors duration-300`}>
           <Providers
             attribute="class"
             defaultTheme="light"
-            disableTransitionOnChange
+            enableSystem
+            storageKey="content-flywheel-theme"
           >
             <LayoutWrapper>
               {userId && <PaymentStatusAlert />}
