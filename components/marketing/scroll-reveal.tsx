@@ -13,8 +13,8 @@ export function ScrollReveal({ children, className = "" }: ScrollRevealProps) {
 
   return (
     <motion.div
-      initial={reduceMotion ? false : { opacity: 0, y: 24 }}
-      whileInView={reduceMotion ? false : { opacity: 1, y: 0 }}
+      initial={reduceMotion ? undefined : { opacity: 0, y: 24 }}
+      whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-48px" }}
       transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
       className={className}
