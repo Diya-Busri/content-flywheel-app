@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Database, Target, Users, Sparkles, CreditCard } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Video, Sparkles, CreditCard } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -40,12 +40,14 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
 
   // Plan IDs now come from props, not environment variables
   
+  const isFreePlan = profile?.membership === "free";
   const navItems = [
-    { href: "/dashboard", icon: <Home size={16} />, label: "Home" },
-    { href: "/dashboard/settings", icon: <Settings size={16} />, label: "Settings" },
-    { href: "/dashboard/data-source", icon: <Database size={16} />, label: "Data source" },
-    { href: "/dashboard/targets", icon: <Target size={16} />, label: "Targets" },
-    { href: "/dashboard/members", icon: <Users size={16} />, label: "Members" },
+    { href: "/dashboard", icon: <Home size={18} />, label: "Home", emoji: "🏠" },
+    { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦" },
+    { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️" },
+    { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅" },
+    { href: "/dashboard/my-videos", icon: <Video size={18} />, label: "My Videos", emoji: "📊" },
+    { href: "/dashboard/settings", icon: <Settings size={18} />, label: "Settings", emoji: "⚙️" },
   ];
 
   // Handle navigation item click
@@ -107,17 +109,17 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
               transition={{ duration: 0.2 }}
             >
               <div className="hidden md:block">
-                <span className="font-bold text-lg">App Name</span>
+                <span className="font-bold text-lg text-slate-900 dark:text-white">Content Flywheel</span>
               </div>
               <div className="block md:hidden text-center">
-                <span className="font-bold text-sm">A</span>
+                <span className="font-bold text-sm text-slate-900 dark:text-white">CF</span>
               </div>
             </motion.div>
           </Link>
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 px-3 relative z-10">
+        <nav className="flex-1 px-3 relative z-10 overflow-y-auto">
           <div className="space-y-1.5">
             {navItems.map((item) => (
               <Link 
@@ -143,12 +145,25 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
                   <div className="flex items-center justify-center">
                     {item.icon}
                   </div>
-                  <span className={`ml-3 hidden md:block text-sm font-medium`}>
-                    {item.label}
+                  <span className="ml-3 hidden md:block text-sm font-medium">
+                    {item.emoji} {item.label}
                   </span>
                 </motion.div>
               </Link>
             ))}
+            {isFreePlan && (
+              <Link href="/pricing" className="block">
+                <motion.div 
+                  className="flex items-center py-2 px-3 rounded-lg cursor-pointer transition-all text-orange-600 hover:bg-orange-50 hover:text-orange-700 dark:text-orange-400 dark:hover:bg-orange-950/30"
+                  whileHover={{ scale: 1.03, x: 4, transition: { duration: 0.2 } }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Sparkles size={18} className="flex-shrink-0" />
+                  <span className="ml-3 hidden md:block text-sm font-medium">Upgrade</span>
+                </motion.div>
+              </Link>
+            )}
           </div>
         </nav>
 
@@ -158,28 +173,6 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
           <div className="px-3 mb-4">
             {/* Subtle section divider */}
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-4" />
-            
-            {/* Upgrade Button - Links to pricing page */}
-            <Link href="/pricing">
-              <motion.div
-                whileHover={{ 
-                  scale: 1.03,
-                  transition: { duration: 0.2 }
-                }}
-                whileTap={{ scale: 0.97 }}
-              >
-                <Button 
-                  variant="default" 
-                  size="sm"
-                  className="w-full flex items-center justify-center md:justify-start gap-1.5 py-1.5 h-auto transition-colors shadow-sm mb-3 relative overflow-hidden group"
-                >
-                  {/* Button hover effect */}
-                  <span className="absolute inset-0 w-full h-full bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <Sparkles size={14} className="relative z-10" />
-                  <span className="hidden md:block text-xs font-medium relative z-10">Upgrade</span>
-                </Button>
-              </motion.div>
-            </Link>
             
             {/* Billing Button - Only visible for members with whopMembershipId */}
             {profile?.whopMembershipId && (
