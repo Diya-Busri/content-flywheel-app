@@ -1,7 +1,7 @@
 import { LegalPageLayout } from "@/components/legal-page-layout";
 
 export const metadata = {
-  title: "Privacy Policy",
+  title: "Privacy Policy | Content Flywheel",
   description: "Privacy Policy for Content Flywheel",
 };
 

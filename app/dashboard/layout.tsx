@@ -5,6 +5,7 @@
  */
 import React, { ReactNode } from "react";
 import { getProfileByUserId, updateProfile } from "@/db/queries/profiles-queries";
+import { createProfileAction } from "@/actions/profiles-actions";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/sidebar";
@@ -13,6 +14,7 @@ import CancellationPopup from "@/components/cancellation-popup";
 import WelcomeMessagePopup from "@/components/welcome-message-popup";
 import PaymentSuccessPopup from "@/components/payment-success-popup";
 import { DashboardReviewPopup } from "@/components/dashboard-review-popup";
+import { DashboardSetupError } from "@/components/dashboard-setup-error";
 
 /**
  * Check if a free user with an expired billing cycle needs their credits downgraded
@@ -67,13 +69,24 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const { userId } = auth();
 
   if (!userId) {
-    return redirect("/login");
+    return redirect("/sign-in");
   }
 
   let profile = await getProfileByUserId(userId);
 
+  // If no profile, try creating one (handles race with root layout)
   if (!profile) {
-    return redirect("/signup");
+    try {
+      const user = await currentUser();
+      const email = user?.emailAddresses?.[0]?.emailAddress;
+      const res = await createProfileAction(email ? { userId, email } : { userId });
+      if (res.data) profile = res.data;
+    } catch (e) {
+      console.error("Dashboard: profile creation failed", e);
+    }
+    if (!profile) {
+      return <DashboardSetupError />;
+    }
   }
 
   // Run just-in-time credit check for expired subscriptions
@@ -81,7 +94,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   
   // Verify profile is still valid after check
   if (!profile) {
-    return redirect("/signup");
+    return <DashboardSetupError />;
   }
 
   // Get the current user to extract email

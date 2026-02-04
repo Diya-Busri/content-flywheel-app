@@ -1,7 +1,7 @@
 import { LegalPageLayout } from "@/components/legal-page-layout";
 
 export const metadata = {
-  title: "Terms of Service",
+  title: "Terms of Service | Content Flywheel",
   description: "Terms of Service for Content Flywheel",
 };
 

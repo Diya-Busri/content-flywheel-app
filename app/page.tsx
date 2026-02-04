@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Check, ArrowRight, Package, Video, ShoppingBag, ShieldCheck, Upload, Sparkles, Download, Youtube } from "lucide-react";
 import {
@@ -9,6 +10,12 @@ import {
 import { ReviewsCarousel } from "@/components/marketing/reviews-carousel";
 import { LandingNavbar } from "@/components/marketing/landing-navbar";
 import { ChatWidget } from "@/components/chat-widget";
+
+export const metadata: Metadata = {
+  title: "Content Flywheel - AI Video Generation for Social Media",
+  description:
+    "Turn products into sales-driving videos for TikTok, Instagram, and YouTube. AI-powered video creation focused on conversion, not vanity metrics.",
+};
 
 export default function HomePage() {
   return (

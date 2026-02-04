@@ -4,7 +4,12 @@
  * Features a sidebar navigation and content area
  * Requires a paid membership to access
  */
+import type { Metadata } from "next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
+export const metadata: Metadata = {
+  title: "Dashboard | Content Flywheel",
+};
 
 /**
  * Main dashboard page component

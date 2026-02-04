@@ -1,6 +1,9 @@
-"use client";
-
 import { SignIn } from "@clerk/nextjs";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Sign In | Content Flywheel",
+};
 
 export default function SignInPage() {
   return (

@@ -1,7 +1,7 @@
 import { LegalPageLayout } from "@/components/legal-page-layout";
 
 export const metadata = {
-  title: "Refund Policy",
+  title: "Refund Policy | Content Flywheel",
   description: "Refund Policy for Content Flywheel",
 };
 

@@ -14,8 +14,9 @@ import { claimPendingProfile } from "@/actions/whop-actions";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Template App",
-  description: "A full-stack template for modern web applications."
+  title: "Content Flywheel - AI Video Generation for Social Media",
+  description:
+    "Turn products into sales-driving videos for TikTok, Instagram, and YouTube. AI-powered video creation focused on conversion, not vanity metrics.",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -60,9 +61,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      afterSignInUrl="/dashboard"
+      afterSignUpUrl="/dashboard"
+    >
       <html lang="en" suppressHydrationWarning>
-        <body className={`${inter.className} transition-colors duration-300`}>
+        <body className={`${inter.className} transition-colors duration-300`} suppressHydrationWarning>
           <Providers
             attribute="class"
             defaultTheme="light"
