@@ -27,7 +27,12 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
   const pathname = usePathname();
   const router = useRouter();
   const [showUpgradePopup, setShowUpgradePopup] = useState(false);
-  
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const isActive = (path: string) => pathname === path;
   
   // Check if user has reached credit limit
@@ -69,7 +74,7 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
 
   return (
     <>
-      {profile && (
+      {mounted && profile && (
         <UpgradePlanPopup 
           profile={profile} 
           monthlyPlanId={whopMonthlyPlanId} 
@@ -79,7 +84,7 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
         />
       )}
       
-      <div className="h-screen w-[60px] md:w-[220px] bg-white/60 backdrop-blur-xl border-r border-white/40 flex flex-col justify-between py-5 relative overflow-hidden">
+      <div className="h-screen w-[60px] md:w-[220px] flex-shrink-0 bg-white/80 dark:bg-[#1a1a1a] backdrop-blur-xl border-r border-gray-200 dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20">
         {/* Glassmorphism effects */}
         <motion.div 
           className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-primary/5 pointer-events-none"
@@ -131,8 +136,8 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
                 <motion.div 
                   className={`flex items-center py-2 px-3 rounded-lg cursor-pointer transition-all ${
                     isActive(item.href) 
-                      ? "bg-[#1a1a1a] text-white shadow-sm" 
-                      : "text-gray-600 hover:bg-gray-100/80 hover:border-gray-200/50 hover:shadow-md"
+                      ? "bg-primary text-white shadow-sm dark:bg-orange-600 dark:text-white" 
+                      : "text-gray-600 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-white/10 hover:border-gray-200/50 dark:hover:border-white/10 hover:shadow-md"
                   }`}
                   whileHover={{ 
                     scale: 1.03, 
@@ -172,7 +177,7 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
           {/* Subscription Management Section */}
           <div className="px-3 mb-4">
             {/* Subtle section divider */}
-            <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-4" />
+            <div className="h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-white/10 to-transparent mb-4" />
             
             {/* Billing Button - Only visible for members with whopMembershipId */}
             {profile?.whopMembershipId && (
@@ -191,9 +196,9 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="w-full flex items-center justify-center md:justify-start gap-1.5 border-white/60 bg-white/70 hover:bg-white/90 hover:border-white py-1.5 h-auto transition-all shadow-sm hover:shadow-md"
+                    className="w-full flex items-center justify-center md:justify-start gap-1.5 border-white/60 bg-white/70 hover:bg-white/90 hover:border-white dark:border-white/20 dark:bg-white/10 dark:hover:bg-white/20 dark:text-gray-200 py-1.5 h-auto transition-all shadow-sm hover:shadow-md"
                   >
-                    <CreditCard size={14} className="text-gray-600" />
+                    <CreditCard size={14} className="text-gray-600 dark:text-gray-400" />
                     <span className="hidden md:block text-xs">Billing</span>
                   </Button>
                 </motion.div>
@@ -238,18 +243,22 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
             }}
             whileTap={{ scale: 0.98 }}
           >
-            <div className="w-7 h-7 rounded-full overflow-hidden border border-white/80 flex items-center justify-center bg-white/80 shadow-sm">
-              <UserButton 
-                afterSignOutUrl="/"
-                appearance={{
-                  elements: {
-                    userButtonAvatarBox: "w-7 h-7",
-                    userButtonTrigger: "w-7 h-7 rounded-full"
-                  }
-                }} 
-              />
+            <div className="w-7 h-7 rounded-full overflow-hidden border border-white/80 dark:border-white/20 flex items-center justify-center bg-white/80 dark:bg-white/10 shadow-sm">
+              {mounted ? (
+                <UserButton 
+                  afterSignOutUrl="/"
+                  appearance={{
+                    elements: {
+                      userButtonAvatarBox: "w-7 h-7",
+                      userButtonTrigger: "w-7 h-7 rounded-full"
+                    }
+                  }} 
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-600" aria-hidden />
+              )}
             </div>
-            <span className="text-xs text-gray-600 hidden md:block ml-3 font-medium truncate max-w-[120px]">
+            <span className="text-xs text-gray-600 dark:text-gray-300 hidden md:block ml-3 font-medium truncate max-w-[120px]">
               {userEmail || "Account"}
             </span>
           </motion.div>

@@ -2,11 +2,13 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { profilesTable } from "./schema/profiles-schema";
 import { pendingProfilesTable } from "./schema/pending-profiles-schema";
+import { productsTable } from "./schema/products-schema";
 
 // Define the schema properly
-const schema = { 
+const schema = {
   profiles: profilesTable,
-  pendingProfiles: pendingProfilesTable
+  pendingProfiles: pendingProfilesTable,
+  products: productsTable,
 };
 
 // Add connection options with improved timeout and retry settings for Vercel environment

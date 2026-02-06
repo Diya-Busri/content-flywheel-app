@@ -8,8 +8,8 @@ import { getProfileByUserId, updateProfile } from "@/db/queries/profiles-queries
 import { createProfileAction } from "@/actions/profiles-actions";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import Sidebar from "@/components/sidebar";
 import { revalidatePath } from "next/cache";
+import Sidebar from "@/components/sidebar";
 import CancellationPopup from "@/components/cancellation-popup";
 import WelcomeMessagePopup from "@/components/welcome-message-popup";
 import PaymentSuccessPopup from "@/components/payment-success-popup";
@@ -110,7 +110,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   });
 
   return (
-    <div className="flex h-screen bg-gray-50 relative overflow-hidden">
+    <div className="flex h-screen bg-gray-50 dark:bg-[#0F0F0F] relative overflow-hidden" suppressHydrationWarning>
       {/* Show welcome message popup - component handles visibility logic */}
       <WelcomeMessagePopup profile={profile} />
       
