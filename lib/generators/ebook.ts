@@ -1,51 +1,74 @@
 import { jsPDF } from "jspdf";
 import type { ProductDetails } from "./types";
+import { addPageBackground, addPlacedElementsToPage, hexToRgb } from "./pdf-utils";
 
+function stripHtml(html: string): string {
+  if (!html || typeof html !== "string") return "";
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
+ * Generate PDF that matches the editor 1:1: one PDF page per section (editor page).
+ * Each page uses the exact same background, overlay, and content as the editor.
+ * pageBackgrounds[i] and placedElementsByPage[i] correspond to section i.
+ */
 export async function generateEbook(details: ProductDetails): Promise<ArrayBuffer> {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ compress: false });
   const title = details.title || "Untitled Guide";
-  const niche = details.niche || "your topic";
-  const sections = details.sections ?? [
-    { title: "Introduction", body: `This comprehensive guide will teach you everything you need to know about ${niche}. Whether you're just starting out or looking to improve your skills, this ebook provides practical, actionable advice.` },
-    { title: "Getting Started", body: "In this chapter we cover the fundamentals and set you up for success. Follow the steps in order for best results." },
-    { title: "Advanced Techniques", body: "Once you have the basics down, these techniques will help you go further and achieve better outcomes." },
-    { title: "Case Studies", body: "Real-world examples and applications to illustrate key concepts." },
-    { title: "Resources", body: "Further reading, tools, and templates to support your journey." },
-  ];
+  const pageBackgrounds = details.pageBackgrounds ?? [];
+  const sections = details.sections ?? [{ title: "Content", body: "Your content here." }];
+  const layout = details.designSettings?.layout;
+  const colors = details.designSettings?.colors;
+  const placedByPage = details.placedElementsByPage ?? [];
+  const marginMm = (layout?.margins ?? 2) * 10;
+  const contentWidth = 210 - marginMm * 2;
 
-  doc.setFontSize(32);
-  doc.setFont("helvetica", "bold");
-  doc.text(title, 20, 100, { maxWidth: 170 });
+  const [tr, tg, tb] = hexToRgb(colors?.title ?? "#333333");
+  const [hr, hg, hb] = hexToRgb(colors?.heading ?? "#333333");
+  const [br, bg, bb] = hexToRgb(colors?.body ?? "#555555");
 
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "normal");
-  doc.text("A comprehensive guide", 20, 120);
+  const CANVAS_W_PX = 800;
+  const CANVAS_H_PX = 1100;
 
-  doc.addPage();
-  doc.setFontSize(20);
-  doc.setFont("helvetica", "bold");
-  doc.text("Table of Contents", 20, 20);
-
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "normal");
-  let tocY = 40;
-  sections.forEach((s, i) => {
-    const pageNum = 3 + i;
-    doc.text(`${i + 1}. ${s.title} ${".".repeat(Math.max(0, 35 - s.title.length))} ${pageNum}`, 20, tocY);
-    tocY += 10;
-  });
-
-  sections.forEach((section, idx) => {
-    doc.addPage();
-    doc.setFontSize(24);
+  for (let idx = 0; idx < sections.length; idx++) {
+    if (idx > 0) doc.addPage();
+    const section = sections[idx];
+    const pageBg = pageBackgrounds[idx] ?? pageBackgrounds[0];
+    await addPageBackground(doc, pageBg);
+    const pageElements = placedByPage[idx];
+    if (pageElements?.length) {
+      await addPlacedElementsToPage(doc, pageElements, CANVAS_W_PX, CANVAS_H_PX);
+    }
+    let y = marginMm + 8;
+    if (idx === 0) {
+      doc.setFontSize(28);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(tr, tg, tb);
+      doc.text(title, marginMm, y, { maxWidth: contentWidth });
+      y += 14;
+    }
+    doc.setFontSize(20);
     doc.setFont("helvetica", "bold");
-    doc.text(`Chapter ${idx + 1}: ${section.title}`, 20, 20, { maxWidth: 170 });
-
+    doc.setTextColor(hr, hg, hb);
+    doc.text(section.title, marginMm, y, { maxWidth: contentWidth });
+    y += 12;
     doc.setFontSize(12);
     doc.setFont("helvetica", "normal");
-    const lines = doc.splitTextToSize(section.body, 170);
-    doc.text(lines, 20, 40);
-  });
+    doc.setTextColor(br, bg, bb);
+    const bodyText = stripHtml(section.body);
+    const lines = doc.splitTextToSize(bodyText, contentWidth);
+    doc.text(lines, marginMm, y);
+  }
 
   return doc.output("arraybuffer");
 }

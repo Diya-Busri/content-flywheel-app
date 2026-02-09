@@ -56,25 +56,14 @@ export function ChatWidget() {
   };
 
   return (
-    <>
-      {/* Floating chat button */}
-      <button
-        type="button"
-        onClick={() => setIsOpen((o) => !o)}
-        className="fixed bottom-6 right-6 z-[100] flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-200 hover:scale-110 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 dark:focus:ring-offset-slate-950"
-        style={{ backgroundColor: ACCENT }}
-        aria-label={isOpen ? "Close chat" : "Open chat"}
-      >
-        <MessageCircle className="h-6 w-6 text-slate-900" />
-      </button>
-
-      {/* Chat window: 400x600 desktop, full width on mobile */}
+    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
+      {/* Chat window: constrained size, above the button when open */}
       <div
-        className={`fixed z-[99] flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl transition-all duration-300 ease-out dark:border-slate-700 dark:bg-slate-900
-          ${isOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}
+        className={`flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl transition-all duration-300 ease-out dark:border-slate-700 dark:bg-slate-900
+          ${isOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none invisible"}
           ${isOpen
-            ? "right-6 bottom-[4.5rem] h-[600px] w-[400px] max-sm:bottom-24 max-sm:left-4 max-sm:right-4 max-sm:h-[calc(100vh-7rem)] max-sm:w-auto"
-            : "right-6 bottom-[4.5rem] h-0 w-[400px] max-sm:w-[calc(100vw-2rem)]"
+            ? "h-[480px] w-[380px] max-sm:h-[calc(100vh-8rem)] max-sm:w-[calc(100vw-2rem)] max-sm:max-h-[520px]"
+            : "h-0 w-0 overflow-hidden"
           }
         `}
       >
@@ -156,6 +145,17 @@ export function ChatWidget() {
           </button>
         </div>
       </div>
-    </>
+
+      {/* Floating chat button - always visible, not full width */}
+      <button
+        type="button"
+        onClick={() => setIsOpen((o) => !o)}
+        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full shadow-lg transition-all duration-200 hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 dark:focus:ring-offset-slate-950"
+        style={{ backgroundColor: ACCENT }}
+        aria-label={isOpen ? "Close chat" : "Open chat"}
+      >
+        <MessageCircle className="h-6 w-6 text-slate-900" />
+      </button>
+    </div>
   );
 }

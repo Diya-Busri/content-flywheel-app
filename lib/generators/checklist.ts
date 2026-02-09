@@ -1,10 +1,13 @@
 import { jsPDF } from "jspdf";
 import type { ProductDetails } from "./types";
+import { addPageBackground } from "./pdf-utils";
 
 export async function generateChecklist(details: ProductDetails): Promise<ArrayBuffer> {
   const doc = new jsPDF();
   const title = details.title || "Checklist";
+  const pageBackgrounds = details.pageBackgrounds ?? [];
 
+  await addPageBackground(doc, pageBackgrounds[0]);
   doc.setFontSize(24);
   doc.setFont("helvetica", "bold");
   doc.text(title, 20, 20);

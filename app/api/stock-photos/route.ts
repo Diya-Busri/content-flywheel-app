@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       photos?: Array<{
         id: number;
         alt?: string;
-        src?: { small?: string; medium?: string; large?: string; original?: string };
+        src?: { small?: string; medium?: string; large?: string; large2x?: string; original?: string };
       }>;
       total_results?: number;
       page?: number;
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
     const photos = (data.photos ?? []).map((photo) => ({
       id: String(photo.id),
       url: photo.src?.medium ?? photo.src?.small,
-      fullUrl: photo.src?.large ?? photo.src?.original ?? photo.src?.medium,
+      fullUrl: photo.src?.original ?? photo.src?.large2x ?? photo.src?.large ?? photo.src?.medium,
       thumb: photo.src?.small ?? photo.src?.medium,
     }));
 

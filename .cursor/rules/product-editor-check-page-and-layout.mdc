@@ -1,0 +1,57 @@
+---
+description: When ProductEditor data loads but UI doesn't render – check page.tsx and layout
+globs: "**/digital-products/**/edit/page.tsx"
+alwaysApply: false
+---
+
+# ProductEditor Blank – Check Page and Layout (Not the Component)
+
+When the **page is still blank** even with minimal code, **data loads** (console shows product data) but the **UI doesn't render**, the component is likely fine. The problem is probably **how Next.js is rendering it** – the page or a layout.
+
+## HYPOTHESIS
+
+- **page.tsx** might be wrapping or rendering ProductEditor incorrectly.
+- A **layout** in that folder might be hiding content.
+
+## CHECK THIS
+
+### 1. Open the edit page
+
+- File: **app/dashboard/digital-products/[id]/edit/page.tsx**
+
+### 2. Prefer a simple page that only renders the editor
+
+Make sure the page looks like this (no extra wrappers, no async params if not needed):
+
+```typescript
+import ProductEditor from './ProductEditor'
+
+export default function EditProductPage() {
+  return <ProductEditor />
+}
+```
+
+- If your app needs the dynamic `id`, keep passing it:  
+  `const { id } = await params` and `return <ProductEditor productId={id} />` in an async page, **or** have ProductEditor use `useParams()` and read `params.id` itself. The important part is: the page should **only** render `<ProductEditor />` (with props if required), with no wrapper that could hide it.
+- Remove any wrapper divs, suspense, or conditional rendering that might prevent the editor from showing.
+
+### 3. Check for a layout that might hide content
+
+- Look for **layout.tsx** in:
+  - **app/dashboard/digital-products/[id]/edit/**
+  - **app/dashboard/digital-products/[id]/**
+  - **app/dashboard/**
+- If a layout exists, check for:
+  - `display: none`, `opacity: 0`, or `visibility: hidden` on a parent.
+  - Conditional rendering that might not render `children`.
+  - CSS or structure that could make the main area zero-height or invisible.
+
+### 4. If page.tsx doesn't exist or is complex
+
+- **Missing page:** Add the file so the route exists and returns `<ProductEditor />` (and pass `productId` or rely on `useParams()` as above).
+- **Complex page:** Simplify so the page only renders ProductEditor (and any required props). Move other logic elsewhere if needed.
+
+## Summary
+
+- **ProductEditor** is likely fine (console shows data).
+- **Next.js routing or layout** is the likely cause: simplify page.tsx and check layout.tsx so the editor is actually rendered and not hidden.

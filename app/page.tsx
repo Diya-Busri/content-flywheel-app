@@ -19,180 +19,146 @@ export const metadata: Metadata = {
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <ChatWidget />
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 overflow-x-hidden">
       <LandingNavbar />
 
-      <main className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-        <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-16">
-          {/* Left column: headline, description, CTA, subtext */}
-          <div>
-            <h1 className="text-4xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-5xl">
-              Turn Products Into Sales-Driving Videos in Minutes
-            </h1>
-            <p className="mt-6 max-w-xl text-lg text-slate-600 dark:text-slate-400">
-              AI-powered video creation for digital products, TikTok Shop, and affiliate marketing. Upload your product, get conversion-focused videos for TikTok, Instagram, and YouTube.
-            </p>
-            <div className="mt-8 flex flex-col gap-4">
-              <Link
-                href="/sign-up"
-                className="inline-flex w-fit items-center gap-2 rounded-xl bg-amber-500 px-6 py-3.5 text-sm font-semibold text-slate-900 hover:bg-amber-400"
-              >
-                Start Creating Free <ArrowRight className="h-4 w-4" />
-              </Link>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                No editing skills required. First 3 videos free.
-              </p>
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-slate-600 dark:text-slate-400">
-                <span className="inline-flex items-center gap-1.5">
-                  <Check className="h-4 w-4 text-emerald-500" /> No credit card required
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Check className="h-4 w-4 text-emerald-500" /> Cancel anytime
-                </span>
+      <div className="fixed bottom-4 right-4 z-50">
+        <ChatWidget />
+      </div>
+
+      <main className="pt-20">
+        {/* Hero - breathing room */}
+        <section className="relative min-h-screen flex items-center bg-slate-50 dark:bg-slate-950">
+          <div className="max-w-7xl mx-auto px-6 py-20 w-full">
+            <div className="grid lg:grid-cols-2 gap-16 items-center">
+              {/* Left - Text content */}
+              <div className="space-y-8">
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight text-slate-900 dark:text-white">
+                  Turn Products Into
+                  <br />
+                  <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
+                    Sales-Driving Videos
+                  </span>
+                  <br />
+                  in Minutes
+                </h1>
+                <p className="text-lg sm:text-xl lg:text-2xl text-slate-600 dark:text-gray-400 leading-relaxed max-w-xl">
+                  AI-powered video creation for digital products, TikTok Shop, and affiliate marketing. Upload your product, get conversion-focused videos for TikTok, Instagram, and YouTube.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                  <Link
+                    href="/sign-up"
+                    className="px-8 py-4 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold text-lg inline-flex items-center justify-center gap-2 transition-all hover:scale-105 text-white"
+                  >
+                    Start Creating Free <ArrowRight className="h-5 w-5" />
+                  </Link>
+                  <Link
+                    href="#how-it-works"
+                    className="px-8 py-4 bg-slate-200 dark:bg-gray-800 hover:bg-slate-300 dark:hover:bg-gray-700 rounded-lg font-semibold text-lg inline-flex items-center justify-center transition-all text-slate-900 dark:text-white"
+                  >
+                    See How It Works
+                  </Link>
+                </div>
+                <div className="pt-6 space-y-3">
+                  <p className="text-sm text-slate-500 dark:text-gray-500">
+                    No editing skills required. First 3 videos free.
+                  </p>
+                  <div className="flex flex-wrap gap-6 text-sm text-slate-600 dark:text-gray-400">
+                    <span className="flex items-center gap-2">
+                      <Check className="w-5 h-5 text-green-500 shrink-0" />
+                      No credit card required
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <Check className="w-5 h-5 text-green-500 shrink-0" />
+                      Cancel anytime
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {/* Right - Visual demo */}
+              <div className="relative">
+                <div className="flex items-center justify-center gap-6 sm:gap-8">
+                  <div className="relative group">
+                    <div className="w-40 h-40 sm:w-48 sm:h-48 lg:w-56 lg:h-56 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-gray-800 dark:to-gray-900 rounded-2xl shadow-2xl flex flex-col items-center justify-center border border-slate-300 dark:border-gray-700 transition-all group-hover:scale-105">
+                      <Package className="w-14 h-14 sm:w-16 sm:h-16 text-slate-500 dark:text-gray-500 mb-2" />
+                      <p className="text-sm text-slate-600 dark:text-gray-400 font-medium">BEFORE</p>
+                      <p className="text-xs text-slate-500 dark:text-gray-500">Product photo</p>
+                    </div>
+                  </div>
+                  <div className="text-4xl sm:text-5xl text-orange-500 animate-pulse" aria-hidden>
+                    →
+                  </div>
+                  <div className="relative group">
+                    <div className="w-40 h-40 sm:w-48 sm:h-48 lg:w-56 lg:h-56 bg-gradient-to-br from-orange-900/20 to-orange-600/20 rounded-2xl shadow-2xl flex flex-col items-center justify-center border border-orange-500/30 transition-all group-hover:scale-105">
+                      <Video className="w-14 h-14 sm:w-16 sm:h-16 text-orange-400 mb-2" />
+                      <p className="text-sm text-orange-400 font-medium">AFTER</p>
+                      <p className="text-xs text-gray-400">AI Video</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-8 text-center">
+                  <p className="text-sm text-slate-600 dark:text-gray-400">
+                    Works for: <span className="text-slate-900 dark:text-white">Digital products</span> • <span className="text-slate-900 dark:text-white">TikTok Shop</span> • <span className="text-slate-900 dark:text-white">Affiliate links</span> • <span className="text-slate-900 dark:text-white">Script fixing</span>
+                  </p>
+                </div>
               </div>
             </div>
           </div>
+        </section>
 
-          {/* Right column: before/after comparison */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="flex w-full max-w-md items-center gap-3">
-              {/* BEFORE card */}
-              <div className="flex flex-1 flex-col items-center gap-2">
-                <div className="flex aspect-square w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
-                  <Package className="h-12 w-12 text-slate-400 dark:text-slate-500" />
-                </div>
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                  BEFORE — Product photo
-                </span>
-              </div>
-
-              {/* Arrow */}
-              <div className="flex shrink-0 items-center justify-center text-amber-500" aria-hidden>
-                <ArrowRight className="h-8 w-8 lg:h-10 lg:w-10" />
-              </div>
-
-              {/* AFTER card */}
-              <div className="flex flex-1 flex-col items-center gap-2">
-                <div className="flex aspect-square w-full items-center justify-center rounded-xl border border-slate-700 bg-slate-900 dark:border-slate-600 dark:bg-black">
-                  <Video className="h-12 w-12 text-slate-500 dark:text-slate-400" />
-                </div>
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                  AFTER — AI Video
-                </span>
-              </div>
-            </div>
-            <p className="text-center text-xs font-medium text-slate-500 dark:text-slate-400">
-              Works for: Digital products • TikTok Shop • Affiliate links • Script fixing
-            </p>
-          </div>
-        </div>
-
-        {/* Features */}
-        <section id="features" className="mt-24 lg:mt-32">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+        {/* Built for conversion - dedicated section with spacing */}
+        <section className="py-24 lg:py-32 bg-slate-100 dark:bg-gray-900/50">
+          <div className="max-w-5xl mx-auto px-6 text-center">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white mb-6">
               Built for conversion, not views
             </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-600 dark:text-slate-400">
+            <p className="text-lg sm:text-xl lg:text-2xl text-slate-600 dark:text-gray-400 leading-relaxed">
               Three sales-focused tools to turn any product into videos that drive revenue
             </p>
           </div>
-          <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:mt-16 lg:grid-cols-3">
-            {/* Card 1: Digital Product Videos */}
-            <div className="group rounded-2xl border border-slate-200 bg-white p-8 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-amber-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-amber-800/50">
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500 dark:bg-amber-500/20">
-                <Package className="h-7 w-7" strokeWidth={2} />
-              </div>
-              <h3 className="mt-6 text-xl font-semibold text-slate-900 dark:text-white">
-                Digital Product Videos
-              </h3>
-              <p className="mt-3 text-slate-600 dark:text-slate-400">
-                Scripts optimized for click-through and purchase, not just views. AI analyzes your product&apos;s value prop and creates videos that drive action.
-              </p>
-              <ul className="mt-5 space-y-2 border-t border-slate-100 pt-5 dark:border-slate-700">
-                <li className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Conversion-optimized hooks and CTAs
-                </li>
-                <li className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Platform-specific aspect ratios (9:16, 1:1)
-                </li>
-                <li className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Sales-focused captions that convert
-                </li>
-              </ul>
-            </div>
+        </section>
 
-            {/* Card 2: TikTok Shop & Affiliate */}
-            <div className="group rounded-2xl border border-slate-200 bg-white p-8 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-amber-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-amber-800/50">
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500 dark:bg-amber-500/20">
-                <ShoppingBag className="h-7 w-7" strokeWidth={2} />
+        {/* Features - cards with spacing */}
+        <section id="features" className="py-24">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="p-8 bg-white dark:bg-gray-800/50 rounded-2xl border border-slate-200 dark:border-gray-700 hover:border-orange-500/50 transition-all hover:scale-105 shadow-sm dark:shadow-none">
+                <div className="text-5xl mb-6">📱</div>
+                <h3 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">Digital Product Creator</h3>
+                <p className="text-slate-600 dark:text-gray-400 leading-relaxed">
+                  Transform your expertise into professional digital products. Workbooks, guides, templates - all AI-generated and ready to sell.
+                </p>
               </div>
-              <h3 className="mt-6 text-xl font-semibold text-slate-900 dark:text-white">
-                TikTok Shop & Affiliate Videos
-              </h3>
-              <p className="mt-3 text-slate-600 dark:text-slate-400">
-                Turn any product link into compelling demos and reviews. Focused on answering buyer questions and overcoming objections.
-              </p>
-              <ul className="mt-5 space-y-2 border-t border-slate-100 pt-5 dark:border-slate-700">
-                <li className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Works with TikTok Shop, Amazon, any link
-                </li>
-                <li className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Buyer psychology-driven scripts
-                </li>
-                <li className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Objection-handling built in
-                </li>
-              </ul>
-            </div>
-
-            {/* Card 3: Auto Compliance Check */}
-            <div className="group rounded-2xl border border-slate-200 bg-white p-8 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-amber-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-amber-800/50 sm:col-span-2 lg:col-span-1">
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500 dark:bg-amber-500/20">
-                <ShieldCheck className="h-7 w-7" strokeWidth={2} />
+              <div className="p-8 bg-white dark:bg-gray-800/50 rounded-2xl border border-slate-200 dark:border-gray-700 hover:border-orange-500/50 transition-all hover:scale-105 shadow-sm dark:shadow-none">
+                <div className="text-5xl mb-6">🛍️</div>
+                <h3 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">TikTok Shop Videos</h3>
+                <p className="text-slate-600 dark:text-gray-400 leading-relaxed">
+                  Upload any product photo and get scroll-stopping TikTok Shop videos that convert browsers into buyers.
+                </p>
               </div>
-              <h3 className="mt-6 text-xl font-semibold text-slate-900 dark:text-white">
-                Auto Compliance Check
-              </h3>
-              <p className="mt-3 text-slate-600 dark:text-slate-400">
-                Never lose revenue to account bans. AI ensures your videos meet platform guidelines before you post.
-              </p>
-              <ul className="mt-5 space-y-2 border-t border-slate-100 pt-5 dark:border-slate-700">
-                <li className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Pre-screens against platform rules
-                </li>
-                <li className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Auto-corrects flagged content
-                </li>
-                <li className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Protect your revenue stream
-                </li>
-              </ul>
+              <div className="p-8 bg-white dark:bg-gray-800/50 rounded-2xl border border-slate-200 dark:border-gray-700 hover:border-orange-500/50 transition-all hover:scale-105 shadow-sm dark:shadow-none">
+                <div className="text-5xl mb-6">✅</div>
+                <h3 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">Script Compliance</h3>
+                <p className="text-slate-600 dark:text-gray-400 leading-relaxed">
+                  Ensure your marketing videos meet platform guidelines. Auto-check for banned phrases and compliance issues.
+                </p>
+              </div>
             </div>
           </div>
         </section>
 
         {/* How it works */}
-        <section id="how-it-works" className="mt-24 lg:mt-32">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-              From product to posted in 3 steps
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-600 dark:text-slate-400">
-              No video editing skills required. Our AI handles the heavy lifting
-            </p>
-          </div>
-          <div className="mx-auto mt-14 max-w-2xl space-y-10">
+        <section id="how-it-works" className="py-24">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+                From product to posted in 3 steps
+              </h2>
+              <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-600 dark:text-slate-400">
+                No video editing skills required. Our AI handles the heavy lifting
+              </p>
+            </div>
+            <div className="mx-auto mt-14 max-w-2xl space-y-10">
             {/* Step 1 */}
             <div className="flex gap-6">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-500 dark:bg-amber-500/20">
@@ -238,27 +204,31 @@ export default function HomePage() {
                 </p>
               </div>
             </div>
+            </div>
           </div>
         </section>
 
         {/* What Our Users Say */}
-        <section id="reviews" className="mt-24 lg:mt-32">
-          <div className="text-center">
+        <section id="reviews" className="py-24 bg-slate-100 dark:bg-gray-900/30">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center">
             <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
               What Our Users Say
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-lg text-slate-600 dark:text-slate-400">
               Real results from creators using Content Flywheel
             </p>
-          </div>
-          <div className="mt-14">
-            <ReviewsCarousel />
+            </div>
+            <div className="mt-14">
+              <ReviewsCarousel />
+            </div>
           </div>
         </section>
 
         {/* Why Generic AI Tools Miss Sales */}
-        <section id="why-us" className="mt-24 lg:mt-32">
-          <div className="text-center">
+        <section id="why-us" className="py-24">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center">
             <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
               Most tools optimize for the wrong metrics. We optimize for revenue.
             </h2>
@@ -315,14 +285,16 @@ export default function HomePage() {
               </ul>
             </div>
           </div>
+          </div>
         </section>
 
         {/* Platforms */}
-        <section id="platforms" className="mt-24 lg:mt-32">
-          <h2 className="text-center text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-            Works with all major platforms
-          </h2>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-12">
+        <section id="platforms" className="py-24 bg-slate-100 dark:bg-gray-900/30">
+          <div className="max-w-7xl mx-auto px-6">
+            <h2 className="text-center text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+              Works with all major platforms
+            </h2>
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-12">
             <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-8 py-4 dark:border-slate-800 dark:bg-slate-900">
               <span className="text-xl font-bold text-slate-900 dark:text-white">TikTok</span>
             </div>
@@ -333,12 +305,14 @@ export default function HomePage() {
               <Youtube className="h-8 w-8 text-red-600 dark:text-red-500" />
               <span className="text-xl font-bold text-slate-900 dark:text-white">YouTube</span>
             </div>
+            </div>
           </div>
         </section>
 
         {/* Pricing preview */}
-        <section id="pricing-preview" className="mt-24 lg:mt-32">
-          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center dark:border-slate-800 dark:bg-slate-900">
+        <section id="pricing-preview" className="py-24">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
               Simple, transparent pricing
             </h2>
@@ -351,21 +325,23 @@ export default function HomePage() {
             >
               View pricing <ArrowRight className="h-4 w-4" />
             </Link>
+            </div>
           </div>
         </section>
 
         {/* FAQ */}
-        <section id="faq" className="mt-24 lg:mt-32">
-          <div className="text-center">
+        <section id="faq" className="py-24 bg-slate-100 dark:bg-gray-900/30">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center">
             <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
               Frequently Asked Questions
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-lg text-slate-600 dark:text-slate-400">
               Quick answers to common questions
             </p>
-          </div>
-          <div className="mx-auto mt-14 max-w-3xl">
-            <Accordion type="single" collapsible className="w-full">
+            </div>
+            <div className="mx-auto mt-14 max-w-3xl">
+              <Accordion type="single" collapsible className="w-full">
               <AccordionItem value="formats" className="border-slate-200 dark:border-slate-700 [&[data-state=open]]:border-l-4 [&[data-state=open]]:border-l-amber-500 [&[data-state=open]]:pl-4">
                 <AccordionTrigger className="text-left text-slate-900 hover:text-amber-600 hover:no-underline dark:text-white dark:hover:text-amber-400">
                   What video formats and platforms do you support?
@@ -423,12 +399,14 @@ export default function HomePage() {
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
+            </div>
           </div>
         </section>
 
         {/* Final CTA */}
-        <section className="mt-24 lg:mt-32">
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500/20 via-slate-100 to-amber-600/10 dark:from-amber-500/15 dark:via-slate-900 dark:to-amber-600/10">
+        <section className="py-24 lg:py-32">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500/20 via-slate-100 to-amber-600/10 dark:from-amber-500/15 dark:via-slate-900 dark:to-amber-600/10">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-400/10 via-transparent to-transparent dark:from-amber-500/10" aria-hidden />
             <div className="relative px-8 py-16 text-center sm:px-12 lg:py-20">
               <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl lg:text-5xl">
@@ -447,12 +425,13 @@ export default function HomePage() {
                 First 3 videos free • Cancel anytime
               </p>
             </div>
+            </div>
           </div>
         </section>
       </main>
 
       {/* Footer */}
-      <footer className="mt-24 border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <footer className="border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
           <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
             <div>

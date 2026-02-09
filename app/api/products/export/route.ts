@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateProduct, isValidProductType } from "@/lib/generators";
-import type { ProductType, ProductDetails } from "@/lib/generators/types";
+import type { ProductType, ProductDetails, PageBackground, ExportDesignSettings, PlacedElementExport } from "@/lib/generators/types";
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9-_]/g, "-").replace(/-+/g, "-").slice(0, 100) || "product";
@@ -20,8 +20,25 @@ export async function POST(request: Request) {
     const sections = Array.isArray(body.sections)
       ? (body.sections as Array<{ title: string; body: string }>)
       : [];
+    const pageBackgrounds = Array.isArray(body.pageBackgrounds)
+      ? (body.pageBackgrounds as PageBackground[])
+      : undefined;
+    const designSettings = body.designSettings != null && typeof body.designSettings === "object"
+      ? (body.designSettings as ExportDesignSettings)
+      : undefined;
+    const placedElementsByPage = Array.isArray(body.placedElementsByPage)
+      ? (body.placedElementsByPage as PlacedElementExport[][])
+      : undefined;
 
-    const productDetails: ProductDetails = { title, description, niche, sections };
+    const productDetails: ProductDetails = {
+      title,
+      description,
+      niche,
+      sections,
+      pageBackgrounds,
+      designSettings,
+      placedElementsByPage,
+    };
 
     if (format === "notion") {
       const result = await generateProduct("notion", productDetails);
@@ -91,7 +108,11 @@ export async function POST(request: Request) {
     if (!isValidProductType(pdfType)) {
       return NextResponse.json({ error: "Invalid format" }, { status: 400 });
     }
-    const buffer = await generateProduct(pdfType, productDetails) as ArrayBuffer;
+    // CRITICAL: When export is from the editor, request body contains the CURRENT sections.
+    // Always use section-based PDF (one page per section, actual content) so PDF matches editor.
+    // Workbook/course/checklist generators use hardcoded templates and would export wrong content.
+    const { generateEbook } = await import("@/lib/generators/ebook");
+    const buffer = await generateEbook(productDetails) as ArrayBuffer;
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": "application/pdf",

@@ -1,10 +1,13 @@
 import { jsPDF } from "jspdf";
 import type { ProductDetails } from "./types";
+import { addPageBackground } from "./pdf-utils";
 
 export async function generateWorkbook(details: ProductDetails): Promise<ArrayBuffer> {
   const doc = new jsPDF();
   const title = details.title || "Workbook";
+  const pageBackgrounds = details.pageBackgrounds ?? [];
 
+  await addPageBackground(doc, pageBackgrounds[0]);
   doc.setFontSize(28);
   doc.setFont("helvetica", "bold");
   doc.text(`${title} Workbook`, 20, 40);
@@ -14,6 +17,7 @@ export async function generateWorkbook(details: ProductDetails): Promise<ArrayBu
   doc.text(details.description || "Your interactive workbook", 20, 55, { maxWidth: 170 });
 
   doc.addPage();
+  await addPageBackground(doc, pageBackgrounds[1]);
   doc.setFontSize(20);
   doc.setFont("helvetica", "bold");
   doc.text("Worksheet 1: Self-Assessment", 20, 20);
@@ -35,6 +39,7 @@ export async function generateWorkbook(details: ProductDetails): Promise<ArrayBu
   });
 
   doc.addPage();
+  await addPageBackground(doc, pageBackgrounds[2]);
   doc.setFontSize(20);
   doc.setFont("helvetica", "bold");
   doc.text("Worksheet 2: 30-Day Action Plan", 20, 20);
@@ -48,6 +53,7 @@ export async function generateWorkbook(details: ProductDetails): Promise<ArrayBu
   });
 
   doc.addPage();
+  await addPageBackground(doc, pageBackgrounds[3]);
   doc.setFontSize(20);
   doc.setFont("helvetica", "bold");
   doc.text("Worksheet 3: Reflection", 20, 20);

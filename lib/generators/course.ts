@@ -1,12 +1,15 @@
 import { jsPDF } from "jspdf";
 import type { ProductDetails } from "./types";
+import { addPageBackground } from "./pdf-utils";
 
 export async function generateCourseOutline(details: ProductDetails): Promise<ArrayBuffer> {
   const doc = new jsPDF();
   const title = details.title || "Course";
   const description = details.description || "Master the topic";
   const niche = details.niche || "learners";
+  const pageBackgrounds = details.pageBackgrounds ?? [];
 
+  await addPageBackground(doc, pageBackgrounds[0]);
   doc.setFontSize(32);
   doc.setFont("helvetica", "bold");
   doc.text(title, 20, 60, { maxWidth: 170 });
@@ -16,6 +19,7 @@ export async function generateCourseOutline(details: ProductDetails): Promise<Ar
   doc.text("Course Outline & Structure", 20, 90);
 
   doc.addPage();
+  await addPageBackground(doc, pageBackgrounds[1]);
   doc.setFontSize(20);
   doc.setFont("helvetica", "bold");
   doc.text("Course Overview", 20, 20);
@@ -46,6 +50,7 @@ export async function generateCourseOutline(details: ProductDetails): Promise<Ar
   doc.text("Project: Apply What You Learned", 25, 170);
 
   doc.addPage();
+  await addPageBackground(doc, pageBackgrounds[2]);
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
   doc.text("Module 3: Advanced Topics", 20, 20);

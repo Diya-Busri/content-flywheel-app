@@ -202,6 +202,7 @@ export default function DiscoverFlow() {
   const [dontKnowYet, setDontKnowYet] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [showResumeModal, setShowResumeModal] = useState(false);
+  const [savedProductId, setSavedProductId] = useState<string | null>(null);
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false);
   const [courseIncludeAvatar, setCourseIncludeAvatar] = useState(false);
   const [courseVoiceOver, setCourseVoiceOver] = useState(false);
@@ -225,6 +226,7 @@ export default function DiscoverFlow() {
     "discovery-selected-product",
     "discovery-format",
     "discovery-content-style",
+    "discovery-product-id",
   ] as const;
 
   function clearDiscoveryStorage() {
@@ -259,15 +261,16 @@ export default function DiscoverFlow() {
     setDontKnowYet(false);
     setSalesGuide(null);
     setSalesGuideProductId(null);
+    setSavedProductId(null);
     setShowResumeModal(false);
   }
 
   function handleResume() {
-    if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-      console.log("✅ RESUMING - State already loaded from localStorage");
-      console.log("Current step:", step);
-    }
     setShowResumeModal(false);
+    if (savedProductId) {
+      router.push(`/dashboard/digital-products/${savedProductId}/edit`);
+      return;
+    }
   }
 
   const handleStep2Start = async () => {
@@ -714,6 +717,8 @@ export default function DiscoverFlow() {
             // ignore
           }
         }
+        const savedProductIdVal = localStorage.getItem("discovery-product-id");
+        if (savedProductIdVal && savedProductIdVal.trim()) setSavedProductId(savedProductIdVal.trim());
         // Set step AFTER all other state so modal and content show correct step
         setStep(stepNum);
         setShowResumeModal(true);
@@ -870,6 +875,11 @@ export default function DiscoverFlow() {
       }
 
       if (data.productId) {
+        try {
+          localStorage.setItem("discovery-product-id", data.productId);
+        } catch {
+          // ignore
+        }
         router.push(`/dashboard/digital-products/${data.productId}/edit`);
         return;
       }
@@ -941,7 +951,9 @@ export default function DiscoverFlow() {
           <DialogHeader>
             <DialogTitle className="text-xl text-white">Welcome back!</DialogTitle>
             <DialogDescription className="text-[#A0A0A0]">
-              You have an in-progress discovery session. Continue where you left off or start fresh.
+              {savedProductId
+                ? "You have a product in progress. Open it in the editor or start a new discovery."
+                : "You have an in-progress discovery session. Continue where you left off or start fresh."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -952,8 +964,10 @@ export default function DiscoverFlow() {
             >
               <Play className="h-8 w-8 shrink-0 text-orange-500" />
               <div className="min-w-0 flex-1">
-                <div className="font-semibold text-white">Continue where you left off</div>
-                <p className="mt-1 text-sm text-[#A0A0A0]">Resume with all your generated content and progress saved.</p>
+                <div className="font-semibold text-white">{savedProductId ? "Open in editor" : "Continue where you left off"}</div>
+                <p className="mt-1 text-sm text-[#A0A0A0]">
+                  {savedProductId ? "Go directly to the product editor to finish designing your product." : "Resume with all your generated content and progress saved."}
+                </p>
                 <p className="mt-2 text-xs text-[#666]">
                   • Step {step} of 6
                   <br />

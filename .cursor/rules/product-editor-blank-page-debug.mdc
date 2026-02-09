@@ -1,0 +1,52 @@
+---
+description: Debug blank ProductEditor when API returns 200 but UI does not render
+globs: "**/digital-products/**/ProductEditor*.tsx"
+alwaysApply: false
+---
+
+# ProductEditor Blank Page – Render Debug (API Works, UI Doesn’t)
+
+When the **page is still blank** and **API calls work (200)** but the **UI is not rendering**, treat it as a **render issue**, not a data issue.
+
+## IMMEDIATE ACTION: Browser Console
+
+1. Press **F12** in the browser → open the **Console** tab.
+2. Look for **errors**. Common ones:
+   - `Cannot read property of undefined`
+   - `Hydration mismatch`
+   - `X is not a function`
+3. **Share the EXACT error messages** from the Console (copy-paste or screenshot).
+
+## IF NO ERRORS in Console
+
+### 1. Elements tab – what’s in the DOM?
+
+- Open **Elements** (or **Inspector**) tab.
+- Check:
+  - Is there a `div` with class `min-h-screen`?
+  - Is the ProductEditor component (or its root) in the DOM?
+  - **What HTML is actually there?** (list or describe the main nodes.)
+
+### 2. CSS hiding content?
+
+- **Right‑click the page** → **Inspect**.
+- Look for elements with:
+  - `display: none`
+  - `opacity: 0`
+  - `visibility: hidden`
+- Note which element has these styles if you find them.
+
+## Context
+
+- **Terminal shows successful API calls (200)** → data is loading.
+- So the problem is likely:
+  - **Render**: component not mounting, wrong branch returned, or crash before paint.
+  - **CSS**: content present but hidden.
+
+## What to share
+
+1. **Screenshot** of the browser **Console** tab (F12 → Console).
+2. If no console errors: what you see in **Elements** (e.g. presence of `min-h-screen`, ProductEditor root, or “empty” body).
+3. Any elements with `display:none` or `opacity:0` that might hide the editor.
+
+Do **not** change code until this information is collected. Use it to decide whether the fix is in React (render/errors) or in CSS (visibility).

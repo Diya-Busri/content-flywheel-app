@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=Nunito:wght@400;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -66,6 +68,12 @@
   html {
     scroll-behavior: smooth;
   }
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
   body {
     @apply bg-background text-foreground;
   }
@@ -119,5 +127,11 @@
   .carousel-container::after {
     right: 0;
     background: linear-gradient(to left, hsl(var(--background)), transparent);
+  }
+
+  /* Canvas background images: crisp, high-quality rendering */
+  [data-canvas-background-img] {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: high-quality;
   }
 }

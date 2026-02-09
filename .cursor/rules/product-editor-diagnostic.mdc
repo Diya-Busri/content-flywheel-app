@@ -1,0 +1,85 @@
+---
+description: Diagnose blank ProductEditor page with console.logs before making fixes
+globs: "**/digital-products/**/ProductEditor.tsx"
+alwaysApply: false
+---
+
+# ProductEditor – Diagnose Before Fixing
+
+When the ProductEditor page is **blank**, **diagnose what's actually broken** before changing logic or layout.
+
+## DIAGNOSTIC STEPS
+
+### 1. Check browser DevTools
+
+- Open DevTools (F12) → **Console** tab  
+- Note any **error messages** and share them
+
+### 2. Add console.logs to see what’s running
+
+In `ProductEditor.tsx`, add logs at these points (adapt to existing props: e.g. `productId` may come from props, not `useParams`):
+
+```typescript
+export default function ProductEditor({ productId }: { productId: string }) {
+  console.log('ProductEditor rendered')
+
+  console.log('Product ID:', productId)
+
+  const [product, setProduct] = useState(null)
+  const [loading, setLoading] = useState(true)
+  // ... keep all existing state
+
+  useEffect(() => {
+    async function loadProduct() {
+      console.log('Loading product...')
+      // existing fetch/load code
+    }
+    loadProduct()
+  }, [productId])
+
+  console.log('Product data:', product)
+  console.log('Loading state:', loading)
+
+  if (loading) {
+    console.log('Showing loading state')
+    return <div>Loading product...</div>
+  }
+
+  if (!product) {
+    console.log('No product found')
+    return <div>Product not found</div>
+  }
+
+  console.log('Rendering editor')
+  return <div>Editor should be here</div>
+}
+```
+
+### 3. Save and check the console
+
+- Save the file  
+- Reload the ProductEditor page  
+- Watch the **Console** for the log messages
+
+### 4. Share the output
+
+Report which messages appear and in what order. That answers:
+
+- Is the component rendering?
+- Is the product ID correct?
+- Is data loading?
+- Where does it stop (loading vs no product vs “Rendering editor”)?
+
+## DO NOT
+
+- Change data fetching logic
+- Refactor or rewrite other parts of the file
+- Add new features or UI changes
+
+## DO
+
+- Add **only** these (or equivalent) console.logs  
+- Keep the rest of the file unchanged  
+- Use the console output to decide the next fix
+
+Only after you have the console output should you make targeted fixes.
