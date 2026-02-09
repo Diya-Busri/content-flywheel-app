@@ -51,6 +51,7 @@ const VIDEO_STYLES = [
 ];
 
 export default function VideosFlow() {
+  const router = useRouter();
   const [productName, setProductName] = useState<string>("");
   const [selectedScripts, setSelectedScripts] = useState<SelectedScriptForVideo[]>([]);
   const [videoStyle, setVideoStyle] = useState<string>("broll");

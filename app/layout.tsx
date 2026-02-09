@@ -3,7 +3,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "@/components/utilities/providers";
 import LayoutWrapper from "@/components/layout-wrapper";
 import { ClerkProvider } from "@clerk/nextjs";
-import { auth } from "@clerk/nextjs/server";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -16,11 +15,9 @@ export const metadata: Metadata = {
     "Turn products into sales-driving videos for TikTok, Instagram, and YouTube. AI-powered video creation focused on conversion, not vanity metrics.",
 };
 
-// Profile creation/claim is handled in dashboard layout so root layout stays fast
-// and sign-up → dashboard redirect does not block on DB/Clerk calls.
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { userId } = auth();
-
+// Root layout is synchronous - no blocking auth() call. Sign-in/sign-up pages load instantly.
+// PaymentStatusAlert uses useAuth() and renders nothing when unauthenticated.
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider
       signInUrl="/sign-in"
@@ -29,7 +26,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       afterSignUpUrl="/dashboard"
     >
       <html lang="en" suppressHydrationWarning>
-        <body className={`${inter.className} transition-colors duration-300`} suppressHydrationWarning>
+        <body className={`${inter.className} min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300`} suppressHydrationWarning>
           <Providers
             attribute="class"
             defaultTheme="light"
@@ -37,7 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             storageKey="content-flywheel-theme"
           >
             <LayoutWrapper>
-              {userId && <PaymentStatusAlert />}
+              <PaymentStatusAlert />
               {children}
             </LayoutWrapper>
             <Toaster />

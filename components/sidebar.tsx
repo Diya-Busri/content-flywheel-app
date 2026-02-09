@@ -84,7 +84,7 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
         />
       )}
       
-      <div className="h-screen w-[60px] md:w-[220px] flex-shrink-0 bg-white/80 dark:bg-[#1a1a1a] backdrop-blur-xl border-r border-gray-200 dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20">
+      <div className="sidebar no-print h-screen w-[60px] md:w-[220px] flex-shrink-0 bg-white/80 dark:bg-[#1a1a1a] backdrop-blur-xl border-r border-gray-200 dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20">
         {/* Glassmorphism effects */}
         <motion.div 
           className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-primary/5 pointer-events-none"

@@ -36,7 +36,7 @@ import {
   FileVideo,
 } from "lucide-react";
 
-const MAX_FILE_SIZE_MB = 100;
+const MAX_FILE_SIZE_MB = 500;
 const MAX_FILE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ACCEPTED_FILE_EXTENSIONS = ".pdf,.epub,.zip,.docx,.pptx,.xlsx";
 const ACCEPTED_FILE_TYPES = [
@@ -380,7 +380,7 @@ export default function DigitalProductFlow() {
                             <p className="text-sm text-slate-600 dark:text-slate-400">
                               Drag & drop here, or click to browse
                             </p>
-                            <p className="text-xs text-slate-500 mt-1">PDF, EPUB, ZIP, DOCX, PPTX, XLSX — max 100MB</p>
+                            <p className="text-xs text-slate-500 mt-1">PDF, EPUB, ZIP, DOCX, PPTX, XLSX — max {MAX_FILE_SIZE_MB}MB</p>
                           </label>
                         )}
                       </div>

@@ -17,7 +17,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ArrowLeft, Upload } from "lucide-react";
 
-const MAX_FILE_SIZE_MB = 100;
+const MAX_FILE_SIZE_MB = 500;
 const MAX_FILE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ACCEPTED_FILE_EXTENSIONS = ".pdf,.epub,.zip,.docx,.pptx,.xlsx";
 const ACCEPTED_FILE_TYPES = [
@@ -209,7 +209,7 @@ export default function CreateFlow() {
                       <p className="text-sm text-[#E0E0E0]">Drag & drop your file here</p>
                       <p className="text-sm text-[#A0A0A0] mt-1">or click to browse</p>
                       <p className="text-xs text-[#666] mt-3">PDF, EPUB, DOCX, PPTX, XLSX, ZIP</p>
-                      <p className="text-xs text-[#666]">Max 100MB</p>
+                      <p className="text-xs text-[#666]">Max {MAX_FILE_SIZE_MB}MB</p>
                     </label>
                   )}
                 </div>

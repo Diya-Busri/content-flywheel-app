@@ -12,11 +12,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Pencil,
-  Download,
   Loader2,
   Check,
   X,
@@ -38,12 +38,26 @@ import {
   ImageIcon,
   Eye,
   LayoutGrid,
+  Undo2,
+  Redo2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Sun,
+  Moon,
+  Printer,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { HexColorPicker } from "react-colorful";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { cleanMarkdownToHtml } from "@/lib/clean-markdown";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 type Section = { id: string; title: string; content: string; contentHtml?: string; order: number };
 
@@ -55,6 +69,21 @@ type SelectedTextMeta = {
   content: string;
   styles: TextStyles;
 };
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function formatLastSaved(date: Date): string {
+  const sec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (sec < 5) return "just now";
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
 
 function rgbToHex(rgb: string): string {
   const m = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
@@ -111,6 +140,12 @@ const OVERLAY_PRESETS: Record<string, OverlaySettings> = {
   none: { color: "rgba(255, 255, 255, 0)", opacity: 0 },
 };
 
+export type PageBackground = {
+  backgroundImage?: string | null;
+  backgroundSettings?: ImageSettings;
+  overlaySettings?: OverlaySettings;
+};
+
 type Product = {
   id: string;
   title: string;
@@ -124,6 +159,7 @@ type Product = {
     backgroundImage?: string;
     backgroundSettings?: ImageSettings;
     overlaySettings?: OverlaySettings;
+    pages?: PageBackground[];
     textStyles?: Record<string, Record<"title" | "body", TextStyles>>;
   } | null;
   placedElements?: unknown[] | null;
@@ -140,6 +176,13 @@ export type PlacedElement = {
   imageSettings?: ImageSettings;
 };
 
+type EditorSnapshot = {
+  sections: Section[];
+  placedElementsByPage: PlacedElement[][];
+  pageBackgrounds: PageBackground[];
+};
+
+const HISTORY_LIMIT = 50;
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 1100;
 
@@ -329,15 +372,6 @@ function parsePlacedElements(raw: unknown[] | null | undefined): PlacedElement[]
     });
 }
 
-const TEMPLATES = [
-  { id: "modern", label: "Modern", desc: "Clean and bold" },
-  { id: "classic", label: "Classic", desc: "Traditional layout" },
-  { id: "minimal", label: "Minimal", desc: "Lots of whitespace" },
-  { id: "bold", label: "Bold", desc: "Colorful, geometric" },
-  { id: "elegant", label: "Elegant", desc: "Refined typography" },
-  { id: "creative", label: "Creative", desc: "Playful and fun" },
-];
-
 const DEFAULT_LAYOUT = {
   paragraphSpacing: 1,
   lineHeight: 1.6,
@@ -346,6 +380,72 @@ const DEFAULT_LAYOUT = {
   sectionSpacing: 2,
   maxWidth: "normal" as const,
 };
+
+type LayoutOverrides = Partial<typeof DEFAULT_LAYOUT>;
+type TemplateId = "modern" | "classic" | "minimal" | "bold" | "elegant" | "creative";
+
+const TEMPLATE_PRESETS: Record<
+  TemplateId,
+  { layout: LayoutOverrides; accentColor: string; fontFamily: string; titleColor: string; headingColor: string; bodyColor: string }
+> = {
+  modern: {
+    layout: { paragraphSpacing: 1, lineHeight: 1.6, alignment: "left", margins: 2, sectionSpacing: 2, maxWidth: "normal" },
+    accentColor: "#FF6B35",
+    fontFamily: "Inter, system-ui, sans-serif",
+    titleColor: "#FF6B35",
+    headingColor: "#1a1a1a",
+    bodyColor: "#4a4a4a",
+  },
+  classic: {
+    layout: { paragraphSpacing: 1.25, lineHeight: 1.75, alignment: "left", margins: 2.5, sectionSpacing: 2.5, maxWidth: "narrow" },
+    accentColor: "#2c3e50",
+    fontFamily: "Georgia, 'Times New Roman', serif",
+    titleColor: "#2c3e50",
+    headingColor: "#2c3e50",
+    bodyColor: "#34495e",
+  },
+  minimal: {
+    layout: { paragraphSpacing: 1.5, lineHeight: 1.8, alignment: "left", margins: 3, sectionSpacing: 3, maxWidth: "narrow" },
+    accentColor: "#374151",
+    fontFamily: "Inter, system-ui, sans-serif",
+    titleColor: "#111827",
+    headingColor: "#1f2937",
+    bodyColor: "#6b7280",
+  },
+  bold: {
+    layout: { paragraphSpacing: 1.2, lineHeight: 1.6, alignment: "left", margins: 2, sectionSpacing: 2, maxWidth: "wide" },
+    accentColor: "#7C3AED",
+    fontFamily: "'DM Sans', Inter, sans-serif",
+    titleColor: "#7C3AED",
+    headingColor: "#1a1a1a",
+    bodyColor: "#374151",
+  },
+  elegant: {
+    layout: { paragraphSpacing: 1.4, lineHeight: 1.8, alignment: "left", margins: 2.5, sectionSpacing: 2.5, maxWidth: "normal" },
+    accentColor: "#6B4E71",
+    fontFamily: "'Playfair Display', Georgia, serif",
+    titleColor: "#6B4E71",
+    headingColor: "#2d2d2d",
+    bodyColor: "#5a5a5a",
+  },
+  creative: {
+    layout: { paragraphSpacing: 1.1, lineHeight: 1.65, alignment: "left", margins: 2, sectionSpacing: 1.8, maxWidth: "wide" },
+    accentColor: "#EC4899",
+    fontFamily: "'Nunito', Inter, sans-serif",
+    titleColor: "#EC4899",
+    headingColor: "#1f2937",
+    bodyColor: "#4b5563",
+  },
+};
+
+const TEMPLATES = [
+  { id: "modern" as TemplateId, label: "Modern", desc: "Clean and bold" },
+  { id: "classic" as TemplateId, label: "Classic", desc: "Traditional layout" },
+  { id: "minimal" as TemplateId, label: "Minimal", desc: "Lots of whitespace" },
+  { id: "bold" as TemplateId, label: "Bold", desc: "Colorful, geometric" },
+  { id: "elegant" as TemplateId, label: "Elegant", desc: "Refined typography" },
+  { id: "creative" as TemplateId, label: "Creative", desc: "Playful and fun" },
+];
 
 export default function ProductEditor({ productId }: { productId: string }) {
   const router = useRouter();
@@ -357,11 +457,21 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [template, setTemplate] = useState("modern");
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [, setSaveIndicatorTick] = useState(0);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [sectionToDeleteId, setSectionToDeleteId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showFullPreview, setShowFullPreview] = useState(false);
-  const [placedElements, setPlacedElements] = useState<PlacedElement[]>([]);
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const [uiTheme, setUiTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("product-editor-theme") as "light" | "dark" | null;
+      return stored === "dark" ? "dark" : "light";
+    }
+    return "light";
+  });
+  const [placedElementsByPage, setPlacedElementsByPage] = useState<PlacedElement[][]>([]);
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
   const [layoutSettings, setLayoutSettings] = useState(DEFAULT_LAYOUT);
   const [activeIconCategory, setActiveIconCategory] = useState<string>(Object.keys(ICON_CATEGORIES)[0] ?? "Business");
@@ -375,10 +485,30 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [backgroundSettings, setBackgroundSettings] = useState<ImageSettings>(DEFAULT_IMAGE_SETTINGS);
   const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(DEFAULT_OVERLAY);
+  const [pageBackgrounds, setPageBackgrounds] = useState<PageBackground[]>([]);
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [imageSettings, setImageSettings] = useState<ImageSettings>(DEFAULT_IMAGE_SETTINGS);
   const selectedTextRef = useRef<HTMLElement | null>(null);
   const [selectedTextMeta, setSelectedTextMeta] = useState<SelectedTextMeta | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([]);
+  const [redoStack, setRedoStack] = useState<EditorSnapshot[]>([]);
+  const recordingRef = useRef(false);
+  const recordUndoDebouncedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const currentPageElements = placedElementsByPage[currentPageIndex] ?? [];
+
+  const setCurrentPageElements = useCallback(
+    (updater: (prev: PlacedElement[]) => PlacedElement[]) => {
+      setPlacedElementsByPage((prev) => {
+        const next = [...prev];
+        while (next.length <= currentPageIndex) next.push([]);
+        next[currentPageIndex] = updater(next[currentPageIndex] ?? []);
+        return next;
+      });
+    },
+    [currentPageIndex]
+  );
 
   const updateLayout = useCallback(<K extends keyof typeof DEFAULT_LAYOUT>(key: K, value: (typeof DEFAULT_LAYOUT)[K]) => {
     setLayoutSettings((prev) => ({ ...prev, [key]: value }));
@@ -400,19 +530,62 @@ export default function ProductEditor({ productId }: { productId: string }) {
       const data = (await res.json()) as Product;
       setProduct(data);
       setSections(data.content?.sections ?? []);
-      setTemplate((data.designSettings as { template?: string })?.template ?? "modern");
-      setPlacedElements(parsePlacedElements(data.placedElements ?? []));
+      const savedTemplate = ((data.designSettings as { template?: string })?.template ?? "modern") as TemplateId;
+      setTemplate(savedTemplate);
+      const byPage = (data.designSettings as { placedElementsByPage?: unknown[] })?.placedElementsByPage;
+      if (Array.isArray(byPage) && byPage.length > 0) {
+        setPlacedElementsByPage(byPage.map((pageArr) => (Array.isArray(pageArr) ? parsePlacedElements(pageArr) : [])));
+      } else {
+        const legacy = parsePlacedElements(data.placedElements ?? []);
+        setPlacedElementsByPage(legacy.length ? [legacy] : []);
+      }
       const colors = (data.designSettings as { colors?: Record<string, string> })?.colors;
-      setGraphicsAccentColor(colors?.graphics ?? "#333333");
-      setCustomColor(colors?.graphics ?? "#333333");
-      const ds = data.designSettings as {
+      const preset = TEMPLATE_PRESETS[savedTemplate] ?? TEMPLATE_PRESETS.modern;
+      setGraphicsAccentColor(colors?.graphics ?? preset.accentColor);
+      setCustomColor(colors?.graphics ?? preset.accentColor);
+      setLayoutSettings((prev) => {
+        const layoutFromDs = (data.designSettings as { layout?: LayoutOverrides })?.layout;
+        if (layoutFromDs && typeof layoutFromDs === "object") {
+          return { ...prev, ...layoutFromDs } as typeof prev;
+        }
+        return { ...prev, ...preset.layout } as typeof prev;
+      });
+      const rawDs = data.designSettings ?? (data as { design_settings?: unknown }).design_settings;
+      const ds = rawDs as {
         backgroundImage?: string;
+        background_image?: string;
         backgroundSettings?: ImageSettings;
         overlaySettings?: OverlaySettings;
+        pages?: PageBackground[];
       } | undefined;
-      setBackgroundImage(ds?.backgroundImage ?? null);
-      setBackgroundSettings(ds?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...ds.backgroundSettings } : DEFAULT_IMAGE_SETTINGS);
-      setOverlaySettings(ds?.overlaySettings ? { ...DEFAULT_OVERLAY, ...ds.overlaySettings } : DEFAULT_OVERLAY);
+      const sectionsCount = (data.content?.sections ?? []).length || 1;
+      const legacyBgUrl = ds?.backgroundImage ?? ds?.background_image ?? null;
+      let pages: PageBackground[];
+      if (Array.isArray(ds?.pages) && ds.pages.length >= sectionsCount) {
+        pages = ds.pages.slice(0, sectionsCount).map((p) => ({
+          backgroundImage: p?.backgroundImage ?? null,
+          backgroundSettings: p?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...p.backgroundSettings } : undefined,
+          overlaySettings: p?.overlaySettings ? { ...DEFAULT_OVERLAY, ...p.overlaySettings } : undefined,
+        }));
+      } else {
+        pages = Array.from({ length: sectionsCount }, (_, i) =>
+          i === 0 && legacyBgUrl
+            ? {
+                backgroundImage: legacyBgUrl,
+                backgroundSettings: ds?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...ds.backgroundSettings } : undefined,
+                overlaySettings: ds?.overlaySettings ? { ...DEFAULT_OVERLAY, ...ds.overlaySettings } : undefined,
+              }
+            : {}
+        );
+      }
+      setPageBackgrounds(pages);
+      setCurrentPageIndex(0);
+      setUndoStack([]);
+      setRedoStack([]);
+      const first = pages[0];
+      setBackgroundImage(first?.backgroundImage ?? null);
+      setBackgroundSettings(first?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...first.backgroundSettings } : DEFAULT_IMAGE_SETTINGS);
+      setOverlaySettings(first?.overlaySettings ? { ...DEFAULT_OVERLAY, ...first.overlaySettings } : DEFAULT_OVERLAY);
     } catch {
       setError("Failed to load product");
     } finally {
@@ -424,11 +597,122 @@ export default function ProductEditor({ productId }: { productId: string }) {
     fetchProduct();
   }, [fetchProduct]);
 
+  useEffect(() => {
+    setPageBackgrounds((prev) => {
+      const need = sections.length || 1;
+      if (prev.length === need) return prev;
+      const next = [...prev];
+      while (next.length < need) next.push({});
+      return next.slice(0, need);
+    });
+  }, [sections.length]);
+
+  useEffect(() => {
+    setPlacedElementsByPage((prev) => {
+      const need = sections.length || 1;
+      if (prev.length === need) return prev;
+      const next = [...prev];
+      while (next.length < need) next.push([]);
+      return next.slice(0, need);
+    });
+  }, [sections.length]);
+
+  useEffect(() => {
+    const safeIndex = Math.min(currentPageIndex, Math.max(0, pageBackgrounds.length - 1));
+    if (safeIndex !== currentPageIndex) setCurrentPageIndex(safeIndex);
+  }, [currentPageIndex, pageBackgrounds.length]);
+
+  useEffect(() => {
+    const page = pageBackgrounds[currentPageIndex];
+    setBackgroundImage(page?.backgroundImage ?? null);
+    setBackgroundSettings(page?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...page.backgroundSettings } : DEFAULT_IMAGE_SETTINGS);
+    setOverlaySettings(page?.overlaySettings ? { ...DEFAULT_OVERLAY, ...page.overlaySettings } : DEFAULT_OVERLAY);
+  }, [currentPageIndex, pageBackgrounds]);
+
+  const persistCurrentPageBackground = useCallback((updates: Partial<PageBackground>) => {
+    setPageBackgrounds((prev) => {
+      const next = [...prev];
+      while (next.length <= currentPageIndex) next.push({});
+      next[currentPageIndex] = { ...next[currentPageIndex], ...updates };
+      return next;
+    });
+  }, [currentPageIndex]);
+
+  const snapshot = useCallback(
+    (): EditorSnapshot => ({
+      sections: sections.map((s) => ({ ...s })),
+      placedElementsByPage: placedElementsByPage.map((pageArr) => pageArr.map((e) => ({ ...e }))),
+      pageBackgrounds: pageBackgrounds.map((p) => ({ ...p })),
+    }),
+    [sections, placedElementsByPage, pageBackgrounds]
+  );
+
+  const recordUndo = useCallback(
+    (immediate = true) => {
+      if (recordingRef.current) return;
+      const snap = snapshot();
+      setUndoStack((prev) => {
+        const next = [...prev, snap].slice(-HISTORY_LIMIT);
+        return next;
+      });
+      setRedoStack([]);
+    },
+    [snapshot]
+  );
+
+  const recordUndoDebounced = useCallback(() => {
+    if (recordingRef.current) return;
+    if (recordUndoDebouncedRef.current) clearTimeout(recordUndoDebouncedRef.current);
+    const snap = snapshot();
+    recordUndoDebouncedRef.current = setTimeout(() => {
+      recordUndoDebouncedRef.current = null;
+      if (recordingRef.current) return;
+      setUndoStack((prev) => [...prev, snap].slice(-HISTORY_LIMIT));
+      setRedoStack([]);
+    }, 400);
+  }, [snapshot]);
+
+  const applySnapshot = useCallback(
+    (snap: EditorSnapshot) => {
+      setSections(snap.sections);
+      setPlacedElementsByPage(snap.placedElementsByPage);
+      setPageBackgrounds(snap.pageBackgrounds);
+      const page = snap.pageBackgrounds[Math.min(currentPageIndex, snap.pageBackgrounds.length - 1)];
+      setBackgroundImage(page?.backgroundImage ?? null);
+      setBackgroundSettings(page?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...page.backgroundSettings } : DEFAULT_IMAGE_SETTINGS);
+      setOverlaySettings(page?.overlaySettings ? { ...DEFAULT_OVERLAY, ...page.overlaySettings } : DEFAULT_OVERLAY);
+    },
+    [currentPageIndex]
+  );
+
+  const undo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    recordingRef.current = true;
+    const prevState = snapshot();
+    const toRestore = undoStack[undoStack.length - 1];
+    setUndoStack((prev) => prev.slice(0, -1));
+    setRedoStack((prev) => [...prev, prevState].slice(-HISTORY_LIMIT));
+    applySnapshot(toRestore);
+    recordingRef.current = false;
+  }, [undoStack, snapshot, applySnapshot]);
+
+  const redo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    recordingRef.current = true;
+    const prevState = snapshot();
+    const toRestore = redoStack[redoStack.length - 1];
+    setRedoStack((prev) => prev.slice(0, -1));
+    setUndoStack((prev) => [...prev, prevState].slice(-HISTORY_LIMIT));
+    applySnapshot(toRestore);
+    recordingRef.current = false;
+  }, [redoStack, snapshot, applySnapshot]);
+
   const saveToServer = useCallback(
     async (payload: {
       content?: { sections: Section[] };
       designSettings?: Record<string, unknown>;
       placedElements?: PlacedElement[];
+      placedElementsByPage?: PlacedElement[][];
     }) => {
       if (!productId) return;
       setSaving(true);
@@ -450,6 +734,30 @@ export default function ProductEditor({ productId }: { productId: string }) {
     [productId]
   );
 
+  const handleTemplateSelect = useCallback(
+    (templateId: string) => {
+      const preset = TEMPLATE_PRESETS[templateId as TemplateId];
+      if (!preset) return;
+      setTemplate(templateId);
+      setLayoutSettings((prev) => ({ ...prev, ...preset.layout } as typeof prev));
+      setGraphicsAccentColor(preset.accentColor);
+      setCustomColor(preset.accentColor);
+      saveToServer({
+        content: { sections },
+        designSettings: {
+          ...product?.designSettings,
+          template: templateId,
+          colors: { ...product?.designSettings?.colors, graphics: preset.accentColor },
+          typography: product?.designSettings?.typography,
+          pages: pageBackgrounds.length ? pageBackgrounds : undefined,
+          layout: { ...layoutSettings, ...preset.layout },
+          placedElementsByPage,
+        },
+      });
+    },
+    [product?.designSettings, sections, pageBackgrounds, layoutSettings, placedElementsByPage, saveToServer]
+  );
+
   useEffect(() => {
     if (!product || sections.length === 0) return;
     autoSaveTimerRef.current = setInterval(() => {
@@ -458,27 +766,56 @@ export default function ProductEditor({ productId }: { productId: string }) {
         designSettings: {
           ...product.designSettings,
           template,
+          layout: layoutSettings,
           colors: { ...product.designSettings?.colors, graphics: graphicsAccentColor },
           typography: product.designSettings?.typography,
-          backgroundImage: backgroundImage ?? undefined,
-          backgroundSettings: backgroundImage ? backgroundSettings : undefined,
-          overlaySettings: backgroundImage ? overlaySettings : undefined,
+          pages: pageBackgrounds.length ? pageBackgrounds : undefined,
+          placedElementsByPage: placedElementsByPage,
         },
-        placedElements,
       });
-    }, 30000);
+    }, 5000);
     return () => {
       if (autoSaveTimerRef.current) clearInterval(autoSaveTimerRef.current);
     };
-  }, [sections, template, product, placedElements, graphicsAccentColor, backgroundImage, backgroundSettings, overlaySettings, saveToServer]);
+  }, [sections, template, product, placedElementsByPage, graphicsAccentColor, layoutSettings, pageBackgrounds, saveToServer]);
 
   const openEdit = (section: Section) => {
     setEditingSectionId(section.id);
     setEditingContent(section.content);
   };
 
+  const confirmDeleteSection = useCallback(() => {
+    if (!sectionToDeleteId || sections.length <= 1) return;
+    recordUndo();
+    const idx = sections.findIndex((s) => s.id === sectionToDeleteId);
+    const nextSections = sections.filter((s) => s.id !== sectionToDeleteId);
+    const nextPageBackgrounds = pageBackgrounds.filter((_, i) => i !== idx);
+    const nextPlacedByPage = placedElementsByPage.filter((_, i) => i !== idx);
+    setSections(nextSections);
+    setPageBackgrounds(nextPageBackgrounds.length ? nextPageBackgrounds : [{}]);
+    setPlacedElementsByPage(nextPlacedByPage.length ? nextPlacedByPage : [[]]);
+    setEditingSectionId((id) => (id === sectionToDeleteId ? null : id));
+    setSectionToDeleteId(null);
+    setCurrentPageIndex((i) => {
+      if (idx < 0) return i;
+      if (i >= nextSections.length) return Math.max(0, nextSections.length - 1);
+      if (i > idx) return i - 1;
+      return i;
+    });
+    saveToServer({
+      content: { sections: nextSections },
+      designSettings: {
+        ...product?.designSettings,
+        pages: nextPageBackgrounds.length ? nextPageBackgrounds : undefined,
+        placedElementsByPage: nextPlacedByPage.length ? nextPlacedByPage : [[]],
+      },
+    });
+    toast({ title: "Section deleted" });
+  }, [sectionToDeleteId, sections, pageBackgrounds, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo]);
+
   const saveEdit = () => {
     if (!editingSectionId) return;
+    recordUndo();
     const nextSections = sections.map((s) => (s.id === editingSectionId ? { ...s, content: editingContent } : s));
     setSections(nextSections);
     setEditingSectionId(null);
@@ -486,9 +823,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
   };
 
   const updateSectionContent = useCallback((sectionId: string, newContent: string) => {
+    recordUndoDebounced();
     setSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, content: newContent } : s)));
     if (editingSectionId === sectionId) setEditingContent(newContent);
-  }, [editingSectionId]);
+  }, [editingSectionId, recordUndoDebounced]);
 
   async function handleRegenerateSection(
     sectionId: string,
@@ -514,7 +852,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
       const data = (await res.json()) as { newContent?: string; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Request failed");
       if (data.newContent) {
-        updateSectionContent(sectionId, data.newContent);
+        recordUndo();
+        setSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, content: data.newContent! } : s)));
+        if (editingSectionId === sectionId) setEditingContent(data.newContent);
         if (action === "regenerate") toast({ title: "Section regenerated!" });
         else if (action === "expand") toast({ title: "Section expanded!" });
         else if (action === "condense") toast({ title: "Section condensed!" });
@@ -532,6 +872,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   }
 
   const addSection = () => {
+    recordUndo();
     const id = `section-${Date.now()}`;
     const newSection: Section = { id, title: "New Section", content: "", order: sections.length + 1 };
     setSections((prev) => [...prev, newSection]);
@@ -539,62 +880,87 @@ export default function ProductEditor({ productId }: { productId: string }) {
     setEditingContent("");
   };
 
-  const updateElementPosition = useCallback((id: string, position: { x: number; y: number }) => {
-    setPlacedElements((prev) => prev.map((el) => (el.id === id ? { ...el, position } : el)));
-  }, []);
+  const updateElementPosition = useCallback(
+    (id: string, position: { x: number; y: number }) => {
+      recordUndo();
+      setCurrentPageElements((prev) => prev.map((el) => (el.id === id ? { ...el, position } : el)));
+    },
+    [recordUndo, setCurrentPageElements]
+  );
   const updateElementSize = useCallback(
     (id: string, size: { width: number; height: number }, position: { x: number; y: number }) => {
-      setPlacedElements((prev) => prev.map((el) => (el.id === id ? { ...el, size, position } : el)));
+      recordUndo();
+      setCurrentPageElements((prev) => prev.map((el) => (el.id === id ? { ...el, size, position } : el)));
     },
-    []
+    [recordUndo, setCurrentPageElements]
   );
-  const deleteElement = useCallback((id: string) => {
-    setPlacedElements((prev) => prev.filter((el) => el.id !== id));
-    setSelectedElement(null);
-  }, []);
-  const duplicateElement = useCallback((id: string) => {
-    const element = placedElements.find((el) => el.id === id);
-    if (!element) return;
-    const newElement: PlacedElement = {
-      ...element,
-      id: `${element.type}-${Date.now()}`,
-      position: { x: element.position.x + 20, y: element.position.y + 20 },
-    };
-    setPlacedElements((prev) => [...prev, newElement]);
-    setSelectedElement(newElement.id);
-  }, [placedElements]);
+  const deleteElement = useCallback(
+    (id: string) => {
+      recordUndo();
+      setCurrentPageElements((prev) => prev.filter((el) => el.id !== id));
+      setSelectedElement(null);
+    },
+    [recordUndo, setCurrentPageElements]
+  );
+  const duplicateElement = useCallback(
+    (id: string) => {
+      const element = currentPageElements.find((el) => el.id === id);
+      if (!element) return;
+      recordUndo();
+      const newElement: PlacedElement = {
+        ...element,
+        id: `${element.type}-${Date.now()}`,
+        position: { x: element.position.x + 20, y: element.position.y + 20 },
+      };
+      setCurrentPageElements((prev) => [...prev, newElement]);
+      setSelectedElement(newElement.id);
+    },
+    [currentPageElements, recordUndo, setCurrentPageElements]
+  );
   const bringToFront = useCallback(() => {
-    const maxZ = Math.max(0, ...placedElements.map((el) => el.zIndex));
-    setPlacedElements((prev) =>
+    if (!selectedElement) return;
+    recordUndo();
+    const maxZ = Math.max(0, ...currentPageElements.map((el) => el.zIndex));
+    setCurrentPageElements((prev) =>
       prev.map((el) => (el.id === selectedElement ? { ...el, zIndex: maxZ + 1 } : el))
     );
-  }, [placedElements, selectedElement]);
+  }, [currentPageElements, selectedElement, recordUndo, setCurrentPageElements]);
   const sendToBack = useCallback(() => {
-    const minZ = Math.min(0, ...placedElements.map((el) => el.zIndex));
-    setPlacedElements((prev) =>
+    if (!selectedElement) return;
+    recordUndo();
+    const minZ = Math.min(0, ...currentPageElements.map((el) => el.zIndex));
+    setCurrentPageElements((prev) =>
       prev.map((el) => (el.id === selectedElement ? { ...el, zIndex: minZ - 1 } : el))
     );
-  }, [placedElements, selectedElement]);
-  const moveElement = useCallback((id: string, deltaX: number, deltaY: number) => {
-    setPlacedElements((prev) =>
-      prev.map((el) =>
-        el.id === id ? { ...el, position: { x: el.position.x + deltaX, y: el.position.y + deltaY } } : el
-      )
-    );
-  }, []);
-  const handleIconClick = useCallback((iconName: string) => {
-    const newElement: PlacedElement = {
-      id: `icon-${Date.now()}`,
-      type: "icon",
-      content: iconName,
-      position: { x: CANVAS_WIDTH / 2 - 50, y: 300 },
-      size: { width: 80, height: 80 },
-      rotation: 0,
-      zIndex: placedElements.length,
-    };
-    setPlacedElements((prev) => [...prev, newElement]);
-    setSelectedElement(newElement.id);
-  }, [placedElements.length]);
+  }, [currentPageElements, selectedElement, recordUndo, setCurrentPageElements]);
+  const moveElement = useCallback(
+    (id: string, deltaX: number, deltaY: number) => {
+      recordUndo();
+      setCurrentPageElements((prev) =>
+        prev.map((el) =>
+          el.id === id ? { ...el, position: { x: el.position.x + deltaX, y: el.position.y + deltaY } } : el
+        )
+      );
+    },
+    [recordUndo, setCurrentPageElements]
+  );
+  const handleIconClick = useCallback(
+    (iconName: string) => {
+      recordUndo();
+      const newElement: PlacedElement = {
+        id: `icon-${Date.now()}`,
+        type: "icon",
+        content: iconName,
+        position: { x: CANVAS_WIDTH / 2 - 50, y: 300 },
+        size: { width: 80, height: 80 },
+        rotation: 0,
+        zIndex: currentPageElements.length,
+      };
+      setCurrentPageElements((prev) => [...prev, newElement]);
+      setSelectedElement(newElement.id);
+    },
+    [currentPageElements.length, recordUndo, setCurrentPageElements]
+  );
 
   const handleApplyColor = useCallback((color: string) => {
     setGraphicsAccentColor(color);
@@ -618,36 +984,44 @@ export default function ProductEditor({ productId }: { productId: string }) {
     if (colors[0]) handleApplyColor(colors[0]);
   }, [handleApplyColor]);
 
-  const handleAddPhoto = useCallback((url: string) => {
-    const newElement: PlacedElement = {
-      id: `image-${Date.now()}`,
-      type: "image",
-      content: url,
-      position: { x: CANVAS_WIDTH / 2 - 100, y: 280 },
-      size: { width: 200, height: 200 },
-      rotation: 0,
-      zIndex: placedElements.length,
-    };
-    setPlacedElements((prev) => [...prev, newElement]);
-    setSelectedElement(newElement.id);
-  }, [placedElements.length]);
+  const handleAddPhoto = useCallback(
+    (url: string) => {
+      recordUndo();
+      const newElement: PlacedElement = {
+        id: `image-${Date.now()}`,
+        type: "image",
+        content: url,
+        position: { x: CANVAS_WIDTH / 2 - 100, y: 280 },
+        size: { width: 200, height: 200 },
+        rotation: 0,
+        zIndex: currentPageElements.length,
+      };
+      setCurrentPageElements((prev) => [...prev, newElement]);
+      setSelectedElement(newElement.id);
+    },
+    [currentPageElements.length, recordUndo, setCurrentPageElements]
+  );
 
-  const handleAddShape = useCallback((svgFragment: string, fillColor: string) => {
-    const filled = svgFragment.replace(/currentColor/g, fillColor).replace(/stroke="currentColor"/g, `stroke="${fillColor}"`);
-    const fullSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><g fill="${fillColor}" stroke="${fillColor}">${filled}</g></svg>`;
-    const dataUrl = `data:image/svg+xml,${encodeURIComponent(fullSvg)}`;
-    const newElement: PlacedElement = {
-      id: `image-${Date.now()}`,
-      type: "image",
-      content: dataUrl,
-      position: { x: CANVAS_WIDTH / 2 - 50, y: 300 },
-      size: { width: 80, height: 80 },
-      rotation: 0,
-      zIndex: placedElements.length,
-    };
-    setPlacedElements((prev) => [...prev, newElement]);
-    setSelectedElement(newElement.id);
-  }, [placedElements.length]);
+  const handleAddShape = useCallback(
+    (svgFragment: string, fillColor: string) => {
+      recordUndo();
+      const filled = svgFragment.replace(/currentColor/g, fillColor).replace(/stroke="currentColor"/g, `stroke="${fillColor}"`);
+      const fullSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><g fill="${fillColor}" stroke="${fillColor}">${filled}</g></svg>`;
+      const dataUrl = `data:image/svg+xml,${encodeURIComponent(fullSvg)}`;
+      const newElement: PlacedElement = {
+        id: `image-${Date.now()}`,
+        type: "image",
+        content: dataUrl,
+        position: { x: CANVAS_WIDTH / 2 - 50, y: 300 },
+        size: { width: 80, height: 80 },
+        rotation: 0,
+        zIndex: currentPageElements.length,
+      };
+      setCurrentPageElements((prev) => [...prev, newElement]);
+      setSelectedElement(newElement.id);
+    },
+    [currentPageElements.length, recordUndo, setCurrentPageElements]
+  );
 
   const searchPhotos = useCallback(async (query?: string) => {
     const q = (query ?? photoSearch).trim() || "nature";
@@ -665,7 +1039,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
   }, [photoSearch, toast]);
 
-  const selectedImageElement = selectedElement ? placedElements.find((el) => el.id === selectedElement && el.type === "image") : null;
+  const selectedImageElement = selectedElement ? currentPageElements.find((el) => el.id === selectedElement && el.type === "image") : null;
 
   useEffect(() => {
     if (selectedImageElement) {
@@ -675,6 +1049,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const updateImageSetting = useCallback(
     (key: keyof ImageSettings, value: number | string) => {
+      recordUndoDebounced();
       const next = { ...imageSettings, [key]: value };
       setImageSettings(next);
       if (!selectedElement) return;
@@ -682,33 +1057,67 @@ export default function ProductEditor({ productId }: { productId: string }) {
         prev.map((el) => (el.id === selectedElement ? { ...el, imageSettings: { ...el.imageSettings, ...next } } : el))
       );
     },
-    [imageSettings, selectedElement]
+    [imageSettings, selectedElement, recordUndoDebounced]
+  );
+
+  const setBackgroundFromUrl = useCallback(
+    (imageUrl: string) => {
+      recordUndo();
+      const url = typeof imageUrl === "string" ? imageUrl.trim() : "";
+      if (!url) {
+        toast({ title: "No image URL to set as background", variant: "destructive" });
+        return;
+      }
+      const newBgSettings = { ...DEFAULT_IMAGE_SETTINGS };
+      const defaultOverlay = DEFAULT_OVERLAY;
+      setBackgroundImage(url);
+      setBackgroundSettings(newBgSettings);
+      setOverlaySettings(defaultOverlay);
+      persistCurrentPageBackground({ backgroundImage: url, backgroundSettings: newBgSettings, overlaySettings: defaultOverlay });
+      saveToServer({
+        designSettings: {
+          ...product?.designSettings,
+          pages: (() => {
+            const next = [...pageBackgrounds];
+            while (next.length <= currentPageIndex) next.push({});
+            next[currentPageIndex] = { backgroundImage: url, backgroundSettings: newBgSettings, overlaySettings: defaultOverlay };
+            return next;
+          })(),
+        },
+      });
+      toast({ title: "Background set for this page. Adjust opacity and overlay below." });
+    },
+    [toast, product?.designSettings, saveToServer, persistCurrentPageBackground, pageBackgrounds, currentPageIndex, recordUndo]
   );
 
   const setAsBackground = useCallback(() => {
     const el = selectedImageElement;
     if (!el) return;
-    setBackgroundImage(el.content);
-    setBackgroundSettings({ ...DEFAULT_IMAGE_SETTINGS, ...el.imageSettings });
+    recordUndo();
+    const imageUrl = typeof el.content === "string" ? el.content.trim() : "";
+    if (!imageUrl) {
+      toast({ title: "No image URL to set as background", variant: "destructive" });
+      return;
+    }
+    const newBgSettings = { ...DEFAULT_IMAGE_SETTINGS, ...el.imageSettings };
     const defaultOverlay = DEFAULT_OVERLAY;
+    setBackgroundImage(imageUrl);
+    setBackgroundSettings(newBgSettings);
     setOverlaySettings(defaultOverlay);
-    setPlacedElements((prev) => prev.filter((e) => e.id !== el.id));
-    setSelectedElement(null);
-    setProduct((p) =>
-      p
-        ? {
-            ...p,
-            designSettings: {
-              ...p.designSettings,
-              backgroundImage: el.content,
-              backgroundSettings: { ...DEFAULT_IMAGE_SETTINGS, ...el.imageSettings },
-              overlaySettings: defaultOverlay,
-            },
-          }
-        : null
+    persistCurrentPageBackground({ backgroundImage: imageUrl, backgroundSettings: newBgSettings, overlaySettings: defaultOverlay });
+    const nextPlacedByPage = placedElementsByPage.map((pageArr, i) =>
+      i === currentPageIndex ? pageArr.filter((e) => e.id !== el.id) : pageArr
     );
-    toast({ title: "Background set. Adjust overlay if needed." });
-  }, [selectedImageElement, toast]);
+    setPlacedElementsByPage(nextPlacedByPage);
+    setSelectedElement(null);
+    const nextPages = [...pageBackgrounds];
+    while (nextPages.length <= currentPageIndex) nextPages.push({});
+    nextPages[currentPageIndex] = { backgroundImage: imageUrl, backgroundSettings: newBgSettings, overlaySettings: defaultOverlay };
+    saveToServer({
+      designSettings: { ...product?.designSettings, pages: nextPages, placedElementsByPage: nextPlacedByPage },
+    });
+    toast({ title: "Background set for this page. Image removed from canvas." });
+  }, [selectedImageElement, placedElementsByPage, product?.designSettings, saveToServer, toast, persistCurrentPageBackground, pageBackgrounds, currentPageIndex, recordUndo]);
 
   const FILTER_PRESETS: Record<string, Partial<ImageSettings>> = {
     none: { brightness: 100, contrast: 100, saturation: 100, blur: 0 },
@@ -721,54 +1130,136 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const applyFilter = useCallback(
     (name: keyof typeof FILTER_PRESETS) => {
+      recordUndo();
       const filter = FILTER_PRESETS[name] ?? FILTER_PRESETS.none;
       const next = { ...imageSettings, ...filter };
       setImageSettings(next);
       if (!selectedElement) return;
-      setPlacedElements((prev) =>
+      setCurrentPageElements((prev) =>
         prev.map((el) => (el.id === selectedElement ? { ...el, imageSettings: { ...el.imageSettings, ...next } } : el))
       );
     },
-    [imageSettings, selectedElement]
+    [imageSettings, selectedElement, recordUndo, setCurrentPageElements]
   );
 
   const resetImageSettings = useCallback(() => {
+    recordUndo();
     setImageSettings(DEFAULT_IMAGE_SETTINGS);
     if (!selectedElement) return;
-    setPlacedElements((prev) =>
+    setCurrentPageElements((prev) =>
       prev.map((el) =>
         el.id === selectedElement ? { ...el, imageSettings: DEFAULT_IMAGE_SETTINGS } : el
       )
     );
-  }, [selectedElement]);
+  }, [selectedElement, recordUndo, setCurrentPageElements]);
 
   const removeBackground = useCallback(() => {
+    recordUndo();
     setBackgroundImage(null);
     setBackgroundSettings(DEFAULT_IMAGE_SETTINGS);
     setOverlaySettings(DEFAULT_OVERLAY);
-    setProduct((p) =>
-      p
-        ? {
-            ...p,
-            designSettings: {
-              ...p.designSettings,
-              backgroundImage: undefined,
-              backgroundSettings: undefined,
-              overlaySettings: undefined,
-            },
-          }
-        : null
+    persistCurrentPageBackground({ backgroundImage: null, backgroundSettings: undefined, overlaySettings: undefined });
+    const nextPages = [...pageBackgrounds];
+    while (nextPages.length <= currentPageIndex) nextPages.push({});
+    nextPages[currentPageIndex] = {};
+    saveToServer({ designSettings: { ...product?.designSettings, pages: nextPages } });
+    toast({ title: "Background removed from this page" });
+  }, [toast, persistCurrentPageBackground, pageBackgrounds, currentPageIndex, product?.designSettings, saveToServer, recordUndo]);
+
+  const applyBackgroundToAllPages = useCallback(() => {
+    recordUndo();
+    const currentBg: PageBackground = {
+      backgroundImage: backgroundImage ?? undefined,
+      backgroundSettings: { ...backgroundSettings },
+      overlaySettings: { ...overlaySettings },
+    };
+    const nextPages = Array.from({ length: sections.length }, () => ({ ...currentBg }));
+    setPageBackgrounds(nextPages);
+    saveToServer({ designSettings: { ...product?.designSettings, pages: nextPages } });
+    toast({ title: "Background applied to all pages" });
+  }, [sections.length, backgroundImage, backgroundSettings, overlaySettings, product?.designSettings, saveToServer, toast, recordUndo]);
+
+  const applyGraphicsToAllPages = useCallback(() => {
+    recordUndo();
+    const currentGraphics = currentPageElements.map((e) => ({ ...e }));
+    const nextByPage = Array.from({ length: sections.length }, () => currentGraphics.map((e) => ({ ...e, id: `${e.type}-${Date.now()}-${Math.random().toString(36).slice(2)}` })));
+    setPlacedElementsByPage(nextByPage);
+    saveToServer({ designSettings: { ...product?.designSettings, placedElementsByPage: nextByPage } });
+    toast({ title: "Graphics applied to all pages" });
+  }, [sections.length, currentPageElements, product?.designSettings, saveToServer, toast, recordUndo]);
+
+  const selectedGraphicElement = selectedElement ? currentPageElements.find((el) => el.id === selectedElement) : null;
+
+  const pagesWithSelectedIconCount = selectedGraphicElement
+    ? placedElementsByPage.filter((pageArr) =>
+        pageArr.some((el) => el.type === selectedGraphicElement.type && el.content === selectedGraphicElement.content)
+      ).length
+    : 0;
+
+  const applySelectedIconToAllPages = useCallback(() => {
+    if (!selectedGraphicElement || sections.length <= 1) return;
+    recordUndo();
+    const { type, content, position, size, rotation, zIndex, imageSettings } = selectedGraphicElement;
+    const nextByPage = placedElementsByPage.map((pageArr, i) => {
+      if (i === currentPageIndex) return pageArr;
+      const copy: PlacedElement = {
+        id: `${type}-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`,
+        type,
+        content,
+        position: { ...position },
+        size: { ...size },
+        rotation,
+        zIndex,
+        ...(imageSettings ? { imageSettings: { ...imageSettings } } : {}),
+      };
+      return [...pageArr, copy];
+    });
+    setPlacedElementsByPage(nextByPage);
+    saveToServer({ designSettings: { ...product?.designSettings, placedElementsByPage: nextByPage } });
+    toast({ title: `Icon applied to all ${sections.length} pages` });
+  }, [selectedGraphicElement, sections.length, currentPageIndex, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo]);
+
+  const removeSelectedIconFromAllPages = useCallback(() => {
+    if (!selectedGraphicElement) return;
+    recordUndo();
+    const matchType = selectedGraphicElement.type;
+    const matchContent = selectedGraphicElement.content;
+    const nextByPage = placedElementsByPage.map((pageArr) =>
+      pageArr.filter((el) => !(el.type === matchType && el.content === matchContent))
     );
-    toast({ title: "Background removed" });
-  }, [toast]);
+    const pagesAffected = placedElementsByPage.filter((pageArr) =>
+      pageArr.some((el) => el.type === matchType && el.content === matchContent)
+    ).length;
+    setPlacedElementsByPage(nextByPage);
+    setSelectedElement(null);
+    saveToServer({ designSettings: { ...product?.designSettings, placedElementsByPage: nextByPage } });
+    toast({ title: `Icon removed from all ${pagesAffected} pages` });
+  }, [selectedGraphicElement, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo]);
 
   const updateOverlay = useCallback((key: keyof OverlaySettings, value: string | number) => {
-    setOverlaySettings((prev) => ({ ...prev, [key]: value }));
-  }, []);
+    recordUndoDebounced();
+    setOverlaySettings((prev) => {
+      const next = { ...prev, [key]: value };
+      persistCurrentPageBackground({ overlaySettings: next });
+      return next;
+    });
+  }, [persistCurrentPageBackground, recordUndoDebounced]);
 
   const setOverlayPreset = useCallback((preset: keyof typeof OVERLAY_PRESETS) => {
-    setOverlaySettings(OVERLAY_PRESETS[preset] ?? DEFAULT_OVERLAY);
-  }, []);
+    recordUndo();
+    const next = OVERLAY_PRESETS[preset] ?? DEFAULT_OVERLAY;
+    setOverlaySettings(next);
+    persistCurrentPageBackground({ overlaySettings: next });
+  }, [persistCurrentPageBackground, recordUndo]);
+
+  const updateBackgroundSettings = useCallback(<K extends keyof ImageSettings>(key: K, value: ImageSettings[K]) => {
+    recordUndoDebounced();
+    setBackgroundSettings((prev) => {
+      const next = { ...prev, [key]: value };
+      persistCurrentPageBackground({ backgroundSettings: next });
+      return next;
+    });
+  }, [persistCurrentPageBackground, recordUndoDebounced]);
 
   const handleTextClick = useCallback(
     (e: React.MouseEvent) => {
@@ -932,32 +1423,81 @@ export default function ProductEditor({ productId }: { productId: string }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedElement, deleteElement, duplicateElement, moveElement]);
 
+  useEffect(() => {
+    function handleUndoRedo(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key === "z") {
+        if (e.shiftKey) {
+          e.preventDefault();
+          redo();
+        } else {
+          e.preventDefault();
+          undo();
+        }
+      } else if (e.key === "y") {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", handleUndoRedo);
+    return () => window.removeEventListener("keydown", handleUndoRedo);
+  }, [undo, redo]);
+
+  useEffect(() => {
+    if (!lastSaved) return;
+    const t = setInterval(() => setSaveIndicatorTick((n) => n + 1), 15000);
+    return () => clearInterval(t);
+  }, [lastSaved]);
+
   const handleDownloadPdf = async () => {
-    if (!product) return;
-    const type = ["ebook", "workbook", "course", "checklist"].includes(product.format) ? product.format : "ebook";
+    setPdfExporting(true);
     try {
-      const res = await fetch("/api/products/export", {
+      const title = product?.title ?? "Product";
+      const payload = {
+        title,
+        sections: sections.map((s) => ({
+          id: s.id,
+          title: s.title,
+          content: s.content,
+          contentHtml: s.contentHtml,
+        })),
+      };
+      const res = await fetch("/api/generate-workbook-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          format: type,
-          title: product.title,
-          description: "",
-          niche: product.niche,
-          sections: sections.map((s) => ({ title: s.title, body: s.content })),
-        }),
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Export failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(typeof err?.error === "string" ? err.error : `Export failed (${res.status})`);
+      }
       const blob = await res.blob();
+      const fileName = `${title.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "") || "product"}.pdf`;
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${product.title.replace(/\s+/g, "-")}.pdf`;
+      a.href = url;
+      a.download = fileName;
       a.click();
-      URL.revokeObjectURL(a.href);
+      URL.revokeObjectURL(url);
+      toast({ title: "PDF downloaded", description: `Saved as ${fileName}` });
     } catch (err) {
-      console.error("PDF export failed:", err);
+      toast({
+        title: "Export failed",
+        description: err instanceof Error ? err.message : "PDF generation failed.",
+        variant: "destructive",
+      });
+    } finally {
+      setPdfExporting(false);
     }
   };
+
+  const toggleUiTheme = useCallback(() => {
+    setUiTheme((prev) => {
+      const next = prev === "light" ? "dark" : "light";
+      if (typeof window !== "undefined") localStorage.setItem("product-editor-theme", next);
+      return next;
+    });
+  }, []);
 
   const handleGenerateVideos = () => {
     try {
@@ -980,30 +1520,37 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#0F0F0F] text-white flex items-center justify-center">
+      <main className="min-h-screen bg-gray-100 flex items-center justify-center">
         <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
       </main>
     );
   }
   if (error || !product) {
     return (
-      <main className="min-h-screen bg-[#0F0F0F] text-white p-6">
-        <p className="text-red-400">{error ?? "Product not found"}</p>
-        <Link href="/dashboard/digital-products" className="text-orange-500 mt-4 inline-block">
+      <main className="min-h-screen bg-gray-100 text-gray-900 p-6">
+        <p className="text-red-600">{error ?? "Product not found"}</p>
+        <Link href="/dashboard/digital-products" className="text-orange-500 mt-4 inline-block hover:underline">
           ← Back to Digital Products
         </Link>
       </main>
     );
   }
 
-  const cardClass = "border-[#2A2A2A] bg-[#1A1A1A]";
+  const dsBg = (product?.designSettings as { backgroundImage?: string } | undefined)?.backgroundImage;
+  const canvasBgUrl = (typeof backgroundImage === "string" ? backgroundImage.trim() : "") || (typeof dsBg === "string" ? dsBg.trim() : "") || null;
 
+  const templatePreset = TEMPLATE_PRESETS[(template as TemplateId) || "modern"] ?? TEMPLATE_PRESETS.modern;
   const previewLayoutStyle: React.CSSProperties & Record<`--${string}`, string> = {
     ["--paragraph-spacing" as const]: `${layoutSettings.paragraphSpacing}rem`,
     ["--line-height" as const]: String(layoutSettings.lineHeight),
     ["--text-align" as const]: layoutSettings.alignment,
     ["--margins" as const]: `${layoutSettings.margins}rem`,
     ["--section-spacing" as const]: `${layoutSettings.sectionSpacing}rem`,
+    ["--template-font" as const]: templatePreset.fontFamily,
+    ["--template-title-color" as const]: templatePreset.titleColor,
+    ["--template-heading-color" as const]: templatePreset.headingColor,
+    ["--template-body-color" as const]: templatePreset.bodyColor,
+    fontFamily: templatePreset.fontFamily,
     maxWidth:
       layoutSettings.maxWidth === "narrow"
         ? 600
@@ -1016,11 +1563,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
     padding: `${layoutSettings.margins}rem`,
   };
 
+  const isDark = uiTheme === "dark";
   return (
-    <main className="min-h-screen bg-[#0F0F0F] text-white">
+    <main className={`min-h-screen font-sans ${isDark ? "bg-[#0F0F0F] text-gray-100 editor-dark" : "bg-gray-100 text-gray-900"}`} data-theme={uiTheme}>
       <style
         dangerouslySetInnerHTML={{
           __html: `
+            [data-canvas-background], [data-canvas-background-img] { display: block !important; visibility: visible !important; }
             .product-editor-preview-layout p { margin-bottom: var(--paragraph-spacing, 1rem); line-height: var(--line-height, 1.6); text-align: var(--text-align, left); }
             .product-editor-preview-layout h2 { margin-top: calc(var(--section-spacing, 2rem) * 1.5); margin-bottom: calc(var(--paragraph-spacing, 1rem) * 1.5); text-align: var(--text-align, left); }
             .product-editor-preview-layout h3 { margin-top: calc(var(--section-spacing, 2rem) * 0.75); margin-bottom: calc(var(--paragraph-spacing, 1rem) * 0.75); text-align: var(--text-align, left); }
@@ -1030,55 +1579,126 @@ export default function ProductEditor({ productId }: { productId: string }) {
           `,
         }}
       />
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-[#2A2A2A] bg-[#0F0F0F]/95 backdrop-blur py-4 px-4 md:px-6">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard/digital-products" className="text-[#A0A0A0] hover:text-orange-500 text-sm">
-              ← Digital Products
+      {/* Header - minimal Canva-style toolbar */}
+      <header className={`sticky top-0 z-40 border-b backdrop-blur-sm shadow-sm ${isDark ? "border-[#2A2A2A] bg-[#0F0F0F]/95" : "border-gray-200 bg-white/95"}`}>
+        <div className="max-w-[1800px] mx-auto flex items-center justify-between gap-6 px-4 md:px-6 h-14">
+          <div className="flex items-center gap-6 min-w-0">
+            <Link href="/dashboard/digital-products" className={`text-sm shrink-0 flex items-center gap-1 ${isDark ? "text-gray-400 hover:text-orange-500" : "text-gray-500 hover:text-orange-500"}`}>
+              <ChevronLeft className="w-4 h-4" /> Back
             </Link>
-            <h1 className="text-lg font-semibold text-white truncate max-w-[200px] md:max-w-none">{product.title}</h1>
+            <div className={`h-5 w-px hidden sm:block ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+            <h1 className={`text-base font-semibold truncate ${isDark ? "text-white" : "text-gray-900"}`}>{product.title}</h1>
             {saving ? (
-              <span className="flex items-center gap-1.5 text-xs text-[#A0A0A0]">
+              <span className={`flex items-center gap-1.5 text-xs shrink-0 ${isDark ? "text-gray-400" : "text-gray-500"}`}>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
               </span>
             ) : lastSaved ? (
-              <span className="flex items-center gap-1.5 text-xs text-green-500">
-                <Check className="w-3.5 h-3.5" /> Saved
+              <span className="flex items-center gap-1.5 text-xs text-emerald-600 shrink-0" title={lastSaved.toLocaleString()}>
+                <Check className="w-3.5 h-3.5" /> Saved ✓ · {formatLastSaved(lastSaved)}
               </span>
             ) : null}
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-[#2A2A2A] text-[#E0E0E0] hover:bg-[#2A2A2A] gap-1"
-              onClick={() => setShowFullPreview(true)}
-            >
-              <Eye className="w-4 h-4" /> View Full Product
-            </Button>
-            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 gap-1" onClick={handleDownloadPdf}>
-              <Download className="w-4 h-4" /> Export
+          <div className="flex items-center gap-2 shrink-0">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={toggleUiTheme}
+                    className={`p-2 rounded-lg transition-colors ${isDark ? "text-gray-400 hover:text-orange-500 hover:bg-[#2A2A2A]" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}
+                    aria-label={isDark ? "Switch to light background" : "Switch to dark background"}
+                  >
+                    {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{isDark ? "Light background" : "Dark background"}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button size="sm" variant="ghost" className={isDark ? "text-gray-400 hover:text-white hover:bg-[#2A2A2A]" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"} onClick={() => setShowFullPreview(true)}>
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Preview</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-2" onClick={() => setShowFullPreview(true)}>
+              <Eye className="w-4 h-4" /> Export PDF
             </Button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto p-4 md:p-6">
-        <div className="grid md:grid-cols-[1fr_380px] gap-6">
-          {/* Preview - Left ~60% */}
-          <Card className={cardClass}>
-            <CardHeader>
-              <CardTitle className="text-base text-white">Preview</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-auto max-h-[70vh] rounded-lg border border-[#2A2A2A]">
+      <div className="flex-1 flex overflow-hidden min-h-[calc(100vh-3.5rem)]">
+        {/* Canvas area - left, larger */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-auto">
+          <div className={`flex-1 flex items-start justify-center p-6 md:p-10 min-h-[calc(100vh-3.5rem)] ${isDark ? "bg-[#0F0F0F]" : "bg-gray-100"}`}>
+            <div className="flex flex-col items-center gap-4 w-full max-w-4xl">
+              {/* Toolbar above canvas */}
+              <div className="flex items-center justify-between w-full max-w-[800px]">
+                <div className="flex items-center gap-1">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={undo}
+                          disabled={undoStack.length === 0}
+                          className={`p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent ${isDark ? "text-gray-400 hover:text-white hover:bg-[#2A2A2A]" : "text-gray-500 hover:text-gray-900 hover:bg-gray-200"}`}
+                        >
+                          <Undo2 className="w-4 h-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Undo (Ctrl+Z)</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={redo}
+                          disabled={redoStack.length === 0}
+                          className={`p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent ${isDark ? "text-gray-400 hover:text-white hover:bg-[#2A2A2A]" : "text-gray-500 hover:text-gray-900 hover:bg-gray-200"}`}
+                        >
+                          <Redo2 className="w-4 h-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Redo (Ctrl+Y)</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                {sections.length > 1 ? (
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPageIndex((i) => Math.max(0, i - 1))}
+                      disabled={currentPageIndex <= 0}
+                      className={`p-1 rounded disabled:opacity-40 disabled:cursor-not-allowed ${isDark ? "text-gray-400 hover:text-white hover:bg-[#2A2A2A]" : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"}`}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className={`text-sm font-medium min-w-[80px] text-center ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                      {currentPageIndex + 1} / {sections.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPageIndex((i) => Math.min(sections.length - 1, i + 1))}
+                      disabled={currentPageIndex >= sections.length - 1}
+                      className={`p-1 rounded disabled:opacity-40 disabled:cursor-not-allowed ${isDark ? "text-gray-400 hover:text-white hover:bg-[#2A2A2A]" : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"}`}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              {/* Canvas with drop shadow */}
+              <div className="rounded-lg shadow-xl border border-gray-200 overflow-hidden" style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)" }}>
                 <div
-                  className="relative isolate bg-white text-[#1A1A1A]"
+                  className="relative isolate text-[#1A1A1A]"
                   style={{
                     width: CANVAS_WIDTH,
                     minHeight: CANVAS_HEIGHT,
                     fontFamily: "var(--font-sans), sans-serif",
+                    backgroundColor: canvasBgUrl ? "transparent" : "#ffffff",
                   }}
                   onClick={() => {
                     setSelectedElement(null);
@@ -1086,36 +1706,84 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   }}
                   role="presentation"
                 >
-                  {backgroundImage && (
-                    <div
-                      className="absolute inset-0 z-0"
-                      style={{
-                        backgroundImage: `url(${backgroundImage})`,
-                        backgroundSize: backgroundSettings.fit ?? "cover",
-                        backgroundPosition: backgroundSettings.position ?? "center center",
-                        backgroundRepeat: "no-repeat",
-                        opacity: backgroundSettings.opacity ?? 1,
-                        filter: `blur(${backgroundSettings.blur ?? 0}px) brightness(${backgroundSettings.brightness ?? 100}%) contrast(${backgroundSettings.contrast ?? 100}%) saturate(${backgroundSettings.saturation ?? 100}%)`,
-                      }}
-                    />
-                  )}
-                  {backgroundImage && (
-                    <div
-                      className="absolute inset-0 z-[1]"
-                      style={{
-                        backgroundColor: overlaySettings.color,
-                        opacity: overlaySettings.opacity,
-                      }}
-                      aria-hidden
-                    />
-                  )}
+                  {canvasBgUrl ? (
+                    <>
+                      <div
+                        data-canvas-background
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          top: 0,
+                          right: 0,
+                          bottom: 0,
+                          width: "100%",
+                          height: "100%",
+                          zIndex: 0,
+                          display: "block",
+                          visibility: "visible",
+                          opacity: 1,
+                          pointerEvents: "none",
+                          overflow: "hidden",
+                        }}
+                        aria-hidden
+                      >
+                        <img
+                          data-canvas-background-img
+                          src={canvasBgUrl}
+                          alt=""
+                          fetchPriority="high"
+                          decoding="async"
+                          style={{
+                            position: "absolute",
+                            left: 0,
+                            top: 0,
+                            minWidth: "100%",
+                            minHeight: "100%",
+                            width: "100%",
+                            height: "100%",
+                            display: "block",
+                            visibility: "visible",
+                            opacity: backgroundSettings.opacity ?? 1,
+                            objectFit: (backgroundSettings.fit ?? "cover") as React.CSSProperties["objectFit"],
+                            objectPosition: backgroundSettings.position ?? "center center",
+                            imageRendering: "high-quality",
+                            filter: (backgroundSettings.blur ?? 0) > 0
+                              ? `blur(${backgroundSettings.blur}px) brightness(${backgroundSettings.brightness ?? 100}%) contrast(${backgroundSettings.contrast ?? 100}%) saturate(${backgroundSettings.saturation ?? 100}%)`
+                              : `brightness(${backgroundSettings.brightness ?? 100}%) contrast(${backgroundSettings.contrast ?? 100}%) saturate(${backgroundSettings.saturation ?? 100}%)`,
+                          }}
+                          draggable={false}
+                          aria-hidden
+                        />
+                      </div>
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          top: 0,
+                          right: 0,
+                          bottom: 0,
+                          zIndex: 1,
+                          pointerEvents: "none",
+                          backgroundColor: overlaySettings.color,
+                          opacity: overlaySettings.opacity,
+                        }}
+                        aria-hidden
+                      />
+                    </>
+                  ) : null}
                   <div
-                    className={`relative z-10 product-editor-preview-layout ${product.format === "workbook" ? "format-workbook" : ""}`}
-                    style={previewLayoutStyle}
+                    className={`relative z-10 pointer-events-auto product-editor-preview-layout ${product.format === "workbook" ? "format-workbook" : ""}`}
+                    style={{
+                      ...previewLayoutStyle,
+                      ...(canvasBgUrl ? { backgroundColor: "transparent" } : {}),
+                    }}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <h2 className="text-2xl font-bold border-b pb-2 text-orange-600">{product.title}</h2>
-                    {sections.map((section) => {
+                    <h2 className="text-2xl font-bold border-b pb-2" style={{ color: templatePreset.titleColor }}>{product.title}</h2>
+                    {(sections.length > 1
+                      ? (sections[currentPageIndex] ? [sections[currentPageIndex]] : [])
+                      : sections
+                    ).map((section) => {
                       const titleStyles = product.designSettings?.textStyles?.[section.id]?.title;
                       const bodyStyles = product.designSettings?.textStyles?.[section.id]?.body;
                       return (
@@ -1123,8 +1791,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           <h3
                             data-section-id={section.id}
                             data-text-type="title"
-                            className="text-lg font-semibold text-[#333] cursor-text"
-                            style={titleStyles}
+                            className="text-lg font-semibold cursor-text"
+                            style={{ ...titleStyles, color: titleStyles?.color ?? templatePreset.headingColor }}
                             onClick={handleTextClick}
                           >
                             {section.title}
@@ -1132,8 +1800,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           <div
                             data-section-id={section.id}
                             data-text-type="body"
-                            className="mt-2 text-[#555] prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2 cursor-text"
-                            style={bodyStyles}
+                            className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2 cursor-text"
+                            style={{ ...bodyStyles, color: bodyStyles?.color ?? templatePreset.bodyColor }}
                             onClick={handleTextClick}
                           >
                             {section.content || section.contentHtml ? (
@@ -1151,10 +1819,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       );
                     })}
                   </div>
-                  {/* Placed elements layer (Canva-style) - above content */}
+                  {/* Placed elements layer (Canva-style) - above content; current page only */}
                   <div className="absolute inset-0 pointer-events-none z-20" aria-hidden>
-                    <div className="w-full h-full relative">
-                  {[...placedElements]
+                    <div className="w-full h-full relative pointer-events-none">
+                  {[...currentPageElements]
                     .sort((a, b) => a.zIndex - b.zIndex)
                     .map((element) => {
                       const isIconify = element.type === "icon" && element.content.includes(":");
@@ -1175,7 +1843,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             e.stopPropagation();
                             setSelectedElement(element.id);
                           }}
-                          style={{ zIndex: element.zIndex }}
+                          style={{ zIndex: Math.max(1, element.zIndex) }}
                         >
                           <div className="w-full h-full flex items-center justify-center bg-transparent">
                             {element.type === "icon" && isIconify ? (
@@ -1197,14 +1865,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             )}
                           </div>
                           {selectedElement === element.id && (
-                            <div className="absolute -top-9 left-0 flex gap-1 bg-[#1A1A1A] text-white rounded px-2 py-1.5 text-xs border border-[#2A2A2A]">
+                            <div className="absolute -top-9 left-0 flex gap-1 bg-white text-gray-700 rounded-lg px-2 py-1.5 text-xs border border-gray-200 shadow-lg">
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   deleteElement(element.id);
                                 }}
-                                className="hover:bg-[#2A2A2A] rounded p-1"
+                                className="hover:bg-gray-100 rounded p-1"
                                 title="Delete"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1215,7 +1883,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                   e.stopPropagation();
                                   duplicateElement(element.id);
                                 }}
-                                className="hover:bg-[#2A2A2A] rounded p-1"
+                                className="hover:bg-gray-100 rounded p-1"
                                 title="Duplicate"
                               >
                                 <Copy className="w-3.5 h-3.5" />
@@ -1226,7 +1894,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                   e.stopPropagation();
                                   bringToFront();
                                 }}
-                                className="hover:bg-[#2A2A2A] rounded p-1"
+                                className="hover:bg-gray-100 rounded p-1"
                                 title="Bring to front"
                               >
                                 <ArrowUp className="w-3.5 h-3.5" />
@@ -1237,7 +1905,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                   e.stopPropagation();
                                   sendToBack();
                                 }}
-                                className="hover:bg-[#2A2A2A] rounded p-1"
+                                className="hover:bg-gray-100 rounded p-1"
                                 title="Send to back"
                               >
                                 <ArrowDown className="w-3.5 h-3.5" />
@@ -1251,41 +1919,42 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+        </div>
 
-          {/* Tabs - Right ~40% */}
-          <Card className={cardClass}>
+        {/* Right sidebar - Canva-style light panel */}
+        <aside className={`w-[360px] shrink-0 border-l flex flex-col overflow-hidden ${isDark ? "border-[#2A2A2A] bg-[#1A1A1A]" : "border-gray-200 bg-white"}`}>
             {selectedTextMeta && (
-              <div className="p-4 border-b border-[#2A2A2A] bg-[#1A1A1A] space-y-4 max-h-[50vh] overflow-y-auto">
+              <div className="p-4 border-b border-gray-200 bg-gray-50 space-y-4 max-h-[50vh] overflow-y-auto">
                 <div className="flex justify-between items-center">
-                  <h4 className="text-sm font-semibold text-white">Edit text</h4>
+                  <h4 className="text-sm font-semibold text-gray-900">Edit text</h4>
                   <button
                     type="button"
                     onClick={deselectText}
-                    className="text-xs text-[#A0A0A0] hover:text-white"
+                    className="text-xs text-gray-500 hover:text-gray-900"
                   >
                     Deselect
                   </button>
                 </div>
                 <div>
-                  <label className="text-xs text-[#E0E0E0] block mb-1">Content</label>
+                  <label className="text-xs text-gray-600 font-medium block mb-1">Content</label>
                   <textarea
                     value={selectedTextMeta.type === "title" ? selectedTextMeta.content : selectedTextMeta.content.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ")}
                     onChange={(e) => updateTextContent(e.target.value)}
-                    className="w-full p-2 bg-[#2A2A2A] rounded text-sm text-white border border-[#333] min-h-[60px]"
+                    className="w-full p-2.5 bg-white rounded-lg text-sm text-gray-900 border border-gray-200 min-h-[60px] focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                     rows={2}
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[#E0E0E0] block mb-1">Text color</label>
+                  <label className="text-xs text-gray-600 font-medium block mb-1">Text color</label>
                   <div className="flex gap-1.5 flex-wrap mb-2">
                     {["#000000", "#374151", "#6B7280", "#FFFFFF", "#FF6B35", "#3B82F6", "#10B981", "#F59E0B", "#EF4444"].map((color) => (
                       <button
                         key={color}
                         type="button"
                         onClick={() => updateTextStyle("color", color)}
-                        className={`w-7 h-7 rounded border-2 shrink-0 ${rgbToHex(selectedTextMeta.styles.color ?? "") === color ? "border-orange-500" : "border-[#2A2A2A]"}`}
+                        className={`w-7 h-7 rounded border-2 shrink-0 ${rgbToHex(selectedTextMeta.styles.color ?? "") === color ? "border-orange-500" : "border-gray-200"}`}
                         style={{ backgroundColor: color }}
                       />
                     ))}
@@ -1298,7 +1967,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-[#E0E0E0] block mb-1">Font size: {parseInt(selectedTextMeta.styles.fontSize ?? "16", 10)}px</label>
+                  <label className="text-xs text-gray-600 font-medium block mb-1">Font size: {parseInt(selectedTextMeta.styles.fontSize ?? "16", 10)}px</label>
                   <input
                     type="range"
                     min="12"
@@ -1306,15 +1975,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     step="2"
                     value={parseInt(selectedTextMeta.styles.fontSize ?? "16", 10)}
                     onChange={(e) => updateTextStyle("fontSize", `${e.target.value}px`)}
-                    className="w-full h-2 bg-[#2A2A2A] rounded accent-orange-500"
+                    className="w-full h-2 bg-gray-200 rounded-lg accent-orange-500"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[#E0E0E0] block mb-1">Font</label>
+                  <label className="text-xs text-gray-600 font-medium block mb-1">Font</label>
                   <select
                     value={(selectedTextMeta.styles.fontFamily ?? "Inter").split(",")[0].trim()}
                     onChange={(e) => updateTextStyle("fontFamily", e.target.value + ", sans-serif")}
-                    className="w-full p-2 bg-[#2A2A2A] rounded text-sm text-white border border-[#333]"
+                    className="w-full p-2.5 bg-white rounded-lg text-sm text-gray-900 border border-gray-200 focus:ring-2 focus:ring-orange-500/20"
                   >
                     {["Inter", "Arial", "Georgia", "Times New Roman", "Courier New", "Verdana", "Helvetica", "Playfair Display", "Roboto", "Open Sans", "Lato", "Montserrat"].map((f) => (
                       <option key={f} value={f}>{f}</option>
@@ -1322,14 +1991,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-[#E0E0E0] block mb-1">Weight</label>
+                  <label className="text-xs text-gray-700 block mb-1">Weight</label>
                   <div className="grid grid-cols-4 gap-1">
                     {(["300", "400", "600", "700"] as const).map((w) => (
                       <button
                         key={w}
                         type="button"
                         onClick={() => updateTextStyle("fontWeight", w)}
-                        className={`px-2 py-1.5 rounded text-xs ${(selectedTextMeta.styles.fontWeight ?? "400") === w ? "bg-orange-500 text-white" : "bg-[#2A2A2A] text-[#A0A0A0] hover:bg-[#333]"}`}
+                        className={`px-2 py-1.5 rounded-lg text-xs font-medium ${(selectedTextMeta.styles.fontWeight ?? "400") === w ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
                       >
                         {w === "300" ? "Light" : w === "400" ? "Normal" : w === "600" ? "Semi" : "Bold"}
                       </button>
@@ -1337,14 +2006,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-[#E0E0E0] block mb-1">Alignment</label>
+                  <label className="text-xs text-gray-600 font-medium block mb-1">Alignment</label>
                   <div className="grid grid-cols-4 gap-1">
                     {(["left", "center", "right", "justify"] as const).map((align) => (
                       <button
                         key={align}
                         type="button"
                         onClick={() => updateTextStyle("textAlign", align)}
-                        className={`p-2 rounded text-xs ${(selectedTextMeta.styles.textAlign ?? "left") === align ? "bg-orange-500 text-white" : "bg-[#2A2A2A] text-[#A0A0A0] hover:bg-[#333]"}`}
+                        className={`p-2 rounded-lg text-xs font-medium ${(selectedTextMeta.styles.textAlign ?? "left") === align ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
                       >
                         {align === "left" ? "Left" : align === "center" ? "Center" : align === "right" ? "Right" : "Justify"}
                       </button>
@@ -1352,7 +2021,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-[#E0E0E0] block mb-1">Line height: {parseFloat(selectedTextMeta.styles.lineHeight ?? "1.6").toFixed(1)}</label>
+                  <label className="text-xs text-gray-600 font-medium block mb-1">Line height: {parseFloat(selectedTextMeta.styles.lineHeight ?? "1.6").toFixed(1)}</label>
                   <input
                     type="range"
                     min="1"
@@ -1360,129 +2029,231 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     step="0.1"
                     value={parseFloat(selectedTextMeta.styles.lineHeight ?? "1.6")}
                     onChange={(e) => updateTextStyle("lineHeight", e.target.value)}
-                    className="w-full h-2 bg-[#2A2A2A] rounded accent-orange-500"
+                    className="w-full h-2 bg-gray-200 rounded-lg accent-orange-500"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[#E0E0E0] block mb-1">Effects</label>
+                  <label className="text-xs text-gray-600 font-medium block mb-1">Effects</label>
                   <div className="grid grid-cols-2 gap-1">
-                    <button type="button" onClick={() => toggleTextDecoration("underline")} className="px-2 py-1.5 bg-[#2A2A2A] hover:bg-[#333] rounded text-xs text-[#E0E0E0]">
+                    <button type="button" onClick={() => toggleTextDecoration("underline")} className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs text-gray-700">
                       <u>Underline</u>
                     </button>
-                    <button type="button" onClick={() => toggleTextDecoration("line-through")} className="px-2 py-1.5 bg-[#2A2A2A] hover:bg-[#333] rounded text-xs text-[#E0E0E0]">
+                    <button type="button" onClick={() => toggleTextDecoration("line-through")} className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs text-gray-700">
                       <s>Strikethrough</s>
                     </button>
-                    <button type="button" onClick={() => updateTextStyle("textTransform", "uppercase")} className="px-2 py-1.5 bg-[#2A2A2A] hover:bg-[#333] rounded text-xs text-[#E0E0E0]">
+                    <button type="button" onClick={() => updateTextStyle("textTransform", "uppercase")} className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs text-gray-700">
                       UPPERCASE
                     </button>
-                    <button type="button" onClick={() => updateTextStyle("textTransform", "none")} className="px-2 py-1.5 bg-[#2A2A2A] hover:bg-[#333] rounded text-xs text-[#E0E0E0]">
+                    <button type="button" onClick={() => updateTextStyle("textTransform", "none")} className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs text-gray-700">
                       Normal
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-[#E0E0E0] block mb-1">Highlight</label>
+                  <label className="text-xs text-gray-600 font-medium block mb-1">Highlight</label>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => updateTextStyle("backgroundColor", "transparent")} className="flex-1 py-1.5 bg-[#2A2A2A] rounded text-xs text-[#A0A0A0]">None</button>
+                    <button type="button" onClick={() => updateTextStyle("backgroundColor", "transparent")} className="flex-1 py-1.5 bg-gray-100 rounded-lg text-xs text-gray-600 hover:bg-gray-200">None</button>
                     {["#FEF3C7", "#DBEAFE", "#FEE2E2"].map((bg) => (
-                      <button key={bg} type="button" onClick={() => updateTextStyle("backgroundColor", bg)} className="w-8 h-8 rounded border border-[#333]" style={{ backgroundColor: bg }} />
+                      <button key={bg} type="button" onClick={() => updateTextStyle("backgroundColor", bg)} className="w-8 h-8 rounded-lg border border-gray-200 hover:border-gray-300" style={{ backgroundColor: bg }} />
                     ))}
                   </div>
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={resetTextStyles} className="w-full border-[#2A2A2A] text-[#A0A0A0]">
+                <Button type="button" variant="outline" size="sm" onClick={resetTextStyles} className="w-full border-gray-200 text-gray-600 hover:bg-gray-50">
                   Reset to default
                 </Button>
               </div>
             )}
-            <Tabs defaultValue="content" className="w-full">
-              <TabsList className="bg-[#0F0F0F] border-b border-[#2A2A2A] w-full grid grid-cols-5">
-                <TabsTrigger value="content" className="data-[state=active]:bg-orange-500 text-xs gap-1">
+            <Tabs defaultValue="content" className="w-full flex flex-col flex-1 min-h-0">
+              <TabsList className="bg-gray-50 border-b border-gray-200 w-full grid grid-cols-5 rounded-none h-11 px-0">
+                <TabsTrigger value="content" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
                   <BookOpen className="w-3.5 h-3.5" /> Content
                 </TabsTrigger>
-                <TabsTrigger value="design" className="data-[state=active]:bg-orange-500 text-xs gap-1">
+                <TabsTrigger value="design" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
                   <Palette className="w-3.5 h-3.5" /> Design
                 </TabsTrigger>
-                <TabsTrigger value="graphics" className="data-[state=active]:bg-orange-500 text-xs gap-1">
+                <TabsTrigger value="graphics" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
                   <ImageIcon className="w-3.5 h-3.5" /> Graphics
                 </TabsTrigger>
-                <TabsTrigger value="layout" className="data-[state=active]:bg-orange-500 text-xs gap-1">
+                <TabsTrigger value="layout" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
                   <LayoutGrid className="w-3.5 h-3.5" /> Layout
                 </TabsTrigger>
-                <TabsTrigger value="export" className="data-[state=active]:bg-orange-500 text-xs gap-1">
+                <TabsTrigger value="export" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
                   <FileOutput className="w-3.5 h-3.5" /> Export
                 </TabsTrigger>
               </TabsList>
-              <TabsContent value="content" className="mt-4 space-y-2 p-2">
-                <p className="text-xs text-[#A0A0A0] mb-2">Table of Contents</p>
+              <div className="flex-1 overflow-y-auto">
+              <TabsContent value="content" className="mt-0 p-4 space-y-3">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Table of Contents</h3>
                 {sections.map((section, i) => (
-                  <div key={section.id} className="flex items-center justify-between gap-2 rounded-lg border border-[#2A2A2A] p-2">
-                    <span className="text-sm text-[#E0E0E0] truncate">
+                  <div key={section.id} className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white p-3 hover:border-gray-300">
+                    <span className="text-sm text-gray-700 truncate min-w-0 flex-1">
                       {i + 1}. {section.title}
                     </span>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0 text-[#A0A0A0] hover:text-orange-500" onClick={() => openEdit(section)} aria-label="Edit section">
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-500 hover:text-orange-500 hover:bg-orange-50" onClick={() => openEdit(section)} aria-label="Edit section">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-gray-500 hover:text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => setSectionToDeleteId(section.id)}
+                        disabled={sections.length <= 1}
+                        aria-label="Delete section"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
-                <Button type="button" variant="outline" size="sm" className="w-full mt-2 border-[#2A2A2A] text-[#A0A0A0] gap-1" onClick={addSection}>
+                <Button type="button" variant="outline" size="sm" className="w-full mt-2 border-gray-200 text-gray-600 hover:bg-gray-50 gap-1.5" onClick={addSection}>
                   <Plus className="w-3.5 h-3.5" /> Add New Section
                 </Button>
               </TabsContent>
-              <TabsContent value="design" className="mt-4 p-2">
-                <p className="text-sm font-medium text-white mb-3">Template</p>
+              <TabsContent value="design" className="mt-0 p-4">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Template</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {TEMPLATES.map((t) => (
                     <button
                       key={t.id}
                       type="button"
-                      onClick={() => setTemplate(t.id)}
+                      onClick={() => handleTemplateSelect(t.id)}
                       className={`rounded-xl border-2 p-4 text-left transition-all ${
-                        template === t.id ? "border-orange-500 bg-orange-500/10" : "border-[#2A2A2A] hover:border-[#3A3A3A]"
+                        template === t.id ? "border-orange-500 bg-orange-50" : "border-gray-200 hover:border-gray-300 bg-white"
                       }`}
                     >
-                      <p className="text-sm font-medium text-white">{t.label}</p>
-                      <p className="text-xs text-[#A0A0A0] mt-0.5">{t.desc}</p>
+                      <p className="text-sm font-medium text-gray-900">{t.label}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{t.desc}</p>
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-[#666] mt-3">Preview updates as you edit. More design options (Colors, Typography) coming soon.</p>
+                <p className="text-xs text-gray-500 mt-3">Preview updates as you edit.</p>
               </TabsContent>
-              <TabsContent value="graphics" className="mt-4 p-2 space-y-6 max-h-[calc(100vh-12rem)] overflow-y-auto">
-                <p className="text-xs text-[#A0A0A0] mb-2">Click to add to canvas. Drag on preview to move and resize. Delete/Backspace • Ctrl+C duplicate • Arrows nudge.</p>
+              <TabsContent value="graphics" className="mt-0 p-4 space-y-6 overflow-y-auto">
+                <p className="text-xs text-gray-500 mb-3">Click to add to canvas. Drag to move and resize. Icons and graphics are on the current page only.</p>
+                {sections.length > 1 && currentPageElements.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={applyGraphicsToAllPages}
+                    className="w-full border-gray-200 text-gray-600 hover:bg-gray-100"
+                  >
+                    Apply graphics to all pages
+                  </Button>
+                )}
+
+                {selectedGraphicElement && (
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                    <p className="text-xs font-medium text-gray-900">Selected graphic</p>
+                    <div className="flex flex-col gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={applySelectedIconToAllPages}
+                        disabled={sections.length <= 1}
+                        className="w-full border-gray-200 text-gray-600 hover:bg-gray-100 text-xs"
+                      >
+                        Apply to all pages
+                      </Button>
+                      {pagesWithSelectedIconCount >= 2 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={removeSelectedIconFromAllPages}
+                          className="w-full border-red-200 text-red-600 hover:bg-red-50 text-xs"
+                        >
+                          Remove from all pages
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {!backgroundImage && (
+                  <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p className="text-sm font-medium text-gray-900 mb-1">Set page background</p>
+                    <p className="text-xs text-gray-500">
+                      Each page can have its own background. Use the page selector above the canvas to switch pages. Click <span className="text-orange-400 font-medium">&quot;Set as background&quot;</span> on any photo to set it for the current page.
+                    </p>
+                  </div>
+                )}
 
                 {backgroundImage && (
-                  <div className="mb-4 p-3 bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg space-y-3">
-                    <p className="text-xs font-medium text-white">Background image</p>
+                  <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
+                    <p className="text-xs font-medium text-gray-900">
+                      Background image{sections.length > 1 ? ` (Page ${currentPageIndex + 1})` : ""}
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-3 items-start">
+                        <div className="w-16 h-16 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0">
+                          <img
+                            src={backgroundImage}
+                            alt="Background preview"
+                            className="w-full h-full object-cover"
+                            style={{ opacity: 1 }}
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-gray-600 truncate" title={backgroundImage}>
+                            {backgroundImage.startsWith("data:")
+                              ? "Image"
+                              : backgroundImage.split("/").filter(Boolean).pop()?.split("?")[0] || "Background image"}
+                          </p>
+                          <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                removeBackground();
+                                toast({ title: "Pick a new image from the photos below." });
+                              }}
+                              className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs text-gray-700"
+                            >
+                              Change background
+                            </button>
+                            <button
+                              type="button"
+                              onClick={removeBackground}
+                              className="px-2 py-1 border border-red-200 text-red-600 hover:bg-red-50 rounded-lg text-xs"
+                            >
+                              Remove background
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                     <div>
-                      <label className="text-xs text-[#A0A0A0] block mb-1">Opacity: {Math.round((backgroundSettings.opacity ?? 1) * 100)}%</label>
+                      <label className="text-xs text-gray-500 block mb-1">Opacity: {Math.round((backgroundSettings.opacity ?? 1) * 100)}%</label>
                       <input
                         type="range"
                         min="0"
                         max="1"
                         step="0.1"
                         value={backgroundSettings.opacity ?? 1}
-                        onChange={(e) => setBackgroundSettings((s) => ({ ...s, opacity: parseFloat(e.target.value) }))}
-                        className="w-full h-2 bg-[#2A2A2A] rounded-lg appearance-none cursor-pointer accent-orange-500"
+                        onChange={(e) => updateBackgroundSettings("opacity", parseFloat(e.target.value))}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-[#A0A0A0] block mb-1">Blur: {backgroundSettings.blur ?? 0}px</label>
+                      <label className="text-xs text-gray-500 block mb-1">Blur: {backgroundSettings.blur ?? 0}px</label>
                       <input
                         type="range"
                         min="0"
                         max="20"
                         step="1"
                         value={backgroundSettings.blur ?? 0}
-                        onChange={(e) => setBackgroundSettings((s) => ({ ...s, blur: parseInt(e.target.value, 10) }))}
-                        className="w-full h-2 bg-[#2A2A2A] rounded-lg appearance-none cursor-pointer accent-orange-500"
+                        onChange={(e) => updateBackgroundSettings("blur", parseInt(e.target.value, 10))}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-[#A0A0A0] block mb-1">Fit</label>
+                      <label className="text-xs text-gray-500 block mb-1">Fit</label>
                       <select
                         value={backgroundSettings.fit ?? "cover"}
-                        onChange={(e) => setBackgroundSettings((s) => ({ ...s, fit: e.target.value }))}
-                        className="w-full p-2 bg-[#2A2A2A] rounded text-sm text-white border border-[#333]"
+                        onChange={(e) => updateBackgroundSettings("fit", e.target.value)}
+                        className="w-full p-2.5 bg-white rounded-lg text-sm text-gray-900 border border-gray-200"
                       >
                         <option value="cover">Cover (fill)</option>
                         <option value="contain">Contain (fit)</option>
@@ -1490,7 +2261,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs text-[#A0A0A0] block mb-1">Position</label>
+                      <label className="text-xs text-gray-500 block mb-1">Position</label>
                       <div className="grid grid-cols-3 gap-1">
                         {(["top", "center", "bottom"] as const).flatMap((v) =>
                           (["left", "center", "right"] as const).map((h) => {
@@ -1500,8 +2271,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                               <button
                                 key={pos}
                                 type="button"
-                                onClick={() => setBackgroundSettings((s) => ({ ...s, position: pos }))}
-                                className={`p-1.5 rounded text-xs ${backgroundSettings.position === pos ? "bg-orange-500 text-white" : "bg-[#2A2A2A] text-[#A0A0A0] hover:bg-[#333]"}`}
+                                onClick={() => updateBackgroundSettings("position", pos)}
+                                className={`p-1.5 rounded text-xs ${backgroundSettings.position === pos ? "bg-orange-500 text-white" : "bg-gray-200 text-gray-500 hover:bg-gray-300"}`}
                                 title={pos}
                               >
                                 {label}
@@ -1511,8 +2282,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         )}
                       </div>
                     </div>
-                    <div className="border-t border-[#2A2A2A] pt-3 mt-3">
-                      <p className="text-xs font-medium text-white mb-2">Content overlay</p>
+                    <div className="border-t border-gray-200 pt-3 mt-3">
+                      <p className="text-xs font-medium text-gray-900 mb-2">Content overlay</p>
                       <p className="text-[11px] text-[#666] mb-3">Makes text readable over the background</p>
                       <div className="flex gap-2 mb-3">
                         {[
@@ -1526,7 +2297,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             type="button"
                             onClick={() => updateOverlay("color", color)}
                             className={`w-10 h-10 rounded border-2 shrink-0 ${
-                              overlaySettings.color === color ? "border-orange-500" : "border-[#2A2A2A]"
+                              overlaySettings.color === color ? "border-orange-500" : "border-gray-200"
                             }`}
                             style={{ backgroundColor: bg }}
                             title={label}
@@ -1534,7 +2305,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         ))}
                       </div>
                       <div className="mb-3">
-                        <label className="text-xs text-[#A0A0A0] block mb-1">
+                        <label className="text-xs text-gray-500 block mb-1">
                           Overlay strength: {Math.round((overlaySettings.opacity ?? 0.9) * 100)}%
                         </label>
                         <input
@@ -1544,8 +2315,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           step="0.05"
                           value={overlaySettings.opacity ?? 0.9}
                           onChange={(e) => updateOverlay("opacity", parseFloat(e.target.value))}
-                          className="w-full h-2 bg-[#2A2A2A] rounded-lg appearance-none cursor-pointer accent-orange-500"
+                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                         />
+                        <p className="text-[11px] text-[#666] mt-0.5">Lower this to see more of the background image.</p>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         {(["clean", "dark", "subtle", "none"] as const).map((preset) => (
@@ -1553,7 +2325,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             key={preset}
                             type="button"
                             onClick={() => setOverlayPreset(preset)}
-                            className="px-2 py-1.5 bg-[#2A2A2A] hover:bg-[#333] rounded text-xs text-[#E0E0E0]"
+                            className="px-2 py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-xs text-gray-700"
                           >
                             {preset === "clean" ? "Clean white" : preset === "dark" ? "Dark elegant" : preset === "subtle" ? "Subtle tint" : "No overlay"}
                           </button>
@@ -1569,12 +2341,21 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     >
                       Remove background
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={applyBackgroundToAllPages}
+                      className="w-full border-gray-200 text-gray-600 hover:bg-gray-100 mt-2"
+                    >
+                      Apply to all pages
+                    </Button>
                   </div>
                 )}
 
                 {selectedImageElement && (
-                  <div className="p-4 bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg space-y-4">
-                    <h4 className="text-sm font-semibold text-white">Image settings</h4>
+                  <div className="p-4 bg-gray-100 border border-gray-200 rounded-lg space-y-4">
+                    <h4 className="text-sm font-semibold text-gray-900">Image settings</h4>
                     <Button
                       type="button"
                       onClick={setAsBackground}
@@ -1583,7 +2364,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       Set as background
                     </Button>
                     <div>
-                      <label className="text-xs text-[#E0E0E0] block mb-1">Opacity: {Math.round((imageSettings.opacity ?? 1) * 100)}%</label>
+                      <label className="text-xs text-gray-700 block mb-1">Opacity: {Math.round((imageSettings.opacity ?? 1) * 100)}%</label>
                       <input
                         type="range"
                         min="0"
@@ -1591,11 +2372,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         step="0.1"
                         value={imageSettings.opacity ?? 1}
                         onChange={(e) => updateImageSetting("opacity", parseFloat(e.target.value))}
-                        className="w-full h-2 bg-[#2A2A2A] rounded-lg appearance-none cursor-pointer accent-orange-500"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-[#E0E0E0] block mb-1">Blur: {imageSettings.blur ?? 0}px</label>
+                      <label className="text-xs text-gray-700 block mb-1">Blur: {imageSettings.blur ?? 0}px</label>
                       <input
                         type="range"
                         min="0"
@@ -1603,11 +2384,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         step="1"
                         value={imageSettings.blur ?? 0}
                         onChange={(e) => updateImageSetting("blur", parseInt(e.target.value, 10))}
-                        className="w-full h-2 bg-[#2A2A2A] rounded-lg appearance-none cursor-pointer accent-orange-500"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-[#E0E0E0] block mb-1">Brightness: {imageSettings.brightness ?? 100}%</label>
+                      <label className="text-xs text-gray-700 block mb-1">Brightness: {imageSettings.brightness ?? 100}%</label>
                       <input
                         type="range"
                         min="50"
@@ -1615,11 +2396,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         step="5"
                         value={imageSettings.brightness ?? 100}
                         onChange={(e) => updateImageSetting("brightness", parseInt(e.target.value, 10))}
-                        className="w-full h-2 bg-[#2A2A2A] rounded-lg appearance-none cursor-pointer accent-orange-500"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-[#E0E0E0] block mb-1">Contrast: {imageSettings.contrast ?? 100}%</label>
+                      <label className="text-xs text-gray-700 block mb-1">Contrast: {imageSettings.contrast ?? 100}%</label>
                       <input
                         type="range"
                         min="50"
@@ -1627,11 +2408,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         step="5"
                         value={imageSettings.contrast ?? 100}
                         onChange={(e) => updateImageSetting("contrast", parseInt(e.target.value, 10))}
-                        className="w-full h-2 bg-[#2A2A2A] rounded-lg appearance-none cursor-pointer accent-orange-500"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-[#E0E0E0] block mb-1">Saturation: {imageSettings.saturation ?? 100}%</label>
+                      <label className="text-xs text-gray-700 block mb-1">Saturation: {imageSettings.saturation ?? 100}%</label>
                       <input
                         type="range"
                         min="0"
@@ -1639,25 +2420,25 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         step="10"
                         value={imageSettings.saturation ?? 100}
                         onChange={(e) => updateImageSetting("saturation", parseInt(e.target.value, 10))}
-                        className="w-full h-2 bg-[#2A2A2A] rounded-lg appearance-none cursor-pointer accent-orange-500"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-[#E0E0E0] block mb-2">Quick filters</label>
+                      <label className="text-xs text-gray-700 block mb-2">Quick filters</label>
                       <div className="grid grid-cols-3 gap-2">
                         {(["none", "vintage", "grayscale", "warm", "cool", "fade"] as const).map((name) => (
                           <button
                             key={name}
                             type="button"
                             onClick={() => applyFilter(name)}
-                            className="px-2 py-1.5 bg-[#2A2A2A] hover:bg-[#333] rounded text-xs text-[#E0E0E0]"
+                            className="px-2 py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-xs text-gray-700"
                           >
                             {name === "none" ? "None" : name === "grayscale" ? "B&W" : name.charAt(0).toUpperCase() + name.slice(1)}
                           </button>
                         ))}
                       </div>
                     </div>
-                    <Button type="button" variant="outline" size="sm" onClick={resetImageSettings} className="w-full border-[#2A2A2A] text-[#A0A0A0]">
+                    <Button type="button" variant="outline" size="sm" onClick={resetImageSettings} className="w-full border-gray-200 text-gray-500">
                       Reset to original
                     </Button>
                   </div>
@@ -1665,11 +2446,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
                 {/* Icons */}
                 <div>
-                  <h3 className="text-sm font-medium text-white mb-2">Icons</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Icons</h3>
                   <input
                     type="text"
                     placeholder="Search 1000+ icons..."
-                    className="w-full p-2 mb-3 bg-[#1A1A1A] border border-[#2A2A2A] rounded text-sm text-white placeholder:text-[#666]"
+                    className="w-full p-2.5 mb-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400"
                     value={iconSearch}
                     onChange={(e) => setIconSearch(e.target.value)}
                   />
@@ -1680,7 +2461,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         type="button"
                         onClick={() => setActiveIconCategory(category)}
                         className={`px-3 py-1.5 rounded text-xs whitespace-nowrap transition-colors ${
-                          activeIconCategory === category ? "bg-orange-500 text-white" : "bg-[#2A2A2A] text-[#E0E0E0] hover:bg-[#333]"
+                          activeIconCategory === category ? "bg-orange-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                         }`}
                       >
                         {category}
@@ -1695,10 +2476,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           key={iconId}
                           type="button"
                           onClick={() => handleIconClick(iconId)}
-                          className="p-2 bg-[#1A1A1A] hover:bg-[#2A2A2A] border border-[#2A2A2A] hover:border-orange-500/50 rounded flex items-center justify-center aspect-square transition-colors"
+                          className="p-2 bg-gray-100 hover:bg-gray-200 border border-gray-200 hover:border-orange-500/50 rounded flex items-center justify-center aspect-square transition-colors"
                           title={iconId}
                         >
-                          <Icon icon={iconId} className="w-6 h-6 text-[#E0E0E0]" />
+                          <Icon icon={iconId} className="w-6 h-6 text-gray-700" />
                         </button>
                       ))}
                   </div>
@@ -1706,7 +2487,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
                 {/* Color palettes */}
                 <div>
-                  <h3 className="text-sm font-medium text-white mb-2">Color palettes</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Color palettes</h3>
                   <div className="flex gap-2 mb-3 flex-wrap">
                     {Object.keys(COLOR_PALETTES).map((style) => (
                       <button
@@ -1714,7 +2495,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         type="button"
                         onClick={() => setActivePaletteStyle(style)}
                         className={`px-3 py-1.5 rounded text-xs ${
-                          activePaletteStyle === style ? "bg-orange-500 text-white" : "bg-[#2A2A2A] text-[#E0E0E0] hover:bg-[#333]"
+                          activePaletteStyle === style ? "bg-orange-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                         }`}
                       >
                         {style}
@@ -1723,15 +2504,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </div>
                   <div className="space-y-2">
                     {(COLOR_PALETTES[activePaletteStyle] ?? []).map((palette) => (
-                      <div key={palette.name} className="bg-[#1A1A1A] border border-[#2A2A2A] p-2 rounded flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-[#A0A0A0] w-24 shrink-0">{palette.name}</span>
+                      <div key={palette.name} className="bg-gray-100 border border-gray-200 p-2 rounded flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-gray-500 w-24 shrink-0">{palette.name}</span>
                         <div className="flex gap-1 flex-1">
                           {palette.colors.map((color) => (
                             <button
                               key={color}
                               type="button"
                               onClick={() => handleApplyColor(color)}
-                              className="w-8 h-8 rounded border-2 border-[#2A2A2A] hover:border-white shrink-0"
+                              className="w-8 h-8 rounded border-2 border-gray-200 hover:border-white shrink-0"
                               style={{ backgroundColor: color }}
                               title={color}
                             />
@@ -1751,7 +2532,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
                 {/* Custom color */}
                 <div>
-                  <h3 className="text-sm font-medium text-white mb-2">Custom color</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Custom color</h3>
                   <div className="[&_.react-colorful]:h-24 [&_.react-colorful]:w-full [&_.react-colorful]:rounded">
                     <HexColorPicker color={customColor} onChange={setCustomColor} />
                   </div>
@@ -1760,7 +2541,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       type="text"
                       value={customColor}
                       onChange={(e) => setCustomColor(e.target.value)}
-                      className="flex-1 p-2 bg-[#1A1A1A] border border-[#2A2A2A] rounded text-sm text-white font-mono"
+                      className="flex-1 p-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 font-mono"
                     />
                     <Button type="button" size="sm" onClick={() => handleApplyColor(customColor)} className="bg-orange-500 hover:bg-orange-600 shrink-0">
                       Apply
@@ -1770,19 +2551,19 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
                 {/* Shapes */}
                 <div>
-                  <h3 className="text-sm font-medium text-white mb-2">Shapes</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Shapes</h3>
                   <div className="grid grid-cols-4 gap-2">
                     {SHAPES.map((shape) => (
                       <button
                         key={shape.name}
                         type="button"
                         onClick={() => handleAddShape(shape.svg, graphicsAccentColor)}
-                        className="aspect-square p-2 bg-[#1A1A1A] hover:bg-[#2A2A2A] border border-[#2A2A2A] hover:border-orange-500/50 rounded flex flex-col items-center justify-center transition-colors"
+                        className="aspect-square p-2 bg-gray-100 hover:bg-gray-200 border border-gray-200 hover:border-orange-500/50 rounded flex flex-col items-center justify-center transition-colors"
                       >
-                        <svg viewBox="0 0 100 100" className="w-full h-8 text-[#E0E0E0]" fill="currentColor">
+                        <svg viewBox="0 0 100 100" className="w-full h-8 text-gray-700" fill="currentColor">
                           <g dangerouslySetInnerHTML={{ __html: shape.svg }} />
                         </svg>
-                        <span className="text-[10px] text-[#A0A0A0] mt-1 truncate w-full text-center">{shape.name}</span>
+                        <span className="text-[10px] text-gray-500 mt-1 truncate w-full text-center">{shape.name}</span>
                       </button>
                     ))}
                   </div>
@@ -1790,11 +2571,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
                 {/* Stock photos */}
                 <div>
-                  <h3 className="text-sm font-medium text-white mb-2">Stock photos</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Stock photos</h3>
                   <input
                     type="text"
                     placeholder="Search free photos..."
-                    className="w-full p-2 mb-2 bg-[#1A1A1A] border border-[#2A2A2A] rounded text-sm text-white placeholder:text-[#666]"
+                    className="w-full p-2.5 mb-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400"
                     value={photoSearch}
                     onChange={(e) => setPhotoSearch(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && searchPhotos()}
@@ -1808,7 +2589,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           setPhotoSearch(cat);
                           searchPhotos(cat.toLowerCase());
                         }}
-                        className="px-2 py-1 bg-[#2A2A2A] hover:bg-[#333] rounded text-xs text-[#E0E0E0]"
+                        className="px-2 py-1 bg-gray-200 hover:bg-gray-300 rounded text-xs text-gray-700"
                       >
                         {cat}
                       </button>
@@ -1823,23 +2604,44 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </div>
                   ) : photos.length > 0 ? (
                     <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto">
-                      {photos.map((photo) => (
-                        <button
-                          key={photo.id}
-                          type="button"
-                          onClick={() => handleAddPhoto(photo.fullUrl ?? photo.url ?? "")}
-                          className="relative aspect-square rounded overflow-hidden border border-[#2A2A2A] hover:border-orange-500/50 group"
-                        >
-                          <img
-                            src={photo.thumb ?? photo.url}
-                            alt=""
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          />
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                            <span className="text-white text-xs">Add to canvas</span>
+                      {photos.map((photo) => {
+                        const photoUrl = photo.fullUrl ?? photo.url ?? "";
+                        if (!photoUrl) return null;
+                        return (
+                          <div
+                            key={photo.id}
+                            className="relative aspect-square rounded overflow-hidden border border-gray-200 hover:border-orange-500/50 group"
+                          >
+                            <img
+                              src={photo.thumb ?? photo.url}
+                              alt=""
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center gap-1.5 p-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddPhoto(photoUrl);
+                                }}
+                                className="w-full py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded"
+                              >
+                                Add to canvas
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setBackgroundFromUrl(photoUrl);
+                                }}
+                                className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded"
+                              >
+                                Set as background
+                              </button>
+                            </div>
                           </div>
-                        </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-xs text-[#666] py-4">Search or pick a category to load photos. Photos by Unsplash.</p>
@@ -1847,11 +2649,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   <p className="text-[10px] text-[#555] mt-1">Photos by Unsplash</p>
                 </div>
               </TabsContent>
-              <TabsContent value="layout" className="mt-4 p-4">
-                <h3 className="text-sm font-medium text-white mb-4">Text Layout</h3>
+              <TabsContent value="layout" className="mt-0 p-4">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Text Layout</h3>
                 <div className="space-y-6">
                   <div>
-                    <label className="block mb-2 text-xs text-[#E0E0E0]">Paragraph Spacing</label>
+                    <label className="block mb-2 text-xs text-gray-700">Paragraph Spacing</label>
                     <input
                       type="range"
                       min="0"
@@ -1859,7 +2661,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       step="0.25"
                       value={layoutSettings.paragraphSpacing}
                       onChange={(e) => updateLayout("paragraphSpacing", parseFloat(e.target.value))}
-                      className="w-full h-2 bg-[#2A2A2A] rounded-lg appearance-none cursor-pointer accent-orange-500"
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                     />
                     <div className="flex justify-between text-xs text-[#666] mt-1">
                       <span>Tight</span>
@@ -1868,7 +2670,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </div>
                   </div>
                   <div>
-                    <label className="block mb-2 text-xs text-[#E0E0E0]">Line Height</label>
+                    <label className="block mb-2 text-xs text-gray-700">Line Height</label>
                     <input
                       type="range"
                       min="1.2"
@@ -1876,7 +2678,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       step="0.1"
                       value={layoutSettings.lineHeight}
                       onChange={(e) => updateLayout("lineHeight", parseFloat(e.target.value))}
-                      className="w-full h-2 bg-[#2A2A2A] rounded-lg appearance-none cursor-pointer accent-orange-500"
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                     />
                     <div className="flex justify-between text-xs text-[#666] mt-1">
                       <span>Compact</span>
@@ -1885,7 +2687,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </div>
                   </div>
                   <div>
-                    <label className="block mb-2 text-xs text-[#E0E0E0]">Text Alignment</label>
+                    <label className="block mb-2 text-xs text-gray-700">Text Alignment</label>
                     <div className="grid grid-cols-3 gap-2">
                       {(["left", "center", "justify"] as const).map((align) => (
                         <Button
@@ -1895,8 +2697,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           size="sm"
                           className={
                             layoutSettings.alignment === align
-                              ? "border-orange-500 bg-orange-500/10 text-white"
-                              : "border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A]"
+                              ? "border-orange-500 bg-orange-50 text-orange-600"
+                              : "border-gray-200 text-gray-500 hover:bg-gray-200"
                           }
                           onClick={() => updateLayout("alignment", align)}
                         >
@@ -1906,7 +2708,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </div>
                   </div>
                   <div>
-                    <label className="block mb-2 text-xs text-[#E0E0E0]">Page Margins</label>
+                    <label className="block mb-2 text-xs text-gray-700">Page Margins</label>
                     <input
                       type="range"
                       min="1"
@@ -1914,7 +2716,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       step="0.5"
                       value={layoutSettings.margins}
                       onChange={(e) => updateLayout("margins", parseFloat(e.target.value))}
-                      className="w-full h-2 bg-[#2A2A2A] rounded-lg appearance-none cursor-pointer accent-orange-500"
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                     />
                     <div className="flex justify-between text-xs text-[#666] mt-1">
                       <span>Narrow</span>
@@ -1923,7 +2725,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </div>
                   </div>
                   <div>
-                    <label className="block mb-2 text-xs text-[#E0E0E0]">Section Spacing</label>
+                    <label className="block mb-2 text-xs text-gray-700">Section Spacing</label>
                     <input
                       type="range"
                       min="1"
@@ -1931,7 +2733,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       step="0.5"
                       value={layoutSettings.sectionSpacing}
                       onChange={(e) => updateLayout("sectionSpacing", parseFloat(e.target.value))}
-                      className="w-full h-2 bg-[#2A2A2A] rounded-lg appearance-none cursor-pointer accent-orange-500"
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                     />
                     <div className="flex justify-between text-xs text-[#666] mt-1">
                       <span>Compact</span>
@@ -1940,13 +2742,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </div>
                   </div>
                   <div>
-                    <label className="block mb-2 text-xs text-[#E0E0E0]">Content Width</label>
+                    <label className="block mb-2 text-xs text-gray-700">Content Width</label>
                     <select
                       value={layoutSettings.maxWidth}
                       onChange={(e) =>
                         updateLayout("maxWidth", e.target.value as "narrow" | "normal" | "wide" | "full")
                       }
-                      className="w-full p-2 rounded-lg bg-[#2A2A2A] border border-[#3A3A3A] text-white text-sm"
+                      className="w-full p-2.5 rounded-lg bg-white border border-gray-200 text-gray-900 text-sm"
                     >
                       <option value="narrow">Narrow (600px)</option>
                       <option value="normal">Normal (800px)</option>
@@ -1957,32 +2759,47 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A]"
+                    className="w-full border-gray-200 text-gray-500 hover:bg-gray-200"
                     onClick={resetLayout}
                   >
                     Reset to Defaults
                   </Button>
                 </div>
               </TabsContent>
-              <TabsContent value="export" className="mt-4 space-y-4 p-2">
-                <p className="text-sm font-medium text-white">Download Your Product</p>
+              <TabsContent value="export" className="mt-0 p-4 space-y-3">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Export</h3>
                 <div className="space-y-2">
-                  <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 gap-1" onClick={handleDownloadPdf}>
-                    <Download className="w-3.5 h-3.5" /> Download PDF
-                  </Button>
-                  <Button size="sm" variant="outline" className="w-full border-[#2A2A2A] text-[#A0A0A0] gap-1" onClick={handleGenerateVideos}>
+                  <Button size="sm" variant="outline" className="w-full border-gray-200 text-gray-500 gap-1" onClick={handleGenerateVideos}>
                     Generate Marketing Videos →
                   </Button>
                 </div>
               </TabsContent>
+              </div>
             </Tabs>
-          </Card>
-        </div>
+        </aside>
       </div>
+
+      {/* Delete Section Confirmation */}
+      <Dialog open={!!sectionToDeleteId} onOpenChange={(open) => !open && setSectionToDeleteId(null)}>
+        <DialogContent className="max-w-sm bg-white border-gray-200 text-gray-900">
+          <DialogHeader>
+            <DialogTitle>Delete section?</DialogTitle>
+            <DialogDescription>Delete this section? This cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setSectionToDeleteId(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteSection}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Section Modal */}
       <Dialog open={!!editingSectionId} onOpenChange={(open) => !open && setEditingSectionId(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-[#1A1A1A] border-[#2A2A2A] text-white">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white border-gray-200 text-gray-900">
           <DialogHeader>
             <DialogTitle>Edit Section: {sections.find((s) => s.id === editingSectionId)?.title ?? ""}</DialogTitle>
           </DialogHeader>
@@ -1990,7 +2807,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
             <RichTextEditor value={editingContent} onChange={setEditingContent} minHeight="220px" />
           </div>
           {editingSectionId && (
-            <div className="flex flex-wrap gap-2 mt-4 border-t border-[#2A2A2A] pt-4">
+            <div className="flex flex-wrap gap-2 mt-4 border-t border-gray-200 pt-4">
               <Button
                 type="button"
                 size="sm"
@@ -2053,7 +2870,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]" onClick={() => setEditingSectionId(null)}>
+            <Button variant="outline" className="border-gray-200 text-gray-500" onClick={() => setEditingSectionId(null)}>
               Cancel
             </Button>
             <Button className="bg-orange-500 hover:bg-orange-600" onClick={saveEdit}>
@@ -2063,34 +2880,174 @@ export default function ProductEditor({ productId }: { productId: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* Full product preview modal */}
+      {/* Full product preview modal – Save as PDF via browser print */}
       {showFullPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="bg-[#1A1A1A] rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-[#2A2A2A]">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#2A2A2A] bg-[#1A1A1A] p-4">
-              <h2 className="text-lg font-semibold text-white">Full Product Preview</h2>
-              <Button variant="ghost" size="sm" className="text-[#A0A0A0] hover:text-white" onClick={() => setShowFullPreview(false)}>
-                <X className="w-5 h-5" /> Close
+        <div className="pdf-print-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <style
+            dangerouslySetInnerHTML={{
+              __html: `
+                @media print {
+                  .sidebar, .no-print, .modal-header, nav, button { display: none !important; }
+                  .pdf-print-overlay { background: transparent !important; padding: 0 !important; }
+                  .pdf-print-overlay > div { max-height: none !important; box-shadow: none !important; }
+                  .preview-pages-container { overflow: visible !important; padding: 0 !important; }
+                  .preview-page, [data-page] {
+                    page-break-after: always;
+                    page-break-inside: avoid;
+                    width: 100%;
+                    min-height: 100vh;
+                  }
+                  .preview-page:first-child, [data-page]:first-of-type { page-break-before: avoid; }
+                  .preview-page:last-child { page-break-after: auto; }
+                  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                  @page { size: A4; margin: 0; }
+                }
+              `,
+            }}
+          />
+          <div className="bg-gray-100 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-200 shadow-2xl">
+            <div className="modal-header sticky top-0 z-10 border-b border-gray-200 bg-white p-4 no-print space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Full Product Preview</h2>
+                <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-900" onClick={() => setShowFullPreview(false)}>
+                  <X className="w-5 h-5" /> Close
+                </Button>
+              </div>
+              <p className="text-sm text-gray-600">
+                To save your product as PDF, click the button below and select &quot;Save as PDF&quot; in the print dialog.
+              </p>
+              <Button size="lg" className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2 text-base font-semibold py-6" onClick={handleDownloadPdf} disabled={pdfExporting}>
+                {pdfExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />} {pdfExporting ? "Generating PDF..." : "Download PDF"}
               </Button>
             </div>
-            <div
-              className={`flex-1 overflow-y-auto p-8 bg-white text-[#1A1A1A] ${product.format === "workbook" ? "format-workbook product-editor-preview-layout" : ""}`}
-            >
-              <h1 className="text-3xl font-bold mb-6 text-[#333]">{product.title}</h1>
-              <p className="text-sm text-[#666] mb-8">Format: {product.format}</p>
-              {sections.map((section) => (
-                <div key={section.id} className="mb-8">
-                  <h2 className="text-2xl font-bold mb-4 text-[#333]">{section.title}</h2>
-                  <div
-                    className="prose prose-lg max-w-none text-[#555]"
-                    dangerouslySetInnerHTML={{ __html: cleanMarkdownToHtml(section.content) }}
-                  />
-                </div>
-              ))}
+            <div data-print-source className="editor-canvas preview-pages-container flex-1 overflow-y-auto p-6 flex flex-col items-center gap-6">
+                {Array.from({ length: Math.max(sections.length, pageBackgrounds.length, placedElementsByPage.length, 1) }, (_, pageIdx) => {
+                  const section = sections[pageIdx] ?? { id: `page-${pageIdx}`, title: "", content: "", contentHtml: "" };
+                  const pageBg = pageBackgrounds[pageIdx];
+                  const bgUrl = pageBg?.backgroundImage ?? null;
+                  const bgSettings = pageBg?.backgroundSettings
+                    ? { ...DEFAULT_IMAGE_SETTINGS, ...pageBg.backgroundSettings }
+                    : DEFAULT_IMAGE_SETTINGS;
+                  const overlay = pageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...pageBg.overlaySettings } : DEFAULT_OVERLAY;
+                  const titleStyles = product.designSettings?.textStyles?.[section.id]?.title;
+                  const bodyStyles = product.designSettings?.textStyles?.[section.id]?.body;
+                  return (
+                    <div
+                      key={section.id}
+                      id={`preview-page-${pageIdx}`}
+                      data-pdf-page
+                      data-page
+                      className="preview-page product-page relative shrink-0 rounded-lg overflow-hidden border border-gray-200 bg-white shadow-lg"
+                      style={{
+                        width: CANVAS_WIDTH,
+                        minHeight: CANVAS_HEIGHT,
+                        pageBreakAfter: "always",
+                        pageBreakInside: "avoid",
+                      }}
+                    >
+                    {bgUrl ? (
+                      <>
+                        <div className="absolute inset-0 z-0" aria-hidden>
+                          <img
+                            src={bgUrl}
+                            alt=""
+                            className="absolute inset-0 w-full h-full object-cover"
+                            style={{
+                              opacity: bgSettings.opacity ?? 1,
+                              objectFit: (bgSettings.fit ?? "cover") as React.CSSProperties["objectFit"],
+                              objectPosition: bgSettings.position ?? "center center",
+                              filter: (bgSettings.blur ?? 0) > 0
+                                ? `blur(${bgSettings.blur}px) brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`
+                                : `brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`,
+                            }}
+                          />
+                        </div>
+                        <div
+                          className="absolute inset-0 z-[1] pointer-events-none"
+                          style={{ backgroundColor: overlay.color, opacity: overlay.opacity }}
+                          aria-hidden
+                        />
+                      </>
+                    ) : null}
+                    <div
+                      className={`relative z-10 product-editor-preview-layout ${product.format === "workbook" ? "format-workbook" : ""}`}
+                      style={{
+                        ...previewLayoutStyle,
+                        ...(bgUrl ? { backgroundColor: "transparent" } : {}),
+                        minHeight: CANVAS_HEIGHT,
+                      }}
+                    >
+                      <h2 className="text-2xl font-bold border-b pb-2" style={{ color: templatePreset.titleColor }}>{product.title}</h2>
+                      <section>
+                        <h3 className="text-lg font-semibold" style={{ ...titleStyles, color: titleStyles?.color ?? templatePreset.headingColor }}>
+                          {section.title}
+                        </h3>
+                        <div
+                          className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2"
+                          style={{ ...bodyStyles, color: bodyStyles?.color ?? templatePreset.bodyColor }}
+                        >
+                          {section.content || section.contentHtml ? (
+                            <div
+                              className="preview-content"
+                              dangerouslySetInnerHTML={{
+                                __html: section.contentHtml ?? cleanMarkdownToHtml(section.content ?? ""),
+                              }}
+                            />
+                          ) : (
+                            <span className="text-[#999]">(Empty)</span>
+                          )}
+                        </div>
+                      </section>
+                    </div>
+                    {/* Placed elements - per-page graphics */}
+                    <div className="absolute inset-0 pointer-events-none z-20">
+                      {[...(placedElementsByPage[pageIdx] ?? [])]
+                        .sort((a, b) => a.zIndex - b.zIndex)
+                        .map((element) => {
+                          const isIconify = element.type === "icon" && element.content.includes(":");
+                          const LucideIcon = !isIconify && element.type === "icon" ? GRAPHICS_ICONS.find((i) => i.name === element.content)?.icon : null;
+                          const iconColor = graphicsAccentColor;
+                          return (
+                            <div
+                              key={element.id}
+                              className="absolute flex items-center justify-center"
+                              style={{
+                                left: element.position.x,
+                                top: element.position.y,
+                                width: element.size.width,
+                                height: element.size.height,
+                                zIndex: Math.max(1, element.zIndex),
+                              }}
+                            >
+                              {element.type === "icon" && isIconify ? (
+                                <Icon icon={element.content} className="w-full h-full" style={{ color: iconColor }} />
+                              ) : element.type === "icon" && LucideIcon ? (
+                                <LucideIcon className="w-full h-full" style={{ color: iconColor }} />
+                              ) : element.type === "image" ? (
+                                <img
+                                  src={element.content}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                  style={{
+                                    opacity: element.imageSettings?.opacity ?? 1,
+                                    filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)`,
+                                  }}
+                                />
+                              ) : (
+                                <span className="text-[#999] text-xs">?</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                  );
+                })}
             </div>
           </div>
         </div>
       )}
+
     </main>
   );
 }
