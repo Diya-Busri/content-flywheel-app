@@ -1,0 +1,310 @@
+/**
+ * Builds a full HTML document for server-side PDF generation (Puppeteer).
+ * Matches the editor preview: one page per section, backgrounds, overlays, text, placed elements.
+ */
+
+import { cleanMarkdownToHtml } from "@/lib/clean-markdown";
+
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 1100;
+
+type TemplateId = "modern" | "classic" | "minimal" | "bold" | "elegant" | "creative";
+
+const TEMPLATE_PRESETS: Record<
+  TemplateId,
+  { fontFamily: string; titleColor: string; headingColor: string; bodyColor: string }
+> = {
+  modern: { fontFamily: "Inter, system-ui, sans-serif", titleColor: "#FF6B35", headingColor: "#1a1a1a", bodyColor: "#4a4a4a" },
+  classic: { fontFamily: "Georgia, 'Times New Roman', serif", titleColor: "#2c3e50", headingColor: "#2c3e50", bodyColor: "#34495e" },
+  minimal: { fontFamily: "Inter, system-ui, sans-serif", titleColor: "#111827", headingColor: "#1f2937", bodyColor: "#6b7280" },
+  bold: { fontFamily: "'DM Sans', Inter, sans-serif", titleColor: "#7C3AED", headingColor: "#1a1a1a", bodyColor: "#374151" },
+  elegant: { fontFamily: "'Playfair Display', Georgia, serif", titleColor: "#6B4E71", headingColor: "#2d2d2d", bodyColor: "#5a5a5a" },
+  creative: { fontFamily: "'Nunito', Inter, sans-serif", titleColor: "#EC4899", headingColor: "#1f2937", bodyColor: "#4b5563" },
+};
+
+const DEFAULT_IMAGE = { opacity: 1, blur: 0, brightness: 100, contrast: 100, saturation: 100, fit: "cover" as const, position: "center center" };
+const DEFAULT_OVERLAY = { color: "rgba(255, 255, 255, 0.9)", opacity: 0.9 };
+
+export interface PdfSection {
+  id?: string;
+  title: string;
+  body?: string;
+  contentHtml?: string;
+}
+
+export interface PdfPageBackground {
+  backgroundImage?: string | null;
+  backgroundSettings?: { opacity?: number; blur?: number; brightness?: number; contrast?: number; saturation?: number; fit?: string; position?: string };
+  overlaySettings?: { color?: string; opacity?: number };
+}
+
+export interface PdfPlacedElement {
+  id: string;
+  type: "icon" | "image";
+  content: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  zIndex?: number;
+  imageSettings?: { opacity?: number };
+}
+
+export interface PdfProductPayload {
+  title: string;
+  sections: PdfSection[];
+  pageBackgrounds?: PdfPageBackground[];
+  designSettings?: {
+    template?: string;
+    layout?: { margins?: number; paragraphSpacing?: number; sectionSpacing?: number; lineHeight?: number; alignment?: string; maxWidth?: string };
+    colors?: { graphics?: string };
+    textStyles?: Record<string, { title?: { color?: string; fontFamily?: string }; body?: { color?: string; fontFamily?: string } }>;
+  };
+  placedElementsByPage?: PdfPlacedElement[][];
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function sectionBodyHtml(section: PdfSection): string {
+  const raw = section.contentHtml ?? (section.body != null ? cleanMarkdownToHtml(section.body) : "");
+  return raw || "<span style='color:#999'>(Empty)</span>";
+}
+
+function iconToImgHtml(content: string, color: string): string {
+  if (content.includes(":")) {
+    const [prefix, name] = content.split(":");
+    const src = `https://api.iconify.design/${prefix}/${name}.svg?color=${encodeURIComponent(color.replace("#", ""))}`;
+    return `<img src="${escapeHtml(src)}" alt="" style="width:100%;height:100%;object-fit:contain" loading="lazy" />`;
+  }
+  const svgByNames: Record<string, string> = {
+    Star: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/>',
+    Heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="currentColor"/>',
+    Zap: '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/>',
+    Target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+    MessageCircle: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" fill="currentColor"/>',
+    Bookmark: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" fill="currentColor"/>',
+    Check: '<path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+    BookOpen: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zm20 0h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" fill="currentColor"/>',
+  };
+  const path = svgByNames[content];
+  if (path) {
+    return `<span style="display:inline-block;width:100%;height:100%;color:${escapeHtml(color)}"><svg viewBox="0 0 24 24" width="100%" height="100%" fill="currentColor">${path}</svg></span>`;
+  }
+  return `<span style="color:#999;font-size:12px">?</span>`;
+}
+
+/** Build HTML for a single page (one section). Used for page-by-page PDF rendering. */
+export function buildSinglePageHtml(payload: PdfProductPayload, pageIdx: number): string {
+  const { title, sections, pageBackgrounds = [], designSettings = {}, placedElementsByPage = [] } = payload;
+  const templateId = (designSettings.template as TemplateId) || "modern";
+  const preset = TEMPLATE_PRESETS[templateId] ?? TEMPLATE_PRESETS.modern;
+  const layout = designSettings.layout ?? {};
+  const margins = layout.margins ?? 2;
+  const paragraphSpacing = layout.paragraphSpacing ?? 1;
+  const sectionSpacing = layout.sectionSpacing ?? 2;
+  const lineHeight = layout.lineHeight ?? 1.6;
+  const alignment = layout.alignment ?? "left";
+  const maxWidth = layout.maxWidth === "narrow" ? 600 : layout.maxWidth === "wide" ? 1000 : 800;
+  const graphicsColor = designSettings.colors?.graphics ?? "#333333";
+
+  const pages = sections.length ? sections : [{ title: title, body: "" }];
+  const section = pages[pageIdx] ?? pages[0];
+
+  const pageBg = pageBackgrounds[pageIdx];
+  const bgUrl = pageBg?.backgroundImage ?? null;
+  const bgSettings = pageBg?.backgroundSettings ? { ...DEFAULT_IMAGE, ...pageBg.backgroundSettings } : DEFAULT_IMAGE;
+  const overlay = pageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...pageBg.overlaySettings } : DEFAULT_OVERLAY;
+  const overlayOpacity = typeof overlay.opacity === "number" ? (overlay.opacity > 1 ? overlay.opacity / 100 : overlay.opacity) : 0.9;
+  const titleStyles = designSettings.textStyles?.[section.id ?? ""]?.title;
+  const bodyStyles = designSettings.textStyles?.[section.id ?? ""]?.body;
+  const productTitleColor = preset.titleColor;
+  const headingColor = titleStyles?.color ?? bodyStyles?.color ?? preset.headingColor;
+  const bodyColor = bodyStyles?.color ?? preset.bodyColor;
+
+  let bgBlock = "";
+  if (bgUrl) {
+    const fit = bgSettings.fit ?? "cover";
+    const pos = bgSettings.position ?? "center center";
+    const opacity = bgSettings.opacity ?? 1;
+    const filter =
+      (bgSettings.blur ?? 0) > 0
+        ? `blur(${bgSettings.blur}px) brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`
+        : `brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`;
+    bgBlock = `
+        <div class="pdf-bg" style="position:absolute;inset:0;z-index:0;">
+          <img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:${fit};object-position:${pos};opacity:${opacity};filter:${escapeHtml(filter)};" />
+        </div>
+        <div class="pdf-overlay" style="position:absolute;inset:0;z-index:1;pointer-events:none;background-color:${escapeHtml(overlay.color)};opacity:${overlayOpacity};"></div>`;
+  }
+
+  const placed = (placedElementsByPage[pageIdx] ?? [])
+    .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+    .map((el) => {
+      const color = graphicsColor;
+      const inner =
+        el.type === "image"
+          ? `<img src="${escapeHtml(el.content)}" alt="" style="width:100%;height:100%;object-fit:cover;opacity:${el.imageSettings?.opacity ?? 1};" />`
+          : iconToImgHtml(el.content, color);
+      return `<div class="pdf-placed" style="position:absolute;left:${el.position.x}px;top:${el.position.y}px;width:${el.size.width}px;height:${el.size.height}px;z-index:${Math.max(1, el.zIndex ?? 0)};display:flex;align-items:center;justify-content:center;">${inner}</div>`;
+    })
+    .join("");
+
+  const bodyHtml = sectionBodyHtml(section);
+  const pageDiv = `
+      <div class="pdf-page" style="position:relative;background:#fff;width:${CANVAS_WIDTH}px;height:${CANVAS_HEIGHT}px;overflow:hidden;box-sizing:border-box;">
+        ${bgBlock}
+        <div class="pdf-content" style="position:relative;z-index:10;font-family:${escapeHtml(preset.fontFamily)};max-width:${maxWidth}px;margin:0 auto;padding:${margins}rem;height:100%;box-sizing:border-box;overflow:hidden;${bgUrl ? "background:transparent;" : ""}">
+          <h2 class="pdf-title" style="font-size:1.5rem;font-weight:700;border-bottom:1px solid currentColor;padding-bottom:0.5rem;margin:0 0 1rem;color:${escapeHtml(productTitleColor)};">${escapeHtml(title)}</h2>
+          <section>
+            <h3 class="pdf-heading" style="font-size:1.125rem;font-weight:600;margin:0 0 0.5rem;color:${escapeHtml(headingColor)};">${escapeHtml(section.title)}</h3>
+            <div class="pdf-body prose" style="margin-top:0.5rem;color:${escapeHtml(bodyColor)};font-size:0.875rem;line-height:${lineHeight};text-align:${alignment};">
+              ${bodyHtml}
+            </div>
+          </section>
+        </div>
+        <div class="pdf-placed-layer" style="position:absolute;inset:0;pointer-events:none;z-index:20;">${placed}</div>
+      </div>`;
+
+  const css = `
+    .pdf-page * { box-sizing: border-box; }
+    .pdf-content p { margin-bottom: ${paragraphSpacing}rem; }
+    .pdf-content h2, .pdf-content h3 { margin-top: ${sectionSpacing * 0.75}rem; margin-bottom: ${paragraphSpacing}rem; }
+    .pdf-content ul, .pdf-content ol { margin-bottom: ${paragraphSpacing}rem; padding-left: 1.5rem; }
+    .pdf-content li { margin-bottom: 0.5rem; }
+  `;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=${CANVAS_WIDTH}, initial-scale=1" />
+  <title>${escapeHtml(title)} - ${escapeHtml(section.title)}</title>
+  <style>${css}</style>
+  <link rel="preconnect" href="https://api.iconify.design" />
+</head>
+<body style="margin:0;padding:0;background:#fff;">
+  ${pageDiv}
+</body>
+</html>`;
+}
+
+/** Returns HTML fragment (style + single page div) for client-side PDF export. */
+export function buildSinglePageFragment(payload: PdfProductPayload, pageIdx: number): string {
+  const full = buildSinglePageHtml(payload, pageIdx);
+  const styleMatch = full.match(/<style>([\s\S]*?)<\/style>/i);
+  const bodyMatch = full.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+  const style = styleMatch ? styleMatch[1] : "";
+  const body = bodyMatch ? bodyMatch[1].trim() : "";
+  return `<style>${style}</style>${body}`;
+}
+
+export function buildProductPdfHtml(payload: PdfProductPayload): string {
+  const { title, sections, pageBackgrounds = [], designSettings = {}, placedElementsByPage = [] } = payload;
+  const templateId = (designSettings.template as TemplateId) || "modern";
+  const preset = TEMPLATE_PRESETS[templateId] ?? TEMPLATE_PRESETS.modern;
+  const layout = designSettings.layout ?? {};
+  const margins = layout.margins ?? 2;
+  const paragraphSpacing = layout.paragraphSpacing ?? 1;
+  const sectionSpacing = layout.sectionSpacing ?? 2;
+  const lineHeight = layout.lineHeight ?? 1.6;
+  const alignment = layout.alignment ?? "left";
+  const maxWidth = layout.maxWidth === "narrow" ? 600 : layout.maxWidth === "wide" ? 1000 : 800;
+  const graphicsColor = designSettings.colors?.graphics ?? "#333333";
+
+  const pages = sections.length ? sections : [{ title: title, body: "" }];
+
+  const pageDivs = pages.map((section, pageIdx) => {
+    const pageBg = pageBackgrounds[pageIdx];
+    const bgUrl = pageBg?.backgroundImage ?? null;
+    const bgSettings = pageBg?.backgroundSettings ? { ...DEFAULT_IMAGE, ...pageBg.backgroundSettings } : DEFAULT_IMAGE;
+    const overlay = pageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...pageBg.overlaySettings } : DEFAULT_OVERLAY;
+    const overlayOpacity = typeof overlay.opacity === "number" ? (overlay.opacity > 1 ? overlay.opacity / 100 : overlay.opacity) : 0.9;
+    const titleStyles = designSettings.textStyles?.[section.id ?? ""]?.title;
+    const bodyStyles = designSettings.textStyles?.[section.id ?? ""]?.body;
+    const productTitleColor = preset.titleColor;
+    const headingColor = titleStyles?.color ?? bodyStyles?.color ?? preset.headingColor;
+    const bodyColor = bodyStyles?.color ?? preset.bodyColor;
+
+    let bgBlock = "";
+    if (bgUrl) {
+      const fit = bgSettings.fit ?? "cover";
+      const pos = bgSettings.position ?? "center center";
+      const opacity = bgSettings.opacity ?? 1;
+      const filter =
+        (bgSettings.blur ?? 0) > 0
+          ? `blur(${bgSettings.blur}px) brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`
+          : `brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`;
+      bgBlock = `
+        <div class="pdf-bg" style="position:absolute;inset:0;z-index:0;">
+          <img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:${fit};object-position:${pos};opacity:${opacity};filter:${escapeHtml(filter)};" />
+        </div>
+        <div class="pdf-overlay" style="position:absolute;inset:0;z-index:1;pointer-events:none;background-color:${escapeHtml(overlay.color)};opacity:${overlayOpacity};"></div>`;
+    }
+
+    const placed = (placedElementsByPage[pageIdx] ?? [])
+      .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+      .map((el) => {
+        const color = graphicsColor;
+        const inner =
+          el.type === "image"
+            ? `<img src="${escapeHtml(el.content)}" alt="" style="width:100%;height:100%;object-fit:cover;opacity:${el.imageSettings?.opacity ?? 1};" />`
+            : iconToImgHtml(el.content, color);
+        return `<div class="pdf-placed" style="position:absolute;left:${el.position.x}px;top:${el.position.y}px;width:${el.size.width}px;height:${el.size.height}px;z-index:${Math.max(1, el.zIndex ?? 0)};display:flex;align-items:center;justify-content:center;">${inner}</div>`;
+      })
+      .join("");
+
+    const bodyHtml = sectionBodyHtml(section);
+    return `
+      <div class="pdf-page" style="position:relative;background:#fff;">
+        ${bgBlock}
+        <div class="pdf-content" style="position:relative;z-index:10;font-family:${escapeHtml(preset.fontFamily)};max-width:${maxWidth}px;margin:0 auto;padding:${margins}rem;height:100%;box-sizing:border-box;overflow:hidden;${bgUrl ? "background:transparent;" : ""}">
+          <h2 class="pdf-title" style="font-size:1.5rem;font-weight:700;border-bottom:1px solid currentColor;padding-bottom:0.5rem;margin:0 0 1rem;color:${escapeHtml(productTitleColor)};">${escapeHtml(title)}</h2>
+          <section>
+            <h3 class="pdf-heading" style="font-size:1.125rem;font-weight:600;margin:0 0 0.5rem;color:${escapeHtml(headingColor)};">${escapeHtml(section.title)}</h3>
+            <div class="pdf-body prose" style="margin-top:0.5rem;color:${escapeHtml(bodyColor)};font-size:0.875rem;line-height:${lineHeight};text-align:${alignment};">
+              ${bodyHtml}
+            </div>
+          </section>
+        </div>
+        <div class="pdf-placed-layer" style="position:absolute;inset:0;pointer-events:none;z-index:20;">${placed}</div>
+      </div>`;
+  });
+
+  const css = `
+    @page { size: ${CANVAS_WIDTH}px ${CANVAS_HEIGHT}px; margin: 0; }
+    .pdf-page {
+      box-sizing: border-box;
+      width: ${CANVAS_WIDTH}px;
+      height: ${CANVAS_HEIGHT}px;
+      overflow: hidden;
+      page-break-after: always;
+      page-break-inside: avoid;
+    }
+    .pdf-page:last-child { page-break-after: auto; }
+    .pdf-page * { box-sizing: border-box; }
+    .pdf-content p { margin-bottom: ${paragraphSpacing}rem; }
+    .pdf-content h2, .pdf-content h3 { margin-top: ${sectionSpacing * 0.75}rem; margin-bottom: ${paragraphSpacing}rem; }
+    .pdf-content ul, .pdf-content ol { margin-bottom: ${paragraphSpacing}rem; padding-left: 1.5rem; }
+    .pdf-content li { margin-bottom: 0.5rem; }
+  `;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=${CANVAS_WIDTH}, initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+  <style>${css}</style>
+  <link rel="preconnect" href="https://api.iconify.design" />
+</head>
+<body style="margin:0;padding:0;background:#fff;">
+  <div class="pdf-pages" style="display:flex;flex-direction:column;align-items:center;gap:0;">
+    ${pageDivs.join("\n")}
+  </div>
+</body>
+</html>`;
+}
