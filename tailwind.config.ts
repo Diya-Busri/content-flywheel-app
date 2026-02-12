@@ -58,6 +58,9 @@ const config = {
           600: "#E67E22",
         },
       },
+      fontSize: {
+        "10xl": ["10rem", { lineHeight: "1.1" }],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

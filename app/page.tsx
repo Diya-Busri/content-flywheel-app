@@ -33,7 +33,7 @@ export default function HomePage() {
             <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-center">
               {/* Left - Text content */}
               <div className="space-y-5">
-                <h1 className="text-5xl lg:text-6xl font-bold leading-tight text-slate-900 dark:text-white">
+                <h1 className="text-10xl lg:text-6xl font-bold leading-tight text-slate-900 dark:text-white">
                   Turn Products Into
                   <br />
                   <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
