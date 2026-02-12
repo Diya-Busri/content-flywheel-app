@@ -6,7 +6,7 @@ import {
   dailyTasksTable,
   goalWeeklyReviewsTable,
 } from "@/db/schema/goals-schema";
-import { eq, and, asc, gte, sql } from "drizzle-orm";
+import { eq, and, asc, gte, sql, isNotNull } from "drizzle-orm";
 
 /** Monday 00:00:00 UTC for the week containing date d. */
 function getWeekStart(d: Date): Date {
@@ -62,7 +62,7 @@ export async function GET(
       .where(
         and(
           eq(dailyTasksTable.goalId, goalId),
-          dailyTasksTable.proofSubmittedAt != null,
+          isNotNull(dailyTasksTable.proofSubmittedAt),
           gte(dailyTasksTable.proofSubmittedAt, weekStart),
           sql`${dailyTasksTable.proofSubmittedAt} < ${weekEnd}`
         )
