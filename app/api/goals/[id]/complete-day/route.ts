@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
-import { goalsTable, dailyTasksTable } from "@/db/schema/goals-schema";
+import { goalsTable, dailyTasksTable, type TaskCategory } from "@/db/schema/goals-schema";
 import { TASK_CATEGORIES } from "@/lib/goals/categories";
 import { generateTasks } from "@/lib/goals/generate-tasks";
 import { eq, and } from "drizzle-orm";
@@ -121,7 +121,7 @@ export async function POST(
             appLink: t.appLink ?? null,
             appLabel: t.appLabel ?? null,
             category:
-              t.category && (TASK_CATEGORIES as readonly string[]).includes(t.category) ? t.category : null,
+              (t.category && (TASK_CATEGORIES as readonly string[]).includes(t.category) ? t.category : null) as TaskCategory | null,
           }));
           await db.insert(dailyTasksTable).values(taskRows);
         } catch (err) {
