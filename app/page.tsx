@@ -28,12 +28,12 @@ export default function HomePage() {
 
       <main className="pt-16">
         {/* Hero - breathing room */}
-        <section className="relative min-h-screen flex items-center bg-slate-50 dark:bg-slate-950">
+        <section className="relative min-h-[85vh] sm:min-h-screen flex items-center bg-slate-50 dark:bg-slate-950">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-24 pb-12 sm:py-16 w-full">
             <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-center">
               {/* Left - Text content */}
               <div className="space-y-5">
-                <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold leading-tight text-slate-900 dark:text-white">
+                <h1 className="text-4xl lg:text-5xl font-bold leading-tight text-slate-900 dark:text-white">
                   Turn Products Into
                   <br />
                   <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
