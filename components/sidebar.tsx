@@ -5,7 +5,8 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Video, Sparkles, CreditCard } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, Sparkles, CreditCard, Library } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -51,7 +52,8 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
     { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦" },
     { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️" },
     { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅" },
-    { href: "/dashboard/my-videos", icon: <Video size={18} />, label: "My Videos", emoji: "📊" },
+    { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯" },
+    { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚" },
     { href: "/dashboard/settings", icon: <Settings size={18} />, label: "Settings", emoji: "⚙️" },
   ];
 
@@ -105,9 +107,9 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
         <div className="absolute inset-y-0 left-0 w-px bg-gradient-to-b from-transparent via-white to-transparent opacity-80" />
         <div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-white to-transparent opacity-80" />
 
-        {/* Logo */}
-        <div className="px-3 mb-8 relative z-10">
-          <Link href="/dashboard">
+        {/* Logo + theme toggle */}
+        <div className="px-3 mb-8 relative z-10 flex items-center justify-between gap-2">
+          <Link href="/dashboard" className="min-w-0 flex-1">
             <motion.div 
               className="flex items-center justify-center md:justify-start"
               whileHover={{ scale: 1.02 }}
@@ -121,6 +123,9 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
               </div>
             </motion.div>
           </Link>
+          <div className="flex-shrink-0">
+            <ThemeToggle />
+          </div>
         </div>
 
         {/* Navigation Items */}

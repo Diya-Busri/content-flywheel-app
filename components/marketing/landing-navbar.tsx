@@ -32,12 +32,12 @@ export function LandingNavbar() {
   ];
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 border-b border-gray-800 bg-gray-900/95 backdrop-blur supports-[backdrop-filter]:bg-gray-900/90">
+    <header className="fixed top-0 left-0 right-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90">
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-20">
         {/* Logo */}
         <Link
           href="/"
-          className="flex items-center gap-2 shrink-0 text-2xl font-bold text-white"
+          className="flex items-center gap-2 shrink-0 text-2xl font-bold text-foreground"
         >
           Content <span className="text-orange-500">Flywheel</span>
         </Link>
@@ -49,7 +49,7 @@ export function LandingNavbar() {
               key={id}
               href={`#${id}`}
               onClick={(e) => handleNavClick(e, id)}
-              className="text-gray-300 hover:text-white transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
               {label}
             </a>
@@ -61,7 +61,7 @@ export function LandingNavbar() {
           <ThemeToggle />
           <Link
             href="/sign-in"
-            className="text-gray-300 hover:text-white transition-colors hidden sm:block"
+            className="text-muted-foreground hover:text-foreground transition-colors hidden sm:block"
           >
             Sign In
           </Link>
@@ -79,7 +79,7 @@ export function LandingNavbar() {
           <Button
             variant="ghost"
             size="icon"
-            className="text-gray-300 hover:text-white"
+            className="text-muted-foreground hover:text-foreground"
             onClick={() => setMobileOpen((o) => !o)}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
           >
@@ -90,14 +90,14 @@ export function LandingNavbar() {
 
       {/* Mobile dropdown */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-gray-800 bg-gray-900 px-4 py-4 flex flex-col gap-2">
+        <div className="md:hidden border-t border-border bg-background px-4 py-4 flex flex-col gap-2">
           {navLinks.map(({ label, id }) => (
             <a
               key={id}
               href={`#${id}`}
               onClick={(e) => handleNavClick(e, id)}
               className={cn(
-                "rounded-lg px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800"
+                "rounded-lg px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-accent"
               )}
             >
               {label}
@@ -106,7 +106,7 @@ export function LandingNavbar() {
           <Link
             href="/sign-in"
             onClick={() => setMobileOpen(false)}
-            className="rounded-lg px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800"
+            className="rounded-lg px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-accent"
           >
             Sign In
           </Link>

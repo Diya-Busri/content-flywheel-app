@@ -19,8 +19,12 @@ export async function POST(request: Request) {
     const productName = (product?.name ?? body.productName ?? "").trim() || "";
     const productIncluded = product?.included ?? body.productIncluded ?? "";
     const productWhy = product?.why ?? body.productWhy ?? "";
-    const productDescription = (typeof body.productDescription === "string" ? body.productDescription : "") || (productName ? `${productIncluded}. ${productWhy}` : "");
+    let productDescription = (typeof body.productDescription === "string" ? body.productDescription : "") || (productName ? `${productIncluded}. ${productWhy}` : "");
     const format = VALID_FORMATS.includes(body.format) ? body.format : "ebook";
+    const spreadsheetDisclaimer = "⚠️ This is a step-by-step tutorial guide (PDF). You will learn how to create this spreadsheet yourself in Excel or Google Sheets. This is NOT a pre-made spreadsheet file - it's an educational guide that teaches you valuable Excel skills.";
+    if (format === "spreadsheet") {
+      productDescription = productDescription ? `${productDescription} ${spreadsheetDisclaimer}` : spreadsheetDisclaimer;
+    }
     const hooks = Array.isArray(body.hooks) ? body.hooks : [];
     const ctas = Array.isArray(body.ctas) ? body.ctas : [];
     const hookTexts = hooks.map((h: string | { text?: string }) => (typeof h === "string" ? h : h?.text ?? ""));
@@ -52,11 +56,14 @@ export async function POST(request: Request) {
       })),
     };
 
-    const designSettings = {
+    const designSettings: Record<string, unknown> = {
       template: "modern",
       colors: { primary: "#FF6B35", secondary: "#004E89", accent: "#F7B32B" },
       typography: { heading: "Inter", body: "Open Sans", size: 16 },
     };
+    if (format === "spreadsheet") {
+      designSettings.subtitle = spreadsheetDisclaimer;
+    }
 
     const [inserted] = await db
       .insert(productsTable)

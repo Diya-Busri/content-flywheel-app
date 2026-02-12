@@ -6,13 +6,14 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, ArrowRight, Loader2, User, Video, RefreshCw, Filter, BookOpen, ClipboardList, Sheet, FileStack, GraduationCap, ListChecks, Play, Sparkles, Trash2, Copy, Check, AlertCircle, Target, Zap, MessageCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, User, Video, RefreshCw, Filter, BookOpen, ClipboardList, Sheet, FileStack, GraduationCap, ListChecks, NotebookPen, Calendar, Play, Sparkles, Trash2, Copy, Check, AlertCircle, Target, Zap, MessageCircle } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -139,10 +140,12 @@ const PROGRESS_VALUES = [17, 33, 50, 67, 83, 100];
 const PRODUCT_FORMATS = [
   { id: "ebook", label: "Ebook/Guide", icon: BookOpen, desc: "PDF with chapters & TOC" },
   { id: "workbook", label: "Workbook", icon: ClipboardList, desc: "Fill-in worksheets & exercises" },
-  { id: "spreadsheet", label: "Spreadsheet", icon: Sheet, desc: "Excel/Sheets with formulas" },
+  { id: "spreadsheet", label: "Spreadsheet Tutorial Guide", icon: Sheet, desc: "Step-by-step instructions to build your spreadsheet in Excel/Google Sheets. Learn formulas, formatting, and advanced features. Downloads as a PDF tutorial." },
   { id: "notion", label: "Notion Template", icon: FileStack, desc: "Databases & templates" },
   { id: "course", label: "Course Outline", icon: GraduationCap, desc: "Modules & lessons structure" },
   { id: "checklist", label: "Checklist Pack", icon: ListChecks, desc: "Printable action checklists" },
+  { id: "journal", label: "Journal", icon: NotebookPen, desc: "Guided prompts & writing space" },
+  { id: "planner", label: "Planner", icon: Calendar, desc: "Lined pages for planning & notes" },
 ] as const;
 
 const GENERATE_STEPS = [
@@ -200,6 +203,8 @@ export default function DiscoverFlow() {
   const [facelessOrPersonal, setFacelessOrPersonal] = useState<"faceless" | "personal" | null>(null);
   const [productFormat, setProductFormat] = useState<string | null>(null);
   const [dontKnowYet, setDontKnowYet] = useState(false);
+  const [customNiche, setCustomNiche] = useState("");
+  const [customProductName, setCustomProductName] = useState("");
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [savedProductId, setSavedProductId] = useState<string | null>(null);
@@ -211,8 +216,14 @@ export default function DiscoverFlow() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [generateStepIndex, setGenerateStepIndex] = useState(0);
 
-  // Next: need goal + (interests text OR "I'm not sure")
-  const canProceedStep1 = !!goal && (interests.trim().length > 0 || dontKnowYet);
+  // Step 1: must select goal (experienced/beginner) + interests min 3 chars OR "I'm not sure"
+  const canProceedStep1 = !!goal && (interests.trim().length >= 3 || dontKnowYet);
+  // Step 2: must select a niche from list OR enter custom niche (min 3 chars)
+  const canProceedStep2 = selectedNiche !== null || customNiche.trim().length >= 3;
+  // Step 3: must select a product OR enter custom product name
+  const canProceedStep3 = selectedProduct !== null || customProductName.trim().length >= 1;
+  // Step 5: if they have a selected product, must wait for sales guide; otherwise can proceed (custom path)
+  const canProceedStep5 = !selectedProduct || !!salesGuide;
 
   const DISCOVERY_KEYS = [
     "discovery-niches",
@@ -259,6 +270,8 @@ export default function DiscoverFlow() {
     setFacelessOrPersonal(null);
     setProductFormat(null);
     setDontKnowYet(false);
+    setCustomNiche("");
+    setCustomProductName("");
     setSalesGuide(null);
     setSalesGuideProductId(null);
     setSavedProductId(null);
@@ -353,7 +366,6 @@ export default function DiscoverFlow() {
     setSelectedNiche(n);
     setProductSuggestionsError(null);
     setProductCurrentPage(0);
-    setStep(3);
     try {
       const key = getProductsStorageKey(n.id);
       const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
@@ -815,7 +827,6 @@ export default function DiscoverFlow() {
 
   const handleSelectProduct = (p: ProductSuggestionItem) => {
     setSelectedProduct(p);
-    setStep(4);
   };
 
   const handleCreateProduct = async () => {
@@ -846,9 +857,14 @@ export default function DiscoverFlow() {
 
     try {
       const nicheName = selectedNiche?.name ?? "";
-      const productDescription = selectedProduct
+      const baseDescription = selectedProduct
         ? `${selectedProduct.included}. ${selectedProduct.why} Target: ${nicheName}.`
         : "";
+      const spreadsheetDisclaimer = "⚠️ This is a step-by-step tutorial guide (PDF). You will learn how to create this spreadsheet yourself in Excel or Google Sheets. This is NOT a pre-made spreadsheet file - it's an educational guide that teaches you valuable Excel skills.";
+      const productDescription =
+        productFormat === "spreadsheet"
+          ? `${baseDescription} ${spreadsheetDisclaimer}`.trim()
+          : baseDescription;
       const hooks = salesGuide?.hooks?.map((h) => ({ text: h.text, whyItWorks: h.whyItWorks })) ?? [];
       const ctas = salesGuide?.ctas?.map((c) => ({ text: c.text, whyItWorks: c.whyItWorks })) ?? [];
 
@@ -1116,7 +1132,10 @@ export default function DiscoverFlow() {
               </div>
               <div className="flex flex-col items-end gap-2 pt-2">
                 {!goal && (
-                  <p className="text-xs text-amber-500/90">Select a goal above to continue</p>
+                  <p className="text-xs text-amber-500/90">Select a goal to continue</p>
+                )}
+                {goal && !dontKnowYet && interests.trim().length > 0 && interests.trim().length < 3 && (
+                  <p className="text-xs text-amber-500/90">Enter at least 3 characters</p>
                 )}
                 <Button
                   type="button"
@@ -1221,7 +1240,15 @@ export default function DiscoverFlow() {
                             <p className="text-xs text-[#888] mb-2">Angles: {n.subNiches.join(" · ")}</p>
                           )}
                           <p className="text-sm text-[#A0A0A0] mb-4">Why this works: {n.why}</p>
-                          <Button size="sm" className="bg-orange-500 hover:bg-orange-600" onClick={() => handleSelectNiche(n)}>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="bg-orange-500 hover:bg-orange-600 cursor-pointer"
+                            onClick={() => {
+                              handleSelectNiche(n);
+                              setStep(3);
+                            }}
+                          >
                             Select This Niche
                           </Button>
                         </CardContent>
@@ -1318,9 +1345,43 @@ export default function DiscoverFlow() {
                   )}
                 </Button>
 
-                <div className="flex justify-between">
+                <div className="mt-6 space-y-3">
+                  <Label className="text-[#A0A0A0]">Or enter your own niche (min 3 characters)</Label>
+                  <Input
+                    placeholder="e.g. Budgeting for freelancers"
+                    value={customNiche}
+                    onChange={(e) => setCustomNiche(e.target.value)}
+                    className="bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-[#666]"
+                  />
+                  {customNiche.trim().length > 0 && customNiche.trim().length < 3 && (
+                    <p className="text-xs text-amber-500/90">Enter at least 3 characters</p>
+                  )}
+                </div>
+
+                <div className="flex justify-between mt-6">
                   <Button variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(1)}>← Back</Button>
-                  <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]" onClick={() => setStep(3)}>Skip & Enter Custom Niche →</Button>
+                  <Button
+                    className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => {
+                      if (!selectedNiche && customNiche.trim().length >= 3) {
+                        setSelectedNiche({
+                          id: "custom",
+                          name: customNiche.trim(),
+                          demand: "",
+                          competition: "",
+                          revenue: "",
+                          why: "",
+                          saturation: "low",
+                          trend: "stable",
+                          subNiches: [],
+                        });
+                      }
+                      setStep(3);
+                    }}
+                    disabled={!canProceedStep2}
+                  >
+                    Next: Choose Product <ArrowRight className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
             )}
@@ -1417,7 +1478,17 @@ export default function DiscoverFlow() {
                           <p className="text-sm text-[#A0A0A0] mb-1">What&apos;s included:</p>
                           <p className="text-sm text-[#E0E0E0] mb-3">{p.included}</p>
                           <p className="text-sm text-[#A0A0A0] mb-4">Why it sells: {p.why}</p>
-                          <Button size="sm" className="bg-orange-500 hover:bg-orange-600" onClick={() => handleSelectProduct(p)}>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="relative z-10 cursor-pointer bg-orange-500 hover:bg-orange-600"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleSelectProduct(p);
+                              setStep(4);
+                            }}
+                          >
                             Create This Product
                           </Button>
                         </CardContent>
@@ -1481,9 +1552,37 @@ export default function DiscoverFlow() {
               <p className="text-xs text-[#666] mt-2">{productSuggestionsError}</p>
             )}
 
+            <div className="mt-6 space-y-3">
+              <Label className="text-[#A0A0A0]">Or enter your own product name</Label>
+              <Input
+                placeholder="e.g. My Budget Tracker"
+                value={customProductName}
+                onChange={(e) => setCustomProductName(e.target.value)}
+                className="bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-[#666]"
+              />
+            </div>
+
             <div className="flex justify-between mt-6">
               <Button variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(2)}>← Back</Button>
-              <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]" onClick={() => setStep(4)}>Create Custom Product →</Button>
+              <Button
+                className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => {
+                  if (!selectedProduct && customProductName.trim().length >= 1) {
+                    setSelectedProduct({
+                      id: "custom",
+                      name: customProductName.trim(),
+                      type: "Guides",
+                      price: "TBD",
+                      included: "",
+                      why: "",
+                    });
+                  }
+                  setStep(4);
+                }}
+                disabled={!canProceedStep3}
+              >
+                Next: Your Content Style <ArrowRight className="w-4 h-4" />
+              </Button>
             </div>
           </>
         )}
@@ -1549,10 +1648,17 @@ export default function DiscoverFlow() {
             </div>
             <div className="flex justify-between mt-8">
               <Button variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(3)}>← Back</Button>
-              <Button className="bg-orange-500 hover:bg-orange-600 gap-2" onClick={() => setStep(5)} disabled={facelessOrPersonal === null}>
-                Next: Learn Hooks & CTAs →
+              <Button
+                className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setStep(5)}
+                disabled={facelessOrPersonal === null}
+              >
+                Next: Learn Hooks & CTAs <ArrowRight className="w-4 h-4" />
               </Button>
             </div>
+            {facelessOrPersonal === null && (
+              <p className="text-xs text-amber-500/90 mt-2">Select faceless or personal brand to continue</p>
+            )}
           </>
         )}
 
@@ -1816,10 +1922,20 @@ export default function DiscoverFlow() {
 
             <div className="flex justify-between">
               <Button variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(4)}>← Back</Button>
-              <Button className="bg-orange-500 hover:bg-orange-600 gap-2" onClick={() => setStep(6)}>
-                Next: Choose Format →
+              <Button
+                className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setStep(6)}
+                disabled={!canProceedStep5}
+              >
+                Next: Choose Format <ArrowRight className="w-4 h-4" />
               </Button>
             </div>
+            {selectedProduct && !salesGuide && salesGuideLoading && (
+              <p className="text-xs text-amber-500/90 mt-2">Loading your sales guide…</p>
+            )}
+            {selectedProduct && !salesGuide && !salesGuideLoading && (
+              <p className="text-xs text-amber-500/90 mt-2">Waiting for sales guide. If it doesn’t load, click Back and reselect your product.</p>
+            )}
           </>
         )}
 
@@ -1880,10 +1996,15 @@ export default function DiscoverFlow() {
             )}
 
             <div className="flex justify-between">
-              <Button variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(5)}>← Back</Button>
+              <Button type="button" variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(5)}>← Back</Button>
               <Button
-                className="bg-orange-500 hover:bg-orange-600 gap-2"
-                onClick={handleCreateProduct}
+                type="button"
+                className="relative z-10 cursor-pointer bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleCreateProduct();
+                }}
                 disabled={!productFormat || generating}
               >
                 {generating ? (
@@ -1896,6 +2017,9 @@ export default function DiscoverFlow() {
                 )}
               </Button>
             </div>
+            {!productFormat && !generating && (
+              <p className="text-xs text-amber-500/90 mt-2">Select a format to continue</p>
+            )}
           </>
         )}
       </div>

@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       afterSignUpUrl="/dashboard"
     >
       <html lang="en" suppressHydrationWarning>
-        <body className={`${inter.className} min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300`} suppressHydrationWarning>
+        <body className={`${inter.className} min-h-screen bg-background text-foreground transition-colors duration-300`} suppressHydrationWarning>
           <Providers
             attribute="class"
             defaultTheme="light"

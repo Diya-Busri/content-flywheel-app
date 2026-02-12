@@ -3,12 +3,26 @@ import postgres from "postgres";
 import { profilesTable } from "./schema/profiles-schema";
 import { pendingProfilesTable } from "./schema/pending-profiles-schema";
 import { productsTable } from "./schema/products-schema";
+import { scriptsTable, videosTable, tiktokShopVideosTable } from "./schema/library-schema";
+import {
+  goalsTable,
+  dailyTasksTable,
+  goalReminderSettingsTable,
+  goalWeeklyReviewsTable,
+} from "./schema/goals-schema";
 
 // Define the schema properly
 const schema = {
   profiles: profilesTable,
   pendingProfiles: pendingProfilesTable,
   products: productsTable,
+  scripts: scriptsTable,
+  videos: videosTable,
+  tiktokShopVideos: tiktokShopVideosTable,
+  goals: goalsTable,
+  dailyTasks: dailyTasksTable,
+  goalReminderSettings: goalReminderSettingsTable,
+  goalWeeklyReviews: goalWeeklyReviewsTable,
 };
 
 // Add connection options with improved timeout and retry settings for Vercel environment

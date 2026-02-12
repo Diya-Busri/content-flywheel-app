@@ -1,14 +1,8 @@
 /**
- * My Videos - Video library
+ * Redirect /dashboard/my-videos to unified library (Videos tab lives in My Library).
  */
-import type { Metadata } from "next";
-import MyVideosFlow from "./MyVideosFlow";
-
-export const metadata: Metadata = {
-  title: "My Videos | Content Flywheel",
-  description: "View and manage your generated videos",
-};
+import { redirect } from "next/navigation";
 
 export default function MyVideosPage() {
-  return <MyVideosFlow />;
+  redirect("/dashboard/library");
 }

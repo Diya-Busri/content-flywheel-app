@@ -46,12 +46,16 @@ import {
   Sun,
   Moon,
   Printer,
+  Sparkles,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { HexColorPicker } from "react-colorful";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { cleanMarkdownToHtml } from "@/lib/clean-markdown";
 import { useToast } from "@/components/ui/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Tooltip,
   TooltipContent,
@@ -462,8 +466,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [sectionToDeleteId, setSectionToDeleteId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [showGenerateAIDialog, setShowGenerateAIDialog] = useState(false);
+  const [generateAICustomType, setGenerateAICustomType] = useState("");
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [showFullPreview, setShowFullPreview] = useState(false);
   const [pdfExporting, setPdfExporting] = useState(false);
+  const [includeCover, setIncludeCover] = useState(true);
+  const [includeBackPage, setIncludeBackPage] = useState(true);
   const [uiTheme, setUiTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("product-editor-theme") as "light" | "dark" | null;
@@ -868,6 +877,65 @@ export default function ProductEditor({ productId }: { productId: string }) {
       });
     } finally {
       setIsRegenerating(false);
+    }
+  }
+
+  const GENERATE_AI_CONTENT_TYPES = [
+    { id: "exercises", label: "Exercises" },
+    { id: "worksheets", label: "Worksheets" },
+    { id: "tips", label: "Tips & best practices" },
+    { id: "case-studies", label: "Case studies" },
+    { id: "examples", label: "Examples & scenarios" },
+    { id: "key-takeaways", label: "Key takeaways" },
+    { id: "checklists", label: "Checklists" },
+    { id: "step-by-step", label: "Step-by-step instructions" },
+    { id: "content", label: "Content (general informational content/explanations)" },
+  ] as const;
+
+  async function handleGenerateSectionWithAI(contentType: string, customType?: string) {
+    const sectionId = editingSectionId;
+    const section = sectionId ? sections.find((s) => s.id === sectionId) : null;
+    if (!section || !product) return;
+    setIsGeneratingAI(true);
+    try {
+      const existingSections = sections
+        .filter((s) => s.id !== sectionId)
+        .map((s) => ({
+          title: s.title,
+          contentPreview: (s.content || "").slice(0, 200),
+        }));
+      const res = await fetch("/api/products/generate-section-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productTitle: product.title,
+          niche: product.niche || "",
+          sectionTitle: section.title,
+          contentType,
+          customType: customType?.trim() || undefined,
+          existingSections,
+        }),
+      });
+      const data = (await res.json()) as { newContent?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Request failed");
+      if (data.newContent) {
+        recordUndo();
+        setSections((prev) =>
+          prev.map((s) => (s.id === sectionId ? { ...s, content: data.newContent! } : s))
+        );
+        setEditingContent(data.newContent);
+        setShowGenerateAIDialog(false);
+        setGenerateAICustomType("");
+        toast({ title: "Content generated!", description: "Edit or save as needed." });
+      }
+    } catch (err) {
+      toast({
+        title: "Generation failed",
+        description: err instanceof Error ? err.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingAI(false);
     }
   }
 
@@ -1449,30 +1517,88 @@ export default function ProductEditor({ productId }: { productId: string }) {
     return () => clearInterval(t);
   }, [lastSaved]);
 
+  // Normalize product format for export routing (DB stores e.g. "spreadsheet", "notion")
+  const formatNorm = (product?.format ?? "").toLowerCase().trim();
+  const isSpreadsheet = formatNorm === "spreadsheet";
+  const isNotionTemplate = formatNorm === "notion" || formatNorm === "notion template";
+  // Single source of truth for export button labels (used in header and Export tab modal)
+  const exportLabel = isSpreadsheet ? "Tutorial (PDF)" : isNotionTemplate ? "Notion Template" : "PDF";
+  const exportGeneratingLabel = isSpreadsheet ? "Generating tutorial PDF..." : isNotionTemplate ? "Generating Notion template..." : "Generating PDF...";
+
   const handleDownloadPdf = async () => {
     setPdfExporting(true);
     try {
       const title = product?.title ?? "Product";
-      const payload = {
-        title,
-        sections: sections.map((s) => ({
-          id: s.id,
-          title: s.title,
-          content: s.content,
-          contentHtml: s.contentHtml,
-        })),
-      };
-      const res = await fetch("/api/generate-workbook-pdf", {
+      const safeName = title.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "") || "product";
+      // Re-read format at click time so we always route correctly
+      const currentFormat = (product?.format ?? "").toLowerCase().trim();
+
+      if (currentFormat === "spreadsheet") {
+        // Spreadsheet products are tutorial guides → export as PDF
+        const res = await fetch("/api/generate-pdf-puppeteer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productId,
+            includeCover,
+            includeBackPage,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(typeof err?.error === "string" ? err.error : `Export failed (${res.status})`);
+        }
+        const blob = await res.blob();
+        const fileName = `${safeName}-tutorial.pdf`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast({ title: "Tutorial PDF downloaded", description: `Saved as ${fileName}` });
+        return;
+      }
+
+      if (currentFormat === "notion" || currentFormat === "notion template") {
+        const res = await fetch("/api/generate-notion-template", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(typeof err?.error === "string" ? err.error : `Export failed (${res.status})`);
+        }
+        const text = await res.text();
+        const fileName = `${safeName}.md`;
+        const blob = new Blob([text], { type: "text/markdown; charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast({ title: "Notion template downloaded", description: `Saved as ${fileName}` });
+        return;
+      }
+
+      // All other formats (workbook, ebook, guide, checklist, etc.) → PDF
+      const res = await fetch("/api/generate-pdf-puppeteer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          productId,
+          includeCover,
+          includeBackPage,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(typeof err?.error === "string" ? err.error : `Export failed (${res.status})`);
       }
       const blob = await res.blob();
-      const fileName = `${title.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "") || "product"}.pdf`;
+      const fileName = `${safeName}.pdf`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -1483,7 +1609,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     } catch (err) {
       toast({
         title: "Export failed",
-        description: err instanceof Error ? err.message : "PDF generation failed.",
+        description: err instanceof Error ? err.message : "Export failed.",
         variant: "destructive",
       });
     } finally {
@@ -1623,7 +1749,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </Tooltip>
             </TooltipProvider>
             <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-2" onClick={() => setShowFullPreview(true)}>
-              <Eye className="w-4 h-4" /> Export PDF
+              <Eye className="w-4 h-4" /> Export {exportLabel}
             </Button>
           </div>
         </div>
@@ -2768,7 +2894,27 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </TabsContent>
               <TabsContent value="export" className="mt-0 p-4 space-y-3">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Export</h3>
-                <div className="space-y-2">
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="includeCover"
+                      checked={includeCover}
+                      onCheckedChange={(v) => setIncludeCover(v === true)}
+                    />
+                    <Label htmlFor="includeCover" className="text-sm font-normal cursor-pointer">
+                      Include cover page
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="includeBackPage"
+                      checked={includeBackPage}
+                      onCheckedChange={(v) => setIncludeBackPage(v === true)}
+                    />
+                    <Label htmlFor="includeBackPage" className="text-sm font-normal cursor-pointer">
+                      Include back page
+                    </Label>
+                  </div>
                   <Button size="sm" variant="outline" className="w-full border-gray-200 text-gray-500 gap-1" onClick={handleGenerateVideos}>
                     Generate Marketing Videos →
                   </Button>
@@ -2808,6 +2954,20 @@ export default function ProductEditor({ productId }: { productId: string }) {
           </div>
           {editingSectionId && (
             <div className="flex flex-wrap gap-2 mt-4 border-t border-gray-200 pt-4">
+              <Button
+                type="button"
+                size="sm"
+                className="bg-orange-500 hover:bg-orange-600 text-white border-0"
+                onClick={() => setShowGenerateAIDialog(true)}
+                disabled={isRegenerating || isGeneratingAI}
+              >
+                {isGeneratingAI ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+                <span className="ml-1.5">Generate with AI</span>
+              </Button>
               <Button
                 type="button"
                 size="sm"
@@ -2880,6 +3040,57 @@ export default function ProductEditor({ productId }: { productId: string }) {
         </DialogContent>
       </Dialog>
 
+      {/* Generate with AI – content type choice */}
+      <Dialog open={showGenerateAIDialog} onOpenChange={(open) => !open && setShowGenerateAIDialog(false)}>
+        <DialogContent className="max-w-md bg-white border-gray-200 text-gray-900">
+          <DialogHeader>
+            <DialogTitle>Generate with AI</DialogTitle>
+            <DialogDescription>
+              What type of content do you want for this section? The AI will use your product topic and existing sections for context.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2 py-2">
+            {GENERATE_AI_CONTENT_TYPES.map(({ id, label }) => (
+              <Button
+                key={id}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="justify-start border-gray-200 text-gray-700 hover:bg-orange-50 hover:border-orange-200"
+                disabled={isGeneratingAI}
+                onClick={() => handleGenerateSectionWithAI(id)}
+              >
+                <Sparkles className="w-3.5 h-3.5 mr-2 text-orange-500 shrink-0" />
+                {label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-2 border-t border-gray-200">
+            <Input
+              placeholder="Or describe custom type (e.g. reflection questions)"
+              value={generateAICustomType}
+              onChange={(e) => setGenerateAICustomType(e.target.value)}
+              className="flex-1 border-gray-200"
+              disabled={isGeneratingAI}
+            />
+            <Button
+              type="button"
+              size="sm"
+              className="bg-orange-500 hover:bg-orange-600 shrink-0"
+              disabled={isGeneratingAI || !generateAICustomType.trim()}
+              onClick={() => handleGenerateSectionWithAI("other", generateAICustomType)}
+            >
+              {isGeneratingAI ? <Loader2 className="w-4 h-4 animate-spin" /> : "Generate"}
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="border-gray-200" onClick={() => setShowGenerateAIDialog(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Full product preview modal – Save as PDF via browser print */}
       {showFullPreview && (
         <div className="pdf-print-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
@@ -2914,10 +3125,12 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 </Button>
               </div>
               <p className="text-sm text-gray-600">
-                To save your product as PDF, click the button below and select &quot;Save as PDF&quot; in the print dialog.
+                {isSpreadsheet || isNotionTemplate
+                  ? `Click the button below to download your ${exportLabel}.`
+                  : 'To save your product as PDF, click the button below and select "Save as PDF" in the print dialog.'}
               </p>
               <Button size="lg" className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2 text-base font-semibold py-6" onClick={handleDownloadPdf} disabled={pdfExporting}>
-                {pdfExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />} {pdfExporting ? "Generating PDF..." : "Download PDF"}
+                {pdfExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />} {pdfExporting ? exportGeneratingLabel : `Download ${exportLabel}`}
               </Button>
             </div>
             <div data-print-source className="editor-canvas preview-pages-container flex-1 overflow-y-auto p-6 flex flex-col items-center gap-6">

@@ -13,7 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, Upload, ArrowRight, Loader2 } from "lucide-react";
+import { ArrowLeft, Upload, ArrowRight, Loader2, AlertCircle, AlertTriangle, Info, Sparkles, Copy, Download, RefreshCw, Library } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import type { ScriptViolation } from "@/app/api/script-checker/route";
 
 const MAX_SCRIPT_CHARS = 5000;
 const MAX_IMAGE_SIZE_MB = 5;
@@ -21,7 +23,166 @@ const MAX_IMAGE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ACCEPTED_IMAGE_EXT = ".jpg,.jpeg,.png,.webp";
 
-type Platform = "tiktok" | "instagram" | "youtube" | "all";
+type Platform = "tiktok" | "instagram" | "youtube" | "facebook" | "twitter" | "all";
+
+const PLATFORM_LABELS: Record<Platform, string> = {
+  tiktok: "TikTok",
+  instagram: "Instagram Reels",
+  youtube: "YouTube Shorts",
+  facebook: "Facebook",
+  twitter: "Twitter/X",
+  all: "All platforms (strictest)",
+};
+
+function platformToApi(platform: Platform): string[] {
+  if (platform === "all") return ["TikTok", "Instagram", "YouTube", "Facebook", "Twitter"];
+  return [PLATFORM_LABELS[platform]];
+}
+
+function SideBySideComparison({
+  originalScript,
+  compliantScript,
+  setCompliantScript,
+  violationLineNumbers,
+  onCopy,
+  onDownload,
+  onRecheck,
+  onSaveToLibrary,
+  savingToLibrary = false,
+}: {
+  originalScript: string;
+  compliantScript: string;
+  setCompliantScript: (s: string) => void;
+  violationLineNumbers: Set<number>;
+  onCopy: () => void;
+  onDownload: () => void;
+  onRecheck: () => void;
+  onSaveToLibrary: () => void;
+  savingToLibrary?: boolean;
+}) {
+  const originalLines = originalScript.split("\n");
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Side-by-side comparison</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Original (violations highlighted)</p>
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-3 font-mono text-sm">
+            {originalLines.map((line, i) => (
+              <div
+                key={i}
+                className={`px-2 py-0.5 -mx-2 rounded ${
+                  violationLineNumbers.has(i + 1)
+                    ? "bg-red-200/60 dark:bg-red-900/40 text-red-900 dark:text-red-100"
+                    : "text-slate-700 dark:text-slate-300"
+                }`}
+              >
+                <span className="text-slate-400 dark:text-slate-500 select-none mr-2">{i + 1}</span>
+                {line || " "}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Compliant script (editable)</p>
+          <Textarea
+            value={compliantScript}
+            onChange={(e) => setCompliantScript(e.target.value)}
+            className="font-mono text-sm min-h-[120px] min-w-0 resize-y bg-green-50/50 dark:bg-green-950/20 border-green-200 dark:border-green-900/50"
+            placeholder="Compliant script will appear here..."
+            rows={Math.min(40, Math.max(8, compliantScript.split("\n").length + 2))}
+          />
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onCopy} className="gap-1.5">
+          <Copy className="w-3.5 h-3.5" />
+          Copy new script
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={onDownload} className="gap-1.5">
+          <Download className="w-3.5 h-3.5" />
+          Save as file
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={onSaveToLibrary} className="gap-1.5" disabled={savingToLibrary}>
+          {savingToLibrary ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Library className="w-3.5 h-3.5" />}
+          Save to Library
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={onRecheck} className="gap-1.5">
+          <RefreshCw className="w-3.5 h-3.5" />
+          Re-check for compliance
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ViolationCard({ violation }: { violation: ScriptViolation }) {
+  const severityConfig = {
+    critical: {
+      icon: AlertCircle,
+      label: "Critical",
+      className: "border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20",
+      iconClassName: "text-red-600 dark:text-red-400",
+    },
+    warning: {
+      icon: AlertTriangle,
+      label: "Warning",
+      className: "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20",
+      iconClassName: "text-amber-600 dark:text-amber-400",
+    },
+    suggestion: {
+      icon: Info,
+      label: "Suggestion",
+      className: "border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-950/20",
+      iconClassName: "text-blue-600 dark:text-blue-400",
+    },
+  };
+  const config = severityConfig[violation.severity] ?? severityConfig.warning;
+  const Icon = config.icon;
+
+  const categories = violation.categories ?? (violation.category ? [violation.category] : ["Compliance issue"]);
+  const hasMultiple = categories.length > 1;
+
+  return (
+    <div className={`rounded-lg border p-4 ${config.className}`}>
+      <div className="flex items-start gap-3">
+        <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${config.iconClassName}`} />
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                {config.label}
+              </span>
+              <span className="text-xs text-slate-600 dark:text-slate-400">
+                Line {violation.lineNumber}{hasMultiple ? ": Multiple issues" : ""}
+              </span>
+            </div>
+            {hasMultiple ? (
+              <ul className="list-disc list-inside text-xs text-slate-600 dark:text-slate-400 space-y-0.5 ml-0.5">
+                {categories.map((c, i) => (
+                  <li key={i}>{c}</li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-xs text-slate-600 dark:text-slate-400">{categories[0]}</span>
+            )}
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Violates: {violation.platforms.join(", ")}
+            </p>
+          </div>
+          <p className="text-base font-semibold text-slate-900 dark:text-white">
+            &ldquo;{violation.exactText}&rdquo;
+          </p>
+          <div className="pt-2">
+            <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 mb-1">Suggested fix:</p>
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{violation.suggestedFix}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ScriptCheckerFlow() {
   const [platform, setPlatform] = useState<Platform>("tiktok");
@@ -31,6 +192,112 @@ export default function ScriptCheckerFlow() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [violations, setViolations] = useState<ScriptViolation[]>([]);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [compliantScript, setCompliantScript] = useState<string | null>(null);
+  const [generatingCompliant, setGeneratingCompliant] = useState(false);
+  const [compliantError, setCompliantError] = useState<string | null>(null);
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
+  const { toast } = useToast();
+
+  const violationLineNumbers = new Set(violations.map((v) => v.lineNumber));
+
+  const handleGenerateCompliant = async () => {
+    setGeneratingCompliant(true);
+    setCompliantError(null);
+    try {
+      const res = await fetch("/api/script-checker/generate-compliant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ script: script.trim(), violations }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Generation failed");
+      setCompliantScript(data.compliantScript ?? "");
+    } catch (err) {
+      setCompliantError(err instanceof Error ? err.message : "Failed to generate compliant script");
+    } finally {
+      setGeneratingCompliant(false);
+    }
+  };
+
+  const handleCopyCompliant = () => {
+    if (!compliantScript) return;
+    navigator.clipboard.writeText(compliantScript);
+    toast({ title: "Copied!", description: "Compliant script copied to clipboard." });
+  };
+
+  const handleDownloadCompliant = () => {
+    if (!compliantScript) return;
+    const blob = new Blob([compliantScript], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "compliant-script.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Downloaded!", description: "Saved as compliant-script.txt" });
+  };
+
+  const runCheck = async (scriptToCheck: string) => {
+    setAnalyzing(true);
+    setCheckError(null);
+    try {
+      const res = await fetch("/api/script-checker", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          script: scriptToCheck.trim(),
+          platforms: platformToApi(platform),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Analysis failed");
+      setViolations(data.violations ?? []);
+    } catch (err) {
+      setCheckError(err instanceof Error ? err.message : "Failed to analyze script");
+      setViolations([]);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleRecheckCompliant = () => {
+    const toCheck = compliantScript ?? script;
+    setScript(toCheck);
+    setCompliantScript(null);
+    runCheck(toCheck);
+  };
+
+  const handleSaveToLibrary = async () => {
+    const content = compliantScript ?? script;
+    if (!content?.trim()) return;
+    setSavingToLibrary(true);
+    try {
+      const res = await fetch("/api/library/scripts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `Script – ${PLATFORM_LABELS[platform]}`,
+          content,
+          platform,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to save");
+      }
+      toast({ title: "Saved to Library", description: "Your script is now in My Library." });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Could not save to library",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingToLibrary(false);
+    }
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -65,7 +332,7 @@ export default function ScriptCheckerFlow() {
     setImagePreview(URL.createObjectURL(file));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: Record<string, string> = {};
     if (!script.trim()) errors.script = "Please paste your video script.";
@@ -73,9 +340,8 @@ export default function ScriptCheckerFlow() {
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
     setSubmitted(true);
-    setAnalyzing(true);
-    // Placeholder: results will be built next; keep spinner for now
-    setTimeout(() => setAnalyzing(false), 3000);
+    setCompliantScript(null);
+    await runCheck(script);
   };
 
   return (
@@ -92,7 +358,7 @@ export default function ScriptCheckerFlow() {
         Check Script Compliance
       </h1>
       <p className="text-slate-600 dark:text-slate-400 mb-10">
-        Ensure your video scripts meet TikTok, Instagram, and YouTube guidelines
+        Ensure your video scripts meet TikTok, Instagram, YouTube, Facebook, and Twitter guidelines
       </p>
 
       <form onSubmit={handleSubmit}>
@@ -106,7 +372,7 @@ export default function ScriptCheckerFlow() {
           <CardContent className="space-y-8">
             {/* 1. Platform Selection */}
             <div className="space-y-3">
-              <Label>Which platform are you posting on?</Label>
+              <Label>Which platform(s) are you posting on?</Label>
               <RadioGroup
                 value={platform}
                 onValueChange={(v: Platform) => setPlatform(v)}
@@ -130,6 +396,18 @@ export default function ScriptCheckerFlow() {
                     YouTube Shorts
                   </label>
                 </div>
+                <div className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3 hover:border-orange-200 dark:hover:border-orange-900/50">
+                  <RadioGroupItem value="facebook" id="platform-facebook" />
+                  <label htmlFor="platform-facebook" className="cursor-pointer text-sm font-medium">
+                    Facebook
+                  </label>
+                </div>
+                <div className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3 hover:border-orange-200 dark:hover:border-orange-900/50">
+                  <RadioGroupItem value="twitter" id="platform-twitter" />
+                  <label htmlFor="platform-twitter" className="cursor-pointer text-sm font-medium">
+                    Twitter/X
+                  </label>
+                </div>
                 <div className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3 hover:border-orange-200 dark:hover:border-orange-900/50 sm:col-span-2">
                   <RadioGroupItem value="all" id="platform-all" />
                   <label htmlFor="platform-all" className="cursor-pointer text-sm font-medium">
@@ -141,7 +419,22 @@ export default function ScriptCheckerFlow() {
 
             {/* 2. Video Script */}
             <div className="space-y-2">
-              <Label htmlFor="script">Paste Your Video Script *</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="script">Paste Your Video Script *</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-slate-500 hover:text-orange-500"
+                  onClick={() =>
+                    setScript(
+                      "This supplement will CURE your acne in 24 hours - guaranteed! Studies show it works 100% of the time.\n\nDM me for the link - I make a commission but trust me it's amazing.\n\nYou'll never have skin problems again, I promise."
+                    )
+                  }
+                >
+                  Try sample script (known violations)
+                </Button>
+              </div>
               <Textarea
                 id="script"
                 placeholder="Paste your video script here... We'll check for policy violations, banned words, and compliance issues."
@@ -226,13 +519,13 @@ export default function ScriptCheckerFlow() {
         </Card>
       </form>
 
-      {/* Results section (placeholder) */}
+      {/* Results section */}
       {submitted && (
         <Card className="border-slate-200 dark:border-slate-800 mt-8">
           <CardHeader>
             <CardTitle className="text-xl">Results</CardTitle>
             <CardDescription>
-              Compliance analysis for your script
+              Compliance analysis for {PLATFORM_LABELS[platform]}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -243,10 +536,72 @@ export default function ScriptCheckerFlow() {
                   Analyzing script for compliance issues...
                 </p>
               </div>
+            ) : checkError ? (
+              <div className="py-6 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 px-4">
+                <p className="text-sm text-red-700 dark:text-red-300">{checkError}</p>
+              </div>
+            ) : violations.length === 0 ? (
+              <div className="py-8 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/50 px-4 text-center">
+                <p className="text-green-700 dark:text-green-300 font-medium">No violations found</p>
+                <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                  Your script looks compliant with {PLATFORM_LABELS[platform]} guidelines. Keep in mind platform rules can change; always review official policies.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveToLibrary}
+                  disabled={savingToLibrary}
+                  className="mt-4 gap-1.5"
+                >
+                  {savingToLibrary ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Library className="w-3.5 h-3.5" />}
+                  Save to Library
+                </Button>
+              </div>
             ) : (
-              <p className="text-sm text-slate-500 py-4">
-                Results will be shown here. (Next step: build results UI)
-              </p>
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Found {violations.length} issue{violations.length !== 1 ? "s" : ""} to review:
+                  </p>
+                  <Button
+                    type="button"
+                    className="bg-orange-500 hover:bg-orange-600 gap-2"
+                    onClick={handleGenerateCompliant}
+                    disabled={generatingCompliant}
+                  >
+                    {generatingCompliant ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4" />
+                    )}
+                    Generate Compliant Script
+                  </Button>
+                </div>
+                {compliantError && (
+                  <div className="rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 px-4 py-2">
+                    <p className="text-sm text-red-700 dark:text-red-300">{compliantError}</p>
+                  </div>
+                )}
+                {compliantScript && (
+                  <SideBySideComparison
+                    originalScript={script}
+                    compliantScript={compliantScript}
+                    setCompliantScript={setCompliantScript}
+                    violationLineNumbers={violationLineNumbers}
+                    onCopy={handleCopyCompliant}
+                    onDownload={handleDownloadCompliant}
+                    onRecheck={handleRecheckCompliant}
+                    onSaveToLibrary={handleSaveToLibrary}
+                    savingToLibrary={savingToLibrary}
+                  />
+                )}
+                <div className="space-y-4">
+                  {violations.map((v, i) => (
+                    <ViolationCard key={i} violation={v} />
+                  ))}
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>

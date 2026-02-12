@@ -110,7 +110,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   });
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-[#0F0F0F] relative overflow-hidden" suppressHydrationWarning>
+    <div className="flex h-screen bg-background relative overflow-hidden" suppressHydrationWarning>
       {/* Show welcome message popup - component handles visibility logic */}
       <WelcomeMessagePopup profile={profile} />
       

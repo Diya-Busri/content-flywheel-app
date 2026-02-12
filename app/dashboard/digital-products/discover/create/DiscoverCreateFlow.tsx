@@ -30,6 +30,8 @@ import {
   FileStack,
   GraduationCap,
   ListChecks,
+  NotebookPen,
+  Calendar,
   Pencil,
   Download,
   Plane,
@@ -84,6 +86,8 @@ const PRODUCT_FORMATS = [
   { id: "notion", label: "Notion Template", icon: FileStack, desc: "Pre-built Notion database with templates", perfect: "Perfect for productivity tools" },
   { id: "course", label: "Course Outline", icon: GraduationCap, desc: "Module-by-module course structure with lessons", perfect: "Perfect for teaching & educational content" },
   { id: "checklist", label: "Checklist Pack", icon: ListChecks, desc: "Step-by-step action items, printable PDFs", perfect: "Perfect for simple quick-win products" },
+  { id: "journal", label: "Journal", icon: NotebookPen, desc: "Guided prompts & writing space", perfect: "Perfect for reflection & daily writing" },
+  { id: "planner", label: "Planner", icon: Calendar, desc: "Lined pages for planning & notes", perfect: "Perfect for goals, schedules & note-taking" },
 ];
 
 const LENGTH_OPTIONS = [

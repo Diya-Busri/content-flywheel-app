@@ -9,6 +9,8 @@ export const productsTable = pgTable("products", {
   content: jsonb("content").$type<{ sections: Array<{ id: string; title: string; content: string; order: number }> }>().notNull(),
   designSettings: jsonb("design_settings").$type<Record<string, unknown>>(),
   placedElements: jsonb("placed_elements").$type<unknown[]>(),
+  status: text("status").default("draft").notNull(),
+  deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
