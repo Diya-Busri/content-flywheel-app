@@ -26,14 +26,14 @@ export default function HomePage() {
         <ChatWidget />
       </div>
 
-      <main className="pt-20">
+      <main className="pt-16">
         {/* Hero - breathing room */}
         <section className="relative min-h-screen flex items-center bg-slate-50 dark:bg-slate-950">
-          <div className="max-w-7xl mx-auto px-6 py-20 w-full">
-            <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 w-full">
+            <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-center">
               {/* Left - Text content */}
-              <div className="space-y-8">
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight text-slate-900 dark:text-white">
+              <div className="space-y-5">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold leading-tight text-slate-900 dark:text-white">
                   Turn Products Into
                   <br />
                   <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
@@ -42,19 +42,19 @@ export default function HomePage() {
                   <br />
                   in Minutes
                 </h1>
-                <p className="text-lg sm:text-xl lg:text-2xl text-slate-600 dark:text-gray-400 leading-relaxed max-w-xl">
+                <p className="text-sm sm:text-base lg:text-lg text-slate-600 dark:text-gray-400 leading-relaxed max-w-xl">
                   AI-powered video creation for digital products, TikTok Shop, and affiliate marketing. Upload your product, get conversion-focused videos for TikTok, Instagram, and YouTube.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
                   <Link
                     href="/sign-up"
-                    className="px-8 py-4 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold text-lg inline-flex items-center justify-center gap-2 transition-all hover:scale-105 text-white"
+                    className="px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold text-base inline-flex items-center justify-center gap-2 transition-all hover:scale-105 text-white"
                   >
-                    Start Creating Free <ArrowRight className="h-5 w-5" />
+                    Start Creating Free <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
                     href="#how-it-works"
-                    className="px-8 py-4 bg-slate-200 dark:bg-gray-800 hover:bg-slate-300 dark:hover:bg-gray-700 rounded-lg font-semibold text-lg inline-flex items-center justify-center transition-all text-slate-900 dark:text-white"
+                    className="px-6 py-3 bg-slate-200 dark:bg-gray-800 hover:bg-slate-300 dark:hover:bg-gray-700 rounded-lg font-semibold text-base inline-flex items-center justify-center transition-all text-slate-900 dark:text-white"
                   >
                     See How It Works
                   </Link>
@@ -77,22 +77,22 @@ export default function HomePage() {
               </div>
               {/* Right - Visual demo */}
               <div className="relative">
-                <div className="flex items-center justify-center gap-6 sm:gap-8">
+                <div className="flex items-center justify-center gap-4 sm:gap-6">
                   <div className="relative group">
-                    <div className="w-40 h-40 sm:w-48 sm:h-48 lg:w-56 lg:h-56 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-gray-800 dark:to-gray-900 rounded-2xl shadow-2xl flex flex-col items-center justify-center border border-slate-300 dark:border-gray-700 transition-all group-hover:scale-105">
-                      <Package className="w-14 h-14 sm:w-16 sm:h-16 text-slate-500 dark:text-gray-500 mb-2" />
-                      <p className="text-sm text-slate-600 dark:text-gray-400 font-medium">BEFORE</p>
-                      <p className="text-xs text-slate-500 dark:text-gray-500">Product photo</p>
+                    <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-gray-800 dark:to-gray-900 rounded-xl shadow-xl flex flex-col items-center justify-center border border-slate-300 dark:border-gray-700 transition-all group-hover:scale-105">
+                      <Package className="w-10 h-10 sm:w-12 sm:h-12 text-slate-500 dark:text-gray-500 mb-1" />
+                      <p className="text-xs text-slate-600 dark:text-gray-400 font-medium">BEFORE</p>
+                      <p className="text-[10px] text-slate-500 dark:text-gray-500">Product photo</p>
                     </div>
                   </div>
-                  <div className="text-4xl sm:text-5xl text-orange-500 animate-pulse" aria-hidden>
+                  <div className="text-2xl sm:text-3xl text-orange-500 animate-pulse" aria-hidden>
                     →
                   </div>
                   <div className="relative group">
-                    <div className="w-40 h-40 sm:w-48 sm:h-48 lg:w-56 lg:h-56 bg-gradient-to-br from-orange-900/20 to-orange-600/20 rounded-2xl shadow-2xl flex flex-col items-center justify-center border border-orange-500/30 transition-all group-hover:scale-105">
-                      <Video className="w-14 h-14 sm:w-16 sm:h-16 text-orange-400 mb-2" />
-                      <p className="text-sm text-orange-400 font-medium">AFTER</p>
-                      <p className="text-xs text-gray-400">AI Video</p>
+                    <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 bg-gradient-to-br from-orange-900/20 to-orange-600/20 rounded-xl shadow-xl flex flex-col items-center justify-center border border-orange-500/30 transition-all group-hover:scale-105">
+                      <Video className="w-10 h-10 sm:w-12 sm:h-12 text-orange-400 mb-1" />
+                      <p className="text-xs text-orange-400 font-medium">AFTER</p>
+                      <p className="text-[10px] text-gray-400">AI Video</p>
                     </div>
                   </div>
                 </div>
@@ -107,12 +107,12 @@ export default function HomePage() {
         </section>
 
         {/* Built for conversion - dedicated section with spacing */}
-        <section className="py-24 lg:py-32 bg-slate-100 dark:bg-gray-900/50">
-          <div className="max-w-5xl mx-auto px-6 text-center">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white mb-6">
+        <section className="py-16 lg:py-24 bg-slate-100 dark:bg-gray-900/50">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white mb-4">
               Built for conversion, not views
             </h2>
-            <p className="text-lg sm:text-xl lg:text-2xl text-slate-600 dark:text-gray-400 leading-relaxed">
+            <p className="text-base sm:text-lg lg:text-xl text-slate-600 dark:text-gray-400 leading-relaxed">
               Three sales-focused tools to turn any product into videos that drive revenue
             </p>
           </div>
