@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -33,13 +34,17 @@ export function LandingNavbar() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90">
-      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-20">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
         {/* Logo */}
-        <Link
-          href="/"
-          className="flex items-center gap-2 shrink-0 text-2xl font-bold text-foreground"
-        >
-          Content <span className="text-orange-500">Flywheel</span>
+        <Link href="/" className="flex items-center shrink-0" aria-label="Content Flywheel home">
+          <Image
+            src="/images/Content_Flywheel_Logo.png"
+            alt="Content Flywheel"
+            width={160}
+            height={32}
+            className="h-8 w-auto"
+            priority
+          />
         </Link>
 
         {/* Desktop nav - more spacing */}
@@ -67,7 +72,7 @@ export function LandingNavbar() {
           </Link>
           <Link
             href="/sign-up"
-            className="px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold text-white transition-all hover:scale-105"
+            className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold text-sm text-white transition-all hover:scale-105"
           >
             Start Creating Free
           </Link>

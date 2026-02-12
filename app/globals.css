@@ -66,6 +66,7 @@
     @apply border-border;
   }
   html {
+    font-size: 87.5%; /* 14px base – prevents "zoomed" look when deployed */
     scroll-behavior: smooth;
   }
   html,
@@ -83,7 +84,7 @@
   [id="pricing-preview"],
   [id="reviews"],
   [id="faq"] {
-    scroll-margin-top: 5rem;
+    scroll-margin-top: 4.5rem;
   }
 }
 
