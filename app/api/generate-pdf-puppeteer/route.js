@@ -630,8 +630,6 @@ function buildFormatSpecificHTML(product, format) {
   }
 }
 
-export { buildFormatSpecificHTML, normalizeFormat };
-
 function buildFullHtml(product, options = {}) {
   const includeCover = options.includeCover !== false;
   const includeBackPage = options.includeBackPage !== false;
