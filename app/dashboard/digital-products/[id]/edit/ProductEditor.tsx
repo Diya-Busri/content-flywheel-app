@@ -379,10 +379,10 @@ function parsePlacedElements(raw: unknown[] | null | undefined): PlacedElement[]
 const DEFAULT_LAYOUT = {
   paragraphSpacing: 1,
   lineHeight: 1.6,
-  alignment: "left" as const,
+  alignment: "left" as "left" | "center" | "justify",
   margins: 2,
   sectionSpacing: 2,
-  maxWidth: "normal" as const,
+  maxWidth: "normal" as "narrow" | "normal" | "wide" | "full",
 };
 
 type LayoutOverrides = Partial<typeof DEFAULT_LAYOUT>;
@@ -1124,11 +1124,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
       const next = { ...imageSettings, [key]: value };
       setImageSettings(next);
       if (!selectedElement) return;
-      setPlacedElements((prev) =>
+      setCurrentPageElements((prev) =>
         prev.map((el) => (el.id === selectedElement ? { ...el, imageSettings: { ...el.imageSettings, ...next } } : el))
       );
     },
-    [imageSettings, selectedElement, recordUndoDebounced]
+    [imageSettings, selectedElement, recordUndoDebounced, setCurrentPageElements]
   );
 
   const setBackgroundFromUrl = useCallback(
@@ -1369,23 +1369,21 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const persistTextStyles = useCallback(
     (sectionId: string, type: "title" | "body", styles: TextStyles) => {
-      setProduct((p) =>
-        p
-          ? {
-              ...p,
-              designSettings: {
-                ...p.designSettings,
-                textStyles: {
-                  ...p.designSettings?.textStyles,
-                  [sectionId]: {
-                    ...p.designSettings?.textStyles?.[sectionId],
-                    [type]: styles,
-                  },
-                },
-              },
-            }
-          : null
-      );
+      setProduct((p) => {
+        if (!p) return null;
+        const prevSection = p.designSettings?.textStyles?.[sectionId] ?? { title: {} as TextStyles, body: {} as TextStyles };
+        const nextSection = { ...prevSection, [type]: styles } as Record<"title" | "body", TextStyles>;
+        return {
+          ...p,
+          designSettings: {
+            ...p.designSettings,
+            textStyles: {
+              ...p.designSettings?.textStyles,
+              [sectionId]: nextSection,
+            },
+          },
+        } as Product;
+      });
     },
     []
   );
@@ -1394,7 +1392,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     (property: string, value: string) => {
       if (!selectedTextRef.current || !selectedTextMeta) return;
       const el = selectedTextRef.current;
-      (el.style as Record<string, string>)[property] = value;
+      (el.style as unknown as Record<string, string>)[property] = value;
       const nextStyles = { ...selectedTextMeta.styles, [property]: value };
       setSelectedTextMeta((prev) => (prev ? { ...prev, styles: nextStyles } : null));
       persistTextStyles(selectedTextMeta.sectionId, selectedTextMeta.type, nextStyles);
@@ -1432,7 +1430,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const resetTextStyles = useCallback(() => {
     if (!selectedTextMeta) return;
     Object.entries(DEFAULT_TEXT_STYLES).forEach(([key, value]) => {
-      if (selectedTextRef.current) (selectedTextRef.current.style as Record<string, string>)[key] = value;
+      if (selectedTextRef.current) (selectedTextRef.current.style as unknown as Record<string, string>)[key] = value;
     });
     const nextStyles = { ...DEFAULT_TEXT_STYLES };
     setSelectedTextMeta((prev) => (prev ? { ...prev, styles: nextStyles } : null));
@@ -1875,7 +1873,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             opacity: backgroundSettings.opacity ?? 1,
                             objectFit: (backgroundSettings.fit ?? "cover") as React.CSSProperties["objectFit"],
                             objectPosition: backgroundSettings.position ?? "center center",
-                            imageRendering: "high-quality",
+                            imageRendering: "auto",
                             filter: (backgroundSettings.blur ?? 0) > 0
                               ? `blur(${backgroundSettings.blur}px) brightness(${backgroundSettings.brightness ?? 100}%) contrast(${backgroundSettings.contrast ?? 100}%) saturate(${backgroundSettings.saturation ?? 100}%)`
                               : `brightness(${backgroundSettings.brightness ?? 100}%) contrast(${backgroundSettings.contrast ?? 100}%) saturate(${backgroundSettings.saturation ?? 100}%)`,
@@ -1968,7 +1966,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           }}
                           bounds="parent"
                           className={`pointer-events-auto cursor-move ${selectedElement === element.id ? "ring-2 ring-orange-500 ring-offset-1" : ""}`}
-                          onClick={(e) => {
+                          onClick={(e: React.MouseEvent) => {
                             e.stopPropagation();
                             setSelectedElement(element.id);
                           }}

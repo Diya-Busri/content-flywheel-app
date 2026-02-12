@@ -126,7 +126,7 @@ Return JSON with violations array. Check ALL categories: misleading health claim
 
     const SEVERITY_ORDER = { critical: 3, warning: 2, suggestion: 1 };
     const rawViolations = (parsed.violations ?? [])
-      .filter((v): v is Record<string, unknown> => v && typeof v === "object")
+      .filter((v): v is Record<string, unknown> => Boolean(v && typeof v === "object"))
       .map((v) => ({
         lineNumber: typeof v.lineNumber === "number" ? v.lineNumber : 1,
         exactText: typeof v.exactText === "string" ? v.exactText : String(v.exactText ?? ""),
@@ -151,10 +151,10 @@ Return JSON with violations array. Check ALL categories: misleading health claim
         byLine.set(v.lineNumber, { ...v });
         continue;
       }
-      const allCategories = [...new Set([...existing.categories, ...v.categories])];
+      const allCategories = Array.from(new Set([...existing.categories, ...v.categories]));
       const maxSeverity =
         SEVERITY_ORDER[v.severity] > SEVERITY_ORDER[existing.severity] ? v.severity : existing.severity;
-      const allPlatforms = [...new Set([...existing.platforms, ...v.platforms])];
+      const allPlatforms = Array.from(new Set([...existing.platforms, ...v.platforms]));
       const combinedFix =
         existing.suggestedFix === v.suggestedFix
           ? existing.suggestedFix

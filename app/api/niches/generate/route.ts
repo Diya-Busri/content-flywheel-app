@@ -181,12 +181,12 @@ Return ONLY a JSON array (no markdown, no explanation):
       const interestKeywords = interests
         .toLowerCase()
         .split(/[,\s]+/)
-        .map((w) => w.trim())
-        .filter((w) => w.length > 3);
+        .map((w: string) => w.trim())
+        .filter((w: string) => w.length > 3);
 
       const validatedNiches = niches.filter((niche) => {
         const nicheText = `${niche.name} ${niche.why}`.toLowerCase();
-        const hasMatch = interestKeywords.some((keyword) => nicheText.includes(keyword));
+        const hasMatch = interestKeywords.some((keyword: string) => nicheText.includes(keyword));
 
         if (!hasMatch) {
           console.warn(`⚠️ Rejected: "${niche.name}" - doesn't match interests`);

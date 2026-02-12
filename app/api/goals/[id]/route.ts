@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
-import { goalsTable, dailyTasksTable } from "@/db/schema/goals-schema";
+import { goalsTable, dailyTasksTable, type GoalStatus } from "@/db/schema/goals-schema";
 import { eq, and, asc } from "drizzle-orm";
 
 export async function GET(
@@ -152,7 +152,7 @@ export async function PATCH(
     }
 
     const now = new Date();
-    const updates: { status?: string; title?: string; description?: string | null; updatedAt: Date } = {
+    const updates: { status?: GoalStatus; title?: string; description?: string | null; updatedAt: Date } = {
       updatedAt: now,
     };
 
@@ -160,11 +160,11 @@ export async function PATCH(
       if (typeof status !== "string" || status !== "archived") {
         return NextResponse.json({ error: "Completed goals can only be archived" }, { status: 400 });
       }
-      updates.status = status;
+      updates.status = "archived";
     } else {
-      const validActiveStatuses = ["active", "paused"];
-      if (typeof status === "string" && validActiveStatuses.includes(status)) {
-        updates.status = status;
+      const validActiveStatuses: GoalStatus[] = ["active", "paused"];
+      if (typeof status === "string" && validActiveStatuses.includes(status as GoalStatus)) {
+        updates.status = status as GoalStatus;
       }
       if (typeof title === "string" && title.trim()) {
         updates.title = title.trim();
