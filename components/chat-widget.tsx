@@ -18,10 +18,18 @@ const WELCOME_MESSAGE: Message = {
   text: "Hi! How can we help? Choose a quick reply or type your message below.",
 };
 
+function buildChatRequestBody(messages: Message[]): { role: "user" | "assistant"; content: string }[] {
+  return messages.map((m) => ({
+    role: m.role === "user" ? "user" : "assistant",
+    content: m.text,
+  }));
+}
+
 export function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -30,29 +38,98 @@ export function ChatWidget() {
     if (isOpen) scrollToBottom();
   }, [isOpen, messages]);
 
+  const sendMessage = async (userText: string) => {
+    const text = userText.trim();
+    if (!text || isLoading) return;
+
+    setInput("");
+    const userMessage: Message = { role: "user", text };
+    const assistantPlaceholder: Message = { role: "bot", text: "" };
+    setMessages((prev) => [...prev, userMessage, assistantPlaceholder]);
+    setIsLoading(true);
+
+    const messageList = [...messages, userMessage];
+    const body = buildChatRequestBody(messageList);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: body }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Request failed: ${res.status}`);
+      }
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) {
+        setMessages((prev) => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (last?.role === "bot") next[next.length - 1] = { ...last, text: "Something went wrong." };
+          return next;
+        });
+        return;
+      }
+
+      let accumulated = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n\n");
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice(6);
+          if (payload === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(payload) as { content?: string };
+            if (parsed.content) {
+              accumulated += parsed.content;
+              setMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last?.role === "bot") next[next.length - 1] = { ...last, text: accumulated };
+                return next;
+              });
+            }
+          } catch {
+            // skip malformed chunk
+          }
+        }
+      }
+
+      if (!accumulated) {
+        setMessages((prev) => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (last?.role === "bot") next[next.length - 1] = { ...last, text: "No response received." };
+          return next;
+        });
+      }
+    } catch (err) {
+      setMessages((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.role === "bot") {
+          next[next.length - 1] = { ...last, text: err instanceof Error ? err.message : "Something went wrong." };
+        }
+        return next;
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleQuickReply = (label: string) => {
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text: label },
-      {
-        role: "bot",
-        text: "Thanks for reaching out! We'll get back to you soon. For now this is a demo—no messages are sent.",
-      },
-    ]);
+    sendMessage(label);
   };
 
   const handleSend = () => {
-    const text = input.trim();
-    if (!text) return;
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", text }]);
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "bot",
-        text: "Got it! This is a demo chat—your message is stored locally only.",
-      },
-    ]);
+    sendMessage(input);
   };
 
   return (
@@ -98,7 +175,7 @@ export function ChatWidget() {
                 }`}
                 style={msg.role === "user" ? { backgroundColor: ACCENT } : undefined}
               >
-                {msg.text}
+                {msg.text || (msg.role === "bot" && isLoading ? "…" : "")}
               </div>
             </div>
           ))}
@@ -116,7 +193,8 @@ export function ChatWidget() {
                 key={label}
                 type="button"
                 onClick={() => handleQuickReply(label)}
-                className="rounded-xl border-2 border-amber-500/50 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:border-amber-500 hover:bg-amber-50 dark:border-amber-500/50 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-amber-500 dark:hover:bg-amber-500/10"
+                disabled={isLoading}
+                className="rounded-xl border-2 border-amber-500/50 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:border-amber-500 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-500/50 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-amber-500 dark:hover:bg-amber-500/10"
               >
                 {label}
               </button>
@@ -132,12 +210,14 @@ export function ChatWidget() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="Type a message..."
-            className="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500"
+            disabled={isLoading}
+            className="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500"
           />
           <button
             type="button"
             onClick={handleSend}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-opacity hover:opacity-90"
+            disabled={isLoading}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-opacity hover:opacity-90 disabled:opacity-50"
             style={{ backgroundColor: ACCENT }}
             aria-label="Send"
           >
