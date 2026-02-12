@@ -147,7 +147,7 @@ export default function DigitalProductFlow() {
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [productName, productDescription, productFileOrLinkMode, productFile, productSalesPageLink]);
+  }, [productName, productFileOrLinkMode, productFile, productSalesPageLink]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -300,7 +300,7 @@ export default function DigitalProductFlow() {
               Product details
             </CardTitle>
             <CardDescription>
-              Enter your product information. We'll use this to generate video scripts.
+              Enter your product information. We&apos;ll use this to generate video scripts.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">

@@ -291,7 +291,7 @@ export function ProofModal({
                     <span aria-hidden>⚠️</span> Proof Not Validated
                   </h3>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                    Your submission doesn't clearly demonstrate task completion.
+                    Your submission doesn&apos;t clearly demonstrate task completion.
                   </p>
                 </div>
                 <div>
@@ -498,7 +498,7 @@ export function ProofModal({
           <AlertDialogHeader>
             <AlertDialogTitle>Skip validation?</AlertDialogTitle>
             <AlertDialogDescription>
-              Skipping validation means you're only accountable to yourself. Your proof will be accepted without AI review.
+              Skipping validation means you&apos;re only accountable to yourself. Your proof will be accepted without AI review.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -513,7 +513,7 @@ export function ProofModal({
           <AlertDialogHeader>
             <AlertDialogTitle>Override validation?</AlertDialogTitle>
             <AlertDialogDescription>
-              Your proof was rejected {rejectionCount} time{rejectionCount > 1 ? "s" : ""}. You can submit anyway — you'll be accountable only to yourself.
+              Your proof was rejected {rejectionCount} time{rejectionCount > 1 ? "s" : ""}. You can submit anyway — you&apos;ll be accountable only to yourself.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

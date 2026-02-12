@@ -43,7 +43,7 @@ export async function POST(
 
     const pageCount = Math.max(1, sections.length || 1);
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line -- puppeteer is optional at build time
     const puppeteer = require("puppeteer");
     const browser = await puppeteer.launch({
       headless: true,

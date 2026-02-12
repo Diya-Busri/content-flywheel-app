@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Rnd } from "react-rnd";
@@ -505,7 +505,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const recordingRef = useRef(false);
   const recordUndoDebouncedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const currentPageElements = placedElementsByPage[currentPageIndex] ?? [];
+  const currentPageElements = useMemo(
+    () => placedElementsByPage[currentPageIndex] ?? [],
+    [placedElementsByPage, currentPageIndex]
+  );
 
   const setCurrentPageElements = useCallback(
     (updater: (prev: PlacedElement[]) => PlacedElement[]) => {
