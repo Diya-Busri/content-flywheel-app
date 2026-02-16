@@ -42,3 +42,15 @@ export const tiktokShopVideosTable = pgTable("tiktok_shop_videos", {
   platform: text("platform").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+/** Async render jobs: create job, process in background, poll for status. */
+export const renderJobsTable = pgTable("render_jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull(),
+  status: text("status").notNull().default("pending"), // pending | processing | completed | failed
+  videoUrl: text("video_url"),
+  error: text("error"),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});

@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, Sparkles, CreditCard, Library } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, Sparkles, CreditCard, Library, FlaskConical } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -51,6 +51,7 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
     { href: "/dashboard", icon: <Home size={18} />, label: "Home", emoji: "🏠" },
     { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦" },
     { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️" },
+    { href: "/dashboard/ugc-lab", icon: <FlaskConical size={18} />, label: "UGC Lab", emoji: "🔬" },
     { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅" },
     { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯" },
     { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚" },

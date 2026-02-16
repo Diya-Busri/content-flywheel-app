@@ -103,6 +103,20 @@
     }
   }
 
+  /* Subtle zoom-in for avatar preview */
+  .animate-zoom-subtle {
+    animation: zoom-subtle 5s ease-in-out infinite alternate;
+  }
+
+  @keyframes zoom-subtle {
+    from {
+      transform: scale(1);
+    }
+    to {
+      transform: scale(1.05);
+    }
+  }
+
   .carousel-container {
     width: 100%;
     overflow: hidden;

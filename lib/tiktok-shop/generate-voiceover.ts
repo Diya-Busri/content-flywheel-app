@@ -26,8 +26,18 @@ export async function getVoiceoverBuffer(script: string, voiceId?: string): Prom
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    console.error("[generate-voiceover] ElevenLabs error:", res.status, err);
+    const errText = await res.text();
+    console.error("[generate-voiceover] ElevenLabs error:", res.status, errText);
+    try {
+      const errJson = JSON.parse(errText) as { detail?: { status?: string; message?: string } };
+      if (errJson.detail?.status === "quota_exceeded") {
+        throw new Error(
+          "ElevenLabs quota exceeded. " + (errJson.detail.message ?? "Not enough credits for this script. Add credits at elevenlabs.io or use a shorter script.")
+        );
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith("ElevenLabs quota exceeded")) throw e;
+    }
     throw new Error("ElevenLabs TTS failed: " + res.status);
   }
 

@@ -47,6 +47,7 @@ import {
   Moon,
   Printer,
   Sparkles,
+  Type,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { HexColorPicker } from "react-colorful";
@@ -169,15 +170,30 @@ type Product = {
   placedElements?: unknown[] | null;
 };
 
+export type TextBoxSettings = {
+  fontSize: number;
+  fontFamily: string;
+  color: string;
+  textAlign: "left" | "center" | "right";
+};
+
+const DEFAULT_TEXT_BOX: TextBoxSettings = {
+  fontSize: 16,
+  fontFamily: "Inter, system-ui, sans-serif",
+  color: "#333333",
+  textAlign: "left",
+};
+
 export type PlacedElement = {
   id: string;
-  type: "icon" | "image";
+  type: "icon" | "image" | "text";
   content: string;
   position: { x: number; y: number };
   size: { width: number; height: number };
   rotation: number;
   zIndex: number;
   imageSettings?: ImageSettings;
+  textSettings?: TextBoxSettings;
 };
 
 type EditorSnapshot = {
@@ -358,21 +374,29 @@ function parsePlacedElements(raw: unknown[] | null | undefined): PlacedElement[]
         (item as PlacedElement).size != null
     )
     .map((item) => {
-      const raw = item as PlacedElement & { imageSettings?: unknown };
+      const raw = item as PlacedElement & { imageSettings?: unknown; textSettings?: unknown };
       const imgSettings = raw.imageSettings && typeof raw.imageSettings === "object" ? raw.imageSettings as ImageSettings : undefined;
-      return {
+      const txtSettings = raw.textSettings && typeof raw.textSettings === "object" ? raw.textSettings as Partial<TextBoxSettings> : undefined;
+      const type = raw.type === "text" ? "text" : raw.type === "image" ? "image" : "icon";
+      const base = {
         id: raw.id,
-        type: raw.type === "image" ? "image" : "icon",
-        content: raw.content,
+        type,
+        content: raw.content ?? "",
         position: { x: Number(raw.position?.x) || 0, y: Number(raw.position?.y) || 0 },
         size: {
-          width: Number(raw.size?.width) || 80,
-          height: Number(raw.size?.height) || 80,
+          width: Number(raw.size?.width) || (type === "text" ? 200 : 80),
+          height: Number(raw.size?.height) || (type === "text" ? 48 : 80),
         },
         rotation: Number(raw.rotation) || 0,
         zIndex: Number(raw.zIndex) ?? 0,
-        ...(imgSettings ? { imageSettings: { ...DEFAULT_IMAGE_SETTINGS, ...imgSettings } } : {}),
       };
+      if (type === "text") {
+        return { ...base, textSettings: { ...DEFAULT_TEXT_BOX, ...txtSettings } };
+      }
+      if (imgSettings) {
+        return { ...base, imageSettings: { ...DEFAULT_IMAGE_SETTINGS, ...imgSettings } };
+      }
+      return base;
     });
 }
 
@@ -1094,6 +1118,22 @@ export default function ProductEditor({ productId }: { productId: string }) {
     [currentPageElements.length, recordUndo, setCurrentPageElements]
   );
 
+  const handleAddTextBox = useCallback(() => {
+    recordUndo();
+    const newElement: PlacedElement = {
+      id: `text-${Date.now()}`,
+      type: "text",
+      content: "Double-click to edit",
+      position: { x: CANVAS_WIDTH / 2 - 100, y: 300 },
+      size: { width: 200, height: 48 },
+      rotation: 0,
+      zIndex: currentPageElements.length,
+      textSettings: { ...DEFAULT_TEXT_BOX },
+    };
+    setCurrentPageElements((prev) => [...prev, newElement]);
+    setSelectedElement(newElement.id);
+  }, [currentPageElements.length, recordUndo, setCurrentPageElements]);
+
   const searchPhotos = useCallback(async (query?: string) => {
     const q = (query ?? photoSearch).trim() || "nature";
     setIsLoadingPhotos(true);
@@ -1129,6 +1169,34 @@ export default function ProductEditor({ productId }: { productId: string }) {
       );
     },
     [imageSettings, selectedElement, recordUndoDebounced, setCurrentPageElements]
+  );
+
+  const selectedTextElement = selectedElement ? currentPageElements.find((el) => el.id === selectedElement && el.type === "text") : null;
+
+  const updateTextBoxContent = useCallback(
+    (content: string) => {
+      if (!selectedElement) return;
+      recordUndoDebounced();
+      setCurrentPageElements((prev) =>
+        prev.map((el) => (el.id === selectedElement ? { ...el, content } : el))
+      );
+    },
+    [selectedElement, recordUndoDebounced, setCurrentPageElements]
+  );
+
+  const updateTextBoxSetting = useCallback(
+    (key: keyof TextBoxSettings, value: string | number) => {
+      if (!selectedElement) return;
+      recordUndoDebounced();
+      setCurrentPageElements((prev) =>
+        prev.map((el) => {
+          if (el.id !== selectedElement || el.type !== "text") return el;
+          const next = { ...el.textSettings, [key]: value } as TextBoxSettings;
+          return { ...el, textSettings: { ...DEFAULT_TEXT_BOX, ...next } };
+        })
+      );
+    },
+    [selectedElement, recordUndoDebounced, setCurrentPageElements]
   );
 
   const setBackgroundFromUrl = useCallback(
@@ -1987,6 +2055,19 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                   filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)`,
                                 }}
                               />
+                            ) : element.type === "text" ? (
+                              <div
+                                className="w-full h-full overflow-auto p-1 flex items-center"
+                                style={{
+                                  fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize,
+                                  fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily,
+                                  color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color,
+                                  textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign,
+                                  wordBreak: "break-word",
+                                }}
+                              >
+                                {element.content || "Double-click to edit"}
+                              </div>
                             ) : (
                               <span className="text-[#999] text-xs">?</span>
                             )}
@@ -2295,6 +2376,75 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           Remove from all pages
                         </Button>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {selectedTextElement && (
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
+                    <p className="text-xs font-medium text-gray-900">Text box</p>
+                    <div>
+                      <label className="text-xs text-gray-600 font-medium block mb-1">Text</label>
+                      <textarea
+                        value={selectedTextElement.content}
+                        onChange={(e) => updateTextBoxContent(e.target.value)}
+                        className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 min-h-[80px] resize-y"
+                        placeholder="Enter text..."
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-600 font-medium block mb-1">Font size: {(selectedTextElement.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize)}px</label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="72"
+                        step="2"
+                        value={selectedTextElement.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize}
+                        onChange={(e) => updateTextBoxSetting("fontSize", parseInt(e.target.value, 10))}
+                        className="w-full h-2 bg-gray-200 rounded-lg accent-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-600 font-medium block mb-1">Font</label>
+                      <select
+                        value={(selectedTextElement.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily).split(",")[0].trim()}
+                        onChange={(e) => updateTextBoxSetting("fontFamily", e.target.value + ", system-ui, sans-serif")}
+                        className="w-full p-2.5 bg-white rounded-lg text-sm text-gray-900 border border-gray-200"
+                      >
+                        {["Inter", "Arial", "Georgia", "Times New Roman", "Courier New", "Verdana", "Helvetica", "Playfair Display", "Roboto", "Open Sans", "Lato", "Montserrat"].map((f) => (
+                          <option key={f} value={f}>{f}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-600 font-medium block mb-1">Color</label>
+                      <div className="[&_.react-colorful]:h-20 [&_.react-colorful]:w-full [&_.react-colorful]:rounded">
+                        <HexColorPicker
+                          color={selectedTextElement.textSettings?.color ?? DEFAULT_TEXT_BOX.color}
+                          onChange={(c) => updateTextBoxSetting("color", c)}
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        value={selectedTextElement.textSettings?.color ?? DEFAULT_TEXT_BOX.color}
+                        onChange={(e) => updateTextBoxSetting("color", e.target.value)}
+                        className="w-full mt-2 p-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-600 font-medium block mb-1">Alignment</label>
+                      <div className="grid grid-cols-3 gap-1">
+                        {(["left", "center", "right"] as const).map((align) => (
+                          <button
+                            key={align}
+                            type="button"
+                            onClick={() => updateTextBoxSetting("textAlign", align)}
+                            className={`p-2 rounded-lg text-xs font-medium ${(selectedTextElement.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign) === align ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                          >
+                            {align === "left" ? "Left" : align === "center" ? "Center" : "Right"}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2674,6 +2824,20 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       Apply
                     </Button>
                   </div>
+                </div>
+
+                {/* Add Text */}
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Text box</h3>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddTextBox}
+                    className="w-full border-gray-200 text-gray-600 hover:bg-gray-50 gap-2"
+                  >
+                    <Type className="w-4 h-4" /> Add text box
+                  </Button>
                 </div>
 
                 {/* Shapes */}
@@ -3247,6 +3411,19 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                     filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)`,
                                   }}
                                 />
+                              ) : element.type === "text" ? (
+                                <div
+                                  className="w-full h-full overflow-auto p-1 flex items-center"
+                                  style={{
+                                    fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize,
+                                    fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily,
+                                    color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color,
+                                    textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign,
+                                    wordBreak: "break-word",
+                                  }}
+                                >
+                                  {element.content || ""}
+                                </div>
                               ) : (
                                 <span className="text-[#999] text-xs">?</span>
                               )}

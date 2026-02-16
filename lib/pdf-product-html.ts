@@ -38,14 +38,22 @@ export interface PdfPageBackground {
   overlaySettings?: { color?: string; opacity?: number };
 }
 
+const DEFAULT_TEXT_BOX = {
+  fontSize: 16,
+  fontFamily: "Inter, system-ui, sans-serif",
+  color: "#333333",
+  textAlign: "left" as const,
+};
+
 export interface PdfPlacedElement {
   id: string;
-  type: "icon" | "image";
+  type: "icon" | "image" | "text";
   content: string;
   position: { x: number; y: number };
   size: { width: number; height: number };
   zIndex?: number;
   imageSettings?: { opacity?: number };
+  textSettings?: { fontSize?: number; fontFamily?: string; color?: string; textAlign?: "left" | "center" | "right" };
 }
 
 export interface PdfProductPayload {
@@ -145,10 +153,15 @@ export function buildSinglePageHtml(payload: PdfProductPayload, pageIdx: number)
     .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
     .map((el) => {
       const color = graphicsColor;
-      const inner =
-        el.type === "image"
-          ? `<img src="${escapeHtml(el.content)}" alt="" style="width:100%;height:100%;object-fit:cover;opacity:${el.imageSettings?.opacity ?? 1};" />`
-          : iconToImgHtml(el.content, color);
+      let inner: string;
+      if (el.type === "text") {
+        const ts = { ...DEFAULT_TEXT_BOX, ...el.textSettings };
+        inner = `<div style="width:100%;height:100%;overflow:hidden;padding:4px;display:flex;align-items:center;word-break:break-word;font-size:${ts.fontSize}px;font-family:${escapeHtml(ts.fontFamily)};color:${escapeHtml(ts.color)};text-align:${ts.textAlign};">${escapeHtml(el.content || "")}</div>`;
+      } else if (el.type === "image") {
+        inner = `<img src="${escapeHtml(el.content)}" alt="" style="width:100%;height:100%;object-fit:cover;opacity:${el.imageSettings?.opacity ?? 1};" />`;
+      } else {
+        inner = iconToImgHtml(el.content, color);
+      }
       return `<div class="pdf-placed" style="position:absolute;left:${el.position.x}px;top:${el.position.y}px;width:${el.size.width}px;height:${el.size.height}px;z-index:${Math.max(1, el.zIndex ?? 0)};display:flex;align-items:center;justify-content:center;">${inner}</div>`;
     })
     .join("");
@@ -249,10 +262,15 @@ export function buildProductPdfHtml(payload: PdfProductPayload): string {
       .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
       .map((el) => {
         const color = graphicsColor;
-        const inner =
-          el.type === "image"
-            ? `<img src="${escapeHtml(el.content)}" alt="" style="width:100%;height:100%;object-fit:cover;opacity:${el.imageSettings?.opacity ?? 1};" />`
-            : iconToImgHtml(el.content, color);
+        let inner: string;
+        if (el.type === "text") {
+          const ts = { ...DEFAULT_TEXT_BOX, ...el.textSettings };
+          inner = `<div style="width:100%;height:100%;overflow:hidden;padding:4px;display:flex;align-items:center;word-break:break-word;font-size:${ts.fontSize}px;font-family:${escapeHtml(ts.fontFamily)};color:${escapeHtml(ts.color)};text-align:${ts.textAlign};">${escapeHtml(el.content || "")}</div>`;
+        } else if (el.type === "image") {
+          inner = `<img src="${escapeHtml(el.content)}" alt="" style="width:100%;height:100%;object-fit:cover;opacity:${el.imageSettings?.opacity ?? 1};" />`;
+        } else {
+          inner = iconToImgHtml(el.content, color);
+        }
         return `<div class="pdf-placed" style="position:absolute;left:${el.position.x}px;top:${el.position.y}px;width:${el.size.width}px;height:${el.size.height}px;z-index:${Math.max(1, el.zIndex ?? 0)};display:flex;align-items:center;justify-content:center;">${inner}</div>`;
       })
       .join("");

@@ -3,3 +3,6 @@ export * from "./pending-profiles-schema";
 export * from "./products-schema";
 export * from "./library-schema";
 export * from "./goals-schema";
+export * from "./face-profiles-schema";
+export * from "./video-jobs-schema";
+export * from "./ugc-campaigns-schema";

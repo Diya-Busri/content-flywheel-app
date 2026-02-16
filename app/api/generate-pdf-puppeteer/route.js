@@ -90,6 +90,13 @@ function getIconifyUrl(content) {
   return iconify ? `https://api.iconify.design/${iconify}.svg` : null;
 }
 
+const DEFAULT_TEXT_BOX = {
+  fontSize: 16,
+  fontFamily: "Inter, system-ui, sans-serif",
+  color: "#333333",
+  textAlign: "left",
+};
+
 function parsePlacedElements(raw) {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -103,15 +110,25 @@ function parsePlacedElements(raw) {
         item.position != null &&
         item.size != null
     )
-    .map((item) => ({
-      id: item.id,
-      type: item.type === "image" ? "image" : "icon",
-      content: item.content,
-      position: { x: Number(item.position?.x) || 0, y: Number(item.position?.y) || 0 },
-      size: { width: Number(item.size?.width) || 80, height: Number(item.size?.height) || 80 },
-      zIndex: Number(item.zIndex) ?? 0,
-      imageSettings: item.imageSettings,
-    }));
+    .map((item) => {
+      const type = item.type === "text" ? "text" : item.type === "image" ? "image" : "icon";
+      const base = {
+        id: item.id,
+        type,
+        content: item.content,
+        position: { x: Number(item.position?.x) || 0, y: Number(item.position?.y) || 0 },
+        size: {
+          width: Number(item.size?.width) || (type === "text" ? 200 : 80),
+          height: Number(item.size?.height) || (type === "text" ? 48 : 80),
+        },
+        zIndex: Number(item.zIndex) ?? 0,
+      };
+      if (type === "text") {
+        const ts = item.textSettings && typeof item.textSettings === "object" ? item.textSettings : {};
+        return { ...base, textSettings: { ...DEFAULT_TEXT_BOX, ...ts } };
+      }
+      return { ...base, imageSettings: item.imageSettings };
+    });
 }
 
 function parsePageBackgrounds(ds, sectionsCount) {
@@ -170,7 +187,10 @@ function buildSectionBlock({ productTitle, section, pageBg, placedElements, grap
     const h = el.size?.height ?? 48;
     const z = Math.max(1, el.zIndex || 0);
 
-    if (el.type === "image" && el.content) {
+    if (el.type === "text") {
+      const ts = { ...DEFAULT_TEXT_BOX, ...(el.textSettings || {}) };
+      html += `<div style="position:absolute;left:${left}px;top:${top}px;width:${w}px;height:${h}px;z-index:${z};overflow:hidden;padding:4px;display:flex;align-items:center;word-break:break-word;font-size:${ts.fontSize}px;font-family:${escapeHtml(ts.fontFamily)};color:${escapeHtml(ts.color)};text-align:${ts.textAlign};">${escapeHtml(el.content || "")}</div>`;
+    } else if (el.type === "image" && el.content) {
       const imgOp = el.imageSettings?.opacity ?? 1;
       const imgFilter = `blur(${el.imageSettings?.blur ?? 0}px) brightness(${el.imageSettings?.brightness ?? 100}%) contrast(${el.imageSettings?.contrast ?? 100}%) saturate(${el.imageSettings?.saturation ?? 100}%)`;
       html += `<img src="${escapeHtml(el.content)}" alt="" style="position:absolute;left:${left}px;top:${top}px;width:${w}px;height:${h}px;z-index:${z};opacity:${imgOp};filter:${imgFilter};object-fit:cover;" />`;

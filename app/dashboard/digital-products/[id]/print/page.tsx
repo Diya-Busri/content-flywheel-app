@@ -31,14 +31,22 @@ type PageBackground = {
   backgroundSettings?: { opacity?: number; blur?: number; brightness?: number; contrast?: number; saturation?: number; fit?: string; position?: string };
   overlaySettings?: { color?: string; opacity?: number };
 };
+const DEFAULT_TEXT_BOX = {
+  fontSize: 16,
+  fontFamily: "Inter, system-ui, sans-serif",
+  color: "#333333",
+  textAlign: "left" as const,
+};
+
 type PlacedElement = {
   id: string;
-  type: "icon" | "image";
+  type: "icon" | "image" | "text";
   content: string;
   position: { x: number; y: number };
   size: { width: number; height: number };
   zIndex: number;
   imageSettings?: { opacity?: number };
+  textSettings?: { fontSize?: number; fontFamily?: string; color?: string; textAlign?: "left" | "center" | "right" };
 };
 
 type ProductPrintPayload = {
@@ -67,15 +75,20 @@ function parsePlacedElements(arr: unknown[]): PlacedElement[] {
   if (!Array.isArray(arr)) return [];
   return arr.map((item) => {
     const o = item as Record<string, unknown>;
-    return {
+    const type = o.type === "text" ? "text" : o.type === "image" ? "image" : "icon";
+    const base = {
       id: String(o.id ?? crypto.randomUUID()),
-      type: (o.type === "image" ? "image" : "icon") as "icon" | "image",
+      type: type as "icon" | "image" | "text",
       content: String(o.content ?? ""),
       position: (o.position as { x: number; y: number }) ?? { x: 0, y: 0 },
-      size: (o.size as { width: number; height: number }) ?? { width: 60, height: 60 },
+      size: (o.size as { width: number; height: number }) ?? (type === "text" ? { width: 200, height: 48 } : { width: 60, height: 60 }),
       zIndex: Number(o.zIndex ?? 1),
-      imageSettings: (o.imageSettings as { opacity?: number }) ?? undefined,
     };
+    if (type === "text") {
+      const ts = (o.textSettings ?? {}) as Partial<typeof DEFAULT_TEXT_BOX>;
+      return { ...base, textSettings: { ...DEFAULT_TEXT_BOX, ...ts } };
+    }
+    return { ...base, imageSettings: (o.imageSettings as { opacity?: number }) ?? undefined };
   });
 }
 
@@ -343,7 +356,20 @@ export default function ProductPrintPage() {
                         className="absolute flex items-center justify-center"
                         style={{ left: element.position.x, top: element.position.y, width: element.size.width, height: element.size.height, zIndex: Math.max(1, element.zIndex) }}
                       >
-                        {element.type === "icon" && isIconify ? (
+                        {element.type === "text" ? (
+                          <div
+                            className="w-full h-full overflow-auto p-1 flex items-center"
+                            style={{
+                              fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize,
+                              fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily,
+                              color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color,
+                              textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign,
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {element.content || ""}
+                          </div>
+                        ) : element.type === "icon" && isIconify ? (
                           <Icon icon={element.content} className="w-full h-full" style={{ color: graphicsAccentColor }} />
                         ) : element.type === "icon" && LucideIcon ? (
                           <LucideIcon className="w-full h-full" style={{ color: graphicsAccentColor }} />

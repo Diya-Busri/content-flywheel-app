@@ -10,6 +10,7 @@
     "lint": "next lint",
     "db:generate": "npx drizzle-kit generate",
     "db:migrate": "npx drizzle-kit migrate",
+    "db:ugc-lab": "node scripts/run-ugc-lab-migration.mjs",
     "type-check": "tsc --noEmit",
     "video": "remotion studio",
     "render": "remotion render src/remotion/index.tsx ShowcaseVideo out/video.mp4"
@@ -85,6 +86,7 @@
     "react-colorful": "^5.6.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18",
+    "react-easy-crop": "^5.5.6",
     "react-hook-form": "^7.53.0",
     "react-resizable-panels": "^2.1.1",
     "react-rnd": "^10.5.2",

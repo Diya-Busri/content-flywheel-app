@@ -3,7 +3,10 @@ import postgres from "postgres";
 import { profilesTable } from "./schema/profiles-schema";
 import { pendingProfilesTable } from "./schema/pending-profiles-schema";
 import { productsTable } from "./schema/products-schema";
-import { scriptsTable, videosTable, tiktokShopVideosTable } from "./schema/library-schema";
+import { scriptsTable, videosTable, tiktokShopVideosTable, renderJobsTable } from "./schema/library-schema";
+import { faceProfilesTable } from "./schema/face-profiles-schema";
+import { videoJobsTable } from "./schema/video-jobs-schema";
+import { ugcCampaignsTable, ugcCampaignProductsTable } from "./schema/ugc-campaigns-schema";
 import {
   goalsTable,
   dailyTasksTable,
@@ -19,10 +22,15 @@ const schema = {
   scripts: scriptsTable,
   videos: videosTable,
   tiktokShopVideos: tiktokShopVideosTable,
+  renderJobs: renderJobsTable,
   goals: goalsTable,
   dailyTasks: dailyTasksTable,
   goalReminderSettings: goalReminderSettingsTable,
   goalWeeklyReviews: goalWeeklyReviewsTable,
+  faceProfiles: faceProfilesTable,
+  videoJobs: videoJobsTable,
+  ugcCampaigns: ugcCampaignsTable,
+  ugcCampaignProducts: ugcCampaignProductsTable,
 };
 
 // Add connection options with improved timeout and retry settings for Vercel environment
