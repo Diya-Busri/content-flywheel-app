@@ -15,7 +15,7 @@ import { generateAvatarVideo } from "@/lib/tiktok-shop/heygen-video";
 
 const VIDEO_STYLES: VideoStyle[] = ["unboxing", "demo", "before-after"];
 
-const useHeyGen = () => Boolean(process.env.HEYGEN_API_KEY?.trim());
+const hasHeyGen = () => Boolean(process.env.HEYGEN_API_KEY?.trim());
 
 export async function POST(request: Request) {
   console.log("[generate-video] POST received");
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   );
   console.log("[generate-video] Env keys present:", envKeys.sort().join(", ") || "(none)");
 
-  const heygenMode = useHeyGen();
+  const heygenMode = hasHeyGen();
 
   if (!heygenMode) {
     if (!process.env.ELEVENLABS_API_KEY?.trim()) {

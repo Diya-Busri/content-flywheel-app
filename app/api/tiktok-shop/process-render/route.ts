@@ -20,7 +20,7 @@ import { generateAvatarVideo } from "@/lib/tiktok-shop/heygen-video";
 import { generateProductInHandVideo } from "@/lib/tiktok-shop/product-in-hand-video";
 
 const VIDEO_STYLES: VideoStyle[] = ["unboxing", "demo", "before-after"];
-const useHeyGen = () => Boolean(process.env.HEYGEN_API_KEY?.trim());
+const hasHeyGen = () => Boolean(process.env.HEYGEN_API_KEY?.trim());
 
 /**
  * POST: Internal. Runs video generation and updates render job.
@@ -56,18 +56,18 @@ export async function POST(request: Request) {
 
   const link = productLink?.trim() || "https://tiktok-shop.local/product";
   const videoBuildMode = body.videoBuildMode as string | undefined;
-  const hasHeyGen = useHeyGen();
+  const heygenEnabled = hasHeyGen();
   // Respect user choice: ai-avatar, mixed, product-in-hand use HeyGen; others use Creatomate
   const heygenMode =
-    hasHeyGen &&
+    heygenEnabled &&
     (videoBuildMode === "ai-avatar" || videoBuildMode === "mixed" || !videoBuildMode);
-  const productInHandMode = hasHeyGen && videoBuildMode === "product-in-hand";
+  const productInHandMode = heygenEnabled && videoBuildMode === "product-in-hand";
   const style = VIDEO_STYLES.includes(videoStyle as VideoStyle) ? (videoStyle as VideoStyle) : "demo";
   const platformList = Array.isArray(platforms) && platforms.length > 0 ? platforms : ["tiktok"];
   const primaryPlatform = platformList[0];
 
   try {
-    console.log("[process-render] Starting job:", jobId, "videoBuildMode:", body.videoBuildMode, "heygenMode:", useHeyGen());
+    console.log("[process-render] Starting job:", jobId, "videoBuildMode:", body.videoBuildMode, "heygenMode:", heygenEnabled);
     let resolvedImageUrl: string | undefined;
     if (productImageBase64 && typeof productImageBase64 === "string" && process.env.BLOB_READ_WRITE_TOKEN) {
       try {

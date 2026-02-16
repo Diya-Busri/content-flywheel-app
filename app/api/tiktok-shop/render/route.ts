@@ -4,7 +4,7 @@ import { db } from "@/db/db";
 import { renderJobsTable } from "@/db/schema/library-schema";
 import { eq } from "drizzle-orm";
 
-const useHeyGen = () => Boolean(process.env.HEYGEN_API_KEY?.trim());
+const hasHeyGen = () => Boolean(process.env.HEYGEN_API_KEY?.trim());
 
 /**
  * POST: Create async render job. Returns jobId immediately; processing runs in background.
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const heygenMode = useHeyGen();
+    const heygenMode = hasHeyGen();
     console.log("[render] HEYGEN_API_KEY present:", !!process.env.HEYGEN_API_KEY?.trim(), "| heygenMode:", heygenMode);
     if (!heygenMode) {
       if (!process.env.ELEVENLABS_API_KEY?.trim() || !process.env.CREATOMATE_API_KEY?.trim()) {

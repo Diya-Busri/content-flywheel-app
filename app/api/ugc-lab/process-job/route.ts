@@ -13,7 +13,7 @@ import { uploadVideoFromUrlToBlob } from "@/lib/tiktok-shop/upload-video-blob";
 /** UGC Lab job processing can take several minutes (FaceSwap ~2–5 min). */
 export const maxDuration = 300;
 
-const useFaceSwap = () =>
+const hasFaceSwap = () =>
   Boolean(
     (process.env.FACESWAP_API_KEY || process.env.REMAKER_API_KEY)?.trim()
   );
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
     if (isFaceSwapProvider(job.provider)) {
       // FaceSwap provider: face image + template video → poll until done
-      if (!useFaceSwap()) {
+      if (!hasFaceSwap()) {
         throw new Error(
           "FACESWAP_API_KEY or REMAKER_API_KEY is not set. Add it to .env.local for FaceSwap."
         );
@@ -136,7 +136,7 @@ export async function POST(request: Request) {
       const missing: string[] = [];
       if (!isFaceSwapProvider(job.provider)) {
         missing.push("provider must be faceswap");
-      } else if (!useFaceSwap()) {
+      } else if (!hasFaceSwap()) {
         missing.push("FACESWAP_API_KEY or REMAKER_API_KEY");
       }
       if (!job.faceProfileId) missing.push("face profile");
