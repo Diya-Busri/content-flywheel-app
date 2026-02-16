@@ -115,8 +115,34 @@ export function PostContentCard({ jobId }: { jobId: string | null }) {
             Post Content
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <p className="text-sm text-slate-600 dark:text-slate-400">{error}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setError(null);
+              setLoading(true);
+              fetch(`/api/videos/${jobId}/post-content`)
+                .then((r) => r.json())
+                .then((res) => {
+                  if (!res.caption && res.error) {
+                    setError(res.error);
+                    setData(null);
+                  } else {
+                    setData(res);
+                    setError(null);
+                  }
+                })
+                .catch((e) => {
+                  setError(e instanceof Error ? e.message : "Failed to load");
+                  setData(null);
+                })
+                .finally(() => setLoading(false));
+            }}
+          >
+            Retry
+          </Button>
         </CardContent>
       </Card>
     );

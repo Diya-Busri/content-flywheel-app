@@ -64,7 +64,7 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 
-type Section = { id: string; title: string; content: string; contentHtml?: string; order: number };
+type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string };
 
 export type TextStyles = Record<string, string>;
 
@@ -506,6 +506,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
   });
   const [placedElementsByPage, setPlacedElementsByPage] = useState<PlacedElement[][]>([]);
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
+  const [editingTextBoxId, setEditingTextBoxId] = useState<string | null>(null);
+  const editingTextAreaRef = useRef<HTMLTextAreaElement | null>(null);
+  const editingTextBoxInitialContentRef = useRef<string>("");
   const [layoutSettings, setLayoutSettings] = useState(DEFAULT_LAYOUT);
   const [activeIconCategory, setActiveIconCategory] = useState<string>(Object.keys(ICON_CATEGORIES)[0] ?? "Business");
   const [iconSearch, setIconSearch] = useState("");
@@ -514,7 +517,12 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [graphicsAccentColor, setGraphicsAccentColor] = useState("#333333");
   const [photos, setPhotos] = useState<{ id: string; url?: string; fullUrl?: string; thumb?: string }[]>([]);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
+  const [isLoadingMorePhotos, setIsLoadingMorePhotos] = useState(false);
   const [photoSearch, setPhotoSearch] = useState("");
+  const [photoPage, setPhotoPage] = useState(1);
+  const [photoTotalPages, setPhotoTotalPages] = useState(0);
+  const [photoCurrentQuery, setPhotoCurrentQuery] = useState("");
+  const [previewPhoto, setPreviewPhoto] = useState<{ id: string; url?: string; fullUrl?: string; thumb?: string } | null>(null);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [backgroundSettings, setBackgroundSettings] = useState<ImageSettings>(DEFAULT_IMAGE_SETTINGS);
   const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(DEFAULT_OVERLAY);
@@ -1134,21 +1142,42 @@ export default function ProductEditor({ productId }: { productId: string }) {
     setSelectedElement(newElement.id);
   }, [currentPageElements.length, recordUndo, setCurrentPageElements]);
 
-  const searchPhotos = useCallback(async (query?: string) => {
-    const q = (query ?? photoSearch).trim() || "nature";
-    setIsLoadingPhotos(true);
-    try {
-      const res = await fetch(`/api/stock-photos?query=${encodeURIComponent(q)}&per_page=20`);
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = (await res.json()) as { photos?: { id: string; url?: string; fullUrl?: string; thumb?: string }[] };
-      setPhotos(data.photos ?? []);
-    } catch {
-      setPhotos([]);
-      toast({ title: "Could not load photos", variant: "destructive" });
-    } finally {
-      setIsLoadingPhotos(false);
-    }
-  }, [photoSearch, toast]);
+  const searchPhotos = useCallback(
+    async (query?: string, page = 1, append = false) => {
+      const q = (query ?? photoSearch).trim() || "nature";
+      const isNewSearch = !append || page === 1;
+      if (isNewSearch) setIsLoadingPhotos(true);
+      else setIsLoadingMorePhotos(true);
+      try {
+        const res = await fetch(
+          `/api/stock-photos?query=${encodeURIComponent(q)}&per_page=24&page=${page}`
+        );
+        if (!res.ok) throw new Error("Failed to fetch");
+        const data = (await res.json()) as {
+          photos?: { id: string; url?: string; fullUrl?: string; thumb?: string }[];
+          total?: number;
+          totalPages?: number;
+        };
+        const newPhotos = data.photos ?? [];
+        setPhotoCurrentQuery(q);
+        setPhotoPage(page);
+        setPhotoTotalPages(data.totalPages ?? 0);
+        setPhotos((prev) => (append && page > 1 ? [...prev, ...newPhotos] : newPhotos));
+      } catch {
+        if (isNewSearch) setPhotos([]);
+        toast({ title: "Could not load photos", variant: "destructive" });
+      } finally {
+        setIsLoadingPhotos(false);
+        setIsLoadingMorePhotos(false);
+      }
+    },
+    [photoSearch, toast]
+  );
+
+  const loadMorePhotos = useCallback(() => {
+    if (photoTotalPages <= photoPage || isLoadingMorePhotos) return;
+    searchPhotos(photoCurrentQuery || undefined, photoPage + 1, true);
+  }, [photoPage, photoTotalPages, photoCurrentQuery, isLoadingMorePhotos, searchPhotos]);
 
   const selectedImageElement = selectedElement ? currentPageElements.find((el) => el.id === selectedElement && el.type === "image") : null;
 
@@ -1173,6 +1202,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const selectedTextElement = selectedElement ? currentPageElements.find((el) => el.id === selectedElement && el.type === "text") : null;
 
+  useEffect(() => {
+    if (editingTextBoxId) {
+      editingTextAreaRef.current?.focus();
+      const len = editingTextAreaRef.current?.value?.length ?? 0;
+      editingTextAreaRef.current?.setSelectionRange(len, len);
+    }
+  }, [editingTextBoxId]);
+
   const updateTextBoxContent = useCallback(
     (content: string) => {
       if (!selectedElement) return;
@@ -1182,6 +1219,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
       );
     },
     [selectedElement, recordUndoDebounced, setCurrentPageElements]
+  );
+
+  const saveTextBoxContentById = useCallback(
+    (elementId: string, content: string) => {
+      recordUndoDebounced();
+      setCurrentPageElements((prev) =>
+        prev.map((el) => (el.id === elementId && el.type === "text" ? { ...el, content } : el))
+      );
+      setEditingTextBoxId(null);
+    },
+    [recordUndoDebounced, setCurrentPageElements]
   );
 
   const updateTextBoxSetting = useCallback(
@@ -1735,7 +1783,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const canvasBgUrl = (typeof backgroundImage === "string" ? backgroundImage.trim() : "") || (typeof dsBg === "string" ? dsBg.trim() : "") || null;
 
   const templatePreset = TEMPLATE_PRESETS[(template as TemplateId) || "modern"] ?? TEMPLATE_PRESETS.modern;
-  const previewLayoutStyle: React.CSSProperties & Record<`--${string}`, string> = {
+  const previewLayoutStyle: React.CSSProperties = {
     ["--paragraph-spacing" as const]: `${layoutSettings.paragraphSpacing}rem`,
     ["--line-height" as const]: String(layoutSettings.lineHeight),
     ["--text-align" as const]: layoutSettings.alignment,
@@ -1760,7 +1808,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const isDark = uiTheme === "dark";
   return (
-    <main className={`min-h-screen font-sans ${isDark ? "bg-[#0F0F0F] text-gray-100 editor-dark" : "bg-gray-100 text-gray-900"}`} data-theme={uiTheme}>
+    <div
+      className={`flex flex-col h-full min-h-0 overflow-hidden font-sans ${isDark ? "bg-[#0F0F0F] text-gray-100 editor-dark" : "bg-gray-100 text-gray-900"}`}
+      data-theme={uiTheme}
+      role="main"
+    >
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -1775,7 +1827,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         }}
       />
       {/* Header - minimal Canva-style toolbar */}
-      <header className={`sticky top-0 z-40 border-b backdrop-blur-sm shadow-sm ${isDark ? "border-[#2A2A2A] bg-[#0F0F0F]/95" : "border-gray-200 bg-white/95"}`}>
+      <header className={`shrink-0 sticky top-0 z-40 border-b backdrop-blur-sm shadow-sm ${isDark ? "border-[#2A2A2A] bg-[#0F0F0F]/95" : "border-gray-200 bg-white/95"}`}>
         <div className="max-w-[1800px] mx-auto flex items-center justify-between gap-6 px-4 md:px-6 h-14">
           <div className="flex items-center gap-6 min-w-0">
             <Link href="/dashboard/digital-products" className={`text-sm shrink-0 flex items-center gap-1 ${isDark ? "text-gray-400 hover:text-orange-500" : "text-gray-500 hover:text-orange-500"}`}>
@@ -1824,13 +1876,12 @@ export default function ProductEditor({ productId }: { productId: string }) {
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden min-h-[calc(100vh-3.5rem)]">
-        {/* Canvas area - left, larger */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-auto">
-          <div className={`flex-1 flex items-start justify-center p-6 md:p-10 min-h-[calc(100vh-3.5rem)] ${isDark ? "bg-[#0F0F0F]" : "bg-gray-100"}`}>
-            <div className="flex flex-col items-center gap-4 w-full max-w-4xl">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Center content area - scrollable */}
+        <div className={`flex-1 min-w-0 overflow-y-auto ${isDark ? "bg-[#0F0F0F]" : "bg-gray-100"}`}>
+          <div className="flex flex-col items-center px-4 py-8">
               {/* Toolbar above canvas */}
-              <div className="flex items-center justify-between w-full max-w-[800px]">
+              <div className="flex items-center justify-between w-full max-w-[816px] mb-4">
                 <div className="flex items-center gap-1">
                   <TooltipProvider>
                     <Tooltip>
@@ -1865,7 +1916,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
                     <button
                       type="button"
-                      onClick={() => setCurrentPageIndex((i) => Math.max(0, i - 1))}
+                      onClick={() => {
+                        setEditingTextBoxId(null);
+                        setCurrentPageIndex((i) => Math.max(0, i - 1));
+                      }}
                       disabled={currentPageIndex <= 0}
                       className={`p-1 rounded disabled:opacity-40 disabled:cursor-not-allowed ${isDark ? "text-gray-400 hover:text-white hover:bg-[#2A2A2A]" : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"}`}
                     >
@@ -1876,7 +1930,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </span>
                     <button
                       type="button"
-                      onClick={() => setCurrentPageIndex((i) => Math.min(sections.length - 1, i + 1))}
+                      onClick={() => {
+                        setEditingTextBoxId(null);
+                        setCurrentPageIndex((i) => Math.min(sections.length - 1, i + 1));
+                      }}
                       disabled={currentPageIndex >= sections.length - 1}
                       className={`p-1 rounded disabled:opacity-40 disabled:cursor-not-allowed ${isDark ? "text-gray-400 hover:text-white hover:bg-[#2A2A2A]" : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"}`}
                     >
@@ -1885,18 +1942,19 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </div>
                 ) : null}
               </div>
-              {/* Canvas with drop shadow */}
-              <div className="rounded-lg shadow-xl border border-gray-200 overflow-hidden" style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)" }}>
+              {/* Page card - Google Docs style */}
+              <div className={`w-full max-w-[928px] mx-auto my-8 rounded-lg shadow-lg overflow-hidden ${isDark ? "bg-[#1A1A1A] border border-[#2A2A2A]" : "bg-white border border-gray-200"}`} style={{ minHeight: 1056, boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)" }}>
                 <div
                   className="relative isolate text-[#1A1A1A]"
                   style={{
                     width: CANVAS_WIDTH,
                     minHeight: CANVAS_HEIGHT,
                     fontFamily: "var(--font-sans), sans-serif",
-                    backgroundColor: canvasBgUrl ? "transparent" : "#ffffff",
+                    backgroundColor: canvasBgUrl ? "transparent" : (isDark ? "#1A1A1A" : "#ffffff"),
                   }}
                   onClick={() => {
                     setSelectedElement(null);
+                    setEditingTextBoxId(null);
                     deselectText();
                   }}
                   role="presentation"
@@ -1992,6 +2050,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           >
                             {section.title}
                           </h3>
+                          {section.imageUrl?.trim() ? (
+                            <div className="my-4 flex justify-center">
+                              <img
+                                src={section.imageUrl}
+                                alt=""
+                                className="max-w-full max-h-80 object-contain rounded-lg shadow-md"
+                              />
+                            </div>
+                          ) : null}
                           <div
                             data-section-id={section.id}
                             data-text-type="body"
@@ -2033,7 +2100,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             updateElementSize(element.id, { width: ref.offsetWidth, height: ref.offsetHeight }, position);
                           }}
                           bounds="parent"
-                          className={`pointer-events-auto cursor-move ${selectedElement === element.id ? "ring-2 ring-orange-500 ring-offset-1" : ""}`}
+                          disableDragging={element.type === "text" && editingTextBoxId === element.id}
+                          className={`pointer-events-auto ${element.type === "text" && editingTextBoxId === element.id ? "cursor-text" : "cursor-move"} ${selectedElement === element.id ? "ring-2 ring-orange-500 ring-offset-1" : ""}`}
                           onClick={(e: React.MouseEvent) => {
                             e.stopPropagation();
                             setSelectedElement(element.id);
@@ -2056,8 +2124,42 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                 }}
                               />
                             ) : element.type === "text" ? (
+                              editingTextBoxId === element.id ? (
+                                <textarea
+                                  ref={(el) => {
+                                    editingTextAreaRef.current = el;
+                                  }}
+                                  className="w-full h-full overflow-auto p-1 resize-none bg-white/95 border border-orange-400 rounded outline-none"
+                                  style={{
+                                    fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize,
+                                    fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily,
+                                    color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color,
+                                    textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign,
+                                    wordBreak: "break-word",
+                                  }}
+                                  value={element.content}
+                                  onChange={(e) => {
+                                    recordUndoDebounced();
+                                    setCurrentPageElements((prev) =>
+                                      prev.map((el) => (el.id === element.id && el.type === "text" ? { ...el, content: e.target.value } : el))
+                                    );
+                                  }}
+                                  onBlur={(e) => saveTextBoxContentById(element.id, e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Escape") {
+                                      e.preventDefault();
+                                      setCurrentPageElements((prev) =>
+                                        prev.map((el) => (el.id === element.id && el.type === "text" ? { ...el, content: editingTextBoxInitialContentRef.current } : el))
+                                      );
+                                      setEditingTextBoxId(null);
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  placeholder="Enter text..."
+                                />
+                              ) : (
                               <div
-                                className="w-full h-full overflow-auto p-1 flex items-center"
+                                className="w-full h-full overflow-auto p-1 flex items-center cursor-text select-text"
                                 style={{
                                   fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize,
                                   fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily,
@@ -2065,9 +2167,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                   textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign,
                                   wordBreak: "break-word",
                                 }}
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  editingTextBoxInitialContentRef.current = element.content || "";
+                                  setEditingTextBoxId(element.id);
+                                  setSelectedElement(element.id);
+                                }}
                               >
                                 {element.content || "Double-click to edit"}
                               </div>
+                              )
                             ) : (
                               <span className="text-[#999] text-xs">?</span>
                             )}
@@ -2126,13 +2236,12 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </div>
                   </div>
                 </div>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Right sidebar - Canva-style light panel */}
-        <aside className={`w-[360px] shrink-0 border-l flex flex-col overflow-hidden ${isDark ? "border-[#2A2A2A] bg-[#1A1A1A]" : "border-gray-200 bg-white"}`}>
+        {/* Right sidebar - fixed width, independently scrollable */}
+        <aside className={`w-[380px] shrink-0 border-l flex flex-col overflow-y-auto ${isDark ? "border-[#2A2A2A] bg-[#1A1A1A]" : "border-gray-200 bg-white"}`}>
             {selectedTextMeta && (
               <div className="p-4 border-b border-gray-200 bg-gray-50 space-y-4 max-h-[50vh] overflow-y-auto">
                 <div className="flex justify-between items-center">
@@ -2872,7 +2981,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     onKeyDown={(e) => e.key === "Enter" && searchPhotos()}
                   />
                   <div className="flex gap-2 mb-2 flex-wrap">
-                    {["Business", "Love", "Nature", "Technology", "People", "Abstract"].map((cat) => (
+                    {["Business", "Love", "Nature", "Technology", "People", "Abstract", "Scenery"].map((cat) => (
                       <button
                         key={cat}
                         type="button"
@@ -2890,55 +2999,130 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </button>
                   </div>
                   {isLoadingPhotos ? (
-                    <div className="flex justify-center py-8">
+                    <div className="flex justify-center py-12">
                       <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
                     </div>
                   ) : photos.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto">
-                      {photos.map((photo) => {
-                        const photoUrl = photo.fullUrl ?? photo.url ?? "";
-                        if (!photoUrl) return null;
-                        return (
-                          <div
-                            key={photo.id}
-                            className="relative aspect-square rounded overflow-hidden border border-gray-200 hover:border-orange-500/50 group"
-                          >
-                            <img
-                              src={photo.thumb ?? photo.url}
-                              alt=""
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            />
-                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center gap-1.5 p-1">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAddPhoto(photoUrl);
-                                }}
-                                className="w-full py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded"
-                              >
-                                Add to canvas
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setBackgroundFromUrl(photoUrl);
-                                }}
-                                className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded"
-                              >
-                                Set as background
-                              </button>
+                    <>
+                      <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto">
+                        {photos.map((photo) => {
+                          const photoUrl = photo.fullUrl ?? photo.url ?? "";
+                          if (!photoUrl) return null;
+                          return (
+                            <div
+                              key={photo.id}
+                              role="button"
+                              tabIndex={0}
+                              className="relative aspect-square rounded overflow-hidden border border-gray-200 hover:border-orange-500/50 group cursor-pointer"
+                              onClick={() => setPreviewPhoto(photo)}
+                              onKeyDown={(e) => e.key === "Enter" && setPreviewPhoto(photo)}
+                            >
+                              <img
+                                src={photo.thumb ?? photo.url}
+                                alt=""
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center gap-1.5 p-1">
+                                <span className="text-white text-xs font-medium">Click to preview</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAddPhoto(photoUrl);
+                                    setPreviewPhoto(null);
+                                  }}
+                                  className="w-full py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded"
+                                >
+                                  Add to canvas
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setBackgroundFromUrl(photoUrl);
+                                    setPreviewPhoto(null);
+                                  }}
+                                  className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded"
+                                >
+                                  Set as background
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                      {photoTotalPages > 1 && photoPage < photoTotalPages && (
+                        <button
+                          type="button"
+                          onClick={loadMorePhotos}
+                          disabled={isLoadingMorePhotos}
+                          className="w-full mt-2 py-2.5 text-sm font-medium text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg border border-orange-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          {isLoadingMorePhotos ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>Load more ({photoPage} of {photoTotalPages})</>
+                          )}
+                        </button>
+                      )}
+                    </>
                   ) : (
-                    <p className="text-xs text-[#666] py-4">Search or pick a category to load photos. Photos by Unsplash.</p>
+                    <p className="text-xs text-[#666] py-6">Search or pick a category to load photos. Photos by Pexels.</p>
                   )}
-                  <p className="text-[10px] text-[#555] mt-1">Photos by Unsplash</p>
+                  <p className="text-[10px] text-[#555] mt-1">Photos by Pexels (pexels.com)</p>
                 </div>
+                {/* Photo preview dialog */}
+                <Dialog open={!!previewPhoto} onOpenChange={(open) => !open && setPreviewPhoto(null)}>
+                  <DialogContent className="max-w-2xl p-0 overflow-hidden">
+                    {previewPhoto && (
+                      <>
+                        <div className="relative">
+                          <img
+                            src={previewPhoto.fullUrl ?? previewPhoto.url ?? previewPhoto.thumb}
+                            alt=""
+                            className="w-full max-h-[70vh] object-contain bg-gray-100"
+                          />
+                          <DialogHeader className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/60 to-transparent">
+                            <DialogTitle className="text-white text-lg">Preview</DialogTitle>
+                          </DialogHeader>
+                        </div>
+                        <DialogFooter className="flex gap-2 p-4 border-t">
+                          <Button
+                            variant="outline"
+                            onClick={() => setPreviewPhoto(null)}
+                          >
+                            Close
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              const url = previewPhoto.fullUrl ?? previewPhoto.url ?? "";
+                              if (url) {
+                                handleAddPhoto(url);
+                                setPreviewPhoto(null);
+                              }
+                            }}
+                            className="bg-orange-500 hover:bg-orange-600"
+                          >
+                            Add to canvas
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={() => {
+                              const url = previewPhoto.fullUrl ?? previewPhoto.url ?? "";
+                              if (url) {
+                                setBackgroundFromUrl(url);
+                                setPreviewPhoto(null);
+                              }
+                            }}
+                            className="bg-purple-600 hover:bg-purple-700 text-white"
+                          >
+                            Set as background
+                          </Button>
+                        </DialogFooter>
+                      </>
+                    )}
+                  </DialogContent>
+                </Dialog>
               </TabsContent>
               <TabsContent value="layout" className="mt-0 p-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Text Layout</h3>
@@ -3360,6 +3544,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         <h3 className="text-lg font-semibold" style={{ ...titleStyles, color: titleStyles?.color ?? templatePreset.headingColor }}>
                           {section.title}
                         </h3>
+                        {section.imageUrl?.trim() ? (
+                          <div className="my-4 flex justify-center">
+                            <img
+                              src={section.imageUrl}
+                              alt=""
+                              className="max-w-full max-h-80 object-contain rounded-lg shadow-md"
+                            />
+                          </div>
+                        ) : null}
                         <div
                           className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2"
                           style={{ ...bodyStyles, color: bodyStyles?.color ?? templatePreset.bodyColor }}
@@ -3439,6 +3632,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
         </div>
       )}
 
-    </main>
+    </div>
   );
 }

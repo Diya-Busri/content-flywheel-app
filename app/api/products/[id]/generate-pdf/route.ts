@@ -23,11 +23,12 @@ export async function POST(
 
     const title = typeof body.title === "string" ? body.title : "My Product";
     const sectionsRaw = Array.isArray(body.sections) ? body.sections : [];
-    const sections: PdfSection[] = sectionsRaw.map((s: { title?: string; body?: string; contentHtml?: string; id?: string }) => ({
+    const sections: PdfSection[] = sectionsRaw.map((s: { title?: string; body?: string; contentHtml?: string; id?: string; imageUrl?: string }) => ({
       id: typeof s.id === "string" ? s.id : undefined,
       title: typeof s.title === "string" ? s.title : "Section",
       body: typeof s.body === "string" ? s.body : undefined,
       contentHtml: typeof s.contentHtml === "string" ? s.contentHtml : undefined,
+      imageUrl: typeof s.imageUrl === "string" && s.imageUrl.trim() ? s.imageUrl.trim() : undefined,
     }));
     const pageBackgrounds = Array.isArray(body.pageBackgrounds) ? body.pageBackgrounds : undefined;
     const designSettings = body.designSettings != null && typeof body.designSettings === "object" ? body.designSettings : undefined;

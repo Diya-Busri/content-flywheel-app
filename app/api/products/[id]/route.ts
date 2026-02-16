@@ -24,7 +24,21 @@ export async function GET(
     if (!product) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
-    return NextResponse.json(product);
+    // Serialize explicitly so we always return JSON and never throw (e.g. BigInt/circular in content)
+    let body: string;
+    try {
+      body = JSON.stringify(product);
+    } catch (serialErr) {
+      console.error("Product fetch: JSON serialize failed", serialErr);
+      return NextResponse.json(
+        { error: "Failed to serialize product" },
+        { status: 500 }
+      );
+    }
+    return new NextResponse(body, {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (err) {
     console.error("Product fetch failed:", err);
     return NextResponse.json(

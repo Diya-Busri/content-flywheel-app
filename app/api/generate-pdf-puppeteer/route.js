@@ -54,6 +54,7 @@ function normalizeFormat(format) {
   if (f === "workbook") return "workbook";
   if (f === "ebook") return "ebook";
   if (f === "guide") return "guide";
+  if (f === "spreadsheet" || f === "notion" || f === "notion template" || f === "template") return "guide";
   if (f === "checklist" || f === "checklist pack") return "checklist";
   if (f === "journal" || f === "journal prompted" || f === "prompted journal") return "journal-prompted";
   if (f === "journal blank" || f === "blank journal") return "journal-blank";
@@ -152,16 +153,40 @@ function parsePageBackgrounds(ds, sectionsCount) {
   );
 }
 
-function buildSectionBlock({ productTitle, section, pageBg, placedElements, graphicsAccentColor }) {
-  const bg = pageBg || {};
-  const bgUrl = bg.backgroundImage || null;
-  const bgSettings = { ...DEFAULT_IMAGE, ...bg.backgroundSettings };
-  const overlay = { ...DEFAULT_OVERLAY, ...bg.overlaySettings };
+/** Normalize overlay opacity to 0–1 (accept 0–100 from UI). */
+function overlayOpacity(overlay) {
+  const o = overlay?.opacity;
+  if (typeof o !== "number") return 0.9;
+  return o > 1 ? o / 100 : o;
+}
 
-  const sectionTitle = escapeHtml(section.title || "(Untitled)");
-  const contentHtml = section.contentHtml ? section.contentHtml : (cleanMarkdownToHtml(section.content ?? "") || "<p>(Empty)</p>");
+/**
+ * Wraps arbitrary inner HTML in a full page with background, overlay, and placed elements.
+ * Use for all formats so PDF matches the in-app preview (same styling per page).
+ */
+function buildPageShell(product, pageIdx, pageCount, innerContentHtml) {
+  const ds = product?.designSettings ?? {};
+  const preset = getTemplatePreset(ds);
+  const graphicsAccentColor = ds?.colors?.graphics ?? preset.accentColor;
+  const fontFamily = preset?.fontFamily ?? "Inter, system-ui, sans-serif";
+  const pageBackgrounds = parsePageBackgrounds(ds, pageCount);
+  let placedElementsByPage = Array.isArray(ds.placedElementsByPage)
+    ? ds.placedElementsByPage.map((pageArr) => (Array.isArray(pageArr) ? parsePlacedElements(pageArr) : []))
+    : [];
+  if (placedElementsByPage.length !== pageCount) {
+    const legacy = parsePlacedElements(product?.placedElements ?? []);
+    placedElementsByPage = legacy.length ? [legacy] : Array.from({ length: pageCount }, () => []);
+    while (placedElementsByPage.length < pageCount) placedElementsByPage.push([]);
+    placedElementsByPage = placedElementsByPage.slice(0, pageCount);
+  }
 
-  const sectionStyle = `position:relative;width:${CANVAS_WIDTH}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;overflow:visible;page-break-after:auto;box-sizing:border-box;background-color:#fff;`;
+  const pageBg = pageBackgrounds[pageIdx] ?? {};
+  const bgUrl = pageBg.backgroundImage || null;
+  const bgSettings = { ...DEFAULT_IMAGE, ...pageBg.backgroundSettings };
+  const overlay = { ...DEFAULT_OVERLAY, ...pageBg.overlaySettings };
+  const opacityVal = overlayOpacity(overlay);
+
+  const sectionStyle = `position:relative;width:${CANVAS_WIDTH}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;overflow:visible;page-break-after:auto;box-sizing:border-box;background-color:#fff;font-family:${escapeHtml(fontFamily)};-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
   let html = `<div class="section-block" style="${sectionStyle}">`;
 
   if (bgUrl) {
@@ -169,14 +194,80 @@ function buildSectionBlock({ productTitle, section, pageBg, placedElements, grap
       (bgSettings.blur || 0) > 0
         ? `filter:blur(${bgSettings.blur}px) brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`
         : `filter:brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;"><img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${bgSettings.fit};object-position:${bgSettings.position};opacity:${bgSettings.opacity};${filter}" /></div>`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${overlay.opacity};pointer-events:none;"></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${bgSettings.fit};object-position:${bgSettings.position};opacity:${bgSettings.opacity};${filter}" /></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${opacityVal};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   }
 
-  html += `<div class="section-content" style="position:relative;z-index:10;padding:30px 30px 20px 30px;box-sizing:border-box;${bgUrl ? "background-color:transparent;" : "background-color:#fff;"}">`;
-  html += `<h2 class="pdf-heading" style="font-size:24px;font-weight:bold;margin:0 0 6px;color:#111;border-bottom:1px solid #ddd;padding-bottom:6px;">${escapeHtml(productTitle)}</h2>`;
-  html += `<h3 class="pdf-heading" style="font-size:18px;font-weight:600;margin:12px 0 6px;color:#FF6B35;">${sectionTitle}</h3>`;
-  html += `<div class="pdf-body" style="margin-top:6px;font-size:14px;line-height:1.5;color:#333;">${contentHtml}</div>`;
+  html += `<div class="section-content" style="position:relative;z-index:10;padding:30px 30px 20px 30px;box-sizing:border-box;max-width:100%;font-family:${escapeHtml(fontFamily)};${bgUrl ? "background-color:transparent;" : "background-color:#fff;"}-webkit-print-color-adjust:exact;print-color-adjust:exact;">`;
+  html += innerContentHtml;
+  html += `</div>`;
+
+  const elements = (placedElementsByPage[pageIdx] ?? []).slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+  for (const el of elements) {
+    const left = el.position?.x ?? 0;
+    const top = el.position?.y ?? 0;
+    const w = el.size?.width ?? 48;
+    const h = el.size?.height ?? 48;
+    const z = Math.max(1, el.zIndex || 0);
+    if (el.type === "text") {
+      const ts = { ...DEFAULT_TEXT_BOX, ...(el.textSettings || {}) };
+      html += `<div style="position:absolute;left:${left}px;top:${top}px;width:${w}px;height:${h}px;z-index:${z};overflow:hidden;padding:4px;display:flex;align-items:center;word-break:break-word;font-size:${ts.fontSize}px;font-family:${escapeHtml(ts.fontFamily)};color:${escapeHtml(ts.color)};text-align:${ts.textAlign};">${escapeHtml(el.content || "")}</div>`;
+    } else if (el.type === "image" && el.content) {
+      const imgOp = el.imageSettings?.opacity ?? 1;
+      const imgFilter = `blur(${el.imageSettings?.blur ?? 0}px) brightness(${el.imageSettings?.brightness ?? 100}%) contrast(${el.imageSettings?.contrast ?? 100}%) saturate(${el.imageSettings?.saturation ?? 100}%)`;
+      html += `<img src="${escapeHtml(el.content)}" alt="" style="position:absolute;left:${left}px;top:${top}px;width:${w}px;height:${h}px;z-index:${z};opacity:${imgOp};filter:${imgFilter};object-fit:cover;-webkit-print-color-adjust:exact;print-color-adjust:exact;" />`;
+    } else if (el.type === "icon") {
+      const iconUrl = getIconifyUrl(el.content);
+      if (iconUrl) {
+        const color = (graphicsAccentColor || "#333").replace("#", "%23");
+        html += `<img src="${iconUrl}?color=${color}" alt="" style="position:absolute;left:${left}px;top:${top}px;width:${w}px;height:${h}px;z-index:${z};-webkit-print-color-adjust:exact;print-color-adjust:exact;" />`;
+      }
+    }
+  }
+  html += `</div>`;
+  return html;
+}
+
+function buildSectionBlock({ productTitle, section, pageBg, placedElements, graphicsAccentColor, preset = null, textStyles = null }) {
+  const bg = pageBg || {};
+  const bgUrl = bg.backgroundImage || null;
+  const bgSettings = { ...DEFAULT_IMAGE, ...bg.backgroundSettings };
+  const overlay = { ...DEFAULT_OVERLAY, ...bg.overlaySettings };
+
+  const titleColor = preset?.titleColor ?? "#111";
+  const headingColor = preset?.headingColor ?? "#1a1a1a";
+  const bodyColor = preset?.bodyColor ?? "#333";
+  const fontFamily = preset?.fontFamily ?? "Inter, system-ui, sans-serif";
+  const accent = graphicsAccentColor ?? preset?.accentColor ?? "#FF6B35";
+
+  const sectionTitleStyles = textStyles?.[section.id]?.title;
+  const sectionBodyStyles = textStyles?.[section.id]?.body;
+  const titleStyleColor = sectionTitleStyles?.color ?? headingColor;
+  const bodyStyleColor = sectionBodyStyles?.color ?? bodyColor;
+
+  const sectionTitle = escapeHtml(section.title || "(Untitled)");
+  const contentHtml = section.contentHtml ? section.contentHtml : (cleanMarkdownToHtml(section.content ?? "") || "<p>(Empty)</p>");
+  const sectionImage = section.imageUrl?.trim()
+    ? `<div style="margin:12px 0 16px;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:100%;height:auto;max-height:280px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>`
+    : "";
+
+  const sectionStyle = `position:relative;width:${CANVAS_WIDTH}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;overflow:visible;page-break-after:auto;box-sizing:border-box;background-color:#fff;font-family:${escapeHtml(fontFamily)};-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+  let html = `<div class="section-block" style="${sectionStyle}">`;
+
+  if (bgUrl) {
+    const filter =
+      (bgSettings.blur || 0) > 0
+        ? `filter:blur(${bgSettings.blur}px) brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`
+        : `filter:brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${bgSettings.fit};object-position:${bgSettings.position};opacity:${bgSettings.opacity};${filter}" /></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${overlayOpacity(overlay)};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
+  }
+
+  html += `<div class="section-content" style="position:relative;z-index:10;padding:30px 30px 20px 30px;box-sizing:border-box;max-width:100%;font-family:${escapeHtml(fontFamily)};${bgUrl ? "background-color:transparent;" : "background-color:#fff;"}-webkit-print-color-adjust:exact;print-color-adjust:exact;">`;
+  html += `<h2 class="pdf-heading" style="font-size:24px;font-weight:bold;margin:0 0 6px;color:${escapeHtml(titleColor)};border-bottom:1px solid #ddd;padding-bottom:6px;">${escapeHtml(productTitle)}</h2>`;
+  html += `<h3 class="pdf-heading" style="font-size:18px;font-weight:600;margin:12px 0 6px;color:${escapeHtml(titleStyleColor)};">${sectionTitle}</h3>`;
+  html += sectionImage;
+  html += `<div class="pdf-body" style="margin-top:6px;font-size:15px;line-height:1.65;color:${escapeHtml(bodyStyleColor)};">${contentHtml}</div>`;
   html += `</div>`;
 
   const elements = (placedElements || []).slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
@@ -210,7 +301,8 @@ function buildSectionBlock({ productTitle, section, pageBg, placedElements, grap
 /** Cover page: full-page background, title, subtitle, author. Uses first-page background or gradient. Insert as FIRST page when includeCover is true. */
 function buildCoverPage(product, coverPageBg) {
   const ds = product?.designSettings ?? {};
-  const graphicsAccentColor = ds?.colors?.graphics ?? "#FF6B35";
+  const preset = getTemplatePreset(ds);
+  const graphicsAccentColor = ds?.colors?.graphics ?? preset.accentColor;
   const title = product?.title ?? "Product";
   const niche = product?.niche ?? "";
   const customSubtitle = product?.subtitle ?? product?.tagline ?? ds?.subtitle ?? ds?.tagline ?? "";
@@ -230,12 +322,12 @@ function buildCoverPage(product, coverPageBg) {
       (bgSettings.blur || 0) > 0
         ? `filter:blur(${bgSettings.blur}px) brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`
         : `filter:brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;"><img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${bgSettings.fit};object-position:${bgSettings.position};opacity:${bgSettings.opacity};${filter}" /></div>`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${overlay.opacity};pointer-events:none;"></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${bgSettings.fit};object-position:${bgSettings.position};opacity:${bgSettings.opacity};${filter}" /></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${overlayOpacity(overlay)};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   } else {
     const gradient = `linear-gradient(160deg, #ffffff 0%, ${graphicsAccentColor}12 40%, ${graphicsAccentColor}22 100%)`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;background:${gradient};"></div>`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background:rgba(255,255,255,0.75);pointer-events:none;"></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;background:${gradient};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background:rgba(255,255,255,0.75);pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   }
 
   html += `<div class="cover-content" style="position:relative;z-index:10;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:60px 50px 50px;box-sizing:border-box;">`;
@@ -284,12 +376,12 @@ function buildBackPage(product, coverPageBg) {
       (bgSettings.blur || 0) > 0
         ? `filter:blur(${bgSettings.blur}px) brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`
         : `filter:brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;"><img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${bgSettings.fit};object-position:${bgSettings.position};opacity:${bgSettings.opacity};${filter}" /></div>`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${overlay.opacity};pointer-events:none;"></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${bgSettings.fit};object-position:${bgSettings.position};opacity:${bgSettings.opacity};${filter}" /></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${overlayOpacity(overlay)};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   } else {
     const gradient = `linear-gradient(160deg, #ffffff 0%, ${graphicsAccentColor}12 40%, ${graphicsAccentColor}22 100%)`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;background:${gradient};"></div>`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background:rgba(255,255,255,0.75);pointer-events:none;"></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;background:${gradient};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background:rgba(255,255,255,0.75);pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   }
 
   html += `<div class="back-content" style="position:relative;z-index:10;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:50px;box-sizing:border-box;">`;
@@ -305,24 +397,45 @@ function buildBackPage(product, coverPageBg) {
   return html;
 }
 
+const TEMPLATE_PRESETS = {
+  modern: { accentColor: "#FF6B35", fontFamily: "Inter, system-ui, sans-serif", titleColor: "#FF6B35", headingColor: "#1a1a1a", bodyColor: "#4a4a4a" },
+  classic: { accentColor: "#2c3e50", fontFamily: "Georgia, 'Times New Roman', serif", titleColor: "#2c3e50", headingColor: "#2c3e50", bodyColor: "#34495e" },
+  minimal: { accentColor: "#374151", fontFamily: "Inter, system-ui, sans-serif", titleColor: "#111827", headingColor: "#1f2937", bodyColor: "#6b7280" },
+  bold: { accentColor: "#7C3AED", fontFamily: "'DM Sans', Inter, sans-serif", titleColor: "#7C3AED", headingColor: "#1a1a1a", bodyColor: "#374151" },
+  elegant: { accentColor: "#6B4E71", fontFamily: "'Playfair Display', Georgia, serif", titleColor: "#6B4E71", headingColor: "#2d2d2d", bodyColor: "#5a5a5a" },
+  creative: { accentColor: "#EC4899", fontFamily: "'Nunito', Inter, sans-serif", titleColor: "#EC4899", headingColor: "#1f2937", bodyColor: "#4b5563" },
+};
+
+function getTemplatePreset(ds) {
+  const templateId = ds?.template ?? "modern";
+  const preset = TEMPLATE_PRESETS[templateId] ?? TEMPLATE_PRESETS.modern;
+  const accentOverride = ds?.colors?.graphics ?? ds?.colors?.primary ?? preset.accentColor;
+  return { ...preset, accentColor: accentOverride };
+}
+
 const BASE_PAGE_CSS = `
-  *{box-sizing:border-box}
-  body{margin:0;padding:0;orphans:3;widows:3;}
-  .section-block{margin:0;padding:0;}
-  .section-content{orphans:3;widows:3;}
-  p{margin:0 0 0.5rem;page-break-inside:avoid;}
-  .pdf-heading{page-break-after:avoid;}
-  h2.pdf-heading,h3.pdf-heading{page-break-after:avoid;}
-  ul,ol{margin:0 0 0.5rem;padding-left:1.5rem;page-break-inside:avoid;}
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{margin:0;padding:0;orphans:3;widows:3;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .section-block{margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .section-content{orphans:3;widows:3}
+  p{margin:0 0 0.5rem;page-break-inside:avoid}
+  .pdf-heading{page-break-after:avoid}
+  h2.pdf-heading,h3.pdf-heading{page-break-after:avoid}
+  ul,ol{margin:0 0 0.5rem;padding-left:1.5rem;page-break-inside:avoid}
   li{margin-bottom:0.2rem}
+  img{max-width:100%;height:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 `;
 
 function getPageCss(extra = "") {
   return BASE_PAGE_CSS + (extra ? `\n${extra}\n` : "") + `@page{size:${CANVAS_WIDTH}px ${CANVAS_HEIGHT}px;margin:0;}`;
 }
 
+const FONT_LINKS =
+  '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+  '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=DM+Sans:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">';
+
 function wrapFullHtml(bodyHtml, pageCss) {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${pageCss}</style></head><body style="margin:0;padding:0;">${bodyHtml}</body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">${FONT_LINKS}<style>${pageCss}</style></head><body style="margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${bodyHtml}</body></html>`;
 }
 
 // ----- 1. WORKBOOK: interactive worksheets (existing) -----
@@ -331,7 +444,9 @@ function buildWorkbookContent(product, options) {
   const sections = product?.content?.sections ?? [];
   const pageCount = Math.max(1, sections.length);
   const ds = product?.designSettings ?? {};
-  const graphicsAccentColor = ds?.colors?.graphics ?? "#FF6B35";
+  const preset = getTemplatePreset(ds);
+  const graphicsAccentColor = ds?.colors?.graphics ?? preset.accentColor;
+  const textStyles = ds?.textStyles ?? null;
   const pageBackgrounds = parsePageBackgrounds(ds, pageCount);
   let placedElementsByPage = Array.isArray(ds.placedElementsByPage)
     ? ds.placedElementsByPage.map((pageArr) => (Array.isArray(pageArr) ? parsePlacedElements(pageArr) : []))
@@ -348,60 +463,69 @@ function buildWorkbookContent(product, options) {
     const section = secs[i] ?? { id: `page-${i}`, title: "(Untitled)", content: "", contentHtml: "" };
     const pageBg = pageBackgrounds[i] ?? null;
     const placed = placedElementsByPage[i] ?? [];
-    body += buildSectionBlock({ productTitle: title, section, pageBg, placedElements: placed, graphicsAccentColor });
+    body += buildSectionBlock({ productTitle: title, section, pageBg, placedElements: placed, graphicsAccentColor, preset, textStyles });
   }
   return body;
 }
 
-// ----- 2. EBOOK: professional book, serif, TOC with page numbers, chapter headers, footer page numbers -----
+// ----- 2. EBOOK: professional book, TOC + chapters; each page wrapped with buildPageShell (backgrounds, placed elements) -----
 function buildEbookContent(product) {
   const title = product?.title ?? "Product";
   const sections = product?.content?.sections ?? [];
   const secs = sections.length ? sections : [{ id: "1", title: title, content: "", contentHtml: "" }];
   const ds = product?.designSettings ?? {};
-  const accent = ds?.colors?.graphics ?? "#FF6B35";
-  const pageStyle = `width:${CANVAS_WIDTH}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;page-break-after:auto;box-sizing:border-box;background:#fff;`;
+  const preset = getTemplatePreset(ds);
+  const accent = ds?.colors?.graphics ?? preset.accentColor;
+  const titleColor = preset.titleColor;
+  const headingColor = preset.headingColor;
+  const bodyColor = preset.bodyColor;
+  const fontFamily = preset.fontFamily;
+  const textStyles = ds?.textStyles ?? null;
   const marginWide = "padding:52px 64px 52px;";
-  const serif = "font-family:Georgia,'Times New Roman',serif;";
-  let html = "";
+  const pageCount = 1 + secs.length;
 
-  html += `<div class="section-block ebook-toc" style="${pageStyle}page-break-after:always;">`;
-  html += `<div class="section-content" style="position:relative;z-index:10;${marginWide}${serif}">`;
-  html += `<h2 style="font-size:22px;font-weight:700;margin:0 0 28px;color:#111;border-bottom:2px solid #ddd;padding-bottom:10px;">Contents</h2>`;
+  let tocInner = `<h2 style="font-size:22px;font-weight:700;margin:0 0 28px;color:${escapeHtml(titleColor)};border-bottom:2px solid #ddd;padding-bottom:10px;">Contents</h2>`;
   secs.forEach((sec, i) => {
     const chNum = i + 1;
-    html += `<p style="margin:0 0 12px;font-size:15px;line-height:1.5;color:#333;display:flex;justify-content:space-between;"><span>Chapter ${chNum} &mdash; ${escapeHtml(sec.title || "(Untitled)")}</span><span style="color:#888;">p. —</span></p>`;
+    tocInner += `<p style="margin:0 0 12px;font-size:15px;line-height:1.5;color:${escapeHtml(bodyColor)};display:flex;justify-content:space-between;"><span>Chapter ${chNum} &mdash; ${escapeHtml(sec.title || "(Untitled)")}</span><span style="color:#888;">p. —</span></p>`;
   });
-  html += `</div>`;
-  html += `<div class="ebook-footer" style="position:absolute;bottom:0;left:0;right:0;padding:12px 64px;font-size:11px;color:#888;${serif}text-align:center;">— 1 —</div>`;
-  html += `</div>`;
+  tocInner += `<div class="ebook-footer" style="position:absolute;bottom:0;left:0;right:0;padding:12px 64px;font-size:11px;color:#888;font-family:${escapeHtml(fontFamily)};text-align:center;">— 1 —</div>`;
+  let html = buildPageShell(product, 0, pageCount, tocInner);
 
   secs.forEach((section, i) => {
+    const pageIdx = i + 1;
     const chNum = i + 1;
+    const secTitleColor = textStyles?.[section.id]?.title?.color ?? headingColor;
+    const secBodyColor = textStyles?.[section.id]?.body?.color ?? bodyColor;
     const sectionTitle = escapeHtml(section.title || "(Untitled)");
     const contentHtml = section.contentHtml ? section.contentHtml : (cleanMarkdownToHtml(section.content ?? "") || "<p>(Empty)</p>");
-    html += `<div class="section-block ebook-chapter" style="${pageStyle}">`;
-    html += `<div class="section-content" style="position:relative;z-index:10;${marginWide}${serif}">`;
-    html += `<p style="font-size:12px;margin:0 0 6px;color:${accent};font-weight:600;">Chapter ${chNum}</p>`;
-    html += `<h2 class="pdf-heading" style="font-size:26px;font-weight:700;margin:0 0 24px;color:#111;">${sectionTitle}</h2>`;
-    html += `<div class="pdf-body" style="font-size:15px;line-height:1.7;color:#333;">${contentHtml}</div>`;
-    html += `</div>`;
-    html += `<div class="ebook-footer" style="position:absolute;bottom:0;left:0;right:0;padding:12px 64px;font-size:11px;color:#888;${serif}text-align:center;">— <span class="page-number">—</span> —</div>`;
-    html += `</div>`;
+    const sectionImage = section.imageUrl?.trim()
+      ? `<div style="margin:16px 0 24px;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:100%;height:auto;max-height:300px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>`
+      : "";
+    let chapterInner = `<p style="font-size:12px;margin:0 0 6px;color:${escapeHtml(accent)};font-weight:600;">Chapter ${chNum}</p>`;
+    chapterInner += `<h2 class="pdf-heading" style="font-size:26px;font-weight:700;margin:0 0 24px;color:${escapeHtml(secTitleColor)};">${sectionTitle}</h2>`;
+    chapterInner += sectionImage;
+    chapterInner += `<div class="pdf-body" style="font-size:15px;line-height:1.7;color:${escapeHtml(secBodyColor)};">${contentHtml}</div>`;
+    chapterInner += `<div class="ebook-footer" style="position:absolute;bottom:0;left:0;right:0;padding:12px 64px;font-size:11px;color:#888;font-family:${escapeHtml(fontFamily)};text-align:center;">— <span class="page-number">—</span> —</div>`;
+    html += buildPageShell(product, pageIdx, pageCount, chapterInner);
   });
   return html;
 }
 
-// ----- 3. GUIDE: Step 1/2/3, Inter, action boxes, progress, summary boxes -----
+// ----- 3. GUIDE: Step 1/2/3, action boxes, progress; each page wrapped with buildPageShell -----
 function buildGuideContent(product) {
   const title = product?.title ?? "Product";
   const sections = product?.content?.sections ?? [];
   const secs = sections.length ? sections : [{ id: "1", title: title, content: "", contentHtml: "" }];
   const ds = product?.designSettings ?? {};
-  const accent = ds?.colors?.graphics ?? "#FF6B35";
-  const pageStyle = `width:${CANVAS_WIDTH}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;page-break-after:auto;box-sizing:border-box;background:#fff;`;
+  const preset = getTemplatePreset(ds);
+  const accent = ds?.colors?.graphics ?? preset.accentColor;
+  const headingColor = preset.headingColor;
+  const bodyColor = preset.bodyColor;
+  const fontFamily = preset.fontFamily;
   const pad = "padding:40px 48px 36px;";
-  const sans = "font-family:Inter,system-ui,-apple-system,sans-serif;";
+  const textStyles = ds?.textStyles ?? null;
+  const pageCount = secs.length;
   let html = "";
 
   secs.forEach((section, i) => {
@@ -410,17 +534,21 @@ function buildGuideContent(product) {
     const stepTitle = escapeHtml(section.title || `Step ${stepNum}`).replace(/^Step \d+:\s*/i, "");
     const contentHtml = section.contentHtml ? section.contentHtml : (cleanMarkdownToHtml(section.content ?? "") || "<p>(Empty)</p>");
     const progressPct = Math.round((stepNum / totalSteps) * 100);
-    html += `<div class="section-block guide-step" style="${pageStyle}">`;
-    html += `<div class="section-content" style="position:relative;z-index:10;${pad}${sans}">`;
-    html += `<p style="font-size:12px;margin:0 0 8px;color:#666;font-weight:600;">Step ${stepNum} of ${totalSteps}</p>`;
-    html += `<div style="margin-bottom:20px;height:6px;background:#eee;border-radius:3px;overflow:hidden;"><div style="width:${progressPct}%;height:100%;background:${accent};border-radius:3px;"></div></div>`;
-    html += `<h2 class="pdf-heading" style="font-size:20px;font-weight:700;margin:0 0 20px;color:#111;">Step ${stepNum}: ${stepTitle}</h2>`;
-    html += `<div class="action-box" style="margin:0 0 20px;padding:16px 20px;background:${accent}12;border-left:4px solid ${accent};border-radius:0 8px 8px 0;">`;
-    html += `<div style="font-size:14px;line-height:1.6;color:#333;">${contentHtml}</div></div>`;
-    html += `<div class="summary-box" style="margin-top:24px;padding:20px;background:#f8f9fa;border-radius:8px;border:1px solid #eee;">`;
-    html += `<p style="font-size:12px;margin:0 0 8px;color:#666;font-weight:600;">Summary</p>`;
-    html += `<p style="font-size:14px;margin:0;line-height:1.5;color:#444;">Complete Step ${stepNum} above, then move to the next.</p></div>`;
-    html += `</div></div>`;
+    const sectionImage = section.imageUrl?.trim()
+      ? `<div style="margin:12px 0 16px;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:70%;height:auto;max-height:280px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>`
+      : "";
+    const secHeadingColor = textStyles?.[section.id]?.title?.color ?? headingColor;
+    const secBodyColor = textStyles?.[section.id]?.body?.color ?? bodyColor;
+    let inner = `<p style="font-size:12px;margin:0 0 8px;color:#666;font-weight:600;">Step ${stepNum} of ${totalSteps}</p>`;
+    inner += `<div style="margin-bottom:20px;height:6px;background:#eee;border-radius:3px;overflow:hidden;"><div style="width:${progressPct}%;height:100%;background:${accent};border-radius:3px;"></div></div>`;
+    inner += `<h2 class="pdf-heading" style="font-size:20px;font-weight:700;margin:0 0 20px;color:${escapeHtml(secHeadingColor)};">Step ${stepNum}: ${stepTitle}</h2>`;
+    inner += sectionImage;
+    inner += `<div class="action-box" style="margin:0 0 20px;padding:16px 20px;background:${accent}12;border-left:4px solid ${accent};border-radius:0 8px 8px 0;">`;
+    inner += `<div style="font-size:14px;line-height:1.6;color:${escapeHtml(secBodyColor)};">${contentHtml}</div></div>`;
+    inner += `<div class="summary-box" style="margin-top:24px;padding:20px;background:#f8f9fa;border-radius:8px;border:1px solid #eee;">`;
+    inner += `<p style="font-size:12px;margin:0 0 8px;color:#666;font-weight:600;">Summary</p>`;
+    inner += `<p style="font-size:14px;margin:0;line-height:1.5;color:#444;">Complete Step ${stepNum} above, then move to the next.</p></div>`;
+    html += buildPageShell(product, i, pageCount, inner);
   });
   return html;
 }
@@ -431,7 +559,8 @@ function buildChecklistContent(product) {
   const sections = product?.content?.sections ?? [];
   const secs = sections.length ? sections : [{ id: "1", title: title, content: "", contentHtml: "" }];
   const ds = product?.designSettings ?? {};
-  const accent = ds?.colors?.graphics ?? "#FF6B35";
+  const preset = getTemplatePreset(ds);
+  const accent = ds?.colors?.graphics ?? preset.accentColor;
   let totalItems = 0;
   const sectionData = secs.map((s) => {
     const { html, totalCount } = contentToChecklistHtml(s.content ?? "");
@@ -439,68 +568,75 @@ function buildChecklistContent(product) {
     return { title: s.title, html: html || "<p>☐ (No items)</p>", count: totalCount };
   });
 
-  const pageStyle = `width:${CANVAS_WIDTH}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;page-break-after:auto;box-sizing:border-box;background:#fff;`;
   const contentPadding = "padding:36px 40px 32px;";
   const checkboxStyle = "font-size:18px;line-height:2.2;color:#111;";
   const largeCheckbox = '<span style="display:inline-block;width:24px;height:24px;border:2px solid #333;border-radius:4px;margin-right:10px;vertical-align:middle;"></span>';
+  const pageCount = sectionData.length;
   let html = "";
 
-  sectionData.forEach(({ title: catTitle, html: contentHtml, count }) => {
+  sectionData.forEach(({ title: catTitle, html: contentHtml }, idx) => {
     const categoryTitle = escapeHtml(catTitle || "(Untitled)");
     const withCheckboxes = contentHtml.replace(/☐/g, largeCheckbox);
-    html += `<div class="section-block checklist-category" style="${pageStyle}">`;
-    html += `<div class="section-content" style="position:relative;z-index:10;${contentPadding}">`;
-    html += `<p style="font-size:14px;font-weight:700;margin:0 0 16px;color:#111;">0 of ${totalItems} completed</p>`;
-    html += `<h2 class="pdf-heading" style="font-size:20px;font-weight:700;margin:0 0 16px;color:${accent};border-bottom:3px solid ${accent};padding-bottom:8px;">${categoryTitle}</h2>`;
-    html += `<div class="pdf-body checklist-items" style="${checkboxStyle}">${withCheckboxes}</div>`;
-    html += `<p style="font-size:12px;margin:20px 0 0;color:#666;">☐ = To do &nbsp;&nbsp; ☑ = Done</p>`;
-    html += `</div></div>`;
+    const sec = secs[idx];
+    const sectionImage = sec?.imageUrl?.trim()
+      ? `<div style="margin:12px 0 16px;text-align:center;"><img src="${escapeHtml(sec.imageUrl)}" alt="" style="max-width:70%;height:auto;max-height:200px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>`
+      : "";
+    let inner = `<p style="font-size:14px;font-weight:700;margin:0 0 16px;color:#111;">0 of ${totalItems} completed</p>`;
+    inner += `<h2 class="pdf-heading" style="font-size:20px;font-weight:700;margin:0 0 16px;color:${accent};border-bottom:3px solid ${accent};padding-bottom:8px;">${categoryTitle}</h2>`;
+    inner += sectionImage;
+    inner += `<div class="pdf-body checklist-items" style="${checkboxStyle}">${withCheckboxes}</div>`;
+    inner += `<p style="font-size:12px;margin:20px 0 0;color:#666;">☐ = To do &nbsp;&nbsp; ☑ = Done</p>`;
+    html += buildPageShell(product, idx, pageCount, inner);
   });
   return html;
 }
 
-// ----- 5. JOURNAL (PROMPTED): one page per prompt (title + follow-ups from body), then 15-20 horizontal lines for writing -----
+// ----- 5. JOURNAL (PROMPTED): one page per prompt + 20 blank lined pages; each wrapped with buildPageShell -----
 function buildJournalPromptedContent(product) {
   const sections = product?.content?.sections ?? [];
+  const secs = sections.length ? sections : [{ title: "Reflect", content: "", contentHtml: "" }];
   const ds = product?.designSettings ?? {};
-  const accent = ds?.colors?.graphics ?? "#FF6B35";
-  const pageStyle = `width:${CANVAS_WIDTH}px;height:${CANVAS_HEIGHT}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;page-break-after:always;box-sizing:border-box;background:#fff;`;
+  const preset = getTemplatePreset(ds);
+  const accent = ds?.colors?.graphics ?? preset.accentColor;
   const pad = "padding:44px 48px 40px;";
   const linesPerPage = 18;
   const lineHeight = 26;
+  const pageCount = secs.length + 20;
   let html = "";
 
-  (sections.length ? sections : [{ title: "Reflect", content: "", contentHtml: "" }]).forEach((section) => {
+  secs.forEach((section, idx) => {
     const promptTitle = escapeHtml(section.title || "Reflect");
     const contentHtml = section.contentHtml ? section.contentHtml : (cleanMarkdownToHtml(section.content ?? "") || "");
-    html += `<div class="section-block journal-page" style="${pageStyle}">`;
-    html += `<div class="section-content" style="position:relative;z-index:10;${pad}">`;
-    html += `<p style="font-size:11px;margin:0 0 16px;color:#999;">Date: ________________</p>`;
-    html += `<h3 style="font-size:16px;margin:0 0 12px;color:${accent};font-weight:600;">${promptTitle}</h3>`;
-    if (contentHtml) html += `<div style="font-size:13px;line-height:1.5;color:#555;margin-bottom:24px;">${contentHtml}</div>`;
-    html += `<div style="border-bottom:1px solid #e0e0e0;height:${linesPerPage * lineHeight}px;">`;
-    for (let i = 0; i < linesPerPage; i++) html += `<div style="height:${lineHeight}px;border-bottom:1px solid #eee;"></div>`;
-    html += `</div></div></div>`;
+    const sectionImage = section.imageUrl?.trim()
+      ? `<div style="margin:12px 0 16px;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:70%;height:auto;max-height:200px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>`
+      : "";
+    let inner = `<p style="font-size:11px;margin:0 0 16px;color:#999;">Date: ________________</p>`;
+    inner += `<h3 style="font-size:16px;margin:0 0 12px;color:${accent};font-weight:600;">${promptTitle}</h3>`;
+    inner += sectionImage;
+    if (contentHtml) inner += `<div style="font-size:13px;line-height:1.5;color:#555;margin-bottom:24px;">${contentHtml}</div>`;
+    inner += `<div style="border-bottom:1px solid #e0e0e0;height:${linesPerPage * lineHeight}px;">`;
+    for (let i = 0; i < linesPerPage; i++) inner += `<div style="height:${lineHeight}px;border-bottom:1px solid #eee;"></div>`;
+    inner += `</div>`;
+    html += buildPageShell(product, idx, pageCount, inner);
   });
   for (let p = 0; p < 20; p++) {
-    html += `<div class="section-block journal-blank" style="${pageStyle}">`;
-    html += `<div class="section-content" style="position:relative;z-index:10;${pad}">`;
-    html += `<p style="font-size:11px;margin:0 0 20px;color:#999;">Date: ________________</p>`;
-    html += `<div style="border-bottom:1px solid #e0e0e0;height:${linesPerPage * lineHeight}px;">`;
-    for (let i = 0; i < linesPerPage; i++) html += `<div style="height:${lineHeight}px;border-bottom:1px solid #eee;"></div>`;
-    html += `</div></div></div>`;
+    let inner = `<p style="font-size:11px;margin:0 0 20px;color:#999;">Date: ________________</p>`;
+    inner += `<div style="border-bottom:1px solid #e0e0e0;height:${linesPerPage * lineHeight}px;">`;
+    for (let i = 0; i < linesPerPage; i++) inner += `<div style="height:${lineHeight}px;border-bottom:1px solid #eee;"></div>`;
+    inner += `</div>`;
+    html += buildPageShell(product, secs.length + p, pageCount, inner);
   }
   return html;
 }
 
-// ----- 6. JOURNAL (BLANK): 50 blank lined pages, page numbers, optional section dividers -----
+// ----- 6. JOURNAL (BLANK): 50 blank lined pages, optional section dividers; each wrapped with buildPageShell -----
 function buildJournalBlankContent(product) {
   const sections = product?.content?.sections ?? [];
   const dividerTitles = sections.length ? sections.map((s) => s.title || "Section") : [];
   const pageCount = 50;
   const ds = product?.designSettings ?? {};
-  const accent = ds?.colors?.graphics ?? "#FF6B35";
-  const pageStyle = `width:${CANVAS_WIDTH}px;height:${CANVAS_HEIGHT}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;page-break-after:always;box-sizing:border-box;background:#fff;`;
+  const preset = getTemplatePreset(ds);
+  const accent = ds?.colors?.graphics ?? preset.accentColor;
   const pad = "padding:40px 48px 50px;";
   const linesPerPage = 32;
   let html = "";
@@ -510,76 +646,73 @@ function buildJournalBlankContent(product) {
   for (let p = 0; p < pageCount; p++) {
     const pageNum = p + 1;
     const isDivider = dividerTitles.length > 0 && p > 0 && p % dividerInterval === 0 && dividerIndex < dividerTitles.length;
+    let inner;
     if (isDivider) {
       const divTitle = escapeHtml(dividerTitles[dividerIndex] ?? "Section");
-      html += `<div class="section-block journal-divider" style="${pageStyle}">`;
-      html += `<div class="section-content" style="position:relative;z-index:10;${pad};display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">`;
-      html += `<h2 style="font-size:22px;font-weight:700;margin:0;color:${accent};">${divTitle}</h2>`;
-      html += `<p style="font-size:12px;margin:24px 0 0;color:#999;">— ${pageNum} —</p>`;
-      html += `</div></div>`;
+      inner = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;"><h2 style="font-size:22px;font-weight:700;margin:0;color:${accent};">${divTitle}</h2><p style="font-size:12px;margin:24px 0 0;color:#999;">— ${pageNum} —</p></div>`;
       dividerIndex++;
     } else {
-      html += `<div class="section-block journal-blank-page" style="${pageStyle}">`;
-      html += `<div class="section-content" style="position:relative;z-index:10;${pad}">`;
-      html += `<div style="height:${linesPerPage * 22}px;">`;
-      for (let i = 0; i < linesPerPage; i++) html += `<div style="height:22px;border-bottom:1px solid #eee;"></div>`;
-      html += `</div><p style="font-size:11px;margin:12px 0 0;text-align:center;color:#999;">${pageNum}</p>`;
-      html += `</div></div>`;
+      inner = `<div style="height:${linesPerPage * 22}px;">`;
+      for (let i = 0; i < linesPerPage; i++) inner += `<div style="height:22px;border-bottom:1px solid #eee;"></div>`;
+      inner += `</div><p style="font-size:11px;margin:12px 0 0;text-align:center;color:#999;">${pageNum}</p>`;
     }
+    html += buildPageShell(product, p, pageCount, inner);
   }
   return html;
 }
 
-// ----- 7. PLANNER/NOTEBOOK: template pages with section content (boxes, example text in light gray), then lined area -----
+// ----- 7. PLANNER/NOTEBOOK: template pages + blank lined pages; each wrapped with buildPageShell -----
 function buildPlannerContent(product) {
   const sections = product?.content?.sections ?? [];
   const secs = sections.length ? sections : [{ id: "t1", title: "Template", content: "", contentHtml: "" }];
   const ds = product?.designSettings ?? {};
-  const accent = ds?.colors?.graphics ?? "#FF6B35";
-  const pageStyle = `width:${CANVAS_WIDTH}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;page-break-after:auto;box-sizing:border-box;background:#fff;`;
+  const preset = getTemplatePreset(ds);
+  const accent = ds?.colors?.graphics ?? preset.accentColor;
   const pad = "padding:36px 44px 32px;";
   const linesInBox = 12;
   const lineHeight = 22;
+  const blankCount = Math.max(0, 50 - secs.length);
+  const pageCount = secs.length + blankCount;
   let html = "";
 
   secs.forEach((section, idx) => {
     const templateTitle = escapeHtml(section.title || `Template ${idx + 1}`);
     const contentHtml = section.contentHtml ? section.contentHtml : (cleanMarkdownToHtml(section.content ?? "") || "<p>(No content)</p>");
-    html += `<div class="section-block planner-template" style="${pageStyle}">`;
-    html += `<div class="section-content" style="position:relative;z-index:10;${pad}">`;
-    html += `<h2 class="pdf-heading" style="font-size:20px;font-weight:700;margin:0 0 20px;color:${accent};border-bottom:2px solid ${accent};padding-bottom:8px;">${templateTitle}</h2>`;
-    html += `<div class="planner-template-body" style="font-size:14px;line-height:1.6;color:#999;margin-bottom:24px;padding:16px;border:1px solid #e0e0e0;border-radius:8px;background:#fafafa;">`;
-    html += contentHtml;
-    html += `</div>`;
-    html += `<p style="font-size:11px;margin:0 0 8px;color:#999;">Your notes:</p>`;
-    html += `<div style="border:1px solid #e8e8e8;border-radius:4px;padding:8px;">`;
-    for (let i = 0; i < linesInBox; i++) html += `<div style="height:${lineHeight}px;border-bottom:1px solid #eee;"></div>`;
-    html += `</div></div></div>`;
+    const sectionImage = section.imageUrl?.trim()
+      ? `<div style="margin:12px 0 16px;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:70%;height:auto;max-height:200px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>`
+      : "";
+    let inner = `<h2 class="pdf-heading" style="font-size:20px;font-weight:700;margin:0 0 20px;color:${accent};border-bottom:2px solid ${accent};padding-bottom:8px;">${templateTitle}</h2>`;
+    inner += sectionImage;
+    inner += `<div class="planner-template-body" style="font-size:14px;line-height:1.6;color:#999;margin-bottom:24px;padding:16px;border:1px solid #e0e0e0;border-radius:8px;background:#fafafa;">`;
+    inner += contentHtml;
+    inner += `</div>`;
+    inner += `<p style="font-size:11px;margin:0 0 8px;color:#999;">Your notes:</p>`;
+    inner += `<div style="border:1px solid #e8e8e8;border-radius:4px;padding:8px;">`;
+    for (let i = 0; i < linesInBox; i++) inner += `<div style="height:${lineHeight}px;border-bottom:1px solid #eee;"></div>`;
+    inner += `</div>`;
+    html += buildPageShell(product, idx, pageCount, inner);
   });
 
-  const pageCount = Math.max(0, 50 - secs.length);
-  const fullPageStyle = `width:${CANVAS_WIDTH}px;height:${CANVAS_HEIGHT}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;page-break-after:always;box-sizing:border-box;background:#fff;`;
   const linesPerPage = 32;
-  for (let p = 0; p < pageCount; p++) {
-    html += `<div class="section-block planner-page" style="${fullPageStyle}">`;
-    html += `<div class="section-content" style="position:relative;z-index:10;${pad}">`;
-    html += `<div style="height:${linesPerPage * 22}px;">`;
-    for (let i = 0; i < linesPerPage; i++) html += `<div style="height:22px;border-bottom:1px solid #e8e8e8;"></div>`;
-    html += `</div><p style="font-size:11px;margin:12px 0 0;text-align:center;color:#999;">— ${p + 1} —</p>`;
-    html += `</div></div>`;
+  for (let p = 0; p < blankCount; p++) {
+    let inner = `<div style="height:${linesPerPage * 22}px;">`;
+    for (let i = 0; i < linesPerPage; i++) inner += `<div style="height:22px;border-bottom:1px solid #e8e8e8;"></div>`;
+    inner += `</div><p style="font-size:11px;margin:12px 0 0;text-align:center;color:#999;">— ${p + 1} —</p>`;
+    html += buildPageShell(product, secs.length + p, pageCount, inner);
   }
   return html;
 }
 
-// ----- 8. COURSE OUTLINE: modules, objectives (first para), lesson breakdown, resources, completion + certificate -----
+// ----- 8. COURSE OUTLINE: modules + certificate page; each wrapped with buildPageShell -----
 function buildCourseContent(product) {
   const title = product?.title ?? "Product";
   const sections = product?.content?.sections ?? [];
   const secs = sections.length ? sections : [{ id: "1", title: title, content: "", contentHtml: "" }];
   const ds = product?.designSettings ?? {};
-  const accent = ds?.colors?.graphics ?? "#FF6B35";
-  const pageStyle = `width:${CANVAS_WIDTH}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;page-break-after:auto;box-sizing:border-box;background:#fff;`;
+  const preset = getTemplatePreset(ds);
+  const accent = ds?.colors?.graphics ?? preset.accentColor;
   const pad = "padding:36px 44px 32px;";
+  const pageCount = secs.length + 1;
   let html = "";
 
   secs.forEach((section, modIndex) => {
@@ -587,36 +720,30 @@ function buildCourseContent(product) {
     const rawContent = section.content ?? "";
     const { first: objectivesHtml, rest: lessonsHtml } = splitFirstParagraph(rawContent);
     const moduleNum = modIndex + 1;
+    const sectionImage = section.imageUrl?.trim()
+      ? `<div style="margin:12px 0 16px;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:70%;height:auto;max-height:220px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>`
+      : "";
 
-    html += `<div class="section-block course-module" style="${pageStyle}">`;
-    html += `<div class="section-content" style="position:relative;z-index:10;${pad}">`;
-    html += `<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">`;
-    html += `<span style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;background:${accent};color:#fff;font-size:16px;font-weight:700;border-radius:8px;">${moduleNum}</span>`;
-    html += `<h2 class="pdf-heading" style="font-size:22px;font-weight:700;margin:0;color:#111;">${moduleTitle}</h2>`;
-    html += `</div>`;
-    html += `<p style="font-size:12px;margin:0 0 8px;color:#666;font-weight:600;">Learning objectives</p>`;
-    html += `<div style="font-size:14px;line-height:1.6;color:#333;margin-bottom:20px;">${objectivesHtml || "<p>—</p>"}</div>`;
-    html += `<p style="font-size:12px;margin:0 0 8px;color:#666;font-weight:600;">Lesson breakdown</p>`;
+    let inner = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">`;
+    inner += `<span style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;background:${accent};color:#fff;font-size:16px;font-weight:700;border-radius:8px;">${moduleNum}</span>`;
+    inner += `<h2 class="pdf-heading" style="font-size:22px;font-weight:700;margin:0;color:#111;">${moduleTitle}</h2>`;
+    inner += `</div>`;
+    inner += sectionImage;
+    inner += `<p style="font-size:12px;margin:0 0 8px;color:#666;font-weight:600;">Learning objectives</p>`;
+    inner += `<div style="font-size:14px;line-height:1.6;color:#333;margin-bottom:20px;">${objectivesHtml || "<p>—</p>"}</div>`;
+    inner += `<p style="font-size:12px;margin:0 0 8px;color:#666;font-weight:600;">Lesson breakdown</p>`;
     const lessonCb = '<span style="display:inline-block;width:16px;height:16px;border:2px solid #333;margin-right:8px;vertical-align:middle;"></span> ';
     const lessonsWithCheckboxes = (lessonsHtml || "").replace(/<li([^>]*)>/gi, (_, attrs) => `<li${attrs} style="list-style:none;">${lessonCb}`);
-    html += `<div class="course-lessons" style="font-size:14px;line-height:1.65;color:#333;margin-bottom:20px;">${lessonsWithCheckboxes || "<p>—</p>"}</div>`;
-    html += `<p style="font-size:12px;margin:0 0 8px;color:#666;font-weight:600;">Resources / materials</p>`;
-    html += `<ul style="margin:0 0 16px;padding-left:1.5rem;font-size:13px;color:#555;"><li>Notes for this module</li><li>☐ Mark when complete</li></ul>`;
-    html += `<p style="font-size:14px;margin:0;color:${accent};font-weight:600;">☐ Module ${moduleNum} complete</p>`;
-    html += `</div></div>`;
+    inner += `<div class="course-lessons" style="font-size:14px;line-height:1.65;color:#333;margin-bottom:20px;">${lessonsWithCheckboxes || "<p>—</p>"}</div>`;
+    inner += `<p style="font-size:12px;margin:0 0 8px;color:#666;font-weight:600;">Resources / materials</p>`;
+    inner += `<ul style="margin:0 0 16px;padding-left:1.5rem;font-size:13px;color:#555;"><li>Notes for this module</li><li>☐ Mark when complete</li></ul>`;
+    inner += `<p style="font-size:14px;margin:0;color:${accent};font-weight:600;">☐ Module ${moduleNum} complete</p>`;
+    html += buildPageShell(product, modIndex, pageCount, inner);
   });
 
   const certTitle = escapeHtml(title);
-  const pageStyleCert = `width:${CANVAS_WIDTH}px;height:${CANVAS_HEIGHT}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;page-break-after:auto;box-sizing:border-box;background:#fff;`;
-  html += `<div class="section-block course-certificate" style="${pageStyleCert}">`;
-  html += `<div class="section-content" style="position:relative;z-index:10;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px;border:3px double ${accent};">`;
-  html += `<p style="font-size:12px;margin:0 0 12px;color:#666;letter-spacing:0.2em;">CERTIFICATE OF COMPLETION</p>`;
-  html += `<h2 style="font-size:24px;font-weight:700;margin:0 0 24px;color:#111;">${certTitle}</h2>`;
-  html += `<p style="font-size:14px;margin:0 0 32px;color:#444;">This certifies that</p>`;
-  html += `<p style="font-size:18px;font-weight:600;margin:0 0 8px;color:#111;border-bottom:1px solid #ccc;min-width:240px;">_________________________</p>`;
-  html += `<p style="font-size:12px;margin:0 0 24px;color:#888;">has completed all modules.</p>`;
-  html += `<p style="font-size:11px;margin:0;color:#999;">Date: ________________</p>`;
-  html += `</div></div>`;
+  const certInner = `<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px;border:3px double ${accent};"><p style="font-size:12px;margin:0 0 12px;color:#666;letter-spacing:0.2em;">CERTIFICATE OF COMPLETION</p><h2 style="font-size:24px;font-weight:700;margin:0 0 24px;color:#111;">${certTitle}</h2><p style="font-size:14px;margin:0 0 32px;color:#444;">This certifies that</p><p style="font-size:18px;font-weight:600;margin:0 0 8px;color:#111;border-bottom:1px solid #ccc;min-width:240px;">_________________________</p><p style="font-size:12px;margin:0 0 24px;color:#888;">has completed all modules.</p><p style="font-size:11px;margin:0;color:#999;">Date: ________________</p></div>`;
+  html += buildPageShell(product, secs.length, pageCount, certInner);
   return html;
 }
 
@@ -712,18 +839,24 @@ export async function POST(request) {
     page.setDefaultNavigationTimeout(60000);
     await page.setViewport({ width: CANVAS_WIDTH + 100, height: CANVAS_HEIGHT + 100 });
 
+    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+    if (!baseUrl && process.env.VERCEL_URL) baseUrl = `https://${process.env.VERCEL_URL}`;
+    if (!baseUrl) baseUrl = "http://localhost:3000";
+    baseUrl = baseUrl.replace(/\/$/, "");
     await page.setContent(fullHtml, {
       waitUntil: "networkidle0",
       timeout: 60000,
+      baseURL: baseUrl,
     });
     await page.evaluate(() => document.fonts?.ready);
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 2000));
 
     const pdfBuffer = await page.pdf({
-      format: "A4",
       printBackground: true,
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
-      preferCSSPageSize: false,
+      preferCSSPageSize: true,
+      width: `${CANVAS_WIDTH}px`,
+      height: `${CANVAS_HEIGHT}px`,
     });
 
     await browser.close();

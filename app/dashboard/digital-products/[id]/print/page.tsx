@@ -25,7 +25,7 @@ const GRAPHICS_ICONS: { name: string; icon: React.ComponentType<{ className?: st
   { name: "BookOpen", icon: BookOpen },
 ];
 
-type Section = { id: string; title: string; content: string; contentHtml?: string };
+type Section = { id: string; title: string; content: string; contentHtml?: string; imageUrl?: string };
 type PageBackground = {
   backgroundImage?: string | null;
   backgroundSettings?: { opacity?: number; blur?: number; brightness?: number; contrast?: number; saturation?: number; fit?: string; position?: string };
@@ -111,6 +111,7 @@ function parseContentSections(content: unknown): Section[] {
     title: String(s.title ?? ""),
     content: String(s.content ?? ""),
     contentHtml: s.contentHtml != null ? String(s.contentHtml) : undefined,
+    imageUrl: typeof s.imageUrl === "string" ? s.imageUrl : undefined,
   }));
 }
 
@@ -157,7 +158,7 @@ function productToPayload(product: Record<string, unknown>): ProductPrintPayload
   return {
     title: (product.title as string) ?? "Product",
     format: (product.format as string) ?? "ebook",
-    sections: sections.map((s) => ({ id: s.id, title: s.title, content: s.content ?? "", contentHtml: s.contentHtml })),
+    sections: sections.map((s) => ({ id: s.id, title: s.title, content: s.content ?? "", contentHtml: s.contentHtml, imageUrl: s.imageUrl })),
     pageBackgrounds: pageBackgrounds.length > 0 ? pageBackgrounds : undefined,
     placedElementsByPage: placedElementsByPage.some((arr) => arr.length > 0) ? placedElementsByPage : undefined,
     layoutSettings: {

@@ -3,6 +3,27 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
+/** Parse response as JSON; if server returned HTML (error/sign-in page), throw a clear error. */
+async function parseJsonResponse<T = unknown>(res: Response): Promise<T> {
+  const text = await res.text();
+  const trimmed = text.trim();
+  const url = res.url?.replace(/^.*\/api/, "/api") || "request";
+  if (trimmed.startsWith("<") || trimmed.toUpperCase().startsWith("<!DOCTYPE")) {
+    const status = res.status;
+    throw new Error(
+      status === 401
+        ? "Session expired. Please sign in again."
+        : `Server returned an error page (${status}) for ${url}. Please sign in again or try again later.`
+    );
+  }
+  if (!trimmed) return {} as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`Invalid response from ${url}. Please try again.`);
+  }
+}
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -155,6 +176,18 @@ const GENERATE_STEPS = [
   "Formatting product...",
 ];
 
+const FORMAT_LABELS: Record<string, string> = {
+  ebook: "Ebook",
+  workbook: "Workbook",
+  spreadsheet: "Spreadsheet Tutorial",
+  notion: "Notion Template",
+  course: "Course Outline",
+  checklist: "Checklist",
+  journal: "Journal",
+  planner: "Planner",
+  template: "Template",
+};
+
 /** Full sales education guide from API (Step 5). */
 type ProductSalesGuide = {
   productOverview: { productName: string; format: string; targetCustomer: string; transformation: string };
@@ -215,6 +248,7 @@ export default function DiscoverFlow() {
   const [generating, setGenerating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [generateStepIndex, setGenerateStepIndex] = useState(0);
+  const [generateProgress, setGenerateProgress] = useState<{ total: number; completed: number } | null>(null);
 
   // Step 1: must select goal (experienced/beginner) + interests min 3 chars OR "I'm not sure"
   const canProceedStep1 = !!goal && (interests.trim().length >= 3 || dontKnowYet);
@@ -312,11 +346,11 @@ export default function DiscoverFlow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse<{ error?: string } | NicheOption[]>(res);
       console.log("📥 RECEIVED FROM API:", res.ok ? (Array.isArray(data) ? data.length : 0) : data, data);
 
       if (!res.ok) {
-        const errMsg = (data && typeof data.error === "string" ? data.error : null) || "Generation failed";
+        const errMsg = (typeof data === "object" && data !== null && !Array.isArray(data) && typeof (data as { error?: string }).error === "string" ? (data as { error: string }).error : null) || "Generation failed";
         setGenerateError(errMsg);
         setAllNiches([]);
         setCurrentPage(0);
@@ -406,7 +440,7 @@ export default function DiscoverFlow() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ niche: selectedNiche.name, subNiches: selectedNiche.subNiches ?? [] }),
     })
-      .then((res) => res.json())
+      .then((res) => parseJsonResponse(res))
       .then((data) => {
         if (cancelled) return;
         if (Array.isArray(data) && data.length > 0) {
@@ -450,7 +484,7 @@ export default function DiscoverFlow() {
           exclude: allProductSuggestions.map((p) => p.name),
         }),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse<ProductSuggestionItem[] | { error?: string }>(res);
       if (!Array.isArray(data) || data.length === 0) {
         setProductSuggestionsError("Could not generate more. Try again.");
         return;
@@ -529,7 +563,7 @@ export default function DiscoverFlow() {
         goal,
       }),
     })
-      .then((res) => res.json())
+      .then((res) => parseJsonResponse<{ productOverview?: unknown }>(res))
       .then((data) => {
         if (cancelled) return;
         if (data.productOverview) {
@@ -578,9 +612,10 @@ export default function DiscoverFlow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse<{ error?: string } | NicheOption[]>(res);
       if (!res.ok) {
-        setGenerateError((data && typeof data.error === "string" ? data.error : null) || "Generation failed");
+        const err = typeof data === "object" && data !== null && !Array.isArray(data) && typeof (data as { error?: string }).error === "string" ? (data as { error: string }).error : null;
+        setGenerateError(err || "Generation failed");
         return;
       }
       if (!data || !Array.isArray(data) || data.length === 0) {
@@ -850,10 +885,11 @@ export default function DiscoverFlow() {
     setGenerating(true);
     setCreateError(null);
     setGenerateStepIndex(0);
+    setGenerateProgress(null);
 
     const stepInterval = setInterval(() => {
       setGenerateStepIndex((i) => Math.min(i + 1, GENERATE_STEPS.length - 1));
-    }, 8000);
+    }, 4000);
 
     try {
       const nicheName = selectedNiche?.name ?? "";
@@ -884,22 +920,80 @@ export default function DiscoverFlow() {
         }),
       });
 
-      const data = (await response.json()) as { productId?: string; error?: string };
+      const data = await parseJsonResponse<{ productId?: string; error?: string }>(response);
 
       if (!response.ok) {
         throw new Error(data.error ?? "Failed to generate product");
       }
 
-      if (data.productId) {
-        try {
-          localStorage.setItem("discovery-product-id", data.productId);
-        } catch {
-          // ignore
-        }
-        router.push(`/dashboard/digital-products/${data.productId}/edit`);
-        return;
+      const productId = data.productId;
+      if (!productId) throw new Error("No product ID returned");
+
+      try {
+        localStorage.setItem("discovery-product-id", productId);
+      } catch {
+        // ignore
       }
-      throw new Error("No product ID returned");
+
+      const POLL_INTERVAL_MS = 2500;
+      const TIMEOUT_MS = 10 * 60 * 1000; // 10 min
+      const pollStart = Date.now();
+
+      // Poll in a loop so we stay on this page with overlay visible until product is ready
+      while (true) {
+        if (Date.now() - pollStart > TIMEOUT_MS) {
+          throw new Error("Generation is taking longer than expected. Check your products list—it may appear shortly.");
+        }
+        const res = await fetch(`/api/products/${productId}`);
+        if (!res.ok) {
+          if (res.status === 404) {
+            await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+            continue;
+          }
+          const text = await res.text();
+          if (res.status === 401) {
+            throw new Error("Session expired. Please sign in again.");
+          }
+          const isHtml = text.trimStart().startsWith("<");
+          let errMessage: string;
+          if (isHtml) {
+            errMessage =
+              res.status === 401
+                ? "Session expired. Please sign in again."
+                : `Server error (${res.status}). Please try again in a moment or check the app is running.`;
+          } else {
+            try {
+              const parsed = text.startsWith("{") ? (JSON.parse(text) as { error?: string }) : null;
+              errMessage = parsed?.error ?? (text?.slice(0, 200) || `Request failed (${res.status})`);
+            } catch {
+              errMessage = text?.slice(0, 200) || `Request failed (${res.status})`;
+            }
+          }
+          throw new Error(errMessage);
+        }
+        const product = await parseJsonResponse<{ status?: string; content?: { sections?: Array<{ content?: string; contentHtml?: string }> } }>(res);
+        const sections = product.content?.sections ?? [];
+        const total = Array.isArray(sections) ? sections.length : 0;
+        const completed = Array.isArray(sections)
+          ? sections.filter((s) => ((s?.content ?? s?.contentHtml ?? "").trim().length > 0)).length
+          : 0;
+        if (total > 0) setGenerateProgress({ total, completed });
+
+        const hasContent = total > 0 && completed === total;
+        const isCompleted = product.status === "draft" && hasContent;
+        const isFailed = product.status === "failed";
+
+        if (isFailed) throw new Error("Product generation failed. Please try again.");
+        if (isCompleted) {
+          clearInterval(stepInterval);
+          setGenerating(false);
+          setGenerateProgress(null);
+          setGenerateStepIndex(GENERATE_STEPS.length - 1);
+          router.push(`/dashboard/digital-products/${productId}/edit`);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      }
     } catch (err) {
       console.error("Product generation failed:", err);
       const message = err instanceof Error ? err.message : "Failed to generate product. Please try again.";
@@ -912,6 +1006,7 @@ export default function DiscoverFlow() {
     } finally {
       clearInterval(stepInterval);
       setGenerating(false);
+      setGenerateProgress(null);
       setGenerateStepIndex(0);
     }
   };
@@ -931,32 +1026,68 @@ export default function DiscoverFlow() {
 
   return (
     <main className={wrapperClass}>
-      {/* Step 7: Generating product overlay */}
-      {generating && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0F0F0F]/95 backdrop-blur-sm p-6">
-          <h2 className="text-xl font-semibold text-white mb-1">Generating Your Product...</h2>
-          <p className="text-orange-500 font-medium mb-8">{selectedProduct?.name ?? "Your Product"}</p>
-          <div className="w-full max-w-sm space-y-3">
-            {GENERATE_STEPS.map((label, i) => (
-              <div key={i} className="flex items-center gap-3 text-sm">
-                {i < generateStepIndex ? (
-                  <Check className="w-5 h-5 text-green-500 shrink-0" />
-                ) : i === generateStepIndex ? (
-                  <Loader2 className="w-5 h-5 text-orange-500 animate-spin shrink-0" />
-                ) : (
-                  <span className="w-5 h-5 rounded-full border border-[#2A2A2A] shrink-0" />
-                )}
-                <span className={i <= generateStepIndex ? "text-[#E0E0E0]" : "text-[#666]"}>{label}</span>
+      {/* Generating product overlay - blocks entire screen, no navigation until complete */}
+      {(generating || createError) && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0F0F0F]/98 backdrop-blur-md p-6" role="alert" aria-live="polite">
+          {createError ? (
+            <>
+              <h2 className="text-xl font-semibold text-white mb-2">Generation Failed</h2>
+              <p className="text-red-400 text-center max-w-md mb-6">{createError}</p>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#222]"
+                  onClick={() => setCreateError(null)}
+                >
+                  Dismiss
+                </Button>
+                <Button
+                  className="bg-orange-500 hover:bg-orange-600"
+                  onClick={() => {
+                    setCreateError(null);
+                    handleCreateProduct();
+                  }}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Retry
+                </Button>
               </div>
-            ))}
-          </div>
-          <p className="text-sm text-[#A0A0A0] mt-8">
-            {productFormat === "workbook"
-              ? "Creating comprehensive workbook with exercises and worksheets... This takes ~60 seconds"
-              : "Estimated time: ~30 seconds"}
-          </p>
-          {createError && (
-            <p className="text-red-400 mt-4 text-sm">{createError}</p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-xl font-semibold text-white mb-1">
+                Generating your {productFormat ? FORMAT_LABELS[productFormat] ?? "Product" : "Product"}...
+              </h2>
+              <p className="text-orange-500 font-medium mb-2">{selectedProduct?.name ?? "Your Product"}</p>
+              {generateProgress && generateProgress.total > 0 && (
+                <p className="text-[#A0A0A0] text-sm mb-6">
+                  Generating chapter {Math.min(generateProgress.completed + 1, generateProgress.total)} of {generateProgress.total}...
+                </p>
+              )}
+              {(!generateProgress || generateProgress.total === 0) && <div className="mb-6" />}
+              <div className="w-full max-w-sm space-y-3">
+                {GENERATE_STEPS.map((label, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm">
+                    {i < generateStepIndex ? (
+                      <Check className="w-5 h-5 text-green-500 shrink-0" />
+                    ) : i === generateStepIndex ? (
+                      <Loader2 className="w-5 h-5 text-orange-500 animate-spin shrink-0" />
+                    ) : (
+                      <span className="w-5 h-5 rounded-full border border-[#2A2A2A] shrink-0" />
+                    )}
+                    <span className={i <= generateStepIndex ? "text-[#E0E0E0]" : "text-[#666]"}>{label}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-sm text-[#A0A0A0] mt-8">
+                {productFormat === "workbook"
+                  ? "Creating comprehensive workbook with exercises and worksheets... This takes ~60 seconds"
+                  : productFormat === "course"
+                    ? "Creating course outline with modules and lessons... This takes ~45 seconds"
+                    : "Estimated time: ~30 seconds. Please stay on this page."
+              }
+              </p>
+            </>
           )}
         </div>
       )}

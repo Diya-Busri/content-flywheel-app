@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("query") || "relationships";
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-  const perPage = Math.min(30, Math.max(1, parseInt(searchParams.get("per_page") || "20", 10)));
+  const perPage = Math.min(30, Math.max(1, parseInt(searchParams.get("per_page") || "24", 10)));
 
   const apiKey = process.env.PEXELS_API_KEY || process.env.NEXT_PUBLIC_PEXELS_API_KEY;
   if (!apiKey) {

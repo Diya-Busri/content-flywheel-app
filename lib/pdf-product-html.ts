@@ -30,6 +30,7 @@ export interface PdfSection {
   title: string;
   body?: string;
   contentHtml?: string;
+  imageUrl?: string | null;
 }
 
 export interface PdfPageBackground {
@@ -167,14 +168,16 @@ export function buildSinglePageHtml(payload: PdfProductPayload, pageIdx: number)
     .join("");
 
   const bodyHtml = sectionBodyHtml(section);
+  const sectionImage = section.imageUrl?.trim() ? `<div class="pdf-section-image" style="margin:1rem 0 1.5rem;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:100%;height:auto;max-height:320px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>` : "";
   const pageDiv = `
       <div class="pdf-page" style="position:relative;background:#fff;width:${CANVAS_WIDTH}px;height:${CANVAS_HEIGHT}px;overflow:hidden;box-sizing:border-box;">
         ${bgBlock}
-        <div class="pdf-content" style="position:relative;z-index:10;font-family:${escapeHtml(preset.fontFamily)};max-width:${maxWidth}px;margin:0 auto;padding:${margins}rem;height:100%;box-sizing:border-box;overflow:hidden;${bgUrl ? "background:transparent;" : ""}">
+        <div class="pdf-content" style="position:relative;z-index:10;font-family:${escapeHtml(preset.fontFamily)};max-width:${maxWidth}px;margin:0 auto;padding:${margins}rem;height:100%;box-sizing:border-box;overflow:auto;${bgUrl ? "background:transparent;" : ""}">
           <h2 class="pdf-title" style="font-size:1.5rem;font-weight:700;border-bottom:1px solid currentColor;padding-bottom:0.5rem;margin:0 0 1rem;color:${escapeHtml(productTitleColor)};">${escapeHtml(title)}</h2>
           <section>
             <h3 class="pdf-heading" style="font-size:1.125rem;font-weight:600;margin:0 0 0.5rem;color:${escapeHtml(headingColor)};">${escapeHtml(section.title)}</h3>
-            <div class="pdf-body prose" style="margin-top:0.5rem;color:${escapeHtml(bodyColor)};font-size:0.875rem;line-height:${lineHeight};text-align:${alignment};">
+            ${sectionImage}
+            <div class="pdf-body prose" style="margin-top:0.5rem;color:${escapeHtml(bodyColor)};font-size:${maxWidth >= 900 ? "1rem" : "0.875rem"};line-height:${lineHeight};text-align:${alignment};">
               ${bodyHtml}
             </div>
           </section>
@@ -276,14 +279,16 @@ export function buildProductPdfHtml(payload: PdfProductPayload): string {
       .join("");
 
     const bodyHtml = sectionBodyHtml(section);
+    const sectionImage = section.imageUrl?.trim() ? `<div class="pdf-section-image" style="margin:1rem 0 1.5rem;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:100%;height:auto;max-height:320px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>` : "";
     return `
       <div class="pdf-page" style="position:relative;background:#fff;">
         ${bgBlock}
-        <div class="pdf-content" style="position:relative;z-index:10;font-family:${escapeHtml(preset.fontFamily)};max-width:${maxWidth}px;margin:0 auto;padding:${margins}rem;height:100%;box-sizing:border-box;overflow:hidden;${bgUrl ? "background:transparent;" : ""}">
+        <div class="pdf-content" style="position:relative;z-index:10;font-family:${escapeHtml(preset.fontFamily)};max-width:${maxWidth}px;margin:0 auto;padding:${margins}rem;height:100%;box-sizing:border-box;overflow:auto;${bgUrl ? "background:transparent;" : ""}">
           <h2 class="pdf-title" style="font-size:1.5rem;font-weight:700;border-bottom:1px solid currentColor;padding-bottom:0.5rem;margin:0 0 1rem;color:${escapeHtml(productTitleColor)};">${escapeHtml(title)}</h2>
           <section>
             <h3 class="pdf-heading" style="font-size:1.125rem;font-weight:600;margin:0 0 0.5rem;color:${escapeHtml(headingColor)};">${escapeHtml(section.title)}</h3>
-            <div class="pdf-body prose" style="margin-top:0.5rem;color:${escapeHtml(bodyColor)};font-size:0.875rem;line-height:${lineHeight};text-align:${alignment};">
+            ${sectionImage}
+            <div class="pdf-body prose" style="margin-top:0.5rem;color:${escapeHtml(bodyColor)};font-size:${maxWidth >= 900 ? "1rem" : "0.875rem"};line-height:${lineHeight};text-align:${alignment};">
               ${bodyHtml}
             </div>
           </section>

@@ -23,10 +23,10 @@ export async function GET(
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+    const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) {
       return NextResponse.json(
-        { error: "ANTHROPIC_API_KEY not configured. Post content generation unavailable." },
+        { error: "OPENAI_API_KEY not configured. Post content generation unavailable." },
         { status: 503 }
       );
     }
@@ -89,24 +89,25 @@ RULES:
 
     const userPrompt = `Product description (for context):\n${productDescription || "Not provided"}\n\nVideo script:\n${fullScript}\n\nGenerate caption, hashtags, title variations, and platform tips. Output valid JSON only.`;
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
+        model: "gpt-4o-mini",
         max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
       }),
     });
 
     if (!response.ok) {
       const err = await response.text();
-      console.error("[post-content] Anthropic error:", response.status, err);
+      console.error("[post-content] OpenAI error:", response.status, err);
       return NextResponse.json(
         { error: "Failed to generate post content. Try again." },
         { status: 500 }
@@ -114,14 +115,13 @@ RULES:
     }
 
     const data = (await response.json()) as {
-      content?: Array<{ type: string; text?: string }>;
+      choices?: Array<{ message?: { content?: string } }>;
     };
-    const textBlock = data.content?.find((c) => c.type === "text" && c.text);
-    const text = textBlock?.text ?? "";
+    const text = data.choices?.[0]?.message?.content ?? "";
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error("[post-content] No JSON in Claude response:", text.slice(0, 300));
+      console.error("[post-content] No JSON in OpenAI response:", text.slice(0, 300));
       return NextResponse.json(
         { error: "Invalid response from AI. Try again." },
         { status: 500 }
