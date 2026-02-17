@@ -808,6 +808,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: { guide: Vide
                       .join("\n\n");
                     return (
                       <TabsContent key={id} value={id} className="mt-4 space-y-4">
+                        <div className="space-y-4">
                         {p.platformNotes && (
                           <p className="text-sm text-[#A0A0A0] italic border-l-2 border-orange-500/50 pl-3">{p.platformNotes}</p>
                         )}
@@ -897,6 +898,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: { guide: Vide
                         {p.engagementStrategy && <p className="text-sm text-[#B0B0B0]"><span className="text-white">Engagement:</span> {p.engagementStrategy}</p>}
                         {p.exportSettings && <p className="text-sm text-[#B0B0B0]"><span className="text-white">Export:</span> {p.exportSettings}</p>}
                         <CopyButton text={copyText} label={`${label} guide`} />
+                        </div>
                       </TabsContent>
                     );
                   })}
