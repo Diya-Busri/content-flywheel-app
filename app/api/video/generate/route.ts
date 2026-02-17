@@ -1,200 +1,234 @@
-import { NextResponse } from "next/server";
+/**
+ * POST /api/video/generate
+ * Accepts: { hook, body, cta, productImageUrl?, productId? }
+ * Builds Shotstack edit and returns render ID for polling.
+ * Uses SHOTSTACK_API_KEY (production) or SHOTSTACK_API_KEY_SANDBOX (stage).
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { db } from "@/db/db";
+import { productsTable } from "@/db/schema/products-schema";
+import { eq, and, isNull } from "drizzle-orm";
 
-const CREATOMATE_BASE = "https://api.creatomate.com/v1";
+const SHOTSTACK_STAGE = "https://api.shotstack.io/edit/stage";
+const SHOTSTACK_PROD = "https://api.shotstack.io/edit/v1";
+const FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1557683316-973673baf926?w=1080&h=1920&fit=crop";
 
-type VideoStyle = "unboxing" | "promo" | "demo" | "beforeAfter";
+function getApiKey(): string | null {
+  const stage = process.env.SHOTSTACK_API_KEY_SANDBOX?.trim() || process.env.SHOTSTACK_SANDBOX_API_KEY?.trim();
+  const prod = process.env.SHOTSTACK_API_KEY?.trim();
+  return stage || prod || null;
+}
 
-type GenerateBody = {
-  script: string;
-  videoStyle: VideoStyle;
-  imageUrl: string;
-};
+function getBaseUrl(): string {
+  return process.env.SHOTSTACK_API_KEY?.trim() && !process.env.SHOTSTACK_API_KEY_SANDBOX?.trim() && !process.env.SHOTSTACK_SANDBOX_API_KEY?.trim()
+    ? SHOTSTACK_PROD
+    : SHOTSTACK_STAGE;
+}
 
-type Scenes = {
-  Headline: string;
-  Subheadline: string;
-  CTA: string;
-};
+function buildShotstackEdit(
+  hook: string,
+  body: string,
+  cta: string,
+  productImageUrl: string
+): Record<string, unknown> {
+  const h = (hook || "").slice(0, 200).trim() || "Your hook";
+  const b = (body || "").slice(0, 500).trim() || "Your message";
+  const c = (cta || "").slice(0, 150).trim() || "Link in bio";
 
-const STYLE_ENV_KEYS: Record<VideoStyle, string> = {
-  unboxing: "CREATOMATE_TEMPLATE_UNBOXING",
-  promo: "CREATOMATE_TEMPLATE_PROMO",
-  demo: "CREATOMATE_TEMPLATE_DEMO",
-  beforeAfter: "CREATOMATE_TEMPLATE_BEFORE_AFTER",
-};
-
-function structureScript(script: string): Scenes {
-  const lines = (script ?? "")
-    .trim()
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
   return {
-    Headline: lines[0] ?? "",
-    Subheadline: lines[1] ?? "",
-    CTA: "Shop now",
+    timeline: {
+      background: "#000000",
+      tracks: [
+        {
+          clips: [
+            {
+              asset: { type: "image", src: productImageUrl },
+              start: 0,
+              length: 30,
+              fit: "cover",
+            },
+          ],
+        },
+        {
+          clips: [
+            {
+              asset: {
+                type: "shape",
+                shape: "rectangle",
+                fill: { color: "#000000", opacity: 0.5 },
+                rectangle: { width: 1080, height: 1920 },
+              },
+              start: 0,
+              length: 30,
+            },
+          ],
+        },
+        {
+          clips: [
+            {
+              asset: {
+                type: "title",
+                text: h,
+                style: "blockbuster",
+                color: "#ffffff",
+                size: "large",
+                position: "center",
+              },
+              start: 0,
+              length: 5,
+              transition: { in: "fade" },
+            },
+          ],
+        },
+        {
+          clips: [
+            {
+              asset: {
+                type: "title",
+                text: b,
+                style: "skinny",
+                color: "#ffffff",
+                size: "medium",
+                position: "center",
+              },
+              start: 5,
+              length: 15,
+              transition: { in: "fade" },
+            },
+          ],
+        },
+        {
+          clips: [
+            {
+              asset: {
+                type: "title",
+                text: c,
+                style: "blockbuster",
+                color: "#FFD700",
+                size: "large",
+                position: "center",
+              },
+              start: 20,
+              length: 10,
+              transition: { in: "fade" },
+            },
+          ],
+        },
+      ],
+    },
+    output: {
+      format: "mp4",
+      fps: 25,
+      size: { width: 1080, height: 1920 },
+    },
   };
 }
 
-function getApiKey(): string {
-  const key = process.env.CREATOMATE_API_KEY;
-  if (!key || !key.trim()) {
-    throw new Error("CREATOMATE_API_KEY is not set. Add it to your environment.");
-  }
-  return key.trim();
-}
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
-function getTemplateId(style: VideoStyle): string {
-  const envKey = STYLE_ENV_KEYS[style];
-  const id = process.env[envKey];
-  if (!id || !String(id).trim()) {
-    throw new Error(
-      `${envKey} is not set. Add your Creatomate template ID for "${style}" style to .env.local`
-    );
-  }
-  return String(id).trim();
-}
-
-async function pollRenderStatus(
-  renderId: string,
-  apiKey: string,
-  maxAttempts = 60,
-  intervalMs = 2000
-): Promise<string> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    await new Promise((r) => setTimeout(r, intervalMs));
-
-    const statusRes = await fetch(`${CREATOMATE_BASE}/renders/${renderId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-
-    if (!statusRes.ok) {
-      const errBody = await statusRes.text();
-      console.error("[video/generate] Poll status failed:", statusRes.status, errBody);
-      if (attempt < maxAttempts - 1) continue;
-      throw new Error(`Creatomate status check failed: ${statusRes.status}`);
-    }
-
-    const data = (await statusRes.json()) as {
-      status?: string;
-      url?: string;
-      error_message?: string;
-    };
-
-    console.log("[video/generate] Poll", attempt + 1, "status:", data.status);
-
-    if (data.status === "succeeded") {
-      if (data.url) {
-        console.log("[video/generate] Done, url:", data.url);
-        return data.url;
-      }
-      throw new Error("Creatomate succeeded but no URL returned");
-    }
-
-    if (data.status === "failed") {
-      const msg = data.error_message ?? "Unknown error";
-      console.error("[video/generate] Creatomate render failed:", msg);
-      throw new Error(`Creatomate render failed: ${msg}`);
-    }
-  }
-
-  throw new Error("Creatomate render timed out after polling");
-}
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const apiKey = getApiKey();
-
-    const body = (await request.json().catch(() => ({}))) as Partial<GenerateBody>;
-    const { script, videoStyle, imageUrl } = body;
-
-    if (!script || typeof script !== "string") {
-      return NextResponse.json({ error: "script is required (string)" }, { status: 400 });
-    }
-    if (!imageUrl || typeof imageUrl !== "string") {
-      return NextResponse.json({ error: "imageUrl is required (string)" }, { status: 400 });
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "SHOTSTACK_API_KEY or SHOTSTACK_API_KEY_SANDBOX is not configured." },
+        { status: 503 }
+      );
     }
 
-    const validStyles: VideoStyle[] = ["unboxing", "promo", "demo", "beforeAfter"];
-    const style = validStyles.includes(videoStyle as VideoStyle)
-      ? (videoStyle as VideoStyle)
-      : "demo";
-
-    const templateId = getTemplateId(style);
-    console.log("[video/generate] templateId:", templateId, "style:", style);
-
-    const scenes = structureScript(script);
-
-    const modifications: Record<string, string> = {
-      "Headline.text": scenes.Headline,
-      "Subheadline.text": scenes.Subheadline,
-      "CTA.text": scenes.CTA,
-      "ProductImage.source": imageUrl,
+    const body = await request.json().catch(() => ({}));
+    const { hook, body: bodyText, cta, productImageUrl: providedImageUrl, productId } = body as {
+      hook?: string;
+      body?: string;
+      cta?: string;
+      productImageUrl?: string;
+      productId?: string;
     };
 
-    const createRes = await fetch(`${CREATOMATE_BASE}/renders`, {
+    let imageUrl: string =
+      typeof providedImageUrl === "string" && providedImageUrl.trim()
+        ? providedImageUrl.trim()
+        : "";
+
+    if (!imageUrl && productId && userId) {
+      const [product] = await db
+        .select()
+        .from(productsTable)
+        .where(
+          and(
+            eq(productsTable.id, productId),
+            eq(productsTable.userId, userId),
+            isNull(productsTable.deletedAt)
+          )
+        );
+      if (product?.marketingAssets && typeof product.marketingAssets === "object") {
+        const ma = product.marketingAssets as { thumbnailUrl?: string };
+        if (ma.thumbnailUrl) imageUrl = ma.thumbnailUrl;
+      }
+    }
+
+    if (!imageUrl || !imageUrl.startsWith("https://") || imageUrl.includes("localhost")) {
+      imageUrl = FALLBACK_IMAGE;
+    }
+
+    const edit = buildShotstackEdit(
+      hook || "",
+      bodyText || "",
+      cta || "",
+      imageUrl
+    );
+
+    const base = getBaseUrl();
+    const createRes = await fetch(`${base}/render`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        "x-api-key": apiKey,
       },
-      body: JSON.stringify({
-        template_id: templateId,
-        modifications,
-      }),
+      body: JSON.stringify(edit),
     });
 
-    const responseBody = await createRes.text();
-
-    if (!createRes.ok) {
-      console.error("[video/generate] Creatomate create error:", createRes.status, responseBody);
-      let detail = responseBody.slice(0, 300);
-      try {
-        const err = JSON.parse(responseBody) as { message?: string; error?: string };
-        detail = err.message ?? err.error ?? detail;
-      } catch {
-        // use raw slice
-      }
-      return NextResponse.json(
-        { error: `Creatomate create failed (${createRes.status}): ${detail}` },
-        { status: 502 }
-      );
-    }
-
-    let createData: { id?: string };
+    const resBody = await createRes.text();
+    let data: { success?: boolean; response?: { id?: string; message?: string } };
     try {
-      createData = JSON.parse(responseBody);
+      data = JSON.parse(resBody);
     } catch {
       return NextResponse.json(
-        { error: "Creatomate returned invalid JSON" },
-        { status: 502 }
-      );
-    }
-
-    const renderId = createData.id;
-    if (!renderId) {
-      console.error("[video/generate] No render id in response:", responseBody);
-      return NextResponse.json(
-        { error: "Creatomate did not return render id" },
-        { status: 502 }
-      );
-    }
-
-    console.log("[video/generate] Render created, id:", renderId);
-
-    const videoUrl = await pollRenderStatus(renderId, apiKey);
-
-    if (!videoUrl || !videoUrl.startsWith("http")) {
-      return NextResponse.json(
-        { error: "Video generation succeeded but no usable URL returned" },
+        { error: `Shotstack returned invalid JSON: ${resBody.slice(0, 200)}` },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ videoUrl });
+    if (!createRes.ok) {
+      const msg = data.response?.message || resBody.slice(0, 300);
+      return NextResponse.json(
+        { error: `Shotstack error: ${msg}` },
+        { status: createRes.status }
+      );
+    }
+
+    const renderId = data.response?.id;
+    if (!renderId) {
+      return NextResponse.json(
+        { error: "Shotstack did not return render ID" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      renderId,
+      status: "queued",
+      message: "Render started. Poll /api/video/status/[id] for progress.",
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Video generation failed";
-    console.error("[video/generate] Error:", err);
+    console.error("[video/generate]", err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

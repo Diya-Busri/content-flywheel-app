@@ -1,35 +1,34 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { generateAvatarVideo } from "@/lib/tiktok-shop/heygen-video";
+import { getShotstackApiKey, renderShotstack } from "@/lib/shotstack-edit";
 
-/** Allow up to 5 min for HeyGen (typical: 1–3 min; free tier can queue). */
-export const maxDuration = 300;
+const FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1557683316-973673baf926?w=1080&h=1920&fit=crop";
+
+export const maxDuration = 120;
 
 /**
- * POST: Generate a short (~3 sec) HeyGen preview video with the selected avatar.
- * Body: fullScript, avatarId, voiceId?, avatarStyle?
- * Uses first 2 lines, truncated to ~6 words for faster HeyGen render.
+ * POST: Generate a short Shotstack preview video with hook + product image.
+ * Replaces HeyGen avatar preview. Body: fullScript, productImageUrl?
+ * Uses first ~20 words as hook for a quick preview.
  */
 export async function POST(request: Request) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    if (!process.env.HEYGEN_API_KEY?.trim()) {
+    const apiKey = getShotstackApiKey();
+    if (!apiKey) {
       return NextResponse.json(
-        { error: "HEYGEN_API_KEY is not set. Avatar preview requires HeyGen." },
+        { error: "SHOTSTACK_API_KEY_SANDBOX is not set. Add it to .env." },
         { status: 503 }
       );
     }
 
     const body = await request.json().catch(() => ({}));
-    const { fullScript, avatarId, voiceId, avatarStyle, backgroundPreset, voiceEmotion } = body as {
+    const { fullScript, productImageUrl } = body as {
       fullScript?: string;
-      avatarId?: string;
-      voiceId?: string;
-      avatarStyle?: "normal" | "circle" | "closeUp";
-      backgroundPreset?: "studio" | "office" | "bedroom" | "gradient" | "warm";
-      voiceEmotion?: "Friendly" | "Excited" | "Soothing" | "Serious" | "Broadcaster";
+      productImageUrl?: string;
     };
 
     if (!fullScript || typeof fullScript !== "string" || !fullScript.trim()) {
@@ -39,40 +38,14 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!avatarId || typeof avatarId !== "string") {
-      return NextResponse.json(
-        { error: "avatarId is required. Select an avatar first." },
-        { status: 400 }
-      );
-    }
+    const words = fullScript.trim().split(/\s+/);
+    const hook = words.slice(0, 20).join(" ") || "Preview";
+    const imageUrl = typeof productImageUrl === "string" && productImageUrl.trim()
+      ? productImageUrl.trim()
+      : FALLBACK_IMAGE;
 
-    // First 2 lines, truncated to ~6 words for faster HeyGen render (~3 sec clip)
-    const lines = fullScript.trim().split(/\n+/).filter(Boolean);
-    let previewScript = lines.slice(0, 2).join(" ").trim();
-    if (!previewScript) previewScript = fullScript.trim();
-    const words = previewScript.split(/\s+/);
-    if (words.length > 6) {
-      previewScript = words.slice(0, 6).join(" ") + ".";
-    }
-
-    if (!previewScript || previewScript.length < 5) {
-      return NextResponse.json(
-        { error: "Script too short for preview." },
-        { status: 400 }
-      );
-    }
-
-    const videoUrl = await generateAvatarVideo({
-      script: previewScript,
-      avatarId,
-      voiceId: voiceId || undefined,
-      avatarStyle: avatarStyle ?? "normal",
-      dimension: { width: 720, height: 1280 },
-      caption: false,
-      backgroundPreset: backgroundPreset ?? "office",
-      voiceEmotion: voiceEmotion && ["Friendly", "Excited", "Soothing", "Serious", "Broadcaster"].includes(voiceEmotion) ? voiceEmotion : "Friendly",
-      useAvatarIV: true,
-    });
+    const shotstackScript = { hook, body: "Preview of your video...", cta: "Link in bio" };
+    const videoUrl = await renderShotstack(shotstackScript, imageUrl, apiKey);
 
     return NextResponse.json({ videoUrl });
   } catch (err) {

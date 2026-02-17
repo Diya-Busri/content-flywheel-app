@@ -3,27 +3,23 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { renderJobsTable } from "@/db/schema/library-schema";
 import { eq } from "drizzle-orm";
-
-const hasHeyGen = () => Boolean(process.env.HEYGEN_API_KEY?.trim());
+import { getShotstackApiKey } from "@/lib/shotstack-edit";
 
 /**
  * POST: Create async render job. Returns jobId immediately; processing runs in background.
- * Body: same as generate-video (productLink, productDescription, script, etc.)
+ * Uses Shotstack Edit API for TikTok-style videos.
  */
 export async function POST(request: Request) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const heygenMode = hasHeyGen();
-    console.log("[render] HEYGEN_API_KEY present:", !!process.env.HEYGEN_API_KEY?.trim(), "| heygenMode:", heygenMode);
-    if (!heygenMode) {
-      if (!process.env.ELEVENLABS_API_KEY?.trim() || !process.env.CREATOMATE_API_KEY?.trim()) {
-        return NextResponse.json(
-          { error: "ELEVENLABS_API_KEY and CREATOMATE_API_KEY are required for product videos." },
-          { status: 503 }
-        );
-      }
+    const hasShotstack = !!getShotstackApiKey();
+    if (!hasShotstack) {
+      return NextResponse.json(
+        { error: "SHOTSTACK_API_KEY_SANDBOX is required. Add it to .env." },
+        { status: 503 }
+      );
     }
 
     const body = await request.json().catch(() => ({}));
@@ -50,12 +46,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to create render job" }, { status: 500 });
     }
 
-    // Fire-and-forget: trigger process-render. Do NOT await.
     const base =
       process.env.NEXT_PUBLIC_APP_URL?.trim() ||
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
       "http://localhost:3000";
-    console.log("[render] Triggering process-render at", `${base}/api/tiktok-shop/process-render`, "jobId:", job.id);
     fetch(`${base}/api/tiktok-shop/process-render`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -63,12 +57,12 @@ export async function POST(request: Request) {
     })
       .then(async (r) => {
         if (!r.ok) {
-          const body = await r.text().catch(() => "");
-          console.error("[render] process-render failed", r.status, r.statusText, "body:", body.slice(0, 500));
+          const txt = await r.text().catch(() => "");
+          console.error("[render] process-render failed", r.status, txt.slice(0, 500));
         }
       })
       .catch((e) => {
-        console.error("[render] Failed to trigger process-render:", e instanceof Error ? e.message : e, e);
+        console.error("[render] Failed to trigger process-render:", e);
       });
 
     return NextResponse.json({ jobId: job.id });

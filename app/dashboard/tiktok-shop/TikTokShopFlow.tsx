@@ -45,7 +45,6 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
-import { AvatarSelectionGrid } from "@/components/tiktok-shop/AvatarSelectionGrid";
 import { AvatarPreviewPlayer } from "@/components/tiktok-shop/AvatarPreviewPlayer";
 import { PostContentCard } from "@/components/tiktok-shop/PostContentCard";
 import { useToast } from "@/components/ui/use-toast";
@@ -93,64 +92,9 @@ const DURATION_OPTIONS = [
 ];
 
 const VIDEO_BUILD_MODES = [
-  { id: "ai-avatar", label: "AI Avatar", desc: "HeyGen presenter", icon: "👤" },
-  { id: "product-in-hand", label: "Product in hand", desc: "AI person holding product", icon: "🖐️" },
-  { id: "product-animation", label: "Product animation", desc: "Your product + captions", icon: "🎬" },
-  { id: "stock-captions", label: "Stock + captions", desc: "B-roll with text", icon: "📽️" },
-  { id: "mixed", label: "Mixed", desc: "Avatar intro + product", icon: "✨" },
+  { id: "product-animation", label: "Text + product", desc: "Shotstack: text overlays + product image", icon: "🎬" },
+  { id: "stock-captions", label: "TikTok-style", desc: "Shotstack: hook, body, CTA + product", icon: "📽️" },
 ];
-
-const VOICE_OPTIONS = [
-  { id: "pNInz6obpgDQGcFmaJgB", label: "Adam" },
-  { id: "21m00Tcm4TlvDq8ikWAM", label: "Rachel" },
-  { id: "EXAVITQu4vr4xnSDxMaL", label: "Bella" },
-];
-
-const AVATAR_STYLE_OPTIONS = [
-  { id: "normal", label: "Normal", desc: "Full frame" },
-  { id: "circle", label: "Circle", desc: "Circular crop" },
-  { id: "closeUp", label: "Close up", desc: "Tighter frame" },
-] as const;
-
-/** HeyGen voice emotion – adds expressiveness, reduces static feel. */
-const MOTION_STYLE_OPTIONS = [
-  { id: "Friendly", label: "Friendly", desc: "Warm, approachable" },
-  { id: "Excited", label: "Excited", desc: "Energetic, upbeat" },
-  { id: "Soothing", label: "Soothing", desc: "Calm, reassuring" },
-  { id: "Serious", label: "Serious", desc: "Professional, authoritative" },
-  { id: "Broadcaster", label: "Broadcaster", desc: "Clear, presentational" },
-] as const;
-
-/** Who appears holding the product in Product-in-hand mode (DALL-E generated). */
-const PRESENTER_STYLE_OPTIONS = [
-  { id: "young-woman", label: "Young woman", desc: "Mid-20s" },
-  { id: "young-man", label: "Young man", desc: "Mid-20s" },
-  { id: "middle-aged-woman", label: "Middle-aged woman", desc: "40s" },
-  { id: "middle-aged-man", label: "Middle-aged man", desc: "40s" },
-  { id: "diverse", label: "Diverse", desc: "Neutral" },
-] as const;
-
-/** Person type for Product in hand (DALL-E generates the image). */
-const PRESENTER_OPTIONS = [
-  { id: "young-woman", label: "Young woman", desc: "Mid-20s, friendly" },
-  { id: "young-man", label: "Young man", desc: "Mid-20s, friendly" },
-  { id: "middle-aged-woman", label: "Middle-aged woman", desc: "40s, warm" },
-  { id: "middle-aged-man", label: "Middle-aged man", desc: "40s, warm" },
-  { id: "diverse", label: "Diverse", desc: "Neutral, inclusive" },
-] as const;
-
-/** Background options for HeyGen avatar videos. "product" = product image behind avatar. */
-const BACKGROUND_OPTIONS = [
-  { id: "product", label: "Product image", desc: "Product as background", color: "bg-slate-300" },
-  { id: "office", label: "Office", desc: "Light gray", color: "bg-slate-200" },
-  { id: "studio", label: "Studio", desc: "Dark", color: "bg-slate-950" },
-  { id: "bedroom", label: "Bedroom", desc: "Warm beige", color: "bg-amber-100" },
-  { id: "gradient", label: "Gradient", desc: "Soft indigo", color: "bg-indigo-100" },
-  { id: "warm", label: "Warm", desc: "Soft yellow", color: "bg-amber-50" },
-] as const;
-
-type HeyGenAvatar = { id: string; name: string; gender?: string; previewImageUrl?: string; previewVideoUrl?: string; premium?: boolean };
-type HeyGenVoice = { id: string; name: string; language?: string; gender?: string };
 
 type ProductBreakdown = {
   productName: string;
@@ -182,27 +126,14 @@ export default function TikTokShopFlow() {
   const [hookStyle, setHookStyle] = useState("tiktok-made-me-buy");
   const [tone, setTone] = useState("ugc-style");
   const [targetDurationSec, setTargetDurationSec] = useState(30);
-  const [videoBuildMode, setVideoBuildMode] = useState("ai-avatar");
-  const [voiceId, setVoiceId] = useState(VOICE_OPTIONS[0].id);
+  const [videoBuildMode, setVideoBuildMode] = useState("product-animation");
   const [subtitleStyle, setSubtitleStyle] = useState("bold");
   const [fontChoice, setFontChoice] = useState("sans");
   const [captionColor, setCaptionColor] = useState("#FFFFFF");
-  const [avatars, setAvatars] = useState<HeyGenAvatar[]>([]);
-  const [heygenVoices, setHeygenVoices] = useState<HeyGenVoice[]>([]);
-  const [avatarsLoading, setAvatarsLoading] = useState(false);
-  const [selectedAvatarId, setSelectedAvatarId] = useState<string | null>(null);
-  const [selectedHeygenVoiceId, setSelectedHeygenVoiceId] = useState<string | null>(null);
-  const [avatarStyle, setAvatarStyle] = useState<"normal" | "circle" | "closeUp">("normal");
-  const [backgroundPreset, setBackgroundPreset] = useState<string>("product");
-  const [voiceEmotion, setVoiceEmotion] = useState<string>("Friendly");
-  const [presenterStyle, setPresenterStyle] = useState<string>("young-woman");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [previewScriptText, setPreviewScriptText] = useState<string>("");
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
-  const [previewImageLoading, setPreviewImageLoading] = useState(false);
-  const [previewImageBase64, setPreviewImageBase64] = useState<string | null>(null);
-  const [previewImageModalOpen, setPreviewImageModalOpen] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<"idle" | "polling" | "completed" | "failed">("idle");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -211,7 +142,7 @@ export default function TikTokShopFlow() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number | null>(null);
   const { toast } = useToast();
-  const [hasHeyGen, setHasHeyGen] = useState(false);
+  const [hasShotstack, setHasShotstack] = useState(false);
 
   useEffect(() => {
     try {
@@ -219,15 +150,9 @@ export default function TikTokShopFlow() {
       if (raw) {
         const p = JSON.parse(raw) as Record<string, unknown>;
         if (typeof p.videoBuildMode === "string") setVideoBuildMode(p.videoBuildMode);
-        if (typeof p.avatarStyle === "string") setAvatarStyle(p.avatarStyle as "normal" | "circle" | "closeUp");
-        if (typeof p.backgroundPreset === "string") setBackgroundPreset(p.backgroundPreset);
-        if (typeof p.voiceEmotion === "string") setVoiceEmotion(p.voiceEmotion);
-        if (typeof p.presenterStyle === "string") setPresenterStyle(p.presenterStyle);
         if (typeof p.targetDurationSec === "number") setTargetDurationSec(p.targetDurationSec);
         if (typeof p.hookStyle === "string") setHookStyle(p.hookStyle);
         if (typeof p.tone === "string") setTone(p.tone);
-        if (typeof p.selectedAvatarId === "string") setSelectedAvatarId(p.selectedAvatarId);
-        if (typeof p.selectedHeygenVoiceId === "string") setSelectedHeygenVoiceId(p.selectedHeygenVoiceId);
       }
     } catch {
       // ignore
@@ -237,58 +162,23 @@ export default function TikTokShopFlow() {
   useEffect(() => {
     const prefs = {
       videoBuildMode,
-      avatarStyle,
-      backgroundPreset,
-      voiceEmotion,
-      presenterStyle,
       targetDurationSec,
       hookStyle,
       tone,
-      selectedAvatarId,
-      selectedHeygenVoiceId,
     };
     try {
       localStorage.setItem(TIKTOK_PREFS_KEY, JSON.stringify(prefs));
     } catch {
       // ignore
     }
-  }, [videoBuildMode, avatarStyle, backgroundPreset, voiceEmotion, presenterStyle, targetDurationSec, hookStyle, tone, selectedAvatarId, selectedHeygenVoiceId]);
+  }, [videoBuildMode, targetDurationSec, hookStyle, tone]);
 
   useEffect(() => {
     fetch("/api/tiktok-shop/video-mode")
       .then((r) => r.json())
-      .then((d) => setHasHeyGen(d.mode === "avatar"))
-      .catch(() => setHasHeyGen(false));
+      .then((d) => setHasShotstack(d.mode === "shotstack"))
+      .catch(() => setHasShotstack(false));
   }, []);
-
-  useEffect(() => {
-    if (backgroundPreset === "product" && !productImage && !imagePreview) setBackgroundPreset("office");
-  }, [backgroundPreset, productImage, imagePreview]);
-
-  const showAvatarPicker = hasHeyGen && (videoBuildMode === "ai-avatar" || videoBuildMode === "mixed");
-  const showProductInHand = hasHeyGen && videoBuildMode === "product-in-hand";
-  const needsHeyGenVoices = showAvatarPicker || showProductInHand;
-  const avatarsFetchedRef = useRef(false);
-  useEffect(() => {
-    if (step === 4 && needsHeyGenVoices && !avatarsFetchedRef.current) {
-      avatarsFetchedRef.current = true;
-      setAvatarsLoading(true);
-      fetch("/api/tiktok-shop/avatars")
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.avatars?.length) {
-            setAvatars(d.avatars);
-            setSelectedAvatarId((prev) => prev ?? d.avatars[0]?.id ?? null);
-          }
-          if (d.voices?.length) {
-            setHeygenVoices(d.voices);
-            setSelectedHeygenVoiceId((prev) => prev ?? d.voices[0]?.id ?? null);
-          }
-        })
-        .catch(() => { avatarsFetchedRef.current = false; })
-        .finally(() => setAvatarsLoading(false));
-    }
-  }, [step, needsHeyGenVoices]);
 
   const getProductImageBase64 = (): Promise<string | undefined> => {
     if (!productImage) return Promise.resolve(undefined);
@@ -434,16 +324,8 @@ export default function TikTokShopFlow() {
           productImageBase64,
           videoStyle: "demo",
           platforms: ["tiktok"],
-          voiceId,
           targetDurationSec,
           videoBuildMode,
-          creativeControls: { subtitleStyle, fontChoice, captionColor },
-          avatarId: showAvatarPicker ? selectedAvatarId ?? undefined : undefined,
-          heygenVoiceId: needsHeyGenVoices ? selectedHeygenVoiceId ?? undefined : undefined,
-          avatarStyle: showAvatarPicker ? avatarStyle : undefined,
-          backgroundPreset: (showAvatarPicker || showProductInHand) ? backgroundPreset : undefined,
-          voiceEmotion: needsHeyGenVoices ? voiceEmotion : undefined,
-          presenterStyle: showProductInHand ? presenterStyle : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -495,41 +377,8 @@ export default function TikTokShopFlow() {
     };
   }, [jobId, jobStatus, toast]);
 
-  const handlePreviewProductInHand = async () => {
-    if (!breakdown?.productName) return;
-    setPreviewImageLoading(true);
-    setPreviewImageBase64(null);
-    try {
-      const res = await fetch("/api/tiktok-shop/product-in-hand-preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productName: breakdown.productName,
-          productDescription: breakdown.productDescription,
-          presenterStyle,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Preview failed");
-      if (data.imageBase64) {
-        setPreviewImageBase64(data.imageBase64);
-        setPreviewImageModalOpen(true);
-      } else {
-        throw new Error("No image returned");
-      }
-    } catch (err) {
-      toast({
-        title: "Preview failed",
-        description: err instanceof Error ? err.message : "Could not generate preview image",
-        variant: "destructive",
-      });
-    } finally {
-      setPreviewImageLoading(false);
-    }
-  };
-
-  const handlePreviewAvatar = async () => {
-    if (!selectedAvatarId || !scriptResult?.fullScript) return;
+  const handlePreviewShotstack = async () => {
+    if (!scriptResult?.fullScript) return;
     setPreviewLoading(true);
     setPreviewVideoUrl(null);
     try {
@@ -538,22 +387,15 @@ export default function TikTokShopFlow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fullScript: scriptResult.fullScript,
-          avatarId: selectedAvatarId,
-          voiceId: selectedHeygenVoiceId ?? undefined,
-          avatarStyle,
-          backgroundPreset: backgroundPreset === "product" ? "office" : backgroundPreset,
-          voiceEmotion,
+          productImageUrl: undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Preview failed");
       if (data.videoUrl) {
         const full = scriptResult.fullScript.trim();
-        const lines = full.split(/\n+/).filter(Boolean);
-        const snippet = lines.slice(0, 2).join(" ").trim();
-        const words = snippet.split(/\s+/);
-        const previewText = words.length > 6 ? words.slice(0, 6).join(" ") + "." : snippet || full.slice(0, 80);
-        setPreviewScriptText(previewText);
+        const words = full.split(/\s+/);
+        setPreviewScriptText(words.slice(0, 20).join(" ") || full.slice(0, 100));
         setPreviewVideoUrl(data.videoUrl);
         setPreviewModalOpen(true);
       } else {
@@ -892,279 +734,44 @@ export default function TikTokShopFlow() {
                     key={m.id}
                     type="button"
                     onClick={() => setVideoBuildMode(m.id)}
-                    disabled={(m.id === "ai-avatar" || m.id === "product-in-hand") && !hasHeyGen}
                     className={`flex items-start gap-3 rounded-lg border p-3 text-left ${
                       videoBuildMode === m.id ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30" : "border-slate-200 dark:border-slate-700"
-                    } ${(m.id === "ai-avatar" || m.id === "product-in-hand") && !hasHeyGen ? "opacity-50 cursor-not-allowed" : ""}`}
+                    }`}
                   >
                     <span className="text-xl">{m.icon}</span>
                     <div>
                       <p className="font-medium text-sm">{m.label}</p>
                       <p className="text-xs text-slate-500">{m.desc}</p>
-                      {(m.id === "ai-avatar" || m.id === "product-in-hand") && hasHeyGen && <Badge variant="secondary" className="mt-1 text-xs">HeyGen + OpenAI</Badge>}
+                      {hasShotstack && <Badge variant="secondary" className="mt-1 text-xs">Shotstack</Badge>}
                     </div>
                   </button>
                 ))}
               </div>
             </div>
 
-            {showProductInHand && (
+            {hasShotstack && (
               <div className="space-y-4 rounded-lg border border-orange-200 dark:border-orange-900/50 bg-orange-50/30 dark:bg-orange-950/20 p-4">
-                <Label className="text-base">Product in hand</Label>
-                <p className="text-xs text-slate-600 dark:text-slate-400">AI generates a person holding your product, then animates them speaking your script.</p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {avatarsLoading ? (
-                    <div className="flex items-center gap-2 text-sm text-slate-500">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading voices...
-                    </div>
-                  ) : heygenVoices.length > 0 ? (
-                    <div>
-                      <Label className="text-sm">HeyGen voice</Label>
-                      <select
-                        value={selectedHeygenVoiceId ?? ""}
-                        onChange={(e) => setSelectedHeygenVoiceId(e.target.value || null)}
-                        className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm mt-1"
-                      >
-                        {heygenVoices.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.name} {v.gender ? `(${v.gender})` : ""} {v.language ? `· ${v.language}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-500">Using default voice.</p>
-                  )}
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <Label className="text-sm">Who holds the product</Label>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent>Type of person AI generates in the image. DALL-E creates the composite.</TooltipContent>
-                      </Tooltip>
-                    </div>
-                    <select
-                      value={presenterStyle}
-                      onChange={(e) => setPresenterStyle(e.target.value)}
-                      className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm mt-1"
-                    >
-                      {PRESENTER_OPTIONS.map((o) => (
-                        <option key={o.id} value={o.id}>{o.label} — {o.desc}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <Label className="text-sm">Background</Label>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent>What appears behind the avatar in the video</TooltipContent>
-                      </Tooltip>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-0.5 mb-2">Behind the person in the video</p>
-                    <div className="flex flex-wrap gap-1">
-                      {(["office", "studio", "bedroom", "gradient", "warm"] as const).map((id) => (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => setBackgroundPreset(id)}
-                          className={`px-2.5 py-1 rounded text-xs font-medium ${
-                            backgroundPreset === id ? "bg-orange-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
-                          }`}
-                        >
-                          {BACKGROUND_OPTIONS.find((b) => b.id === id)?.label ?? id}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <Label className="text-sm">Motion style</Label>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent>Voice emotion for avatar expressiveness. Adds natural movement.</TooltipContent>
-                      </Tooltip>
-                    </div>
-                    <select
-                      value={voiceEmotion}
-                      onChange={(e) => setVoiceEmotion(e.target.value)}
-                      className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm mt-1"
-                    >
-                      {MOTION_STYLE_OPTIONS.map((o) => (
-                        <option key={o.id} value={o.id}>{o.label} — {o.desc}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                <Label className="text-base">Preview video</Label>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Shotstack: text overlays + product image. Generate a short preview to see how it looks.</p>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={handlePreviewProductInHand}
-                  disabled={!breakdown?.productName || previewImageLoading}
+                  onClick={handlePreviewShotstack}
+                  disabled={!scriptResult?.fullScript || previewLoading}
                   className="gap-2"
                 >
-                  {previewImageLoading ? (
+                  {previewLoading ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <PlayCircle className="w-4 h-4" />
                   )}
-                  {previewImageLoading ? "Generating preview (~30s)…" : "Preview image"}
+                  {previewLoading ? "Generating preview (~30s)…" : "Preview video"}
                 </Button>
               </div>
             )}
 
-            {showAvatarPicker && (
-              <div className="space-y-4 rounded-lg border border-orange-200 dark:border-orange-900/50 bg-orange-50/30 dark:bg-orange-950/20 p-4">
-                <Label className="text-base">Choose avatar & voice</Label>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Select the presenter and voice for your video. Preview how each avatar looks.</p>
-                {avatarsLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading avatars...
-                  </div>
-                ) : avatars.length > 0 ? (
-                  <>
-                    <AvatarSelectionGrid
-                      avatars={avatars}
-                      selectedAvatarId={selectedAvatarId}
-                      onSelect={(id) => setSelectedAvatarId(id)}
-                      isLoading={false}
-                      label="Avatar"
-                    />
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <div className="flex items-center gap-1">
-                          <Label className="text-sm">HeyGen voice</Label>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent>AI voice that reads your script. Some voices support Motion style for extra expressiveness.</TooltipContent>
-                          </Tooltip>
-                        </div>
-                        <select
-                          value={selectedHeygenVoiceId ?? ""}
-                          onChange={(e) => setSelectedHeygenVoiceId(e.target.value || null)}
-                          className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm mt-1"
-                        >
-                          {heygenVoices.map((v) => (
-                            <option key={v.id} value={v.id}>
-                              {v.name} {v.gender ? `(${v.gender})` : ""} {v.language ? `· ${v.language}` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1">
-                          <Label className="text-sm">Avatar style</Label>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent>How the avatar is framed: full frame, circular crop, or close-up.</TooltipContent>
-                          </Tooltip>
-                        </div>
-                        <select
-                          value={avatarStyle}
-                          onChange={(e) => setAvatarStyle(e.target.value as "normal" | "circle" | "closeUp")}
-                          className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm mt-1"
-                        >
-                          {AVATAR_STYLE_OPTIONS.map((o) => (
-                            <option key={o.id} value={o.id}>{o.label} — {o.desc}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1">
-                          <Label className="text-sm">Motion style</Label>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent>Voice emotion for expressiveness. Adds natural movement and reduces a static feel.</TooltipContent>
-                          </Tooltip>
-                        </div>
-                        <select
-                          value={voiceEmotion}
-                          onChange={(e) => setVoiceEmotion(e.target.value)}
-                          className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm mt-1"
-                        >
-                          {MOTION_STYLE_OPTIONS.map((o) => (
-                            <option key={o.id} value={o.id}>{o.label} — {o.desc}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <Label className="text-sm">Background</Label>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent>What appears behind the avatar. Product image uses your uploaded product as the backdrop.</TooltipContent>
-                        </Tooltip>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-0.5 mb-2">What appears behind the avatar in the video</p>
-                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                        {BACKGROUND_OPTIONS.filter((b) => b.id !== "product" || productImage || imagePreview).map((b) => (
-                          <button
-                            key={b.id}
-                            type="button"
-                            onClick={() => setBackgroundPreset(b.id)}
-                            className={`flex flex-col items-center gap-1 rounded-lg border-2 p-2 transition-all ${
-                              backgroundPreset === b.id ? "border-orange-500 ring-2 ring-orange-200 dark:ring-orange-800" : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
-                            }`}
-                          >
-                            <span className={`w-8 h-8 rounded-md ${b.color} border border-slate-200 dark:border-slate-600`} title={b.label} />
-                            <span className="text-[10px] font-medium text-slate-600 dark:text-slate-400 truncate w-full text-center">{b.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handlePreviewAvatar}
-                      disabled={!selectedAvatarId || !scriptResult?.fullScript || previewLoading}
-                      className="gap-2"
-                    >
-                      {previewLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <PlayCircle className="w-4 h-4" />
-                      )}
-                      {previewLoading ? "Generating preview (usually 1–3 min)…" : "Preview avatar"}
-                    </Button>
-                  </>
-                ) : (
-                  <p className="text-sm text-slate-500">No avatars available. Using default.</p>
-                )}
-              </div>
-            )}
-
             <div className="grid gap-4 sm:grid-cols-2">
-              {!showAvatarPicker && !showProductInHand && (
-              <div>
-                <Label>Voice (ElevenLabs)</Label>
-                <select
-                  value={voiceId}
-                  onChange={(e) => setVoiceId(e.target.value)}
-                  className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm mt-1"
-                >
-                  {VOICE_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                </select>
-              </div>
-              )}
               <div>
                 <Label>Subtitle style</Label>
                 <select
@@ -1224,9 +831,7 @@ export default function TikTokShopFlow() {
             {jobStatus === "idle" && (
               <div className="space-y-3">
                 <p className="text-xs text-slate-500">
-                  {videoBuildMode === "product-in-hand" && "~4–5 min (DALL-E + HeyGen)"}
-                  {(videoBuildMode === "ai-avatar" || videoBuildMode === "mixed") && "~2–3 min (HeyGen avatar)"}
-                  {(videoBuildMode === "product-animation" || videoBuildMode === "stock-captions") && "~1–2 min"}
+                  ~1–2 min (Shotstack: text + product image)
                 </p>
                 <Button onClick={startRender} disabled={!breakdown || !scriptResult} className="w-full gap-2">
                   <Play className="w-4 h-4" />
@@ -1240,9 +845,7 @@ export default function TikTokShopFlow() {
                   <div className="space-y-2">
                     <Progress value={33} className="h-2" />
                     <p className="text-sm text-slate-600 dark:text-slate-400">
-                      {videoBuildMode === "product-in-hand" && "Generating image → uploading → creating video. Usually 4–5 min."}
-                      {(videoBuildMode === "ai-avatar" || videoBuildMode === "mixed") && "Creating avatar video. Usually 2–3 min."}
-                      {(videoBuildMode === "product-animation" || videoBuildMode === "stock-captions") && "Rendering product video. Usually 1–2 min."}
+                      Rendering TikTok-style video with Shotstack. Usually 1–2 min.
                     </p>
                     <p className="text-xs text-slate-500">Elapsed: {Math.floor(pollElapsedSec / 60)}m {pollElapsedSec % 60}s · Polling every 10s</p>
                   </div>
@@ -1250,7 +853,7 @@ export default function TikTokShopFlow() {
                 {jobStatus === "failed" && jobError && (
                   <div className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 p-4 space-y-3">
                     <p className="text-sm text-red-700 dark:text-red-400 font-medium">{jobError}</p>
-                    <p className="text-xs text-slate-600 dark:text-slate-400">If this keeps failing, try shortening the script, changing the avatar, or picking a different background.</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">If this keeps failing, try shortening the script or ensuring a product image is available.</p>
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" onClick={startRender} className="gap-1">
                         <RefreshCw className="w-3.5 h-3.5" />
@@ -1297,7 +900,7 @@ export default function TikTokShopFlow() {
       <Dialog open={previewModalOpen} onOpenChange={setPreviewModalOpen}>
         <DialogContent className="max-w-lg p-0 overflow-hidden max-h-[95vh] overflow-y-auto">
           <DialogHeader className="p-4 pb-0">
-            <DialogTitle>Avatar preview</DialogTitle>
+            <DialogTitle>Video preview</DialogTitle>
           </DialogHeader>
           {previewVideoUrl && (
             <div className="p-4 pt-2">
@@ -1310,25 +913,6 @@ export default function TikTokShopFlow() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={previewImageModalOpen} onOpenChange={setPreviewImageModalOpen}>
-        <DialogContent className="max-w-md p-0 overflow-hidden">
-          <DialogHeader className="p-4 pb-0">
-            <DialogTitle>Product in hand preview</DialogTitle>
-            <p className="text-sm text-slate-500 mt-1">This is the AI-generated image. The full render will animate this person speaking your script.</p>
-          </DialogHeader>
-          {previewImageBase64 && (
-            <div className="p-4">
-              <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 aspect-[9/16] max-h-[420px] bg-slate-100 dark:bg-slate-900">
-                <img
-                  src={previewImageBase64}
-                  alt="Preview: person holding product"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </main>
     </TooltipProvider>
   );

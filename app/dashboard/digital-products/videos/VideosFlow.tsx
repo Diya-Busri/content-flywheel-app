@@ -15,8 +15,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Check, Play, Loader2, User, Image, Package, Sparkles, AlertCircle } from "lucide-react";
+import { ArrowLeft, Check, Play, Loader2, User, Image, Package, Sparkles, AlertCircle, FileText } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { VIDEO_GUIDE_PLATFORMS } from "@/lib/video-guide-platforms";
 
 const VOICE_OPTIONS = [
   "Professional Male (British)",
@@ -63,10 +64,13 @@ export default function VideosFlow() {
   const [background, setBackground] = useState<string>("clean");
   const [captionStyle, setCaptionStyle] = useState<string>(CAPTION_PRESETS[0]);
   const [addLogo, setAddLogo] = useState(false);
-  const [platforms, setPlatforms] = useState({ tiktok: true, instagram: true, youtube: false });
+  const [platforms, setPlatforms] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(VIDEO_GUIDE_PLATFORMS.map((p) => [p.id, p.id === "tiktok" || p.id === "instagram_reels"]))
+  );
   const [previewLoading, setPreviewLoading] = useState(false);
   const [generateLoading, setGenerateLoading] = useState(false);
-  const [creatomateConfigured, setCreatomateConfigured] = useState<boolean | null>(null);
+  const [generateProgress, setGenerateProgress] = useState<string | null>(null);
+  const [shotstackConfigured, setShotstackConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
     try {
@@ -91,63 +95,57 @@ export default function VideosFlow() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/digital-products/creatomate-status")
+    fetch("/api/digital-products/shotstack-status")
       .then((r) => r.json())
-      .then((d) => setCreatomateConfigured(d.configured === true))
-      .catch(() => setCreatomateConfigured(false));
+      .then((d) => {
+        setShotstackConfigured(d.configured === true);
+      })
+      .catch(() => setShotstackConfigured(false));
   }, []);
 
-  const togglePlatform = (key: "tiktok" | "instagram" | "youtube") => {
-    setPlatforms((prev) => ({ ...prev, [key]: !prev[key] }));
+  const togglePlatform = (id: string) => {
+    setPlatforms((prev) => ({ ...prev, [id]: !prev[id] }));
   };
+
+  const selectedPlatformIds = VIDEO_GUIDE_PLATFORMS.filter((p) => platforms[p.id]).map((p) => p.id);
 
   const handlePreview = () => {
     setPreviewLoading(true);
     setTimeout(() => setPreviewLoading(false), 2500);
   };
 
-  const handleGenerateFull = async () => {
+  const handleGenerateGuide = async () => {
+    const script = selectedScripts[0];
+    if (!script) return;
     setGenerateLoading(true);
+    setGenerateProgress("Generating guide...");
+    sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify(selectedScripts));
+
     try {
-      sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify(selectedScripts));
-      const res = await fetch("/api/digital-products/generate-videos", {
+      const res = await fetch("/api/video-guide/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          hook: script.hook,
+          body: script.body,
+          cta: script.cta,
           productId: productId || undefined,
-          scripts: selectedScripts,
+          platforms: selectedPlatformIds.length > 0 ? selectedPlatformIds : ["tiktok"],
         }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && Array.isArray(data.videos) && data.videos.length > 0) {
-        sessionStorage.setItem("digitalProductsGeneratedVideos", JSON.stringify(data.videos));
-        toast({ title: "Videos generated", description: `${data.videos.length} video(s) ready.` });
-        router.push("/dashboard/digital-products/results");
-      } else if (res.status === 503) {
-        toast({
-          title: "Video generation not configured",
-          description: data.error || "Add CREATOMATE_API_KEY and template to .env. Using scripts for now.",
-          variant: "destructive",
-        });
-        router.push("/dashboard/digital-products/results");
-      } else {
-        toast({
-          title: "Video generation failed",
-          description: data.error || "Try again or download scripts from the results page.",
-          variant: "destructive",
-        });
-        router.push("/dashboard/digital-products/results");
+      const guide = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(guide.error || `Request failed: ${res.status}`);
       }
+      sessionStorage.setItem("videoCreationGuide", JSON.stringify({ ...guide, scriptTitle: script.title }));
+      toast({ title: "Guide ready", description: "Your personalised video creation guide is ready." });
+      router.push("/dashboard/digital-products/video-guide");
     } catch (e) {
-      toast({
-        title: "Error",
-        description: e instanceof Error ? e.message : "Something went wrong",
-        variant: "destructive",
-      });
-      sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify(selectedScripts));
-      router.push("/dashboard/digital-products/results");
+      const msg = e instanceof Error ? e.message : "Something went wrong";
+      toast({ title: "Guide generation failed", description: msg, variant: "destructive" });
     } finally {
       setGenerateLoading(false);
+      setGenerateProgress(null);
     }
   };
 
@@ -172,18 +170,6 @@ export default function VideosFlow() {
         <p className="text-[#A0A0A0] mb-8">
           Based on: <span className="font-medium text-white">{productName || "Your product"}</span>
         </p>
-
-        {creatomateConfigured === false && (
-          <div className="mb-6 p-4 rounded-lg border border-amber-500/50 bg-amber-500/10 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-amber-200">Video generation requires configuration</p>
-              <p className="text-sm text-amber-200/80 mt-1">
-                Add CREATOMATE_API_KEY and CREATOMATE_TEMPLATE_DIGITAL_PRODUCT (or CREATOMATE_TEMPLATE_PROMO) to your environment. Until then, you can still get downloadable scripts.
-              </p>
-            </div>
-          </div>
-        )}
 
         {count === 0 ? (
           <Card className={cardClass}>
@@ -333,23 +319,29 @@ export default function VideosFlow() {
             {/* PLATFORM OPTIMIZATION */}
             <Card className={cardClass}>
               <CardHeader>
-                <CardTitle className="text-lg text-white">Platform optimization</CardTitle>
-                <p className="text-sm text-[#A0A0A0]">Which platforms? (select all that apply)</p>
+                <CardTitle className="text-lg text-white">Target platforms</CardTitle>
+                <p className="text-sm text-[#A0A0A0]">Select all platforms you want to post on. The guide will include platform-specific strategies for each.</p>
               </CardHeader>
               <CardContent className="space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <Checkbox checked={platforms.tiktok} onCheckedChange={() => togglePlatform("tiktok")} />
-                  <span className="text-sm text-[#E0E0E0]">TikTok (9:16, 30s recommended)</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <Checkbox checked={platforms.instagram} onCheckedChange={() => togglePlatform("instagram")} />
-                  <span className="text-sm text-[#E0E0E0]">Instagram Reels (9:16, 60s recommended)</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <Checkbox checked={platforms.youtube} onCheckedChange={() => togglePlatform("youtube")} />
-                  <span className="text-sm text-[#E0E0E0]">YouTube Shorts (9:16, up to 60s)</span>
-                </label>
-                <p className="text-xs text-[#A0A0A0] mt-2">Selecting multiple platforms creates optimized versions for each.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {VIDEO_GUIDE_PLATFORMS.map((p) => (
+                    <label
+                      key={p.id}
+                      className={`flex items-start gap-3 cursor-pointer rounded-lg border p-3 transition-colors ${
+                        platforms[p.id] ? "border-orange-500 bg-orange-500/10" : "border-[#2A2A2A] hover:border-[#3A3A3A]"
+                      }`}
+                    >
+                      <Checkbox checked={!!platforms[p.id]} onCheckedChange={() => togglePlatform(p.id)} />
+                      <div>
+                        <span className="text-sm font-medium text-white">{p.label}</span>
+                        <p className="text-xs text-orange-500/90 mt-0.5">{p.contentType}</p>
+                        <p className="text-xs text-[#A0A0A0] mt-0.5">{p.aspect} • {p.duration}</p>
+                        <p className="text-xs text-[#6A6A6A] mt-0.5">{p.note}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-[#A0A0A0] mt-2">Platform selection happens before generation so the AI creates tailored content for each platform.</p>
               </CardContent>
             </Card>
           </div>
@@ -358,42 +350,38 @@ export default function VideosFlow() {
         {/* Bottom bar */}
         {count > 0 && (
           <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#2A2A2A] bg-[#0F0F0F]/95 backdrop-blur py-4 px-4 md:px-6">
-            <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handlePreview}
-                  disabled={previewLoading}
-                  className="gap-2 border-[#2A2A2A] text-[#A0A0A0]"
-                >
-                  {previewLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Play className="w-4 h-4" />
-                  )}
-                  Preview 10s Sample
-                </Button>
-                <p className="text-xs text-[#A0A0A0]">Free, watermarked. See how it looks before generating.</p>
-              </div>
-              <div className="flex flex-col sm:items-end gap-2">
-                <p className="text-sm text-[#A0A0A0]">
-                  {creatomateConfigured
-                    ? `Generate ${count} video${count !== 1 ? "s" : ""} (15–30s, 1080×1920)`
-                    : `Get ${count} script${count !== 1 ? "s" : ""} (configure Creatomate to generate videos)`}
-                </p>
-                <Button
-                  className="bg-orange-500 hover:bg-orange-600 gap-2"
-                  size="lg"
-                  onClick={handleGenerateFull}
-                  disabled={generateLoading}
-                >
-                  {generateLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : creatomateConfigured ? (
-                    <Package className="w-4 h-4" />
-                  ) : null}
-                  {generateLoading ? "Generating..." : creatomateConfigured ? "Generate Videos →" : "Get My Scripts →"}
-                </Button>
+            <div className="max-w-4xl mx-auto flex flex-col gap-3">
+              {generateProgress && (
+                <div className="flex items-center gap-3 rounded-lg bg-orange-500/10 border border-orange-500/30 px-4 py-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-orange-500 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-orange-200">{generateProgress}</p>
+                    <p className="text-xs text-orange-200/80">This may take 2–5 minutes. Don&apos;t close this page.</p>
+                  </div>
+                  <div className="flex-1 h-2 rounded-full bg-[#2A2A2A] overflow-hidden">
+                    <div className="h-full w-1/3 animate-pulse rounded-full bg-orange-500" style={{ animationDuration: "1.5s" }} />
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                <div className="flex flex-col sm:items-end gap-2 sm:ml-auto">
+                  <p className="text-sm text-[#A0A0A0]">
+                    Get a personalised step-by-step guide to create your video using free tools
+                  </p>
+                  <Button
+                    className="bg-orange-500 hover:bg-orange-600 gap-2"
+                    size="lg"
+                    onClick={handleGenerateGuide}
+                    disabled={generateLoading}
+                  >
+                    {generateLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <FileText className="w-4 h-4" />
+                    )}
+                    {generateLoading ? "Generating..." : "Create Video Guide →"}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

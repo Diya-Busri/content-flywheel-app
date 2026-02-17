@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
+import { getShotstackApiKey } from "@/lib/shotstack-edit";
 
 /**
- * GET: Returns whether TikTok Shop uses AI avatar (HeyGen) or product-only (Creatomate) video.
- * Does not expose API keys.
+ * GET: Returns whether TikTok Shop video generation is configured (Shotstack).
  */
 export async function GET() {
-  const useAvatar = Boolean(process.env.HEYGEN_API_KEY?.trim());
+  const configured = !!getShotstackApiKey();
   return NextResponse.json({
-    mode: useAvatar ? "avatar" : "product",
-    label: useAvatar ? "AI Avatar (HeyGen)" : "Product + text",
+    mode: configured ? "shotstack" : "unconfigured",
+    label: configured ? "Shotstack (text + product image)" : "Not configured",
   });
 }
