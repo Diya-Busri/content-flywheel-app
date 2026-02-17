@@ -175,7 +175,7 @@ export default function VideosFlow() {
           <Card className={cardClass}>
             <CardContent className="py-12 text-center">
               <p className="text-[#A0A0A0] mb-4">
-                No scripts selected. Go back and select at least one script to customize and generate videos.
+                No scripts selected. Go back and select at least one script to customize and create your Video Creation Guide.
               </p>
               <Button asChild variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]">
                 <Link href="/dashboard/digital-products/scripts">Back to Scripts</Link>

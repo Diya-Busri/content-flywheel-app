@@ -521,7 +521,7 @@ export default function DigitalProductFlow() {
                 onClick={handleGenerateVideo}
                 disabled={!selectedScriptId}
               >
-                Generate Video
+                Create Video Guide
               </Button>
             </div>
           </CardContent>
@@ -535,7 +535,7 @@ export default function DigitalProductFlow() {
             <div className="text-center">
               <Loader2 className="w-12 h-12 text-orange-500 animate-spin mx-auto mb-4" />
               <p className="text-slate-600 dark:text-slate-400 mb-2">
-                Creating your video... This takes 2–5 minutes.
+                Creating your Video Creation Guide...
               </p>
               <Progress value={Math.min(videoProgress, 100)} className="max-w-xs mx-auto h-2" />
             </div>

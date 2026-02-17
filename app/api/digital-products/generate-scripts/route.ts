@@ -1,6 +1,6 @@
 /**
- * POST: Generate fresh video scripts for a digital product (Pain Point, Story, Value Bomb).
- * Uses product title + description from DB. No caching — each call returns new scripts.
+ * POST: Generate 4 video script variations for a digital product in one API call.
+ * Angles: Story, Problem/Solution, Social Proof/Results, Curiosity/Controversy.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
@@ -58,31 +58,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const prompt = `You are an expert at writing short-form video scripts for digital products (TikTok, Reels, Shorts). Generate exactly 3 scripts for this product. Each script must feel specific to the product, not generic.
+    const prompt = `You are an expert at writing short-form video scripts for digital products (TikTok, Reels, Shorts). Generate exactly 4 scripts for this product in one response. Each script must feel specific to the product, not generic.
 
 PRODUCT:
 - Name: "${title}"
 - Description: ${description || "(none provided)"}
 - Niche/audience: ${niche}
 
-Generate 3 scripts with these angles:
-1. "Pain Point Angle" — hook on the problem, body on how the product solves it, strong CTA.
-2. "Story Angle" — hook on a transformation or result, body with a mini story or social proof, CTA.
-3. "Value Bomb Angle" — hook on a specific tip or outcome, body with clear value and benefits, CTA.
+Generate 4 scripts with these exact angles (in this order):
+1. "Story Angle" — e.g. "Meet Sarah who transformed her life..." Hook on a person or transformation story; body with a mini story or relatable scenario; CTA.
+2. "Problem/Solution Angle" — e.g. "Tired of living paycheck to paycheck? Here's the fix..." Hook on the problem; body on how the product solves it; strong CTA.
+3. "Social Proof/Results Angle" — e.g. "1000+ people have already used this to..." Hook with results or numbers; body with social proof and outcomes; CTA.
+4. "Curiosity/Controversy Angle" — e.g. "Nobody talks about this passive income method..." Hook with curiosity gap or mild controversy; body reveals value without giving everything away; CTA.
+
+HIGHLIGHTING (required): Wrap text in tags where they fit:
+- Pain/emotional triggers: [PAIN]...[/PAIN]
+- Benefits/transformation: [BENEFIT]...[/BENEFIT]
+Only tag the strongest phrases.
 
 RULES:
 - Hook: 1–2 sentences, under ~100 chars, punchy and scroll-stopping.
 - Body: 2–4 short paragraphs, under ~300 chars total, benefit-focused.
-- CTA: one clear action, under ~100 chars (e.g. "Link in bio", "Comment X for the guide").
+- CTA: one clear action, under ~100 chars.
 - Write for 30-second videos. Be specific to this product and niche.
-- No placeholders like [product name] — use the actual product name.
+- No placeholders — use the actual product name.
 
 Return ONLY valid JSON (no markdown, no code fence):
 {
   "scripts": [
-    { "title": "Pain Point Angle", "hook": "...", "body": "...", "cta": "..." },
     { "title": "Story Angle", "hook": "...", "body": "...", "cta": "..." },
-    { "title": "Value Bomb Angle", "hook": "...", "body": "...", "cta": "..." }
+    { "title": "Problem/Solution Angle", "hook": "...", "body": "...", "cta": "..." },
+    { "title": "Social Proof/Results Angle", "hook": "...", "body": "...", "cta": "..." },
+    { "title": "Curiosity/Controversy Angle", "hook": "...", "body": "...", "cta": "..." }
   ]
 }`;
 
@@ -98,12 +105,12 @@ Return ONLY valid JSON (no markdown, no code fence):
           {
             role: "system",
             content:
-              "You generate short-form video scripts for digital products. Return only valid JSON with a 'scripts' array. Each item has title, hook, body, cta (strings).",
+              "You generate short-form video scripts for digital products. Return only valid JSON with a 'scripts' array. Each item has title, hook, body, cta (strings). Use [PAIN]...[/PAIN] for pain/emotional triggers and [BENEFIT]...[/BENEFIT] for benefits where they appear in the text.",
           },
           { role: "user", content: prompt },
         ],
         temperature: 0.7,
-        max_tokens: 1500,
+        max_tokens: 2500,
       }),
     });
 
@@ -125,10 +132,11 @@ Return ONLY valid JSON (no markdown, no code fence):
     }
     const parsed = JSON.parse(content) as { scripts?: Array<{ title?: string; hook?: string; body?: string; cta?: string }> };
     const raw = Array.isArray(parsed.scripts) ? parsed.scripts : [];
+    const defaultTitles = ["Story Angle", "Problem/Solution Angle", "Social Proof/Results Angle", "Curiosity/Controversy Angle"];
 
-    const scripts: GeneratedScriptItem[] = raw.slice(0, 3).map((s, i) => ({
+    const scripts: GeneratedScriptItem[] = raw.slice(0, 4).map((s, i) => ({
       id: `gen-${i + 1}`,
-      title: typeof s.title === "string" ? s.title : ["Pain Point Angle", "Story Angle", "Value Bomb Angle"][i] ?? `Script ${i + 1}`,
+      title: typeof s.title === "string" ? s.title : defaultTitles[i] ?? `Script ${i + 1}`,
       length: 30,
       hook: typeof s.hook === "string" ? s.hook.trim() : "",
       body: typeof s.body === "string" ? s.body.trim() : "",

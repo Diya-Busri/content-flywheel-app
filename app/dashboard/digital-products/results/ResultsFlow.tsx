@@ -5,10 +5,116 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, Download, Copy, FileText, Loader2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowLeft, Download, Copy, FileText, Loader2, RefreshCw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { VideoCustomizationModal } from "@/components/digital-products/VideoCustomizationModal";
 import type { VideoCustomizationSettings } from "@/components/digital-products/VideoCustomizationModal";
+
+/** Matches the 4 angles from generate-scripts; used for Regenerate dropdown. */
+const SCRIPT_ANGLES = [
+  "Story Angle",
+  "Problem/Solution Angle",
+  "Social Proof/Results Angle",
+  "Curiosity/Controversy Angle",
+] as const;
+
+/** Strip [PAIN]...[/PAIN] and [BENEFIT]...[/BENEFIT] tags for clipboard/download. */
+function stripScriptTags(text: string): string {
+  return text
+    .replace(/\[PAIN\](.*?)\[\/PAIN\]/gs, "$1")
+    .replace(/\[BENEFIT\](.*?)\[\/BENEFIT\]/gs, "$1");
+}
+
+/** Pain/benefit keywords for fallback when script has no [PAIN]/[BENEFIT] tags. */
+const PAIN_WORDS = /\b(struggling|stressed|stressing|frustrated|overwhelmed|broke|stuck|failing|worried|anxious|broke|can't afford|tired of|exhausted|stressed out|struggle|frustration|overwhelm|worry|anxiety|fear|scared|confused|lost|broken|stuck)\b/gi;
+const BENEFIT_WORDS = /\b(thriving|freedom|transformed|saved|confident|calm|organized|successful|easy|finally|peace of mind|financial freedom|transformation|results|winning|confident|clarity|relief|simple|quick|powerful)\b/gi;
+
+type Segment = { type: "normal" | "pain" | "benefit"; text: string };
+
+function parseSegments(text: string): Segment[] {
+  const segments: Segment[] = [];
+  const re = /\[PAIN\](.*?)\[\/PAIN\]|\[BENEFIT\](.*?)\[\/BENEFIT\]/gs;
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > lastIndex) {
+      segments.push({ type: "normal", text: text.slice(lastIndex, m.index) });
+    }
+    if (m[1] !== undefined) segments.push({ type: "pain", text: m[1] });
+    if (m[2] !== undefined) segments.push({ type: "benefit", text: m[2] });
+    lastIndex = re.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    segments.push({ type: "normal", text: text.slice(lastIndex) });
+  }
+  return segments;
+}
+
+/** Apply keyword-based highlighting to normal text when no tags present. */
+function highlightKeywords(text: string): Segment[] {
+  const segments: Segment[] = [];
+  let lastEnd = 0;
+  const combined = new RegExp(
+    `(${PAIN_WORDS.source})|(${BENEFIT_WORDS.source})`,
+    "gi"
+  );
+  let match: RegExpExecArray | null;
+  while ((match = combined.exec(text)) !== null) {
+    if (match.index > lastEnd) {
+      segments.push({ type: "normal", text: text.slice(lastEnd, match.index) });
+    }
+    if (match[1]) segments.push({ type: "pain", text: match[1] });
+    if (match[2]) segments.push({ type: "benefit", text: match[2] });
+    lastEnd = match.index + match[0].length;
+  }
+  if (lastEnd < text.length) {
+    segments.push({ type: "normal", text: text.slice(lastEnd) });
+  }
+  return segments.length > 0 ? segments : [{ type: "normal", text: text }];
+}
+
+function getSegments(text: string): Segment[] {
+  const parsed = parseSegments(text);
+  const hasTags = parsed.some((s) => s.type !== "normal");
+  if (hasTags) return parsed;
+  return highlightKeywords(text);
+}
+
+function ScriptHighlightedText({
+  text,
+  isCta,
+}: {
+  text: string;
+  isCta?: boolean;
+}) {
+  const segments = getSegments(text);
+  return (
+    <span className={isCta ? "font-bold text-amber-400" : undefined}>
+      {segments.map((seg, i) => {
+        if (seg.type === "normal")
+          return <span key={i}>{seg.text}</span>;
+        if (seg.type === "pain")
+          return (
+            <span key={i} className="bg-red-500/25 text-red-300 rounded px-0.5">
+              {seg.text}
+            </span>
+          );
+        return (
+          <span key={i} className="bg-emerald-500/25 text-emerald-300 rounded px-0.5">
+            {seg.text}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 type ScriptForDisplay = {
   id: string;
@@ -29,6 +135,8 @@ export default function ResultsFlow() {
   const [customizationModalOpen, setCustomizationModalOpen] = useState(false);
   const [customizationScript, setCustomizationScript] = useState<ScriptForDisplay | null>(null);
   const [customizationScripts, setCustomizationScripts] = useState<ScriptForDisplay[] | null>(null);
+  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
+  const [regenerateAngleByIndex, setRegenerateAngleByIndex] = useState<Record<number, string>>({});
 
   useEffect(() => {
     try {
@@ -48,7 +156,7 @@ export default function ResultsFlow() {
   }, []);
 
   const copyScript = (script: ScriptForDisplay) => {
-    const full = `${script.hook}\n\n${script.body}\n\n${script.cta}`;
+    const full = `${stripScriptTags(script.hook)}\n\n${stripScriptTags(script.body)}\n\n${stripScriptTags(script.cta)}`;
     navigator.clipboard.writeText(full).then(
       () => toast({ title: "Copied", description: `"${script.title}" copied to clipboard` }),
       () => toast({ title: "Copy failed", variant: "destructive" })
@@ -60,7 +168,7 @@ export default function ResultsFlow() {
     const text = scripts
       .map(
         (s) =>
-          `=== ${s.title} (${s.length}s) ===\n\nHook:\n${s.hook}\n\nBody:\n${s.body}\n\nCTA:\n${s.cta}\n\n`
+          `=== ${s.title} (${s.length}s) ===\n\nHook:\n${stripScriptTags(s.hook)}\n\nBody:\n${stripScriptTags(s.body)}\n\nCTA:\n${stripScriptTags(s.cta)}\n\n`
       )
       .join("\n---\n\n");
     const blob = new Blob([text], { type: "text/plain" });
@@ -71,6 +179,41 @@ export default function ResultsFlow() {
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: "Downloaded", description: "All scripts saved as video-scripts.txt" });
+  };
+
+  const handleRegenerateScript = async (index: number) => {
+    if (!productId) {
+      toast({ title: "Product context missing", variant: "destructive", description: "Go back and select scripts again." });
+      return;
+    }
+    const angle = regenerateAngleByIndex[index] ?? SCRIPT_ANGLES[0];
+    setRegeneratingIndex(index);
+    try {
+      const res = await fetch("/api/digital-products/regenerate-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId, angle }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Regeneration failed");
+      }
+      const newScript = data.script as ScriptForDisplay;
+      if (newScript) {
+        const next = scripts.map((s, i) => (i === index ? { ...newScript, id: s.id } : s));
+        setScripts(next);
+        sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify(next));
+        toast({ title: "Script updated", description: `New "${angle}" variation replaced this script.` });
+      }
+    } catch (e) {
+      toast({
+        title: "Regenerate failed",
+        description: e instanceof Error ? e.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setRegeneratingIndex(null);
+    }
   };
 
   const createVideoGuide = async (script: ScriptForDisplay, settings?: VideoCustomizationSettings, platforms?: string[]) => {
@@ -149,7 +292,9 @@ export default function ResultsFlow() {
         <div className="w-16 h-16 rounded-full bg-orange-500/20 flex items-center justify-center mb-6">
           <FileText className="w-8 h-8 text-orange-500" />
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Your scripts are ready</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
+          {scripts.length === 4 ? "4 Scripts Ready - Post 1 per day for maximum reach" : `${scripts.length} Script${scripts.length === 1 ? "" : "s"} Ready`}
+        </h1>
         <p className="text-[#A0A0A0] mb-6">
           Get a personalised Video Creation Guide for each script. Each guide includes AI image prompts, editing steps, and export settings.
         </p>
@@ -190,29 +335,59 @@ export default function ResultsFlow() {
         </div>
 
         <div className="space-y-6 mb-8">
-          {scripts.map((script) => (
+          {scripts.map((script, index) => (
             <Card key={script.id} className="border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div>
+                    <span className="inline-block text-xs font-medium text-orange-500 uppercase tracking-wide mb-1">Angle</span>
                     <p className="font-medium text-white">{script.title}</p>
                     <p className="text-xs text-[#A0A0A0]">{script.length}s • Hook + Body + CTA</p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-[#2A2A2A] text-[#A0A0A0] shrink-0"
-                    onClick={() => copyScript(script)}
-                    disabled={guideLoading}
-                  >
-                    <Copy className="w-3.5 h-3.5 mr-1.5" />
-                    Copy
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <Select
+                      value={regenerateAngleByIndex[index] ?? ((SCRIPT_ANGLES as readonly string[]).includes(script.title) ? script.title : SCRIPT_ANGLES[0])}
+                      onValueChange={(v) => setRegenerateAngleByIndex((prev) => ({ ...prev, [index]: v }))}
+                    >
+                      <SelectTrigger className="w-[180px] h-8 border-[#2A2A2A] text-[#A0A0A0] bg-[#0F0F0F] text-xs">
+                        <SelectValue placeholder="Angle" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#1A1A1A] border-[#2A2A2A]">
+                        {SCRIPT_ANGLES.map((a) => (
+                          <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-[#2A2A2A] text-[#A0A0A0]"
+                      onClick={() => handleRegenerateScript(index)}
+                      disabled={guideLoading || !productId || regeneratingIndex !== null}
+                    >
+                      {regeneratingIndex === index ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                      ) : (
+                        <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                      )}
+                      Regenerate
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-[#2A2A2A] text-[#A0A0A0]"
+                      onClick={() => copyScript(script)}
+                      disabled={guideLoading}
+                    >
+                      <Copy className="w-3.5 h-3.5 mr-1.5" />
+                      Copy
+                    </Button>
+                  </div>
                 </div>
                 <div className="text-sm text-[#B0B0B0] space-y-2 font-mono bg-[#0F0F0F] rounded-lg p-3 overflow-x-auto mb-4">
-                  <p><span className="text-orange-500">Hook:</span> {script.hook}</p>
-                  <p><span className="text-orange-500">Body:</span> {script.body}</p>
-                  <p><span className="text-orange-500">CTA:</span> {script.cta}</p>
+                  <p><span className="text-orange-500">Hook:</span> <ScriptHighlightedText text={script.hook} /></p>
+                  <p><span className="text-orange-500">Body:</span> <ScriptHighlightedText text={script.body} /></p>
+                  <p><span className="text-orange-500">CTA:</span> <ScriptHighlightedText text={script.cta} isCta /></p>
                 </div>
 
                 <Button

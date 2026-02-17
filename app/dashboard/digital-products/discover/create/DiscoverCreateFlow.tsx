@@ -1541,7 +1541,7 @@ export default function DiscoverCreateFlow() {
               <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]">Save Changes</Button>
             </div>
             <Button className="bg-orange-500 hover:bg-orange-600" size="lg" onClick={handleGenerateVideos}>
-              Generate Videos →
+              Create Video Guide →
             </Button>
           </div>
         </div>

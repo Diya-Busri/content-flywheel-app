@@ -536,6 +536,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [marketingGenerating, setMarketingGenerating] = useState(false);
   const [marketingRegenerating, setMarketingRegenerating] = useState(false);
   const [thumbnailTemplate, setThumbnailTemplate] = useState<ThumbnailTemplateId>("modern-gradient");
+  const [thumbnailOrientation, setThumbnailOrientation] = useState<"horizontal" | "vertical">("horizontal");
   const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
   const thumbnailCaptureRef = useRef<HTMLDivElement | null>(null);
   const [includeCover, setIncludeCover] = useState(true);
@@ -1924,7 +1925,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     } catch {
       // ignore
     }
-    router.push(`/dashboard/digital-products/scripts?productId=${encodeURIComponent(productId)}`);
+    router.push(`/dashboard/digital-products/scripts?productId=${encodeURIComponent(productId)}&intent=video-guide`);
   }, [productId, product?.title, product?.niche, product?.marketingAssets, router]);
 
   const marketingAssets = (product?.marketingAssets ?? {}) as {
@@ -1940,27 +1941,43 @@ export default function ProductEditor({ productId }: { productId: string }) {
     if (!productId) return;
     setThumbnailGenerating(true);
     try {
-      const res = await fetch(`/api/products/${productId}/generate-thumbnail`, {
+      const title = product?.title ?? "";
+      const subtitle = product?.niche ?? (marketingAssets as { productDescription?: string })?.productDescription?.slice(0, 120) ?? "";
+      const productType = product?.format ?? "Digital Product";
+      const res = await fetch("/api/generate-thumbnail", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ style: thumbnailTemplate }),
+        body: JSON.stringify({
+          title,
+          subtitle,
+          style: thumbnailTemplate,
+          productType,
+          orientation: thumbnailOrientation,
+        }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof data?.error === "string" ? data.error : "Thumbnail generation failed");
-      setProduct((p) => (p ? { ...p, marketingAssets: { ...p.marketingAssets, thumbnailUrl: data.url, thumbnailStyle: data.style } } : null));
-      saveToServer({ marketingAssets: { ...marketingAssets, thumbnailUrl: data.url, thumbnailStyle: data.style } });
+      if (!res.ok) {
+        const msg = typeof data?.error === "string" ? data.error : "Thumbnail generation failed. Please try again.";
+        throw new Error(msg);
+      }
+      const url = data?.url;
+      if (!url || typeof url !== "string") {
+        throw new Error("No image URL returned. Please try again.");
+      }
+      const orientation = data.orientation === "vertical" ? "vertical" : "horizontal";
+      setProduct((p) => (p ? { ...p, marketingAssets: { ...p.marketingAssets, thumbnailUrl: url, thumbnailStyle: data.style ?? thumbnailTemplate, thumbnailOrientation: orientation } } : null));
+      saveToServer({ marketingAssets: { ...marketingAssets, thumbnailUrl: url, thumbnailStyle: data.style ?? thumbnailTemplate, thumbnailOrientation: orientation } });
       toast({
         title: "Thumbnail generated",
-        description: data.cached === false
-          ? "Download it soon—image wasn’t cached and may expire in about an hour. Add Supabase bucket \"product-thumbnails\" for permanent caching."
-          : "Download or regenerate for a new design.",
+        description: "Download it soon—the image link may expire in about an hour.",
       });
     } catch (e) {
-      toast({ title: "Thumbnail failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+      const message = e instanceof Error ? e.message : "Thumbnail generation failed. Please try again.";
+      toast({ title: "Thumbnail failed", description: message, variant: "destructive" });
     } finally {
       setThumbnailGenerating(false);
     }
-  }, [productId, thumbnailTemplate, marketingAssets, saveToServer, toast]);
+  }, [productId, product, thumbnailTemplate, thumbnailOrientation, marketingAssets, saveToServer, toast]);
 
   const handleGenerateMarketingAssets = useCallback(async () => {
     if (!productId) return;
@@ -2018,10 +2035,36 @@ export default function ProductEditor({ productId }: { productId: string }) {
   );
 
   const hasDalleThumbnail = !!marketingAssets.thumbnailUrl;
-  const thumbCaptureWidth = hasDalleThumbnail ? 1792 : 1600;
-  const thumbCaptureHeight = hasDalleThumbnail ? 1024 : 1200;
+  const effectiveOrientation = (marketingAssets as { thumbnailOrientation?: "horizontal" | "vertical" }).thumbnailOrientation ?? thumbnailOrientation;
+  const thumbCaptureWidth = effectiveOrientation === "vertical" ? 1024 : hasDalleThumbnail ? 1792 : 1600;
+  const thumbCaptureHeight = effectiveOrientation === "vertical" ? 1792 : hasDalleThumbnail ? 1024 : 1200;
 
   const handleDownloadThumbnail = useCallback(async () => {
+    const thumbUrl = marketingAssets.thumbnailUrl;
+    const filename = `${(product?.title ?? "product").replace(/\s+/g, "-")}-thumbnail.png`;
+
+    if (thumbUrl && (thumbUrl.startsWith("http://") || thumbUrl.startsWith("https://"))) {
+      try {
+        const res = await fetch(thumbUrl, { mode: "cors" });
+        if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast({ title: "Thumbnail downloaded", description: "Image saved." });
+      } catch (e) {
+        toast({
+          title: "Download failed",
+          description: e instanceof Error ? e.message : "Could not download image. The link may have expired.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
     const el = thumbnailCaptureRef.current;
     if (!el) {
       toast({ title: "Download failed", description: "Thumbnail not ready.", variant: "destructive" });
@@ -2044,7 +2087,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `${(product?.title ?? "product").replace(/\s+/g, "-")}-thumbnail.png`;
+          a.download = filename;
           a.click();
           URL.revokeObjectURL(url);
           toast({ title: "Thumbnail downloaded", description: `${thumbCaptureWidth}×${thumbCaptureHeight} PNG saved.` });
@@ -2055,7 +2098,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     } catch (e) {
       toast({ title: "Download failed", description: e instanceof Error ? e.message : "Could not generate thumbnail", variant: "destructive" });
     }
-  }, [product?.title, thumbCaptureWidth, thumbCaptureHeight, toast]);
+  }, [product?.title, marketingAssets.thumbnailUrl, thumbCaptureWidth, thumbCaptureHeight, toast]);
 
   if (loading) {
     return (
@@ -2197,11 +2240,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
       {showCreatedBanner && (
         <div className={`flex items-center justify-between gap-4 px-4 py-3 border-b ${isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-50 border-orange-200"}`}>
           <p className={`text-sm font-medium ${isDark ? "text-orange-200" : "text-orange-900"}`}>
-            🎬 Your product is ready! Now create marketing videos to sell it
+            🎬 Your product is ready! Now get a Video Creation Guide to promote it
           </p>
           <div className="flex items-center gap-2 shrink-0">
             <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5" onClick={handleGenerateVideos}>
-              <Video className="w-3.5 h-3.5" /> Create Marketing Videos →
+              <Video className="w-3.5 h-3.5" /> Create Video Guide →
             </Button>
             <Button size="sm" variant="ghost" className={isDark ? "text-orange-200 hover:bg-orange-500/20" : "text-orange-800 hover:bg-orange-100"} onClick={() => setShowCreatedBanner(false)} aria-label="Dismiss">
               <X className="w-4 h-4" />
@@ -3604,16 +3647,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 </div>
               </TabsContent>
               <TabsContent value="videos" className="mt-0 p-4 space-y-4">
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">Marketing Videos</h3>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Video Creation Guide</h3>
                 <p className="text-xs text-gray-600 mb-3">
-                  Create TikTok-style videos to promote this product. Scripts are pre-filled from your product title and sales copy.
+                  Get a step-by-step guide to create TikTok-style videos for this product. Scripts are pre-filled from your product title and sales copy.
                 </p>
                 <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 gap-2" onClick={handleGenerateVideos}>
-                  <Video className="w-4 h-4" /> Generate TikTok Videos
+                  <Video className="w-4 h-4" /> Create Video Guide
                 </Button>
                 <div className="pt-2 border-t border-gray-200">
-                  <p className="text-xs font-medium text-gray-700 mb-2">Videos for this product</p>
-                  <p className="text-xs text-gray-500">Videos you generate from this product will appear here. Use the button above to create your first video.</p>
+                  <p className="text-xs font-medium text-gray-700 mb-2">Video guide for this product</p>
+                  <p className="text-xs text-gray-500">Create a Video Creation Guide from the button above. The guide includes AI prompts, editing tips, and scene breakdowns.</p>
                 </div>
               </TabsContent>
               <TabsContent value="export" className="mt-0 p-4 space-y-3">
@@ -3640,7 +3683,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </Label>
                   </div>
                   <Button size="sm" variant="outline" className="w-full border-gray-200 text-gray-500 gap-1" onClick={handleGenerateVideos}>
-                    Generate Marketing Videos →
+                    Create Video Guide →
                   </Button>
                 </div>
               </TabsContent>
@@ -3659,7 +3702,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <Label className="text-xs font-medium text-gray-700">
-                          Product thumbnail ({hasDalleThumbnail ? "1792×1024" : "AI-generated"})
+                          Product thumbnail ({effectiveOrientation === "vertical" ? "1024×1792" : "1792×1024"})
                         </Label>
                         <div className="flex gap-1.5">
                           <Button
@@ -3684,6 +3727,32 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           ? "AI-generated image with your title and badges. Choose a style and click Regenerate for a new design."
                           : "Choose a style, then generate an AI thumbnail. No product background image is used—thumbnail is marketplace-only."}
                       </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium text-gray-700">Orientation</span>
+                        <div className="flex rounded-md border border-gray-200 p-0.5 bg-gray-50">
+                          <Button
+                            type="button"
+                            variant={thumbnailOrientation === "horizontal" ? "default" : "ghost"}
+                            size="sm"
+                            className={`h-8 px-3 text-xs rounded ${thumbnailOrientation === "horizontal" ? "bg-orange-500 hover:bg-orange-600 text-white" : "hover:bg-gray-100"}`}
+                            onClick={() => setThumbnailOrientation("horizontal")}
+                          >
+                            Horizontal
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={thumbnailOrientation === "vertical" ? "default" : "ghost"}
+                            size="sm"
+                            className={`h-8 px-3 text-xs rounded ${thumbnailOrientation === "vertical" ? "bg-orange-500 hover:bg-orange-600 text-white" : "hover:bg-gray-100"}`}
+                            onClick={() => setThumbnailOrientation("vertical")}
+                          >
+                            Vertical
+                          </Button>
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {thumbnailOrientation === "horizontal" ? "1792×1024 — marketplace" : "1024×1792 — TikTok, IG, Pinterest"}
+                        </span>
+                      </div>
                       <div className="flex flex-wrap gap-1.5">
                         {THUMBNAIL_TEMPLATES.map((t) => (
                           <Button
@@ -3706,6 +3775,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           accentColor={graphicsAccentColor}
                           template={thumbnailTemplate}
                           baseImageUrl={marketingAssets.thumbnailUrl ?? undefined}
+                          orientation={effectiveOrientation}
                           preview
                         />
                       </div>
@@ -3717,6 +3787,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           accentColor={graphicsAccentColor}
                           template={thumbnailTemplate}
                           baseImageUrl={marketingAssets.thumbnailUrl ?? undefined}
+                          orientation={effectiveOrientation}
                           preview={false}
                           innerRef={thumbnailCaptureRef}
                         />

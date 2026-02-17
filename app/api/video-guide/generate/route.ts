@@ -73,7 +73,7 @@ STORYTELLING FRAMEWORKS (choose the best fit for the product/script):
    - Scene 5: "I have X more strategies..." + CTA
 
 For EACH scene, specify:
-- VISUAL: AI prompt, camera angle, lighting mood, color palette, media type (still/AI video/screen recording)
+- VISUAL / aiPrompt: MANDATORY LENGTH — each aiPrompt MUST be 50-80 words minimum (count the words). Write a single, dense paragraph paste-ready for DALL-E, Midjourney, or Grok. You MUST include every one of: (1) subject appearance and age range, (2) clothing and expression and pose/gesture, (3) environment with specific objects/furniture/props/background, (4) lighting type and direction, (5) camera angle and framing, (6) art style (e.g. photorealistic, cinematic), (7) color palette, (8) mood/atmosphere, (9) "vertical 9:16", (10) quality keywords like "8k, ultra detailed, sharp focus". Short prompts like "A woman looking stressed at a desk, vertical 9:16" are FORBIDDEN — they must be 50-80+ words. Also set cameraAngle, lightingMood, colorPalette, mediaType.
 - TEXT OVERLAY: Exact text, font style, size, position, color, animation, timing
 - TRANSITION: Type, effects, pacing
 - AUDIO: Music volume, beat drops, SFX, mood
@@ -104,6 +104,24 @@ Script:
 
 Generate a TikTok creative brief. Choose the best storytelling framework (Pain Point, Story, or Value Bomb) for this product.
 
+CRITICAL — AI IMAGE PROMPTS (visualDirection.aiPrompt) — WORD COUNT ENFORCED:
+Each scene's aiPrompt MUST be 50-80 words minimum. Count the words. Shorter prompts are invalid.
+Write a single, dense paragraph that can be pasted directly into Midjourney, DALL-E, ChatGPT image, or Grok.
+Every aiPrompt MUST explicitly include ALL of the following (use this checklist):
+1. Subject: appearance, age range, clothing, expression, pose/gesture
+2. Environment: specific objects, furniture, props, background elements
+3. Lighting: type and direction (e.g. golden hour, soft studio lighting, warm lamplight, neon)
+4. Camera: angle and framing (close-up, wide shot, over-the-shoulder, bird's eye, medium shot)
+5. Art style: e.g. photorealistic, cinematic, editorial, lifestyle photography
+6. Color palette: e.g. warm tones, cool blues, muted earth tones, vibrant accents
+7. Mood/atmosphere: e.g. energetic, calm, dramatic, stressed, inspirational
+8. Aspect ratio: always include "vertical 9:16"
+9. Quality keywords: end with "8k, ultra detailed, sharp focus" or similar
+
+Example of a VALID aiPrompt (50+ words): "Photorealistic close-up of a young woman in her mid-20s with natural makeup, wearing a cozy cream sweater, sitting at a messy wooden desk covered with crumpled bills and a laptop showing a bank account, soft warm lamplight casting shadows, stressed expression with her hand on her forehead, shallow depth of field, muted warm tones with pops of red from overdue notices, cinematic mood, vertical 9:16, ultra detailed, 8k"
+
+FORBIDDEN — do NOT output short prompts like "A young woman looking stressed while staring at bills on a cluttered desk, vertical 9:16, financial struggle theme". That is under 25 words and will be rejected. Every aiPrompt must be 50-80+ words with full subject, environment, lighting, camera, style, color, mood, aspect ratio, and quality keywords.
+
 Return ONLY this JSON object (no markdown, no code fences):
 {
   "storytellingFramework": "Pain Point Angle" | "Story Angle" | "Value Bomb Angle",
@@ -113,7 +131,7 @@ Return ONLY this JSON object (no markdown, no code fences):
       "scene": "Scene 1 - [Name]",
       "timing": "0-2s",
       "visualDirection": {
-        "aiPrompt": "Detailed DALL-E/Midjourney prompt for this scene, vertical 9:16, specific to product niche",
+        "aiPrompt": "50-80 words minimum. Single dense paragraph with: subject (appearance, age, clothing, expression, pose), environment (specific objects/furniture/background), lighting, camera angle/framing, art style, color palette, mood, vertical 9:16, quality keywords (8k, ultra detailed, sharp focus). Paste-ready for DALL-E/Midjourney/Grok.",
         "cameraAngle": "close-up" | "wide" | "overhead" | "medium",
         "lightingMood": "dark/moody" | "bright/clean" | "soft/warm" | "high contrast",
         "colorPalette": "Describe colors matching product branding",

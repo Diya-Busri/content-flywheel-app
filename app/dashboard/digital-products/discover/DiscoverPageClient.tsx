@@ -1,16 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { DiscoverLoadFailed } from "./DiscoverLoadingWithTimeout";
 
 const DiscoverFlow = dynamic(
   () =>
     import("./DiscoverFlow")
       .then((m) => ({ default: m?.default }))
-      .catch(() =>
-        import("./DiscoverLoadingWithTimeout").then((m) => ({
-          default: m.DiscoverLoadFailed,
-        }))
-      ),
+      .catch(() => ({ default: DiscoverLoadFailed })),
   {
     ssr: false,
     loading: () => (

@@ -207,6 +207,7 @@ export default function ScriptsFlow() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const productIdFromUrl = searchParams.get("productId");
+  const intentVideoGuide = searchParams.get("intent") === "video-guide";
   const [loading, setLoading] = useState(true);
   const [scripts, setScripts] = useState<ScriptData[]>([]);
   const [editModal, setEditModal] = useState<{ scriptId: string; section: SectionType } | null>(null);
@@ -229,7 +230,11 @@ export default function ScriptsFlow() {
     } catch {
       // ignore
     }
-    router.push("/dashboard/digital-products/videos");
+    if (intentVideoGuide && productIdFromUrl) {
+      router.push(`/dashboard/digital-products/results?productId=${encodeURIComponent(productIdFromUrl)}&intent=video-guide`);
+    } else {
+      router.push("/dashboard/digital-products/videos");
+    }
   };
 
   useEffect(() => {
@@ -306,6 +311,8 @@ export default function ScriptsFlow() {
           };
           if (cancelled) return;
           if (genRes.ok && Array.isArray(genData.scripts) && genData.scripts.length > 0) {
+            const count = genData.scripts.length;
+            const selectAllForVideoGuide = count === 4 || intentVideoGuide;
             const defaults = {
               isStarred: false,
               platforms: { tiktok: true, instagram: true, youtube: false } as const,
@@ -313,7 +320,7 @@ export default function ScriptsFlow() {
               engagementPotential: "High" as const,
               conversionFocus: true,
               compliance: { tiktok: "Approved", instagram: "Approved", youtube: "Approved" } as const,
-              isSelected: false,
+              isSelected: selectAllForVideoGuide,
             };
             setScripts(
               genData.scripts.map((s, i) => ({
@@ -324,7 +331,7 @@ export default function ScriptsFlow() {
                 hook: s.hook,
                 body: s.body,
                 cta: s.cta,
-                isSelected: i === 1,
+                isSelected: selectAllForVideoGuide || i === 1,
                 isStarred: i === 1,
               }))
             );
@@ -592,7 +599,7 @@ export default function ScriptsFlow() {
                 title={selectedCount > 0 ? undefined : "Select at least one script"}
                 onClick={goToVideos}
               >
-                Generate Videos →
+                Create Video Guide →
               </Button>
             </div>
           </div>

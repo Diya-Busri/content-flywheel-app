@@ -1,6 +1,6 @@
 /**
  * Content Flywheel Pro — Pricing (paywall)
- * Monthly $69.99, Yearly $671.90 (save 20%). Subscribe via Stripe Checkout.
+ * Monthly £69.99/month, Yearly £671.90/year (£55.99/month billed annually). Subscribe via Stripe Checkout.
  */
 "use client";
 
@@ -25,8 +25,8 @@ const FEATURES = [
 const PLANS = [
   {
     name: "Monthly",
-    price: "$69.99",
-    period: "per month",
+    price: "£69.99",
+    period: "/month",
     description: "Flexible month-to-month access.",
     cta: "Subscribe",
     plan: "monthly" as const,
@@ -35,9 +35,9 @@ const PLANS = [
   },
   {
     name: "Yearly",
-    price: "$671.90",
-    period: "per year",
-    description: "Save 20% when you commit for a year.",
+    price: "£671.90",
+    period: "/year",
+    description: "£55.99/month billed annually. Save 20% when you commit for a year.",
     cta: "Subscribe",
     plan: "yearly" as const,
     highlighted: true,

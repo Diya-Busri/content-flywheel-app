@@ -4,9 +4,10 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import {
-  generateThumbnail,
+  generateHtmlThumbnail,
   type ThumbnailStyleId,
-} from "@/lib/thumbnail-dalle";
+} from "@/lib/thumbnail-html";
+import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,6 +18,8 @@ const VALID_STYLES: ThumbnailStyleId[] = [
   "bold-dark",
   "lifestyle",
 ];
+
+const BUCKET = "product-images";
 
 export async function POST(
   request: NextRequest,
@@ -63,8 +66,7 @@ export async function POST(
       );
     }
 
-    const { url, cached } = await generateThumbnail(
-      productId,
+    const { buffer } = await generateHtmlThumbnail(
       {
         title: product.title,
         niche: product.niche,
@@ -72,6 +74,44 @@ export async function POST(
       },
       style
     );
+
+    let url: string;
+    let cached = false;
+    const supabase = getSupabaseAdmin();
+    const path = `thumbnails/${productId}/thumbnail.png`;
+
+    const bufferBytes = Buffer.from(buffer);
+    if (supabase) {
+      let uploadResult = await supabase.storage
+        .from(BUCKET)
+        .upload(path, bufferBytes, {
+          contentType: "image/png",
+          upsert: true,
+        });
+
+      if (uploadResult.error) {
+        const errMsg = String(uploadResult.error.message || uploadResult.error).toLowerCase();
+        const isBucketMissing = errMsg.includes("bucket") || errMsg.includes("not found") || errMsg.includes("does not exist");
+        if (isBucketMissing) {
+          const { error: createErr } = await supabase.storage.createBucket(BUCKET, { public: true });
+          if (!createErr) {
+            uploadResult = await supabase.storage
+              .from(BUCKET)
+              .upload(path, bufferBytes, { contentType: "image/png", upsert: true });
+          }
+        }
+      }
+
+      if (!uploadResult.error) {
+        const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+        url = urlData.publicUrl;
+        cached = true;
+      } else {
+        url = `data:image/png;base64,${bufferBytes.toString("base64")}`;
+      }
+    } else {
+      url = `data:image/png;base64,${bufferBytes.toString("base64")}`;
+    }
 
     const currentAssets = (product.marketingAssets ?? {}) as Record<
       string,

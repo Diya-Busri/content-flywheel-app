@@ -1085,7 +1085,7 @@ export default function DiscoverFlow() {
         setGenerateProgress(null);
         setGenerateStepIndex(GENERATE_STEPS.length - 1);
         if (alsoGenerateVideos) {
-          router.push(`/dashboard/digital-products/scripts?productId=${encodeURIComponent(result.productId)}`);
+          router.push(`/dashboard/digital-products/scripts?productId=${encodeURIComponent(result.productId)}&intent=video-guide`);
         } else {
           router.push(`/dashboard/digital-products/${result.productId}/edit?created=1`);
         }
@@ -2616,9 +2616,9 @@ export default function DiscoverFlow() {
             <Dialog open={showVideoPromptModal} onOpenChange={setShowVideoPromptModal}>
               <DialogContent className="bg-[#1A1A1A] border-[#2A2A2A] text-white max-w-md">
                 <DialogHeader>
-                  <DialogTitle className="text-lg">Would you also like to generate marketing videos?</DialogTitle>
+                  <DialogTitle className="text-lg">Would you also like a Video Creation Guide?</DialogTitle>
                   <DialogDescription className="text-[#A0A0A0]">
-                    We can take you straight to the video script generator after your product is ready, so you can create TikTok-style videos to promote it.
+                    We can generate a step-by-step guide showing you exactly how to create TikTok-style promotional videos for your product, including AI prompts, editing tips, and scene breakdowns.
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter className="flex gap-2 sm:gap-0 flex-col-reverse sm:flex-row">
@@ -2642,7 +2642,7 @@ export default function DiscoverFlow() {
                     }}
                   >
                     <Video className="w-4 h-4" />
-                    Yes, create videos too
+                    Yes, create video guide
                   </Button>
                 </DialogFooter>
               </DialogContent>

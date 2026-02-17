@@ -85,7 +85,7 @@ export function VideoCustomizationModal({ open, onClose, script, scripts, onGene
           <p className="text-xs text-[#A0A0A0] mt-0.5">
             {createGuide
               ? "Multi-platform video marketing guide with AI prompts, posting schedules, and platform strategies."
-              : "TikTok-style videos with text overlays and product image (Shotstack)."}
+              : "Step-by-step Video Creation Guide with AI prompts, editing tips, and scene breakdowns."}
           </p>
         </DialogHeader>
 
@@ -162,7 +162,7 @@ export function VideoCustomizationModal({ open, onClose, script, scripts, onGene
             {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : createGuide ? <FileText className="w-4 h-4" /> : <Video className="w-4 h-4" />}
             {createGuide
               ? "Create Video Guide"
-              : `Generate Video${scriptsToGenerate.length > 1 ? "s" : ""}`}
+              : "Create Video Guide"}
           </Button>
         </div>
       </DialogContent>

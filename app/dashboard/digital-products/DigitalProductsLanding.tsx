@@ -58,7 +58,7 @@ export default function DigitalProductsLanding() {
                 <ul className="text-sm text-[#E0E0E0] space-y-1">
                   <li>→ Enter your product details</li>
                   <li>→ Customize AI-generated scripts</li>
-                  <li>→ Generate videos in minutes</li>
+                  <li>→ Get a Video Creation Guide in minutes</li>
                 </ul>
               </div>
               <p className="text-xs text-[#A0A0A0]">Time: ~10 minutes</p>

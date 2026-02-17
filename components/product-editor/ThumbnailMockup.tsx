@@ -4,9 +4,9 @@ import React from "react";
 
 const THUMB_WIDTH = 1600;
 const THUMB_HEIGHT = 1200;
-/** DALL-E 3 thumbnail size (landscape). */
-const DALLE_THUMB_WIDTH = 1792;
-const DALLE_THUMB_HEIGHT = 1024;
+/** DALL-E 3 thumbnail sizes. */
+const DALLE_HORIZONTAL = { width: 1792, height: 1024 };
+const DALLE_VERTICAL = { width: 1024, height: 1792 };
 
 export type ThumbnailTemplateId = "modern-gradient" | "clean-minimal" | "bold-dark" | "lifestyle";
 
@@ -25,6 +25,8 @@ type ThumbnailMockupProps = {
   template: ThumbnailTemplateId;
   /** When set, use this as the full background (DALL-E image) and render only title/badges overlay. */
   baseImageUrl?: string | null;
+  /** Orientation for aspect ratio: horizontal (1792x1024) or vertical (1024x1792). */
+  orientation?: "horizontal" | "vertical";
   className?: string;
   style?: React.CSSProperties;
   /** When true, render in a small preview container. When false, render at full size for capture. */
@@ -39,11 +41,13 @@ export function ThumbnailMockup({
   accentColor,
   template,
   baseImageUrl = null,
+  orientation = "horizontal",
   className = "",
   style = {},
   preview = true,
   innerRef,
 }: ThumbnailMockupProps) {
+  const dalleSize = orientation === "vertical" ? DALLE_VERTICAL : DALLE_HORIZONTAL;
   const sellingPoints = [
     sectionCount > 0 ? `✓ ${sectionCount} ${sectionCount === 1 ? "Chapter" : "Chapters"}` : "✓ Full Guide",
     "✓ Actionable Steps",
@@ -52,8 +56,8 @@ export function ThumbnailMockup({
   ].slice(0, 3);
 
   const isDalleMode = !!baseImageUrl;
-  const width = isDalleMode ? DALLE_THUMB_WIDTH : THUMB_WIDTH;
-  const height = isDalleMode ? DALLE_THUMB_HEIGHT : THUMB_HEIGHT;
+  const width = isDalleMode ? dalleSize.width : (orientation === "vertical" ? DALLE_VERTICAL.width : THUMB_WIDTH);
+  const height = isDalleMode ? dalleSize.height : (orientation === "vertical" ? DALLE_VERTICAL.height : THUMB_HEIGHT);
 
   const containerStyle: React.CSSProperties = {
     width,
@@ -181,9 +185,9 @@ export function ThumbnailMockup({
       </div>
     );
     if (preview) {
-      const scale = 320 / DALLE_THUMB_WIDTH;
+      const scale = 320 / width;
       return (
-        <div style={{ width: 320, height: 320 * (DALLE_THUMB_HEIGHT / DALLE_THUMB_WIDTH), overflow: "hidden", position: "relative", borderRadius: 8 }}>
+        <div style={{ width: 320, height: 320 * (height / width), overflow: "hidden", position: "relative", borderRadius: 8 }}>
           <div style={{ position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left" }}>
             {dalleInner}
           </div>
