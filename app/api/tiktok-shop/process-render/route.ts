@@ -15,7 +15,7 @@ const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1557683316-973673baf926?w=1080&h=1920&fit=crop";
 
 /** Shotstack must fetch images from a public URL. localhost, blob:, data: and private URLs will fail. */
-function usePublicImageUrl(url: string): string {
+function getPublicImageUrl(url: string): string {
   if (!url || typeof url !== "string") return FALLBACK_IMAGE;
   const u = url.trim().toLowerCase();
   if (u.startsWith("blob:") || u.startsWith("data:")) return FALLBACK_IMAGE;
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
 
     const product = await extractProductDetails(link, resolvedImageUrl, productDescription.trim());
     const rawImageUrl = product.imageUrl?.trim() || resolvedImageUrl || FALLBACK_IMAGE;
-    const productImageUrl = usePublicImageUrl(rawImageUrl);
+    const productImageUrl = getPublicImageUrl(rawImageUrl);
 
     const scriptResult =
       providedScript?.fullScript &&
