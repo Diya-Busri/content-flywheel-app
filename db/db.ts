@@ -8,6 +8,7 @@ import { faceProfilesTable } from "./schema/face-profiles-schema";
 import { videoJobsTable } from "./schema/video-jobs-schema";
 import { ugcCampaignsTable, ugcCampaignProductsTable } from "./schema/ugc-campaigns-schema";
 import { nicheCacheTable } from "./schema/niche-cache-schema";
+import { userSettingsTable } from "./schema/user-settings-schema";
 import {
   goalsTable,
   dailyTasksTable,
@@ -33,6 +34,7 @@ const schema = {
   ugcCampaigns: ugcCampaignsTable,
   ugcCampaignProducts: ugcCampaignProductsTable,
   nicheCache: nicheCacheTable,
+  userSettings: userSettingsTable,
 };
 
 // Add connection options with improved timeout and retry settings for Vercel environment

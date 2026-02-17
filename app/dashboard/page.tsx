@@ -1,27 +1,69 @@
 /**
  * Dashboard home page for Content Flywheel
- * Displays quick stats, quick actions, and recent videos
+ * Displays quick stats (synced with profile + DB), quick actions, and recent videos
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
-import { getProfileByUserId } from "@/db/queries/profiles-queries";
+import { db } from "@/db/db";
+import { videosTable, tiktokShopVideosTable } from "@/db/schema/library-schema";
+import { videoJobsTable } from "@/db/schema/video-jobs-schema";
+import { eq, desc, isNull, and, count } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Package, ShoppingBag, CheckSquare, Video, Play } from "lucide-react";
+import { Package, ShoppingBag, CheckSquare, Video, Play, ExternalLink } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Dashboard | Content Flywheel",
   description: "Create AI-powered videos for social media",
 };
 
+type RecentVideoItem = {
+  id: string;
+  title: string;
+  createdAt: Date;
+  href: string;
+  source: "library" | "ugc-lab" | "tiktok-shop";
+};
+
+async function getVideoStats(userId: string) {
+  let libraryCount = 0;
+  let ugcCount = 0;
+  let tiktokCount = 0;
+  const recent: RecentVideoItem[] = [];
+
+  try {
+    const videoWhere = and(eq(videosTable.userId, userId), isNull(videosTable.deletedAt));
+    const [libraryVideos, ugcJobs, tiktokVideos, libCountRow, ugcCountRow, tiktokCountRow] = await Promise.all([
+      db.select({ id: videosTable.id, title: videosTable.title, createdAt: videosTable.createdAt }).from(videosTable).where(videoWhere).orderBy(desc(videosTable.createdAt)).limit(5),
+      db.select({ id: videoJobsTable.id, hookPreview: videoJobsTable.hookPreview, createdAt: videoJobsTable.createdAt }).from(videoJobsTable).where(eq(videoJobsTable.userId, userId)).orderBy(desc(videoJobsTable.createdAt)).limit(5),
+      db.select({ id: tiktokShopVideosTable.id, productLink: tiktokShopVideosTable.productLink, createdAt: tiktokShopVideosTable.createdAt }).from(tiktokShopVideosTable).where(eq(tiktokShopVideosTable.userId, userId)).orderBy(desc(tiktokShopVideosTable.createdAt)).limit(5),
+      db.select({ count: count() }).from(videosTable).where(videoWhere),
+      db.select({ count: count() }).from(videoJobsTable).where(eq(videoJobsTable.userId, userId)),
+      db.select({ count: count() }).from(tiktokShopVideosTable).where(eq(tiktokShopVideosTable.userId, userId)),
+    ]);
+
+    libraryCount = Number(libCountRow[0]?.count ?? 0);
+    ugcCount = Number(ugcCountRow[0]?.count ?? 0);
+    tiktokCount = Number(tiktokCountRow[0]?.count ?? 0);
+
+    const withSource: RecentVideoItem[] = [
+      ...libraryVideos.map((v) => ({ id: v.id, title: v.title || "Untitled video", createdAt: v.createdAt!, href: "/dashboard/library", source: "library" as const })),
+      ...ugcJobs.map((j) => ({ id: j.id, title: (j.hookPreview || "UGC video").slice(0, 60) + (j.hookPreview && j.hookPreview.length > 60 ? "…" : ""), createdAt: j.createdAt!, href: "/dashboard/ugc-lab", source: "ugc-lab" as const })),
+      ...tiktokVideos.map((v) => ({ id: v.id, title: (v.productLink || "TikTok Shop video").slice(0, 60) + (v.productLink && v.productLink.length > 60 ? "…" : ""), createdAt: v.createdAt!, href: "/dashboard/tiktok-shop", source: "tiktok-shop" as const })),
+    ];
+    recent.push(...withSource.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 5));
+  } catch (err) {
+    console.error("[dashboard] getVideoStats:", err);
+  }
+
+  const digitalProductsCount = libraryCount + ugcCount;
+  return { digitalProductsCount, tiktokShopCount: tiktokCount, recent };
+}
+
 export default async function DashboardPage() {
   const { userId } = auth();
-  const profile = userId ? await getProfileByUserId(userId) : null;
-
-  const usedCredits = profile?.usedCredits ?? 0;
-  const usageCredits = profile?.usageCredits ?? 3; // Free tier default
-  const creditsRemaining = Math.max(0, usageCredits - usedCredits);
+  const videoStats = userId ? await getVideoStats(userId) : { digitalProductsCount: 0, tiktokShopCount: 0, recent: [] as RecentVideoItem[] };
 
   return (
     <main className="p-6 md:p-10">
@@ -37,49 +79,34 @@ export default async function DashboardPage() {
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
           Quick Stats
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card className="border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Videos Generated
+                Digital Products
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                {usedCredits}/{usageCredits}
+                {videoStats.digitalProductsCount}
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Free tier
+                Videos & guides created
               </p>
             </CardContent>
           </Card>
           <Card className="border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Total Views
+                TikTok Shop
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                Coming soon
+                {videoStats.tiktokShopCount}
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Track performance across platforms
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Credits Remaining
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-orange-500">
-                {creditsRemaining} free videos left
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Resets monthly
+                Videos & guides created
               </p>
             </CardContent>
           </Card>
@@ -142,31 +169,86 @@ export default async function DashboardPage() {
 
       {/* Recent Videos */}
       <section>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-          Recent Videos
-        </h2>
-        <Card className="border-slate-200 dark:border-slate-800 shadow-sm border-dashed">
-          <CardContent className="p-12 flex flex-col items-center justify-center text-center min-h-[200px]">
-            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
-              <Video className="w-8 h-8 text-slate-400" />
-            </div>
-            <p className="text-slate-600 dark:text-slate-400 mb-2 font-medium">
-              No videos yet. Create your first video to get started!
-            </p>
-            <p className="text-sm text-slate-500 dark:text-slate-500 mb-6">
-              Your generated videos will appear here
-            </p>
-            <Button
-              asChild
-              className="bg-orange-500 hover:bg-orange-600 text-white"
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+            Recent Videos
+          </h2>
+          {videoStats.recent.length > 0 && (
+            <Link
+              href="/dashboard/library"
+              className="text-sm font-medium text-orange-500 hover:text-orange-600 flex items-center gap-1"
             >
-              <Link href="/dashboard/digital-products" className="gap-2">
-                <Play className="w-4 h-4" />
-                Create Video
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+              View all
+              <ExternalLink className="w-3.5 h-3.5" />
+            </Link>
+          )}
+        </div>
+        {videoStats.recent.length > 0 ? (
+          <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+            <CardContent className="p-0">
+              <ul className="divide-y divide-slate-200 dark:divide-slate-800">
+                {videoStats.recent.map((item) => {
+                  const badgeLabel = item.source === "tiktok-shop" ? "TikTok Shop" : "Digital Product";
+                  return (
+                    <li key={`${item.source}-${item.id}`}>
+                      <Link
+                        href={item.href}
+                        className="flex items-center gap-3 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-950/50 flex items-center justify-center shrink-0">
+                          <Video className="w-5 h-5 text-orange-500" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-medium text-slate-900 dark:text-white truncate">
+                              {item.title}
+                            </p>
+                            <span
+                              className={`shrink-0 inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
+                                item.source === "tiktok-shop"
+                                  ? "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300"
+                                  : "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300"
+                              }`}
+                            >
+                              {badgeLabel}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            {item.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                          </p>
+                        </div>
+                        <ExternalLink className="w-4 h-4 text-slate-400 shrink-0" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-slate-200 dark:border-slate-800 shadow-sm border-dashed">
+            <CardContent className="p-12 flex flex-col items-center justify-center text-center min-h-[200px]">
+              <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+                <Video className="w-8 h-8 text-slate-400" />
+              </div>
+              <p className="text-slate-600 dark:text-slate-400 mb-2 font-medium">
+                No videos yet. Create your first video to get started!
+              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-500 mb-6">
+                Your generated videos will appear here
+              </p>
+              <Button
+                asChild
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                <Link href="/dashboard/digital-products" className="gap-2">
+                  <Play className="w-4 h-4" />
+                  Create Video
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </section>
     </main>
   );

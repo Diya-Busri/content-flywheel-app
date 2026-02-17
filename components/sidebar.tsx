@@ -5,29 +5,23 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, Sparkles, CreditCard, Library, FlaskConical } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, FlaskConical } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { SelectProfile } from "@/db/schema/profiles-schema";
-import { CreditUsageDisplay } from "@/components/credit-usage-display";
-import UpgradePlanPopup from "@/components/upgrade-plan-popup";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 
 interface SidebarProps {
   profile: SelectProfile | null;
   userEmail?: string;
-  whopMonthlyPlanId: string;
-  whopYearlyPlanId: string;
 }
 
-export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYearlyPlanId }: SidebarProps) {
+export default function Sidebar({ profile, userEmail }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [showUpgradePopup, setShowUpgradePopup] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -35,59 +29,21 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
   }, []);
 
   const isActive = (path: string) => pathname === path;
-  
-  // Check if user has reached credit limit
-  const hasReachedCreditLimit = useCallback(() => {
-    if (!profile) return false;
-    const usedCredits = profile.usedCredits ?? 0;
-    const usageCredits = profile.usageCredits ?? 0;
-    return usedCredits >= usageCredits;
-  }, [profile]);
 
-  // Plan IDs now come from props, not environment variables
-  
-  const isFreePlan = profile?.membership === "free";
   const navItems = [
     { href: "/dashboard", icon: <Home size={18} />, label: "Home", emoji: "🏠" },
     { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦" },
     { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️" },
-    { href: "/dashboard/ugc-lab", icon: <FlaskConical size={18} />, label: "UGC Lab", emoji: "🔬" },
+    // Hidden from sidebar – re-enable by uncommenting:
+    // { href: "/dashboard/ugc-lab", icon: <FlaskConical size={18} />, label: "UGC Lab", emoji: "🔬" },
     { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅" },
     { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯" },
     { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚" },
     { href: "/dashboard/settings", icon: <Settings size={18} />, label: "Settings", emoji: "⚙️" },
   ];
 
-  // Handle navigation item click
-  const handleNavItemClick = (e: React.MouseEvent, href: string) => {
-    if (hasReachedCreditLimit()) {
-      e.preventDefault(); // Prevent navigation
-      setShowUpgradePopup(true); // Show upgrade popup
-    } else {
-      // Normal navigation handled by Link component
-    }
-  };
-  
-  // Show upgrade popup on initial load if needed
-  useEffect(() => {
-    if (hasReachedCreditLimit()) {
-      setShowUpgradePopup(true);
-    }
-  }, [profile, hasReachedCreditLimit]);
-
   return (
-    <>
-      {mounted && profile && (
-        <UpgradePlanPopup 
-          profile={profile} 
-          monthlyPlanId={whopMonthlyPlanId} 
-          yearlyPlanId={whopYearlyPlanId}
-          isOpen={showUpgradePopup}
-          onOpenChange={setShowUpgradePopup}
-        />
-      )}
-      
-      <div className="sidebar no-print h-screen w-[60px] md:w-[220px] flex-shrink-0 bg-white/80 dark:bg-[#1a1a1a] backdrop-blur-xl border-r border-gray-200 dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20">
+    <div className="sidebar no-print h-screen w-[60px] md:w-[220px] flex-shrink-0 bg-white/80 dark:bg-[#1a1a1a] backdrop-blur-xl border-r border-gray-200 dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20">
         {/* Glassmorphism effects */}
         <motion.div 
           className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-primary/5 pointer-events-none"
@@ -133,12 +89,7 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
         <nav className="flex-1 px-3 relative z-10 overflow-y-auto">
           <div className="space-y-1.5">
             {navItems.map((item) => (
-              <Link 
-                key={item.href} 
-                href={item.href} 
-                className="block"
-                onClick={(e) => handleNavItemClick(e, item.href)}
-              >
+              <Link key={item.href} href={item.href} className="block">
                 <motion.div 
                   className={`flex items-center py-2 px-3 rounded-lg cursor-pointer transition-all ${
                     isActive(item.href) 
@@ -162,83 +113,31 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
                 </motion.div>
               </Link>
             ))}
-            {isFreePlan && (
-              <Link href="/pricing" className="block">
-                <motion.div 
-                  className="flex items-center py-2 px-3 rounded-lg cursor-pointer transition-all text-orange-600 hover:bg-orange-50 hover:text-orange-700 dark:text-orange-400 dark:hover:bg-orange-950/30"
-                  whileHover={{ scale: 1.03, x: 4, transition: { duration: 0.2 } }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Sparkles size={18} className="flex-shrink-0" />
-                  <span className="ml-3 hidden md:block text-sm font-medium">Upgrade</span>
-                </motion.div>
-              </Link>
-            )}
           </div>
         </nav>
 
         {/* Bottom Section - Account and Subscription Management */}
         <div className="mt-auto pt-4 relative z-10">
-          {/* Subscription Management Section */}
+          {/* Billing: link to Settings where user can open Stripe Customer Portal */}
           <div className="px-3 mb-4">
-            {/* Subtle section divider */}
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-white/10 to-transparent mb-4" />
-            
-            {/* Billing Button - Only visible for members with whopMembershipId */}
-            {profile?.whopMembershipId && (
-              <Link 
-                href={`http://whop.com/orders/${profile.whopMembershipId}/manage`}
-                target="_blank"
-                rel="noopener noreferrer"
+            <Link href="/dashboard/settings">
+              <motion.div
+                whileHover={{ scale: 1.03, transition: { duration: 0.2 } }}
+                whileTap={{ scale: 0.97 }}
               >
-                <motion.div
-                  whileHover={{ 
-                    scale: 1.03,
-                    transition: { duration: 0.2 }
-                  }}
-                  whileTap={{ scale: 0.97 }}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full flex items-center justify-center md:justify-start gap-1.5 border-white/60 bg-white/70 hover:bg-white/90 hover:border-white dark:border-white/20 dark:bg-white/10 dark:hover:bg-white/20 dark:text-gray-200 py-1.5 h-auto transition-all shadow-sm hover:shadow-md"
                 >
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="w-full flex items-center justify-center md:justify-start gap-1.5 border-white/60 bg-white/70 hover:bg-white/90 hover:border-white dark:border-white/20 dark:bg-white/10 dark:hover:bg-white/20 dark:text-gray-200 py-1.5 h-auto transition-all shadow-sm hover:shadow-md"
-                  >
-                    <CreditCard size={14} className="text-gray-600 dark:text-gray-400" />
-                    <span className="hidden md:block text-xs">Billing</span>
-                  </Button>
-                </motion.div>
-              </Link>
-            )}
+                  <CreditCard size={14} className="text-gray-600 dark:text-gray-400" />
+                  <span className="hidden md:block text-xs">Billing</span>
+                </Button>
+              </motion.div>
+            </Link>
           </div>
-          
-          {/* Credit Usage Display */}
-          <div className="px-3 mb-4">
-            <div className="hidden md:block">
-              <CreditUsageDisplay />
-            </div>
-            <div className="block md:hidden text-center">
-              <div className="bg-white/80 py-2 px-1 rounded-lg shadow-sm border border-white/80">
-                <div className="text-[10px] font-medium text-gray-600 mb-1">Credits</div>
-                <div className="flex justify-center">
-                  <div className="w-6 h-6 flex items-center justify-center">
-                    <svg 
-                      viewBox="0 0 24 24" 
-                      className="w-3.5 h-3.5 text-primary"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
+
           {/* User Profile Section */}
           <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
           <motion.div 
@@ -270,6 +169,5 @@ export default function Sidebar({ profile, userEmail, whopMonthlyPlanId, whopYea
           </motion.div>
         </div>
       </div>
-    </>
   );
 } 

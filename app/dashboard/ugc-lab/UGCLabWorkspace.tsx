@@ -158,7 +158,7 @@ export default function UGCLabWorkspace({ isPremium = false }: UGCLabWorkspacePr
               </CardHeader>
               <CardContent>
                 <Button asChild className="w-full" size="lg">
-                  <Link href="/upgrade">Upgrade</Link>
+                  <Link href="/pricing">Subscribe</Link>
                 </Button>
               </CardContent>
             </Card>
