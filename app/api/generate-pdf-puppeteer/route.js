@@ -570,6 +570,11 @@ const BASE_PAGE_CSS = `
   .pdf-heading{page-break-after:avoid}
   h2.pdf-heading,h3.pdf-heading{page-break-after:avoid}
   img{max-width:100%;height:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .exercise-box,.notes-space{margin:12px 0 16px;padding:16px;border:1px dashed #ccc;border-radius:8px;background:#fafafa;min-height:40px;page-break-inside:avoid}
+  .example-box{margin:16px 0;padding:16px 20px;border-left:4px solid #ddd;background:#f8f9fa;border-radius:0 8px 8px 0;page-break-inside:avoid}
+  .chapter-intro{margin:0 0 20px;font-style:italic;color:#555}
+  .checklist-items ul{list-style:none;padding-left:0}.checklist-items li{margin-bottom:0.5em}
+  table{border-collapse:collapse;margin:12px 0;width:100%;page-break-inside:avoid}table th,table td{border:1px solid #ddd;padding:8px 12px;text-align:left}
   @media print{
     *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color-adjust:exact !important}
   }
@@ -717,9 +722,20 @@ function buildChecklistContent(product) {
   const accent = ds?.colors?.graphics ?? preset.accentColor;
   let totalItems = 0;
   const sectionData = secs.map((s) => {
-    const { html, totalCount } = contentToChecklistHtml(s.content ?? "");
-    totalItems += totalCount;
-    return { title: s.title, html: html || "<p>☐ (No items)</p>", count: totalCount };
+    const rawSource = (s.contentHtml ?? s.content ?? "").trim();
+    let html;
+    let count;
+    if (rawSource && (rawSource.includes("<") || rawSource.includes("☐"))) {
+      html = rawSource;
+      const matches = rawSource.match(/☐/g);
+      count = matches ? matches.length : 0;
+    } else {
+      const result = contentToChecklistHtml(s.content ?? "");
+      html = result.html;
+      count = result.totalCount;
+    }
+    totalItems += count;
+    return { title: s.title, html: html || "<p>☐ (No items)</p>", count };
   });
 
   const contentPadding = "padding:36px 40px 32px;";
@@ -871,7 +887,7 @@ function buildCourseContent(product) {
 
   secs.forEach((section, modIndex) => {
     const moduleTitle = escapeHtml(section.title || `Module ${modIndex + 1}`);
-    const rawContent = section.content ?? "";
+    const rawContent = (section.contentHtml ?? section.content ?? "").trim();
     const { first: objectivesHtml, rest: lessonsHtml } = splitFirstParagraph(rawContent);
     const moduleNum = modIndex + 1;
     const sectionImage = section.imageUrl?.trim()
