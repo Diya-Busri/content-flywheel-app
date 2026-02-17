@@ -248,6 +248,13 @@ export default function ScriptsFlow() {
 
   useEffect(() => {
     if (productIdFromUrl) {
+      // Clear cached scripts and videos so results page never shows stale data from a previous run
+      try {
+        sessionStorage.removeItem("selectedScriptsForVideos");
+        sessionStorage.removeItem("digitalProductsGeneratedVideos");
+      } catch {
+        // ignore
+      }
       let cancelled = false;
       (async () => {
         try {
@@ -288,7 +295,42 @@ export default function ScriptsFlow() {
           }
           if (cancelled) return;
           setProductName(title);
-          setScripts(generateMockScripts(formData));
+          // Generate fresh scripts via API (no cache); fallback to mock if API fails
+          const genRes = await fetch("/api/digital-products/generate-scripts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId: productIdFromUrl }),
+          });
+          const genData = (await genRes.json().catch(() => ({}))) as {
+            scripts?: Array<{ id: string; title: string; length: number; hook: string; body: string; cta: string }>;
+          };
+          if (cancelled) return;
+          if (genRes.ok && Array.isArray(genData.scripts) && genData.scripts.length > 0) {
+            const defaults = {
+              isStarred: false,
+              platforms: { tiktok: true, instagram: true, youtube: false } as const,
+              hookStrength: "Strong" as const,
+              engagementPotential: "High" as const,
+              conversionFocus: true,
+              compliance: { tiktok: "Approved", instagram: "Approved", youtube: "Approved" } as const,
+              isSelected: false,
+            };
+            setScripts(
+              genData.scripts.map((s, i) => ({
+                ...defaults,
+                id: s.id,
+                title: s.title,
+                length: s.length as LengthOption,
+                hook: s.hook,
+                body: s.body,
+                cta: s.cta,
+                isSelected: i === 1,
+                isStarred: i === 1,
+              }))
+            );
+          } else {
+            setScripts(generateMockScripts(formData));
+          }
         } catch {
           if (!cancelled) setScripts(generateMockScripts(null));
         } finally {
@@ -298,6 +340,13 @@ export default function ScriptsFlow() {
       return () => {
         cancelled = true;
       };
+    }
+    // No productId: clear cached scripts/videos so results don't show stale data; use form + mock
+    try {
+      sessionStorage.removeItem("selectedScriptsForVideos");
+      sessionStorage.removeItem("digitalProductsGeneratedVideos");
+    } catch {
+      // ignore
     }
     const t = setTimeout(() => {
       let product: ProductFormData | null = null;

@@ -15,7 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Check, Play, Loader2, User, Image, Package, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, Play, Loader2, User, Image, Package, Sparkles, AlertCircle } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 const VOICE_OPTIONS = [
   "Professional Male (British)",
@@ -52,7 +53,9 @@ const VIDEO_STYLES = [
 
 export default function VideosFlow() {
   const router = useRouter();
+  const { toast } = useToast();
   const [productName, setProductName] = useState<string>("");
+  const [productId, setProductId] = useState<string | null>(null);
   const [selectedScripts, setSelectedScripts] = useState<SelectedScriptForVideo[]>([]);
   const [videoStyle, setVideoStyle] = useState<string>("broll");
   const [voice, setVoice] = useState<string>(VOICE_OPTIONS[0]);
@@ -63,6 +66,7 @@ export default function VideosFlow() {
   const [platforms, setPlatforms] = useState({ tiktok: true, instagram: true, youtube: false });
   const [previewLoading, setPreviewLoading] = useState(false);
   const [generateLoading, setGenerateLoading] = useState(false);
+  const [creatomateConfigured, setCreatomateConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
     try {
@@ -76,9 +80,21 @@ export default function VideosFlow() {
         const scripts = JSON.parse(rawScripts) as SelectedScriptForVideo[];
         setSelectedScripts(Array.isArray(scripts) ? scripts : []);
       }
+      const rawContext = sessionStorage.getItem("productContextForVideos");
+      if (rawContext) {
+        const ctx = JSON.parse(rawContext) as { productId?: string };
+        if (ctx.productId) setProductId(ctx.productId);
+      }
     } catch {
       setSelectedScripts([]);
     }
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/digital-products/creatomate-status")
+      .then((r) => r.json())
+      .then((d) => setCreatomateConfigured(d.configured === true))
+      .catch(() => setCreatomateConfigured(false));
   }, []);
 
   const togglePlatform = (key: "tiktok" | "instagram" | "youtube") => {
@@ -90,12 +106,49 @@ export default function VideosFlow() {
     setTimeout(() => setPreviewLoading(false), 2500);
   };
 
-  const handleGenerateFull = () => {
+  const handleGenerateFull = async () => {
     setGenerateLoading(true);
-    setTimeout(() => {
-      setGenerateLoading(false);
+    try {
+      sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify(selectedScripts));
+      const res = await fetch("/api/digital-products/generate-videos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: productId || undefined,
+          scripts: selectedScripts,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(data.videos) && data.videos.length > 0) {
+        sessionStorage.setItem("digitalProductsGeneratedVideos", JSON.stringify(data.videos));
+        toast({ title: "Videos generated", description: `${data.videos.length} video(s) ready.` });
+        router.push("/dashboard/digital-products/results");
+      } else if (res.status === 503) {
+        toast({
+          title: "Video generation not configured",
+          description: data.error || "Add CREATOMATE_API_KEY and template to .env. Using scripts for now.",
+          variant: "destructive",
+        });
+        router.push("/dashboard/digital-products/results");
+      } else {
+        toast({
+          title: "Video generation failed",
+          description: data.error || "Try again or download scripts from the results page.",
+          variant: "destructive",
+        });
+        router.push("/dashboard/digital-products/results");
+      }
+    } catch (e) {
+      toast({
+        title: "Error",
+        description: e instanceof Error ? e.message : "Something went wrong",
+        variant: "destructive",
+      });
+      sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify(selectedScripts));
       router.push("/dashboard/digital-products/results");
-    }, 2000);
+    } finally {
+      setGenerateLoading(false);
+    }
   };
 
   const count = selectedScripts.length;
@@ -119,6 +172,18 @@ export default function VideosFlow() {
         <p className="text-[#A0A0A0] mb-8">
           Based on: <span className="font-medium text-white">{productName || "Your product"}</span>
         </p>
+
+        {creatomateConfigured === false && (
+          <div className="mb-6 p-4 rounded-lg border border-amber-500/50 bg-amber-500/10 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-amber-200">Video generation requires configuration</p>
+              <p className="text-sm text-amber-200/80 mt-1">
+                Add CREATOMATE_API_KEY and CREATOMATE_TEMPLATE_DIGITAL_PRODUCT (or CREATOMATE_TEMPLATE_PROMO) to your environment. Until then, you can still get downloadable scripts.
+              </p>
+            </div>
+          </div>
+        )}
 
         {count === 0 ? (
           <Card className={cardClass}>
@@ -312,7 +377,9 @@ export default function VideosFlow() {
               </div>
               <div className="flex flex-col sm:items-end gap-2">
                 <p className="text-sm text-[#A0A0A0]">
-                  Ready to generate {count} video{count !== 1 ? "s" : ""} • Costs {count} credit{count !== 1 ? "s" : ""}
+                  {creatomateConfigured
+                    ? `Generate ${count} video${count !== 1 ? "s" : ""} (15–30s, 1080×1920)`
+                    : `Get ${count} script${count !== 1 ? "s" : ""} (configure Creatomate to generate videos)`}
                 </p>
                 <Button
                   className="bg-orange-500 hover:bg-orange-600 gap-2"
@@ -320,8 +387,12 @@ export default function VideosFlow() {
                   onClick={handleGenerateFull}
                   disabled={generateLoading}
                 >
-                  {generateLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Generate Full Videos →
+                  {generateLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : creatomateConfigured ? (
+                    <Package className="w-4 h-4" />
+                  ) : null}
+                  {generateLoading ? "Generating..." : creatomateConfigured ? "Generate Videos →" : "Get My Scripts →"}
                 </Button>
               </div>
             </div>
