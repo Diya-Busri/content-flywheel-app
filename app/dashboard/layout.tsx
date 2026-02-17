@@ -45,14 +45,18 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     }
   }
 
-  // Paywall: redirect to pricing if user does not have an active subscription
-  if (!hasActiveSubscription(profile)) {
-    redirect("/pricing");
-  }
-
-  // Get the current user to extract email
+  // Get the current user (needed for email and for admin bypass)
   const user = await currentUser();
   const userEmail = user?.emailAddresses?.[0]?.emailAddress || "";
+
+  // Admin bypass: if user email matches ADMIN_EMAIL, allow full access without subscription
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const isAdmin = adminEmail && userEmail.trim().toLowerCase() === adminEmail;
+
+  // Paywall: redirect to pricing if not admin and user does not have an active subscription
+  if (!isAdmin && !hasActiveSubscription(profile)) {
+    redirect("/pricing");
+  }
 
   return (
     <div className="flex h-screen bg-background relative overflow-hidden" suppressHydrationWarning>

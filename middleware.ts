@@ -21,6 +21,12 @@ export default clerkMiddleware(async (auth, req) => {
   if (userId && isAuthRoute(req)) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
+  // After Stripe Checkout: /dashboard?session_id=cs_xxx → verify session then redirect to dashboard
+  const url = req.nextUrl;
+  if (url.pathname === "/dashboard" && url.searchParams.get("session_id")) {
+    const sessionId = url.searchParams.get("session_id");
+    return NextResponse.redirect(new URL(`/api/stripe/verify-session?session_id=${encodeURIComponent(sessionId!)}`, req.url));
+  }
   if (!isPublicRoute(req)) {
     auth().protect();
   }

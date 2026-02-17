@@ -16,19 +16,15 @@ export async function POST(request: NextRequest) {
 
   if (!secretKey || !monthlyPriceId || !yearlyPriceId) {
     return NextResponse.json(
-      { error: "Stripe is not configured" },
+      { error: "Payment system error. Please try again later." },
       { status: 500 }
     );
   }
 
-  const keyPrefix = secretKey.slice(0, 7);
   if (!secretKey.startsWith("sk_test_") && !secretKey.startsWith("sk_live_")) {
-    console.warn("[Stripe checkout] STRIPE_SECRET_KEY has unexpected prefix:", keyPrefix + "... (length " + secretKey.length + ")");
+    console.warn("[Stripe checkout] STRIPE_SECRET_KEY has unexpected prefix");
     return NextResponse.json(
-      {
-        error:
-          "Invalid STRIPE_SECRET_KEY: use the Secret key from Stripe Dashboard → Developers → API keys (it must start with sk_test_ or sk_live_). Do not use the Publishable key (pk_).",
-      },
+      { error: "Payment system error. Please try again later." },
       { status: 500 }
     );
   }
@@ -57,8 +53,6 @@ export async function POST(request: NextRequest) {
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
-  // Debug: verify which key prefix the server sees (remove after fixing)
-  console.log("[Stripe checkout] Key prefix:", secretKey.slice(0, 7) + "…");
   const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
 
   try {
@@ -73,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     if (!session.url) {
       return NextResponse.json(
-        { error: "Failed to create checkout session" },
+        { error: "Payment system error. Please try again later." },
         { status: 500 }
       );
     }
@@ -82,7 +76,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("Stripe checkout error:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Checkout failed" },
+      { error: "Payment system error. Please try again later." },
       { status: 500 }
     );
   }

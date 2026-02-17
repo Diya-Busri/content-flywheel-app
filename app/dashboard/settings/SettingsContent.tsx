@@ -191,11 +191,11 @@ export default function SettingsContent({
                   const res = await fetch("/api/stripe-portal", { method: "POST" });
                   const data = await res.json();
                   if (data?.url) window.location.href = data.url;
-                  else throw new Error(data?.error || "Failed to open portal");
+                  else throw new Error("Portal failed");
                 } catch (e) {
                   toast({
                     title: "Error",
-                    description: e instanceof Error ? e.message : "Could not open billing portal",
+                    description: "Payment system error. Please try again later.",
                     variant: "destructive",
                   });
                 } finally {

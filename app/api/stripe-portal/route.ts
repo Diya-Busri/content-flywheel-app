@@ -12,16 +12,13 @@ export async function POST(request: NextRequest) {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) {
     return NextResponse.json(
-      { error: "Stripe is not configured" },
+      { error: "Payment system error. Please try again later." },
       { status: 500 }
     );
   }
   if (!secretKey.startsWith("sk_test_") && !secretKey.startsWith("sk_live_")) {
     return NextResponse.json(
-      {
-        error:
-          "Invalid STRIPE_SECRET_KEY: use the Secret key from Stripe Dashboard → Developers → API keys (it must start with sk_test_ or sk_live_).",
-      },
+      { error: "Payment system error. Please try again later." },
       { status: 500 }
     );
   }
@@ -51,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     if (!session.url) {
       return NextResponse.json(
-        { error: "Failed to create portal session" },
+        { error: "Payment system error. Please try again later." },
         { status: 500 }
       );
     }
@@ -60,7 +57,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("Stripe portal error:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Portal failed" },
+      { error: "Payment system error. Please try again later." },
       { status: 500 }
     );
   }

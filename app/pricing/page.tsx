@@ -58,13 +58,12 @@ export default function PricingPage() {
         body: JSON.stringify({ plan }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Checkout failed");
+      if (!res.ok) throw new Error("Checkout failed");
       if (data.url) window.location.href = data.url;
-      else throw new Error("No checkout URL");
+      else throw new Error("Checkout failed");
     } catch (e) {
       console.error(e);
       setLoadingPlan(null);
-      alert(e instanceof Error ? e.message : "Something went wrong. Try again.");
     }
   };
 
