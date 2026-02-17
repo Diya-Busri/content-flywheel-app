@@ -127,6 +127,7 @@ Output valid JSON only, no markdown, with this exact structure:
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
+      // gpt-4o-mini: script generation, not product long-form content
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },

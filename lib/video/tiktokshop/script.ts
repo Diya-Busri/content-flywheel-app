@@ -46,7 +46,8 @@ Generate script as JSON only (no markdown). fullNarration string + scenes array.
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        // gpt-4o-mini: script/scene structure, not product long-form content
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",

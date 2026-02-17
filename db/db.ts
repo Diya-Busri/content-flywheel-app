@@ -7,6 +7,7 @@ import { scriptsTable, videosTable, tiktokShopVideosTable, renderJobsTable } fro
 import { faceProfilesTable } from "./schema/face-profiles-schema";
 import { videoJobsTable } from "./schema/video-jobs-schema";
 import { ugcCampaignsTable, ugcCampaignProductsTable } from "./schema/ugc-campaigns-schema";
+import { nicheCacheTable } from "./schema/niche-cache-schema";
 import {
   goalsTable,
   dailyTasksTable,
@@ -31,6 +32,7 @@ const schema = {
   videoJobs: videoJobsTable,
   ugcCampaigns: ugcCampaignsTable,
   ugcCampaignProducts: ugcCampaignProductsTable,
+  nicheCache: nicheCacheTable,
 };
 
 // Add connection options with improved timeout and retry settings for Vercel environment

@@ -32,6 +32,10 @@ export async function POST(request: Request) {
       colors: { primary: "#FF6B35", secondary: "#004E89", accent: "#F7B32B" },
       typography: { heading: "Inter", body: "Open Sans", size: 16 },
     };
+    const customizationOptions =
+      body.customizationOptions != null && typeof body.customizationOptions === "object"
+        ? (body.customizationOptions as Record<string, unknown>)
+        : undefined;
 
     const [inserted] = await db
       .insert(productsTable)
@@ -43,6 +47,7 @@ export async function POST(request: Request) {
         content: { sections: [] },
         designSettings,
         placedElements: [],
+        customizationOptions: customizationOptions ?? null,
         status: "generating",
       })
       .returning({ id: productsTable.id });

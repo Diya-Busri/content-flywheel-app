@@ -68,6 +68,7 @@ Return ONLY valid JSON (no markdown):
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
+        // gpt-4o-mini: hooks and CTAs, non-critical
         model: "gpt-4o-mini",
         messages: [
           {

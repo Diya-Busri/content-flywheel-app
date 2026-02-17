@@ -95,6 +95,7 @@ Return ONLY a valid JSON array of exactly 6 objects (no markdown). Each object:
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
+        // gpt-4o-mini: product suggestions (titles/descriptions), low complexity
         model: "gpt-4o-mini",
         messages: [
           {

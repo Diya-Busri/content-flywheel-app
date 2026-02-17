@@ -96,6 +96,7 @@ RULES:
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
+        // gpt-4o-mini: post content (caption/hashtags), non-critical
         model: "gpt-4o-mini",
         max_tokens: 1024,
         messages: [

@@ -7,8 +7,9 @@ import { eq, and } from "drizzle-orm";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 1100;
+// A4 at 96dpi: 210mm ≈ 794px, 297mm ≈ 1123px (so PDF matches editor and is standard A4)
+const CANVAS_WIDTH = 794;
+const CANVAS_HEIGHT = 1123;
 
 const DEFAULT_IMAGE = {
   opacity: 1,
@@ -45,6 +46,37 @@ function cleanMarkdownToHtml(text) {
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     .replace(/##\s+(.+)(?=\n|$)/gm, "<h3>$1</h3>")
     .replace(/#\s+(.+)(?=\n|$)/gm, "<h2>$1</h2>");
+}
+
+/** Build inline CSS string from a block style object (editor textStyles.blocks[i]). */
+function blockStylesToCss(s) {
+  if (!s || typeof s !== "object") return "";
+  const parts = [];
+  if (s.color) parts.push("color:" + s.color);
+  if (s.fontSize) parts.push("font-size:" + s.fontSize);
+  if (s.fontFamily) parts.push("font-family:" + s.fontFamily);
+  if (s.fontWeight) parts.push("font-weight:" + s.fontWeight);
+  if (s.textAlign) parts.push("text-align:" + s.textAlign);
+  if (s.lineHeight) parts.push("line-height:" + s.lineHeight);
+  if (s.textDecoration) parts.push("text-decoration:" + s.textDecoration);
+  if (s.textTransform) parts.push("text-transform:" + s.textTransform);
+  if (s.backgroundColor && s.backgroundColor !== "transparent") parts.push("background-color:" + s.backgroundColor);
+  return parts.join(";");
+}
+
+/** Injects per-block inline styles into section body HTML so PDF matches editor (fonts, colors, sizes). */
+function injectBlockStyles(html, blocks) {
+  if (!Array.isArray(blocks) || blocks.length === 0) return html;
+  let index = 0;
+  return html.replace(/<(h2|h3|h4|p|li)(\s[^>]*)?>/gi, (match, tag, rest) => {
+    const s = blocks[index];
+    index += 1;
+    if (!s || typeof s !== "object") return match;
+    const styleStr = blockStylesToCss(s);
+    if (!styleStr) return match;
+    const safe = styleStr.replace(/"/g, "&quot;");
+    return "<" + tag + (rest || "") + ' style="' + safe + '">';
+  });
 }
 
 /** Normalize product.format for dispatch. Supports: workbook | ebook | guide | checklist | journal-prompted | journal-blank | planner | course */
@@ -132,25 +164,133 @@ function parsePlacedElements(raw) {
     });
 }
 
+/**
+ * Returns one background config per page. EVERY page gets background + overlay so PDF matches preview.
+ * If a page has no background, use the first available (Apply-to-all behavior).
+ */
+/** Collect all image URLs from product (backgrounds, section images, placed images). Skip data: URLs. */
+function collectImageUrls(product) {
+  const urls = new Set();
+  const add = (u) => {
+    if (typeof u === "string" && u.trim() && !u.trim().startsWith("data:")) urls.add(u.trim());
+  };
+  const ds = product?.designSettings ?? {};
+  const pages = ds?.pages;
+  if (Array.isArray(pages)) {
+    pages.forEach((p) => add(p?.backgroundImage));
+  }
+  add(ds?.backgroundImage ?? ds?.background_image);
+  const sections = product?.content?.sections ?? [];
+  sections.forEach((s) => add(s?.imageUrl));
+  const placedByPage = ds?.placedElementsByPage ?? [];
+  placedByPage.forEach((pageArr) => {
+    if (!Array.isArray(pageArr)) return;
+    pageArr.forEach((el) => {
+      if (el?.type === "image" && el?.content) add(el.content);
+    });
+  });
+  const legacy = product?.placedElements ?? [];
+  if (Array.isArray(legacy)) legacy.forEach((el) => el?.type === "image" && el?.content && add(el.content));
+  return Array.from(urls);
+}
+
+/** Fetch image URL and return as base64 data URL so PDF renderer doesn't need to fetch. */
+async function fetchUrlToDataUrl(url, absoluteBase) {
+  if (!url || typeof url !== "string") return null;
+  const trimmed = url.trim();
+  if (trimmed.startsWith("data:")) return trimmed;
+  let href = trimmed;
+  if (absoluteBase && (trimmed.startsWith("/") || !/^https?:/i.test(trimmed))) {
+    try {
+      href = new URL(trimmed, absoluteBase).href;
+    } catch {
+      href = trimmed;
+    }
+  }
+  try {
+    const res = await Promise.race([
+      fetch(href, { method: "GET", headers: { Accept: "image/*" } }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
+    ]);
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    const b64 = Buffer.from(buf).toString("base64");
+    const ct = res.headers.get("content-type") || "image/png";
+    return `data:${ct};base64,${b64}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Return a copy of product with all image URLs replaced by data URLs (so PDF has no external fetches). */
+function resolveProductImages(product, urlToDataUrl) {
+  const map = urlToDataUrl || new Map();
+  const resolve = (u) => (typeof u === "string" && map.get(u.trim())) || u;
+  const ds = product?.designSettings ?? {};
+  const pages = Array.isArray(ds?.pages) ? ds.pages.slice() : [];
+  const outPages = pages.map((p) => {
+    if (!p || typeof p !== "object") return p;
+    const bg = p.backgroundImage ? resolve(p.backgroundImage) : p.backgroundImage;
+    return { ...p, backgroundImage: bg };
+  });
+  const sections = (product?.content?.sections ?? []).map((s) => {
+    if (!s?.imageUrl) return s;
+    return { ...s, imageUrl: resolve(s.imageUrl) };
+  });
+  let placedByPage = ds?.placedElementsByPage;
+  if (Array.isArray(placedByPage)) {
+    placedByPage = placedByPage.map((pageArr) => {
+      if (!Array.isArray(pageArr)) return pageArr;
+      return pageArr.map((el) => {
+        if (el?.type !== "image" || !el?.content) return el;
+        return { ...el, content: resolve(el.content) };
+      });
+    });
+  }
+  const legacyBg = ds?.backgroundImage ?? ds?.background_image;
+  const resolvedLegacyBg = legacyBg ? resolve(legacyBg) : legacyBg;
+  const designSettings = {
+    ...ds,
+    pages: outPages.length ? outPages : ds.pages,
+    backgroundImage: resolvedLegacyBg,
+    background_image: resolvedLegacyBg,
+    placedElementsByPage: placedByPage,
+  };
+  return {
+    ...product,
+    designSettings,
+    content: product?.content ? { ...product.content, sections } : product?.content,
+  };
+}
+
 function parsePageBackgrounds(ds, sectionsCount) {
   const legacyBg = ds?.backgroundImage ?? ds?.background_image ?? null;
+  const legacySettings = ds?.backgroundSettings ? { ...DEFAULT_IMAGE, ...ds.backgroundSettings } : undefined;
+  const legacyOverlay = ds?.overlaySettings ? { ...DEFAULT_OVERLAY, ...ds.overlaySettings } : undefined;
   const pages = ds?.pages;
-  if (Array.isArray(pages) && pages.length >= sectionsCount) {
-    return pages.slice(0, sectionsCount).map((p) => ({
+
+  let raw = [];
+  if (Array.isArray(pages) && pages.length > 0) {
+    raw = pages.slice(0, Math.max(sectionsCount, pages.length)).map((p) => ({
       backgroundImage: p?.backgroundImage ?? null,
       backgroundSettings: p?.backgroundSettings ? { ...DEFAULT_IMAGE, ...p.backgroundSettings } : undefined,
       overlaySettings: p?.overlaySettings ? { ...DEFAULT_OVERLAY, ...p.overlaySettings } : undefined,
     }));
   }
-  return Array.from({ length: sectionsCount }, (_, i) =>
-    i === 0 && legacyBg
-      ? {
-          backgroundImage: legacyBg,
-          backgroundSettings: ds?.backgroundSettings ? { ...DEFAULT_IMAGE, ...ds.backgroundSettings } : undefined,
-          overlaySettings: ds?.overlaySettings ? { ...DEFAULT_OVERLAY, ...ds.overlaySettings } : undefined,
-        }
-      : {}
-  );
+  while (raw.length < sectionsCount) {
+    raw.push({ backgroundImage: null, backgroundSettings: undefined, overlaySettings: undefined });
+  }
+  raw = raw.slice(0, sectionsCount);
+
+  const fallback = raw.find((p) => p?.backgroundImage) || (legacyBg ? { backgroundImage: legacyBg, backgroundSettings: legacySettings, overlaySettings: legacyOverlay } : null);
+  return raw.map((p) => {
+    const bg = p?.backgroundImage ? p : fallback;
+    return {
+      backgroundImage: bg?.backgroundImage ?? null,
+      backgroundSettings: bg?.backgroundSettings ? { ...DEFAULT_IMAGE, ...bg.backgroundSettings } : DEFAULT_IMAGE,
+      overlaySettings: bg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...bg.overlaySettings } : DEFAULT_OVERLAY,
+    };
+  });
 }
 
 /** Normalize overlay opacity to 0–1 (accept 0–100 from UI). */
@@ -198,7 +338,7 @@ function buildPageShell(product, pageIdx, pageCount, innerContentHtml) {
     html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${opacityVal};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   }
 
-  html += `<div class="section-content" style="position:relative;z-index:10;padding:30px 30px 20px 30px;box-sizing:border-box;max-width:100%;font-family:${escapeHtml(fontFamily)};${bgUrl ? "background-color:transparent;" : "background-color:#fff;"}-webkit-print-color-adjust:exact;print-color-adjust:exact;">`;
+  html += `<div class="section-content" style="position:relative;z-index:10;padding:60px;box-sizing:border-box;max-width:100%;min-height:${CANVAS_HEIGHT}px;font-family:${escapeHtml(fontFamily)};${bgUrl ? "background-color:transparent;" : "background-color:#fff;"}-webkit-print-color-adjust:exact;print-color-adjust:exact;">`;
   html += innerContentHtml;
   html += `</div>`;
 
@@ -234,7 +374,7 @@ function buildSectionBlock({ productTitle, section, pageBg, placedElements, grap
   const bgSettings = { ...DEFAULT_IMAGE, ...bg.backgroundSettings };
   const overlay = { ...DEFAULT_OVERLAY, ...bg.overlaySettings };
 
-  const titleColor = preset?.titleColor ?? "#111";
+  const titleColor = textStyles?.__product_title?.title?.color ?? preset?.titleColor ?? "#111";
   const headingColor = preset?.headingColor ?? "#1a1a1a";
   const bodyColor = preset?.bodyColor ?? "#333";
   const fontFamily = preset?.fontFamily ?? "Inter, system-ui, sans-serif";
@@ -244,9 +384,11 @@ function buildSectionBlock({ productTitle, section, pageBg, placedElements, grap
   const sectionBodyStyles = textStyles?.[section.id]?.body;
   const titleStyleColor = sectionTitleStyles?.color ?? headingColor;
   const bodyStyleColor = sectionBodyStyles?.color ?? bodyColor;
+  const sectionBlockStyles = textStyles?.[section.id]?.blocks;
 
   const sectionTitle = escapeHtml(section.title || "(Untitled)");
-  const contentHtml = section.contentHtml ? section.contentHtml : (cleanMarkdownToHtml(section.content ?? "") || "<p>(Empty)</p>");
+  let contentHtml = section.contentHtml ? section.contentHtml : (cleanMarkdownToHtml(section.content ?? "") || "<p>(Empty)</p>");
+  contentHtml = injectBlockStyles(contentHtml, sectionBlockStyles);
   const sectionImage = section.imageUrl?.trim()
     ? `<div style="margin:12px 0 16px;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:100%;height:auto;max-height:280px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>`
     : "";
@@ -263,11 +405,11 @@ function buildSectionBlock({ productTitle, section, pageBg, placedElements, grap
     html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${overlayOpacity(overlay)};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   }
 
-  html += `<div class="section-content" style="position:relative;z-index:10;padding:30px 30px 20px 30px;box-sizing:border-box;max-width:100%;font-family:${escapeHtml(fontFamily)};${bgUrl ? "background-color:transparent;" : "background-color:#fff;"}-webkit-print-color-adjust:exact;print-color-adjust:exact;">`;
-  html += `<h2 class="pdf-heading" style="font-size:24px;font-weight:bold;margin:0 0 6px;color:${escapeHtml(titleColor)};border-bottom:1px solid #ddd;padding-bottom:6px;">${escapeHtml(productTitle)}</h2>`;
-  html += `<h3 class="pdf-heading" style="font-size:18px;font-weight:600;margin:12px 0 6px;color:${escapeHtml(titleStyleColor)};">${sectionTitle}</h3>`;
+  html += `<div class="section-content" style="position:relative;z-index:10;padding:60px;box-sizing:border-box;max-width:100%;min-height:${CANVAS_HEIGHT}px;font-family:${escapeHtml(fontFamily)};${bgUrl ? "background-color:transparent;" : "background-color:#fff;"}-webkit-print-color-adjust:exact;print-color-adjust:exact;">`;
+  html += `<h2 class="pdf-heading" style="font-size:24px;font-weight:bold;margin:0 0 15px;color:${escapeHtml(titleColor)};border-bottom:1px solid #ddd;padding-bottom:8px;">${escapeHtml(productTitle)}</h2>`;
+  html += `<h3 class="pdf-heading" style="font-size:18px;font-weight:600;margin:0 0 15px;color:${escapeHtml(titleStyleColor)};">${sectionTitle}</h3>`;
   html += sectionImage;
-  html += `<div class="pdf-body" style="margin-top:6px;font-size:15px;line-height:1.65;color:${escapeHtml(bodyStyleColor)};">${contentHtml}</div>`;
+  html += `<div class="pdf-body" style="margin-top:40px;font-size:15px;line-height:1.6;color:${escapeHtml(bodyStyleColor)};">${contentHtml}</div>`;
   html += `</div>`;
 
   const elements = (placedElements || []).slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
@@ -330,7 +472,7 @@ function buildCoverPage(product, coverPageBg) {
     html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background:rgba(255,255,255,0.75);pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   }
 
-  html += `<div class="cover-content" style="position:relative;z-index:10;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:60px 50px 50px;box-sizing:border-box;">`;
+  html += `<div class="cover-content" style="position:relative;z-index:10;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:60px;box-sizing:border-box;">`;
   html += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;width:100%;">`;
   html += `<h1 style="font-size:36px;font-weight:700;margin:0 0 16px;color:#111;line-height:1.2;letter-spacing:-0.02em;">${escapeHtml(title)}</h1>`;
   if (subtitle) {
@@ -368,7 +510,7 @@ function buildBackPage(product, coverPageBg) {
   const bgSettings = { ...DEFAULT_IMAGE, ...bg.backgroundSettings };
   const overlay = { ...DEFAULT_OVERLAY, ...bg.overlaySettings };
 
-  const sectionStyle = `position:relative;width:${CANVAS_WIDTH}px;height:${CANVAS_HEIGHT}px;min-height:${CANVAS_HEIGHT}px;margin:0;padding:0;page-break-after:auto;box-sizing:border-box;overflow:hidden;`;
+  const sectionStyle = `position:relative;width:${CANVAS_WIDTH}px;height:${CANVAS_HEIGHT}px;min-height:${CANVAS_HEIGHT}px;max-height:${CANVAS_HEIGHT}px;margin:0;padding:0;page-break-after:avoid;page-break-inside:avoid;box-sizing:border-box;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
   let html = `<div class="back-page section-block" style="${sectionStyle}">`;
 
   if (bgUrl) {
@@ -384,7 +526,8 @@ function buildBackPage(product, coverPageBg) {
     html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background:rgba(255,255,255,0.75);pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   }
 
-  html += `<div class="back-content" style="position:relative;z-index:10;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:50px;box-sizing:border-box;">`;
+  html += `<div class="back-content" style="position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px;box-sizing:border-box;page-break-inside:avoid;">`;
+  html += `<div class="back-content-inner" style="page-break-inside:avoid;">`;
   html += `<h2 style="font-size:22px;font-weight:700;margin:0 0 12px;color:#111;">Thank you</h2>`;
   html += `<p style="font-size:16px;margin:0 0 28px;color:#444;line-height:1.5;">Thank you for using this ${escapeHtml(formatLabel)}!</p>`;
   html += `<p style="font-size:15px;margin:0 0 28px;color:#444;line-height:1.5;">Want to create your own digital products? Visit <strong>contentflywheel.com</strong></p>`;
@@ -393,7 +536,7 @@ function buildBackPage(product, coverPageBg) {
   html += `<p style="font-size:12px;margin:0;color:#888;">Instagram · Twitter · LinkedIn · YouTube</p>`;
   html += `</div>`;
   html += `<p style="font-size:13px;margin:0;color:#888;">Created with <strong style="color:${graphicsAccentColor};">Content Flywheel</strong></p>`;
-  html += `</div></div>`;
+  html += `</div></div></div>`;
   return html;
 }
 
@@ -415,19 +558,27 @@ function getTemplatePreset(ds) {
 
 const BASE_PAGE_CSS = `
   *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  body{margin:0;padding:0;orphans:3;widows:3;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{margin:0;padding:0;orphans:3;widows:3;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .section-block{margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .section-content{orphans:3;widows:3}
-  p{margin:0 0 0.5rem;page-break-inside:avoid}
+  .section-content{orphans:3;widows:3;line-height:1.6}
+  .section-content .pdf-heading,.section-content h2,.section-content h3{margin-top:30px;margin-bottom:15px;page-break-after:avoid}
+  .section-content .pdf-heading:first-child,.section-content h2:first-child,.section-content h3:first-child{margin-top:0}
+  .section-content p{margin:0 0 16px;page-break-inside:avoid;line-height:1.6}
+  .section-content ul,.section-content ol{margin:0 0 16px;padding-left:1.5rem;page-break-inside:avoid;line-height:1.6}
+  .section-content li{margin-bottom:0.35em}
+  .pdf-body{line-height:1.6}
   .pdf-heading{page-break-after:avoid}
   h2.pdf-heading,h3.pdf-heading{page-break-after:avoid}
-  ul,ol{margin:0 0 0.5rem;padding-left:1.5rem;page-break-inside:avoid}
-  li{margin-bottom:0.2rem}
   img{max-width:100%;height:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @media print{
+    *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color-adjust:exact !important}
+  }
+  .back-page,.back-page *{page-break-inside:avoid !important}
+  .back-page{page-break-after:avoid !important}
 `;
 
 function getPageCss(extra = "") {
-  return BASE_PAGE_CSS + (extra ? `\n${extra}\n` : "") + `@page{size:${CANVAS_WIDTH}px ${CANVAS_HEIGHT}px;margin:0;}`;
+  return BASE_PAGE_CSS + (extra ? `\n${extra}\n` : "") + `@page{size:A4;margin:0;}`;
 }
 
 const FONT_LINKS =
@@ -497,8 +648,10 @@ function buildEbookContent(product) {
     const chNum = i + 1;
     const secTitleColor = textStyles?.[section.id]?.title?.color ?? headingColor;
     const secBodyColor = textStyles?.[section.id]?.body?.color ?? bodyColor;
+    const sectionBlockStyles = textStyles?.[section.id]?.blocks;
     const sectionTitle = escapeHtml(section.title || "(Untitled)");
-    const contentHtml = section.contentHtml ? section.contentHtml : (cleanMarkdownToHtml(section.content ?? "") || "<p>(Empty)</p>");
+    let contentHtml = section.contentHtml ? section.contentHtml : (cleanMarkdownToHtml(section.content ?? "") || "<p>(Empty)</p>");
+    contentHtml = injectBlockStyles(contentHtml, sectionBlockStyles);
     const sectionImage = section.imageUrl?.trim()
       ? `<div style="margin:16px 0 24px;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:100%;height:auto;max-height:300px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>`
       : "";
@@ -532,7 +685,8 @@ function buildGuideContent(product) {
     const stepNum = i + 1;
     const totalSteps = secs.length;
     const stepTitle = escapeHtml(section.title || `Step ${stepNum}`).replace(/^Step \d+:\s*/i, "");
-    const contentHtml = section.contentHtml ? section.contentHtml : (cleanMarkdownToHtml(section.content ?? "") || "<p>(Empty)</p>");
+    let contentHtml = section.contentHtml ? section.contentHtml : (cleanMarkdownToHtml(section.content ?? "") || "<p>(Empty)</p>");
+    contentHtml = injectBlockStyles(contentHtml, textStyles?.[section.id]?.blocks);
     const progressPct = Math.round((stepNum / totalSteps) * 100);
     const sectionImage = section.imageUrl?.trim()
       ? `<div style="margin:12px 0 16px;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:70%;height:auto;max-height:280px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>`
@@ -825,7 +979,21 @@ export async function POST(request) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
-    const fullHtml = buildFullHtml(product, { includeCover, includeBackPage });
+    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+    if (!baseUrl && process.env.VERCEL_URL) baseUrl = `https://${process.env.VERCEL_URL}`;
+    if (!baseUrl) baseUrl = "http://localhost:3000";
+    baseUrl = baseUrl.replace(/\/$/, "");
+
+    const imageUrls = collectImageUrls(product);
+    const urlToDataUrl = new Map();
+    await Promise.all(
+      imageUrls.map(async (url) => {
+        const dataUrl = await fetchUrlToDataUrl(url, baseUrl);
+        if (dataUrl) urlToDataUrl.set(url, dataUrl);
+      })
+    );
+    const resolvedProduct = resolveProductImages(product, urlToDataUrl);
+    const fullHtml = buildFullHtml(resolvedProduct, { includeCover, includeBackPage });
 
     const puppeteer = (await import("puppeteer")).default;
     browser = await puppeteer.launch({
@@ -839,17 +1007,32 @@ export async function POST(request) {
     page.setDefaultNavigationTimeout(60000);
     await page.setViewport({ width: CANVAS_WIDTH + 100, height: CANVAS_HEIGHT + 100 });
 
-    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-    if (!baseUrl && process.env.VERCEL_URL) baseUrl = `https://${process.env.VERCEL_URL}`;
-    if (!baseUrl) baseUrl = "http://localhost:3000";
-    baseUrl = baseUrl.replace(/\/$/, "");
     await page.setContent(fullHtml, {
       waitUntil: "networkidle0",
       timeout: 60000,
       baseURL: baseUrl,
     });
     await page.evaluate(() => document.fonts?.ready);
-    await new Promise((r) => setTimeout(r, 2000));
+    // Wait for all images (background + content) to load so PDF includes them
+    await page.evaluate(async () => {
+      const imgs = Array.from(document.querySelectorAll("img"));
+      await Promise.all(
+        imgs.map(
+          (img) =>
+            new Promise((resolve) => {
+              if (img.complete && img.naturalWidth !== 0) {
+                resolve();
+                return;
+              }
+              const onDone = () => resolve();
+              img.onload = onDone;
+              img.onerror = onDone;
+              setTimeout(onDone, 15000);
+            })
+        )
+      );
+    });
+    await new Promise((r) => setTimeout(r, 500));
 
     const pdfBuffer = await page.pdf({
       printBackground: true,

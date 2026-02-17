@@ -55,8 +55,9 @@ export async function POST(req: Request) {
       ...messages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
     ];
 
+    // gpt-4o-mini: general chat, non-critical (save gpt-4o for long-form content)
     const stream = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: openaiMessages,
       stream: true,
       max_tokens: 1024,

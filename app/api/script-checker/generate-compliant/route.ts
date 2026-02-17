@@ -79,6 +79,7 @@ Rewrite the ENTIRE script to fix every violation while keeping it persuasive and
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
+        // gpt-4o-mini: compliance rewrite/formatting, not long-form content
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },

@@ -91,6 +91,7 @@ Return JSON with violations array. Check ALL categories: misleading health claim
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
+        // gpt-4o-mini: validation/formatting, non-critical
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },

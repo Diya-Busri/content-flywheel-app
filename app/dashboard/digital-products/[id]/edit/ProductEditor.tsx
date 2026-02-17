@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Rnd } from "react-rnd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,15 +48,21 @@ import {
   Printer,
   Sparkles,
   Type,
+  Megaphone,
+  Download,
+  Video,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { HexColorPicker } from "react-colorful";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { ThumbnailMockup, THUMBNAIL_TEMPLATES, type ThumbnailTemplateId } from "@/components/product-editor/ThumbnailMockup";
 import { cleanMarkdownToHtml } from "@/lib/clean-markdown";
+import html2canvas from "html2canvas";
 import { useToast } from "@/components/ui/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
@@ -68,9 +74,12 @@ type Section = { id: string; title: string; content: string; contentHtml?: strin
 
 export type TextStyles = Record<string, string>;
 
+export type TextElementType = "title" | "heading" | "subheading" | "body";
+
 type SelectedTextMeta = {
   sectionId: string;
-  type: "title" | "body";
+  type: TextElementType;
+  blockIndex?: number;
   content: string;
   styles: TextStyles;
 };
@@ -134,7 +143,7 @@ export type OverlaySettings = {
 };
 
 const DEFAULT_OVERLAY: OverlaySettings = {
-  color: "rgba(255, 255, 255, 0.9)",
+  color: "rgb(255, 255, 255)",
   opacity: 0.9,
 };
 
@@ -165,9 +174,17 @@ type Product = {
     backgroundSettings?: ImageSettings;
     overlaySettings?: OverlaySettings;
     pages?: PageBackground[];
-    textStyles?: Record<string, Record<"title" | "body", TextStyles>>;
+    textStyles?: Record<string, { title?: TextStyles; body?: TextStyles; blocks?: TextStyles[] }>;
   } | null;
   placedElements?: unknown[] | null;
+  marketingAssets?: {
+    productTitle?: string;
+    productDescription?: string;
+    hashtags?: string[];
+    seoKeywords?: string[];
+    thumbnailUrl?: string | null;
+    updatedAt?: string;
+  } | null;
 };
 
 export type TextBoxSettings = {
@@ -205,6 +222,25 @@ type EditorSnapshot = {
 const HISTORY_LIMIT = 50;
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 1100;
+
+const SELECTION_BLOCK_SELECTOR = "h1, h2, h3, h4, p, li";
+const SELECTION_OUTLINE_STYLE = "2px dashed #f97316";
+const SELECTION_OUTLINE_OFFSET = "2px";
+
+function applySelectionOutline(el: HTMLElement) {
+  el.style.setProperty("outline", SELECTION_OUTLINE_STYLE, "important");
+  el.style.setProperty("outline-offset", SELECTION_OUTLINE_OFFSET, "important");
+}
+function clearSelectionOutline(el: HTMLElement) {
+  el.style.removeProperty("outline");
+  el.style.removeProperty("outline-offset");
+}
+function getBlockType(el: HTMLElement): "heading" | "subheading" | "body" {
+  const tag = el.tagName.toUpperCase();
+  if (tag === "H1" || tag === "H2") return "heading";
+  if (tag === "H3" || tag === "H4") return "subheading";
+  return "body";
+}
 
 // Legacy Lucide icons (by name) for backward compatibility with existing canvases
 const GRAPHICS_ICONS: { name: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }[] = [
@@ -477,8 +513,10 @@ const TEMPLATES = [
 
 export default function ProductEditor({ productId }: { productId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [product, setProduct] = useState<Product | null>(null);
+  const [showCreatedBanner, setShowCreatedBanner] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
@@ -495,6 +533,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [showFullPreview, setShowFullPreview] = useState(false);
   const [pdfExporting, setPdfExporting] = useState(false);
+  const [marketingGenerating, setMarketingGenerating] = useState(false);
+  const [marketingRegenerating, setMarketingRegenerating] = useState(false);
+  const [thumbnailTemplate, setThumbnailTemplate] = useState<ThumbnailTemplateId>("modern-gradient");
+  const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
+  const thumbnailCaptureRef = useRef<HTMLDivElement | null>(null);
   const [includeCover, setIncludeCover] = useState(true);
   const [includeBackPage, setIncludeBackPage] = useState(true);
   const [uiTheme, setUiTheme] = useState<"light" | "dark">(() => {
@@ -530,6 +573,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [imageSettings, setImageSettings] = useState<ImageSettings>(DEFAULT_IMAGE_SETTINGS);
   const selectedTextRef = useRef<HTMLElement | null>(null);
+  const contentAreaRef = useRef<HTMLDivElement | null>(null);
   const [selectedTextMeta, setSelectedTextMeta] = useState<SelectedTextMeta | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([]);
@@ -566,8 +610,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
     try {
       const res = await fetch(`/api/products/${productId}`);
       if (!res.ok) {
-        if (res.status === 404) setError("Product not found");
-        else setError("Failed to load product");
+        let message: string | null = null;
+        try {
+          const body = await res.json();
+          if (typeof (body as { error?: string }).error === "string") message = (body as { error: string }).error;
+        } catch {
+          // ignore
+        }
+        if (res.status === 404) setError(message ?? "Product not found");
+        else if (res.status === 401) setError(message ?? "Please sign in again to view this product.");
+        else setError(message ?? "Failed to load product");
         setLoading(false);
         return;
       }
@@ -630,8 +682,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
       setBackgroundImage(first?.backgroundImage ?? null);
       setBackgroundSettings(first?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...first.backgroundSettings } : DEFAULT_IMAGE_SETTINGS);
       setOverlaySettings(first?.overlaySettings ? { ...DEFAULT_OVERLAY, ...first.overlaySettings } : DEFAULT_OVERLAY);
-    } catch {
-      setError("Failed to load product");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to load product";
+      setError(msg.startsWith("Failed") ? msg : `Failed to load product: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -642,6 +695,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
   }, [fetchProduct]);
 
   useEffect(() => {
+    if (searchParams.get("created") === "1") setShowCreatedBanner(true);
+  }, [searchParams]);
+
+  useEffect(() => {
     setPageBackgrounds((prev) => {
       const need = sections.length || 1;
       if (prev.length === need) return prev;
@@ -650,6 +707,41 @@ export default function ProductEditor({ productId }: { productId: string }) {
       return next.slice(0, need);
     });
   }, [sections.length]);
+
+  useEffect(() => {
+    const root = contentAreaRef.current;
+    if (!root) return;
+    const timer = setTimeout(() => {
+      root.querySelectorAll("section[data-section-id]").forEach((sectionEl) => {
+        const sectionId = sectionEl.getAttribute("data-section-id") ?? "";
+        const preview = sectionEl.querySelector(".preview-content");
+        if (!preview) return;
+        const blocks = preview.querySelectorAll(SELECTION_BLOCK_SELECTOR);
+        const blockStyles = product?.designSettings?.textStyles?.[sectionId]?.blocks ?? [];
+        blocks.forEach((el, i) => {
+          const textType = getBlockType(el as HTMLElement);
+          (el as HTMLElement).setAttribute("data-section-id", sectionId);
+          (el as HTMLElement).setAttribute("data-text-type", textType);
+          (el as HTMLElement).setAttribute("data-block-index", String(i));
+          (el as HTMLElement).style.cursor = "text";
+          (el as HTMLElement).style.pointerEvents = "auto";
+          const s = blockStyles[i];
+          if (s && typeof s === "object") {
+            if (s.color) (el as HTMLElement).style.color = s.color;
+            if (s.fontSize) (el as HTMLElement).style.fontSize = s.fontSize;
+            if (s.fontFamily) (el as HTMLElement).style.fontFamily = s.fontFamily;
+            if (s.fontWeight) (el as HTMLElement).style.fontWeight = s.fontWeight;
+            if (s.textAlign) (el as HTMLElement).style.textAlign = s.textAlign;
+            if (s.lineHeight) (el as HTMLElement).style.lineHeight = s.lineHeight;
+            if (s.textDecoration) (el as HTMLElement).style.textDecoration = s.textDecoration;
+            if (s.textTransform) (el as HTMLElement).style.textTransform = s.textTransform;
+            if (s.backgroundColor) (el as HTMLElement).style.backgroundColor = s.backgroundColor;
+          }
+        });
+      });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [sections, product?.designSettings?.textStyles, currentPageIndex]);
 
   useEffect(() => {
     setPlacedElementsByPage((prev) => {
@@ -757,6 +849,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       designSettings?: Record<string, unknown>;
       placedElements?: PlacedElement[];
       placedElementsByPage?: PlacedElement[][];
+      marketingAssets?: Record<string, unknown>;
     }) => {
       if (!productId) return;
       setSaving(true);
@@ -1450,18 +1543,46 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const handleTextClick = useCallback(
     (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const typeEl = target.closest("[data-text-type]") as HTMLElement | null;
-      if (!typeEl) return;
-      const sectionEl = typeEl.closest("[data-section-id]");
-      if (!sectionEl) return;
-      const sectionId = sectionEl.getAttribute("data-section-id") ?? "";
-      const type = (typeEl.getAttribute("data-text-type") as "title" | "body") ?? "body";
+      const blockEl = (e.target as HTMLElement).closest("h1, h2, h3, h4, p, li") as HTMLElement | null;
+      if (!blockEl) return;
       e.stopPropagation();
-      if (selectedTextRef.current) selectedTextRef.current.style.outline = "";
-      selectedTextRef.current = typeEl;
-      typeEl.style.outline = "2px solid #FF6B35";
-      const comp = window.getComputedStyle(typeEl);
+
+      const root = contentAreaRef.current;
+      if (root) {
+        root.querySelectorAll("[data-selected]").forEach((el) => {
+          (el as HTMLElement).style.outline = "";
+          (el as HTMLElement).style.outlineOffset = "";
+          (el as HTMLElement).removeAttribute("data-selected");
+        });
+      }
+      if (selectedTextRef.current) clearSelectionOutline(selectedTextRef.current);
+
+      blockEl.style.outline = "2px dashed #f97316";
+      blockEl.style.outlineOffset = "2px";
+      blockEl.setAttribute("data-selected", "true");
+      selectedTextRef.current = blockEl;
+
+      const sectionEl = blockEl.closest("section[data-section-id]");
+      const sectionId =
+        blockEl.getAttribute("data-section-id") ??
+        sectionEl?.getAttribute("data-section-id") ??
+        "";
+
+      let type: TextElementType;
+      let blockIndex: number | undefined;
+      const dataTextType = blockEl.getAttribute("data-text-type");
+      if (dataTextType) {
+        type = dataTextType as TextElementType;
+      } else if (blockEl.closest(".preview-content")) {
+        type = getBlockType(blockEl);
+        const preview = blockEl.closest(".preview-content");
+        const blocks = preview ? preview.querySelectorAll("h1, h2, h3, h4, p, li") : [];
+        blockIndex = Array.prototype.indexOf.call(blocks, blockEl);
+      } else {
+        type = getBlockType(blockEl);
+      }
+
+      const comp = window.getComputedStyle(blockEl);
       const styles: TextStyles = {
         color: comp.color,
         fontSize: comp.fontSize,
@@ -1476,7 +1597,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
       setSelectedTextMeta({
         sectionId,
         type,
-        content: type === "title" ? typeEl.textContent ?? "" : typeEl.innerHTML,
+        blockIndex,
+        content: type === "title" || type === "heading" ? blockEl.textContent ?? "" : blockEl.innerHTML,
         styles,
       });
     },
@@ -1484,12 +1606,22 @@ export default function ProductEditor({ productId }: { productId: string }) {
   );
 
   const persistTextStyles = useCallback(
-    (sectionId: string, type: "title" | "body", styles: TextStyles) => {
+    (sectionId: string, type: TextElementType, styles: TextStyles, blockIndex?: number) => {
       setProduct((p) => {
         if (!p) return null;
         const prevSection = p.designSettings?.textStyles?.[sectionId] ?? { title: {} as TextStyles, body: {} as TextStyles };
-        const nextSection = { ...prevSection, [type]: styles } as Record<"title" | "body", TextStyles>;
-        return {
+        const nextSection = { ...prevSection };
+        if (blockIndex !== undefined && (type === "heading" || type === "subheading" || type === "body")) {
+          const blocks = Array.isArray(prevSection.blocks) ? [...prevSection.blocks] : [];
+          while (blocks.length <= blockIndex) blocks.push({} as TextStyles);
+          blocks[blockIndex] = styles;
+          nextSection.blocks = blocks;
+        } else if (sectionId === "__product_title" && type === "heading") {
+          nextSection.title = styles;
+        } else {
+          nextSection[type === "title" ? "title" : "body"] = styles;
+        }
+        const next = {
           ...p,
           designSettings: {
             ...p.designSettings,
@@ -1499,9 +1631,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
             },
           },
         } as Product;
+        queueMicrotask(() => saveToServer({ designSettings: next.designSettings }));
+        return next;
       });
     },
-    []
+    [saveToServer]
   );
 
   const updateTextStyle = useCallback(
@@ -1509,9 +1643,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
       if (!selectedTextRef.current || !selectedTextMeta) return;
       const el = selectedTextRef.current;
       (el.style as unknown as Record<string, string>)[property] = value;
-      const nextStyles = { ...selectedTextMeta.styles, [property]: value };
-      setSelectedTextMeta((prev) => (prev ? { ...prev, styles: nextStyles } : null));
-      persistTextStyles(selectedTextMeta.sectionId, selectedTextMeta.type, nextStyles);
+      setSelectedTextMeta((prev) => (prev ? { ...prev, styles: { ...prev.styles, [property]: value } } : null));
+      persistTextStyles(selectedTextMeta.sectionId, selectedTextMeta.type, { ...selectedTextMeta.styles, [property]: value }, selectedTextMeta.blockIndex);
     },
     [selectedTextMeta, persistTextStyles]
   );
@@ -1519,24 +1652,45 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const updateTextContent = useCallback(
     (newContent: string) => {
       if (!selectedTextRef.current || !selectedTextMeta) return;
-      const { sectionId, type } = selectedTextMeta;
+      const { sectionId, type, blockIndex } = selectedTextMeta;
+      if (sectionId === "__product_title" && type === "heading") {
+        setProduct((p) => (p ? { ...p, title: newContent } : null));
+        selectedTextRef.current.textContent = newContent;
+        setSelectedTextMeta((prev) => (prev ? { ...prev, content: newContent } : null));
+        saveToServer({ title: newContent });
+        return;
+      }
+      if (type === "title") {
+        const nextSections = sections.map((s) => (s.id === sectionId ? { ...s, title: newContent } : s));
+        setSections(nextSections);
+        selectedTextRef.current.textContent = newContent;
+        setSelectedTextMeta((prev) => (prev ? { ...prev, content: newContent } : null));
+        saveToServer({ content: { sections: nextSections } });
+        return;
+      }
+      if (blockIndex !== undefined && (type === "heading" || type === "subheading" || type === "body")) {
+        selectedTextRef.current.innerHTML = newContent;
+        setSelectedTextMeta((prev) => (prev ? { ...prev, content: newContent } : null));
+        const section = sections.find((s) => s.id === sectionId);
+        if (section) {
+          const container = selectedTextRef.current.closest(".preview-content") ?? selectedTextRef.current.parentElement;
+          const fullHtml = container?.innerHTML ?? section.contentHtml ?? "";
+          const nextSections = sections.map((s) => (s.id === sectionId ? { ...s, contentHtml: fullHtml } : s));
+          setSections(nextSections);
+          saveToServer({ content: { sections: nextSections } });
+        }
+        return;
+      }
       const bodyHtml =
         type === "body" && newContent.trim()
           ? `<p>${newContent.trim().replace(/\n/g, "</p><p>")}</p>`
           : newContent;
-      const nextSections =
-        type === "title"
-          ? sections.map((s) => (s.id === sectionId ? { ...s, title: newContent } : s))
-          : sections.map((s) => (s.id === sectionId ? { ...s, contentHtml: bodyHtml } : s));
+      const nextSections = sections.map((s) => (s.id === sectionId ? { ...s, contentHtml: bodyHtml } : s));
       setSections(nextSections);
-      if (type === "title") {
-        selectedTextRef.current.textContent = newContent;
-      } else {
-        const inner = selectedTextRef.current.querySelector(".preview-content");
-        const toSet = type === "body" ? bodyHtml : newContent;
-        if (inner) inner.innerHTML = toSet;
-        else selectedTextRef.current.innerHTML = `<div class="preview-content">${toSet}</div>`;
-      }
+      const inner = selectedTextRef.current.querySelector(".preview-content");
+      const toSet = bodyHtml;
+      if (inner) inner.innerHTML = toSet;
+      else selectedTextRef.current.innerHTML = `<div class="preview-content">${toSet}</div>`;
       setSelectedTextMeta((prev) => (prev ? { ...prev, content: newContent } : null));
       saveToServer({ content: { sections: nextSections } });
     },
@@ -1550,7 +1704,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     });
     const nextStyles = { ...DEFAULT_TEXT_STYLES };
     setSelectedTextMeta((prev) => (prev ? { ...prev, styles: nextStyles } : null));
-    persistTextStyles(selectedTextMeta.sectionId, selectedTextMeta.type, nextStyles);
+    persistTextStyles(selectedTextMeta.sectionId, selectedTextMeta.type, nextStyles, selectedTextMeta.blockIndex);
   }, [selectedTextMeta, persistTextStyles]);
 
   const toggleTextDecoration = useCallback(
@@ -1564,8 +1718,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
   );
 
   const deselectText = useCallback(() => {
+    contentAreaRef.current?.querySelectorAll("[data-selected]").forEach((el) => {
+      (el as HTMLElement).style.outline = "";
+      (el as HTMLElement).style.outlineOffset = "";
+      (el as HTMLElement).removeAttribute("data-selected");
+    });
     if (selectedTextRef.current) {
-      selectedTextRef.current.style.outline = "";
+      clearSelectionOutline(selectedTextRef.current);
       selectedTextRef.current = null;
     }
     setSelectedTextMeta(null);
@@ -1742,24 +1901,161 @@ export default function ProductEditor({ productId }: { productId: string }) {
     });
   }, []);
 
-  const handleGenerateVideos = () => {
+  const handleGenerateVideos = useCallback(() => {
+    const title = product?.title ?? "";
+    const description = (product?.marketingAssets as { productDescription?: string } | undefined)?.productDescription ?? "";
+    const niche = product?.niche ?? "";
     try {
       sessionStorage.setItem(
         "digitalProductForm",
         JSON.stringify({
-          productName: product?.title ?? "",
-          productDescription: "",
+          productName: title,
+          productDescription: description,
           productType: "digital",
           productFileOrLinkMode: "file",
           hasFile: true,
-          fileName: `${product?.title?.replace(/\s+/g, "-") ?? "product"}.pdf`,
+          fileName: `${title.replace(/\s+/g, "-") || "product"}.pdf`,
         })
+      );
+      sessionStorage.setItem(
+        "productContextForVideos",
+        JSON.stringify({ productId, productName: title, productDescription: description, niche })
       );
     } catch {
       // ignore
     }
-    router.push("/dashboard/digital-products/scripts");
+    router.push(`/dashboard/digital-products/scripts?productId=${encodeURIComponent(productId)}`);
+  }, [productId, product?.title, product?.niche, product?.marketingAssets, router]);
+
+  const marketingAssets = (product?.marketingAssets ?? {}) as {
+    productTitle?: string;
+    productDescription?: string;
+    hashtags?: string[];
+    seoKeywords?: string[];
+    thumbnailUrl?: string | null;
+    thumbnailStyle?: ThumbnailTemplateId;
   };
+
+  const handleGenerateThumbnail = useCallback(async () => {
+    if (!productId) return;
+    setThumbnailGenerating(true);
+    try {
+      const res = await fetch(`/api/products/${productId}/generate-thumbnail`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ style: thumbnailTemplate }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data?.error === "string" ? data.error : "Thumbnail generation failed");
+      setProduct((p) => (p ? { ...p, marketingAssets: { ...p.marketingAssets, thumbnailUrl: data.url, thumbnailStyle: data.style } } : null));
+      saveToServer({ marketingAssets: { ...marketingAssets, thumbnailUrl: data.url, thumbnailStyle: data.style } });
+      toast({
+        title: "Thumbnail generated",
+        description: data.cached === false
+          ? "Download it soon—image wasn’t cached and may expire in about an hour. Add Supabase bucket \"product-thumbnails\" for permanent caching."
+          : "Download or regenerate for a new design.",
+      });
+    } catch (e) {
+      toast({ title: "Thumbnail failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+    } finally {
+      setThumbnailGenerating(false);
+    }
+  }, [productId, thumbnailTemplate, marketingAssets, saveToServer, toast]);
+
+  const handleGenerateMarketingAssets = useCallback(async () => {
+    if (!productId) return;
+    setMarketingGenerating(true);
+    try {
+      const res = await fetch(`/api/products/${productId}/marketing-assets`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data?.error === "string" ? data.error : "Failed to generate");
+      setProduct((p) => (p ? { ...p, marketingAssets: data } : null));
+      toast({ title: "Marketing assets generated", description: "Edit any field and save. Use Copy to paste into Etsy, Gumroad, etc." });
+    } catch (e) {
+      toast({ title: "Generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+    } finally {
+      setMarketingGenerating(false);
+    }
+  }, [productId, toast]);
+
+  const handleRegenerateDescription = useCallback(async () => {
+    if (!productId) return;
+    setMarketingRegenerating(true);
+    try {
+      const res = await fetch(`/api/products/${productId}/marketing-assets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ regenerateDescription: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data?.error === "string" ? data.error : "Failed to regenerate");
+      setProduct((p) => (p ? { ...p, marketingAssets: { ...p.marketingAssets, ...data } } : null));
+      toast({ title: "Description regenerated" });
+    } catch (e) {
+      toast({ title: "Regenerate failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+    } finally {
+      setMarketingRegenerating(false);
+    }
+  }, [productId, toast]);
+
+  const saveMarketingEdits = useCallback(
+    (updates: Partial<typeof marketingAssets>) => {
+      const next = { ...marketingAssets, ...updates };
+      setProduct((p) => (p ? { ...p, marketingAssets: next } : null));
+      saveToServer({ marketingAssets: next });
+    },
+    [marketingAssets, saveToServer]
+  );
+
+  const copyToClipboard = useCallback(
+    (text: string, label: string) => {
+      navigator.clipboard.writeText(text).then(
+        () => toast({ title: "Copied", description: `${label} copied to clipboard` }),
+        () => toast({ title: "Copy failed", variant: "destructive" })
+      );
+    },
+    [toast]
+  );
+
+  const hasDalleThumbnail = !!marketingAssets.thumbnailUrl;
+  const thumbCaptureWidth = hasDalleThumbnail ? 1792 : 1600;
+  const thumbCaptureHeight = hasDalleThumbnail ? 1024 : 1200;
+
+  const handleDownloadThumbnail = useCallback(async () => {
+    const el = thumbnailCaptureRef.current;
+    if (!el) {
+      toast({ title: "Download failed", description: "Thumbnail not ready.", variant: "destructive" });
+      return;
+    }
+    try {
+      const canvas = await html2canvas(el, {
+        scale: 1,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: null,
+        width: thumbCaptureWidth,
+        height: thumbCaptureHeight,
+        windowWidth: thumbCaptureWidth,
+        windowHeight: thumbCaptureHeight,
+      });
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${(product?.title ?? "product").replace(/\s+/g, "-")}-thumbnail.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+          toast({ title: "Thumbnail downloaded", description: `${thumbCaptureWidth}×${thumbCaptureHeight} PNG saved.` });
+        },
+        "image/png",
+        1
+      );
+    } catch (e) {
+      toast({ title: "Download failed", description: e instanceof Error ? e.message : "Could not generate thumbnail", variant: "destructive" });
+    }
+  }, [product?.title, thumbCaptureWidth, thumbCaptureHeight, toast]);
 
   if (loading) {
     return (
@@ -1772,9 +2068,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
     return (
       <main className="min-h-screen bg-gray-100 text-gray-900 p-6">
         <p className="text-red-600">{error ?? "Product not found"}</p>
-        <Link href="/dashboard/digital-products" className="text-orange-500 mt-4 inline-block hover:underline">
-          ← Back to Digital Products
-        </Link>
+        <p className="text-sm text-gray-600 mt-2">If the product was moved or deleted, use Back. Otherwise try again or sign in again.</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Button type="button" variant="outline" size="sm" onClick={() => { setError(null); setLoading(true); fetchProduct(); }}>
+            Try again
+          </Button>
+          <Link href="/dashboard/digital-products" className="text-orange-500 inline-flex items-center hover:underline">
+            ← Back to Digital Products
+          </Link>
+        </div>
       </main>
     );
   }
@@ -1816,10 +2118,26 @@ export default function ProductEditor({ productId }: { productId: string }) {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            [data-canvas-background], [data-canvas-background-img] { display: block !important; visibility: visible !important; }
+            [data-canvas-background] {
+              position: absolute !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+              width: 100% !important; height: 100% !important; overflow: hidden !important; padding: 0 !important; margin: 0 !important;
+              pointer-events: none !important;
+            }
+            [data-canvas-background-img] {
+              display: block !important; visibility: visible !important;
+              position: absolute !important; top: 0 !important; left: 0 !important;
+              width: 100% !important; height: 100% !important; object-fit: cover !important;
+              pointer-events: none !important;
+            }
             .product-editor-preview-layout p { margin-bottom: var(--paragraph-spacing, 1rem); line-height: var(--line-height, 1.6); text-align: var(--text-align, left); }
             .product-editor-preview-layout h2 { margin-top: calc(var(--section-spacing, 2rem) * 1.5); margin-bottom: calc(var(--paragraph-spacing, 1rem) * 1.5); text-align: var(--text-align, left); }
             .product-editor-preview-layout h3 { margin-top: calc(var(--section-spacing, 2rem) * 0.75); margin-bottom: calc(var(--paragraph-spacing, 1rem) * 0.75); text-align: var(--text-align, left); }
+            .product-editor-preview-layout .preview-content h1,
+            .product-editor-preview-layout .preview-content h2,
+            .product-editor-preview-layout .preview-content h3,
+            .product-editor-preview-layout .preview-content h4,
+            .product-editor-preview-layout .preview-content p,
+            .product-editor-preview-layout .preview-content li { cursor: pointer; pointer-events: auto; }
             .product-editor-preview-layout section { margin-bottom: var(--section-spacing, 2rem); }
             .product-editor-preview-layout ul, .product-editor-preview-layout ol { margin-bottom: var(--paragraph-spacing, 1rem); padding-left: 1.5rem; text-align: var(--text-align, left); }
             .product-editor-preview-layout li { margin-bottom: 0.5rem; }
@@ -1875,6 +2193,22 @@ export default function ProductEditor({ productId }: { productId: string }) {
           </div>
         </div>
       </header>
+
+      {showCreatedBanner && (
+        <div className={`flex items-center justify-between gap-4 px-4 py-3 border-b ${isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-50 border-orange-200"}`}>
+          <p className={`text-sm font-medium ${isDark ? "text-orange-200" : "text-orange-900"}`}>
+            🎬 Your product is ready! Now create marketing videos to sell it
+          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5" onClick={handleGenerateVideos}>
+              <Video className="w-3.5 h-3.5" /> Create Marketing Videos →
+            </Button>
+            <Button size="sm" variant="ghost" className={isDark ? "text-orange-200 hover:bg-orange-500/20" : "text-orange-800 hover:bg-orange-100"} onClick={() => setShowCreatedBanner(false)} aria-label="Dismiss">
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Center content area - scrollable */}
@@ -1942,13 +2276,63 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </div>
                 ) : null}
               </div>
-              {/* Page card - Google Docs style */}
-              <div className={`w-full max-w-[928px] mx-auto my-8 rounded-lg shadow-lg overflow-hidden ${isDark ? "bg-[#1A1A1A] border border-[#2A2A2A]" : "bg-white border border-gray-200"}`} style={{ minHeight: 1056, boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)" }}>
+              {/* Outer card (max 928px) — background fills THIS so no white strip on sides */}
+              <div
+                className={`relative w-full max-w-[928px] mx-auto my-8 rounded-lg shadow-lg overflow-hidden ${isDark ? "bg-[#1A1A1A] border border-[#2A2A2A]" : "bg-white border border-gray-200"}`}
+                style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)" }}
+              >
+                {canvasBgUrl ? (
+                  <>
+                    <div
+                      data-canvas-background
+                      className="absolute inset-0 overflow-hidden"
+                      style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}
+                      aria-hidden
+                    >
+                      <img
+                        data-canvas-background-img
+                        src={canvasBgUrl}
+                        alt=""
+                        fetchPriority="high"
+                        decoding="async"
+                        className="block w-full h-full object-cover"
+                        style={{
+                          pointerEvents: "none",
+                          objectPosition: backgroundSettings.position ?? "center center",
+                          opacity: backgroundSettings.opacity ?? 1,
+                          filter: (backgroundSettings.blur ?? 0) > 0
+                            ? `blur(${backgroundSettings.blur}px) brightness(${backgroundSettings.brightness ?? 100}%) contrast(${backgroundSettings.contrast ?? 100}%) saturate(${backgroundSettings.saturation ?? 100}%)`
+                            : `brightness(${backgroundSettings.brightness ?? 100}%) contrast(${backgroundSettings.contrast ?? 100}%) saturate(${backgroundSettings.saturation ?? 100}%)`,
+                        }}
+                        draggable={false}
+                        aria-hidden
+                      />
+                    </div>
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        zIndex: 1,
+                        pointerEvents: "none",
+                        backgroundColor: overlaySettings.color,
+                        opacity: overlaySettings.opacity ?? 0.9,
+                      }}
+                      aria-hidden
+                    />
+                  </>
+                ) : null}
+                {/* Page container — overflow-visible so selection outline is not clipped */}
                 <div
-                  className="relative isolate text-[#1A1A1A]"
+                  className="relative text-[#1A1A1A] overflow-visible"
                   style={{
-                    width: CANVAS_WIDTH,
+                    position: "relative",
+                    zIndex: 10,
+                    width: "100%",
                     minHeight: CANVAS_HEIGHT,
+                    padding: 0,
+                    margin: 0,
+                    boxSizing: "border-box",
                     fontFamily: "var(--font-sans), sans-serif",
                     backgroundColor: canvasBgUrl ? "transparent" : (isDark ? "#1A1A1A" : "#ffffff"),
                   }}
@@ -1959,80 +2343,32 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   }}
                   role="presentation"
                 >
-                  {canvasBgUrl ? (
-                    <>
-                      <div
-                        data-canvas-background
-                        style={{
-                          position: "absolute",
-                          left: 0,
-                          top: 0,
-                          right: 0,
-                          bottom: 0,
-                          width: "100%",
-                          height: "100%",
-                          zIndex: 0,
-                          display: "block",
-                          visibility: "visible",
-                          opacity: 1,
-                          pointerEvents: "none",
-                          overflow: "hidden",
-                        }}
-                        aria-hidden
-                      >
-                        <img
-                          data-canvas-background-img
-                          src={canvasBgUrl}
-                          alt=""
-                          fetchPriority="high"
-                          decoding="async"
-                          style={{
-                            position: "absolute",
-                            left: 0,
-                            top: 0,
-                            minWidth: "100%",
-                            minHeight: "100%",
-                            width: "100%",
-                            height: "100%",
-                            display: "block",
-                            visibility: "visible",
-                            opacity: backgroundSettings.opacity ?? 1,
-                            objectFit: (backgroundSettings.fit ?? "cover") as React.CSSProperties["objectFit"],
-                            objectPosition: backgroundSettings.position ?? "center center",
-                            imageRendering: "auto",
-                            filter: (backgroundSettings.blur ?? 0) > 0
-                              ? `blur(${backgroundSettings.blur}px) brightness(${backgroundSettings.brightness ?? 100}%) contrast(${backgroundSettings.contrast ?? 100}%) saturate(${backgroundSettings.saturation ?? 100}%)`
-                              : `brightness(${backgroundSettings.brightness ?? 100}%) contrast(${backgroundSettings.contrast ?? 100}%) saturate(${backgroundSettings.saturation ?? 100}%)`,
-                          }}
-                          draggable={false}
-                          aria-hidden
-                        />
-                      </div>
-                      <div
-                        style={{
-                          position: "absolute",
-                          left: 0,
-                          top: 0,
-                          right: 0,
-                          bottom: 0,
-                          zIndex: 1,
-                          pointerEvents: "none",
-                          backgroundColor: overlaySettings.color,
-                          opacity: overlaySettings.opacity,
-                        }}
-                        aria-hidden
-                      />
-                    </>
-                  ) : null}
                   <div
-                    className={`relative z-10 pointer-events-auto product-editor-preview-layout ${product.format === "workbook" ? "format-workbook" : ""}`}
+                    ref={contentAreaRef}
+                    className={`relative z-10 product-editor-preview-layout ${product.format === "workbook" ? "format-workbook" : ""}`}
                     style={{
                       ...previewLayoutStyle,
+                      position: "relative",
+                      zIndex: 10,
+                      pointerEvents: "auto",
                       ...(canvasBgUrl ? { backgroundColor: "transparent" } : {}),
                     }}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      handleTextClick(e);
+                      e.stopPropagation();
+                    }}
                   >
-                    <h2 className="text-2xl font-bold border-b pb-2" style={{ color: templatePreset.titleColor }}>{product.title}</h2>
+                    <h2
+                      data-section-id="__product_title"
+                      data-text-type="heading"
+                      className="text-2xl font-bold border-b pb-2 cursor-pointer select-text"
+                      style={{
+                        ...(product.designSettings?.textStyles?.["__product_title"]?.title ?? {}),
+                        color: product.designSettings?.textStyles?.["__product_title"]?.title?.color ?? templatePreset.titleColor,
+                      }}
+                    >
+                      {product.title}
+                    </h2>
                     {(sections.length > 1
                       ? (sections[currentPageIndex] ? [sections[currentPageIndex]] : [])
                       : sections
@@ -2044,9 +2380,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           <h3
                             data-section-id={section.id}
                             data-text-type="title"
-                            className="text-lg font-semibold cursor-text"
+                            className="text-lg font-semibold cursor-pointer select-text"
                             style={{ ...titleStyles, color: titleStyles?.color ?? templatePreset.headingColor }}
-                            onClick={handleTextClick}
                           >
                             {section.title}
                           </h3>
@@ -2064,7 +2399,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             data-text-type="body"
                             className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2 cursor-text"
                             style={{ ...bodyStyles, color: bodyStyles?.color ?? templatePreset.bodyColor }}
-                            onClick={handleTextClick}
+                            onClick={(e) => {
+                              console.log("Content area clicked");
+                              console.log("Target:", (e.target as HTMLElement).tagName, (e.target as HTMLElement).textContent?.substring(0, 30));
+                              const target = (e.target as HTMLElement).closest("h1, h2, h3, h4, p, li");
+                              console.log("Closest block:", target?.tagName, target?.textContent?.substring(0, 30));
+                              if (target) {
+                                (target as HTMLElement).style.outline = "2px dashed #f97316";
+                                (target as HTMLElement).style.outlineOffset = "2px";
+                              }
+                            }}
                           >
                             {section.content || section.contentHtml ? (
                               <div
@@ -2254,6 +2598,18 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     Deselect
                   </button>
                 </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">Text type:</span>
+                  <span className="text-xs font-medium text-gray-900 rounded bg-gray-200 px-2 py-0.5">
+                    {selectedTextMeta.type === "title"
+                      ? "Section title"
+                      : selectedTextMeta.type === "heading"
+                        ? "Heading"
+                        : selectedTextMeta.type === "subheading"
+                          ? "Subheading"
+                          : "Body text"}
+                  </span>
+                </div>
                 <div>
                   <label className="text-xs text-gray-600 font-medium block mb-1">Content</label>
                   <textarea
@@ -2381,7 +2737,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </div>
             )}
             <Tabs defaultValue="content" className="w-full flex flex-col flex-1 min-h-0">
-              <TabsList className="bg-gray-50 border-b border-gray-200 w-full grid grid-cols-5 rounded-none h-11 px-0">
+              <TabsList className="bg-gray-50 border-b border-gray-200 w-full grid grid-cols-7 rounded-none h-11 px-0">
                 <TabsTrigger value="content" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
                   <BookOpen className="w-3.5 h-3.5" /> Content
                 </TabsTrigger>
@@ -2394,8 +2750,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 <TabsTrigger value="layout" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
                   <LayoutGrid className="w-3.5 h-3.5" /> Layout
                 </TabsTrigger>
+                <TabsTrigger value="videos" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
+                  <Video className="w-3.5 h-3.5" /> Videos
+                </TabsTrigger>
                 <TabsTrigger value="export" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
                   <FileOutput className="w-3.5 h-3.5" /> Export
+                </TabsTrigger>
+                <TabsTrigger value="marketing" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
+                  <Megaphone className="w-3.5 h-3.5" /> Marketing
                 </TabsTrigger>
               </TabsList>
               <div className="flex-1 overflow-y-auto">
@@ -3241,6 +3603,19 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </Button>
                 </div>
               </TabsContent>
+              <TabsContent value="videos" className="mt-0 p-4 space-y-4">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Marketing Videos</h3>
+                <p className="text-xs text-gray-600 mb-3">
+                  Create TikTok-style videos to promote this product. Scripts are pre-filled from your product title and sales copy.
+                </p>
+                <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 gap-2" onClick={handleGenerateVideos}>
+                  <Video className="w-4 h-4" /> Generate TikTok Videos
+                </Button>
+                <div className="pt-2 border-t border-gray-200">
+                  <p className="text-xs font-medium text-gray-700 mb-2">Videos for this product</p>
+                  <p className="text-xs text-gray-500">Videos you generate from this product will appear here. Use the button above to create your first video.</p>
+                </div>
+              </TabsContent>
               <TabsContent value="export" className="mt-0 p-4 space-y-3">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Export</h3>
                 <div className="space-y-3">
@@ -3268,6 +3643,163 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     Generate Marketing Videos →
                   </Button>
                 </div>
+              </TabsContent>
+              <TabsContent value="marketing" className="mt-0 p-4 space-y-6 overflow-y-auto">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Marketplace listing assets</h3>
+                {!marketingAssets.productTitle && !marketingAssets.productDescription ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-600">Generate title, description, hashtags, and SEO keywords for Etsy, Gumroad, Stan Store, Payhip, etc.</p>
+                    <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 gap-2" onClick={handleGenerateMarketingAssets} disabled={marketingGenerating}>
+                      {marketingGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      {marketingGenerating ? "Generating…" : "Generate marketing assets"}
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <Label className="text-xs font-medium text-gray-700">
+                          Product thumbnail ({hasDalleThumbnail ? "1792×1024" : "AI-generated"})
+                        </Label>
+                        <div className="flex gap-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="bg-orange-500 hover:bg-orange-600 gap-1"
+                            onClick={handleGenerateThumbnail}
+                            disabled={thumbnailGenerating}
+                          >
+                            {thumbnailGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                            {hasDalleThumbnail ? "Regenerate Thumbnail" : "Generate Thumbnail"}
+                          </Button>
+                          {hasDalleThumbnail && (
+                            <Button type="button" variant="outline" size="sm" className="gap-1 h-8" onClick={handleDownloadThumbnail}>
+                              <Download className="w-3.5 h-3.5" /> Download
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {hasDalleThumbnail
+                          ? "AI-generated image with your title and badges. Choose a style and click Regenerate for a new design."
+                          : "Choose a style, then generate an AI thumbnail. No product background image is used—thumbnail is marketplace-only."}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {THUMBNAIL_TEMPLATES.map((t) => (
+                          <Button
+                            key={t.id}
+                            type="button"
+                            variant={thumbnailTemplate === t.id ? "default" : "outline"}
+                            size="sm"
+                            className={thumbnailTemplate === t.id ? "bg-orange-500 hover:bg-orange-600" : ""}
+                            onClick={() => setThumbnailTemplate(t.id)}
+                          >
+                            {t.label}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className="rounded-lg border border-gray-200 bg-gray-100 flex items-center justify-center p-2">
+                        <ThumbnailMockup
+                          productTitle={product?.title ?? "Product"}
+                          format={product?.format ?? "PDF"}
+                          sectionCount={sections.length}
+                          accentColor={graphicsAccentColor}
+                          template={thumbnailTemplate}
+                          baseImageUrl={marketingAssets.thumbnailUrl ?? undefined}
+                          preview
+                        />
+                      </div>
+                      <div style={{ position: "fixed", left: -10000, top: 0, width: thumbCaptureWidth, height: thumbCaptureHeight, pointerEvents: "none", visibility: "hidden" }} aria-hidden="true">
+                        <ThumbnailMockup
+                          productTitle={product?.title ?? "Product"}
+                          format={product?.format ?? "PDF"}
+                          sectionCount={sections.length}
+                          accentColor={graphicsAccentColor}
+                          template={thumbnailTemplate}
+                          baseImageUrl={marketingAssets.thumbnailUrl ?? undefined}
+                          preview={false}
+                          innerRef={thumbnailCaptureRef}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-xs font-medium text-gray-700">Product title</Label>
+                        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={() => copyToClipboard(marketingAssets.productTitle ?? "", "Title")}>
+                          <Copy className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                      <Input
+                        value={marketingAssets.productTitle ?? ""}
+                        onChange={(e) => setProduct((p) => (p ? { ...p, marketingAssets: { ...p.marketingAssets, productTitle: e.target.value } } : null))}
+                        onBlur={(e) => saveMarketingEdits({ productTitle: e.currentTarget.value })}
+                        placeholder="Marketplace-optimized title…"
+                        className="text-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-xs font-medium text-gray-700">Product description</Label>
+                        <div className="flex gap-1">
+                          <Button type="button" variant="outline" size="sm" className="h-7 gap-1 shrink-0" onClick={handleRegenerateDescription} disabled={marketingRegenerating}>
+                            {marketingRegenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} Regenerate
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={() => copyToClipboard(marketingAssets.productDescription ?? "", "Description")}>
+                            <Copy className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                      <Textarea
+                        value={marketingAssets.productDescription ?? ""}
+                        onChange={(e) => setProduct((p) => (p ? { ...p, marketingAssets: { ...p.marketingAssets, productDescription: e.target.value } } : null))}
+                        onBlur={(e) => saveMarketingEdits({ productDescription: e.currentTarget.value })}
+                        placeholder="Listing description…"
+                        rows={8}
+                        className="text-sm resize-y"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-xs font-medium text-gray-700">Hashtags / tags</Label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 shrink-0"
+                          onClick={() => copyToClipboard((marketingAssets.hashtags ?? []).map((t) => (t.startsWith("#") ? t : `#${t}`)).join(" "), "Hashtags")}
+                        >
+                          <Copy className="w-3.5 h-3.5 mr-1" /> Copy
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(marketingAssets.hashtags ?? []).map((tag) => (
+                          <span key={tag} className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
+                            {tag.startsWith("#") ? tag : `#${tag}`}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-xs font-medium text-gray-700">SEO keywords</Label>
+                        <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0" onClick={() => copyToClipboard((marketingAssets.seoKeywords ?? []).join(", "), "SEO keywords")}>
+                          <Copy className="w-3.5 h-3.5 mr-1" /> Copy
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(marketingAssets.seoKeywords ?? []).map((kw) => (
+                          <span key={kw} className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600">
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" className="w-full border-gray-200 gap-2" onClick={handleGenerateMarketingAssets} disabled={marketingGenerating}>
+                      {marketingGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                      {marketingGenerating ? "Regenerating…" : "Regenerate all"}
+                    </Button>
+                  </>
+                )}
               </TabsContent>
               </div>
             </Tabs>
@@ -3502,22 +4034,26 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       className="preview-page product-page relative shrink-0 rounded-lg overflow-hidden border border-gray-200 bg-white shadow-lg"
                       style={{
                         width: CANVAS_WIDTH,
-                        minHeight: CANVAS_HEIGHT,
+                        height: CANVAS_HEIGHT,
                         pageBreakAfter: "always",
                         pageBreakInside: "avoid",
                       }}
                     >
                     {bgUrl ? (
                       <>
-                        <div className="absolute inset-0 z-0" aria-hidden>
+                        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden>
                           <img
                             src={bgUrl}
                             alt=""
-                            className="absolute inset-0 w-full h-full object-cover"
                             style={{
-                              opacity: bgSettings.opacity ?? 1,
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              width: "100%",
+                              height: "100%",
                               objectFit: (bgSettings.fit ?? "cover") as React.CSSProperties["objectFit"],
                               objectPosition: bgSettings.position ?? "center center",
+                              opacity: bgSettings.opacity ?? 1,
                               filter: (bgSettings.blur ?? 0) > 0
                                 ? `blur(${bgSettings.blur}px) brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`
                                 : `brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`,
@@ -3526,7 +4062,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         </div>
                         <div
                           className="absolute inset-0 z-[1] pointer-events-none"
-                          style={{ backgroundColor: overlay.color, opacity: overlay.opacity }}
+                          style={{ backgroundColor: overlay.color, opacity: overlay.opacity ?? 0.9 }}
                           aria-hidden
                         />
                       </>
@@ -3536,7 +4072,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       style={{
                         ...previewLayoutStyle,
                         ...(bgUrl ? { backgroundColor: "transparent" } : {}),
-                        minHeight: CANVAS_HEIGHT,
+                        minHeight: "100%",
                       }}
                     >
                       <h2 className="text-2xl font-bold border-b pb-2" style={{ color: templatePreset.titleColor }}>{product.title}</h2>

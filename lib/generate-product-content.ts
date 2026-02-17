@@ -1,8 +1,30 @@
 import OpenAI from "openai";
+import { withRetry429 } from "./openai-with-retry";
 
 export type GenerateContentSection = { id: string; title: string; body: string; imagePrompt?: string };
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+
+/** Customization from Discovery step 7 (optional). Kept within limits for generation speed (<60s target). */
+export type CustomizationOptions = {
+  numChapters?: number;
+  contentLength?: "short" | "medium" | "long";
+  contentStyle?: "text_only" | "text_with_placeholders" | "text_with_ai_images";
+  tone?: "professional" | "casual" | "academic" | "friendly";
+  ebookGuide?: { includeToc?: boolean; includeIntroConclusion?: boolean };
+  workbook?: { exercisesPerSection?: number; includeAnswerKey?: boolean; includeFillInBlanks?: boolean };
+  checklist?: { numChecklists?: number; itemsPerChecklist?: number; includeProgressTracking?: boolean };
+  course?: { numModules?: number; lessonsPerModule?: number; includeLearningObjectives?: boolean; includeAssignments?: boolean };
+  journal?: { numPrompts?: number; includeLinedSpace?: boolean; includeReflectionQuestions?: boolean };
+  planner?: { duration?: string; includeGoalSetting?: boolean; includeHabitTracker?: boolean };
+  spreadsheet?: { numTutorials?: number; difficulty?: string; includePracticeExercises?: boolean };
+  notion?: { numDatabases?: number; includeSetupInstructions?: boolean };
+};
+
+/** Sensible limits so generation stays under ~60s. Default 4 chapters, medium ~800 words. */
+const DEFAULT_CHAPTERS = 4;
+const MAX_CHAPTERS = 6;
+const MAX_SECTION_TOKENS = 2500;
 
 export type GenerateProductContentParams = {
   productName: string;
@@ -13,6 +35,7 @@ export type GenerateProductContentParams = {
   format: string;
   hookTexts: string[];
   ctaTexts: string[];
+  customizationOptions?: CustomizationOptions;
 };
 
 const SYSTEM_PREMIUM =
@@ -26,7 +49,8 @@ const CONTEXT_BLOCK = (params: GenerateProductContentParams) =>
 ${params.productDescription ? `- Description: ${params.productDescription}` : ""}
 NICHE: ${params.niche || "General audience"}
 ${params.hookTexts?.length ? `HOOKS (weave into content): ${params.hookTexts.join(" | ")}` : ""}
-${params.ctaTexts?.length ? `CTAs: ${params.ctaTexts.join(" | ")}` : ""}`;
+${params.ctaTexts?.length ? `CTAs: ${params.ctaTexts.join(" | ")}` : ""}
+${params.customizationOptions?.tone ? `TONE: Write in a ${params.customizationOptions.tone} tone throughout.` : ""}`;
 
 const CONTENT_STRUCTURE_REQUIREMENTS = `
 EACH SECTION MUST INCLUDE (where applicable):
@@ -365,6 +389,7 @@ export async function generateProductContent(params: GenerateProductContentParam
   const { format = "ebook" } = params;
   const { prompt, useGpt4, maxTokens } = buildPrompt(params);
 
+  // gpt-4o when useGpt4: full product section content in one shot (quality); gpt-4o-mini: cost-saving fallback
   const completion = await openai.chat.completions.create({
     model: useGpt4 ? "gpt-4o" : "gpt-4o-mini",
     messages: [
@@ -394,42 +419,62 @@ export type OutlineSection = { id: string; title: string };
 
 export async function generateProductOutline(params: GenerateProductContentParams): Promise<OutlineSection[]> {
   if (!openai) throw new Error("OPENAI_API_KEY is not configured");
-  const { productName, format = "ebook", niche } = params;
+  const { productName, format = "ebook", niche, customizationOptions } = params;
   const normalizedFormat = (format || "ebook").toLowerCase().trim();
   const ctx = CONTEXT_BLOCK(params);
+  const numChapters = Math.min(MAX_CHAPTERS, Math.max(3, customizationOptions?.numChapters ?? DEFAULT_CHAPTERS));
 
-  const sectionCountHint =
+  const journalPrompts = Math.min(15, Math.max(5, customizationOptions?.journal?.numPrompts ?? 12));
+  const courseModules = Math.min(MAX_CHAPTERS, Math.max(2, customizationOptions?.course?.numModules ?? numChapters));
+  const numChecklists = Math.min(5, Math.max(2, customizationOptions?.checklist?.numChecklists ?? 4));
+  const itemsPerChecklist = Math.min(10, Math.max(5, customizationOptions?.checklist?.itemsPerChecklist ?? 8));
+  const numTutorials = Math.min(5, Math.max(2, customizationOptions?.spreadsheet?.numTutorials ?? 4));
+  const numDatabases = Math.min(5, Math.max(2, customizationOptions?.notion?.numDatabases ?? 4));
+
+  let sectionCountHint =
     normalizedFormat === "workbook"
-      ? "10-14 sections (outcome-promise, fast-start, framework, intro, 8-12 main chapters, disclaimer)"
-      : normalizedFormat === "ebook"
-        ? "10-12 sections (outcome-promise, fast-start, framework, intro, 6-8 chapters, disclaimer)"
-        : normalizedFormat === "guide"
-          ? "10-14 sections (outcome-promise, fast-start, framework, 6-12 steps, disclaimer)"
-          : normalizedFormat === "journal"
-            ? "55-78 sections (outcome-promise, fast-start, framework, 50-75 prompts, disclaimer)"
-            : normalizedFormat === "course"
-              ? "12-16 sections (outcome-promise, fast-start, framework, 8-12 modules, disclaimer)"
-              : normalizedFormat === "planner"
-                ? "34 sections (outcome-promise, fast-start, framework, 30 templates, disclaimer)"
-                : "8-12 sections";
+      ? `outcome-promise, fast-start, framework, intro, ${numChapters} main chapters, disclaimer`
+      : normalizedFormat === "ebook" || normalizedFormat === "guide"
+        ? `outcome-promise, fast-start, framework, intro, ${numChapters} chapters, disclaimer`
+        : normalizedFormat === "journal"
+          ? `outcome-promise, fast-start, framework, ${journalPrompts} prompts, disclaimer`
+          : normalizedFormat === "course"
+            ? `outcome-promise, fast-start, framework, ${courseModules} modules, disclaimer`
+            : normalizedFormat === "planner"
+              ? "outcome-promise, fast-start, framework, 12 templates, disclaimer"
+              : normalizedFormat === "checklist"
+                ? `${numChecklists} checklists (each with ${itemsPerChecklist} items), disclaimer`
+                : normalizedFormat === "spreadsheet"
+                  ? `${numTutorials} tutorials, disclaimer`
+                  : normalizedFormat === "notion"
+                    ? `${numDatabases} databases/views, disclaimer`
+                    : `outcome-promise, fast-start, framework, ${numChapters} sections, disclaimer`;
+  sectionCountHint = `Generate exactly these sections in order: ${sectionCountHint}.`;
 
   const prompt = `Product: "${productName}". Format: ${format}. Niche: ${niche}.
 ${ctx}
 
 Return ONLY a JSON object with a "sections" array. Each item: {"id": "string", "title": "string"}. No body, no imagePrompt.
 Use standard ids where applicable: outcome-promise, fast-start, framework, intro, ch1/ch2/... or step1/step2/... or mod1/mod2/... or p1/p2/..., disclaimer at end.
-${sectionCountHint}. Section titles must be benefit-driven. No markdown, no explanation.`;
+${sectionCountHint} Section titles must be benefit-driven. No markdown, no explanation.`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: "You are a digital product outline expert. Return only valid JSON with a 'sections' array of {id, title}. No other keys." },
-      { role: "user", content: prompt },
-    ],
-    temperature: 0.6,
-    max_tokens: 4000,
-  });
-
+  // gpt-4o-mini: outline/table-of-contents only, low complexity
+  const completion = await withRetry429(
+    () =>
+      openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are a digital product outline expert. Return only valid JSON with a 'sections' array of {id, title}. No other keys." },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.6,
+        max_tokens: 4000,
+      }),
+    {
+      onRetry: (attempt, delayMs) =>
+        console.warn(`[generate-product-content] Outline 429/5xx, retry ${attempt} in ${delayMs / 1000}s`),
+    }
+  );
   const raw = completion.choices[0]?.message?.content?.trim() || "";
   const jsonStr = raw.replace(/^```json\s*/i, "").replace(/\s*```\s*$/i, "").trim();
   const parsed = JSON.parse(jsonStr) as { sections?: Array<{ id?: string; title?: string }> };
@@ -441,6 +486,12 @@ ${sectionCountHint}. Section titles must be benefit-driven. No markdown, no expl
   return sections;
 }
 
+const WORD_HINT_BY_LENGTH: Record<string, string> = {
+  short: "~500 words",
+  medium: "~800 words",
+  long: "~1200 words",
+};
+
 /** Generate body (and optional imagePrompt) for a single section. Used for incremental generation. */
 export async function generateSingleSectionBody(
   params: GenerateProductContentParams,
@@ -449,17 +500,27 @@ export async function generateSingleSectionBody(
   totalSections: number
 ): Promise<{ body: string; imagePrompt?: string }> {
   if (!openai) throw new Error("OPENAI_API_KEY is not configured");
-  const { productName, format, niche } = params;
+  const { productName, format, niche, customizationOptions } = params;
   const ctx = CONTEXT_BLOCK(params);
 
+  const lengthKey = customizationOptions?.contentLength ?? "medium";
+  const customWordHint = WORD_HINT_BY_LENGTH[lengthKey];
   const wordHint =
-    format?.toLowerCase() === "workbook"
-      ? "500-700 words"
+    customWordHint ??
+    (format?.toLowerCase() === "workbook"
+      ? "500-600 words"
       : format?.toLowerCase() === "ebook"
-        ? "1200-1500 words"
+        ? "800-1000 words"
         : format?.toLowerCase() === "guide"
           ? "600-800 words"
-          : "500-800 words";
+          : "500-800 words");
+
+  const contentStyle = customizationOptions?.contentStyle ?? "text_with_placeholders";
+  const wantImagePrompt = contentStyle === "text_with_ai_images";
+  const imageLine =
+    wantImagePrompt
+      ? "For main chapters (ch1, ch2, etc.) or steps, also provide a 1-sentence \"imagePrompt\" for a DALL-E illustration."
+      : "Do not include imagePrompt.";
 
   const prompt = `Product: "${productName}". Format: ${format}. Niche: ${niche}.
 ${ctx}
@@ -469,19 +530,27 @@ Write ONLY the content for this section (section ${sectionIndex + 1} of ${totalS
 - title: "${section.title}"
 
 Requirements: ${wordHint} of HTML. Use <p>, <strong>, <em>, <h2>, <h3>, <ul>, <ol>, <li>. No markdown. Include hook, main content, examples, action items, summary where appropriate.
-For main chapters (ch1, ch2, etc.) or steps, also provide a 1-sentence "imagePrompt" for a DALL-E illustration.
+${imageLine}
 
-Return ONLY valid JSON: {"body": "<p>...</p>", "imagePrompt": "optional one sentence"}. No code fences.`;
+Return ONLY valid JSON: {"body": "<p>...</p>", "imagePrompt": "optional one sentence only if requested"}. No code fences.`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      { role: "system", content: SYSTEM_PREMIUM },
-      { role: "user", content: prompt },
-    ],
-    temperature: 0.7,
-    max_tokens: 4000,
-  });
+  // gpt-4o: quality matters for long-form section content; max_tokens capped for speed
+  const completion = await withRetry429(
+    () =>
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: SYSTEM_PREMIUM },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.7,
+        max_tokens: MAX_SECTION_TOKENS,
+      }),
+    {
+      onRetry: (attempt, delayMs) =>
+        console.warn(`[generate-product-content] Section body 429/5xx, retry ${attempt} in ${delayMs / 1000}s`),
+    }
+  );
 
   const raw = completion.choices[0]?.message?.content?.trim() || "";
   const jsonStr = raw.replace(/^```json\s*/i, "").replace(/\s*```\s*$/i, "").trim();

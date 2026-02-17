@@ -119,6 +119,7 @@ Rules:
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
+        // gpt-4o-mini: sales guide structure, not long-form content
         model: "gpt-4o-mini",
         messages: [
           {

@@ -46,7 +46,8 @@ Generate the TikTok Shop demo script as JSON with fullNarration and 5 scenes fol
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "gpt-4o",
+      // gpt-4o-mini: script generation, not product long-form content
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: OPENAI_SYSTEM },
         { role: "user", content: prompt },

@@ -76,6 +76,7 @@ Be specific to THIS product—no generic answers.`;
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
+      // gpt-4o-mini: product breakdown, non-critical
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemContent },

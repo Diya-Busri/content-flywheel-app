@@ -110,6 +110,7 @@ ${daysSpec} User can dedicate ${commitmentMinutes} minutes per day. Assign a cat
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
+      // gpt-4o-mini: task generation/formatting, low complexity
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },

@@ -65,7 +65,7 @@ export interface PdfProductPayload {
     template?: string;
     layout?: { margins?: number; paragraphSpacing?: number; sectionSpacing?: number; lineHeight?: number; alignment?: string; maxWidth?: string };
     colors?: { graphics?: string };
-    textStyles?: Record<string, { title?: { color?: string; fontFamily?: string }; body?: { color?: string; fontFamily?: string } }>;
+    textStyles?: Record<string, { title?: { color?: string; fontFamily?: string }; body?: { color?: string; fontFamily?: string }; blocks?: Array<Record<string, string>> }>;
   };
   placedElementsByPage?: PdfPlacedElement[][];
 }
@@ -81,6 +81,35 @@ function escapeHtml(s: string): string {
 function sectionBodyHtml(section: PdfSection): string {
   const raw = section.contentHtml ?? (section.body != null ? cleanMarkdownToHtml(section.body) : "");
   return raw || "<span style='color:#999'>(Empty)</span>";
+}
+
+function blockStylesToCss(s: Record<string, string>): string {
+  const parts: string[] = [];
+  if (s.color) parts.push(`color:${s.color}`);
+  if (s.fontSize) parts.push(`font-size:${s.fontSize}`);
+  if (s.fontFamily) parts.push(`font-family:${s.fontFamily}`);
+  if (s.fontWeight) parts.push(`font-weight:${s.fontWeight}`);
+  if (s.textAlign) parts.push(`text-align:${s.textAlign}`);
+  if (s.lineHeight) parts.push(`line-height:${s.lineHeight}`);
+  if (s.textDecoration) parts.push(`text-decoration:${s.textDecoration}`);
+  if (s.textTransform) parts.push(`text-transform:${s.textTransform}`);
+  if (s.backgroundColor && s.backgroundColor !== "transparent") parts.push(`background-color:${s.backgroundColor}`);
+  return parts.join(";");
+}
+
+/** Injects per-block inline styles into section body HTML so headings/subheadings/paragraphs keep editor styles in PDF. */
+function injectBlockStyles(html: string, blocks: Array<Record<string, string>> | undefined): string {
+  if (!Array.isArray(blocks) || blocks.length === 0) return html;
+  let index = 0;
+  return html.replace(/<(h2|h3|h4|p)(\s[^>]*)?>/gi, (match, tag: string, rest: string) => {
+    const s = blocks[index];
+    index += 1;
+    if (!s || typeof s !== "object") return match;
+    const styleStr = blockStylesToCss(s);
+    if (!styleStr) return match;
+    const safe = styleStr.replace(/"/g, "&quot;");
+    return `<${tag}${rest || ""} style="${safe}">`;
+  });
 }
 
 function iconToImgHtml(content: string, color: string): string {
@@ -144,8 +173,8 @@ export function buildSinglePageHtml(payload: PdfProductPayload, pageIdx: number)
         ? `blur(${bgSettings.blur}px) brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`
         : `brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`;
     bgBlock = `
-        <div class="pdf-bg" style="position:absolute;inset:0;z-index:0;">
-          <img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:${fit};object-position:${pos};opacity:${opacity};filter:${escapeHtml(filter)};" />
+        <div class="pdf-bg" style="position:absolute;inset:0;z-index:0;overflow:hidden;">
+          <img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${fit};object-position:${pos};opacity:${opacity};filter:${escapeHtml(filter)};" />
         </div>
         <div class="pdf-overlay" style="position:absolute;inset:0;z-index:1;pointer-events:none;background-color:${escapeHtml(overlay.color)};opacity:${overlayOpacity};"></div>`;
   }
@@ -167,7 +196,9 @@ export function buildSinglePageHtml(payload: PdfProductPayload, pageIdx: number)
     })
     .join("");
 
-  const bodyHtml = sectionBodyHtml(section);
+  const bodyHtmlRaw = sectionBodyHtml(section);
+  const sectionBlockStyles = designSettings.textStyles?.[section.id ?? ""]?.blocks;
+  const bodyHtml = injectBlockStyles(bodyHtmlRaw, sectionBlockStyles);
   const sectionImage = section.imageUrl?.trim() ? `<div class="pdf-section-image" style="margin:1rem 0 1.5rem;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:100%;height:auto;max-height:320px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>` : "";
   const pageDiv = `
       <div class="pdf-page" style="position:relative;background:#fff;width:${CANVAS_WIDTH}px;height:${CANVAS_HEIGHT}px;overflow:hidden;box-sizing:border-box;">
@@ -186,7 +217,9 @@ export function buildSinglePageHtml(payload: PdfProductPayload, pageIdx: number)
       </div>`;
 
   const css = `
+    .pdf-page { position: relative; overflow: hidden; }
     .pdf-page * { box-sizing: border-box; }
+    .pdf-bg img { display: block; }
     .pdf-content p { margin-bottom: ${paragraphSpacing}rem; }
     .pdf-content h2, .pdf-content h3 { margin-top: ${sectionSpacing * 0.75}rem; margin-bottom: ${paragraphSpacing}rem; }
     .pdf-content ul, .pdf-content ol { margin-bottom: ${paragraphSpacing}rem; padding-left: 1.5rem; }
@@ -255,8 +288,8 @@ export function buildProductPdfHtml(payload: PdfProductPayload): string {
           ? `blur(${bgSettings.blur}px) brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`
           : `brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`;
       bgBlock = `
-        <div class="pdf-bg" style="position:absolute;inset:0;z-index:0;">
-          <img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:${fit};object-position:${pos};opacity:${opacity};filter:${escapeHtml(filter)};" />
+        <div class="pdf-bg" style="position:absolute;inset:0;z-index:0;overflow:hidden;">
+          <img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${fit};object-position:${pos};opacity:${opacity};filter:${escapeHtml(filter)};" />
         </div>
         <div class="pdf-overlay" style="position:absolute;inset:0;z-index:1;pointer-events:none;background-color:${escapeHtml(overlay.color)};opacity:${overlayOpacity};"></div>`;
     }
@@ -278,7 +311,9 @@ export function buildProductPdfHtml(payload: PdfProductPayload): string {
       })
       .join("");
 
-    const bodyHtml = sectionBodyHtml(section);
+    const bodyHtmlRaw = sectionBodyHtml(section);
+    const sectionBlockStyles = designSettings.textStyles?.[section.id ?? ""]?.blocks;
+    const bodyHtml = injectBlockStyles(bodyHtmlRaw, sectionBlockStyles);
     const sectionImage = section.imageUrl?.trim() ? `<div class="pdf-section-image" style="margin:1rem 0 1.5rem;text-align:center;"><img src="${escapeHtml(section.imageUrl)}" alt="" style="max-width:100%;height:auto;max-height:320px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);" /></div>` : "";
     return `
       <div class="pdf-page" style="position:relative;background:#fff;">
@@ -309,6 +344,7 @@ export function buildProductPdfHtml(payload: PdfProductPayload): string {
     }
     .pdf-page:last-child { page-break-after: auto; }
     .pdf-page * { box-sizing: border-box; }
+    .pdf-bg img { display: block; }
     .pdf-content p { margin-bottom: ${paragraphSpacing}rem; }
     .pdf-content h2, .pdf-content h3 { margin-top: ${sectionSpacing * 0.75}rem; margin-bottom: ${paragraphSpacing}rem; }
     .pdf-content ul, .pdf-content ol { margin-bottom: ${paragraphSpacing}rem; padding-left: 1.5rem; }

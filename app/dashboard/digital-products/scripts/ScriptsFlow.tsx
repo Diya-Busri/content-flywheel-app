@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -205,6 +205,8 @@ function generateMockScripts(product: ProductFormData | null): ScriptData[] {
 
 export default function ScriptsFlow() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const productIdFromUrl = searchParams.get("productId");
   const [loading, setLoading] = useState(true);
   const [scripts, setScripts] = useState<ScriptData[]>([]);
   const [editModal, setEditModal] = useState<{ scriptId: string; section: SectionType } | null>(null);
@@ -231,18 +233,72 @@ export default function ScriptsFlow() {
   };
 
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem("digitalProductForm");
-      if (raw) {
-        const data = JSON.parse(raw) as ProductFormData;
-        if (data.productName) setProductName(data.productName);
+    if (!productIdFromUrl) {
+      try {
+        const raw = sessionStorage.getItem("digitalProductForm");
+        if (raw) {
+          const data = JSON.parse(raw) as ProductFormData;
+          if (data.productName) setProductName(data.productName);
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
-  }, []);
+  }, [productIdFromUrl]);
 
   useEffect(() => {
+    if (productIdFromUrl) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const res = await fetch(`/api/products/${productIdFromUrl}`);
+          if (!res.ok || cancelled) {
+            if (!cancelled) setLoading(false);
+            return;
+          }
+          const product = (await res.json()) as {
+            id: string;
+            title: string;
+            niche: string;
+            marketingAssets?: { productTitle?: string; productDescription?: string } | null;
+          };
+          const title = product.marketingAssets?.productTitle ?? product.title;
+          const description = product.marketingAssets?.productDescription ?? "";
+          const formData: ProductFormData = {
+            productName: title,
+            productDescription: description,
+            productType: "digital",
+            productFileOrLinkMode: "file",
+            hasFile: true,
+            fileName: `${(title || "product").replace(/\s+/g, "-")}.pdf`,
+          };
+          try {
+            sessionStorage.setItem("digitalProductForm", JSON.stringify(formData));
+            sessionStorage.setItem(
+              "productContextForVideos",
+              JSON.stringify({
+                productId: productIdFromUrl,
+                productName: title,
+                productDescription: description,
+                niche: product.niche,
+              })
+            );
+          } catch {
+            // ignore
+          }
+          if (cancelled) return;
+          setProductName(title);
+          setScripts(generateMockScripts(formData));
+        } catch {
+          if (!cancelled) setScripts(generateMockScripts(null));
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
     const t = setTimeout(() => {
       let product: ProductFormData | null = null;
       try {
@@ -255,7 +311,7 @@ export default function ScriptsFlow() {
       setLoading(false);
     }, 2000);
     return () => clearTimeout(t);
-  }, []);
+  }, [productIdFromUrl]);
 
   const updateScript = (id: string, updates: Partial<ScriptData>) => {
     setScripts((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
@@ -291,11 +347,11 @@ export default function ScriptsFlow() {
   return (
     <main className="min-h-screen bg-[#0F0F0F] text-white p-6 md:p-10 max-w-6xl mx-auto pb-28">
       <Link
-        href="/dashboard/digital-products/create"
+        href={productIdFromUrl ? `/dashboard/digital-products/${productIdFromUrl}/edit` : "/dashboard/digital-products/create"}
         className="inline-flex items-center gap-2 text-sm text-[#A0A0A0] hover:text-orange-500 mb-6 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
-        Back to Product
+        {productIdFromUrl ? "Back to Product Editor" : "Back to Product"}
       </Link>
 
       {/* Progress */}

@@ -68,6 +68,7 @@ export async function PATCH(
         ...(body.content != null && { content: body.content }),
         ...(body.designSettings != null && { designSettings: body.designSettings }),
         ...(body.placedElements != null && { placedElements: body.placedElements }),
+        ...(body.marketingAssets != null && { marketingAssets: body.marketingAssets }),
         updatedAt: new Date(),
       })
       .where(and(eq(productsTable.id, id), eq(productsTable.userId, userId), isNull(productsTable.deletedAt)))

@@ -33,7 +33,8 @@ Generate the script JSON with fullNarration and scenes.`;
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "gpt-4o",
+      // gpt-4o-mini: structured script, not product chapter content
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: OPENAI_SYSTEM },
         { role: "user", content: prompt },

@@ -260,6 +260,14 @@ export default function LibraryFlow() {
                                   Edit
                                 </Link>
                               </DropdownMenuItem>
+                              {item.type === "product" && (
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/dashboard/digital-products/scripts?productId=${encodeURIComponent(item.id)}`}>
+                                    <Video className="w-4 h-4 mr-2" />
+                                    Create Videos
+                                  </Link>
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem onClick={() => navigator.clipboard.writeText(item.title)}>
                                 <Copy className="w-4 h-4 mr-2" />
                                 Duplicate
@@ -321,6 +329,13 @@ export default function LibraryFlow() {
                             Open
                           </Link>
                         </Button>
+                        {item.type === "product" && (
+                          <Button variant="outline" size="sm" asChild title="Create Videos">
+                            <Link href={`/dashboard/digital-products/scripts?productId=${encodeURIComponent(item.id)}`}>
+                              <Video className="w-3.5 h-3.5" />
+                            </Link>
+                          </Button>
+                        )}
                         <Button variant="outline" size="sm">
                           <Download className="w-3.5 h-3.5" />
                         </Button>

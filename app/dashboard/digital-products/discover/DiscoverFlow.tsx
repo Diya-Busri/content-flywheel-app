@@ -19,7 +19,7 @@ async function parseJsonResponse<T = unknown>(res: Response): Promise<T> {
   }
   if (!trimmed) return {} as T;
   try {
-    return JSON.parse(text) as T;
+    return JSON.parse(trimmed) as T;
   } catch {
     throw new Error(`Invalid response from ${url}. Please try again.`);
   }
@@ -34,7 +34,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, ArrowRight, Loader2, User, Video, RefreshCw, Filter, BookOpen, ClipboardList, Sheet, FileStack, GraduationCap, ListChecks, NotebookPen, Calendar, Play, Sparkles, Trash2, Copy, Check, AlertCircle, Target, Zap, MessageCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, User, Video, RefreshCw, Filter, BookOpen, ClipboardList, Sheet, FileStack, GraduationCap, ListChecks, NotebookPen, Calendar, Play, Sparkles, Trash2, Copy, Check, AlertCircle, Target, Zap, MessageCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -169,12 +169,45 @@ const PRODUCT_FORMATS = [
   { id: "planner", label: "Planner", icon: Calendar, desc: "Lined pages for planning & notes" },
 ] as const;
 
+const TOTAL_STEPS = 7;
+
 const GENERATE_STEPS = [
   "Creating outline...",
   "Writing content...",
   "Adding examples...",
   "Formatting product...",
 ];
+
+/** Universal + format-specific customization options for product generation. */
+export type CustomizationOptions = {
+  numChapters: number;
+  contentLength: "short" | "medium" | "long";
+  contentStyle: "text_only" | "text_with_placeholders" | "text_with_ai_images";
+  tone: "professional" | "casual" | "academic" | "friendly";
+  ebookGuide?: { includeToc: boolean; includeIntroConclusion: boolean };
+  workbook?: { exercisesPerSection: number; includeAnswerKey: boolean; includeFillInBlanks: boolean };
+  checklist?: { numChecklists: number; itemsPerChecklist: number; includeProgressTracking: boolean };
+  course?: { numModules: number; lessonsPerModule: number; includeLearningObjectives: boolean; includeAssignments: boolean };
+  journal?: { numPrompts: number; includeLinedSpace: boolean; includeReflectionQuestions: boolean };
+  planner?: { duration: "weekly" | "monthly" | "quarterly" | "yearly"; includeGoalSetting: boolean; includeHabitTracker: boolean };
+  spreadsheet?: { numTutorials: number; difficulty: "beginner" | "intermediate" | "advanced"; includePracticeExercises: boolean };
+  notion?: { numDatabases: number; includeSetupInstructions: boolean };
+};
+
+const DEFAULT_CUSTOMIZATION: CustomizationOptions = {
+  numChapters: 4,
+  contentLength: "medium",
+  contentStyle: "text_with_placeholders",
+  tone: "professional",
+  ebookGuide: { includeToc: true, includeIntroConclusion: true },
+  workbook: { exercisesPerSection: 5, includeAnswerKey: false, includeFillInBlanks: false },
+  checklist: { numChecklists: 4, itemsPerChecklist: 8, includeProgressTracking: false },
+  course: { numModules: 4, lessonsPerModule: 3, includeLearningObjectives: true, includeAssignments: true },
+  journal: { numPrompts: 12, includeLinedSpace: true, includeReflectionQuestions: true },
+  planner: { duration: "monthly", includeGoalSetting: true, includeHabitTracker: true },
+  spreadsheet: { numTutorials: 4, difficulty: "beginner", includePracticeExercises: true },
+  notion: { numDatabases: 4, includeSetupInstructions: true },
+};
 
 const FORMAT_LABELS: Record<string, string> = {
   ebook: "Ebook",
@@ -245,10 +278,15 @@ export default function DiscoverFlow() {
   const [courseIncludeAvatar, setCourseIncludeAvatar] = useState(false);
   const [courseVoiceOver, setCourseVoiceOver] = useState(false);
   const [courseVoiceType, setCourseVoiceType] = useState<string>("professional-female");
+  const [customization, setCustomization] = useState<CustomizationOptions>(DEFAULT_CUSTOMIZATION);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [generateStepIndex, setGenerateStepIndex] = useState(0);
   const [generateProgress, setGenerateProgress] = useState<{ total: number; completed: number } | null>(null);
+  /** When set, we hit the poll timeout but product is still generating; show "Still generating" with Keep waiting / My Library. */
+  const [timeoutStillGenerating, setTimeoutStillGenerating] = useState<string | null>(null);
+  const [showVideoPromptModal, setShowVideoPromptModal] = useState(false);
 
   // Step 1: must select goal (experienced/beginner) + interests min 3 chars OR "I'm not sure"
   const canProceedStep1 = !!goal && (interests.trim().length >= 3 || dontKnowYet);
@@ -303,6 +341,8 @@ export default function DiscoverFlow() {
     setProductCurrentPage(0);
     setFacelessOrPersonal(null);
     setProductFormat(null);
+    setCustomization(DEFAULT_CUSTOMIZATION);
+    setShowAdvancedOptions(false);
     setDontKnowYet(false);
     setCustomNiche("");
     setCustomProductName("");
@@ -351,6 +391,13 @@ export default function DiscoverFlow() {
 
       if (!res.ok) {
         const errMsg = (typeof data === "object" && data !== null && !Array.isArray(data) && typeof (data as { error?: string }).error === "string" ? (data as { error: string }).error : null) || "Generation failed";
+        if (res.status === 429) {
+          setGenerateError("We're experiencing high demand. Your request will automatically retry in a few seconds...");
+          setNicheLoading(true);
+          await new Promise((r) => setTimeout(r, 5000));
+          setGenerateError(null);
+          return handleStep2Start();
+        }
         setGenerateError(errMsg);
         setAllNiches([]);
         setCurrentPage(0);
@@ -403,11 +450,15 @@ export default function DiscoverFlow() {
     try {
       const key = getProductsStorageKey(n.id);
       const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
-      if (saved) {
-        const parsed = JSON.parse(saved) as ProductSuggestionItem[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setAllProductSuggestions(parsed);
-          return;
+      if (saved?.trim()) {
+        try {
+          const parsed = JSON.parse(saved.trim()) as ProductSuggestionItem[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAllProductSuggestions(parsed);
+            return;
+          }
+        } catch {
+          // ignore
         }
       }
     } catch {
@@ -422,8 +473,8 @@ export default function DiscoverFlow() {
     try {
       const key = getProductsStorageKey(selectedNiche.id);
       const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
-      if (saved) {
-        const parsed = JSON.parse(saved) as ProductSuggestionItem[];
+      if (saved?.trim()) {
+        const parsed = JSON.parse(saved.trim()) as ProductSuggestionItem[];
         if (Array.isArray(parsed) && parsed.length > 0) {
           setAllProductSuggestions(parsed);
           return;
@@ -615,6 +666,13 @@ export default function DiscoverFlow() {
       const data = await parseJsonResponse<{ error?: string } | NicheOption[]>(res);
       if (!res.ok) {
         const err = typeof data === "object" && data !== null && !Array.isArray(data) && typeof (data as { error?: string }).error === "string" ? (data as { error: string }).error : null;
+        if (res.status === 429) {
+          setGenerateError("We're experiencing high demand. Your request will automatically retry in a few seconds...");
+          setMoreNichesLoading(true);
+          await new Promise((r) => setTimeout(r, 5000));
+          setGenerateError(null);
+          return handleGenerateMoreNiches();
+        }
         setGenerateError(err || "Generation failed");
         return;
       }
@@ -700,7 +758,7 @@ export default function DiscoverFlow() {
     try {
       const savedStep = localStorage.getItem("discovery-step");
       const stepNum = savedStep ? parseInt(savedStep, 10) : 0;
-      const hasProgress = !Number.isNaN(stepNum) && stepNum > 1 && stepNum <= 6;
+      const hasProgress = !Number.isNaN(stepNum) && stepNum > 1 && stepNum <= 7;
 
       if (process.env.NODE_ENV === "development") {
         console.log("📦 Loading saved state from localStorage...", { savedStep, stepNum, hasProgress });
@@ -724,9 +782,9 @@ export default function DiscoverFlow() {
         if (savedContentStyle === "faceless" || savedContentStyle === "personal") setFacelessOrPersonal(savedContentStyle);
         if (savedFormat != null && savedFormat !== "") setProductFormat(savedFormat);
 
-        if (savedNiches) {
+        if (savedNiches?.trim()) {
           try {
-            const parsed = JSON.parse(savedNiches) as NicheOption[];
+            const parsed = JSON.parse(savedNiches.trim()) as NicheOption[];
             if (Array.isArray(parsed) && parsed.length > 0) {
               setAllNiches(parsed);
               const page = parseInt(savedNichePage ?? "0", 10);
@@ -736,15 +794,15 @@ export default function DiscoverFlow() {
             // ignore
           }
         }
-        if (savedSelectedNiche) {
+        if (savedSelectedNiche?.trim()) {
           try {
-            const niche = JSON.parse(savedSelectedNiche) as NicheOption;
+            const niche = JSON.parse(savedSelectedNiche.trim()) as NicheOption;
             if (niche?.id != null) {
               setSelectedNiche(niche);
               const productsKey = getProductsStorageKey(niche.id);
               const savedProducts = localStorage.getItem(productsKey);
-              if (savedProducts) {
-                const productList = JSON.parse(savedProducts) as ProductSuggestionItem[];
+              if (savedProducts?.trim()) {
+                const productList = JSON.parse(savedProducts.trim()) as ProductSuggestionItem[];
                 if (Array.isArray(productList) && productList.length > 0) setAllProductSuggestions(productList);
               }
             }
@@ -756,9 +814,9 @@ export default function DiscoverFlow() {
           const pageNum = parseInt(savedProductPage, 10);
           if (!Number.isNaN(pageNum) && pageNum >= 0) setProductCurrentPage(pageNum);
         }
-        if (savedSelectedProduct) {
+        if (savedSelectedProduct?.trim()) {
           try {
-            const product = JSON.parse(savedSelectedProduct) as ProductSuggestionItem;
+            const product = JSON.parse(savedSelectedProduct.trim()) as ProductSuggestionItem;
             if (product?.id != null) setSelectedProduct(product);
           } catch {
             // ignore
@@ -864,7 +922,89 @@ export default function DiscoverFlow() {
     setSelectedProduct(p);
   };
 
-  const handleCreateProduct = async () => {
+  const POLL_INTERVAL_MS = 2500;
+
+  /**
+   * Poll GET /api/products/[id] until completed, failed, or timeout.
+   * On timeout, does one final fetch; if product is complete, returns 'completed'; if still generating, returns 'timeout_still_generating'.
+   * Does not redirect or set global state; caller handles outcome.
+   */
+  const runPollLoop = async (
+    productId: string,
+    timeoutMs: number
+  ): Promise<{ outcome: "completed" | "failed" | "timeout_still_generating"; productId: string; error?: string }> => {
+    const pollStart = Date.now();
+    const fetchAndParse = async (): Promise<{
+      status?: string;
+      sections: Array<{ content?: string; contentHtml?: string }>;
+      total: number;
+      completed: number;
+      hasContent: boolean;
+      isCompleted: boolean;
+      isFailed: boolean;
+    }> => {
+      const res = await fetch(`/api/products/${productId}`);
+      if (!res.ok) {
+        if (res.status === 404) return { sections: [], total: 0, completed: 0, hasContent: false, isCompleted: false, isFailed: false };
+        const text = await res.text();
+        if (res.status === 401) throw new Error("Session expired. Please sign in again.");
+        const isHtml = text.trimStart().startsWith("<");
+        const errMessage = isHtml
+          ? `Server error (${res.status}). Please try again in a moment or check the app is running.`
+          : (() => {
+              const trimmed = text.trim();
+              if (trimmed.length > 1 && trimmed.startsWith("{")) {
+                try {
+                  const parsed = JSON.parse(trimmed) as { error?: string };
+                  return parsed?.error ?? (trimmed.slice(0, 200) || `Request failed (${res.status})`);
+                } catch {
+                  // fall through
+                }
+              }
+              return trimmed.slice(0, 200) || `Request failed (${res.status})`;
+            })();
+        throw new Error(errMessage);
+      }
+      const product = await parseJsonResponse<{
+        status?: string;
+        content?: { sections?: Array<{ content?: string; contentHtml?: string }> };
+      }>(res);
+      const sections = product.content?.sections ?? [];
+      const total = Array.isArray(sections) ? sections.length : 0;
+      const completed = Array.isArray(sections)
+        ? sections.filter((s) => ((s?.content ?? s?.contentHtml ?? "").trim().length > 0)).length
+        : 0;
+      const hasContent = total > 0 && completed === total;
+      const isCompleted = product.status === "draft" && hasContent;
+      const isFailed = product.status === "failed";
+      return {
+        status: product.status,
+        sections,
+        total,
+        completed,
+        hasContent,
+        isCompleted,
+        isFailed,
+      };
+    };
+
+    while (true) {
+      if (Date.now() - pollStart > timeoutMs) {
+        const last = await fetchAndParse().catch(() => null);
+        if (last?.isCompleted) {
+          return { outcome: "completed", productId };
+        }
+        return { outcome: "timeout_still_generating", productId };
+      }
+      const data = await fetchAndParse();
+      if (data.total > 0) setGenerateProgress({ total: data.total, completed: data.completed });
+      if (data.isFailed) return { outcome: "failed", productId, error: "Product generation failed. Please try again." };
+      if (data.isCompleted) return { outcome: "completed", productId };
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    }
+  };
+
+  const handleCreateProduct = async (alsoGenerateVideos = false) => {
     if (!productFormat) {
       toast({
         title: "Select a format",
@@ -917,6 +1057,7 @@ export default function DiscoverFlow() {
           format: productFormat,
           hooks,
           ctas,
+          customizationOptions: customization,
         }),
       });
 
@@ -935,64 +1076,29 @@ export default function DiscoverFlow() {
         // ignore
       }
 
-      const POLL_INTERVAL_MS = 2500;
-      const TIMEOUT_MS = 10 * 60 * 1000; // 10 min
-      const pollStart = Date.now();
+      const TIMEOUT_MS = 20 * 60 * 1000; // 20 min — poll until then; on timeout show "Still generating" if not done
+      const result = await runPollLoop(productId, TIMEOUT_MS);
 
-      // Poll in a loop so we stay on this page with overlay visible until product is ready
-      while (true) {
-        if (Date.now() - pollStart > TIMEOUT_MS) {
-          throw new Error("Generation is taking longer than expected. Check your products list—it may appear shortly.");
+      clearInterval(stepInterval);
+      if (result.outcome === "completed") {
+        setGenerating(false);
+        setGenerateProgress(null);
+        setGenerateStepIndex(GENERATE_STEPS.length - 1);
+        if (alsoGenerateVideos) {
+          router.push(`/dashboard/digital-products/scripts?productId=${encodeURIComponent(result.productId)}`);
+        } else {
+          router.push(`/dashboard/digital-products/${result.productId}/edit?created=1`);
         }
-        const res = await fetch(`/api/products/${productId}`);
-        if (!res.ok) {
-          if (res.status === 404) {
-            await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-            continue;
-          }
-          const text = await res.text();
-          if (res.status === 401) {
-            throw new Error("Session expired. Please sign in again.");
-          }
-          const isHtml = text.trimStart().startsWith("<");
-          let errMessage: string;
-          if (isHtml) {
-            errMessage =
-              res.status === 401
-                ? "Session expired. Please sign in again."
-                : `Server error (${res.status}). Please try again in a moment or check the app is running.`;
-          } else {
-            try {
-              const parsed = text.startsWith("{") ? (JSON.parse(text) as { error?: string }) : null;
-              errMessage = parsed?.error ?? (text?.slice(0, 200) || `Request failed (${res.status})`);
-            } catch {
-              errMessage = text?.slice(0, 200) || `Request failed (${res.status})`;
-            }
-          }
-          throw new Error(errMessage);
-        }
-        const product = await parseJsonResponse<{ status?: string; content?: { sections?: Array<{ content?: string; contentHtml?: string }> } }>(res);
-        const sections = product.content?.sections ?? [];
-        const total = Array.isArray(sections) ? sections.length : 0;
-        const completed = Array.isArray(sections)
-          ? sections.filter((s) => ((s?.content ?? s?.contentHtml ?? "").trim().length > 0)).length
-          : 0;
-        if (total > 0) setGenerateProgress({ total, completed });
-
-        const hasContent = total > 0 && completed === total;
-        const isCompleted = product.status === "draft" && hasContent;
-        const isFailed = product.status === "failed";
-
-        if (isFailed) throw new Error("Product generation failed. Please try again.");
-        if (isCompleted) {
-          clearInterval(stepInterval);
-          setGenerating(false);
-          setGenerateProgress(null);
-          setGenerateStepIndex(GENERATE_STEPS.length - 1);
-          router.push(`/dashboard/digital-products/${productId}/edit`);
-          return;
-        }
-        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        return;
+      }
+      if (result.outcome === "failed") {
+        setCreateError(result.error ?? "Product generation failed. Please try again.");
+        toast({ title: "Generation failed", description: result.error, variant: "destructive" });
+        return;
+      }
+      if (result.outcome === "timeout_still_generating") {
+        setTimeoutStillGenerating(result.productId);
+        return;
       }
     } catch (err) {
       console.error("Product generation failed:", err);
@@ -1027,9 +1133,69 @@ export default function DiscoverFlow() {
   return (
     <main className={wrapperClass}>
       {/* Generating product overlay - blocks entire screen, no navigation until complete */}
-      {(generating || createError) && (
+      {(generating || createError || timeoutStillGenerating) && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0F0F0F]/98 backdrop-blur-md p-6" role="alert" aria-live="polite">
-          {createError ? (
+          {timeoutStillGenerating ? (
+            <>
+              <h2 className="text-xl font-semibold text-white mb-2">Still generating...</h2>
+              <p className="text-[#A0A0A0] text-center max-w-md mb-4">
+                This may take a few more minutes. You can check My Library for your product or keep waiting here.
+              </p>
+              <div className="flex flex-wrap gap-3 justify-center">
+                <Button
+                  variant="outline"
+                  className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#222]"
+                  onClick={() => {
+                    setTimeoutStillGenerating(null);
+                    router.push("/dashboard/digital-products");
+                  }}
+                >
+                  Go to My Library
+                </Button>
+                <Button
+                  className="bg-orange-500 hover:bg-orange-600"
+                  onClick={async () => {
+                    const id = timeoutStillGenerating;
+                    if (!id) return;
+                    setGenerating(true);
+                    setTimeoutStillGenerating(null);
+                    setCreateError(null);
+                    const stepInterval = setInterval(
+                      () => setGenerateStepIndex((i) => Math.min(i + 1, GENERATE_STEPS.length - 1)),
+                      4000
+                    );
+                    try {
+                      const result = await runPollLoop(id, 30 * 60 * 1000);
+                      if (result.outcome === "completed") {
+                        setGenerateStepIndex(GENERATE_STEPS.length - 1);
+                        router.push(`/dashboard/digital-products/${result.productId}/edit?created=1`);
+                        return;
+                      }
+                      if (result.outcome === "failed") {
+                        setCreateError(result.error ?? "Product generation failed.");
+                        toast({ title: "Generation failed", description: result.error, variant: "destructive" });
+                        return;
+                      }
+                      if (result.outcome === "timeout_still_generating") {
+                        setTimeoutStillGenerating(result.productId);
+                      }
+                    } catch (err) {
+                      const msg = err instanceof Error ? err.message : "Failed to check status.";
+                      setCreateError(msg);
+                      toast({ title: "Error", description: msg, variant: "destructive" });
+                    } finally {
+                      clearInterval(stepInterval);
+                      setGenerating(false);
+                      setGenerateProgress(null);
+                      setGenerateStepIndex(0);
+                    }
+                  }}
+                >
+                  Keep waiting
+                </Button>
+              </div>
+            </>
+          ) : createError ? (
             <>
               <h2 className="text-xl font-semibold text-white mb-2">Generation Failed</h2>
               <p className="text-red-400 text-center max-w-md mb-6">{createError}</p>
@@ -1081,10 +1247,10 @@ export default function DiscoverFlow() {
               </div>
               <p className="text-sm text-[#A0A0A0] mt-8">
                 {productFormat === "workbook"
-                  ? "Creating comprehensive workbook with exercises and worksheets... This takes ~60 seconds"
+                  ? "Creating comprehensive workbook with exercises and worksheets... May take 1–3 minutes."
                   : productFormat === "course"
-                    ? "Creating course outline with modules and lessons... This takes ~45 seconds"
-                    : "Estimated time: ~30 seconds. Please stay on this page."
+                    ? "Creating course outline with modules and lessons... May take 1–2 minutes."
+                    : "Polling every few seconds. Longer products may take several minutes—you can stay or check My Library if it takes a while."
               }
               </p>
             </>
@@ -1214,7 +1380,7 @@ export default function DiscoverFlow() {
         {/* STEP 1 */}
         {step === 1 && (
           <>
-            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 1 of 6</h2>
+            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 1 of 7</h2>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-8">Tell Us About You</h1>
 
             <div className="space-y-6">
@@ -1285,7 +1451,7 @@ export default function DiscoverFlow() {
         {/* STEP 2 */}
         {step === 2 && (
           <>
-            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 2 of 6</h2>
+            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 2 of 7</h2>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Pick Your Niche</h1>
             {dontKnowYet ? (
               <p className="text-[#A0A0A0] mb-8">Here are the hottest opportunities right now 🔥</p>
@@ -1451,11 +1617,16 @@ export default function DiscoverFlow() {
 
                 {generateError && (
                   <Alert variant="destructive" className="mb-4 border-red-500/50 bg-red-500/10">
-                    <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
-                      <span>{generateError}</span>
-                      <Button size="sm" variant="outline" className="border-red-500/50" onClick={handleGenerateMoreNiches} disabled={moreNichesLoading}>
-                        Retry
-                      </Button>
+                    <AlertDescription className="flex flex-col gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span>{generateError}</span>
+                        <Button size="sm" variant="outline" className="border-red-500/50 shrink-0" onClick={() => { setGenerateError(null); handleStep2Start(); }} disabled={nicheLoading}>
+                          {nicheLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Retry"}
+                        </Button>
+                      </div>
+                      {allNiches.length === 0 && (
+                        <p className="text-sm text-[#A0A0A0] mt-1">You can still continue by entering your own niche below.</p>
+                      )}
                     </AlertDescription>
                   </Alert>
                 )}
@@ -1522,7 +1693,7 @@ export default function DiscoverFlow() {
         {/* STEP 3 */}
         {step === 3 && (
           <>
-            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 3 of 6</h2>
+            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 3 of 7</h2>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Choose a Product</h1>
             <p className="text-[#A0A0A0] mb-6">Based on niche: {selectedNiche?.name ?? "Your niche"}</p>
 
@@ -1721,7 +1892,7 @@ export default function DiscoverFlow() {
         {/* STEP 4: Your Content Style - clickable cards */}
         {step === 4 && (
           <>
-            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 4 of 6</h2>
+            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 4 of 7</h2>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-8">Your Content Style</h1>
 
             <p className="text-[#A0A0A0] mb-6">How do you want to show up online?</p>
@@ -1796,7 +1967,7 @@ export default function DiscoverFlow() {
         {/* STEP 5 - Master the Basics: full sales education */}
         {step === 5 && (
           <>
-            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 5 of 6</h2>
+            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 5 of 7</h2>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Master the Basics</h1>
             <p className="text-[#A0A0A0] mb-6">
               A complete sales masterclass tailored to your product{selectedProduct ? `: ${selectedProduct.name}` : ""}.
@@ -2073,7 +2244,7 @@ export default function DiscoverFlow() {
         {/* STEP 6: Choose Product Format */}
         {step === 6 && (
           <>
-            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 6 of 6</h2>
+            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 6 of 7</h2>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Choose Your Product Format</h1>
             <p className="text-[#A0A0A0] mb-8">How should we package your content? We&apos;ll generate a format-specific product.</p>
 
@@ -2131,10 +2302,303 @@ export default function DiscoverFlow() {
               <Button
                 type="button"
                 className="relative z-10 cursor-pointer bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setStep(7)}
+                disabled={!productFormat}
+              >
+                Next: Customize <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
+            {!productFormat && (
+              <p className="text-xs text-amber-500/90 mt-2">Select a format to continue</p>
+            )}
+          </>
+        )}
+
+        {/* STEP 7: Customize & Create */}
+        {step === 7 && (
+          <>
+            <h2 className="text-lg font-medium text-orange-500 mb-1">Step 7 of 7</h2>
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Customize Your Product</h1>
+            <p className="text-[#A0A0A0] mb-6">Adjust these options to tailor the generated content. You can leave defaults as-is.</p>
+
+            {/* Basic options */}
+            <Card className={`${cardClass} mb-4`}>
+              <CardContent className="p-5">
+                <p className="font-semibold text-white mb-4">Basic</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <Label className="text-[#E0E0E0]">Number of chapters/sections</Label>
+                    <select
+                      value={customization.numChapters}
+                      onChange={(e) => setCustomization((c) => ({ ...c, numChapters: Number(e.target.value) }))}
+                      className="mt-1.5 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-2 text-sm"
+                    >
+                      {[3, 4, 5, 6].map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-[#E0E0E0]">Content length per chapter</Label>
+                    <select
+                      value={customization.contentLength}
+                      onChange={(e) => setCustomization((c) => ({ ...c, contentLength: e.target.value as CustomizationOptions["contentLength"] }))}
+                      className="mt-1.5 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-2 text-sm"
+                    >
+                      <option value="short">Short (~500 words)</option>
+                      <option value="medium">Medium (~800 words)</option>
+                      <option value="long">Long (~1200 words)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-[#E0E0E0]">Content style</Label>
+                    <select
+                      value={customization.contentStyle}
+                      onChange={(e) => setCustomization((c) => ({ ...c, contentStyle: e.target.value as CustomizationOptions["contentStyle"] }))}
+                      className="mt-1.5 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-2 text-sm"
+                    >
+                      <option value="text_only">Text only</option>
+                      <option value="text_with_placeholders">Text with image placeholders</option>
+                      <option value="text_with_ai_images">Text with AI-generated images</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-[#E0E0E0]">Tone</Label>
+                    <select
+                      value={customization.tone}
+                      onChange={(e) => setCustomization((c) => ({ ...c, tone: e.target.value as CustomizationOptions["tone"] }))}
+                      className="mt-1.5 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-2 text-sm"
+                    >
+                      <option value="professional">Professional</option>
+                      <option value="casual">Casual</option>
+                      <option value="academic">Academic</option>
+                      <option value="friendly">Friendly</option>
+                    </select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Advanced toggle */}
+            <button
+              type="button"
+              onClick={() => setShowAdvancedOptions((b) => !b)}
+              className="flex items-center gap-2 text-[#A0A0A0] hover:text-white text-sm mb-3"
+            >
+              {showAdvancedOptions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              Advanced options
+            </button>
+
+            {showAdvancedOptions && (
+              <Card className={`${cardClass} mb-6`}>
+                <CardContent className="p-5 space-y-6">
+                  {/* Ebook/Guide */}
+                  {(productFormat === "ebook" || productFormat === "guide") && (
+                    <div className="space-y-3">
+                      <p className="font-medium text-white">Ebook / Guide</p>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={customization.ebookGuide?.includeToc ?? true}
+                          onChange={(e) => setCustomization((c) => ({
+                            ...c,
+                            ebookGuide: { ...(c.ebookGuide ?? DEFAULT_CUSTOMIZATION.ebookGuide!), includeToc: e.target.checked },
+                          }))}
+                          className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500"
+                        />
+                        Include Table of Contents
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={customization.ebookGuide?.includeIntroConclusion ?? true}
+                          onChange={(e) => setCustomization((c) => ({
+                            ...c,
+                            ebookGuide: { ...(c.ebookGuide ?? DEFAULT_CUSTOMIZATION.ebookGuide!), includeIntroConclusion: e.target.checked },
+                          }))}
+                          className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500"
+                        />
+                        Include introduction & conclusion chapters
+                      </label>
+                    </div>
+                  )}
+                  {/* Workbook */}
+                  {productFormat === "workbook" && (
+                    <div className="space-y-3">
+                      <p className="font-medium text-white">Workbook</p>
+                      <div>
+                        <Label className="text-[#E0E0E0] text-sm">Exercises per section</Label>
+                        <select
+                          value={customization.workbook?.exercisesPerSection ?? 5}
+                          onChange={(e) => setCustomization((c) => ({
+                            ...c,
+                            workbook: { ...(c.workbook ?? DEFAULT_CUSTOMIZATION.workbook!), exercisesPerSection: Number(e.target.value) },
+                          }))}
+                          className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm"
+                        >
+                          {[3, 5, 7].map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input type="checkbox" checked={customization.workbook?.includeAnswerKey ?? false} onChange={(e) => setCustomization((c) => ({ ...c, workbook: { ...(c.workbook ?? DEFAULT_CUSTOMIZATION.workbook!), includeAnswerKey: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                        Include answer key
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input type="checkbox" checked={customization.workbook?.includeFillInBlanks ?? false} onChange={(e) => setCustomization((c) => ({ ...c, workbook: { ...(c.workbook ?? DEFAULT_CUSTOMIZATION.workbook!), includeFillInBlanks: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                        Include fill-in blanks
+                      </label>
+                    </div>
+                  )}
+                  {/* Checklist */}
+                  {productFormat === "checklist" && (
+                    <div className="space-y-3">
+                      <p className="font-medium text-white">Checklist Pack</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-[#E0E0E0] text-sm">Number of checklists</Label>
+                          <select value={customization.checklist?.numChecklists ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, checklist: { ...(c.checklist ?? DEFAULT_CUSTOMIZATION.checklist!), numChecklists: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                            {[3, 5, 10].map((n) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-[#E0E0E0] text-sm">Items per checklist</Label>
+                          <select value={customization.checklist?.itemsPerChecklist ?? 10} onChange={(e) => setCustomization((c) => ({ ...c, checklist: { ...(c.checklist ?? DEFAULT_CUSTOMIZATION.checklist!), itemsPerChecklist: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                            {[5, 10, 15].map((n) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input type="checkbox" checked={customization.checklist?.includeProgressTracking ?? false} onChange={(e) => setCustomization((c) => ({ ...c, checklist: { ...(c.checklist ?? DEFAULT_CUSTOMIZATION.checklist!), includeProgressTracking: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                        Include progress tracking
+                      </label>
+                    </div>
+                  )}
+                  {/* Course */}
+                  {productFormat === "course" && (
+                    <div className="space-y-3">
+                      <p className="font-medium text-white">Course Outline</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-[#E0E0E0] text-sm">Number of modules</Label>
+                          <select value={customization.course?.numModules ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, course: { ...(c.course ?? DEFAULT_CUSTOMIZATION.course!), numModules: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                            {[3, 5, 7].map((n) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-[#E0E0E0] text-sm">Lessons per module</Label>
+                          <select value={customization.course?.lessonsPerModule ?? 3} onChange={(e) => setCustomization((c) => ({ ...c, course: { ...(c.course ?? DEFAULT_CUSTOMIZATION.course!), lessonsPerModule: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                            {[3, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input type="checkbox" checked={customization.course?.includeLearningObjectives ?? true} onChange={(e) => setCustomization((c) => ({ ...c, course: { ...(c.course ?? DEFAULT_CUSTOMIZATION.course!), includeLearningObjectives: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                        Include learning objectives
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input type="checkbox" checked={customization.course?.includeAssignments ?? true} onChange={(e) => setCustomization((c) => ({ ...c, course: { ...(c.course ?? DEFAULT_CUSTOMIZATION.course!), includeAssignments: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                        Include assignments
+                      </label>
+                    </div>
+                  )}
+                  {/* Journal */}
+                  {productFormat === "journal" && (
+                    <div className="space-y-3">
+                      <p className="font-medium text-white">Journal</p>
+                      <div>
+                        <Label className="text-[#E0E0E0] text-sm">Number of prompts</Label>
+                        <select value={customization.journal?.numPrompts ?? 20} onChange={(e) => setCustomization((c) => ({ ...c, journal: { ...(c.journal ?? DEFAULT_CUSTOMIZATION.journal!), numPrompts: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                          {[10, 20, 30].map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input type="checkbox" checked={customization.journal?.includeLinedSpace ?? true} onChange={(e) => setCustomization((c) => ({ ...c, journal: { ...(c.journal ?? DEFAULT_CUSTOMIZATION.journal!), includeLinedSpace: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                        Include lined writing space
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input type="checkbox" checked={customization.journal?.includeReflectionQuestions ?? true} onChange={(e) => setCustomization((c) => ({ ...c, journal: { ...(c.journal ?? DEFAULT_CUSTOMIZATION.journal!), includeReflectionQuestions: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                        Include reflection questions
+                      </label>
+                    </div>
+                  )}
+                  {/* Planner */}
+                  {productFormat === "planner" && (
+                    <div className="space-y-3">
+                      <p className="font-medium text-white">Planner</p>
+                      <div>
+                        <Label className="text-[#E0E0E0] text-sm">Duration</Label>
+                        <select value={customization.planner?.duration ?? "monthly"} onChange={(e) => setCustomization((c) => ({ ...c, planner: { ...(c.planner ?? DEFAULT_CUSTOMIZATION.planner!), duration: e.target.value as "weekly" | "monthly" | "quarterly" | "yearly" } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                          <option value="weekly">Weekly</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="quarterly">Quarterly</option>
+                          <option value="yearly">Yearly</option>
+                        </select>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input type="checkbox" checked={customization.planner?.includeGoalSetting ?? true} onChange={(e) => setCustomization((c) => ({ ...c, planner: { ...(c.planner ?? DEFAULT_CUSTOMIZATION.planner!), includeGoalSetting: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                        Include goal-setting pages
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input type="checkbox" checked={customization.planner?.includeHabitTracker ?? true} onChange={(e) => setCustomization((c) => ({ ...c, planner: { ...(c.planner ?? DEFAULT_CUSTOMIZATION.planner!), includeHabitTracker: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                        Include habit tracker
+                      </label>
+                    </div>
+                  )}
+                  {/* Spreadsheet */}
+                  {productFormat === "spreadsheet" && (
+                    <div className="space-y-3">
+                      <p className="font-medium text-white">Spreadsheet Tutorial</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-[#E0E0E0] text-sm">Number of tutorials</Label>
+                          <select value={customization.spreadsheet?.numTutorials ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), numTutorials: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                            {[3, 5, 7].map((n) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-[#E0E0E0] text-sm">Difficulty</Label>
+                          <select value={customization.spreadsheet?.difficulty ?? "beginner"} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), difficulty: e.target.value as "beginner" | "intermediate" | "advanced" } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                            <option value="beginner">Beginner</option>
+                            <option value="intermediate">Intermediate</option>
+                            <option value="advanced">Advanced</option>
+                          </select>
+                        </div>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input type="checkbox" checked={customization.spreadsheet?.includePracticeExercises ?? true} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), includePracticeExercises: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                        Include practice exercises
+                      </label>
+                    </div>
+                  )}
+                  {/* Notion */}
+                  {productFormat === "notion" && (
+                    <div className="space-y-3">
+                      <p className="font-medium text-white">Notion Template</p>
+                      <div>
+                        <Label className="text-[#E0E0E0] text-sm">Number of databases/views</Label>
+                        <select value={customization.notion?.numDatabases ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, notion: { ...(c.notion ?? DEFAULT_CUSTOMIZATION.notion!), numDatabases: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                          {[3, 5, 7].map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                        <input type="checkbox" checked={customization.notion?.includeSetupInstructions ?? true} onChange={(e) => setCustomization((c) => ({ ...c, notion: { ...(c.notion ?? DEFAULT_CUSTOMIZATION.notion!), includeSetupInstructions: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                        Include setup instructions
+                      </label>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="flex justify-between">
+              <Button type="button" variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(6)}>← Back</Button>
+              <Button
+                type="button"
+                className="relative z-10 cursor-pointer bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleCreateProduct();
+                  setShowVideoPromptModal(true);
                 }}
                 disabled={!productFormat || generating}
               >
@@ -2148,9 +2612,41 @@ export default function DiscoverFlow() {
                 )}
               </Button>
             </div>
-            {!productFormat && !generating && (
-              <p className="text-xs text-amber-500/90 mt-2">Select a format to continue</p>
-            )}
+
+            <Dialog open={showVideoPromptModal} onOpenChange={setShowVideoPromptModal}>
+              <DialogContent className="bg-[#1A1A1A] border-[#2A2A2A] text-white max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-lg">Would you also like to generate marketing videos?</DialogTitle>
+                  <DialogDescription className="text-[#A0A0A0]">
+                    We can take you straight to the video script generator after your product is ready, so you can create TikTok-style videos to promote it.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="flex gap-2 sm:gap-0 flex-col-reverse sm:flex-row">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#222]"
+                    onClick={() => {
+                      setShowVideoPromptModal(false);
+                      handleCreateProduct(false);
+                    }}
+                  >
+                    Skip for now
+                  </Button>
+                  <Button
+                    type="button"
+                    className="bg-orange-500 hover:bg-orange-600 gap-2"
+                    onClick={() => {
+                      setShowVideoPromptModal(false);
+                      handleCreateProduct(true);
+                    }}
+                  >
+                    <Video className="w-4 h-4" />
+                    Yes, create videos too
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </>
         )}
       </div>

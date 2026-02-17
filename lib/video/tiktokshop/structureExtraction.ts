@@ -62,7 +62,8 @@ export async function extractStructure(transcript: string): Promise<StructureBlu
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "gpt-4o",
+      // gpt-4o-mini: structure extraction only, low complexity
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",

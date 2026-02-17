@@ -1,4 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/db/db";
+import { nicheCacheTable } from "@/db/schema/niche-cache-schema";
+import { eq, and, gt, desc } from "drizzle-orm";
+import { fetchOpenAIWithRetry } from "@/lib/openai-with-retry";
+
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_KEY_TRENDING = "trending";
+
+/** In-memory queue: one trending generation at a time to avoid burst 429s. */
+let trendingGenerationPromise: Promise<NicheOption[]> | null = null;
 
 type NicheSaturation = "low" | "medium" | "high" | "veryHigh";
 type NicheTrend = "rising" | "stable" | "declining";
@@ -66,6 +76,34 @@ export async function POST(request: NextRequest) {
 
     console.log("🎯 NICHE GENERATION REQUEST:", { interests, goal, showTrending });
 
+    const useTrendingCache = showTrending || !interests || interests.trim().length === 0;
+
+    if (useTrendingCache) {
+      try {
+        const cutoff = new Date(Date.now() - CACHE_MAX_AGE_MS);
+        const [cached] = await db
+          .select()
+          .from(nicheCacheTable)
+          .where(and(eq(nicheCacheTable.cacheKey, CACHE_KEY_TRENDING), gt(nicheCacheTable.refreshedAt, cutoff)))
+          .orderBy(desc(nicheCacheTable.refreshedAt))
+          .limit(1);
+        if (cached?.niches && Array.isArray(cached.niches) && cached.niches.length >= 6) {
+          const niches = (cached.niches as NicheOption[]).slice(0, 6).map((n, i) => ({
+            ...n,
+            id: `cache-${Date.now()}-${i}`,
+          }));
+          const excludeSet = new Set(exclude.map((t: string) => t.trim().toLowerCase()));
+          const filtered = niches.filter((n) => !excludeSet.has(n.name.trim().toLowerCase()));
+          if (filtered.length >= 6) {
+            console.log("📦 NICHE CACHE HIT");
+            return NextResponse.json(filtered.slice(0, 6));
+          }
+        }
+      } catch (e) {
+        console.warn("Niche cache read failed:", e);
+      }
+    }
+
     let prompt = "";
 
     if (showTrending || !interests || interests.trim().length === 0) {
@@ -126,55 +164,137 @@ Return ONLY a JSON array (no markdown, no explanation):
       );
     }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a digital product niche expert. Always return valid JSON arrays only, no markdown formatting.",
+    async function callOpenAI(): Promise<Response> {
+      return fetchOpenAIWithRetry(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
           },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.8,
-        max_tokens: 2000,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("❌ OpenAI Error:", error);
-      return NextResponse.json(
-        { error: "OpenAI API failed", details: error },
-        { status: 502 }
+          body: JSON.stringify({
+            // gpt-4o-mini: niche suggestions, non-critical
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are a digital product niche expert. Always return valid JSON arrays only, no markdown formatting.",
+              },
+              { role: "user", content: prompt },
+            ],
+            temperature: 0.8,
+            max_tokens: 2000,
+          }),
+        },
+        {
+          onRetry: (attempt, delayMs) =>
+            console.log(`🔄 Niche API 429/5xx, retry ${attempt} in ${delayMs / 1000}s`),
+        }
       );
     }
 
+    async function generateTrendingNiches(): Promise<NicheOption[]> {
+      const response = await callOpenAI();
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw { status: response.status, errorText };
+      }
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const content = data.choices?.[0]?.message?.content ?? "";
+      let jsonText = content.trim();
+      if (jsonText.startsWith("```")) {
+        jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      }
+      const jsonMatch = jsonText.match(/\[[\s\S]*\]/);
+      const rawNiches: OpenAINiche[] = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+      return rawNiches.slice(0, 6).map(mapToNicheOption);
+    }
+
+    let niches: NicheOption[];
+
+    if (useTrendingCache) {
+      const runGeneration = async (): Promise<NicheOption[]> => {
+        try {
+          return await generateTrendingNiches();
+        } finally {
+          trendingGenerationPromise = null;
+        }
+      };
+      try {
+        if (trendingGenerationPromise) {
+          try {
+            niches = await trendingGenerationPromise;
+          } catch {
+            niches = await runGeneration();
+          }
+        } else {
+          trendingGenerationPromise = runGeneration();
+          niches = await trendingGenerationPromise;
+        }
+      } catch (err: unknown) {
+        const status = (err as { status?: number })?.status;
+        const errorText = (err as { errorText?: string })?.errorText ?? "";
+        if (status === 429) {
+          return NextResponse.json(
+            {
+              error:
+                "We're experiencing high demand. We tried several times—please wait a moment and click Retry.",
+              details: errorText,
+            },
+            { status: 429 }
+          );
+        }
+        throw err;
+      }
+      try {
+        await db.delete(nicheCacheTable).where(eq(nicheCacheTable.cacheKey, CACHE_KEY_TRENDING));
+        await db.insert(nicheCacheTable).values({
+          cacheKey: CACHE_KEY_TRENDING,
+          niches: niches as unknown[],
+          refreshedAt: new Date(),
+        });
+      } catch (e) {
+        console.warn("Niche cache write failed:", e);
+      }
+      const excludeSet = new Set(exclude.map((t: string) => t.trim().toLowerCase()));
+      const filtered = niches.filter((n) => !excludeSet.has(n.name.trim().toLowerCase()));
+      return NextResponse.json(filtered.slice(0, 6));
+    }
+
+    const response = await callOpenAI();
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ OpenAI Error:", response.status, errorText);
+      let userMessage = "OpenAI API failed. Please try again.";
+      if (response.status === 401) {
+        userMessage = "Invalid OpenAI API key. Check OPENAI_API_KEY in your environment.";
+      } else if (response.status === 429) {
+        userMessage =
+          "We're experiencing high demand. We tried several times—please wait a moment and click Retry.";
+      } else if (response.status >= 500) {
+        userMessage = "OpenAI service is temporarily unavailable. Please try again in a few minutes.";
+      }
+      return NextResponse.json(
+        { error: userMessage, details: errorText },
+        { status: response.status === 401 ? 503 : 502 }
+      );
+    }
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const content = data.choices?.[0]?.message?.content ?? "";
-
     console.log("📥 Raw OpenAI response:", content.slice(0, 200) + (content.length > 200 ? "..." : ""));
-
     let jsonText = content.trim();
     if (jsonText.startsWith("```")) {
       jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     }
     const jsonMatch = jsonText.match(/\[[\s\S]*\]/);
     const rawNiches: OpenAINiche[] = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-
-    const niches: NicheOption[] = rawNiches.slice(0, 6).map(mapToNicheOption);
-
+    niches = rawNiches.slice(0, 6).map(mapToNicheOption);
     console.log("✅ Parsed niches:", niches.map((n) => n.name));
 
     if (!showTrending && interests.trim().length > 0) {
@@ -183,18 +303,14 @@ Return ONLY a JSON array (no markdown, no explanation):
         .split(/[,\s]+/)
         .map((w: string) => w.trim())
         .filter((w: string) => w.length > 3);
-
       const validatedNiches = niches.filter((niche) => {
         const nicheText = `${niche.name} ${niche.why}`.toLowerCase();
         const hasMatch = interestKeywords.some((keyword: string) => nicheText.includes(keyword));
-
         if (!hasMatch) {
           console.warn(`⚠️ Rejected: "${niche.name}" - doesn't match interests`);
         }
-
         return hasMatch;
       });
-
       if (validatedNiches.length < 4) {
         console.error("Too many irrelevant niches generated");
         return NextResponse.json(
@@ -202,7 +318,6 @@ Return ONLY a JSON array (no markdown, no explanation):
           { status: 500 }
         );
       }
-
       const excludeSet = new Set(exclude.map((t: string) => t.trim().toLowerCase()));
       const filtered = validatedNiches.filter((n) => !excludeSet.has(n.name.trim().toLowerCase()));
       return NextResponse.json(filtered.slice(0, 6));

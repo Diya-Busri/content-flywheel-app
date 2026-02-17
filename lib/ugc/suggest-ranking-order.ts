@@ -45,6 +45,7 @@ Return JSON: { "productIds": ["id1", "id2", ...] } in suggested order (best firs
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
+      // gpt-4o-mini: ranking/ordering suggestion, low complexity
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },

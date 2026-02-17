@@ -15,9 +15,11 @@ const VALID_FORMATS = ["ebook", "guide", "workbook", "spreadsheet", "notion", "c
 
 type SectionRow = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string };
 
+const BATCH_SIZE = 3; // Generate 2-3 chapters in parallel for speed (target <60s total)
+
 /**
- * POST: Internal. Generates product content section-by-section and updates the product.
- * Outline first, then one section at a time so client can show progress and avoid timeouts.
+ * POST: Internal. Generates product content: outline first, then sections in parallel batches.
+ * Client sees progress as each batch completes.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: productId } = await params;
@@ -56,6 +58,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ message: "Already processed" });
     }
 
+    const customizationOptions =
+      body.customizationOptions != null && typeof body.customizationOptions === "object"
+        ? (body.customizationOptions as GenerateProductContentParams["customizationOptions"])
+        : undefined;
+
     const params: GenerateProductContentParams = {
       productName,
       productDescription,
@@ -65,6 +72,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       format,
       hookTexts: hookTexts.filter(Boolean),
       ctaTexts: ctaTexts.filter(Boolean),
+      customizationOptions,
     };
 
     // 1. Generate outline only (fast), save so client can show "Generating chapter 1 of N"
@@ -86,47 +94,64 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const imageContext = { productName, niche: nicheName, format };
     const sectionsWithContent: SectionRow[] = [];
+    const wantAiImages = customizationOptions?.contentStyle === "text_with_ai_images";
 
-    for (let i = 0; i < outline.length; i++) {
-      const section = outline[i];
-      let bodyHtml = "";
-      let imagePrompt: string | undefined;
+    for (let start = 0; start < outline.length; start += BATCH_SIZE) {
+      const batch = outline.slice(start, start + BATCH_SIZE);
+      const batchIndices = batch.map((_, j) => start + j);
 
-      try {
-        const result = await generateSingleSectionBody(params, section, i, outline.length);
-        bodyHtml = result.body || "";
-        imagePrompt = result.imagePrompt;
-      } catch (err) {
-        console.warn("[products/process] Section body failed, retrying once:", section.id, err);
-        try {
-          const retry = await generateSingleSectionBody(params, section, i, outline.length);
-          bodyHtml = retry.body || "";
-          imagePrompt = retry.imagePrompt;
-        } catch (retryErr) {
-          console.error("[products/process] Section failed after retry:", section.id, retryErr);
-          bodyHtml = "<p><em>Content generation failed for this section. You can edit it in the editor.</em></p>";
+      const results = await Promise.allSettled(
+        batch.map((section, j) =>
+          generateSingleSectionBody(params, section, batchIndices[j], outline.length)
+        )
+      );
+
+      const bodiesAndPrompts: { bodyHtml: string; imagePrompt?: string }[] = [];
+      for (let j = 0; j < batch.length; j++) {
+        const section = batch[j];
+        const i = batchIndices[j];
+        let bodyHtml = "";
+        let imagePrompt: string | undefined;
+        const result = results[j];
+        if (result.status === "fulfilled") {
+          bodyHtml = result.value.body || "";
+          imagePrompt = result.value.imagePrompt;
+        } else {
+          console.warn("[products/process] Section body failed, retrying once:", section.id, result.reason);
+          try {
+            const retry = await generateSingleSectionBody(params, section, i, outline.length);
+            bodyHtml = retry.body || "";
+            imagePrompt = retry.imagePrompt;
+          } catch (retryErr) {
+            console.error("[products/process] Section failed after retry:", section.id, retryErr);
+            bodyHtml = "<p><em>Content generation failed for this section. You can edit it in the editor.</em></p>";
+          }
         }
+        bodiesAndPrompts.push({ bodyHtml, imagePrompt });
       }
 
-      let imageUrl: string | undefined;
-      if (imagePrompt?.trim()) {
-        try {
-          imageUrl = await generateProductImage(imagePrompt, imageContext);
-        } catch (err) {
-          console.warn("[products/process] Image gen failed for", section.id, err);
-        }
+      const imageUrls = await Promise.all(
+        batch.map((section, j) => {
+          const prompt = bodiesAndPrompts[j].imagePrompt?.trim();
+          if (!wantAiImages || !prompt) return Promise.resolve(undefined);
+          return generateProductImage(prompt, imageContext).catch((err) => {
+            console.warn("[products/process] Image gen failed for", section.id, err);
+            return undefined;
+          });
+        })
+      );
+
+      for (let j = 0; j < batch.length; j++) {
+        sectionsWithContent.push({
+          id: batch[j].id,
+          title: batch[j].title,
+          content: bodiesAndPrompts[j].bodyHtml,
+          contentHtml: bodiesAndPrompts[j].bodyHtml,
+          order: batchIndices[j] + 1,
+          imageUrl: imageUrls[j],
+        });
       }
 
-      sectionsWithContent.push({
-        id: section.id,
-        title: section.title,
-        content: bodyHtml,
-        contentHtml: bodyHtml,
-        order: i + 1,
-        imageUrl,
-      });
-
-      // Update DB after each section so client can show progress (chapter X of Y)
       await db
         .update(productsTable)
         .set({
