@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import Stripe from "stripe";
 
+/** Production domain for Stripe success/cancel redirects. Never use Vercel preview URLs. */
+const PRODUCTION_DOMAIN = "https://contentflywheel.co.uk";
+function getStripeRedirectBase(): string {
+  const env = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (env && env.startsWith("https://contentflywheel.co.uk")) return env.replace(/\/$/, "");
+  return PRODUCTION_DOMAIN;
+}
+
 /**
  * POST /api/stripe-checkout
  * Body: { priceId: string }
@@ -53,8 +61,7 @@ export async function POST(request: NextRequest) {
   }
   priceId = priceId.trim();
 
-  // success_url and cancel_url must point to production domain, never Vercel preview URLs.
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://contentflywheel.co.uk").replace(/\/$/, "");
+  const baseUrl = getStripeRedirectBase();
   const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
 
   try {
