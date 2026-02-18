@@ -53,11 +53,8 @@ export async function POST(request: NextRequest) {
   }
   priceId = priceId.trim();
 
-  const rawBase =
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-    request.nextUrl.origin;
-  const baseUrl = rawBase.replace(/\/$/, "");
+  // success_url and cancel_url must point to production domain, never Vercel preview URLs.
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://contentflywheel.co.uk").replace(/\/$/, "");
   const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
 
   try {
