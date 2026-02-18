@@ -59,15 +59,15 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   }
 
   return (
-    <div className="flex h-screen bg-background relative overflow-hidden" suppressHydrationWarning>
+    <div className="flex h-screen bg-[#0F0F0F] relative overflow-hidden" suppressHydrationWarning>
       {/* Review popup: test button + show after 3 videos / 5 more after Maybe Later */}
       <DashboardReviewPopup profile={profile} />
 
       {/* Sidebar - no credits/upgrade; subscription managed via Settings */}
       <Sidebar profile={profile} userEmail={userEmail} />
       
-      {/* Main content area */}
-      <div className="flex-1 overflow-auto relative">
+      {/* Main content area - consistent dark theme for all dashboard pages */}
+      <div className="flex-1 overflow-auto relative bg-[#0F0F0F] text-white">
         {children}
       </div>
     </div>

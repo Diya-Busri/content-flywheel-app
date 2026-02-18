@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 /**
- * POST: Deprecated. Product-in-hand mode removed in favor of Shotstack (text + product image).
+ * POST: Deprecated. Use Video Creation Guide flow instead.
  * Returns 410 Gone.
  */
 export async function POST(request: Request) {
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json(
     {
-      error: "Product-in-hand preview is no longer available. Use Shotstack video mode instead (text + product image).",
+      error: "Product-in-hand preview is no longer available. Use Step 4: Video Creation Guides instead.",
     },
     { status: 410 }
   );

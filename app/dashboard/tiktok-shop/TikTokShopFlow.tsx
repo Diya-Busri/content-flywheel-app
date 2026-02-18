@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -13,8 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
   ArrowRight,
@@ -23,31 +22,17 @@ import {
   RefreshCw,
   Sparkles,
   FileText,
-  Film,
-  Play,
-  Download,
-  Library,
   ChevronRight,
-  PlayCircle,
   Info,
-  Copy,
-  Check,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
-import { AvatarPreviewPlayer } from "@/components/tiktok-shop/AvatarPreviewPlayer";
-import { PostContentCard } from "@/components/tiktok-shop/PostContentCard";
 import { useToast } from "@/components/ui/use-toast";
+import { VIDEO_LENGTH_OPTIONS, DEFAULT_VIDEO_LENGTH_SEC } from "@/lib/video-length-options";
 
 const TIKTOK_PREFS_KEY = "tiktok-shop-preferences";
 
@@ -55,15 +40,13 @@ const STEPS = [
   { id: 1, label: "Product", short: "Product" },
   { id: 2, label: "AI Breakdown", short: "Breakdown" },
   { id: 3, label: "Script", short: "Script" },
-  { id: 4, label: "Video Style", short: "Style" },
-  { id: 5, label: "Render", short: "Render" },
+  { id: 4, label: "Video Creation Guides", short: "Guides" },
 ] as const;
 
 const MAX_IMAGE_SIZE_MB = 5;
 const MAX_IMAGE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ACCEPTED_IMAGE_EXT = ".jpg,.jpeg,.png,.webp";
-const POLL_INTERVAL_MS = 10_000;
 
 const HOOK_OPTIONS = [
   { id: "problem", label: "Problem", desc: "Start with the pain" },
@@ -84,18 +67,6 @@ const TONE_OPTIONS = [
   { id: "ugc-style", label: "UGC style" },
 ];
 
-const DURATION_OPTIONS = [
-  { value: 15, label: "15s" },
-  { value: 30, label: "30s" },
-  { value: 45, label: "45s" },
-  { value: 60, label: "60s" },
-];
-
-const VIDEO_BUILD_MODES = [
-  { id: "product-animation", label: "Text + product", desc: "Shotstack: text overlays + product image", icon: "🎬" },
-  { id: "stock-captions", label: "TikTok-style", desc: "Shotstack: hook, body, CTA + product", icon: "📽️" },
-];
-
 type ProductBreakdown = {
   productName: string;
   productDescription: string;
@@ -110,9 +81,14 @@ type ProductBreakdown = {
 type ScriptResult = {
   fullScript: string;
   scenes: { hook: string; pain: string; solution: string; proof_points?: string[]; cta: string };
+  title?: string;
 };
 
+const SCRIPT_VARIATION_LABELS = ["Story", "Problem/Solution", "Social proof", "Curiosity"] as const;
+
 export default function TikTokShopFlow() {
+  const router = useRouter();
+  const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [productLink, setProductLink] = useState("");
   const [productName, setProductName] = useState("");
@@ -121,35 +97,18 @@ export default function TikTokShopFlow() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [breakdown, setBreakdown] = useState<ProductBreakdown | null>(null);
   const [breakdownLoading, setBreakdownLoading] = useState(false);
-  const [scriptResult, setScriptResult] = useState<ScriptResult | null>(null);
+  const [scriptResults, setScriptResults] = useState<ScriptResult[]>([]);
   const [scriptLoading, setScriptLoading] = useState(false);
   const [hookStyle, setHookStyle] = useState("tiktok-made-me-buy");
   const [tone, setTone] = useState("ugc-style");
-  const [targetDurationSec, setTargetDurationSec] = useState(30);
-  const [videoBuildMode, setVideoBuildMode] = useState("product-animation");
-  const [subtitleStyle, setSubtitleStyle] = useState("bold");
-  const [fontChoice, setFontChoice] = useState("sans");
-  const [captionColor, setCaptionColor] = useState("#FFFFFF");
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
-  const [previewScriptText, setPreviewScriptText] = useState<string>("");
-  const [previewModalOpen, setPreviewModalOpen] = useState(false);
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [jobStatus, setJobStatus] = useState<"idle" | "polling" | "completed" | "failed">("idle");
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [jobError, setJobError] = useState<string | null>(null);
-  const [pollElapsedSec, setPollElapsedSec] = useState(0);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollStartRef = useRef<number | null>(null);
-  const { toast } = useToast();
-  const [hasShotstack, setHasShotstack] = useState(false);
+  const [targetDurationSec, setTargetDurationSec] = useState(DEFAULT_VIDEO_LENGTH_SEC);
+  const [guideLoading, setGuideLoading] = useState(false);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(TIKTOK_PREFS_KEY);
       if (raw) {
         const p = JSON.parse(raw) as Record<string, unknown>;
-        if (typeof p.videoBuildMode === "string") setVideoBuildMode(p.videoBuildMode);
         if (typeof p.targetDurationSec === "number") setTargetDurationSec(p.targetDurationSec);
         if (typeof p.hookStyle === "string") setHookStyle(p.hookStyle);
         if (typeof p.tone === "string") setTone(p.tone);
@@ -160,25 +119,13 @@ export default function TikTokShopFlow() {
   }, []);
 
   useEffect(() => {
-    const prefs = {
-      videoBuildMode,
-      targetDurationSec,
-      hookStyle,
-      tone,
-    };
+    const prefs = { targetDurationSec, hookStyle, tone };
     try {
       localStorage.setItem(TIKTOK_PREFS_KEY, JSON.stringify(prefs));
     } catch {
       // ignore
     }
-  }, [videoBuildMode, targetDurationSec, hookStyle, tone]);
-
-  useEffect(() => {
-    fetch("/api/tiktok-shop/video-mode")
-      .then((r) => r.json())
-      .then((d) => setHasShotstack(d.mode === "shotstack"))
-      .catch(() => setHasShotstack(false));
-  }, []);
+  }, [targetDurationSec, hookStyle, tone]);
 
   const getProductImageBase64 = (): Promise<string | undefined> => {
     if (!productImage) return Promise.resolve(undefined);
@@ -207,13 +154,14 @@ export default function TikTokShopFlow() {
 
   const canProceedStep1 = productLink.trim() || productName.trim() || productDescription.trim() || productImage;
   const canProceedStep2 = !!breakdown;
-  const canProceedStep3 = !!scriptResult;
+  const canProceedStep3 = scriptResults.length >= 4;
   const canProceedStep4 = true;
 
   const runProductBreakdown = async () => {
     if (!canProceedStep1) return;
     setBreakdownLoading(true);
     setBreakdown(null);
+    setScriptResults([]);
     try {
       const productImageBase64 = await getProductImageBase64();
       const res = await fetch("/api/tiktok-shop/product-breakdown", {
@@ -238,7 +186,7 @@ export default function TikTokShopFlow() {
     }
   };
 
-  const runGenerateScript = async () => {
+  const runGenerate4Scripts = async () => {
     const name = breakdown?.productName || productName.trim() || "Product";
     const desc = breakdown?.productDescription || productDescription.trim();
     if (!desc) {
@@ -246,28 +194,38 @@ export default function TikTokShopFlow() {
       return;
     }
     setScriptLoading(true);
-    setScriptResult(null);
+    setScriptResults([]);
     try {
       const productImageBase64 = await getProductImageBase64();
-      const res = await fetch("/api/tiktok-shop/generate-script", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productName: name,
-          productDescription: desc,
-          productLink: productLink.trim() || undefined,
-          productImageBase64,
-          videoStyle: "demo",
-          targetDurationSec,
-          hookStyle,
-          tone,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Script generation failed");
-      setScriptResult({ fullScript: data.fullScript, scenes: data.scenes });
+      const hookStyles = ["story", "problem", "stat", "controversial"] as const;
+      const results = await Promise.all(
+        hookStyles.map(async (hookKey, i) => {
+          const res = await fetch("/api/tiktok-shop/generate-script", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              productName: name,
+              productDescription: desc,
+              productLink: productLink.trim() || undefined,
+              productImageBase64,
+              videoStyle: "demo",
+              targetDurationSec,
+              hookStyle: hookKey,
+              tone,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error ?? "Script generation failed");
+          return {
+            fullScript: data.fullScript as string,
+            scenes: data.scenes as ScriptResult["scenes"],
+            title: SCRIPT_VARIATION_LABELS[i],
+          };
+        })
+      );
+      setScriptResults(results);
       setStep(3);
-      toast({ title: "Script ready", description: "Edit if needed, then choose video style." });
+      toast({ title: "4 scripts ready", description: "Continue to create a video guide for each." });
     } catch (err) {
       toast({ title: "Failed", description: err instanceof Error ? err.message : "Script failed", variant: "destructive" });
     } finally {
@@ -275,156 +233,49 @@ export default function TikTokShopFlow() {
     }
   };
 
-  const regenerateSection = async (section: "hook" | "pain" | "solution" | "proof" | "cta") => {
-    if (!scriptResult || !breakdown) return;
-    setScriptLoading(true);
+
+  const scenesToHookBodyCta = (s: ScriptResult["scenes"]) => {
+    const bodyParts = [s.pain, s.solution];
+    if (s.proof_points?.length) bodyParts.push(s.proof_points.join(" "));
+    return {
+      hook: s.hook,
+      body: bodyParts.filter(Boolean).join("\n\n"),
+      cta: s.cta,
+    };
+  };
+
+  const handleCreateVideoGuide = async (script: ScriptResult) => {
+    if (!breakdown) return;
+    const { hook, body, cta } = scenesToHookBodyCta(script.scenes);
+    setGuideLoading(true);
     try {
-      const res = await fetch("/api/tiktok-shop/generate-script", {
+      const res = await fetch("/api/video-guide/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          hook,
+          body,
+          cta,
           productName: breakdown.productName,
           productDescription: breakdown.productDescription,
-          videoStyle: "demo",
-          targetDurationSec,
-          hookStyle,
-          tone,
-          regenerateSection: section,
-          existingScenes: scriptResult.scenes,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Regenerate failed");
-      setScriptResult({ fullScript: data.fullScript, scenes: data.scenes });
-      toast({ title: "Section updated", description: `${section} regenerated.` });
-    } catch (err) {
-      toast({ title: "Failed", description: err instanceof Error ? err.message : "Regenerate failed", variant: "destructive" });
-    } finally {
-      setScriptLoading(false);
-    }
-  };
-
-  const startRender = async () => {
-    if (!scriptResult || !breakdown) return;
-    setJobId(null);
-    setVideoUrl(null);
-    setJobError(null);
-    setPollElapsedSec(0);
-    pollStartRef.current = Date.now();
-    setJobStatus("polling");
-    try {
-      const productImageBase64 = await getProductImageBase64();
-      const res = await fetch("/api/tiktok-shop/render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productLink: productLink.trim() || "https://example.com/product",
-          productDescription: breakdown.productDescription,
-          script: scriptResult,
-          productImageBase64,
-          videoStyle: "demo",
           platforms: ["tiktok"],
-          targetDurationSec,
-          videoBuildMode,
+          durationSeconds: targetDurationSec,
         }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Failed to start render");
-      setJobId(data.jobId);
-      toast({ title: "Render started", description: "Polling every 10s. You can navigate away." });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to start render";
-      setJobStatus("failed");
-      setJobError(msg);
-      toast({ title: "Render failed", description: msg, variant: "destructive" });
-    }
-  };
-
-  useEffect(() => {
-    if (!jobId || jobStatus !== "polling") return;
-    const poll = async () => {
-      try {
-        if (pollStartRef.current) setPollElapsedSec(Math.floor((Date.now() - pollStartRef.current) / 1000));
-        const res = await fetch(`/api/tiktok-shop/render/${jobId}`);
-        const data = await res.json().catch(() => ({}));
-        if (data.status === "completed" && data.videoUrl) {
-          setVideoUrl(data.videoUrl);
-          setJobStatus("completed");
-          pollStartRef.current = null;
-          if (pollRef.current) clearInterval(pollRef.current);
-          pollRef.current = null;
-          toast({ title: "Video ready!", description: "Your video is ready." });
-        } else if (data.status === "failed") {
-          setJobError(data.error ?? "Render failed");
-          setJobStatus("failed");
-          pollStartRef.current = null;
-          if (pollRef.current) clearInterval(pollRef.current);
-          pollRef.current = null;
-          toast({ title: "Render failed", description: data.error, variant: "destructive" });
-        }
-      } catch {
-        // keep polling
-      }
-    };
-    poll();
-    const elapsedInterval = setInterval(() => {
-      if (pollStartRef.current) setPollElapsedSec(Math.floor((Date.now() - pollStartRef.current) / 1000));
-    }, 1000);
-    pollRef.current = setInterval(poll, POLL_INTERVAL_MS);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-      clearInterval(elapsedInterval);
-    };
-  }, [jobId, jobStatus, toast]);
-
-  const handlePreviewShotstack = async () => {
-    if (!scriptResult?.fullScript) return;
-    setPreviewLoading(true);
-    setPreviewVideoUrl(null);
-    try {
-      const res = await fetch("/api/tiktok-shop/avatar-preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fullScript: scriptResult.fullScript,
-          productImageUrl: undefined,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Preview failed");
-      if (data.videoUrl) {
-        const full = scriptResult.fullScript.trim();
-        const words = full.split(/\s+/);
-        setPreviewScriptText(words.slice(0, 20).join(" ") || full.slice(0, 100));
-        setPreviewVideoUrl(data.videoUrl);
-        setPreviewModalOpen(true);
-      } else {
-        throw new Error("No video URL returned");
-      }
+      const guide = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(guide.error ?? "Failed to generate guide");
+      sessionStorage.setItem("videoCreationGuide", JSON.stringify({ ...guide, scriptTitle: (script as ScriptResult & { title?: string }).title ?? "TikTok Shop Script" }));
+      toast({ title: "Video guide ready", description: "Opening your guide." });
+      router.push("/dashboard/digital-products/video-guide");
     } catch (err) {
       toast({
-        title: "Preview failed",
-        description: err instanceof Error ? err.message : "Could not generate preview",
+        title: "Guide failed",
+        description: err instanceof Error ? err.message : "Could not generate video guide",
         variant: "destructive",
       });
     } finally {
-      setPreviewLoading(false);
+      setGuideLoading(false);
     }
-  };
-
-  const saveToLibrary = async () => {
-    if (!videoUrl) return;
-    const res = await fetch("/api/library/videos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: breakdown?.productName || "TikTok Shop Video",
-        thumbnailUrl: videoUrl,
-        platforms: ["tiktok"],
-      }),
-    });
-    if (!res.ok) throw new Error("Failed to save");
-    toast({ title: "Saved to library" });
   };
 
   return (
@@ -432,17 +283,17 @@ export default function TikTokShopFlow() {
     <main className="p-6 md:p-10 max-w-3xl mx-auto">
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-orange-500 mb-6"
+        className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-orange-500 mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to dashboard
       </Link>
 
-      <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">
+      <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
         TikTok Affiliate Control Center
       </h1>
-      <p className="text-slate-600 dark:text-slate-400 mb-8">
-        Create conversion-optimized videos in 5 focused steps.
+      <p className="text-gray-400 mb-8">
+        Product → AI Breakdown → Script → Video Creation Guide. No rendering—get a step-by-step guide to create your video.
       </p>
 
       {/* Stepper */}
@@ -455,7 +306,7 @@ export default function TikTokShopFlow() {
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 step === s.id
                   ? "bg-orange-500 text-white"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  : "bg-[#2A2A2A] text-gray-400 hover:bg-[#3A3A3A] hover:text-white"
               }`}
             >
               <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs bg-white/20">
@@ -465,7 +316,7 @@ export default function TikTokShopFlow() {
               <span className="sm:hidden">{s.short}</span>
             </button>
             {i < STEPS.length - 1 && (
-              <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 mx-0.5" />
+              <ChevronRight className="w-4 h-4 text-gray-600 mx-0.5" />
             )}
           </div>
         ))}
@@ -473,13 +324,13 @@ export default function TikTokShopFlow() {
 
       {/* Step 1: Product Intelligence */}
       {step === 1 && (
-        <Card className="border-slate-200 dark:border-slate-800">
+        <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-white">
               <span className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm">1</span>
               Product Intelligence
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-gray-400">
               Add your product via link, name, or image. We&apos;ll analyze it with AI.
             </CardDescription>
           </CardHeader>
@@ -523,8 +374,8 @@ export default function TikTokShopFlow() {
                     <img src={imagePreview} alt="Product" className="max-h-24 mx-auto rounded" />
                   ) : (
                     <>
-                      <Upload className="w-8 h-8 mx-auto text-slate-400 mb-2" />
-                      <p className="text-sm text-slate-600 dark:text-slate-400">Drop or click to upload</p>
+                      <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-400">Drop or click to upload</p>
                     </>
                   )}
                 </label>
@@ -544,7 +395,7 @@ export default function TikTokShopFlow() {
 
       {/* Step 2: AI Breakdown */}
       {step === 2 && breakdown && (
-        <Card className="border-slate-200 dark:border-slate-800">
+        <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <span className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm">2</span>
@@ -554,35 +405,35 @@ export default function TikTokShopFlow() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="text-xs font-medium text-slate-500 mb-1">Category</p>
-                <p className="text-sm font-medium">{breakdown.category}</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Category</p>
+                <p className="text-sm font-medium text-white">{breakdown.category}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-slate-500 mb-1">Target audience</p>
-                <p className="text-sm">{breakdown.targetAudience}</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Target audience</p>
+                <p className="text-sm text-gray-300">{breakdown.targetAudience}</p>
               </div>
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-500 mb-1">Pain points</p>
-              <ul className="text-sm list-disc list-inside space-y-0.5">{breakdown.corePainPoints.map((p, i) => <li key={i}>{p}</li>)}</ul>
+              <p className="text-xs font-medium text-gray-500 mb-1">Pain points</p>
+              <ul className="text-sm list-disc list-inside space-y-0.5 text-gray-300">{breakdown.corePainPoints.map((p, i) => <li key={i}>{p}</li>)}</ul>
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-500 mb-1">Objections</p>
-              <ul className="text-sm list-disc list-inside space-y-0.5">{breakdown.buyingObjections.map((o, i) => <li key={i}>{o}</li>)}</ul>
+              <p className="text-xs font-medium text-gray-500 mb-1">Objections</p>
+              <ul className="text-sm list-disc list-inside space-y-0.5 text-gray-300">{breakdown.buyingObjections.map((o, i) => <li key={i}>{o}</li>)}</ul>
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-500 mb-1">Emotional triggers</p>
-              <ul className="text-sm list-disc list-inside space-y-0.5">{breakdown.emotionalTriggers.map((t, i) => <li key={i}>{t}</li>)}</ul>
+              <p className="text-xs font-medium text-gray-500 mb-1">Emotional triggers</p>
+              <ul className="text-sm list-disc list-inside space-y-0.5 text-gray-300">{breakdown.emotionalTriggers.map((t, i) => <li key={i}>{t}</li>)}</ul>
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-500 mb-1">Why buy</p>
-              <ul className="text-sm list-disc list-inside space-y-0.5">{breakdown.whyBuy.map((r, i) => <li key={i}>{r}</li>)}</ul>
+              <p className="text-xs font-medium text-gray-500 mb-1">Why buy</p>
+              <ul className="text-sm list-disc list-inside space-y-0.5 text-gray-300">{breakdown.whyBuy.map((r, i) => <li key={i}>{r}</li>)}</ul>
             </div>
             <div className="flex gap-2 pt-2">
               <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
-              <Button onClick={runGenerateScript} disabled={scriptLoading} className="gap-2 flex-1">
+              <Button onClick={runGenerate4Scripts} disabled={scriptLoading} className="gap-2 flex-1">
                 {scriptLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                {scriptLoading ? "Generating script..." : "Continue to Script"}
+                {scriptLoading ? "Generating 4 scripts…" : "Generate 4 Script Variations"}
               </Button>
             </div>
           </CardContent>
@@ -591,121 +442,72 @@ export default function TikTokShopFlow() {
 
       {/* Step 3: Script Builder */}
       {step === 3 && (
-        <Card className="border-slate-200 dark:border-slate-800">
+        <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <span className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm">3</span>
               Script Builder
             </CardTitle>
-            <CardDescription>Choose hook style, tone, and length. Regenerate individual sections if needed.</CardDescription>
+            <CardDescription className="text-gray-400">Generate 4 script variations (Story, Problem/Solution, Social proof, Curiosity). Then create a video guide for any of them.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <div className="flex items-center gap-1">
-                  <Label>Hook style</Label>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                    </TooltipTrigger>
-                    <TooltipContent>How the script opens—e.g. problem (start with the pain), story (relatable scenario), or stat (surprising number).</TooltipContent>
-                  </Tooltip>
-                </div>
-                <select
-                  value={hookStyle}
-                  onChange={(e) => setHookStyle(e.target.value)}
-                  className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm mt-1"
-                >
-                  {HOOK_OPTIONS.map((o) => (
-                    <option key={o.id} value={o.id}>{o.label} — {o.desc}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div className="flex items-center gap-1">
-                  <Label>Tone</Label>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                    </TooltipTrigger>
-                    <TooltipContent>Overall voice of the script—e.g. soft aesthetic, aggressive, luxury, or UGC style.</TooltipContent>
-                  </Tooltip>
-                </div>
-                <select
-                  value={tone}
-                  onChange={(e) => setTone(e.target.value)}
-                  className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm mt-1"
-                >
-                  {TONE_OPTIONS.map((o) => (
-                    <option key={o.id} value={o.id}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label>Length</Label>
-                <select
-                  value={targetDurationSec}
-                  onChange={(e) => setTargetDurationSec(Number(e.target.value))}
-                  className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm mt-1"
-                >
-                  {DURATION_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
+            <div>
+              <Label className="mb-2 block">Video length</Label>
+              <p className="text-xs text-gray-500 mb-3">Choose target duration before generating scripts. Word count and guide scenes will match.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {VIDEO_LENGTH_OPTIONS.map((opt) => {
+                  const selected = targetDurationSec === opt.seconds;
+                  return (
+                    <button
+                      key={opt.seconds}
+                      type="button"
+                      onClick={() => setTargetDurationSec(opt.seconds)}
+                      className={`rounded-lg border-2 p-3 text-left transition-all ${
+                        selected
+                          ? "border-orange-500 bg-orange-500/20"
+                          : "border-[#2A2A2A] bg-[#0F0F0F] hover:border-[#3A3A3A]"
+                      }`}
+                    >
+                      <span className="block font-semibold text-sm text-white">{opt.seconds}s</span>
+                      <span className="block text-xs text-gray-400 mt-0.5">{opt.sublabel}</span>
+                      <span className="block text-xs text-gray-500 mt-1">{opt.wordRange}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-            {!scriptResult ? (
-              <Button onClick={runGenerateScript} disabled={scriptLoading} className="w-full gap-2">
+            <div>
+              <Label>Tone</Label>
+              <select
+                value={tone}
+                onChange={(e) => setTone(e.target.value)}
+                className="w-full max-w-xs h-10 rounded-md border border-[#2A2A2A] bg-[#0F0F0F] text-white px-3 text-sm mt-1"
+              >
+                {TONE_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            {scriptResults.length < 4 ? (
+              <Button onClick={runGenerate4Scripts} disabled={scriptLoading} className="w-full gap-2">
                 {scriptLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                Generate script
+                {scriptLoading ? "Generating 4 script variations…" : "Generate 4 Script Variations"}
               </Button>
             ) : (
               <>
+                <p className="text-sm text-gray-400">4 script variations ready. Continue to create a video guide for each.</p>
                 <div className="space-y-2">
-                  <Label>Full script</Label>
-                  <Textarea
-                    value={scriptResult.fullScript}
-                    onChange={(e) => setScriptResult((p) => p ? { ...p, fullScript: e.target.value } : null)}
-                    rows={8}
-                    className="resize-none"
-                  />
-                  {scriptResult.fullScript.trim() && (() => {
-                    const words = scriptResult.fullScript.trim().split(/\s+/).filter(Boolean).length;
-                    const estSec = Math.round(words / 2.5);
-                    const diff = estSec - targetDurationSec;
-                    return (
-                      <p className="text-xs text-slate-500">
-                        {words} words · ~{estSec}s speech
-                        {Math.abs(diff) > 10 && (
-                          <span className={diff > 0 ? " text-amber-600 dark:text-amber-400" : " text-slate-400"}>
-                            {" "}(target {targetDurationSec}s{diff > 0 ? " — consider shortening" : " — room for more"})
-                          </span>
-                        )}
-                      </p>
-                    );
-                  })()}
-                </div>
-                <div className="space-y-2">
-                  <Label>Regenerate section</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {(["hook", "pain", "solution", "proof", "cta"] as const).map((sec) => (
-                      <Button
-                        key={sec}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => regenerateSection(sec)}
-                        disabled={scriptLoading}
-                      >
-                        {scriptLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                        {sec}
-                      </Button>
-                    ))}
-                  </div>
+                  {scriptResults.map((s, i) => (
+                    <div key={i} className="rounded-lg border border-[#2A2A2A] p-3">
+                      <p className="text-xs font-medium text-orange-400 mb-1">{(s as ScriptResult & { title?: string }).title ?? `Script ${i + 1}`}</p>
+                      <p className="text-sm text-gray-300 line-clamp-2">{s.scenes.hook}</p>
+                    </div>
+                  ))}
                 </div>
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" onClick={() => setStep(2)}>Back</Button>
                   <Button onClick={() => setStep(4)} className="flex-1 gap-2">
-                    Continue to Video Style
+                    Continue to Video Creation Guides
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </div>
@@ -715,203 +517,47 @@ export default function TikTokShopFlow() {
         </Card>
       )}
 
-      {/* Step 4: Video Build Mode + Creative Controls */}
-      {step === 4 && (
-        <Card className="border-slate-200 dark:border-slate-800">
+      {/* Step 4: Video Creation Guides */}
+      {step === 4 && scriptResults.length >= 4 && breakdown && (
+        <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <span className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm">4</span>
-              Video Style & Creative
+              Video Creation Guides
             </CardTitle>
-            <CardDescription>Choose build mode and creative controls.</CardDescription>
+            <CardDescription className="text-gray-400">Get a step-by-step video creation guide for each script—scene breakdowns, AI image prompts (product demos, unboxing, lifestyle), and export settings for TikTok.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div>
-              <Label>Build mode</Label>
-              <div className="grid gap-2 mt-2 sm:grid-cols-2">
-                {VIDEO_BUILD_MODES.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setVideoBuildMode(m.id)}
-                    className={`flex items-start gap-3 rounded-lg border p-3 text-left ${
-                      videoBuildMode === m.id ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30" : "border-slate-200 dark:border-slate-700"
-                    }`}
+            {scriptResults.map((script, i) => {
+              const title = (script as ScriptResult & { title?: string }).title ?? `Script ${i + 1}`;
+              return (
+                <div key={i} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4 space-y-3">
+                  <p className="text-sm font-medium text-white">{title}</p>
+                  <div className="text-sm text-gray-400 space-y-2">
+                    <p><span className="font-medium text-orange-400">Hook:</span> {script.scenes.hook}</p>
+                    <p><span className="font-medium text-orange-400">Body:</span> {[script.scenes.pain, script.scenes.solution].filter(Boolean).join(" ")}</p>
+                    <p><span className="font-medium text-orange-400">CTA:</span> {script.scenes.cta}</p>
+                  </div>
+                  <Button
+                    onClick={() => handleCreateVideoGuide(script)}
+                    disabled={guideLoading}
+                    className="w-full gap-2 bg-orange-500 hover:bg-orange-600"
                   >
-                    <span className="text-xl">{m.icon}</span>
-                    <div>
-                      <p className="font-medium text-sm">{m.label}</p>
-                      <p className="text-xs text-slate-500">{m.desc}</p>
-                      {hasShotstack && <Badge variant="secondary" className="mt-1 text-xs">Shotstack</Badge>}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {hasShotstack && (
-              <div className="space-y-4 rounded-lg border border-orange-200 dark:border-orange-900/50 bg-orange-50/30 dark:bg-orange-950/20 p-4">
-                <Label className="text-base">Preview video</Label>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Shotstack: text overlays + product image. Generate a short preview to see how it looks.</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePreviewShotstack}
-                  disabled={!scriptResult?.fullScript || previewLoading}
-                  className="gap-2"
-                >
-                  {previewLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <PlayCircle className="w-4 h-4" />
-                  )}
-                  {previewLoading ? "Generating preview (~30s)…" : "Preview video"}
-                </Button>
-              </div>
-            )}
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label>Subtitle style</Label>
-                <select
-                  value={subtitleStyle}
-                  onChange={(e) => setSubtitleStyle(e.target.value)}
-                  className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm mt-1"
-                >
-                  <option value="bold">Bold</option>
-                  <option value="outline">Outline</option>
-                  <option value="minimal">Minimal</option>
-                </select>
-              </div>
-              <div>
-                <Label>Font</Label>
-                <select
-                  value={fontChoice}
-                  onChange={(e) => setFontChoice(e.target.value)}
-                  className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm mt-1"
-                >
-                  <option value="sans">Sans</option>
-                  <option value="serif">Serif</option>
-                  <option value="display">Display</option>
-                </select>
-              </div>
-              <div>
-                <Label>Caption color</Label>
-                <input
-                  type="color"
-                  value={captionColor}
-                  onChange={(e) => setCaptionColor(e.target.value)}
-                  className="h-10 w-full rounded border border-slate-200 dark:border-slate-700 cursor-pointer"
-                />
-              </div>
-            </div>
+                    {guideLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                    {guideLoading ? "Generating…" : "Create Video Guide"}
+                  </Button>
+                </div>
+              );
+            })}
             <div className="flex gap-2 pt-2">
               <Button variant="outline" onClick={() => setStep(3)}>Back</Button>
-              <Button onClick={() => { setStep(5); startRender(); }} className="flex-1 gap-2">
-                <Play className="w-4 h-4" />
-                Start render
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 5: Render */}
-      {step === 5 && (
-        <Card className="border-slate-200 dark:border-slate-800">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <span className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm">5</span>
-              Render
-            </CardTitle>
-            <CardDescription>Job runs in the background. Poll every 10s—never blocks UI.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {jobStatus === "idle" && (
-              <div className="space-y-3">
-                <p className="text-xs text-slate-500">
-                  ~1–2 min (Shotstack: text + product image)
-                </p>
-                <Button onClick={startRender} disabled={!breakdown || !scriptResult} className="w-full gap-2">
-                  <Play className="w-4 h-4" />
-                  Start render
-                </Button>
-              </div>
-            )}
-            {(jobStatus === "polling" || jobStatus === "completed" || jobStatus === "failed") && (
-              <>
-                {jobStatus === "polling" && (
-                  <div className="space-y-2">
-                    <Progress value={33} className="h-2" />
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      Rendering TikTok-style video with Shotstack. Usually 1–2 min.
-                    </p>
-                    <p className="text-xs text-slate-500">Elapsed: {Math.floor(pollElapsedSec / 60)}m {pollElapsedSec % 60}s · Polling every 10s</p>
-                  </div>
-                )}
-                {jobStatus === "failed" && jobError && (
-                  <div className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 p-4 space-y-3">
-                    <p className="text-sm text-red-700 dark:text-red-400 font-medium">{jobError}</p>
-                    <p className="text-xs text-slate-600 dark:text-slate-400">If this keeps failing, try shortening the script or ensuring a product image is available.</p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={startRender} className="gap-1">
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        Try again
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => { setJobStatus("idle"); setJobError(null); setJobId(null); setVideoUrl(null); }}>
-                        Adjust settings
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {jobStatus === "completed" && videoUrl && (
-                  <div className="space-y-4">
-                    <div className="rounded-lg overflow-hidden bg-slate-900 aspect-[9/16] max-h-[400px]">
-                      <video src={videoUrl} controls className="w-full h-full object-contain" />
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button asChild className="gap-2">
-                        <a href={videoUrl} download target="_blank" rel="noopener noreferrer">
-                          <Download className="w-4 h-4" />
-                          Download
-                        </a>
-                      </Button>
-                      <Button variant="outline" className="gap-2" onClick={saveToLibrary}>
-                        <Library className="w-4 h-4" />
-                        Save to library
-                      </Button>
-                    </div>
-                    {jobId && <PostContentCard jobId={jobId} />}
-                  </div>
-                )}
-              </>
-            )}
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" onClick={() => setStep(4)}>Back</Button>
-              <Button variant="outline" onClick={() => { setStep(1); setBreakdown(null); setScriptResult(null); setJobId(null); setVideoUrl(null); setJobStatus("idle"); }}>
+              <Button variant="outline" onClick={() => { setStep(1); setBreakdown(null); setScriptResults([]); }}>
                 New video
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
-
-      <Dialog open={previewModalOpen} onOpenChange={setPreviewModalOpen}>
-        <DialogContent className="max-w-lg p-0 overflow-hidden max-h-[95vh] overflow-y-auto">
-          <DialogHeader className="p-4 pb-0">
-            <DialogTitle>Video preview</DialogTitle>
-          </DialogHeader>
-          {previewVideoUrl && (
-            <div className="p-4 pt-2">
-              <AvatarPreviewPlayer
-                videoUrl={previewVideoUrl}
-                scriptText={previewScriptText}
-              />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
     </main>
     </TooltipProvider>

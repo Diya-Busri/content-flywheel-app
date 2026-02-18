@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 /**
- * GET: Returns empty avatars/voices (Shotstack does not use AI avatars).
+ * GET: Returns empty avatars/voices. Video Creation Guide flow does not use AI avatars.
  * Kept for backwards compatibility with UI.
  */
 export async function GET() {

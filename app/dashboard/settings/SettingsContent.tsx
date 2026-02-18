@@ -93,41 +93,41 @@ export default function SettingsContent({
   return (
     <div className="space-y-8 max-w-4xl">
       {/* 1. PROFILE */}
-      <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+      <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
         <CardHeader>
-          <CardTitle className="text-lg text-slate-900 dark:text-white">
+          <CardTitle className="text-lg text-white">
             Profile
           </CardTitle>
-          <CardDescription>Your display name and account info</CardDescription>
+          <CardDescription className="text-gray-400">Your display name and account info</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center gap-6">
-            <Avatar className="h-20 w-20 border-2 border-orange-200 dark:border-orange-900">
+            <Avatar className="h-20 w-20 border-2 border-orange-900">
               {userImageUrl ? (
                 <AvatarImage src={userImageUrl} alt="Profile" />
               ) : null}
-              <AvatarFallback className="bg-orange-100 dark:bg-orange-950 text-orange-600 text-xl">
+              <AvatarFallback className="bg-orange-500/20 text-orange-400 text-xl">
                 {(displayName || userEmail || "U").slice(0, 1).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 space-y-2">
-              <Label htmlFor="display-name">Display name</Label>
+              <Label htmlFor="display-name" className="text-gray-300">Display name</Label>
               <Input
                 id="display-name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Your name"
-                className="max-w-sm border-slate-200 dark:border-slate-700 focus-visible:ring-orange-500"
+                className="max-w-sm border-[#2A2A2A] bg-[#0F0F0F] text-white focus-visible:ring-orange-500"
               />
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Email</Label>
+            <Label className="text-gray-300">Email</Label>
             <Input
               value={userEmail || "—"}
               readOnly
               disabled
-              className="max-w-sm bg-slate-50 dark:bg-slate-900 cursor-not-allowed"
+              className="max-w-sm bg-[#0F0F0F] border-[#2A2A2A] text-gray-500 cursor-not-allowed"
             />
           </div>
           <Button
@@ -141,42 +141,42 @@ export default function SettingsContent({
             Save
           </Button>
           {settingsTableMissing && (
-            <p className="text-sm text-amber-600 dark:text-amber-400">Create the database table above to save.</p>
+            <p className="text-sm text-amber-400">Create the database table above to save.</p>
           )}
         </CardContent>
       </Card>
 
       {/* 2. PLAN & BILLING */}
-      <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+      <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
         <CardHeader>
-          <CardTitle className="text-lg text-slate-900 dark:text-white">
+          <CardTitle className="text-lg text-white">
             Plan & Billing
           </CardTitle>
-          <CardDescription>Your subscription and billing</CardDescription>
+          <CardDescription className="text-gray-400">Your subscription and billing</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <p className="text-sm font-medium text-gray-400">
               Current plan
             </p>
-            <p className="text-lg font-semibold text-slate-900 dark:text-white">
+            <p className="text-lg font-semibold text-white">
               {planLabel}
             </p>
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <p className="text-sm font-medium text-gray-400 mb-1">
               Subscription status
             </p>
-            <p className="text-slate-900 dark:text-white capitalize">
+            <p className="text-white capitalize">
               {subscriptionStatus}
             </p>
           </div>
           {nextBilling && (
             <div>
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              <p className="text-sm font-medium text-gray-400">
                 Next billing date
               </p>
-              <p className="text-slate-900 dark:text-white">
+              <p className="text-white">
                 {nextBilling.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
               </p>
             </div>
@@ -215,13 +215,13 @@ export default function SettingsContent({
       </Card>
 
       {/* DANGER ZONE */}
-      <Card className="border-red-200 dark:border-red-900/50 shadow-sm">
+      <Card className="border-red-900/50 bg-[#1A1A1A]">
         <CardHeader>
-          <CardTitle className="text-lg text-red-600 dark:text-red-400 flex items-center gap-2">
+          <CardTitle className="text-lg text-red-400 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5" />
             Danger Zone
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-gray-400">
             Irreversible actions. Use with caution.
           </CardDescription>
         </CardHeader>

@@ -70,7 +70,6 @@ export default function VideosFlow() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [generateLoading, setGenerateLoading] = useState(false);
   const [generateProgress, setGenerateProgress] = useState<string | null>(null);
-  const [shotstackConfigured, setShotstackConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
     try {
@@ -92,15 +91,6 @@ export default function VideosFlow() {
     } catch {
       setSelectedScripts([]);
     }
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/digital-products/shotstack-status")
-      .then((r) => r.json())
-      .then((d) => {
-        setShotstackConfigured(d.configured === true);
-      })
-      .catch(() => setShotstackConfigured(false));
   }, []);
 
   const togglePlatform = (id: string) => {

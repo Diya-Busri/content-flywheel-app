@@ -64,32 +64,32 @@ function SideBySideComparison({
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Side-by-side comparison</h3>
+      <h3 className="text-sm font-semibold text-white">Side-by-side comparison</h3>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="space-y-1">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Original (violations highlighted)</p>
-          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-3 font-mono text-sm">
+          <p className="text-xs font-medium text-gray-400">Original (violations highlighted)</p>
+          <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 font-mono text-sm">
             {originalLines.map((line, i) => (
               <div
                 key={i}
                 className={`px-2 py-0.5 -mx-2 rounded ${
                   violationLineNumbers.has(i + 1)
-                    ? "bg-red-200/60 dark:bg-red-900/40 text-red-900 dark:text-red-100"
-                    : "text-slate-700 dark:text-slate-300"
+                    ? "bg-red-900/40 text-red-200"
+                    : "text-gray-300"
                 }`}
               >
-                <span className="text-slate-400 dark:text-slate-500 select-none mr-2">{i + 1}</span>
+                <span className="text-gray-500 select-none mr-2">{i + 1}</span>
                 {line || " "}
               </div>
             ))}
           </div>
         </div>
         <div className="space-y-1">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Compliant script (editable)</p>
+          <p className="text-xs font-medium text-gray-400">Compliant script (editable)</p>
           <Textarea
             value={compliantScript}
             onChange={(e) => setCompliantScript(e.target.value)}
-            className="font-mono text-sm min-h-[120px] min-w-0 resize-y bg-green-50/50 dark:bg-green-950/20 border-green-200 dark:border-green-900/50"
+            className="font-mono text-sm min-h-[120px] min-w-0 resize-y bg-green-950/20 border-green-900/50 text-white"
             placeholder="Compliant script will appear here..."
             rows={Math.min(40, Math.max(8, compliantScript.split("\n").length + 2))}
           />
@@ -122,20 +122,20 @@ function ViolationCard({ violation }: { violation: ScriptViolation }) {
     critical: {
       icon: AlertCircle,
       label: "Critical",
-      className: "border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20",
-      iconClassName: "text-red-600 dark:text-red-400",
+      className: "border-red-900/50 bg-red-950/20",
+      iconClassName: "text-red-400",
     },
     warning: {
       icon: AlertTriangle,
       label: "Warning",
-      className: "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20",
-      iconClassName: "text-amber-600 dark:text-amber-400",
+      className: "border-amber-900/50 bg-amber-950/20",
+      iconClassName: "text-amber-400",
     },
     suggestion: {
       icon: Info,
       label: "Suggestion",
-      className: "border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-950/20",
-      iconClassName: "text-blue-600 dark:text-blue-400",
+      className: "border-blue-900/50 bg-blue-950/20",
+      iconClassName: "text-blue-400",
     },
   };
   const config = severityConfig[violation.severity] ?? severityConfig.warning;
@@ -151,32 +151,32 @@ function ViolationCard({ violation }: { violation: ScriptViolation }) {
         <div className="flex-1 min-w-0 space-y-2">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-300">
                 {config.label}
               </span>
-              <span className="text-xs text-slate-600 dark:text-slate-400">
+              <span className="text-xs text-gray-400">
                 Line {violation.lineNumber}{hasMultiple ? ": Multiple issues" : ""}
               </span>
             </div>
             {hasMultiple ? (
-              <ul className="list-disc list-inside text-xs text-slate-600 dark:text-slate-400 space-y-0.5 ml-0.5">
+              <ul className="list-disc list-inside text-xs text-gray-400 space-y-0.5 ml-0.5">
                 {categories.map((c, i) => (
                   <li key={i}>{c}</li>
                 ))}
               </ul>
             ) : (
-              <span className="text-xs text-slate-600 dark:text-slate-400">{categories[0]}</span>
+              <span className="text-xs text-gray-400">{categories[0]}</span>
             )}
-            <p className="text-xs text-slate-600 dark:text-slate-400">
+            <p className="text-xs text-gray-400">
               Violates: {violation.platforms.join(", ")}
             </p>
           </div>
-          <p className="text-base font-semibold text-slate-900 dark:text-white">
+          <p className="text-base font-semibold text-white">
             &ldquo;{violation.exactText}&rdquo;
           </p>
           <div className="pt-2">
-            <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 mb-1">Suggested fix:</p>
-            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{violation.suggestedFix}</p>
+            <p className="text-xs font-semibold text-gray-200 mb-1">Suggested fix:</p>
+            <p className="text-sm font-medium text-gray-200">{violation.suggestedFix}</p>
           </div>
         </div>
       </div>
@@ -348,69 +348,69 @@ export default function ScriptCheckerFlow() {
     <main className="p-6 md:p-10 max-w-3xl mx-auto">
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-orange-500 mb-6"
+        className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-orange-500 mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to dashboard
       </Link>
 
-      <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+      <h1 className="text-3xl font-bold text-white mb-2">
         Check Script Compliance
       </h1>
-      <p className="text-slate-600 dark:text-slate-400 mb-10">
+      <p className="text-gray-400 mb-10">
         Ensure your video scripts meet TikTok, Instagram, YouTube, Facebook, and Twitter guidelines
       </p>
 
       <form onSubmit={handleSubmit}>
-        <Card className="border-slate-200 dark:border-slate-800">
+        <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
           <CardHeader>
-            <CardTitle className="text-xl">Script details</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-xl text-white">Script details</CardTitle>
+            <CardDescription className="text-gray-400">
               Paste your script and choose a platform. We&apos;ll check for policy violations and compliance issues.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-8">
             {/* 1. Platform Selection */}
             <div className="space-y-3">
-              <Label>Which platform(s) are you posting on?</Label>
+              <Label className="text-gray-300">Which platform(s) are you posting on?</Label>
               <RadioGroup
                 value={platform}
                 onValueChange={(v: Platform) => setPlatform(v)}
                 className="grid grid-cols-1 sm:grid-cols-2 gap-2"
               >
-                <div className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3 hover:border-orange-200 dark:hover:border-orange-900/50">
+                <div className="flex items-center gap-3 rounded-lg border border-[#2A2A2A] p-3 hover:border-orange-500/50">
                   <RadioGroupItem value="tiktok" id="platform-tiktok" />
-                  <label htmlFor="platform-tiktok" className="cursor-pointer text-sm font-medium">
+                  <label htmlFor="platform-tiktok" className="cursor-pointer text-sm font-medium text-white">
                     TikTok
                   </label>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3 hover:border-orange-200 dark:hover:border-orange-900/50">
+                <div className="flex items-center gap-3 rounded-lg border border-[#2A2A2A] p-3 hover:border-orange-500/50">
                   <RadioGroupItem value="instagram" id="platform-instagram" />
-                  <label htmlFor="platform-instagram" className="cursor-pointer text-sm font-medium">
+                  <label htmlFor="platform-instagram" className="cursor-pointer text-sm font-medium text-white">
                     Instagram Reels
                   </label>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3 hover:border-orange-200 dark:hover:border-orange-900/50">
+                <div className="flex items-center gap-3 rounded-lg border border-[#2A2A2A] p-3 hover:border-orange-500/50">
                   <RadioGroupItem value="youtube" id="platform-youtube" />
-                  <label htmlFor="platform-youtube" className="cursor-pointer text-sm font-medium">
+                  <label htmlFor="platform-youtube" className="cursor-pointer text-sm font-medium text-white">
                     YouTube Shorts
                   </label>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3 hover:border-orange-200 dark:hover:border-orange-900/50">
+                <div className="flex items-center gap-3 rounded-lg border border-[#2A2A2A] p-3 hover:border-orange-500/50">
                   <RadioGroupItem value="facebook" id="platform-facebook" />
-                  <label htmlFor="platform-facebook" className="cursor-pointer text-sm font-medium">
+                  <label htmlFor="platform-facebook" className="cursor-pointer text-sm font-medium text-white">
                     Facebook
                   </label>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3 hover:border-orange-200 dark:hover:border-orange-900/50">
+                <div className="flex items-center gap-3 rounded-lg border border-[#2A2A2A] p-3 hover:border-orange-500/50">
                   <RadioGroupItem value="twitter" id="platform-twitter" />
-                  <label htmlFor="platform-twitter" className="cursor-pointer text-sm font-medium">
+                  <label htmlFor="platform-twitter" className="cursor-pointer text-sm font-medium text-white">
                     Twitter/X
                   </label>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3 hover:border-orange-200 dark:hover:border-orange-900/50 sm:col-span-2">
+                <div className="flex items-center gap-3 rounded-lg border border-[#2A2A2A] p-3 hover:border-orange-500/50 sm:col-span-2">
                   <RadioGroupItem value="all" id="platform-all" />
-                  <label htmlFor="platform-all" className="cursor-pointer text-sm font-medium">
+                  <label htmlFor="platform-all" className="cursor-pointer text-sm font-medium text-white">
                     All platforms (strictest rules)
                   </label>
                 </div>
@@ -420,12 +420,12 @@ export default function ScriptCheckerFlow() {
             {/* 2. Video Script */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="script">Paste Your Video Script *</Label>
+                <Label htmlFor="script" className="text-gray-300">Paste Your Video Script *</Label>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="text-xs text-slate-500 hover:text-orange-500"
+                  className="text-xs text-gray-500 hover:text-orange-500"
                   onClick={() =>
                     setScript(
                       "This supplement will CURE your acne in 24 hours - guaranteed! Studies show it works 100% of the time.\n\nDM me for the link - I make a commission but trust me it's amazing.\n\nYou'll never have skin problems again, I promise."
@@ -444,10 +444,10 @@ export default function ScriptCheckerFlow() {
                   setFormErrors((prev) => ({ ...prev, script: "" }));
                 }}
                 rows={10}
-                className={`resize-none ${formErrors.script ? "border-red-500" : ""}`}
+                className={`resize-none bg-[#0F0F0F] border-[#2A2A2A] text-white placeholder:text-gray-500 ${formErrors.script ? "border-red-500" : ""}`}
                 maxLength={MAX_SCRIPT_CHARS}
               />
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-gray-500">
                 {script.length}/{MAX_SCRIPT_CHARS} characters
               </p>
               {formErrors.script && (
@@ -457,14 +457,14 @@ export default function ScriptCheckerFlow() {
 
             {/* 3. Product Image (optional) */}
             <div className="space-y-2">
-              <Label>Product Image (optional)</Label>
+              <Label className="text-gray-300">Product Image (optional)</Label>
               <div
                 onDrop={handleImageDrop}
                 onDragOver={(e) => e.preventDefault()}
                 className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
                   imagePreview
                     ? "border-orange-200 dark:border-orange-900/50 bg-orange-50/50 dark:bg-orange-950/20"
-                    : "border-slate-200 dark:border-slate-700 hover:border-orange-300 dark:hover:border-orange-800"
+                    : "border-[#2A2A2A] hover:border-orange-500/50"
                 } ${formErrors.productImage ? "border-red-500" : ""}`}
               >
                 <input
@@ -481,7 +481,7 @@ export default function ScriptCheckerFlow() {
                       alt="Product"
                       className="max-h-24 mx-auto rounded-lg object-contain"
                     />
-                    <p className="text-sm text-slate-600 dark:text-slate-400 truncate max-w-xs mx-auto">{productImage?.name}</p>
+                    <p className="text-sm text-gray-400 truncate max-w-xs mx-auto">{productImage?.name}</p>
                     <label htmlFor="script-checker-image">
                       <Button type="button" variant="outline" size="sm" asChild>
                         <span className="cursor-pointer">Change image</span>
@@ -490,15 +490,15 @@ export default function ScriptCheckerFlow() {
                   </div>
                 ) : (
                   <label htmlFor="script-checker-image" className="cursor-pointer block">
-                    <Upload className="w-8 h-8 mx-auto text-slate-400 mb-2" />
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                    <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-400">
                       Drag & drop or click to upload
                     </p>
-                    <p className="text-xs text-slate-500 mt-1">JPG, PNG, WebP — max 5MB</p>
+                    <p className="text-xs text-gray-500 mt-1">JPG, PNG, WebP — max 5MB</p>
                   </label>
                 )}
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-gray-500">
                 Upload if your script references visual elements
               </p>
               {formErrors.productImage && (
@@ -521,7 +521,7 @@ export default function ScriptCheckerFlow() {
 
       {/* Results section */}
       {submitted && (
-        <Card className="border-slate-200 dark:border-slate-800 mt-8">
+        <Card className="border-[#2A2A2A] bg-[#1A1A1A] mt-8">
           <CardHeader>
             <CardTitle className="text-xl">Results</CardTitle>
             <CardDescription>
@@ -532,7 +532,7 @@ export default function ScriptCheckerFlow() {
             {analyzing ? (
               <div className="py-12 flex flex-col items-center justify-center text-center">
                 <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-gray-400">
                   Analyzing script for compliance issues...
                 </p>
               </div>
@@ -561,7 +561,7 @@ export default function ScriptCheckerFlow() {
             ) : (
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                  <p className="text-sm text-gray-400">
                     Found {violations.length} issue{violations.length !== 1 ? "s" : ""} to review:
                   </p>
                   <Button

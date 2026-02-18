@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { getShotstackApiKey } from "@/lib/shotstack-edit";
 
 /**
- * GET: Returns whether TikTok Shop video generation is configured (Shotstack).
+ * GET: Video rendering removed in favor of Video Creation Guides.
+ * Always returns unconfigured so the UI never shows the old render flow.
  */
 export async function GET() {
-  const configured = !!getShotstackApiKey();
   return NextResponse.json({
-    mode: configured ? "shotstack" : "unconfigured",
-    label: configured ? "Shotstack (text + product image)" : "Not configured",
+    mode: "unconfigured",
+    label: "Use Video Creation Guide (Step 4)",
   });
 }

@@ -1,17 +1,58 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Package, Sparkles, Check, ArrowRight, ChevronRight, Home } from "lucide-react";
+import { Package, Sparkles, Check, ArrowRight, ChevronRight, Home, X, BookOpen } from "lucide-react";
 
 const CARD_CLASS =
   "border-[#2A2A2A] bg-[#1A1A1A] hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-200 hover:scale-[1.01] overflow-hidden";
 
+const SELLING_GUIDE_BANNER_KEY = "digital-products-selling-guide-banner-dismissed";
+
 export default function DigitalProductsLanding() {
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(SELLING_GUIDE_BANNER_KEY) === "1") setBannerDismissed(true);
+    } catch {}
+  }, []);
+
+  const dismissBanner = () => {
+    try {
+      localStorage.setItem(SELLING_GUIDE_BANNER_KEY, "1");
+      setBannerDismissed(true);
+    } catch {}
+  };
+
   return (
     <main className="min-h-screen bg-[#0F0F0F] text-white p-6 md:p-10">
       <div className="max-w-5xl mx-auto">
+        {/* Dismissable banner for new users */}
+        {!bannerDismissed && (
+          <div className="mb-6 rounded-lg border border-orange-500/40 bg-orange-500/10 px-4 py-3 flex items-center justify-between gap-4">
+            <Link
+              href="/dashboard/digital-products/selling-guide"
+              className="flex items-center gap-2 text-amber-200 hover:text-orange-400 transition-colors flex-1 min-w-0"
+            >
+              <BookOpen className="w-5 h-5 shrink-0" />
+              <span className="text-sm font-medium">
+                New to selling? Check our Selling Platforms Guide →
+              </span>
+            </Link>
+            <button
+              type="button"
+              onClick={dismissBanner}
+              className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+              aria-label="Dismiss banner"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Breadcrumb nav so main app navigation is visible */}
         <nav className="flex items-center gap-2 text-sm text-[#A0A0A0] mb-8">
           <Link href="/dashboard" className="flex items-center gap-1 hover:text-white transition-colors">
@@ -112,6 +153,17 @@ export default function DigitalProductsLanding() {
             </CardContent>
           </Card>
         </div>
+
+        <p className="mt-8 text-center text-sm text-gray-500">
+          Don&apos;t have a store yet?{" "}
+          <Link
+            href="/dashboard/digital-products/selling-guide"
+            className="text-orange-500 hover:text-orange-400 font-medium"
+          >
+            Check our Selling Platforms Guide
+          </Link>{" "}
+          to find the best place to sell.
+        </p>
       </div>
     </main>
   );

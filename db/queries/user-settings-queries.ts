@@ -12,7 +12,6 @@ export async function getUserSettings(userId: string): Promise<SelectUserSetting
 export async function getUserSettingsForDisplay(userId: string): Promise<{
   displayName: string | null;
   openaiApiKeyMasked: string | null;
-  shotstackApiKeyMasked: string | null;
   defaultProductType: string;
   defaultVideoStyle: string;
 } | null> {
@@ -23,7 +22,6 @@ export async function getUserSettingsForDisplay(userId: string): Promise<{
   return {
     displayName: row.displayName ?? null,
     openaiApiKeyMasked: mask(row.openaiApiKey),
-    shotstackApiKeyMasked: mask(row.shotstackApiKey),
     defaultProductType: row.defaultProductType ?? "digital_product",
     defaultVideoStyle: row.defaultVideoStyle ?? "professional",
   };
@@ -36,7 +34,6 @@ export async function upsertUserSettings(
   const set: Record<string, unknown> = { updatedAt: new Date() };
   if (data.displayName !== undefined) set.displayName = data.displayName;
   if (data.openaiApiKey !== undefined) set.openaiApiKey = data.openaiApiKey;
-  if (data.shotstackApiKey !== undefined) set.shotstackApiKey = data.shotstackApiKey;
   if (data.defaultProductType !== undefined) set.defaultProductType = data.defaultProductType;
   if (data.defaultVideoStyle !== undefined) set.defaultVideoStyle = data.defaultVideoStyle;
 
@@ -52,7 +49,6 @@ export async function upsertUserSettings(
       userId,
       displayName: data.displayName ?? null,
       openaiApiKey: data.openaiApiKey ?? null,
-      shotstackApiKey: data.shotstackApiKey ?? null,
       defaultProductType: data.defaultProductType ?? "digital_product",
       defaultVideoStyle: data.defaultVideoStyle ?? "professional",
     })

@@ -10,6 +10,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { getVideoLengthOptionOrDefault } from "@/lib/video-length-options";
 
 const EDITING_STEPS: Record<string, string[]> = {
   CapCut: [
@@ -92,8 +93,13 @@ function buildCreativeBriefPrompt(
   productDesc: string,
   hook: string,
   body: string,
-  cta: string
+  cta: string,
+  durationSeconds?: number
 ): string {
+  const lengthOpt = durationSeconds != null ? getVideoLengthOptionOrDefault(durationSeconds) : null;
+  const sceneInstruction = lengthOpt
+    ? `Total video length: ${lengthOpt.durationSec} seconds. Include exactly ${lengthOpt.scenesMin}–${lengthOpt.scenesMax} scenes. Each scene's "timing" must use timestamps that span 0s to ${lengthOpt.durationSec}s (e.g. "0-3s", "3-8s", ...).`
+    : "Include 5 scenes.";
   return `Product: "${productName}"
 ${productDesc ? `Description: ${productDesc}` : ""}
 
@@ -168,7 +174,7 @@ Return ONLY this JSON object (no markdown, no code fences):
   ]
 }
 
-Include 5 scenes. Be specific to the product niche. Output ONLY the JSON object.`;
+${sceneInstruction} Be specific to the product niche. Output ONLY the JSON object.`;
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -274,6 +280,8 @@ export async function POST(request: NextRequest) {
       productId,
       stockImageUrls,
       platforms: platformsReq,
+      durationSeconds: durationSecondsReq,
+      targetDurationSec: targetDurationSecReq,
     } = body as {
       hook?: string;
       body?: string;
@@ -283,7 +291,13 @@ export async function POST(request: NextRequest) {
       productId?: string;
       stockImageUrls?: string[];
       platforms?: string[];
+      durationSeconds?: number;
+      targetDurationSec?: number;
     };
+    const durationSeconds =
+      (typeof durationSecondsReq === "number" && [15, 30, 60, 90].includes(durationSecondsReq) ? durationSecondsReq : null) ??
+      (typeof targetDurationSecReq === "number" && [15, 30, 60, 90].includes(targetDurationSecReq) ? targetDurationSecReq : null) ??
+      undefined;
 
     const selectedPlatforms = Array.isArray(platformsReq) && platformsReq.length > 0 ? platformsReq : ["tiktok"];
 
@@ -358,7 +372,8 @@ export async function POST(request: NextRequest) {
                 productDesc,
                 hook || "",
                 bodyText || "",
-                cta || ""
+                cta || "",
+                durationSeconds
               ),
             },
           ],

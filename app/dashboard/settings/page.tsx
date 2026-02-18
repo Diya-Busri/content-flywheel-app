@@ -22,10 +22,10 @@ export default async function SettingsPage() {
 
   return (
     <main className="p-6 md:p-10">
-      <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+      <h1 className="text-3xl font-bold text-white mb-2">
         Settings
       </h1>
-      <p className="text-slate-600 dark:text-slate-400 mb-8">
+      <p className="text-gray-400 mb-8">
         Manage your account, API keys, and preferences
       </p>
       {settingsTableMissing && (
@@ -54,20 +54,20 @@ function SettingsTableMissingBanner() {
   "updated_at" timestamp DEFAULT now() NOT NULL
 );`;
   return (
-    <div className="mb-8 p-4 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
-      <p className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
+    <div className="mb-8 p-4 rounded-lg bg-amber-950/40 border border-amber-800">
+      <p className="font-semibold text-amber-200 mb-2">
         Database setup required
       </p>
-      <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
-        The <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">user_settings</code> table is missing. Create it in the same database your app uses (check <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">DATABASE_URL</code> in .env.local).
+      <p className="text-sm text-amber-300 mb-3">
+        The <code className="bg-amber-900/50 px-1 rounded">user_settings</code> table is missing. Create it in the same database your app uses (check <code className="bg-amber-900/50 px-1 rounded">DATABASE_URL</code> in .env.local).
       </p>
-      <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
-        <strong>Option 1:</strong> From project root run: <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">npm run db:settings</code>
+      <p className="text-sm text-amber-300 mb-2">
+        <strong>Option 1:</strong> From project root run: <code className="bg-amber-900/50 px-1 rounded">npm run db:settings</code>
       </p>
-      <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
+      <p className="text-sm text-amber-300 mb-2">
         <strong>Option 2 (Supabase):</strong> In Supabase Dashboard → SQL Editor, run:
       </p>
-      <pre className="text-xs p-3 bg-slate-900 text-slate-100 rounded overflow-x-auto">
+      <pre className="text-xs p-3 bg-[#0F0F0F] text-gray-300 rounded overflow-x-auto">
         {sql}
       </pre>
     </div>

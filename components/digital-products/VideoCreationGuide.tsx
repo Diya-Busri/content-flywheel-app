@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -31,6 +31,8 @@ import {
   Lightbulb,
   X,
   Share2,
+  Play,
+  RefreshCw,
 } from "lucide-react";
 
 /** Social Media Kit shape (matches API response). */
@@ -90,20 +92,24 @@ function formatPromptForPlatform(
   }
 }
 
-/** ElevenLabs voice options for voiceover (name -> voice_id). */
-const ELEVENLABS_VOICES: { name: string; voiceId: string }[] = [
-  { name: "Rachel", voiceId: "21m00Tcm4TlvDq8ikWAM" },
-  { name: "Drew", voiceId: "29vD33N1CtxCmqQRPOHJ" },
-  { name: "Clyde", voiceId: "2EiwWnXFnvU5JabPnv8n" },
-  { name: "Domi", voiceId: "AZnzlk1XvdvUeBnXmlld" },
-  { name: "Bella", voiceId: "EXAVITQu4vr4xnSDxMaL" },
-  { name: "Antoni", voiceId: "ErXwobaYiN019PkySvjV" },
-  { name: "Elli", voiceId: "MF3mGyEYCl7XYWbV9V6O" },
-  { name: "Josh", voiceId: "TxGEqnHWrfWFTfGW9XjX" },
-  { name: "Arnold", voiceId: "VR6AewLTigWG4xSOukaG" },
-  { name: "Adam", voiceId: "pNInz6obpgDQGcFmaJgB" },
-  { name: "Sam", voiceId: "yoZ06aMxZJJ28mfd3POQ" },
-];
+import {
+  ELEVENLABS_VOICES,
+  VOICE_PREVIEW_TEXT,
+  VOICEOVER_STORAGE_KEY,
+  getDefaultVoiceId,
+  setDefaultVoiceId,
+} from "@/lib/elevenlabs-voices";
+
+/** Audio element that respects playback speed. */
+function AudioWithSpeed({ src, speed, className, ...props }: { src: string; speed: number; className?: string } & React.AudioHTMLAttributes<HTMLAudioElement>) {
+  const ref = useCallback(
+    (el: HTMLAudioElement | null) => {
+      if (el) el.playbackRate = speed;
+    },
+    [speed]
+  );
+  return <audio ref={ref} src={src} className={className} {...props} />;
+}
 
 type TextOverlayObj = { exactText?: string; fontStyle?: string; size?: string; position?: string; color?: string; animation?: string; timingNote?: string };
 type VisualDirection = { aiPrompt?: string; cameraAngle?: string; lightingMood?: string; colorPalette?: string; mediaType?: string };
@@ -138,14 +144,17 @@ type Props = {
 export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
   const { toast } = useToast();
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [voiceId, setVoiceId] = useState(ELEVENLABS_VOICES[0].voiceId);
+  const [voiceId, setVoiceId] = useState<string>(() => (typeof window !== "undefined" ? getDefaultVoiceId() : ELEVENLABS_VOICES[0].voiceId));
   const [stability, setStability] = useState(0.5);
-  const [similarity, setSimilarity] = useState(0.5);
+  const [similarity, setSimilarity] = useState(0.75);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [voiceoverMode, setVoiceoverMode] = useState<"full" | "scene">("full");
   const [fullVoiceoverUrl, setFullVoiceoverUrl] = useState<string | null>(null);
   const [perSceneUrls, setPerSceneUrls] = useState<(string | null)[]>([]);
   const [generatingFull, setGeneratingFull] = useState(false);
   const [generatingPerScene, setGeneratingPerScene] = useState(false);
   const [generatingSceneIndex, setGeneratingSceneIndex] = useState<number | null>(null);
+  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
   const [characterRefPreviewUrl, setCharacterRefPreviewUrl] = useState<string | null>(null);
   const [characterRefPublicUrl, setCharacterRefPublicUrl] = useState<string | null>(null);
   const [copyFormatByScene, setCopyFormatByScene] = useState<Record<number, PromptPlatform>>({});
@@ -162,6 +171,11 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
     return null;
   });
   const [socialKitLoading, setSocialKitLoading] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setDefaultVoiceId(voiceId);
+  }, [voiceId]);
 
   const script = guide.script;
   const scenes = guide.scenes ?? guide.scenePrompts.map((s, i) => ({
@@ -317,11 +331,12 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
   }, [scenes, script, fullScriptText]);
 
   const generateVoiceover = useCallback(
-    async (text: string): Promise<Blob> => {
+    async (text: string, options?: { voiceIdOverride?: string }): Promise<Blob> => {
+      const vid = options?.voiceIdOverride ?? voiceId;
       const res = await fetch("/api/generate-voiceover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voiceId, stability, similarity }),
+        body: JSON.stringify({ text, voiceId: vid, stability, similarity }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -330,6 +345,24 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
       return res.blob();
     },
     [voiceId, stability, similarity]
+  );
+
+  const handlePreviewVoice = useCallback(
+    async (vId: string) => {
+      setPreviewingVoiceId(vId);
+      try {
+        const blob = await generateVoiceover(VOICE_PREVIEW_TEXT, { voiceIdOverride: vId });
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => URL.revokeObjectURL(url);
+        await audio.play();
+      } catch (e) {
+        toast({ title: "Preview failed", description: e instanceof Error ? e.message : "Could not play sample", variant: "destructive" });
+      } finally {
+        setPreviewingVoiceId(null);
+      }
+    },
+    [generateVoiceover, toast]
   );
 
   const handleGenerateFullVoiceover = useCallback(async () => {
@@ -392,6 +425,18 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
       setGeneratingSceneIndex(null);
     }
   }, [getSceneTexts, generateVoiceover, toast]);
+
+  const handleRegenerateVoiceover = useCallback(() => {
+    if (fullVoiceoverUrl) URL.revokeObjectURL(fullVoiceoverUrl);
+    setFullVoiceoverUrl(null);
+    perSceneUrls.forEach((u) => u && URL.revokeObjectURL(u));
+    setPerSceneUrls([]);
+    if (voiceoverMode === "full") {
+      handleGenerateFullVoiceover();
+    } else {
+      handleGeneratePerSceneVoiceover();
+    }
+  }, [voiceoverMode, fullVoiceoverUrl, perSceneUrls, handleGenerateFullVoiceover, handleGeneratePerSceneVoiceover]);
 
   const downloadGuide = useCallback(() => {
     const lines: string[] = [];
@@ -574,7 +619,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
               <div className="pt-2 border-t border-[#2A2A2A]">
                 <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Generated voiceover</p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <audio controls src={fullVoiceoverUrl} className="max-w-full h-9 flex-1 min-w-0" />
+                  <AudioWithSpeed src={fullVoiceoverUrl} speed={playbackSpeed} controls className="max-w-full h-9 flex-1 min-w-0" />
                   <Button variant="outline" size="sm" className="border-[#2A2A2A] text-[#A0A0A0] shrink-0" asChild>
                     <a href={fullVoiceoverUrl} download="voiceover-full.mp3">Download</a>
                   </Button>
@@ -1057,103 +1102,187 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                   <Mic className="w-4 h-4 text-orange-500" />
                   AI Voiceover (ElevenLabs)
                 </CardTitle>
+                <CardDescription className="text-[#A0A0A0]">
+                  Choose a voice, adjust style, then generate. Your last selected voice is saved as default.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Voice selection grid by category */}
                 <div>
-                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Voice</p>
-                  <Select value={voiceId} onValueChange={setVoiceId}>
-                    <SelectTrigger className="w-full max-w-xs bg-[#0F0F0F] border-[#2A2A2A] text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1A1A1A] border-[#2A2A2A]">
-                      {ELEVENLABS_VOICES.map((v) => (
-                        <SelectItem key={v.voiceId} value={v.voiceId}>{v.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-3">Voice selection</p>
+                  {(["Female", "Male", "Character"] as const).map((cat) => {
+                    const list = ELEVENLABS_VOICES.filter((v) => v.category === cat);
+                    if (list.length === 0) return null;
+                    return (
+                      <div key={cat} className="mb-6 last:mb-0">
+                        <p className="text-xs text-[#A0A0A0] mb-2">{cat}</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {list.map((v) => {
+                            const selected = voiceId === v.voiceId;
+                            const loading = previewingVoiceId === v.voiceId;
+                            return (
+                              <div
+                                key={v.voiceId}
+                                className={`rounded-lg border-2 p-3 flex items-center justify-between gap-2 ${
+                                  selected
+                                    ? "border-orange-500 bg-orange-500/10"
+                                    : "border-[#2A2A2A] bg-[#0F0F0F] hover:border-[#3A3A3A]"
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  className="flex-1 min-w-0 text-left"
+                                  onClick={() => setVoiceId(v.voiceId)}
+                                >
+                                  <span className="block font-medium text-white text-sm">{v.name}</span>
+                                  <span className="block text-xs text-[#A0A0A0]">{v.description}</span>
+                                </button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-[#2A2A2A] text-[#A0A0A0] shrink-0 h-8 w-8 p-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePreviewVoice(v.voiceId);
+                                  }}
+                                  disabled={loading}
+                                  title="Preview voice"
+                                >
+                                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+
+                {/* Generation mode */}
                 <div>
-                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Stability</p>
-                  <Slider
-                    value={[stability]}
-                    onValueChange={([v]) => setStability(v)}
-                    min={0}
-                    max={1}
-                    step={0.1}
-                    className="max-w-xs"
-                  />
-                  <p className="text-xs text-[#A0A0A0] mt-1">{Math.round(stability * 100)}%</p>
+                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Generation mode</p>
+                  <div className="flex rounded-lg border border-[#2A2A2A] p-1 bg-[#0F0F0F] w-full max-w-md">
+                    <button
+                      type="button"
+                      className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                        voiceoverMode === "full"
+                          ? "bg-orange-500 text-white"
+                          : "text-[#A0A0A0] hover:text-white"
+                      }`}
+                      onClick={() => setVoiceoverMode("full")}
+                    >
+                      Full Script
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                        voiceoverMode === "scene"
+                          ? "bg-orange-500 text-white"
+                          : "text-[#A0A0A0] hover:text-white"
+                      }`}
+                      onClick={() => setVoiceoverMode("scene")}
+                    >
+                      Scene by Scene
+                    </button>
+                  </div>
+                  <p className="text-xs text-[#A0A0A0] mt-1">
+                    {voiceoverMode === "full" ? "One audio file for Hook + Body + CTA." : "Separate clips per scene with individual play/download."}
+                  </p>
                 </div>
-                <div>
-                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Clarity</p>
-                  <Slider
-                    value={[similarity]}
-                    onValueChange={([v]) => setSimilarity(v)}
-                    min={0}
-                    max={1}
-                    step={0.1}
-                    className="max-w-xs"
-                  />
-                  <p className="text-xs text-[#A0A0A0] mt-1">{Math.round(similarity * 100)}%</p>
+
+                {/* Speed / Stability / Clarity */}
+                <div className="space-y-4">
+                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide">Speed &amp; style</p>
+                  <div>
+                    <p className="text-sm text-[#B0B0B0] mb-1">Speaking speed (playback): {(playbackSpeed * 100) / 100}x</p>
+                    <Slider
+                      value={[playbackSpeed]}
+                      onValueChange={([v]) => setPlaybackSpeed(v)}
+                      min={0.5}
+                      max={2}
+                      step={0.1}
+                      className="max-w-xs"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm text-[#B0B0B0] mb-1">Stability: {Math.round(stability * 100)}%</p>
+                    <Slider
+                      value={[stability]}
+                      onValueChange={([v]) => setStability(v)}
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      className="max-w-xs"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm text-[#B0B0B0] mb-1">Clarity: {Math.round(similarity * 100)}%</p>
+                    <Slider
+                      value={[similarity]}
+                      onValueChange={([v]) => setSimilarity(v)}
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      className="max-w-xs"
+                    />
+                  </div>
                 </div>
+
+                {/* Generate / Regenerate */}
                 <div className="flex flex-wrap gap-2">
                   <Button
                     className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
-                    onClick={handleGenerateFullVoiceover}
-                    disabled={generatingFull || !fullScriptText.trim()}
+                    onClick={voiceoverMode === "full" ? handleGenerateFullVoiceover : handleGeneratePerSceneVoiceover}
+                    disabled={
+                      (voiceoverMode === "full" ? generatingFull : generatingPerScene) ||
+                      (voiceoverMode === "full" ? !fullScriptText.trim() : getSceneTexts().length === 0)
+                    }
                   >
-                    {generatingFull ? (
+                    {(voiceoverMode === "full" ? generatingFull : generatingPerScene) ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <Mic className="w-4 h-4" />
                     )}
-                    Generate Full Voiceover
+                    {voiceoverMode === "full" ? "Generate Full Voiceover" : "Generate Scene by Scene"}
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] gap-2"
-                    onClick={handleGeneratePerSceneVoiceover}
-                    disabled={generatingPerScene || getSceneTexts().length === 0}
-                  >
-                    {generatingPerScene ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Volume2 className="w-4 h-4" />
-                    )}
-                    Generate Per Scene
-                  </Button>
+                  {(fullVoiceoverUrl || perSceneUrls.some(Boolean)) && (
+                    <Button
+                      variant="outline"
+                      className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] gap-2"
+                      onClick={handleRegenerateVoiceover}
+                      disabled={generatingFull || generatingPerScene}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Regenerate
+                    </Button>
+                  )}
                 </div>
+
+                {/* Full script result */}
                 {fullVoiceoverUrl && (
                   <div>
                     <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Full script audio</p>
                     <div className="flex flex-wrap items-center gap-3">
-                      <audio controls src={fullVoiceoverUrl} className="max-w-full h-9" />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-[#2A2A2A] text-[#A0A0A0]"
-                        asChild
-                      >
+                      <AudioWithSpeed src={fullVoiceoverUrl} speed={playbackSpeed} controls className="max-w-full h-9" />
+                      <Button variant="outline" size="sm" className="border-[#2A2A2A] text-[#A0A0A0]" asChild>
                         <a href={fullVoiceoverUrl} download="voiceover-full.mp3">Download</a>
                       </Button>
                     </div>
                   </div>
                 )}
+
+                {/* Per-scene results */}
                 {perSceneUrls.length > 0 && (
                   <div>
                     <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Per-scene clips</p>
                     <div className="space-y-3">
-                      {perSceneUrls.map((url, i) => (
+                      {perSceneUrls.map((url, i) =>
                         url ? (
                           <div key={i} className="flex flex-wrap items-center gap-3 rounded-lg bg-[#0F0F0F] p-3">
                             <span className="text-sm text-[#A0A0A0] w-20">Scene {i + 1}</span>
-                            <audio controls src={url} className="flex-1 min-w-0 max-w-md h-9" />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-[#2A2A2A] text-[#A0A0A0] shrink-0"
-                              asChild
-                            >
+                            <AudioWithSpeed src={url} speed={playbackSpeed} controls className="flex-1 min-w-0 max-w-md h-9" />
+                            <Button variant="outline" size="sm" className="border-[#2A2A2A] text-[#A0A0A0] shrink-0" asChild>
                               <a href={url} download={`voiceover-scene-${i + 1}.mp3`}>Download</a>
                             </Button>
                           </div>
@@ -1167,7 +1296,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                             <span className="text-sm text-[#A0A0A0]">Scene {i + 1} — failed or pending</span>
                           </div>
                         )
-                      ))}
+                      )}
                     </div>
                   </div>
                 )}

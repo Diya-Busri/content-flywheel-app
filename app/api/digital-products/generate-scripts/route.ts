@@ -7,6 +7,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { getVideoLengthOptionOrDefault } from "@/lib/video-length-options";
 
 export type GeneratedScriptItem = {
   id: string;
@@ -27,6 +28,9 @@ export async function POST(request: NextRequest) {
     if (!productId) {
       return NextResponse.json({ error: "productId required" }, { status: 400 });
     }
+    const targetDurationSec = typeof body.targetDurationSec === "number" ? body.targetDurationSec : 30;
+    const lengthOpt = getVideoLengthOptionOrDefault(targetDurationSec);
+    const { durationSec, wordsMin, wordsMax } = lengthOpt;
 
     const [product] = await db
       .select()
@@ -77,11 +81,11 @@ HIGHLIGHTING (required): Wrap text in tags where they fit:
 Only tag the strongest phrases.
 
 RULES:
-- Hook: 1–2 sentences, under ~100 chars, punchy and scroll-stopping.
-- Body: 2–4 short paragraphs, under ~300 chars total, benefit-focused.
-- CTA: one clear action, under ~100 chars.
-- Write for 30-second videos. Be specific to this product and niche.
-- No placeholders — use the actual product name.
+- Hook: 1–2 sentences, punchy and scroll-stopping.
+- Body: 2–4 short paragraphs, benefit-focused.
+- CTA: one clear action.
+- TARGET LENGTH: ${durationSec} seconds when read aloud. Each script must be approximately ${wordsMin}–${wordsMax} words total. Do not exceed this word count.
+- Be specific to this product and niche. No placeholders — use the actual product name.
 
 Return ONLY valid JSON (no markdown, no code fence):
 {
@@ -137,7 +141,7 @@ Return ONLY valid JSON (no markdown, no code fence):
     const scripts: GeneratedScriptItem[] = raw.slice(0, 4).map((s, i) => ({
       id: `gen-${i + 1}`,
       title: typeof s.title === "string" ? s.title : defaultTitles[i] ?? `Script ${i + 1}`,
-      length: 30,
+      length: durationSec,
       hook: typeof s.hook === "string" ? s.hook.trim() : "",
       body: typeof s.body === "string" ? s.body.trim() : "",
       cta: typeof s.cta === "string" ? s.cta.trim() : "",

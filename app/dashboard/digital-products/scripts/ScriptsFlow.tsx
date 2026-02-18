@@ -43,6 +43,7 @@ import {
   Wrench,
   BookOpen,
 } from "lucide-react";
+import { VIDEO_LENGTH_OPTIONS, DEFAULT_VIDEO_LENGTH_SEC } from "@/lib/video-length-options";
 
 const LENGTH_OPTIONS = [15, 30, 60, 90] as const;
 type LengthOption = (typeof LENGTH_OPTIONS)[number];
@@ -215,6 +216,8 @@ export default function ScriptsFlow() {
   const [showCustomScript, setShowCustomScript] = useState(false);
   const [customScriptText, setCustomScriptText] = useState("");
   const [productName, setProductName] = useState<string | null>(null);
+  const [scriptVideoLengthSec, setScriptVideoLengthSec] = useState(DEFAULT_VIDEO_LENGTH_SEC);
+  const [regeneratingScripts, setRegeneratingScripts] = useState(false);
 
   const goToVideos = () => {
     const selected = scripts.filter((s) => s.isSelected).map((s) => ({
@@ -304,7 +307,10 @@ export default function ScriptsFlow() {
           const genRes = await fetch("/api/digital-products/generate-scripts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ productId: productIdFromUrl }),
+            body: JSON.stringify({
+              productId: productIdFromUrl,
+              targetDurationSec: scriptVideoLengthSec,
+            }),
           });
           const genData = (await genRes.json().catch(() => ({}))) as {
             scripts?: Array<{ id: string; title: string; length: number; hook: string; body: string; cta: string }>;
@@ -444,6 +450,33 @@ export default function ScriptsFlow() {
         </Card>
       ) : (
         <>
+          {productIdFromUrl && (
+            <div className="mb-6">
+              <Label className="text-white block mb-2">Video length</Label>
+              <p className="text-xs text-[#A0A0A0] mb-3">Choose target duration before generating. Word count and video guide scenes will match.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {VIDEO_LENGTH_OPTIONS.map((opt) => {
+                  const selected = scriptVideoLengthSec === opt.seconds;
+                  return (
+                    <button
+                      key={opt.seconds}
+                      type="button"
+                      onClick={() => setScriptVideoLengthSec(opt.seconds)}
+                      className={`rounded-lg border-2 p-3 text-left transition-all ${
+                        selected
+                          ? "border-orange-500 bg-orange-500/10 text-white"
+                          : "border-[#2A2A2A] bg-[#1A1A1A] text-[#A0A0A0] hover:border-[#3A3A3A] hover:text-white"
+                      }`}
+                    >
+                      <span className="block font-semibold text-sm">{opt.seconds}s</span>
+                      <span className="block text-xs mt-0.5 opacity-90">{opt.sublabel}</span>
+                      <span className="block text-xs mt-1 opacity-75">{opt.wordRange}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             {scripts.map((script) => (
               <ScriptCard
@@ -499,16 +532,26 @@ export default function ScriptsFlow() {
               <AccordionTrigger className="text-white hover:no-underline">Advanced Script Settings</AccordionTrigger>
               <AccordionContent className="space-y-6 pt-2">
                 <div>
-                  <Label>Video length customization</Label>
-                  <div className="flex items-center gap-4 mt-2">
-                    <Slider defaultValue={[30]} min={15} max={90} step={5} className="w-48" />
-                    <Input type="number" defaultValue={30} min={15} max={90} className="w-16 h-9" />
-                    <span className="text-sm text-slate-500">seconds</span>
+                  <Label>Video length</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
+                    {VIDEO_LENGTH_OPTIONS.map((opt) => {
+                      const selected = scriptVideoLengthSec === opt.seconds;
+                      return (
+                        <button
+                          key={opt.seconds}
+                          type="button"
+                          onClick={() => setScriptVideoLengthSec(opt.seconds)}
+                          className={`rounded-lg border-2 p-3 text-left transition-all ${
+                            selected ? "border-orange-500 bg-orange-500/10" : "border-[#2A2A2A] bg-[#1A1A1A] hover:border-[#3A3A3A]"
+                          }`}
+                        >
+                          <span className="block font-semibold text-sm text-white">{opt.seconds}s</span>
+                          <span className="block text-xs text-[#A0A0A0] mt-0.5">{opt.sublabel}</span>
+                          <span className="block text-xs text-[#666] mt-1">{opt.wordRange}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                    <Checkbox defaultChecked />
-                    <span className="text-sm">Auto-fit script (AI adjusts pacing to fit length)</span>
-                  </label>
                 </div>
                 <div>
                   <Label>Tone & style</Label>

@@ -14,7 +14,6 @@ import { eq } from "drizzle-orm";
 export type SettingsDisplay = {
   displayName: string | null;
   openaiApiKeyMasked: string | null;
-  shotstackApiKeyMasked: string | null;
   defaultProductType: string;
   defaultVideoStyle: string;
 };
@@ -59,7 +58,6 @@ export async function getSettingsForPage(): Promise<{
         settings: {
           displayName: null,
           openaiApiKeyMasked: null,
-          shotstackApiKeyMasked: null,
           defaultProductType: "digital_product",
           defaultVideoStyle: "professional",
         },
@@ -81,7 +79,6 @@ export async function getSettingsForPage(): Promise<{
     settings: settings ?? {
       displayName: null,
       openaiApiKeyMasked: null,
-      shotstackApiKeyMasked: null,
       defaultProductType: "digital_product",
       defaultVideoStyle: "professional",
     },
@@ -102,16 +99,12 @@ export async function saveProfileAction(displayName: string | null): Promise<{ s
 }
 
 /** Pass a string to update (empty string clears). Pass undefined to leave unchanged. */
-export async function saveApiKeysAction(
-  openaiApiKey?: string | null,
-  shotstackApiKey?: string | null
-): Promise<{ success: boolean; error?: string }> {
+export async function saveApiKeysAction(openaiApiKey?: string | null): Promise<{ success: boolean; error?: string }> {
   try {
     const { userId } = await auth();
     if (!userId) return { success: false, error: "Not signed in" };
-    const updates: { openaiApiKey?: string | null; shotstackApiKey?: string | null } = {};
+    const updates: { openaiApiKey?: string | null } = {};
     if (openaiApiKey !== undefined) updates.openaiApiKey = openaiApiKey?.trim() || null;
-    if (shotstackApiKey !== undefined) updates.shotstackApiKey = shotstackApiKey?.trim() || null;
     await upsertUserSettings(userId, updates);
     revalidatePath("/dashboard/settings");
     return { success: true };

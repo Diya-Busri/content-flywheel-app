@@ -1,11 +1,12 @@
 import type { VideoStyle, HookStyle, ScriptTone, ScriptWithScenes } from "./types";
+import { getVideoLengthOptionOrDefault } from "@/lib/video-length-options";
 
 export type GenerateScriptOptions = {
   productName: string;
   productDescription: string;
   videoStyle: VideoStyle;
   platform: string;
-  /** Target video length in seconds (15–60). Influences script length. */
+  /** Target video length in seconds (15, 30, 60, 90). Influences script length and word count. */
   targetDurationSec?: number;
   /** Hook style for conversion mode */
   hookStyle?: HookStyle;
@@ -51,14 +52,13 @@ export async function generateVideoScript(options: GenerateScriptOptions): Promi
     throw new Error("Product description is required so the script aligns with the product.");
   }
 
-  console.log("[generate-script] Generating:", { productName: productName.slice(0, 30), videoStyle, platform, targetDurationSec });
-
-  const durationSec =
-    targetDurationSec != null && targetDurationSec >= 15 && targetDurationSec <= 60
-      ? targetDurationSec
-      : 22;
-  const wordsMin = Math.round((durationSec - 2) * 2.5);
-  const wordsMax = Math.round((durationSec + 2) * 2.8);
+  const lengthOpt = getVideoLengthOptionOrDefault(
+    targetDurationSec != null && [15, 30, 60, 90].includes(targetDurationSec) ? targetDurationSec : 30
+  );
+  const durationSec = lengthOpt.durationSec;
+  const wordsMin = lengthOpt.wordsMin;
+  const wordsMax = lengthOpt.wordsMax;
+  console.log("[generate-script] Generating:", { productName: productName.slice(0, 30), videoStyle, platform, targetDurationSec: durationSec, wordsMin, wordsMax });
 
   const hookPrompt = hookStyle && HOOK_STYLE_PROMPTS[hookStyle] ? HOOK_STYLE_PROMPTS[hookStyle] : "";
   const tonePrompt = tone && TONE_PROMPTS[tone] ? TONE_PROMPTS[tone] : "";

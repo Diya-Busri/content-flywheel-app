@@ -231,6 +231,7 @@ export default function ResultsFlow() {
           cta: settings?.cta ?? script.cta,
           productId: productId || undefined,
           platforms: platforms && platforms.length > 0 ? platforms : ["tiktok"],
+          durationSeconds: [15, 30, 60, 90].includes(script.length) ? script.length : 30,
         }),
       });
       const guide = await res.json().catch(() => ({}));

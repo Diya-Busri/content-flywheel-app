@@ -43,8 +43,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Sun,
-  Moon,
   Printer,
   Sparkles,
   Type,
@@ -541,13 +539,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const thumbnailCaptureRef = useRef<HTMLDivElement | null>(null);
   const [includeCover, setIncludeCover] = useState(true);
   const [includeBackPage, setIncludeBackPage] = useState(true);
-  const [uiTheme, setUiTheme] = useState<"light" | "dark">(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("product-editor-theme") as "light" | "dark" | null;
-      return stored === "dark" ? "dark" : "light";
-    }
-    return "light";
-  });
+  const uiTheme = "dark" as const;
   const [placedElementsByPage, setPlacedElementsByPage] = useState<PlacedElement[][]>([]);
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
   const [editingTextBoxId, setEditingTextBoxId] = useState<string | null>(null);
@@ -1894,14 +1886,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
   };
 
-  const toggleUiTheme = useCallback(() => {
-    setUiTheme((prev) => {
-      const next = prev === "light" ? "dark" : "light";
-      if (typeof window !== "undefined") localStorage.setItem("product-editor-theme", next);
-      return next;
-    });
-  }, []);
-
   const handleGenerateVideos = useCallback(() => {
     const title = product?.title ?? "";
     const description = (product?.marketingAssets as { productDescription?: string } | undefined)?.productDescription ?? "";
@@ -2210,20 +2194,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={toggleUiTheme}
-                    className={`p-2 rounded-lg transition-colors ${isDark ? "text-gray-400 hover:text-orange-500 hover:bg-[#2A2A2A]" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}
-                    aria-label={isDark ? "Switch to light background" : "Switch to dark background"}
-                  >
-                    {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>{isDark ? "Light background" : "Dark background"}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="sm" variant="ghost" className={isDark ? "text-gray-400 hover:text-white hover:bg-[#2A2A2A]" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"} onClick={() => setShowFullPreview(true)}>
+                  <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white hover:bg-[#2A2A2A]" onClick={() => setShowFullPreview(true)}>
                     <Eye className="w-4 h-4" />
                   </Button>
                 </TooltipTrigger>
