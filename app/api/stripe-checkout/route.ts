@@ -44,13 +44,14 @@ export async function POST(request: NextRequest) {
   let priceId: string;
   if (body.plan === "monthly") priceId = monthlyPriceId;
   else if (body.plan === "yearly") priceId = yearlyPriceId;
-  else if (body.priceId && [monthlyPriceId, yearlyPriceId].includes(body.priceId)) priceId = body.priceId;
+  else if (body.priceId && [monthlyPriceId, yearlyPriceId].includes(body.priceId.trim())) priceId = body.priceId.trim();
   else {
     return NextResponse.json(
       { error: "Provide plan: 'monthly' | 'yearly' or a valid priceId." },
       { status: 400 }
     );
   }
+  priceId = priceId.trim();
 
   const rawBase =
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
