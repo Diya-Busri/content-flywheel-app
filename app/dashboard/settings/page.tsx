@@ -22,10 +22,10 @@ export default async function SettingsPage() {
 
   return (
     <main className="p-6 md:p-10">
-      <h1 className="text-3xl font-bold text-white mb-2">
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
         Settings
       </h1>
-      <p className="text-gray-400 mb-8">
+      <p className="text-gray-600 dark:text-gray-400 mb-8">
         Manage your account, API keys, and preferences
       </p>
       {settingsTableMissing && (
@@ -67,7 +67,7 @@ function SettingsTableMissingBanner() {
       <p className="text-sm text-amber-300 mb-2">
         <strong>Option 2 (Supabase):</strong> In Supabase Dashboard → SQL Editor, run:
       </p>
-      <pre className="text-xs p-3 bg-[#0F0F0F] text-gray-300 rounded overflow-x-auto">
+      <pre className="text-xs p-3 bg-gray-100 dark:bg-[#0F0F0F] text-gray-800 dark:text-gray-300 rounded overflow-x-auto">
         {sql}
       </pre>
     </div>

@@ -86,7 +86,7 @@ export function DraggableElement({
     >
       <div
         data-draggable-element
-        className="w-full h-full flex items-center justify-center bg-white/95 border border-[#2A2A2A] rounded overflow-hidden relative group"
+        className="w-full h-full flex items-center justify-center bg-white dark:bg-white/95 border border-gray-200 dark:border-[#2A2A2A] rounded overflow-hidden relative group"
         onClick={() => onSelect(element.id)}
       >
         {/* Delete button - top left */}

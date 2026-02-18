@@ -67,27 +67,27 @@ export default async function DashboardPage() {
 
   return (
     <main className="p-6 md:p-10">
-      <h1 className="text-3xl font-bold text-white mb-2">
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
         Welcome back
       </h1>
-      <p className="text-gray-400 mb-10">
+      <p className="text-gray-600 dark:text-gray-400 mb-10">
         Create AI-powered videos for TikTok, Instagram, and YouTube
       </p>
 
       {/* Quick Stats */}
       <section className="mb-12">
-        <h2 className="text-lg font-semibold text-white mb-4">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Quick Stats
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="border-[#2A2A2A] bg-[#1A1A1A] hover:border-[#3A3A3A] transition-colors">
+          <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-gray-300 dark:hover:border-[#3A3A3A] transition-colors">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-400">
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 Digital Products
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
                 {videoStats.digitalProductsCount}
               </p>
               <p className="text-xs text-gray-500 mt-1">
@@ -95,14 +95,14 @@ export default async function DashboardPage() {
               </p>
             </CardContent>
           </Card>
-          <Card className="border-[#2A2A2A] bg-[#1A1A1A] hover:border-[#3A3A3A] transition-colors">
+          <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-gray-300 dark:hover:border-[#3A3A3A] transition-colors">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-400">
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 TikTok Shop
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
                 {videoStats.tiktokShopCount}
               </p>
               <p className="text-xs text-gray-500 mt-1">
@@ -115,50 +115,50 @@ export default async function DashboardPage() {
 
       {/* Quick Actions */}
       <section className="mb-12">
-        <h2 className="text-lg font-semibold text-white mb-4">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Quick Actions
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Link href="/dashboard/digital-products">
-            <Card className="group cursor-pointer border-[#2A2A2A] bg-[#1A1A1A] hover:border-orange-500/50 transition-all overflow-hidden h-full">
+            <Card className="group cursor-pointer border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-orange-500/50 transition-all overflow-hidden h-full">
               <CardContent className="p-8 flex flex-col items-center justify-center text-center min-h-[180px]">
                 <div className="w-14 h-14 rounded-xl bg-orange-500/20 flex items-center justify-center mb-4 group-hover:bg-orange-500/30 transition-colors">
                   <Package className="w-7 h-7 text-orange-500" />
                 </div>
-                <h3 className="font-semibold text-white mb-2">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
                   Create Digital Product Video
                 </h3>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   Flow 1 — Turn your digital products into sales-driving videos
                 </p>
               </CardContent>
             </Card>
           </Link>
           <Link href="/dashboard/tiktok-shop">
-            <Card className="group cursor-pointer border-[#2A2A2A] bg-[#1A1A1A] hover:border-orange-500/50 transition-all overflow-hidden h-full">
+            <Card className="group cursor-pointer border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-orange-500/50 transition-all overflow-hidden h-full">
               <CardContent className="p-8 flex flex-col items-center justify-center text-center min-h-[180px]">
                 <div className="w-14 h-14 rounded-xl bg-orange-500/20 flex items-center justify-center mb-4 group-hover:bg-orange-500/30 transition-colors">
                   <ShoppingBag className="w-7 h-7 text-orange-500" />
                 </div>
-                <h3 className="font-semibold text-white mb-2">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
                   Generate TikTok Shop Video
                 </h3>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   Flow 2 — Create videos optimized for TikTok Shop
                 </p>
               </CardContent>
             </Card>
           </Link>
           <Link href="/dashboard/script-checker">
-            <Card className="group cursor-pointer border-[#2A2A2A] bg-[#1A1A1A] hover:border-orange-500/50 transition-all overflow-hidden h-full">
+            <Card className="group cursor-pointer border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-orange-500/50 transition-all overflow-hidden h-full">
               <CardContent className="p-8 flex flex-col items-center justify-center text-center min-h-[180px]">
                 <div className="w-14 h-14 rounded-xl bg-orange-500/20 flex items-center justify-center mb-4 group-hover:bg-orange-500/30 transition-colors">
                   <CheckSquare className="w-7 h-7 text-orange-500" />
                 </div>
-                <h3 className="font-semibold text-white mb-2">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
                   Check Script Compliance
                 </h3>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   Flow 3 — Ensure your scripts meet platform guidelines
                 </p>
               </CardContent>
@@ -170,7 +170,7 @@ export default async function DashboardPage() {
       {/* Recent Videos */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Recent Videos
           </h2>
           {videoStats.recent.length > 0 && (
@@ -184,30 +184,30 @@ export default async function DashboardPage() {
           )}
         </div>
         {videoStats.recent.length > 0 ? (
-          <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
+          <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
             <CardContent className="p-0">
-              <ul className="divide-y divide-[#2A2A2A]">
+              <ul className="divide-y divide-[#E5E7EB] dark:divide-[#2A2A2A]">
                 {videoStats.recent.map((item) => {
                   const badgeLabel = item.source === "tiktok-shop" ? "TikTok Shop" : "Digital Product";
                   return (
                     <li key={`${item.source}-${item.id}`}>
                       <Link
                         href={item.href}
-                        className="flex items-center gap-3 px-6 py-4 hover:bg-white/5 transition-colors"
+                        className="flex items-center gap-3 px-6 py-4 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
                       >
                         <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0">
                           <Video className="w-5 h-5 text-orange-500" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-medium text-white truncate">
+                            <p className="font-medium text-gray-900 dark:text-white truncate">
                               {item.title}
                             </p>
                             <span
                               className={`shrink-0 inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
                                 item.source === "tiktok-shop"
-                                  ? "bg-[#2A2A2A] text-gray-300"
-                                  : "bg-orange-500/20 text-orange-300"
+                                  ? "bg-gray-200 dark:bg-[#2A2A2A] text-gray-700 dark:text-gray-300"
+                                  : "bg-orange-500/20 text-orange-600 dark:text-orange-300"
                               }`}
                             >
                               {badgeLabel}
@@ -226,12 +226,12 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="border-[#2A2A2A] border-dashed bg-[#1A1A1A]">
+          <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] border-dashed bg-white dark:bg-[#1A1A1A]">
             <CardContent className="p-12 flex flex-col items-center justify-center text-center min-h-[200px]">
-              <div className="w-16 h-16 rounded-full bg-[#2A2A2A] flex items-center justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center mb-4">
                 <Video className="w-8 h-8 text-gray-500" />
               </div>
-              <p className="text-gray-400 mb-2 font-medium">
+              <p className="text-gray-700 dark:text-gray-400 mb-2 font-medium">
                 No videos yet. Create your first video to get started!
               </p>
               <p className="text-sm text-gray-500 mb-6">

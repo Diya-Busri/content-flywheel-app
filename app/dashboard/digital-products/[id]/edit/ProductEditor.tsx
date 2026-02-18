@@ -67,6 +67,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
+import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 
 type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string };
 
@@ -539,7 +540,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const thumbnailCaptureRef = useRef<HTMLDivElement | null>(null);
   const [includeCover, setIncludeCover] = useState(true);
   const [includeBackPage, setIncludeBackPage] = useState(true);
-  const uiTheme = "dark" as const;
+  const { theme: dashboardTheme } = useDashboardTheme();
+  const uiTheme = dashboardTheme;
   const [placedElementsByPage, setPlacedElementsByPage] = useState<PlacedElement[][]>([]);
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
   const [editingTextBoxId, setEditingTextBoxId] = useState<string | null>(null);

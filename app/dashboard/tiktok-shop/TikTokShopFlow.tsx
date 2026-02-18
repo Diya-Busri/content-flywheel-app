@@ -283,16 +283,16 @@ export default function TikTokShopFlow() {
     <main className="p-6 md:p-10 max-w-3xl mx-auto">
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-orange-500 mb-6"
+        className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-orange-500 mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to dashboard
       </Link>
 
-      <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
+      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">
         TikTok Affiliate Control Center
       </h1>
-      <p className="text-gray-400 mb-8">
+      <p className="text-gray-600 dark:text-gray-400 mb-8">
         Product → AI Breakdown → Script → Video Creation Guide. No rendering—get a step-by-step guide to create your video.
       </p>
 
@@ -306,7 +306,7 @@ export default function TikTokShopFlow() {
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 step === s.id
                   ? "bg-orange-500 text-white"
-                  : "bg-[#2A2A2A] text-gray-400 hover:bg-[#3A3A3A] hover:text-white"
+                  : "bg-gray-200 dark:bg-[#2A2A2A] text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-[#3A3A3A] dark:hover:text-white"
               }`}
             >
               <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs bg-white/20">
@@ -324,13 +324,13 @@ export default function TikTokShopFlow() {
 
       {/* Step 1: Product Intelligence */}
       {step === 1 && (
-        <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
+        <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-white">
+            <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
               <span className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm">1</span>
               Product Intelligence
             </CardTitle>
-            <CardDescription className="text-gray-400">
+            <CardDescription className="text-gray-600 dark:text-gray-400">
               Add your product via link, name, or image. We&apos;ll analyze it with AI.
             </CardDescription>
           </CardHeader>
@@ -374,8 +374,8 @@ export default function TikTokShopFlow() {
                     <img src={imagePreview} alt="Product" className="max-h-24 mx-auto rounded" />
                   ) : (
                     <>
-                      <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-                      <p className="text-sm text-gray-400">Drop or click to upload</p>
+                      <Upload className="w-8 h-8 mx-auto text-gray-500 dark:text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Drop or click to upload</p>
                     </>
                   )}
                 </label>
@@ -395,7 +395,7 @@ export default function TikTokShopFlow() {
 
       {/* Step 2: AI Breakdown */}
       {step === 2 && breakdown && (
-        <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
+        <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <span className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm">2</span>
@@ -405,29 +405,29 @@ export default function TikTokShopFlow() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Category</p>
-                <p className="text-sm font-medium text-white">{breakdown.category}</p>
+                <p className="text-xs font-medium text-gray-700 dark:text-gray-500 mb-1">Category</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{breakdown.category}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Target audience</p>
-                <p className="text-sm text-gray-300">{breakdown.targetAudience}</p>
+                <p className="text-xs font-medium text-gray-700 dark:text-gray-500 mb-1">Target audience</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">{breakdown.targetAudience}</p>
               </div>
             </div>
             <div>
-              <p className="text-xs font-medium text-gray-500 mb-1">Pain points</p>
-              <ul className="text-sm list-disc list-inside space-y-0.5 text-gray-300">{breakdown.corePainPoints.map((p, i) => <li key={i}>{p}</li>)}</ul>
+              <p className="text-xs font-medium text-gray-700 dark:text-gray-500 mb-1">Pain points</p>
+              <ul className="text-sm list-disc list-inside space-y-0.5 text-gray-600 dark:text-gray-300">{breakdown.corePainPoints.map((p, i) => <li key={i}>{p}</li>)}</ul>
             </div>
             <div>
-              <p className="text-xs font-medium text-gray-500 mb-1">Objections</p>
-              <ul className="text-sm list-disc list-inside space-y-0.5 text-gray-300">{breakdown.buyingObjections.map((o, i) => <li key={i}>{o}</li>)}</ul>
+              <p className="text-xs font-medium text-gray-700 dark:text-gray-500 mb-1">Objections</p>
+              <ul className="text-sm list-disc list-inside space-y-0.5 text-gray-600 dark:text-gray-300">{breakdown.buyingObjections.map((o, i) => <li key={i}>{o}</li>)}</ul>
             </div>
             <div>
-              <p className="text-xs font-medium text-gray-500 mb-1">Emotional triggers</p>
-              <ul className="text-sm list-disc list-inside space-y-0.5 text-gray-300">{breakdown.emotionalTriggers.map((t, i) => <li key={i}>{t}</li>)}</ul>
+              <p className="text-xs font-medium text-gray-700 dark:text-gray-500 mb-1">Emotional triggers</p>
+              <ul className="text-sm list-disc list-inside space-y-0.5 text-gray-600 dark:text-gray-300">{breakdown.emotionalTriggers.map((t, i) => <li key={i}>{t}</li>)}</ul>
             </div>
             <div>
-              <p className="text-xs font-medium text-gray-500 mb-1">Why buy</p>
-              <ul className="text-sm list-disc list-inside space-y-0.5 text-gray-300">{breakdown.whyBuy.map((r, i) => <li key={i}>{r}</li>)}</ul>
+              <p className="text-xs font-medium text-gray-700 dark:text-gray-500 mb-1">Why buy</p>
+              <ul className="text-sm list-disc list-inside space-y-0.5 text-gray-600 dark:text-gray-300">{breakdown.whyBuy.map((r, i) => <li key={i}>{r}</li>)}</ul>
             </div>
             <div className="flex gap-2 pt-2">
               <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
@@ -442,18 +442,18 @@ export default function TikTokShopFlow() {
 
       {/* Step 3: Script Builder */}
       {step === 3 && (
-        <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
+        <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <span className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm">3</span>
               Script Builder
             </CardTitle>
-            <CardDescription className="text-gray-400">Generate 4 script variations (Story, Problem/Solution, Social proof, Curiosity). Then create a video guide for any of them.</CardDescription>
+            <CardDescription className="text-gray-600 dark:text-gray-400">Generate 4 script variations (Story, Problem/Solution, Social proof, Curiosity). Then create a video guide for any of them.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
               <Label className="mb-2 block">Video length</Label>
-              <p className="text-xs text-gray-500 mb-3">Choose target duration before generating scripts. Word count and guide scenes will match.</p>
+              <p className="text-xs text-gray-700 dark:text-gray-500 mb-3">Choose target duration before generating scripts. Word count and guide scenes will match.</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {VIDEO_LENGTH_OPTIONS.map((opt) => {
                   const selected = targetDurationSec === opt.seconds;
@@ -465,12 +465,12 @@ export default function TikTokShopFlow() {
                       className={`rounded-lg border-2 p-3 text-left transition-all ${
                         selected
                           ? "border-orange-500 bg-orange-500/20"
-                          : "border-[#2A2A2A] bg-[#0F0F0F] hover:border-[#3A3A3A]"
+                          : "border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F] hover:border-gray-300 dark:hover:border-[#3A3A3A]"
                       }`}
                     >
-                      <span className="block font-semibold text-sm text-white">{opt.seconds}s</span>
-                      <span className="block text-xs text-gray-400 mt-0.5">{opt.sublabel}</span>
-                      <span className="block text-xs text-gray-500 mt-1">{opt.wordRange}</span>
+                      <span className="block font-semibold text-sm text-gray-900 dark:text-white">{opt.seconds}s</span>
+                      <span className="block text-xs text-gray-600 dark:text-gray-400 mt-0.5">{opt.sublabel}</span>
+                      <span className="block text-xs text-gray-600 dark:text-gray-500 mt-1">{opt.wordRange}</span>
                     </button>
                   );
                 })}
@@ -481,7 +481,7 @@ export default function TikTokShopFlow() {
               <select
                 value={tone}
                 onChange={(e) => setTone(e.target.value)}
-                className="w-full max-w-xs h-10 rounded-md border border-[#2A2A2A] bg-[#0F0F0F] text-white px-3 text-sm mt-1"
+                className="w-full max-w-xs h-10 rounded-md border border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F] text-gray-900 dark:text-white px-3 text-sm mt-1"
               >
                 {TONE_OPTIONS.map((o) => (
                   <option key={o.id} value={o.id}>{o.label}</option>
@@ -495,12 +495,12 @@ export default function TikTokShopFlow() {
               </Button>
             ) : (
               <>
-                <p className="text-sm text-gray-400">4 script variations ready. Continue to create a video guide for each.</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">4 script variations ready. Continue to create a video guide for each.</p>
                 <div className="space-y-2">
                   {scriptResults.map((s, i) => (
-                    <div key={i} className="rounded-lg border border-[#2A2A2A] p-3">
+                    <div key={i} className="rounded-lg border border-[#E5E7EB] dark:border-[#2A2A2A] p-3">
                       <p className="text-xs font-medium text-orange-400 mb-1">{(s as ScriptResult & { title?: string }).title ?? `Script ${i + 1}`}</p>
-                      <p className="text-sm text-gray-300 line-clamp-2">{s.scenes.hook}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">{s.scenes.hook}</p>
                     </div>
                   ))}
                 </div>
@@ -519,21 +519,21 @@ export default function TikTokShopFlow() {
 
       {/* Step 4: Video Creation Guides */}
       {step === 4 && scriptResults.length >= 4 && breakdown && (
-        <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
+        <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <span className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm">4</span>
               Video Creation Guides
             </CardTitle>
-            <CardDescription className="text-gray-400">Get a step-by-step video creation guide for each script—scene breakdowns, AI image prompts (product demos, unboxing, lifestyle), and export settings for TikTok.</CardDescription>
+            <CardDescription className="text-gray-600 dark:text-gray-400">Get a step-by-step video creation guide for each script—scene breakdowns, AI image prompts (product demos, unboxing, lifestyle), and export settings for TikTok.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {scriptResults.map((script, i) => {
               const title = (script as ScriptResult & { title?: string }).title ?? `Script ${i + 1}`;
               return (
-                <div key={i} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4 space-y-3">
-                  <p className="text-sm font-medium text-white">{title}</p>
-                  <div className="text-sm text-gray-400 space-y-2">
+                <div key={i} className="rounded-lg border border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F] p-4 space-y-3">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{title}</p>
+                  <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                     <p><span className="font-medium text-orange-400">Hook:</span> {script.scenes.hook}</p>
                     <p><span className="font-medium text-orange-400">Body:</span> {[script.scenes.pain, script.scenes.solution].filter(Boolean).join(" ")}</p>
                     <p><span className="font-medium text-orange-400">CTA:</span> {script.scenes.cta}</p>

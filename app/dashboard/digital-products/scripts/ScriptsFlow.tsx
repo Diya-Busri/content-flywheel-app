@@ -223,7 +223,7 @@ export default function ScriptsFlow() {
     const selected = scripts.filter((s) => s.isSelected).map((s) => ({
       id: s.id,
       title: s.title,
-      length: s.length,
+      length: scriptVideoLengthSec,
       hook: s.hook,
       body: s.body,
       cta: s.cta,
@@ -387,6 +387,52 @@ export default function ScriptsFlow() {
   const selectAll = () => setScripts((prev) => prev.map((s) => ({ ...s, isSelected: true })));
   const deselectAll = () => setScripts((prev) => prev.map((s) => ({ ...s, isSelected: false })));
 
+  const handleRegenerateScripts = async () => {
+    if (!productIdFromUrl || scripts.length === 0) return;
+    setRegeneratingScripts(true);
+    try {
+      const genRes = await fetch("/api/digital-products/generate-scripts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: productIdFromUrl,
+          targetDurationSec: scriptVideoLengthSec,
+        }),
+      });
+      const genData = (await genRes.json().catch(() => ({}))) as {
+        scripts?: Array<{ id: string; title: string; length: number; hook: string; body: string; cta: string }>;
+      };
+      if (genRes.ok && Array.isArray(genData.scripts) && genData.scripts.length > 0) {
+        const count = genData.scripts.length;
+        const selectAllForVideoGuide = count === 4 || intentVideoGuide;
+        const defaults = {
+          isStarred: false,
+          platforms: { tiktok: true, instagram: true, youtube: false } as const,
+          hookStrength: "Strong" as const,
+          engagementPotential: "High" as const,
+          conversionFocus: true,
+          compliance: { tiktok: "Approved", instagram: "Approved", youtube: "Approved" } as const,
+          isSelected: selectAllForVideoGuide,
+        };
+        setScripts(
+          genData.scripts.map((s, i) => ({
+            ...defaults,
+            id: s.id,
+            title: s.title,
+            length: s.length as LengthOption,
+            hook: s.hook,
+            body: s.body,
+            cta: s.cta,
+            isSelected: selectAllForVideoGuide || i === 1,
+            isStarred: i === 1,
+          }))
+        );
+      }
+    } finally {
+      setRegeneratingScripts(false);
+    }
+  };
+
   const openEdit = (scriptId: string, section: SectionType) => {
     const script = scripts.find((s) => s.id === scriptId);
     if (!script) return;
@@ -407,10 +453,10 @@ export default function ScriptsFlow() {
   const editLimit = editModal?.section === "hook" ? limits.hook : editModal?.section === "body" ? limits.body : limits.cta;
 
   return (
-    <main className="min-h-screen bg-[#0F0F0F] text-white p-6 md:p-10 max-w-6xl mx-auto pb-28">
+    <main className="min-h-screen bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white p-6 md:p-10 max-w-6xl mx-auto pb-28">
       <Link
         href={productIdFromUrl ? `/dashboard/digital-products/${productIdFromUrl}/edit` : "/dashboard/digital-products/create"}
-        className="inline-flex items-center gap-2 text-sm text-[#A0A0A0] hover:text-orange-500 mb-6 transition-colors"
+        className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-[#A0A0A0] hover:text-orange-500 mb-6 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         {productIdFromUrl ? "Back to Product Editor" : "Back to Product"}
@@ -425,17 +471,17 @@ export default function ScriptsFlow() {
         <div className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm font-semibold">
           2
         </div>
-        <div className="h-px w-8 bg-[#2A2A2A]" />
-        <div className="w-8 h-8 rounded-full bg-[#2A2A2A] flex items-center justify-center text-sm font-semibold text-[#666]">
-          3
+        <div className="h-px w-8 bg-gray-200 dark:bg-[#2A2A2A]" />
+<div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center text-sm font-semibold text-gray-700 dark:text-gray-400">
+         3
         </div>
-        <span className="ml-3 text-sm font-medium text-[#A0A0A0]">
+        <span className="ml-3 text-sm font-medium text-gray-900 dark:text-gray-400">
           Step 2 of 3 — Customize Your Video Scripts
         </span>
       </div>
       {productName && (
-        <p className="text-sm text-[#A0A0A0] mb-6">
-          Based on: <span className="font-medium text-white">{productName}</span>
+        <p className="text-sm text-gray-700 dark:text-gray-400 mb-6">
+          Based on: <span className="font-medium text-gray-900 dark:text-white">{productName}</span>
         </p>
       )}
 
@@ -452,8 +498,8 @@ export default function ScriptsFlow() {
         <>
           {productIdFromUrl && (
             <div className="mb-6">
-              <Label className="text-white block mb-2">Video length</Label>
-              <p className="text-xs text-[#A0A0A0] mb-3">Choose target duration before generating. Word count and video guide scenes will match.</p>
+              <Label className="text-gray-900 dark:text-white block mb-2">Video length</Label>
+              <p className="text-xs text-gray-700 dark:text-gray-400 mb-3">Choose target duration before generating. Word count and video guide scenes will match.</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {VIDEO_LENGTH_OPTIONS.map((opt) => {
                   const selected = scriptVideoLengthSec === opt.seconds;
@@ -464,8 +510,8 @@ export default function ScriptsFlow() {
                       onClick={() => setScriptVideoLengthSec(opt.seconds)}
                       className={`rounded-lg border-2 p-3 text-left transition-all ${
                         selected
-                          ? "border-orange-500 bg-orange-500/10 text-white"
-                          : "border-[#2A2A2A] bg-[#1A1A1A] text-[#A0A0A0] hover:border-[#3A3A3A] hover:text-white"
+                          ? "border-orange-500 bg-orange-500/10 text-gray-900 dark:bg-orange-900/40 dark:text-white"
+                          : "border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A] text-gray-900 dark:text-gray-300 hover:border-gray-300 dark:hover:border-[#3A3A3A] hover:text-gray-900 dark:hover:text-white"
                       }`}
                     >
                       <span className="block font-semibold text-sm">{opt.seconds}s</span>
@@ -475,6 +521,18 @@ export default function ScriptsFlow() {
                   );
                 })}
               </div>
+              {scripts.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 gap-2 border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#A0A0A0]"
+                  onClick={handleRegenerateScripts}
+                  disabled={regeneratingScripts}
+                >
+                  {regeneratingScripts ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  Regenerate Scripts
+                </Button>
+              )}
             </div>
           )}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -491,36 +549,36 @@ export default function ScriptsFlow() {
           </div>
 
           <div className="flex flex-wrap gap-2 mb-6">
-            <Button variant="outline" className="gap-2 border-[#2A2A2A] text-[#A0A0A0]" onClick={() => setShowCustomScript(true)}>
+            <Button variant="outline" className="gap-2 border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#A0A0A0]" onClick={() => setShowCustomScript(true)}>
               <Plus className="w-4 h-4" />
               Add Custom Script
             </Button>
-            <Button variant="outline" className="gap-2 border-[#2A2A2A] text-[#A0A0A0]">
+            <Button variant="outline" className="gap-2 border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#A0A0A0]">
               <BookOpen className="w-4 h-4" />
               Browse Script Templates
             </Button>
           </div>
 
           {showCustomScript && (
-            <Card className="border-[#2A2A2A] bg-[#1A1A1A] mb-8">
+            <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A] mb-8">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-lg text-white">Custom Script</CardTitle>
-                <Button variant="ghost" size="sm" className="text-[#A0A0A0]" onClick={() => setShowCustomScript(false)}>Close</Button>
+                <CardTitle className="text-lg text-gray-900 dark:text-white">Custom Script</CardTitle>
+                <Button variant="ghost" size="sm" className="text-gray-700 dark:text-[#A0A0A0]" onClick={() => setShowCustomScript(false)}>Close</Button>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label className="text-white">Write your script</Label>
+                  <Label className="text-gray-900 dark:text-white">Write your script</Label>
                   <Textarea
                     placeholder="Paste or write your full script here..."
                     value={customScriptText}
                     onChange={(e) => setCustomScriptText(e.target.value)}
                     rows={8}
-                    className="mt-2 bg-[#0F0F0F] border-[#2A2A2A] text-white"
+                    className="mt-2 bg-gray-100 dark:bg-[#0F0F0F] border-gray-200 dark:border-[#2A2A2A] text-gray-900 dark:text-white"
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="border-[#2A2A2A] text-[#A0A0A0]">AI Enhance This Script</Button>
-                  <Button variant="outline" size="sm" className="border-[#2A2A2A] text-[#A0A0A0]">Check Compliance</Button>
+                  <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#A0A0A0]">AI Enhance This Script</Button>
+                  <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#A0A0A0]">Check Compliance</Button>
                   <Button size="sm" className="bg-orange-500 hover:bg-orange-600" onClick={() => setShowCustomScript(false)}>Save</Button>
                 </div>
               </CardContent>
@@ -528,8 +586,8 @@ export default function ScriptsFlow() {
           )}
 
           <Accordion type="single" collapsible className="mb-8">
-            <AccordionItem value="advanced" className="border-[#2A2A2A]">
-              <AccordionTrigger className="text-white hover:no-underline">Advanced Script Settings</AccordionTrigger>
+            <AccordionItem value="advanced" className="border-gray-200 dark:border-[#2A2A2A]">
+              <AccordionTrigger className="text-gray-900 dark:text-white hover:no-underline">Advanced Script Settings</AccordionTrigger>
               <AccordionContent className="space-y-6 pt-2">
                 <div>
                   <Label>Video length</Label>
@@ -542,12 +600,14 @@ export default function ScriptsFlow() {
                           type="button"
                           onClick={() => setScriptVideoLengthSec(opt.seconds)}
                           className={`rounded-lg border-2 p-3 text-left transition-all ${
-                            selected ? "border-orange-500 bg-orange-500/10" : "border-[#2A2A2A] bg-[#1A1A1A] hover:border-[#3A3A3A]"
+                            selected
+                              ? "border-orange-500 bg-orange-500/10 text-gray-900 dark:bg-orange-900/40 dark:text-white"
+                              : "border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A] text-gray-900 dark:text-gray-300 hover:border-gray-300 dark:hover:border-[#3A3A3A]"
                           }`}
                         >
-                          <span className="block font-semibold text-sm text-white">{opt.seconds}s</span>
-                          <span className="block text-xs text-[#A0A0A0] mt-0.5">{opt.sublabel}</span>
-                          <span className="block text-xs text-[#666] mt-1">{opt.wordRange}</span>
+                          <span className="block font-semibold text-sm">{opt.seconds}s</span>
+                          <span className="block text-xs mt-0.5 opacity-90">{opt.sublabel}</span>
+                          <span className="block text-xs mt-1 opacity-75">{opt.wordRange}</span>
                         </button>
                       );
                     })}
@@ -622,17 +682,17 @@ export default function ScriptsFlow() {
 
       {/* Sticky bottom bar */}
       {!loading && scripts.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#2A2A2A] bg-[#0F0F0F]/95 backdrop-blur py-4 px-4 md:px-6">
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 dark:border-[#2A2A2A] bg-white/95 dark:bg-[#0F0F0F]/95 backdrop-blur py-4 px-4 md:px-6">
           <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-white">
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
                 {selectedCount} script{selectedCount !== 1 ? "s" : ""} selected • Each video costs 1 credit
               </span>
-              <Button variant="ghost" size="sm" className="text-[#A0A0A0] hover:text-white" onClick={selectAll}>Select All</Button>
-              <Button variant="ghost" size="sm" className="text-[#A0A0A0] hover:text-white" onClick={deselectAll}>Deselect All</Button>
+              <Button variant="ghost" size="sm" className="text-gray-700 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white" onClick={selectAll}>Select All</Button>
+              <Button variant="ghost" size="sm" className="text-gray-700 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white" onClick={deselectAll}>Deselect All</Button>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]" asChild>
+              <Button variant="outline" className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#A0A0A0]" asChild>
                 <Link href="/dashboard/digital-products/create">← Back to Product</Link>
               </Button>
               <Button
@@ -668,25 +728,25 @@ function ScriptCard({
   const [lengthUpdating, setLengthUpdating] = useState(false);
 
   return (
-    <Card className={`border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden transition-all ${script.isSelected ? "ring-2 ring-orange-500" : ""}`}>
+    <Card className={`border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A] overflow-hidden transition-all ${script.isSelected ? "ring-2 ring-orange-500" : ""}`}>
       <CardHeader className="pb-3 flex flex-row items-start justify-between gap-2">
         <div>
-          <CardTitle className="text-base text-white">{script.title}</CardTitle>
+          <CardTitle className="text-base text-gray-900 dark:text-white">{script.title}</CardTitle>
         </div>
         <button type="button" onClick={() => onUpdate({ isStarred: !script.isStarred })} className="p-1">
-          <Star className={`w-5 h-5 ${script.isStarred ? "fill-orange-500 text-orange-500" : "text-[#666]"}`} />
+          <Star className={`w-5 h-5 ${script.isStarred ? "fill-orange-500 text-orange-500" : "text-gray-600 dark:text-gray-400"}`} />
         </button>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <div>
-          <Label className="text-xs text-[#A0A0A0]">VIDEO LENGTH</Label>
+          <Label className="text-xs text-gray-700 dark:text-gray-400">VIDEO LENGTH</Label>
           <div className="flex gap-2 mt-2 flex-wrap">
             {LENGTH_OPTIONS.map((len) => (
               <Button
                 key={len}
                 variant={script.length === len ? "default" : "outline"}
                 size="sm"
-                className={`rounded-full ${script.length === len ? "bg-orange-500 hover:bg-orange-600" : "border-[#2A2A2A] text-[#A0A0A0]"}`}
+                className={`rounded-full ${script.length === len ? "bg-orange-500 hover:bg-orange-600" : "border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]"}`}
                 onClick={() => {
                   setLengthUpdating(true);
                   onUpdate({ length: len });
@@ -700,17 +760,17 @@ function ScriptCard({
           {lengthUpdating && <p className="text-xs text-orange-500 mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Updating for {script.length}s...</p>}
         </div>
         <div>
-          <Label className="text-xs text-[#A0A0A0]">PLATFORM</Label>
+          <Label className="text-xs text-gray-700 dark:text-gray-400">PLATFORM</Label>
           <div className="flex gap-3 mt-1">
-            <label className="flex items-center gap-1.5 cursor-pointer text-[#E0E0E0]">
+            <label className="flex items-center gap-1.5 cursor-pointer text-gray-900 dark:text-[#E0E0E0]">
               <Checkbox checked={script.platforms.tiktok} onCheckedChange={(c) => onUpdate({ platforms: { ...script.platforms, tiktok: !!c } })} />
               <span>TikTok</span>
             </label>
-            <label className="flex items-center gap-1.5 cursor-pointer text-[#E0E0E0]">
+            <label className="flex items-center gap-1.5 cursor-pointer text-gray-900 dark:text-[#E0E0E0]">
               <Checkbox checked={script.platforms.instagram} onCheckedChange={(c) => onUpdate({ platforms: { ...script.platforms, instagram: !!c } })} />
               <span>Instagram</span>
             </label>
-            <label className="flex items-center gap-1.5 cursor-pointer text-[#E0E0E0]">
+            <label className="flex items-center gap-1.5 cursor-pointer text-gray-900 dark:text-[#E0E0E0]">
               <Checkbox checked={script.platforms.youtube} onCheckedChange={(c) => onUpdate({ platforms: { ...script.platforms, youtube: !!c } })} />
               <span>YouTube</span>
             </label>
@@ -719,28 +779,28 @@ function ScriptCard({
         <SectionBlock label="HOOK (0-3 seconds)" text={script.hook} limit={charLimits.hook} onEdit={() => onOpenEdit(script.id, "hook")} />
         <SectionBlock label="BODY (3-25 seconds)" text={script.body} limit={charLimits.body} onEdit={() => onOpenEdit(script.id, "body")} />
         <SectionBlock label="CTA (25-30 seconds)" text={script.cta} limit={charLimits.cta} onEdit={() => onOpenEdit(script.id, "cta")} />
-        <div className="pt-2 border-t border-[#2A2A2A] space-y-1">
-          <p className="text-xs font-medium text-[#A0A0A0]">Estimated Performance</p>
-          <p className="text-xs text-[#E0E0E0]">Hook strength: ⭐⭐⭐⭐⭐ ({script.hookStrength})</p>
-          <p className="text-xs text-[#E0E0E0]">Engagement: {script.engagementPotential} · Conversion: {script.conversionFocus ? "✓ Sales-optimized" : "—"}</p>
+        <div className="pt-2 border-t border-gray-200 dark:border-[#2A2A2A] space-y-1">
+          <p className="text-xs font-medium text-gray-700 dark:text-gray-400">Estimated Performance</p>
+          <p className="text-xs text-gray-700 dark:text-[#E0E0E0]">Hook strength: ⭐⭐⭐⭐⭐ ({script.hookStrength})</p>
+          <p className="text-xs text-gray-700 dark:text-[#E0E0E0]">Engagement: {script.engagementPotential} · Conversion: {script.conversionFocus ? "✓ Sales-optimized" : "—"}</p>
         </div>
-        <div className="pt-2 border-t border-[#2A2A2A] space-y-1">
-          <p className="text-xs font-medium text-[#A0A0A0]">Compliance Check</p>
-          <p className="text-xs text-[#E0E0E0]">TikTok: {script.compliance.tiktok}</p>
-          <p className="text-xs text-[#E0E0E0]">Instagram: {script.compliance.instagram}</p>
-          <p className="text-xs text-[#E0E0E0]">YouTube: {script.compliance.youtube}</p>
+        <div className="pt-2 border-t border-gray-200 dark:border-[#2A2A2A] space-y-1">
+          <p className="text-xs font-medium text-gray-700 dark:text-gray-400">Compliance Check</p>
+          <p className="text-xs text-gray-700 dark:text-[#E0E0E0]">TikTok: {script.compliance.tiktok}</p>
+          <p className="text-xs text-gray-700 dark:text-[#E0E0E0]">Instagram: {script.compliance.instagram}</p>
+          <p className="text-xs text-gray-700 dark:text-[#E0E0E0]">YouTube: {script.compliance.youtube}</p>
           {(script.compliance.tiktok.includes("Consider") || script.compliance.instagram.includes("Consider") || script.compliance.youtube.includes("Consider")) && (
-            <Button variant="outline" size="sm" className="mt-2 h-7 text-xs gap-1 border-[#2A2A2A] text-[#A0A0A0]">
+            <Button variant="outline" size="sm" className="mt-2 h-7 text-xs gap-1 border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#A0A0A0]">
               <Wrench className="w-3 h-3" /> Auto-fix
             </Button>
           )}
         </div>
         <div className="flex flex-wrap gap-2 pt-2">
-          <Button size="sm" className={script.isSelected ? "bg-orange-500 hover:bg-orange-600" : "border-[#2A2A2A] text-[#A0A0A0]"} onClick={onToggleSelect}>
+          <Button size="sm" className={script.isSelected ? "bg-orange-500 hover:bg-orange-600" : "border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#A0A0A0]"} onClick={onToggleSelect}>
             <Check className="w-3.5 h-3.5 mr-1" /> Select This Script
           </Button>
-          <Button variant="outline" size="sm" className="border-[#2A2A2A] text-[#A0A0A0]"><Trash2 className="w-3.5 h-3.5 mr-1" /> Discard</Button>
-          <Button variant="outline" size="sm" className="border-[#2A2A2A] text-[#A0A0A0]"><Copy className="w-3.5 h-3.5 mr-1" /> Duplicate</Button>
+          <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#A0A0A0]"><Trash2 className="w-3.5 h-3.5 mr-1" /> Discard</Button>
+          <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#A0A0A0]"><Copy className="w-3.5 h-3.5 mr-1" /> Duplicate</Button>
         </div>
       </CardContent>
     </Card>
@@ -750,17 +810,17 @@ function ScriptCard({
 function SectionBlock({ label, text, limit, onEdit }: { label: string; text: string; limit: number; onEdit: () => void }) {
   return (
     <div>
-      <Label className="text-xs text-[#A0A0A0]">{label}</Label>
-      <div className="mt-1 p-3 rounded-md bg-[#0F0F0F] border border-[#2A2A2A] min-h-[80px]">
-        <p className="text-sm text-[#E0E0E0] whitespace-pre-wrap">{text}</p>
+      <Label className="text-xs text-gray-700 dark:text-gray-400">{label}</Label>
+      <div className="mt-1 p-3 rounded-md bg-gray-100 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#2A2A2A] min-h-[80px]">
+        <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{text}</p>
       </div>
-      <p className="text-xs text-[#A0A0A0] mt-1">Character count: {text.length}/{limit}</p>
+      <p className="text-xs text-gray-700 dark:text-gray-400 mt-1">Character count: {text.length}/{limit}</p>
       <div className="flex flex-wrap gap-2 mt-1">
-        <Button variant="ghost" size="sm" className="h-7 text-xs text-[#A0A0A0] hover:text-white"><RefreshCw className="w-3 h-3 mr-1" /> Regenerate</Button>
-        <Button variant="ghost" size="sm" className="h-7 text-xs text-[#A0A0A0] hover:text-white" onClick={onEdit}><Pencil className="w-3 h-3 mr-1" /> Edit</Button>
-        <Button variant="ghost" size="sm" className="h-7 text-xs text-[#A0A0A0] hover:text-white"><Copy className="w-3 h-3 mr-1" /> Copy to other scripts</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-xs text-gray-700 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white"><RefreshCw className="w-3 h-3 mr-1" /> Regenerate</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-xs text-gray-700 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white" onClick={onEdit}><Pencil className="w-3 h-3 mr-1" /> Edit</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-xs text-gray-700 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white"><Copy className="w-3 h-3 mr-1" /> Copy to other scripts</Button>
       </div>
-      <p className="text-xs text-[#666] mt-0.5"><button type="button" className="underline hover:no-underline">See previous versions</button></p>
+      <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5"><button type="button" className="underline hover:no-underline">See previous versions</button></p>
     </div>
   );
 }

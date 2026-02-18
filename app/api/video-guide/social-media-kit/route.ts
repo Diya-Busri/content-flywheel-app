@@ -1,18 +1,16 @@
 /**
  * POST /api/video-guide/social-media-kit
- * Requires proof upload (image or video). Saves to Supabase, then generates full Social Media Kit via OpenAI.
+ * Requires proof that user selected a file (image or video). We only validate file type - no upload/storage.
  * FormData: file (required), scriptHook, scriptBody, scriptCta, productName, productDescription
- * Returns: { proofUrl, kit }
+ * Returns: { kit } (Social Media Kit from OpenAI)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSupabaseAdmin } from "@/lib/supabase/server";
-
-const BUCKET = "proof-images";
-const PREFIX = "video-guide-proof/";
 
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
 const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/quicktime"]; // .mov
+const MAX_FILE_SIZE_MB = 50;
+const MAX_FILE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 export type SocialMediaKit = {
   tiktok: {
@@ -64,37 +62,17 @@ export async function POST(request: NextRequest) {
     const isVideo = ALLOWED_VIDEO_TYPES.some((t) => type.includes(t));
     if (!isImage && !isVideo) {
       return NextResponse.json(
-        { error: "Invalid file type. Use .png, .jpg, .mp4, or .mov" },
+        { error: "Invalid file type. Use .png, .jpg, .webp, .mp4, or .mov" },
         { status: 400 }
       );
     }
-
-    const supabase = getSupabaseAdmin();
-    if (!supabase) {
+    if (file.size > MAX_FILE_BYTES) {
       return NextResponse.json(
-        { error: "Storage not configured. Add Supabase credentials." },
-        { status: 503 }
+        { error: `File too large. Max ${MAX_FILE_SIZE_MB}MB.` },
+        { status: 400 }
       );
     }
-
-    const ext = isImage
-      ? (type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg")
-      : type.includes("quicktime") ? "mov" : "mp4";
-    const contentType = isImage ? type : type.includes("quicktime") ? "video/quicktime" : "video/mp4";
-    const fileName = `${PREFIX}${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from(BUCKET)
-      .upload(fileName, buffer, { contentType, upsert: false });
-
-    if (uploadError) {
-      console.error("[social-media-kit] Supabase upload error:", uploadError);
-      return NextResponse.json({ error: "Upload failed" }, { status: 500 });
-    }
-
-    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(uploadData.path);
-    const proofUrl = urlData.publicUrl;
+    // Proof gate: we only verify a valid file was selected. No upload/storage.
 
     const scriptHook = (formData.get("scriptHook") as string) ?? "";
     const scriptBody = (formData.get("scriptBody") as string) ?? "";
@@ -225,7 +203,7 @@ Be specific to the product and script. Output ONLY the JSON object.`;
       },
     };
 
-    return NextResponse.json({ proofUrl, kit });
+    return NextResponse.json({ kit });
   } catch (err) {
     console.error("[social-media-kit]", err);
     return NextResponse.json(

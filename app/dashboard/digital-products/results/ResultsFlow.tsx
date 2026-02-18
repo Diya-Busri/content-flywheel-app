@@ -96,18 +96,18 @@ function ScriptHighlightedText({
 }) {
   const segments = getSegments(text);
   return (
-    <span className={isCta ? "font-bold text-amber-400" : undefined}>
+    <span className={isCta ? "text-orange-600 dark:text-orange-400 font-bold" : undefined}>
       {segments.map((seg, i) => {
         if (seg.type === "normal")
           return <span key={i}>{seg.text}</span>;
         if (seg.type === "pain")
           return (
-            <span key={i} className="bg-red-500/25 text-red-300 rounded px-0.5">
+            <span key={i} className="bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 rounded-sm px-1 font-bold">
               {seg.text}
             </span>
           );
         return (
-          <span key={i} className="bg-emerald-500/25 text-emerald-300 rounded px-0.5">
+          <span key={i} className="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 rounded-sm px-1 font-bold">
             {seg.text}
           </span>
         );
@@ -256,11 +256,11 @@ export default function ResultsFlow() {
 
   if (scripts.length === 0) {
     return (
-      <main className="min-h-screen bg-[#0F0F0F] text-white p-6 md:p-10">
+      <main className="min-h-screen bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white p-6 md:p-10">
         <div className="max-w-2xl mx-auto text-center">
           <Link
             href="/dashboard/digital-products/videos"
-            className="inline-flex items-center gap-2 text-sm text-[#A0A0A0] hover:text-orange-500 mb-8 transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-[#A0A0A0] hover:text-orange-500 mb-8 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Video Customization
@@ -268,11 +268,11 @@ export default function ResultsFlow() {
           <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-6">
             <FileText className="w-8 h-8 text-amber-500" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">No scripts found</h1>
-          <p className="text-[#A0A0A0] mb-8">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">No scripts found</h1>
+          <p className="text-gray-600 dark:text-[#A0A0A0] mb-8">
             Go back to select scripts, then return here to create your video creation guide.
           </p>
-          <Button asChild variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]">
+          <Button asChild variant="outline" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]">
             <Link href="/dashboard/digital-products/scripts">Back to Scripts</Link>
           </Button>
         </div>
@@ -281,11 +281,11 @@ export default function ResultsFlow() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0F0F0F] text-white p-6 md:p-10">
+    <main className="min-h-screen bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white p-6 md:p-10">
       <div className="max-w-3xl mx-auto">
         <Link
           href="/dashboard/digital-products/videos"
-          className="inline-flex items-center gap-2 text-sm text-[#A0A0A0] hover:text-orange-500 mb-8 transition-colors"
+          className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-[#A0A0A0] hover:text-orange-500 mb-8 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Video Customization
@@ -293,10 +293,10 @@ export default function ResultsFlow() {
         <div className="w-16 h-16 rounded-full bg-orange-500/20 flex items-center justify-center mb-6">
           <FileText className="w-8 h-8 text-orange-500" />
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">
           {scripts.length === 4 ? "4 Scripts Ready - Post 1 per day for maximum reach" : `${scripts.length} Script${scripts.length === 1 ? "" : "s"} Ready`}
         </h1>
-        <p className="text-[#A0A0A0] mb-6">
+        <p className="text-gray-600 dark:text-[#A0A0A0] mb-6">
           Get a personalised Video Creation Guide for each script. Each guide includes AI image prompts, editing steps, and export settings.
         </p>
 
@@ -308,7 +308,7 @@ export default function ResultsFlow() {
                 <p className="font-medium text-orange-200">{progressStage}</p>
                 <p className="text-xs text-orange-200/80 mt-0.5">Creating your guide. Don&apos;t close this page.</p>
               </div>
-              <div className="w-24 h-2 rounded-full bg-[#2A2A2A] overflow-hidden">
+              <div className="w-24 h-2 rounded-full bg-gray-200 dark:bg-[#2A2A2A] overflow-hidden">
                 <div className="h-full w-2/3 animate-pulse rounded-full bg-orange-500" style={{ animationDuration: "1.5s" }} />
               </div>
             </CardContent>
@@ -337,23 +337,23 @@ export default function ResultsFlow() {
 
         <div className="space-y-6 mb-8">
           {scripts.map((script, index) => (
-            <Card key={script.id} className="border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+            <Card key={script.id} className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A] overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div>
                     <span className="inline-block text-xs font-medium text-orange-500 uppercase tracking-wide mb-1">Angle</span>
-                    <p className="font-medium text-white">{script.title}</p>
-                    <p className="text-xs text-[#A0A0A0]">{script.length}s • Hook + Body + CTA</p>
+                    <p className="font-medium text-gray-900 dark:text-white">{script.title}</p>
+                    <p className="text-xs text-gray-500 dark:text-[#A0A0A0]">{script.length}s • Hook + Body + CTA</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <Select
                       value={regenerateAngleByIndex[index] ?? ((SCRIPT_ANGLES as readonly string[]).includes(script.title) ? script.title : SCRIPT_ANGLES[0])}
                       onValueChange={(v) => setRegenerateAngleByIndex((prev) => ({ ...prev, [index]: v }))}
                     >
-                      <SelectTrigger className="w-[180px] h-8 border-[#2A2A2A] text-[#A0A0A0] bg-[#0F0F0F] text-xs">
+                      <SelectTrigger className="w-[180px] h-8 border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] bg-gray-100 dark:bg-[#0F0F0F] text-xs">
                         <SelectValue placeholder="Angle" />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#1A1A1A] border-[#2A2A2A]">
+                      <SelectContent className="bg-gray-50 dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2A2A2A]">
                         {SCRIPT_ANGLES.map((a) => (
                           <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
                         ))}
@@ -362,7 +362,7 @@ export default function ResultsFlow() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-[#2A2A2A] text-[#A0A0A0]"
+                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]"
                       onClick={() => handleRegenerateScript(index)}
                       disabled={guideLoading || !productId || regeneratingIndex !== null}
                     >
@@ -376,7 +376,7 @@ export default function ResultsFlow() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-[#2A2A2A] text-[#A0A0A0]"
+                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]"
                       onClick={() => copyScript(script)}
                       disabled={guideLoading}
                     >
@@ -385,7 +385,7 @@ export default function ResultsFlow() {
                     </Button>
                   </div>
                 </div>
-                <div className="text-sm text-[#B0B0B0] space-y-2 font-mono bg-[#0F0F0F] rounded-lg p-3 overflow-x-auto mb-4">
+                <div className="text-sm text-gray-600 dark:text-[#B0B0B0] space-y-2 font-mono bg-gray-100 dark:bg-[#0F0F0F] rounded-lg p-3 overflow-x-auto mb-4">
                   <p><span className="text-orange-500">Hook:</span> <ScriptHighlightedText text={script.hook} /></p>
                   <p><span className="text-orange-500">Body:</span> <ScriptHighlightedText text={script.body} /></p>
                   <p><span className="text-orange-500">CTA:</span> <ScriptHighlightedText text={script.cta} isCta /></p>
@@ -435,13 +435,13 @@ export default function ResultsFlow() {
 
         <div className="flex flex-col sm:flex-row gap-3">
           <Button
-            className="bg-[#1A1A1A] border border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] gap-2"
+            className="bg-gray-100 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
             onClick={downloadAllScripts}
           >
             <Download className="w-4 h-4" />
             Download All Scripts (.txt)
           </Button>
-          <Button asChild variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]">
+          <Button asChild variant="outline" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]">
             <Link href="/dashboard/digital-products">Create another product</Link>
           </Button>
         </div>

@@ -168,25 +168,25 @@ export default function LibraryFlow() {
     <main className="p-6 md:p-10 max-w-5xl mx-auto">
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-orange-500 mb-6"
+        className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-orange-500 mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to dashboard
       </Link>
 
-      <h1 className="text-3xl font-bold text-white mb-2">My Library</h1>
-      <p className="text-gray-400 mb-8">
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">My Library</h1>
+      <p className="text-gray-600 dark:text-gray-400 mb-8">
         Your digital products, videos, and scripts in one place
       </p>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <TabsList className="bg-[#1A1A1A] border border-[#2A2A2A]">
-            <TabsTrigger value="all" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-400">All items</TabsTrigger>
-            <TabsTrigger value="products" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-400">Digital Products</TabsTrigger>
-            <TabsTrigger value="videos" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-400">Videos</TabsTrigger>
-            <TabsTrigger value="scripts" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-400">Scripts</TabsTrigger>
-            <TabsTrigger value="trash" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-400">Trash</TabsTrigger>
+          <TabsList className="bg-gray-200 dark:bg-[#1A1A1A] border border-[#E5E7EB] dark:border-[#2A2A2A]">
+            <TabsTrigger value="all" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">All items</TabsTrigger>
+            <TabsTrigger value="products" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Digital Products</TabsTrigger>
+            <TabsTrigger value="videos" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Videos</TabsTrigger>
+            <TabsTrigger value="scripts" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Scripts</TabsTrigger>
+            <TabsTrigger value="trash" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Trash</TabsTrigger>
           </TabsList>
           <div className="relative w-48 sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -194,7 +194,7 @@ export default function LibraryFlow() {
               placeholder="Search..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-gray-500"
+              className="pl-9 bg-white dark:bg-[#1A1A1A] border-[#E5E7EB] dark:border-[#2A2A2A] text-gray-900 dark:text-white placeholder:text-gray-500"
             />
           </div>
         </div>
@@ -203,23 +203,23 @@ export default function LibraryFlow() {
           {loading ? (
             <div className="py-16 flex flex-col items-center justify-center">
               <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
-              <p className="text-gray-400">Loading library...</p>
+              <p className="text-gray-600 dark:text-gray-400">Loading library...</p>
             </div>
           ) : filtered.length === 0 ? (
-            <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
+            <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
               <CardContent className="py-12 text-center">
                 {isTrashView ? (
                   <>
-                    <Trash className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-                    <p className="text-gray-400 mb-2">Trash is empty</p>
+                    <Trash className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
+                    <p className="text-gray-600 dark:text-gray-400 mb-2">Trash is empty</p>
                     <p className="text-sm text-gray-500">
                       Deleted items appear here. Restore them or delete permanently.
                     </p>
                   </>
                 ) : (
                   <>
-                    <Package className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-                    <p className="text-gray-400 mb-2">No items yet</p>
+                    <Package className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
+                    <p className="text-gray-600 dark:text-gray-400 mb-2">No items yet</p>
                     <p className="text-sm text-gray-500">
                       Save products from Digital Products, scripts from Script Checker, and videos from TikTok Shop.
                     </p>
@@ -230,8 +230,8 @@ export default function LibraryFlow() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((item) => (
-                <Card key={`${item.type}-${item.id}`} className="border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
-                  <div className="aspect-video bg-[#2A2A2A] flex items-center justify-center">
+                <Card key={`${item.type}-${item.id}`} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
+                  <div className="aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center">
                     {item.thumbnail ? (
                       <img
                         src={item.thumbnail}
@@ -244,7 +244,7 @@ export default function LibraryFlow() {
                   </div>
                   <CardHeader className="pb-2 pt-3">
                     <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-base truncate text-white">{item.title}</CardTitle>
+                      <CardTitle className="text-base truncate text-gray-900 dark:text-white">{item.title}</CardTitle>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">

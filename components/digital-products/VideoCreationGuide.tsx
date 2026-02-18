@@ -240,6 +240,11 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
       toast({ title: "Select a file", description: "Upload a screenshot or video preview.", variant: "destructive" });
       return;
     }
+    const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp", "video/mp4", "video/quicktime"];
+    if (!allowedTypes.some((t) => socialKitProofFile.type.toLowerCase().includes(t))) {
+      toast({ title: "Invalid file type", description: "Use .png, .jpg, .webp, .mp4, or .mov", variant: "destructive" });
+      return;
+    }
     setSocialKitLoading(true);
     try {
       const form = new FormData();
@@ -515,11 +520,11 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
   ]);
 
   return (
-    <main className="min-h-screen bg-[#0F0F0F] text-white p-6 md:p-10">
+    <main className="min-h-screen bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white p-6 md:p-10">
       <div className="max-w-3xl mx-auto">
         <Link
           href="/dashboard/digital-products/results"
-          className="inline-flex items-center gap-2 text-sm text-[#A0A0A0] hover:text-orange-500 mb-8 transition-colors"
+          className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-[#A0A0A0] hover:text-orange-500 mb-8 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Results
@@ -527,13 +532,13 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
 
         <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Video Creation Guide</h1>
-            <p className="text-[#A0A0A0]">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">Video Creation Guide</h1>
+            <p className="text-gray-600 dark:text-[#A0A0A0]">
               {guide.overview ?? "Multi-platform video marketing guide."}
               {guide.productName && (
                 <>
                   {" "}
-                  <span className="text-white font-medium">{guide.productName}</span>
+                  <span className="text-gray-900 dark:text-white font-medium">{guide.productName}</span>
                 </>
               )}
             </p>
@@ -542,7 +547,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
             <Button
               variant="outline"
               size="sm"
-              className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] hover:text-white"
+              className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
               onClick={copyAllPrompts}
             >
               <Copy className="w-3.5 h-3.5 mr-1.5" />
@@ -551,7 +556,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
             <Button
               variant="outline"
               size="sm"
-              className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] hover:text-white"
+              className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
               onClick={copyAllPromptsMidjourney}
             >
               <Copy className="w-3.5 h-3.5 mr-1.5" />
@@ -568,9 +573,9 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
           </div>
         </div>
 
-        <Card className="mb-8 border-[#2A2A2A] bg-[#1A1A1A]">
+        <Card className="mb-8 border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium text-white flex items-center justify-between gap-2 flex-wrap">
+            <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center justify-between gap-2 flex-wrap">
               <span className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-orange-500" />
                 Full Script
@@ -579,7 +584,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] hover:text-white"
+                  className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
                   onClick={handleGenerateFullVoiceover}
                   disabled={generatingFull || !fullScriptText.trim()}
                 >
@@ -593,7 +598,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] hover:text-white"
+                  className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
                   onClick={copyFullScript}
                 >
                   <Copy className="w-3.5 h-3.5 mr-1.5" />
@@ -602,25 +607,25 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
               </div>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm text-[#B0B0B0] whitespace-pre-line">
+          <CardContent className="space-y-4 text-sm text-gray-600 dark:text-[#B0B0B0] whitespace-pre-line">
             <div>
               <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Hook</p>
-              <p className="text-white">{script.hook}</p>
+              <p className="text-gray-900 dark:text-white">{script.hook}</p>
             </div>
             <div>
               <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Body</p>
-              <p className="text-white">{script.body}</p>
+              <p className="text-gray-900 dark:text-white">{script.body}</p>
             </div>
             <div>
               <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">CTA</p>
-              <p className="text-white">{script.cta}</p>
+              <p className="text-gray-900 dark:text-white">{script.cta}</p>
             </div>
             {fullVoiceoverUrl && (
-              <div className="pt-2 border-t border-[#2A2A2A]">
+              <div className="pt-2 border-t border-gray-200 dark:border-[#2A2A2A]">
                 <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Generated voiceover</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <AudioWithSpeed src={fullVoiceoverUrl} speed={playbackSpeed} controls className="max-w-full h-9 flex-1 min-w-0" />
-                  <Button variant="outline" size="sm" className="border-[#2A2A2A] text-[#A0A0A0] shrink-0" asChild>
+                  <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0" asChild>
                     <a href={fullVoiceoverUrl} download="voiceover-full.mp3">Download</a>
                   </Button>
                 </div>
@@ -630,7 +635,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
         </Card>
 
         <Tabs defaultValue="scenes" className="w-full">
-          <TabsList className="bg-[#1A1A1A] border border-[#2A2A2A] flex flex-wrap gap-1 p-1">
+          <TabsList className="bg-gray-100 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] flex flex-wrap gap-1 p-1">
             <TabsTrigger value="scenes" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
               Scene Breakdown
             </TabsTrigger>
@@ -656,15 +661,15 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
 
           <TabsContent value="scenes" className="mt-6 space-y-4">
             {/* Character Setup */}
-            <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
+            <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base font-medium text-white flex items-center gap-2">
+                <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
                   <ImagePlus className="w-4 h-4 text-orange-500" />
                   Character Setup
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm text-[#B0B0B0]">
+                <p className="text-sm text-gray-600 dark:text-[#B0B0B0]">
                   Use the same reference image across all scenes for consistent characters. Works best with Midjourney (--cref) and ChatGPT.
                 </p>
                 <label className="block">
@@ -674,15 +679,15 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                     className="sr-only"
                     onChange={handleCharacterRefFile}
                   />
-                  <div className="border-2 border-dashed border-[#2A2A2A] rounded-lg p-6 text-center hover:border-orange-500/50 transition-colors cursor-pointer bg-[#0F0F0F]">
-                    <ImagePlus className="w-10 h-10 mx-auto text-[#A0A0A0] mb-2" />
-                    <p className="text-sm text-[#A0A0A0]">Upload your character reference image</p>
-                    <p className="text-xs text-[#6A6A6A] mt-1">PNG, JPG or WebP</p>
+                  <div className="border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] rounded-lg p-6 text-center hover:border-orange-500/50 transition-colors cursor-pointer bg-gray-100 dark:bg-[#0F0F0F]">
+                    <ImagePlus className="w-10 h-10 mx-auto text-gray-500 dark:text-[#A0A0A0] mb-2" />
+                    <p className="text-sm text-gray-600 dark:text-[#A0A0A0]">Upload your character reference image</p>
+                    <p className="text-xs text-gray-500 dark:text-[#6A6A6A] mt-1">PNG, JPG or WebP</p>
                   </div>
                 </label>
                 {characterRefPreviewUrl && (
                   <div className="flex flex-wrap items-start gap-4">
-                    <div className="relative rounded-lg overflow-hidden border border-[#2A2A2A] bg-[#0F0F0F] w-24 h-24 shrink-0">
+                    <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] w-24 h-24 shrink-0">
                       <img
                         src={characterRefPreviewUrl}
                         alt="Character reference"
@@ -710,10 +715,10 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                           placeholder="Paste your hosted image URL"
                           value={characterRefPublicUrl ?? ""}
                           onChange={(e) => setCharacterRefPublicUrl(e.target.value || null)}
-                          className="mt-1 w-full rounded-md bg-[#0F0F0F] border border-[#2A2A2A] px-3 py-2 text-sm text-white placeholder:text-[#6A6A6A] focus:outline-none focus:ring-1 focus:ring-orange-500"
+                          className="mt-1 w-full rounded-md bg-gray-100 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#2A2A2A] px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-[#6A6A6A] focus:outline-none focus:ring-1 focus:ring-orange-500"
                         />
                       </label>
-                      <p className="text-xs text-[#6A6A6A]">Host your image (e.g. Discord, imgur) and paste the direct image URL here for --cref.</p>
+                      <p className="text-xs text-gray-500 dark:text-[#6A6A6A]">Host your image (e.g. Discord, imgur) and paste the direct image URL here for --cref.</p>
                     </div>
                   </div>
                 )}
@@ -749,19 +754,19 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
               const vd = (scene as { visualDirection?: VisualDirection }).visualDirection;
               const transition = (scene as { transition?: { toNextScene?: string; effects?: string; pacing?: string } }).transition;
               return (
-                <Card key={i} className="border-[#2A2A2A] bg-[#1A1A1A]">
+                <Card key={i} className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-medium text-white flex items-center justify-between gap-2 flex-wrap">
+                    <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center justify-between gap-2 flex-wrap">
                       <span>Scene {i + 1} · {scene.timing}</span>
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
                         <Select
                           value={getCopyFormat(i)}
                           onValueChange={(v) => setCopyFormatByScene((prev) => ({ ...prev, [i]: v as PromptPlatform }))}
                         >
-                          <SelectTrigger className="w-[120px] h-8 border-[#2A2A2A] text-[#A0A0A0] bg-[#0F0F0F] text-xs">
+                          <SelectTrigger className="w-[120px] h-8 border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] bg-gray-100 dark:bg-[#0F0F0F] text-xs">
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent className="bg-[#1A1A1A] border-[#2A2A2A]">
+                          <SelectContent className="bg-gray-50 dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2A2A2A]">
                             <SelectItem value="midjourney" className="text-sm">Midjourney</SelectItem>
                             <SelectItem value="chatgpt" className="text-sm">ChatGPT</SelectItem>
                             <SelectItem value="grok" className="text-sm">Grok</SelectItem>
@@ -770,7 +775,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A]"
+                          className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A]"
                           onClick={() => {
                             const platform = getCopyFormat(i);
                             const refUrl = characterRefPublicUrl?.trim() || null;
@@ -785,10 +790,10 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                       </div>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4 text-sm text-[#B0B0B0]">
+                  <CardContent className="space-y-4 text-sm text-gray-600 dark:text-[#B0B0B0]">
                     <div>
                       <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Visual / AI image prompt</p>
-                      <p className="text-white whitespace-pre-wrap">{fullPrompt}</p>
+                      <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{fullPrompt}</p>
                     </div>
                     {(vd?.cameraAngle || vd?.lightingMood || vd?.colorPalette || vd?.mediaType) && (
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
@@ -803,9 +808,9 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                         <p className="text-orange-500 font-medium text-xs uppercase tracking-wide">Text overlay</p>
                         {overlayObjs.map((obj, j) => (
                           <div key={j} className="pl-0 space-y-1">
-                            <p className="text-white">{obj.exactText ?? ""}</p>
+                            <p className="text-gray-900 dark:text-white">{obj.exactText ?? ""}</p>
                             {(obj.fontStyle || obj.size || obj.position || obj.color || obj.animation || obj.timingNote) && (
-                              <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#A0A0A0]">
+                              <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-600 dark:text-[#A0A0A0]">
                                 {obj.fontStyle && <span>Font: {obj.fontStyle}</span>}
                                 {obj.size && <span>Size: {obj.size}</span>}
                                 {obj.position && <span>Position: {obj.position}</span>}
@@ -832,9 +837,9 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
           </TabsContent>
 
           <TabsContent value="editing" className="mt-6 space-y-4">
-            <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
-              <CardHeader>
-                <CardTitle className="text-base font-medium text-white flex items-center gap-2">
+<Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+            <CardHeader>
+                <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
                   <Film className="w-4 h-4 text-orange-500" />
                   Recommended tools & steps
                 </CardTitle>
@@ -843,7 +848,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                 {Object.entries(editingSteps).map(([tool, steps]) => (
                   <div key={tool}>
                     <p className="text-orange-500 font-medium text-sm mb-2">{tool}</p>
-                    <ul className="list-disc list-inside text-sm text-[#B0B0B0] space-y-1">
+                    <ul className="list-disc list-inside text-sm text-gray-600 dark:text-[#B0B0B0] space-y-1">
                       {steps.map((step, j) => (
                         <li key={j}>{step}</li>
                       ))}
@@ -855,65 +860,65 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
           </TabsContent>
 
           <TabsContent value="subtitles" className="mt-6 space-y-4">
-            <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
-              <CardHeader>
-                <CardTitle className="text-base font-medium text-white flex items-center gap-2">
+<Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+            <CardHeader>
+                <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
                   <Type className="w-4 h-4 text-orange-500" />
                   Subtitles & text
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-[#B0B0B0]">
-                <p><span className="text-white">Style:</span> {subtitles.style ?? "—"}</p>
-                <p><span className="text-white">Font:</span> {subtitles.font ?? "—"}</p>
-                <p><span className="text-white">Position:</span> {subtitles.position ?? "—"}</p>
-                <p><span className="text-white">Animation:</span> {subtitles.animation ?? "—"}</p>
-                <p className="text-xs text-[#A0A0A0] mt-2">Use CapCut: Edit → Captions → Auto Captions for word-by-word sync.</p>
+              <CardContent className="space-y-2 text-sm text-gray-600 dark:text-[#B0B0B0]">
+                <p><span className="text-gray-900 dark:text-white">Style:</span> {subtitles.style ?? "—"}</p>
+                <p><span className="text-gray-900 dark:text-white">Font:</span> {subtitles.font ?? "—"}</p>
+                <p><span className="text-gray-900 dark:text-white">Position:</span> {subtitles.position ?? "—"}</p>
+                <p><span className="text-gray-900 dark:text-white">Animation:</span> {subtitles.animation ?? "—"}</p>
+                <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-2">Use CapCut: Edit → Captions → Auto Captions for word-by-word sync.</p>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="music" className="mt-6 space-y-4">
-            <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
-              <CardHeader>
-                <CardTitle className="text-base font-medium text-white flex items-center gap-2">
+<Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+            <CardHeader>
+                <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
                   <Music className="w-4 h-4 text-orange-500" />
                   Music & audio
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-[#B0B0B0]">
-                <p><span className="text-white">Mood:</span> {music.mood ?? "—"}</p>
-                <p><span className="text-white">Sources:</span> {Array.isArray(music.sources) ? music.sources.join(", ") : "—"}</p>
-                <p><span className="text-white">Volume:</span> {music.volume ?? "—"}</p>
-                <p className="text-xs text-[#A0A0A0] mt-2">Sync beat drops with scene transitions. Use TikTok Sounds for trending audio.</p>
+              <CardContent className="space-y-2 text-sm text-gray-600 dark:text-[#B0B0B0]">
+                <p><span className="text-gray-900 dark:text-white">Mood:</span> {music.mood ?? "—"}</p>
+                <p><span className="text-gray-900 dark:text-white">Sources:</span> {Array.isArray(music.sources) ? music.sources.join(", ") : "—"}</p>
+                <p><span className="text-gray-900 dark:text-white">Volume:</span> {music.volume ?? "—"}</p>
+                <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-2">Sync beat drops with scene transitions. Use TikTok Sounds for trending audio.</p>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="export" className="mt-6 space-y-4">
-            <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
-              <CardHeader>
-                <CardTitle className="text-base font-medium text-white flex items-center gap-2">
+<Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+            <CardHeader>
+                <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
                   <Upload className="w-4 h-4 text-orange-500" />
                   Export settings
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-[#B0B0B0]">
-                <p><span className="text-white">Resolution:</span> {exportSettings.resolution ?? "—"}</p>
-                <p><span className="text-white">FPS:</span> {exportSettings.fps ?? "—"}</p>
-                <p><span className="text-white">Format:</span> {exportSettings.format ?? "—"}</p>
-                <p><span className="text-white">File size:</span> {(exportSettings as { fileSize?: string }).fileSize ?? "—"}</p>
+              <CardContent className="space-y-2 text-sm text-gray-600 dark:text-[#B0B0B0]">
+                <p><span className="text-gray-900 dark:text-white">Resolution:</span> {exportSettings.resolution ?? "—"}</p>
+                <p><span className="text-gray-900 dark:text-white">FPS:</span> {exportSettings.fps ?? "—"}</p>
+                <p><span className="text-gray-900 dark:text-white">Format:</span> {exportSettings.format ?? "—"}</p>
+                <p><span className="text-gray-900 dark:text-white">File size:</span> {(exportSettings as { fileSize?: string }).fileSize ?? "—"}</p>
               </CardContent>
             </Card>
             {platformTips.length > 0 && (
-              <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
+              <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
                 <CardHeader>
-                  <CardTitle className="text-base font-medium text-white flex items-center gap-2">
+                  <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
                     <Volume2 className="w-4 h-4 text-orange-500" />
                     Platform tips
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="list-disc list-inside text-sm text-[#B0B0B0] space-y-1">
+                  <ul className="list-disc list-inside text-sm text-gray-600 dark:text-[#B0B0B0] space-y-1">
                     {platformTips.map((t, i) => (
                       <li key={i}>{t}</li>
                     ))}
@@ -925,17 +930,17 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
 
           <TabsContent value="social-kit" className="mt-6 space-y-4">
             {!socialKit ? (
-              <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
+              <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
                 <CardContent className="pt-6 pb-6">
                   <div className="flex flex-col items-center text-center max-w-md mx-auto">
                     <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mb-4">
                       <Lock className="w-8 h-8 text-amber-500" />
                     </div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Upload proof to unlock</h3>
-                    <p className="text-[#A0A0A0] text-sm mb-2">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Upload proof to unlock</h3>
+                    <p className="text-gray-600 dark:text-[#A0A0A0] text-sm mb-2">
                       Upload a screenshot or video preview to unlock your Social Media Kit
                     </p>
-                    <p className="text-[#6A6A6A] text-xs mb-6">
+                    <p className="text-gray-500 dark:text-[#6A6A6A] text-xs mb-6">
                       We want to make sure you&apos;ve created your video before optimizing your social media presence.
                     </p>
                     <label className="w-full block">
@@ -949,8 +954,8 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                         }}
                       />
                       <div
-                        className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors bg-[#0F0F0F] ${
-                          socialKitProofFile ? "border-orange-500/50" : "border-[#2A2A2A] hover:border-orange-500/50"
+                        className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors bg-gray-100 dark:bg-[#0F0F0F] ${
+                          socialKitProofFile ? "border-orange-500/50" : "border-gray-200 dark:border-[#2A2A2A] hover:border-orange-500/50"
                         }`}
                         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                         onDrop={(e) => {
@@ -961,11 +966,11 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                           }
                         }}
                       >
-                        <Upload className="w-10 h-10 mx-auto text-[#A0A0A0] mb-2" />
-                        <p className="text-sm text-[#A0A0A0]">
+                        <Upload className="w-10 h-10 mx-auto text-gray-500 dark:text-[#A0A0A0] mb-2" />
+                        <p className="text-sm text-gray-600 dark:text-[#A0A0A0]">
                           {socialKitProofFile ? socialKitProofFile.name : "Drag and drop or click to upload"}
                         </p>
-                        <p className="text-xs text-[#6A6A6A] mt-1">PNG, JPG, MP4 or MOV</p>
+                        <p className="text-xs text-gray-500 dark:text-[#6A6A6A] mt-1">PNG, JPG, MP4 or MOV</p>
                       </div>
                     </label>
                     <Button
@@ -989,7 +994,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A]"
+                    className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A]"
                     onClick={() => {
                       copyToClipboard(socialKitToText(socialKit), "Social Media Kit");
                     }}
@@ -1000,7 +1005,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A]"
+                    className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A]"
                     onClick={() => {
                       const blob = new Blob([socialKitToText(socialKit)], { type: "text/plain" });
                       const url = URL.createObjectURL(blob);
@@ -1063,9 +1068,9 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                     ],
                   },
                 ].map((section) => (
-                  <Card key={section.key} className="border-[#2A2A2A] bg-[#1A1A1A]">
+                  <Card key={section.key} className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-base font-medium text-white flex items-center gap-2">
+                      <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
                         <section.icon className="w-4 h-4 text-orange-500" />
                         {section.title}
                       </CardTitle>
@@ -1078,14 +1083,14 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 text-[#A0A0A0] hover:text-white shrink-0"
+                              className="h-7 text-gray-600 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white shrink-0"
                               onClick={() => copyToClipboard(item.value ?? "", item.label)}
                             >
                               <Copy className="w-3 h-3 mr-1" />
                               Copy
                             </Button>
                           </div>
-                          <p className="text-sm text-[#B0B0B0] whitespace-pre-wrap">{item.value || "—"}</p>
+                          <p className="text-sm text-gray-600 dark:text-[#B0B0B0] whitespace-pre-wrap">{item.value || "—"}</p>
                         </div>
                       ))}
                     </CardContent>
@@ -1096,13 +1101,13 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
           </TabsContent>
 
           <TabsContent value="voiceover" className="mt-6 space-y-4">
-            <Card className="border-[#2A2A2A] bg-[#1A1A1A]">
+            <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
               <CardHeader>
-                <CardTitle className="text-base font-medium text-white flex items-center gap-2">
+                <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
                   <Mic className="w-4 h-4 text-orange-500" />
                   AI Voiceover (ElevenLabs)
                 </CardTitle>
-                <CardDescription className="text-[#A0A0A0]">
+                <CardDescription className="text-gray-600 dark:text-[#A0A0A0]">
                   Choose a voice, adjust style, then generate. Your last selected voice is saved as default.
                 </CardDescription>
               </CardHeader>
@@ -1115,7 +1120,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                     if (list.length === 0) return null;
                     return (
                       <div key={cat} className="mb-6 last:mb-0">
-                        <p className="text-xs text-[#A0A0A0] mb-2">{cat}</p>
+                        <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mb-2">{cat}</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                           {list.map((v) => {
                             const selected = voiceId === v.voiceId;
@@ -1126,7 +1131,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                                 className={`rounded-lg border-2 p-3 flex items-center justify-between gap-2 ${
                                   selected
                                     ? "border-orange-500 bg-orange-500/10"
-                                    : "border-[#2A2A2A] bg-[#0F0F0F] hover:border-[#3A3A3A]"
+                                    : "border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] hover:border-gray-300 dark:hover:border-[#3A3A3A]"
                                 }`}
                               >
                                 <button
@@ -1134,13 +1139,13 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                                   className="flex-1 min-w-0 text-left"
                                   onClick={() => setVoiceId(v.voiceId)}
                                 >
-                                  <span className="block font-medium text-white text-sm">{v.name}</span>
-                                  <span className="block text-xs text-[#A0A0A0]">{v.description}</span>
+                                  <span className="block font-medium text-gray-900 dark:text-white text-sm">{v.name}</span>
+                                  <span className="block text-xs text-gray-500 dark:text-[#A0A0A0]">{v.description}</span>
                                 </button>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="border-[#2A2A2A] text-[#A0A0A0] shrink-0 h-8 w-8 p-0"
+                                  className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 h-8 w-8 p-0"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handlePreviewVoice(v.voiceId);
@@ -1162,13 +1167,13 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                 {/* Generation mode */}
                 <div>
                   <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Generation mode</p>
-                  <div className="flex rounded-lg border border-[#2A2A2A] p-1 bg-[#0F0F0F] w-full max-w-md">
+                  <div className="flex rounded-lg border border-gray-200 dark:border-[#2A2A2A] p-1 bg-gray-100 dark:bg-[#0F0F0F] w-full max-w-md">
                     <button
                       type="button"
                       className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
                         voiceoverMode === "full"
                           ? "bg-orange-500 text-white"
-                          : "text-[#A0A0A0] hover:text-white"
+                          : "text-gray-600 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white"
                       }`}
                       onClick={() => setVoiceoverMode("full")}
                     >
@@ -1179,14 +1184,14 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                       className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
                         voiceoverMode === "scene"
                           ? "bg-orange-500 text-white"
-                          : "text-[#A0A0A0] hover:text-white"
+                          : "text-gray-600 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white"
                       }`}
                       onClick={() => setVoiceoverMode("scene")}
                     >
                       Scene by Scene
                     </button>
                   </div>
-                  <p className="text-xs text-[#A0A0A0] mt-1">
+                  <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-1">
                     {voiceoverMode === "full" ? "One audio file for Hook + Body + CTA." : "Separate clips per scene with individual play/download."}
                   </p>
                 </div>
@@ -1195,7 +1200,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                 <div className="space-y-4">
                   <p className="text-orange-500 font-medium text-xs uppercase tracking-wide">Speed &amp; style</p>
                   <div>
-                    <p className="text-sm text-[#B0B0B0] mb-1">Speaking speed (playback): {(playbackSpeed * 100) / 100}x</p>
+                    <p className="text-sm text-gray-600 dark:text-[#B0B0B0] mb-1">Speaking speed (playback): {(playbackSpeed * 100) / 100}x</p>
                     <Slider
                       value={[playbackSpeed]}
                       onValueChange={([v]) => setPlaybackSpeed(v)}
@@ -1206,7 +1211,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                     />
                   </div>
                   <div>
-                    <p className="text-sm text-[#B0B0B0] mb-1">Stability: {Math.round(stability * 100)}%</p>
+                    <p className="text-sm text-gray-600 dark:text-[#B0B0B0] mb-1">Stability: {Math.round(stability * 100)}%</p>
                     <Slider
                       value={[stability]}
                       onValueChange={([v]) => setStability(v)}
@@ -1217,7 +1222,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                     />
                   </div>
                   <div>
-                    <p className="text-sm text-[#B0B0B0] mb-1">Clarity: {Math.round(similarity * 100)}%</p>
+                    <p className="text-sm text-gray-600 dark:text-[#B0B0B0] mb-1">Clarity: {Math.round(similarity * 100)}%</p>
                     <Slider
                       value={[similarity]}
                       onValueChange={([v]) => setSimilarity(v)}
@@ -1249,7 +1254,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                   {(fullVoiceoverUrl || perSceneUrls.some(Boolean)) && (
                     <Button
                       variant="outline"
-                      className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] gap-2"
+                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
                       onClick={handleRegenerateVoiceover}
                       disabled={generatingFull || generatingPerScene}
                     >
@@ -1265,7 +1270,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                     <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Full script audio</p>
                     <div className="flex flex-wrap items-center gap-3">
                       <AudioWithSpeed src={fullVoiceoverUrl} speed={playbackSpeed} controls className="max-w-full h-9" />
-                      <Button variant="outline" size="sm" className="border-[#2A2A2A] text-[#A0A0A0]" asChild>
+                      <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]" asChild>
                         <a href={fullVoiceoverUrl} download="voiceover-full.mp3">Download</a>
                       </Button>
                     </div>
@@ -1279,21 +1284,21 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                     <div className="space-y-3">
                       {perSceneUrls.map((url, i) =>
                         url ? (
-                          <div key={i} className="flex flex-wrap items-center gap-3 rounded-lg bg-[#0F0F0F] p-3">
-                            <span className="text-sm text-[#A0A0A0] w-20">Scene {i + 1}</span>
+                          <div key={i} className="flex flex-wrap items-center gap-3 rounded-lg bg-gray-100 dark:bg-[#0F0F0F] p-3">
+                            <span className="text-sm text-gray-500 dark:text-[#A0A0A0] w-20">Scene {i + 1}</span>
                             <AudioWithSpeed src={url} speed={playbackSpeed} controls className="flex-1 min-w-0 max-w-md h-9" />
-                            <Button variant="outline" size="sm" className="border-[#2A2A2A] text-[#A0A0A0] shrink-0" asChild>
+                            <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0" asChild>
                               <a href={url} download={`voiceover-scene-${i + 1}.mp3`}>Download</a>
                             </Button>
                           </div>
                         ) : generatingSceneIndex === i ? (
-                          <div key={i} className="flex items-center gap-2 rounded-lg bg-[#0F0F0F] p-3">
+                          <div key={i} className="flex items-center gap-2 rounded-lg bg-gray-100 dark:bg-[#0F0F0F] p-3">
                             <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
-                            <span className="text-sm text-[#A0A0A0]">Scene {i + 1}…</span>
+                            <span className="text-sm text-gray-500 dark:text-[#A0A0A0]">Scene {i + 1}…</span>
                           </div>
                         ) : (
-                          <div key={i} className="flex items-center gap-2 rounded-lg bg-[#0F0F0F] p-3">
-                            <span className="text-sm text-[#A0A0A0]">Scene {i + 1} — failed or pending</span>
+                          <div key={i} className="flex items-center gap-2 rounded-lg bg-gray-100 dark:bg-[#0F0F0F] p-3">
+                            <span className="text-sm text-gray-500 dark:text-[#A0A0A0]">Scene {i + 1} — failed or pending</span>
                           </div>
                         )
                       )}

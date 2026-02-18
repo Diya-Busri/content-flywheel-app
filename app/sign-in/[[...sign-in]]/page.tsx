@@ -15,7 +15,7 @@ export default function SignInPage() {
             footerActionLink: "text-orange-500 hover:text-orange-600",
           },
         }}
-        afterSignInUrl="/dashboard"
+        fallbackRedirectUrl="/dashboard"
       />
     </div>
   );

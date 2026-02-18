@@ -32,6 +32,14 @@ export async function POST(request: NextRequest) {
     const lengthOpt = getVideoLengthOptionOrDefault(targetDurationSec);
     const { durationSec, wordsMin, wordsMax } = lengthOpt;
 
+    const durationStructure: Record<number, string> = {
+      15: "Hook: 1–2 sentences. Body: 2–3 sentences. CTA: 1 sentence.",
+      30: "Hook: 2–3 sentences. Body: 4–6 sentences. CTA: 1–2 sentences.",
+      60: "Hook: 2–3 sentences. Body: 8–12 sentences. CTA: 2–3 sentences.",
+      90: "Hook: 3–4 sentences. Body: 15–20 sentences. CTA: 3–4 sentences.",
+    };
+    const structureGuide = durationStructure[durationSec] ?? durationStructure[30];
+
     const [product] = await db
       .select()
       .from(productsTable)
@@ -80,11 +88,13 @@ HIGHLIGHTING (required): Wrap text in tags where they fit:
 - Benefits/transformation: [BENEFIT]...[/BENEFIT]
 Only tag the strongest phrases.
 
+DURATION AND LENGTH (strict):
+- Generate a script for a ${durationSec}-second video. Target word count: ${wordsMin}–${wordsMax} words total.
+- Structure: ${structureGuide}
+- When read aloud at normal pace, the script must fit within ${durationSec} seconds. Do not exceed the word count.
+
 RULES:
-- Hook: 1–2 sentences, punchy and scroll-stopping.
-- Body: 2–4 short paragraphs, benefit-focused.
-- CTA: one clear action.
-- TARGET LENGTH: ${durationSec} seconds when read aloud. Each script must be approximately ${wordsMin}–${wordsMax} words total. Do not exceed this word count.
+- Hook: punchy and scroll-stopping. Body: benefit-focused. CTA: one clear action.
 - Be specific to this product and niche. No placeholders — use the actual product name.
 
 Return ONLY valid JSON (no markdown, no code fence):

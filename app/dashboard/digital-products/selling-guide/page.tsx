@@ -158,7 +158,7 @@ const DIFFICULTY_STYLES: Record<Difficulty, string> = {
 function PlatformCard({ platform }: { platform: SellingPlatform }) {
   const [open, setOpen] = useState(false);
   return (
-    <Card className="border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden hover:border-orange-500/40 transition-colors">
+    <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden hover:border-orange-500/40 transition-colors">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -166,7 +166,7 @@ function PlatformCard({ platform }: { platform: SellingPlatform }) {
               <Store className="w-6 h-6 text-orange-500" />
             </div>
             <div>
-              <CardTitle className="text-lg text-white">{platform.name}</CardTitle>
+              <CardTitle className="text-lg text-gray-900 dark:text-white">{platform.name}</CardTitle>
               <span
                 className={`inline-block mt-1.5 text-xs font-medium px-2 py-0.5 rounded border ${DIFFICULTY_STYLES[platform.difficulty]}`}
               >
@@ -175,14 +175,14 @@ function PlatformCard({ platform }: { platform: SellingPlatform }) {
             </div>
           </div>
         </div>
-        <p className="text-sm text-gray-400 mt-2">{platform.description}</p>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{platform.description}</p>
         <div className="flex flex-wrap items-center gap-3 mt-3 text-xs">
           <span className="text-gray-500">
-            <span className="text-gray-400">Price:</span> {platform.price}
+            <span className="text-gray-600 dark:text-gray-400">Price:</span> {platform.price}
           </span>
-          <span className="text-gray-600">•</span>
-          <span className="text-amber-400/90">
-            <span className="text-gray-400">Best for:</span> {platform.bestFor}
+          <span className="text-gray-400">•</span>
+          <span className="text-amber-600 dark:text-amber-400/90">
+            <span className="text-gray-600 dark:text-gray-400">Best for:</span> {platform.bestFor}
           </span>
         </div>
       </CardHeader>
@@ -204,7 +204,7 @@ function PlatformCard({ platform }: { platform: SellingPlatform }) {
             <Button
               variant="ghost"
               size="sm"
-              className="text-gray-400 hover:text-orange-500 hover:bg-orange-500/10 w-full justify-between"
+              className="text-gray-600 dark:text-gray-400 hover:text-orange-500 hover:bg-orange-500/10 w-full justify-between"
             >
               <span>Quick Setup Guide</span>
               <ChevronDown
@@ -213,7 +213,7 @@ function PlatformCard({ platform }: { platform: SellingPlatform }) {
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <ol className="list-decimal list-inside space-y-1.5 text-sm text-gray-400 pt-2 border-t border-[#2A2A2A] mt-2">
+            <ol className="list-decimal list-inside space-y-1.5 text-sm text-gray-600 dark:text-gray-400 pt-2 border-t border-[#E5E7EB] dark:border-[#2A2A2A] mt-2">
               {platform.setupSteps.map((step, i) => (
                 <li key={i} className="pl-1">
                   {step}
@@ -229,39 +229,39 @@ function PlatformCard({ platform }: { platform: SellingPlatform }) {
 
 export default function SellingGuidePage() {
   return (
-    <main className="min-h-screen bg-[#0F0F0F] text-white p-6 md:p-10">
+    <main className="min-h-screen p-6 md:p-10">
       <div className="max-w-4xl mx-auto">
-        <nav className="flex items-center gap-2 text-sm text-gray-400 mb-6">
+        <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-6">
           <Link
             href="/dashboard"
-            className="flex items-center gap-1 hover:text-white transition-colors"
+            className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             <Home className="w-4 h-4" />
             Dashboard
           </Link>
-          <ChevronRight className="w-4 h-4 text-gray-600" />
+          <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-600" />
           <Link
             href="/dashboard/digital-products"
-            className="hover:text-white transition-colors"
+            className="hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             Digital Products
           </Link>
-          <ChevronRight className="w-4 h-4 text-gray-600" />
-          <span className="text-white">Selling Guide</span>
+          <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-600" />
+          <span className="text-gray-900 dark:text-white">Selling Guide</span>
         </nav>
 
         <Link
           href="/dashboard/digital-products"
-          className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-orange-500 mb-6 transition-colors"
+          className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-orange-500 mb-6 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Digital Products
         </Link>
 
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-2">
           Where to Sell Your Digital Product
         </h1>
-        <p className="text-gray-400 text-lg mb-10">
+        <p className="text-gray-600 dark:text-gray-400 text-lg mb-10">
           You need a storefront to sell your product. Here are the best options:
         </p>
 
@@ -272,7 +272,7 @@ export default function SellingGuidePage() {
                 {section.category}
               </h2>
               {section.subtitle && (
-                <p className="text-xs text-gray-500 mb-4">{section.subtitle}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mb-4">{section.subtitle}</p>
               )}
               <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
                 {section.platforms.map((platform) => (
@@ -283,7 +283,7 @@ export default function SellingGuidePage() {
           ))}
         </div>
 
-        <div className="mt-12 pt-8 border-t border-[#2A2A2A]">
+        <div className="mt-12 pt-8 border-t border-[#E5E7EB] dark:border-[#2A2A2A]">
           <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
             <Link href="/dashboard/digital-products">
               <ArrowLeft className="w-4 h-4" />

@@ -10,9 +10,9 @@ import Stripe from "stripe";
  * Use STRIPE_MONTHLY_PRICE_ID or STRIPE_YEARLY_PRICE_ID as priceId.
  */
 export async function POST(request: NextRequest) {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  const monthlyPriceId = process.env.STRIPE_MONTHLY_PRICE_ID;
-  const yearlyPriceId = process.env.STRIPE_YEARLY_PRICE_ID;
+  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
+  const monthlyPriceId = process.env.STRIPE_MONTHLY_PRICE_ID?.trim();
+  const yearlyPriceId = process.env.STRIPE_YEARLY_PRICE_ID?.trim();
 
   if (!secretKey || !monthlyPriceId || !yearlyPriceId) {
     return NextResponse.json(
@@ -74,10 +74,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
-    console.error("Stripe checkout error:", err);
-    return NextResponse.json(
-      { error: "Payment system error. Please try again later." },
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : "Payment system error. Please try again later.";
+    console.error("[stripe-checkout] Stripe error:", err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

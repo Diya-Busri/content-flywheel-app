@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, FlaskConical } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, FlaskConical, Sun, Moon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { SelectProfile } from "@/db/schema/profiles-schema";
 import { useState, useEffect } from "react";
+import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 
 interface SidebarProps {
   profile: SelectProfile | null;
@@ -22,6 +23,7 @@ interface SidebarProps {
 export default function Sidebar({ profile, userEmail }: SidebarProps) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const { theme, toggleTheme } = useDashboardTheme();
 
   useEffect(() => {
     setMounted(true);
@@ -43,11 +45,11 @@ export default function Sidebar({ profile, userEmail }: SidebarProps) {
   ];
 
   return (
-    <div className="sidebar no-print h-screen w-[60px] md:w-[220px] flex-shrink-0 bg-[#1A1A1A] backdrop-blur-xl border-r border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20">
+    <div className="sidebar no-print h-screen w-[60px] md:w-[220px] flex-shrink-0 bg-white dark:bg-[#1A1A1A] backdrop-blur-xl border-r border-[#E5E7EB] dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20">
         {/* Subtle gradient */}
-        <div className="absolute inset-0 bg-gradient-to-b from-white/[0.03] via-transparent to-transparent pointer-events-none" />
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-        <div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/[0.02] dark:from-white/[0.03] via-transparent to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 dark:via-white/20 to-transparent" />
+        <div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-black/10 dark:via-white/10 to-transparent" />
 
         {/* Logo */}
         <div className="px-3 mb-8 relative z-10 flex items-center justify-between gap-2">
@@ -58,10 +60,10 @@ export default function Sidebar({ profile, userEmail }: SidebarProps) {
               transition={{ duration: 0.2 }}
             >
               <div className="hidden md:block">
-                <span className="font-bold text-lg text-white">Content Flywheel</span>
+                <span className="font-bold text-lg text-gray-900 dark:text-white">Content Flywheel</span>
               </div>
               <div className="block md:hidden text-center">
-                <span className="font-bold text-sm text-white">CF</span>
+                <span className="font-bold text-sm text-gray-900 dark:text-white">CF</span>
               </div>
             </motion.div>
           </Link>
@@ -78,7 +80,7 @@ export default function Sidebar({ profile, userEmail }: SidebarProps) {
                     className={`flex items-center py-2 px-3 rounded-lg cursor-pointer transition-all ${isSub ? "pl-4 md:pl-5" : ""} ${
                       isActive(item.href) 
                         ? "bg-orange-500 text-white shadow-sm" 
-                        : "text-gray-400 hover:bg-white/10 hover:text-white"
+                        : "text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
                     }`}
                     whileHover={{ 
                       scale: 1.03, 
@@ -101,11 +103,27 @@ export default function Sidebar({ profile, userEmail }: SidebarProps) {
           </div>
         </nav>
 
-        {/* Bottom Section - Account and Subscription Management */}
+        {/* Bottom Section - Theme toggle, Billing, Account */}
         <div className="mt-auto pt-4 relative z-10">
+          {/* Theme toggle */}
+          <div className="px-3 mb-3">
+            <motion.button
+              type="button"
+              onClick={toggleTheme}
+              className="w-full flex items-center justify-center md:justify-start gap-1.5 py-2 px-3 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white transition-colors"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+              <span className="hidden md:block text-sm font-medium">
+                {theme === "dark" ? "Light mode" : "Dark mode"}
+              </span>
+            </motion.button>
+          </div>
           {/* Billing: link to Settings where user can open Stripe Customer Portal */}
           <div className="px-3 mb-4">
-            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-4" />
+            <div className="h-px bg-gradient-to-r from-transparent via-black/10 dark:via-white/10 to-transparent mb-4" />
             <Link href="/dashboard/settings">
               <motion.div
                 whileHover={{ scale: 1.03, transition: { duration: 0.2 } }}
@@ -114,9 +132,9 @@ export default function Sidebar({ profile, userEmail }: SidebarProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full flex items-center justify-center md:justify-start gap-1.5 border-white/20 bg-white/10 hover:bg-white/20 text-gray-300 py-1.5 h-auto transition-all"
+                  className="w-full flex items-center justify-center md:justify-start gap-1.5 border-[#E5E7EB] dark:border-white/20 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-gray-700 dark:text-gray-300 py-1.5 h-auto transition-all"
                 >
-                  <CreditCard size={14} className="text-gray-400" />
+                  <CreditCard size={14} className="text-gray-500 dark:text-gray-400" />
                   <span className="hidden md:block text-xs">Billing</span>
                 </Button>
               </motion.div>
@@ -124,16 +142,16 @@ export default function Sidebar({ profile, userEmail }: SidebarProps) {
           </div>
 
           {/* User Profile Section */}
-          <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          <div className="h-px bg-gradient-to-r from-transparent via-black/10 dark:via-white/10 to-transparent" />
           <motion.div 
-            className="flex items-center px-3 py-3 hover:bg-white/10 rounded-lg mx-2 cursor-pointer"
+            className="flex items-center px-3 py-3 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg mx-2 cursor-pointer"
             whileHover={{ 
               scale: 1.02,
               transition: { duration: 0.2 }
             }}
             whileTap={{ scale: 0.98 }}
           >
-            <div className="w-7 h-7 rounded-full overflow-hidden border border-white/20 flex items-center justify-center bg-white/10 shadow-sm">
+            <div className="w-7 h-7 rounded-full overflow-hidden border border-[#E5E7EB] dark:border-white/20 flex items-center justify-center bg-black/5 dark:bg-white/10 shadow-sm">
               {mounted ? (
                 <UserButton 
                   afterSignOutUrl="/"
@@ -148,7 +166,7 @@ export default function Sidebar({ profile, userEmail }: SidebarProps) {
                 <div className="w-7 h-7 rounded-full bg-white/20" aria-hidden />
               )}
             </div>
-            <span className="text-xs text-gray-400 hidden md:block ml-3 font-medium truncate max-w-[120px]">
+            <span className="text-xs text-gray-600 dark:text-gray-400 hidden md:block ml-3 font-medium truncate max-w-[120px]">
               {userEmail || "Account"}
             </span>
           </motion.div>

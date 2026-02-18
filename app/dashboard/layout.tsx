@@ -8,8 +8,7 @@ import { getProfileByUserId } from "@/db/queries/profiles-queries";
 import { createProfileAction } from "@/actions/profiles-actions";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import Sidebar from "@/components/sidebar";
-import { DashboardReviewPopup } from "@/components/dashboard-review-popup";
+import { DashboardLayoutClient } from "@/components/dashboard-layout-client";
 import { DashboardSetupError } from "@/components/dashboard-setup-error";
 
 /** Paywall: user must have an active subscription to access the dashboard. */
@@ -59,17 +58,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   }
 
   return (
-    <div className="flex h-screen bg-[#0F0F0F] relative overflow-hidden" suppressHydrationWarning>
-      {/* Review popup: test button + show after 3 videos / 5 more after Maybe Later */}
-      <DashboardReviewPopup profile={profile} />
-
-      {/* Sidebar - no credits/upgrade; subscription managed via Settings */}
-      <Sidebar profile={profile} userEmail={userEmail} />
-      
-      {/* Main content area - consistent dark theme for all dashboard pages */}
-      <div className="flex-1 overflow-auto relative bg-[#0F0F0F] text-white">
-        {children}
-      </div>
-    </div>
+    <DashboardLayoutClient profile={profile} userEmail={userEmail}>
+      {children}
+    </DashboardLayoutClient>
   );
 } 
