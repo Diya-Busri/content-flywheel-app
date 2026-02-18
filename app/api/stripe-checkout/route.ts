@@ -52,7 +52,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+  const rawBase =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    request.nextUrl.origin;
+  const baseUrl = rawBase.replace(/\/$/, "");
   const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
 
   try {

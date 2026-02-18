@@ -9,6 +9,7 @@ import { Check } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { LightNavbar } from "@/components/marketing/light-navbar";
 import { LightFooter } from "@/components/marketing/light-footer";
+import { useToast } from "@/components/ui/use-toast";
 
 const ACCENT = "#F5B942";
 const CONTAINER = "mx-auto max-w-6xl";
@@ -48,21 +49,38 @@ const PLANS = [
 export default function PricingPage() {
   const reduceMotion = useReducedMotion();
   const [loadingPlan, setLoadingPlan] = useState<"monthly" | "yearly" | null>(null);
+  const { toast } = useToast();
 
   const handleSubscribe = async (plan: "monthly" | "yearly") => {
     setLoadingPlan(plan);
     try {
-      const res = await fetch("/api/stripe-checkout", {
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const apiUrl = `${origin}/api/stripe-checkout`;
+      const res = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
+        credentials: "same-origin",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error("Checkout failed");
-      if (data.url) window.location.href = data.url;
-      else throw new Error("Checkout failed");
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+
+      if (res.status === 401) {
+        const redirectUrl = typeof window !== "undefined" ? encodeURIComponent(window.location.pathname) : "%2Fpricing";
+        window.location.href = `/sign-in?redirect_url=${redirectUrl}`;
+        return;
+      }
+
+      if (res.ok && typeof data.url === "string" && data.url.startsWith("http")) {
+        window.location.assign(data.url);
+        return;
+      }
+
+      const message = data.error || "Checkout failed. Please try again.";
+      toast({ title: "Checkout failed", description: message, variant: "destructive" });
     } catch (e) {
       console.error(e);
+      toast({ title: "Checkout failed", description: e instanceof Error ? e.message : "Something went wrong.", variant: "destructive" });
+    } finally {
       setLoadingPlan(null);
     }
   };
