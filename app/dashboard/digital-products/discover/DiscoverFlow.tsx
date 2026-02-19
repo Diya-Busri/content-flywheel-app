@@ -34,7 +34,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, ArrowRight, Loader2, User, Video, RefreshCw, Filter, BookOpen, ClipboardList, Sheet, FileStack, GraduationCap, ListChecks, NotebookPen, Calendar, Play, Sparkles, Trash2, Copy, Check, AlertCircle, Target, Zap, MessageCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, User, Video, RefreshCw, Filter, BookOpen, ClipboardList, Sheet, FileStack, GraduationCap, ListChecks, NotebookPen, Calendar, Play, Sparkles, Trash2, Copy, Check, AlertCircle, Target, Zap, MessageCircle, ChevronDown, ChevronUp, Layers, CheckCircle2, XCircle } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -287,6 +287,10 @@ export default function DiscoverFlow() {
   /** When set, we hit the poll timeout but product is still generating; show "Still generating" with Keep waiting / My Library. */
   const [timeoutStillGenerating, setTimeoutStillGenerating] = useState<string | null>(null);
   const [showVideoPromptModal, setShowVideoPromptModal] = useState(false);
+  const [bundleGenerating, setBundleGenerating] = useState(false);
+  const [bundleItems, setBundleItems] = useState<{ productId: string; format: string; label: string; status: "generating" | "done" | "failed" }[]>([]);
+  const [bundleComplete, setBundleComplete] = useState(false);
+  const [bundleError, setBundleError] = useState<string | null>(null);
 
   // Step 1: must select goal (experienced/beginner) + interests min 3 chars OR "I'm not sure"
   const canProceedStep1 = !!goal && (interests.trim().length >= 3 || dontKnowYet);
@@ -1004,6 +1008,72 @@ export default function DiscoverFlow() {
     }
   };
 
+  const BUNDLE_POLL_TIMEOUT_MS = 20 * 60 * 1000;
+  const pollBundleProductUntilDone = async (productId: string): Promise<"done" | "failed"> => {
+    const start = Date.now();
+    const fetchStatus = async (): Promise<{ isCompleted: boolean; isFailed: boolean }> => {
+      const res = await fetch(`/api/products/${productId}`);
+      if (!res.ok) return { isCompleted: false, isFailed: res.status >= 400 };
+      const data = await res.json().catch(() => ({}));
+      const status = data?.status;
+      const sections = data?.content?.sections ?? [];
+      const hasContent = sections.length > 0 && sections.every((s: { content?: string; contentHtml?: string }) => ((s?.content ?? s?.contentHtml ?? "").trim().length > 0));
+      return { isCompleted: status === "draft" && hasContent, isFailed: status === "failed" };
+    };
+    while (Date.now() - start < BUNDLE_POLL_TIMEOUT_MS) {
+      const { isCompleted, isFailed } = await fetchStatus();
+      if (isFailed) return "failed";
+      if (isCompleted) return "done";
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    }
+    const last = await fetchStatus();
+    return last.isCompleted ? "done" : "failed";
+  };
+
+  const startFullBundle = async () => {
+    const nicheName = selectedNiche?.name ?? customNiche.trim();
+    if (!nicheName) {
+      toast({ title: "No topic", description: "Select or enter a niche first.", variant: "destructive" });
+      return;
+    }
+    setBundleError(null);
+    setBundleGenerating(true);
+    try {
+      const res = await fetch("/api/products/bundle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ niche: nicheName }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to start bundle");
+      const items = (data.items ?? []).map((item: { productId: string; format: string; label: string }) => ({ ...item, status: "generating" as const }));
+      setBundleItems(items);
+      const updateBundleItem = (productId: string, status: "done" | "failed") => {
+        setBundleItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, status } : i)));
+      };
+      await Promise.all(
+        items.map(async (item: { productId: string; format: string; label: string; status: "generating" | "done" | "failed" }) => {
+          const result = await pollBundleProductUntilDone(item.productId);
+          updateBundleItem(item.productId, result);
+        })
+      );
+      setBundleComplete(true);
+      toast({ title: "Bundle complete", description: "All 8 products are in My Library." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to generate bundle";
+      setBundleError(msg);
+      toast({ title: "Bundle failed", description: msg, variant: "destructive" });
+    } finally {
+      setBundleGenerating(false);
+    }
+  };
+
+  const closeBundleDialog = () => {
+    setBundleItems([]);
+    setBundleComplete(false);
+    setBundleError(null);
+  };
+
   const handleCreateProduct = async (alsoGenerateVideos = false) => {
     if (!productFormat) {
       toast({
@@ -1081,14 +1151,15 @@ export default function DiscoverFlow() {
 
       clearInterval(stepInterval);
       if (result.outcome === "completed") {
-        setGenerating(false);
-        setGenerateProgress(null);
-        setGenerateStepIndex(GENERATE_STEPS.length - 1);
+        // Redirect immediately with no delay so user lands in the editor as soon as generation is done
         if (alsoGenerateVideos) {
           router.push(`/dashboard/digital-products/scripts?productId=${encodeURIComponent(result.productId)}&intent=video-guide`);
         } else {
           router.push(`/dashboard/digital-products/${result.productId}/edit?created=1`);
         }
+        setGenerating(false);
+        setGenerateProgress(null);
+        setGenerateStepIndex(GENERATE_STEPS.length - 1);
         return;
       }
       if (result.outcome === "failed") {
@@ -1167,8 +1238,8 @@ export default function DiscoverFlow() {
                     try {
                       const result = await runPollLoop(id, 30 * 60 * 1000);
                       if (result.outcome === "completed") {
-                        setGenerateStepIndex(GENERATE_STEPS.length - 1);
                         router.push(`/dashboard/digital-products/${result.productId}/edit?created=1`);
+                        setGenerateStepIndex(GENERATE_STEPS.length - 1);
                         return;
                       }
                       if (result.outcome === "failed") {
@@ -2269,6 +2340,50 @@ export default function DiscoverFlow() {
               })}
             </div>
 
+            <div className="mb-6">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto border-orange-500/50 text-orange-500 hover:bg-orange-500/10 hover:border-orange-500 gap-2"
+                onClick={startFullBundle}
+                disabled={bundleGenerating}
+              >
+                {bundleGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating all 8…
+                  </>
+                ) : (
+                  <>
+                    <Layers className="w-4 h-4" />
+                    Generate all 8 formats at once →
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <div className="mb-6">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto border-orange-500/50 text-orange-500 hover:bg-orange-500/10 hover:border-orange-500 gap-2"
+                onClick={startFullBundle}
+                disabled={bundleGenerating}
+              >
+                {bundleGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating all 8…
+                  </>
+                ) : (
+                  <>
+                    <Layers className="w-4 h-4" />
+                    Generate all 8 formats at once →
+                  </>
+                )}
+              </Button>
+            </div>
+
             {productFormat === "course" && (
               <Card className={`${cardClass} mb-6`}>
                 <CardContent className="p-5">
@@ -2311,6 +2426,70 @@ export default function DiscoverFlow() {
             {!productFormat && (
               <p className="text-xs text-amber-500/90 mt-2">Select a format to continue</p>
             )}
+
+            {/* Full bundle progress dialog */}
+            <Dialog open={bundleGenerating || bundleItems.length > 0} onOpenChange={(open) => !open && bundleComplete && closeBundleDialog()}>
+              <DialogContent className="sm:max-w-md bg-[#1A1A1A] border-[#2A2A2A]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-white">
+                    <Layers className="w-5 h-5 text-orange-500" />
+                    Generate Full Bundle
+                  </DialogTitle>
+                  <DialogDescription className="text-[#A0A0A0]">
+                    {bundleItems.length === 0
+                      ? "Starting all 8 formats…"
+                      : bundleComplete
+                        ? "All products are in My Library."
+                        : "Generating each format. This may take several minutes."}
+                  </DialogDescription>
+                </DialogHeader>
+                {bundleError && (
+                  <div className="flex items-center gap-2 rounded-md bg-red-500/10 text-red-400 px-3 py-2 text-sm">
+                    <XCircle className="w-4 h-4 shrink-0" />
+                    {bundleError}
+                  </div>
+                )}
+                {bundleItems.length > 0 && (
+                  <ul className="space-y-2 max-h-[280px] overflow-y-auto">
+                    {bundleItems.map((item) => (
+                      <li key={item.productId} className="flex items-center justify-between gap-3 rounded-md border border-[#2A2A2A] px-3 py-2 text-sm">
+                        <span className="font-medium text-white">{item.label}</span>
+                        {item.status === "generating" && (
+                          <span className="flex items-center gap-1.5 text-amber-400">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Generating…
+                          </span>
+                        )}
+                        {item.status === "done" && (
+                          <span className="flex items-center gap-1.5 text-green-400">
+                            <CheckCircle2 className="w-4 h-4" />
+                            Done
+                          </span>
+                        )}
+                        {item.status === "failed" && (
+                          <span className="flex items-center gap-1.5 text-red-400">
+                            <XCircle className="w-4 h-4" />
+                            Failed
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {bundleComplete && (
+                  <DialogFooter>
+                    <Button asChild className="bg-orange-500 hover:bg-orange-600">
+                      <Link href="/dashboard/library" onClick={closeBundleDialog}>
+                        View in My Library
+                      </Link>
+                    </Button>
+                    <Button variant="outline" onClick={closeBundleDialog} className="border-[#2A2A2A] text-[#A0A0A0]">
+                      Close
+                    </Button>
+                  </DialogFooter>
+                )}
+              </DialogContent>
+            </Dialog>
           </>
         )}
 
@@ -2329,14 +2508,18 @@ export default function DiscoverFlow() {
                   <div>
                     <Label className="text-[#E0E0E0]">Number of chapters/sections</Label>
                     <select
-                      value={customization.numChapters}
+                      value={productFormat === "planner" ? 7 : customization.numChapters}
                       onChange={(e) => setCustomization((c) => ({ ...c, numChapters: Number(e.target.value) }))}
                       className="mt-1.5 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-2 text-sm"
+                      disabled={productFormat === "planner"}
                     >
-                      {[3, 4, 5, 6].map((n) => (
+                      {[3, 4, 5, 6, 7].map((n) => (
                         <option key={n} value={n}>{n}</option>
                       ))}
                     </select>
+                    {productFormat === "planner" && (
+                      <p className="text-xs text-[#A0A0A0] mt-1">Planners use 7 sections (intro + 3 planning layouts + disclaimer).</p>
+                    )}
                   </div>
                   <div>
                     <Label className="text-[#E0E0E0]">Content length per chapter</Label>
@@ -2651,6 +2834,72 @@ export default function DiscoverFlow() {
         )}
       </div>
 
+      {/* Full bundle progress dialog (from Step 6) */}
+      <Dialog open={bundleGenerating || bundleItems.length > 0} onOpenChange={(open) => !open && closeBundleDialog()}>
+        <DialogContent className="sm:max-w-md bg-[#1A1A1A] border-[#2A2A2A] text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Layers className="w-5 h-5 text-orange-500" />
+              Generate Full Bundle
+            </DialogTitle>
+            <DialogDescription className="text-[#A0A0A0]">
+              {bundleItems.length === 0
+                ? "Starting all 8 formats for your topic…"
+                : bundleComplete
+                  ? "All products are ready. They appear in My Library."
+                  : "Generating each format. This may take several minutes."}
+            </DialogDescription>
+          </DialogHeader>
+          {bundleError && (
+            <div className="flex items-center gap-2 rounded-md bg-red-500/10 text-red-400 px-3 py-2 text-sm">
+              <XCircle className="w-4 h-4 shrink-0" />
+              {bundleError}
+            </div>
+          )}
+          {bundleItems.length > 0 && (
+            <ul className="space-y-2 max-h-[280px] overflow-y-auto">
+              {bundleItems.map((item) => (
+                <li
+                  key={item.productId}
+                  className="flex items-center justify-between gap-3 rounded-md border border-[#2A2A2A] px-3 py-2 text-sm"
+                >
+                  <span className="font-medium text-white">{item.label}</span>
+                  {item.status === "generating" && (
+                    <span className="flex items-center gap-1.5 text-amber-400">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating…
+                    </span>
+                  )}
+                  {item.status === "done" && (
+                    <span className="flex items-center gap-1.5 text-green-400">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Done
+                    </span>
+                  )}
+                  {item.status === "failed" && (
+                    <span className="flex items-center gap-1.5 text-red-400">
+                      <XCircle className="w-4 h-4" />
+                      Failed
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {bundleComplete && (
+            <DialogFooter>
+              <Button asChild className="bg-orange-500 hover:bg-orange-600">
+                <Link href="/dashboard/library" onClick={closeBundleDialog}>
+                  View in My Library
+                </Link>
+              </Button>
+              <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]" onClick={closeBundleDialog}>
+                Close
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

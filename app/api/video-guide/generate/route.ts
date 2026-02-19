@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
+import { scriptsTable } from "@/db/schema/library-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { getVideoLengthOptionOrDefault } from "@/lib/video-length-options";
 
@@ -581,6 +582,20 @@ export async function POST(request: NextRequest) {
       repurposingGuide,
       thumbnailGuide,
     };
+
+    // Save video guide to library so it appears in My Library alongside products and scripts
+    try {
+      await db.insert(scriptsTable).values({
+        userId,
+        title: `Video Guide: ${productNameRes || "Untitled"}`.trim(),
+        content: JSON.stringify(guide),
+        platform: "video-guide",
+        productId: productId || null,
+      });
+    } catch (saveErr) {
+      console.warn("[video-guide] Failed to save guide to library:", saveErr);
+      // Do not fail the request; guide is still returned and user can view it
+    }
 
     return NextResponse.json(guide);
   } catch (err) {

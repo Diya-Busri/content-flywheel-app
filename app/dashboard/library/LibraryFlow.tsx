@@ -37,8 +37,18 @@ import {
   Trash,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-type LibraryTab = "products" | "videos" | "scripts" | "all" | "trash";
+type LibraryTab = "products" | "scripts" | "all" | "trash";
 
 type LibraryItem = {
   id: string;
@@ -50,6 +60,7 @@ type LibraryItem = {
   productId?: string;
   videoId?: string;
   scriptId?: string;
+  platform?: string;
 };
 
 function formatDate(iso: string): string {
@@ -87,6 +98,8 @@ export default function LibraryFlow() {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const { toast } = useToast();
 
   const fetchItems = async () => {
@@ -120,6 +133,7 @@ export default function LibraryFlow() {
   const getEditLink = (item: LibraryItem) => {
     if (item.type === "product") return `/dashboard/digital-products/${item.id}/edit`;
     if (item.type === "video") return `/dashboard/library`;
+    if (item.type === "script" && item.platform === "video-guide") return `/dashboard/digital-products/video-guide?libraryScriptId=${encodeURIComponent(item.id)}`;
     if (item.type === "script") return `/dashboard/script-checker`;
     return "#";
   };
@@ -164,6 +178,23 @@ export default function LibraryFlow() {
     }
   };
 
+  const handleDeleteAll = async () => {
+    setDeletingAll(true);
+    try {
+      const res = await fetch("/api/library/delete-all", { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete all");
+      setDeleteAllOpen(false);
+      toast({ title: "All items deleted", description: "Your library has been cleared." });
+      fetchItems();
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Could not delete all items", variant: "destructive" });
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
+  const showDeleteAll = !isTrashView && items.length > 0;
+
   return (
     <main className="p-6 md:p-10 max-w-5xl mx-auto">
       <Link
@@ -176,7 +207,7 @@ export default function LibraryFlow() {
 
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">My Library</h1>
       <p className="text-gray-600 dark:text-gray-400 mb-8">
-        Your digital products, videos, and scripts in one place
+        Your digital products, video guides, and scripts in one place
       </p>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
@@ -184,11 +215,23 @@ export default function LibraryFlow() {
           <TabsList className="bg-gray-200 dark:bg-[#1A1A1A] border border-[#E5E7EB] dark:border-[#2A2A2A]">
             <TabsTrigger value="all" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">All items</TabsTrigger>
             <TabsTrigger value="products" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Digital Products</TabsTrigger>
-            <TabsTrigger value="videos" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Videos</TabsTrigger>
             <TabsTrigger value="scripts" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Scripts</TabsTrigger>
             <TabsTrigger value="trash" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Trash</TabsTrigger>
           </TabsList>
-          <div className="relative w-48 sm:w-64">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Delete All: only when there are items and not viewing Trash; opens confirmation modal */}
+            {showDeleteAll && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 shrink-0"
+                onClick={() => setDeleteAllOpen(true)}
+              >
+                <Trash2 className="w-4 h-4 mr-1.5" />
+                Delete All
+              </Button>
+            )}
+            <div className="relative w-48 sm:w-64 shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <Input
               placeholder="Search..."
@@ -197,7 +240,39 @@ export default function LibraryFlow() {
               className="pl-9 bg-white dark:bg-[#1A1A1A] border-[#E5E7EB] dark:border-[#2A2A2A] text-gray-900 dark:text-white placeholder:text-gray-500"
             />
           </div>
+          </div>
         </div>
+
+        <AlertDialog open={deleteAllOpen} onOpenChange={setDeleteAllOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete all items?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete all items? This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletingAll}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDeleteAll();
+                }}
+                disabled={deletingAll}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {deletingAll ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete All"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <TabsContent value={tab} className="mt-0">
           {loading ? (
@@ -220,9 +295,17 @@ export default function LibraryFlow() {
                   <>
                     <Package className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
                     <p className="text-gray-600 dark:text-gray-400 mb-2">No items yet</p>
-                    <p className="text-sm text-gray-500">
-                      Save products from Digital Products, scripts from Script Checker, and videos from TikTok Shop.
+                    <p className="text-sm text-gray-500 mb-4">
+                      Save products from Digital Products, scripts from Script Checker, and videos from TikTok Shop. Video guides are saved here automatically when you create them.
                     </p>
+                    <div className="flex flex-wrap gap-3 justify-center">
+                      <Button asChild className="bg-orange-500 hover:bg-orange-600">
+                        <Link href="/dashboard/digital-products">Digital Products</Link>
+                      </Button>
+                      <Button asChild variant="outline" className="border-[#E5E7EB] dark:border-[#2A2A2A]">
+                        <Link href="/dashboard/digital-products">Create Video Guide</Link>
+                      </Button>
+                    </div>
                   </>
                 )}
               </CardContent>

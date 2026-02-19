@@ -117,6 +117,8 @@ NEXT_PUBLIC_STRIPE_PAYMENT_LINK_YEARLY="https://buy.stripe.com/..."
 NEXT_PUBLIC_STRIPE_PAYMENT_LINK_MONTHLY="https://buy.stripe.com/..."
 ```
 
+- **NEXT_PUBLIC_APP_URL** – Used for checkout redirects and for PDF export (resolving product images). Set to your app URL (e.g. `http://localhost:3000` locally, or your production domain).
+
 > Keep `.env.local` **private** – never commit it to Git!
 
 ### 4. Run Locally
@@ -162,6 +164,7 @@ Key conventions:
 | Clerk fails locally | Ensure the **publishable key** starts with `pk_` and matches your Clerk instance’s frontend API. |
 | Supabase connection errors | Check `DATABASE_URL` format and that your IP is allowed if using direct connections. |
 | Stripe webhooks not firing locally | Use [`stripe listen`](https://stripe.com/docs/cli) or a tunnelling tool like [ngrok](https://ngrok.com/). |
+| PDF export fails (Puppeteer) | **Puppeteer** is in `package.json`; `npm install` installs it. On Linux you may need Chromium deps (e.g. `apt-get install -y chromium-browser`). Set `NEXT_PUBLIC_APP_URL` so product images resolve. |
 
 If none of these solve your problem, email **usecodespring@gmail.com** with logs and a description of the issue.
 

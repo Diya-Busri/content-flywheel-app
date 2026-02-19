@@ -5,6 +5,15 @@ import { productsTable } from "@/db/schema/products-schema";
 
 const VALID_FORMATS = ["ebook", "guide", "workbook", "spreadsheet", "notion", "course", "checklist", "journal", "planner", "template"] as const;
 
+function normalizeFormat(value: string | undefined | null, fallback: string): string {
+  if (value == null || typeof value !== "string") return fallback;
+  const lower = value.toLowerCase().trim();
+  if (lower === "course outline" || lower === "course_outline") return "course";
+  if (lower === "checklist pack") return "checklist";
+  if (lower === "notion template" || lower === "notion_template") return "notion";
+  return VALID_FORMATS.includes(lower as (typeof VALID_FORMATS)[number]) ? lower : fallback;
+}
+
 /**
  * POST: Create product in "generating" state, trigger async processing, return productId immediately.
  * Client should poll GET /api/products/[id] until status === "draft" and content.sections.length > 0.
@@ -21,7 +30,7 @@ export async function POST(request: Request) {
     const product = body.product as { name?: string; included?: string; why?: string; type?: string } | undefined;
     const productName = (product?.name ?? body.productName ?? "").trim() || "";
     const nicheName = typeof niche === "string" ? niche : (niche as { name?: string })?.name ?? "";
-    const format = VALID_FORMATS.includes(body.format) ? body.format : "ebook";
+    const format = normalizeFormat(body.format, "ebook");
 
     if (!productName) {
       return NextResponse.json({ error: "product name is required" }, { status: 400 });

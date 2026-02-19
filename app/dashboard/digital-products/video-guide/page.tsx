@@ -1,11 +1,12 @@
 /**
  * Video Creation Guide page - displays personalised guide for creating marketing videos.
- * Guide data is loaded from sessionStorage (set before navigation) or can be passed via URL state.
+ * Guide data is loaded from: 1) sessionStorage (after creating a new guide), or 2) library (URL ?libraryScriptId=).
  */
 "use client";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Loader2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import VideoCreationGuide from "@/components/digital-products/VideoCreationGuide";
@@ -17,8 +18,35 @@ export default function VideoGuidePage() {
   const [guide, setGuide] = useState<VideoGuideData | null>(null);
   const [scriptTitle, setScriptTitle] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const libraryScriptId = searchParams.get("libraryScriptId");
 
   useEffect(() => {
+    // 1) Load from library if libraryScriptId is in URL (saved video guide from My Library)
+    if (libraryScriptId) {
+      fetch(`/api/library/scripts/${libraryScriptId}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to load guide");
+          return res.json();
+        })
+        .then((script: { content?: string; title?: string; platform?: string }) => {
+          if (script.platform !== "video-guide" || !script.content) {
+            setError("This library item is not a video guide.");
+            return;
+          }
+          const data = JSON.parse(script.content) as VideoGuideData;
+          if (data && data.script && Array.isArray(data.scenePrompts)) {
+            setGuide(data);
+            setScriptTitle(script.title?.replace(/^Video Guide:\s*/i, "") || "");
+          } else {
+            setError("Invalid guide data.");
+          }
+        })
+        .catch(() => setError("Could not load guide from library."));
+      return;
+    }
+
+    // 2) Load from sessionStorage (just created a new guide)
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -29,11 +57,11 @@ export default function VideoGuidePage() {
           return;
         }
       }
-      setError("No guide data found. Go back and generate a video creation guide.");
+      setError("No guide data found. Create a video guide from a digital product (Scripts → Results → Create Video Guide).");
     } catch {
       setError("Invalid guide data.");
     }
-  }, []);
+  }, [libraryScriptId]);
 
   if (error) {
     return (
@@ -44,9 +72,17 @@ export default function VideoGuidePage() {
           </div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No guide found</h1>
           <p className="text-gray-600 dark:text-[#A0A0A0] mb-8">{error}</p>
-          <Button asChild variant="outline" className="border-[#E5E7EB] dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]">
-            <Link href="/dashboard/digital-products/results">Back to Results</Link>
-          </Button>
+          <div className="flex flex-wrap gap-3 justify-center">
+            <Button asChild variant="outline" className="border-[#E5E7EB] dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]">
+              <Link href="/dashboard/digital-products/results">Back to Results</Link>
+            </Button>
+            <Button asChild variant="outline" className="border-[#E5E7EB] dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]">
+              <Link href="/dashboard/library">My Library</Link>
+            </Button>
+            <Button asChild className="bg-orange-500 hover:bg-orange-600">
+              <Link href="/dashboard/digital-products">Create Video Guide</Link>
+            </Button>
+          </div>
         </div>
       </main>
     );

@@ -95,7 +95,6 @@ function formatPromptForPlatform(
 import {
   ELEVENLABS_VOICES,
   VOICE_PREVIEW_TEXT,
-  VOICEOVER_STORAGE_KEY,
   getDefaultVoiceId,
   setDefaultVoiceId,
 } from "@/lib/elevenlabs-voices";
@@ -1112,56 +1111,50 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Voice selection grid by category */}
+                {/* Voice picker: 8 voices as selectable cards, selected in orange */}
                 <div>
-                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-3">Voice selection</p>
-                  {(["Female", "Male", "Character"] as const).map((cat) => {
-                    const list = ELEVENLABS_VOICES.filter((v) => v.category === cat);
-                    if (list.length === 0) return null;
-                    return (
-                      <div key={cat} className="mb-6 last:mb-0">
-                        <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mb-2">{cat}</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                          {list.map((v) => {
-                            const selected = voiceId === v.voiceId;
-                            const loading = previewingVoiceId === v.voiceId;
-                            return (
-                              <div
-                                key={v.voiceId}
-                                className={`rounded-lg border-2 p-3 flex items-center justify-between gap-2 ${
-                                  selected
-                                    ? "border-orange-500 bg-orange-500/10"
-                                    : "border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] hover:border-gray-300 dark:hover:border-[#3A3A3A]"
-                                }`}
-                              >
-                                <button
-                                  type="button"
-                                  className="flex-1 min-w-0 text-left"
-                                  onClick={() => setVoiceId(v.voiceId)}
-                                >
-                                  <span className="block font-medium text-gray-900 dark:text-white text-sm">{v.name}</span>
-                                  <span className="block text-xs text-gray-500 dark:text-[#A0A0A0]">{v.description}</span>
-                                </button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 h-8 w-8 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePreviewVoice(v.voiceId);
-                                  }}
-                                  disabled={loading}
-                                  title="Preview voice"
-                                >
-                                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-                                </Button>
-                              </div>
-                            );
-                          })}
+                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-3">Voice</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    {ELEVENLABS_VOICES.map((v) => {
+                      const selected = voiceId === v.voiceId;
+                      const loading = previewingVoiceId === v.voiceId;
+                      return (
+                        <div
+                          key={v.voiceId}
+                          className={`rounded-lg border-2 p-3 flex items-center justify-between gap-2 transition-colors ${
+                            selected
+                              ? "border-orange-500 bg-orange-500/10 text-gray-900 dark:text-white"
+                              : "border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] hover:border-gray-300 dark:hover:border-[#3A3A3A]"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            className="flex-1 min-w-0 text-left"
+                            onClick={() => {
+                              setVoiceId(v.voiceId);
+                              setDefaultVoiceId(v.voiceId);
+                            }}
+                          >
+                            <span className="block font-medium text-sm">{v.name}</span>
+                            <span className="block text-xs text-gray-500 dark:text-[#A0A0A0]">{v.description}</span>
+                          </button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 h-8 w-8 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePreviewVoice(v.voiceId);
+                            }}
+                            disabled={loading}
+                            title="Preview voice"
+                          >
+                            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                          </Button>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Generation mode */}

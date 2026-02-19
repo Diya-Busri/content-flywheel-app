@@ -1,17 +1,18 @@
 /**
- * Client-side PDF export using jsPDF + html2canvas.
- * One section = one page; no server or browser automation.
+ * Client-side PDF export: one screenshot per editor page div, one PDF page per screenshot.
+ * Uses html2canvas on each .preview-page element (full content, no clipping), then adds each
+ * image as its own full page in the jsPDF document. No splitting of one long screenshot.
  */
 
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
-import type { PdfProductPayload } from "@/lib/pdf-product-html";
-import { buildSinglePageFragment } from "@/lib/pdf-product-html";
 
-const PAGE_WIDTH_PX = 800;
-const PAGE_HEIGHT_PX = 1100;
-const PAGE_WIDTH_MM = (PAGE_WIDTH_PX / 96) * 25.4;
-const PAGE_HEIGHT_MM = (PAGE_HEIGHT_PX / 96) * 25.4;
+const CAPTURE_SCALE = 2;
+
+/** Convert px to mm at 96dpi for jsPDF. */
+function pxToMm(px: number): number {
+  return (px / 96) * 25.4;
+}
 
 function waitForImages(container: HTMLElement, timeoutMs = 5000): Promise<void> {
   const imgs = container.querySelectorAll("img");
@@ -32,60 +33,55 @@ function waitForImages(container: HTMLElement, timeoutMs = 5000): Promise<void> 
 }
 
 /**
- * Generate PDF in the browser: one PDF page per product section.
- * Returns PDF as Blob.
+ * Capture a container that has .preview-page children and return a PDF blob.
+ * Each .preview-page is screenshot once in full (no width/height clamp); each screenshot
+ * becomes exactly one PDF page. No splitting of a single screenshot across pages.
  */
-export async function generatePdfClientSide(
-  payload: PdfProductPayload,
+export async function captureCanvasPagesToPdf(
+  container: HTMLElement,
   onProgress?: (page: number, total: number) => void
 ): Promise<Blob> {
-  const pageCount = Math.max(1, payload.sections?.length ?? 1);
-
-  const container = document.createElement("div");
-  container.style.cssText = `
-    position: fixed;
-    left: -9999px;
-    top: 0;
-    width: ${PAGE_WIDTH_PX}px;
-    height: ${PAGE_HEIGHT_PX}px;
-    overflow: hidden;
-    background: #fff;
-    z-index: -1;
-  `;
-  document.body.appendChild(container);
-
-  const doc = new jsPDF({
-    unit: "mm",
-    format: [PAGE_WIDTH_MM, PAGE_HEIGHT_MM],
-    hotfixes: ["px_scaling"],
-  });
-
-  try {
-    for (let i = 0; i < pageCount; i++) {
-      onProgress?.(i + 1, pageCount);
-      container.innerHTML = buildSinglePageFragment(payload, i);
-      await waitForImages(container, 4000);
-
-      const pageEl = container.querySelector(".pdf-page") as HTMLElement;
-      if (!pageEl) throw new Error("PDF page element not found");
-      const canvas = await html2canvas(pageEl, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
-        width: PAGE_WIDTH_PX,
-        height: PAGE_HEIGHT_PX,
-        windowWidth: PAGE_WIDTH_PX,
-        windowHeight: PAGE_HEIGHT_PX,
-      });
-
-      const imgData = canvas.toDataURL("image/jpeg", 0.92);
-      if (i > 0) doc.addPage([PAGE_WIDTH_MM, PAGE_HEIGHT_MM]);
-      doc.addImage(imgData, "JPEG", 0, 0, PAGE_WIDTH_MM, PAGE_HEIGHT_MM);
-    }
-
-    return doc.output("blob");
-  } finally {
-    document.body.removeChild(container);
+  const pages = Array.from(container.querySelectorAll<HTMLElement>(".preview-page"));
+  if (pages.length === 0) {
+    throw new Error("No .preview-page elements found in container");
   }
+
+  await waitForImages(container, 6000);
+
+  let doc: jsPDF | null = null;
+
+  for (let i = 0; i < pages.length; i++) {
+    onProgress?.(i + 1, pages.length);
+    const pageEl = pages[i]!;
+
+    // Screenshot this page div in full — no width/height so the entire element is captured
+    const canvas = await html2canvas(pageEl, {
+      scale: CAPTURE_SCALE,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+      imageTimeout: 0,
+      scrollX: 0,
+      scrollY: 0,
+    });
+
+    const wPx = canvas.width / CAPTURE_SCALE;
+    const hPx = canvas.height / CAPTURE_SCALE;
+    const wMm = pxToMm(wPx);
+    const hMm = pxToMm(hPx);
+
+    const imgData = canvas.toDataURL("image/jpeg", 0.92);
+
+    if (doc === null) {
+      doc = new jsPDF({ unit: "mm", format: [wMm, hMm], hotfixes: ["px_scaling"] });
+      doc.addImage(imgData, "JPEG", 0, 0, wMm, hMm);
+    } else {
+      doc.addPage([wMm, hMm]);
+      doc.addImage(imgData, "JPEG", 0, 0, wMm, hMm);
+    }
+  }
+
+  if (!doc) throw new Error("No pages captured");
+  return doc.output("blob");
 }

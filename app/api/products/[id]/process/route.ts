@@ -13,9 +13,19 @@ export const maxDuration = 300; // 5 min (Vercel Pro); local dev no limit
 
 const VALID_FORMATS = ["ebook", "guide", "workbook", "spreadsheet", "notion", "course", "checklist", "journal", "planner", "template"] as const;
 
+/** Normalize and validate format from body or DB (handles "Course Outline", "course_outline", "Notion Template", "notion_template", etc.). */
+function normalizeFormat(value: string | undefined | null, fallback: string): string {
+  if (value == null || typeof value !== "string") return fallback;
+  const lower = value.toLowerCase().trim();
+  if (lower === "course outline" || lower === "course_outline") return "course";
+  if (lower === "checklist pack") return "checklist";
+  if (lower === "notion template" || lower === "notion_template") return "notion";
+  return VALID_FORMATS.includes(lower as (typeof VALID_FORMATS)[number]) ? lower : fallback;
+}
+
 type SectionRow = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string };
 
-const BATCH_SIZE = 3; // Generate 2-3 chapters in parallel for speed (target <60s total)
+const BATCH_SIZE = 10; // Generate up to 10 sections in parallel (e.g. planner has 7, all in one batch)
 
 /**
  * POST: Internal. Generates product content: outline first, then sections in parallel batches.
@@ -33,7 +43,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const productIncluded = product?.included ?? body.productIncluded ?? "";
     const productWhy = product?.why ?? body.productWhy ?? "";
     let productDescription = (typeof body.productDescription === "string" ? body.productDescription : "") || (productName ? `${productIncluded}. ${productWhy}` : "");
-    const format = VALID_FORMATS.includes(body.format) ? body.format : "ebook";
+    const [existing] = await db
+      .select({
+        id: productsTable.id,
+        status: productsTable.status,
+        format: productsTable.format,
+        customizationOptions: productsTable.customizationOptions,
+      })
+      .from(productsTable)
+      .where(eq(productsTable.id, productId))
+      .limit(1);
+
+    const formatFromBody = body.format != null ? String(body.format).trim() : "";
+    const formatFromDb = existing?.format ?? "";
+    const format = normalizeFormat(formatFromBody || formatFromDb, "ebook");
     const spreadsheetDisclaimer = "⚠️ This is a step-by-step tutorial guide (PDF). You will learn how to create this spreadsheet yourself in Excel or Google Sheets. This is NOT a pre-made spreadsheet file - it's an educational guide that teaches you valuable Excel skills.";
     if (format === "spreadsheet") {
       productDescription = productDescription ? `${productDescription} ${spreadsheetDisclaimer}` : spreadsheetDisclaimer;
@@ -43,12 +66,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const hookTexts = hooks.map((h: string | { text?: string }) => (typeof h === "string" ? h : h?.text ?? ""));
     const ctaTexts = ctas.map((c: string | { text?: string }) => (typeof c === "string" ? c : c?.text ?? ""));
     const nicheName = typeof niche === "string" ? niche : (niche as { name?: string })?.name ?? "";
-
-    const [existing] = await db
-      .select({ id: productsTable.id, status: productsTable.status })
-      .from(productsTable)
-      .where(eq(productsTable.id, productId))
-      .limit(1);
 
     if (!existing) {
       console.error("[products/process] Product not found:", productId);
@@ -61,7 +78,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const customizationOptions =
       body.customizationOptions != null && typeof body.customizationOptions === "object"
         ? (body.customizationOptions as GenerateProductContentParams["customizationOptions"])
-        : undefined;
+        : existing?.customizationOptions != null && typeof existing.customizationOptions === "object"
+          ? (existing.customizationOptions as GenerateProductContentParams["customizationOptions"])
+          : undefined;
 
     const params: GenerateProductContentParams = {
       productName,

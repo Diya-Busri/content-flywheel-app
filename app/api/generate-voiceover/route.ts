@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const text = typeof body.text === "string" ? body.text.trim() : "";
     const voiceId = typeof body.voiceId === "string" ? body.voiceId.trim() : "";
     const stability = typeof body.stability === "number" ? Math.max(0, Math.min(1, body.stability)) : 0.5;
-    const similarity = typeof body.similarity === "number" ? Math.max(0, Math.min(1, body.similarity)) : 0.5;
+    const similarity = typeof body.similarity === "number" ? Math.max(0, Math.min(1, body.similarity)) : 0.75;
 
     if (!text) {
       return NextResponse.json({ error: "text is required" }, { status: 400 });

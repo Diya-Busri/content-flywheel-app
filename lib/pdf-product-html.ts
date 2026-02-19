@@ -173,10 +173,8 @@ export function buildSinglePageHtml(payload: PdfProductPayload, pageIdx: number)
         ? `blur(${bgSettings.blur}px) brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`
         : `brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`;
     bgBlock = `
-        <div class="pdf-bg" style="position:absolute;inset:0;z-index:0;overflow:hidden;">
-          <img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${fit};object-position:${pos};opacity:${opacity};filter:${escapeHtml(filter)};" />
-        </div>
-        <div class="pdf-overlay" style="position:absolute;inset:0;z-index:1;pointer-events:none;background-color:${escapeHtml(overlay.color)};opacity:${overlayOpacity};"></div>`;
+        <div class="pdf-bg" style="position:absolute;inset:0;min-height:${CANVAS_HEIGHT}px;z-index:0;background-image:url(${escapeHtml(bgUrl)});background-size:cover;background-position:center;background-repeat:no-repeat;background-attachment:fixed;opacity:${opacity};filter:${escapeHtml(filter)};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+        <div class="pdf-overlay" style="position:absolute;inset:0;min-height:${CANVAS_HEIGHT}px;z-index:1;pointer-events:none;background-color:${escapeHtml(overlay.color)};opacity:${overlayOpacity};"></div>`;
   }
 
   const placed = (placedElementsByPage[pageIdx] ?? [])
@@ -288,10 +286,8 @@ export function buildProductPdfHtml(payload: PdfProductPayload): string {
           ? `blur(${bgSettings.blur}px) brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`
           : `brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`;
       bgBlock = `
-        <div class="pdf-bg" style="position:absolute;inset:0;z-index:0;overflow:hidden;">
-          <img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${fit};object-position:${pos};opacity:${opacity};filter:${escapeHtml(filter)};" />
-        </div>
-        <div class="pdf-overlay" style="position:absolute;inset:0;z-index:1;pointer-events:none;background-color:${escapeHtml(overlay.color)};opacity:${overlayOpacity};"></div>`;
+        <div class="pdf-bg" style="position:absolute;inset:0;min-height:${CANVAS_HEIGHT}px;z-index:0;background-image:url(${escapeHtml(bgUrl)});background-size:cover;background-position:center;background-repeat:no-repeat;background-attachment:fixed;opacity:${opacity};filter:${escapeHtml(filter)};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+        <div class="pdf-overlay" style="position:absolute;inset:0;min-height:${CANVAS_HEIGHT}px;z-index:1;pointer-events:none;background-color:${escapeHtml(overlay.color)};opacity:${overlayOpacity};"></div>`;
     }
 
     const placed = (placedElementsByPage[pageIdx] ?? [])

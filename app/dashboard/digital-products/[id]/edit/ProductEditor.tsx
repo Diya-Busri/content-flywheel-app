@@ -56,6 +56,7 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import { ThumbnailMockup, THUMBNAIL_TEMPLATES, type ThumbnailTemplateId } from "@/components/product-editor/ThumbnailMockup";
 import { cleanMarkdownToHtml } from "@/lib/clean-markdown";
 import html2canvas from "html2canvas";
+import { captureCanvasPagesToPdf } from "@/lib/pdf-client-export";
 import { useToast } from "@/components/ui/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -540,6 +541,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const thumbnailCaptureRef = useRef<HTMLDivElement | null>(null);
   const [includeCover, setIncludeCover] = useState(true);
   const [includeBackPage, setIncludeBackPage] = useState(true);
+  const previewPagesContainerRef = useRef<HTMLDivElement | null>(null);
   const { theme: dashboardTheme } = useDashboardTheme();
   const uiTheme = dashboardTheme;
   const [placedElementsByPage, setPlacedElementsByPage] = useState<PlacedElement[][]>([]);
@@ -573,9 +575,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([]);
   const [redoStack, setRedoStack] = useState<EditorSnapshot[]>([]);
+  const [coverBackHintDismissed, setCoverBackHintDismissed] = useState(false);
   const recordingRef = useRef(false);
   const recordUndoDebouncedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const currentPageElements = useMemo(
     () => placedElementsByPage[currentPageIndex] ?? [],
     [placedElementsByPage, currentPageIndex]
@@ -624,11 +626,18 @@ export default function ProductEditor({ productId }: { productId: string }) {
       const savedTemplate = ((data.designSettings as { template?: string })?.template ?? "modern") as TemplateId;
       setTemplate(savedTemplate);
       const byPage = (data.designSettings as { placedElementsByPage?: unknown[] })?.placedElementsByPage;
+      const sectionsCountForPlaced = (data.content?.sections ?? []).length || 1;
       if (Array.isArray(byPage) && byPage.length > 0) {
-        setPlacedElementsByPage(byPage.map((pageArr) => (Array.isArray(pageArr) ? parsePlacedElements(pageArr) : [])));
+        const parsed = byPage.map((pageArr) => (Array.isArray(pageArr) ? parsePlacedElements(pageArr) : []));
+        if (parsed.length === sectionsCountForPlaced + 2) {
+          setPlacedElementsByPage(parsed);
+        } else {
+          setPlacedElementsByPage([[], ...parsed, []]);
+        }
       } else {
         const legacy = parsePlacedElements(data.placedElements ?? []);
-        setPlacedElementsByPage(legacy.length ? [legacy] : []);
+        const contentOnly = legacy.length ? [legacy] : [[]];
+        setPlacedElementsByPage([[], ...contentOnly, []]);
       }
       const colors = (data.designSettings as { colors?: Record<string, string> })?.colors;
       const preset = TEMPLATE_PRESETS[savedTemplate] ?? TEMPLATE_PRESETS.modern;
@@ -651,15 +660,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
       } | undefined;
       const sectionsCount = (data.content?.sections ?? []).length || 1;
       const legacyBgUrl = ds?.backgroundImage ?? ds?.background_image ?? null;
-      let pages: PageBackground[];
+      let contentPages: PageBackground[];
       if (Array.isArray(ds?.pages) && ds.pages.length >= sectionsCount) {
-        pages = ds.pages.slice(0, sectionsCount).map((p) => ({
+        contentPages = ds.pages.slice(0, sectionsCount).map((p) => ({
           backgroundImage: p?.backgroundImage ?? null,
           backgroundSettings: p?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...p.backgroundSettings } : undefined,
           overlaySettings: p?.overlaySettings ? { ...DEFAULT_OVERLAY, ...p.overlaySettings } : undefined,
         }));
       } else {
-        pages = Array.from({ length: sectionsCount }, (_, i) =>
+        contentPages = Array.from({ length: sectionsCount }, (_, i) =>
           i === 0 && legacyBgUrl
             ? {
                 backgroundImage: legacyBgUrl,
@@ -669,6 +678,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
             : {}
         );
       }
+      const pages: PageBackground[] = [{}, ...contentPages, {}];
       setPageBackgrounds(pages);
       setCurrentPageIndex(0);
       setUndoStack([]);
@@ -693,15 +703,20 @@ export default function ProductEditor({ productId }: { productId: string }) {
     if (searchParams.get("created") === "1") setShowCreatedBanner(true);
   }, [searchParams]);
 
+  const totalPages = Math.max(2, sections.length + 2);
+
   useEffect(() => {
     setPageBackgrounds((prev) => {
-      const need = sections.length || 1;
+      const need = totalPages;
       if (prev.length === need) return prev;
-      const next = [...prev];
-      while (next.length < need) next.push({});
+      const cover = prev[0] ?? {};
+      const back = prev.length > 0 ? (prev[prev.length - 1] ?? {}) : {};
+      const content = prev.length <= 2 ? Array.from({ length: sections.length }, () => ({})) : prev.slice(1, prev.length - 1);
+      const next = [cover, ...content, back];
+      while (next.length < need) next.splice(next.length - 1, 0, {});
       return next.slice(0, need);
     });
-  }, [sections.length]);
+  }, [sections.length, totalPages]);
 
   useEffect(() => {
     const root = contentAreaRef.current;
@@ -740,18 +755,55 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   useEffect(() => {
     setPlacedElementsByPage((prev) => {
-      const need = sections.length || 1;
+      const need = totalPages;
       if (prev.length === need) return prev;
-      const next = [...prev];
-      while (next.length < need) next.push([]);
+      const cover = prev[0] ?? [];
+      const back = prev.length > 0 ? (prev[prev.length - 1] ?? []) : [];
+      const content = prev.length <= 2 ? Array.from({ length: sections.length }, () => [] as PlacedElement[]) : prev.slice(1, prev.length - 1);
+      const next = [cover, ...content, back];
+      while (next.length < need) next.splice(next.length - 1, 0, []);
       return next.slice(0, need);
     });
-  }, [sections.length]);
+  }, [sections.length, totalPages]);
 
   useEffect(() => {
-    const safeIndex = Math.min(currentPageIndex, Math.max(0, pageBackgrounds.length - 1));
+    const safeIndex = Math.min(currentPageIndex, Math.max(0, totalPages - 1));
     if (safeIndex !== currentPageIndex) setCurrentPageIndex(safeIndex);
-  }, [currentPageIndex, pageBackgrounds.length]);
+  }, [currentPageIndex, totalPages]);
+
+  const seededCoverBackRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!product?.id || placedElementsByPage.length < 2) return;
+    if (seededCoverBackRef.current === product.id) return;
+    const coverEmpty = (placedElementsByPage[0] ?? []).length === 0;
+    const backEmpty = (placedElementsByPage[totalPages - 1] ?? []).length === 0;
+    if (!coverEmpty && !backEmpty) return;
+    seededCoverBackRef.current = product.id;
+    const title = product.title ?? "Product";
+    const subtitle = product.niche ? `A comprehensive guide to ${product.niche}` : "";
+    setPlacedElementsByPage((prev) => {
+      const next = prev.map((pageArr, idx) => {
+        if (idx === 0 && pageArr.length === 0) {
+          const coverEls: PlacedElement[] = [
+            { id: "cover-title", type: "text", content: title, position: { x: CANVAS_WIDTH / 2 - 200, y: 380 }, size: { width: 400, height: 80 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 32, textAlign: "center" } },
+            { id: "cover-footer", type: "text", content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 1000 }, size: { width: 300, height: 24 }, rotation: 0, zIndex: 2, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 14, textAlign: "center" } },
+          ];
+          if (subtitle) coverEls.splice(1, 0, { id: "cover-subtitle", type: "text", content: subtitle, position: { x: CANVAS_WIDTH / 2 - 200, y: 480 }, size: { width: 400, height: 40 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 18, textAlign: "center" } });
+          return coverEls;
+        }
+        if (idx === totalPages - 1 && pageArr.length === 0) {
+          return [
+            { id: "back-thanks", type: "text", content: "Thank you", position: { x: CANVAS_WIDTH / 2 - 200, y: 350 }, size: { width: 400, height: 36 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 22, textAlign: "center" } },
+            { id: "back-msg", type: "text", content: "Thank you for using this resource!", position: { x: CANVAS_WIDTH / 2 - 200, y: 420 }, size: { width: 400, height: 28 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 16, textAlign: "center" } },
+            { id: "back-url", type: "text", content: "Visit contentflywheel.com", position: { x: CANVAS_WIDTH / 2 - 200, y: 500 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 14, textAlign: "center" } },
+            { id: "back-brand", type: "text", content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 620 }, size: { width: 300, height: 20 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 12, textAlign: "center" } },
+          ];
+        }
+        return pageArr;
+      });
+      return next;
+    });
+  }, [product?.id, product?.title, product?.niche, placedElementsByPage.length, totalPages]);
 
   useEffect(() => {
     const page = pageBackgrounds[currentPageIndex];
@@ -759,6 +811,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
     setBackgroundSettings(page?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...page.backgroundSettings } : DEFAULT_IMAGE_SETTINGS);
     setOverlaySettings(page?.overlaySettings ? { ...DEFAULT_OVERLAY, ...page.overlaySettings } : DEFAULT_OVERLAY);
   }, [currentPageIndex, pageBackgrounds]);
+
+  useEffect(() => {
+    setCoverBackHintDismissed(false);
+  }, [currentPageIndex]);
+
+  const isOnCoverPage = currentPageIndex === 0;
+  const isOnBackPage = currentPageIndex === totalPages - 1;
+  const showCoverBackHint = !coverBackHintDismissed && (isOnCoverPage || isOnBackPage);
 
   const persistCurrentPageBackground = useCallback((updates: Partial<PageBackground>) => {
     setPageBackgrounds((prev) => {
@@ -920,12 +980,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
     if (!sectionToDeleteId || sections.length <= 1) return;
     recordUndo();
     const idx = sections.findIndex((s) => s.id === sectionToDeleteId);
+    if (idx < 0) return;
     const nextSections = sections.filter((s) => s.id !== sectionToDeleteId);
-    const nextPageBackgrounds = pageBackgrounds.filter((_, i) => i !== idx);
-    const nextPlacedByPage = placedElementsByPage.filter((_, i) => i !== idx);
+    const contentPageIndex = idx + 1;
+    const nextPageBackgrounds = [...pageBackgrounds.slice(0, contentPageIndex), ...pageBackgrounds.slice(contentPageIndex + 1)];
+    const nextPlacedByPage = [...placedElementsByPage.slice(0, contentPageIndex), ...placedElementsByPage.slice(contentPageIndex + 1)];
     setSections(nextSections);
-    setPageBackgrounds(nextPageBackgrounds.length ? nextPageBackgrounds : [{}]);
-    setPlacedElementsByPage(nextPlacedByPage.length ? nextPlacedByPage : [[]]);
+    setPageBackgrounds(nextPageBackgrounds.length ? nextPageBackgrounds : [{}, {}]);
+    setPlacedElementsByPage(nextPlacedByPage.length ? nextPlacedByPage : [[], []]);
     setEditingSectionId((id) => (id === sectionToDeleteId ? null : id));
     setSectionToDeleteId(null);
     setCurrentPageIndex((i) => {
@@ -1448,20 +1510,22 @@ export default function ProductEditor({ productId }: { productId: string }) {
       backgroundSettings: { ...backgroundSettings },
       overlaySettings: { ...overlaySettings },
     };
-    const nextPages = Array.from({ length: sections.length }, () => ({ ...currentBg }));
+    const nextPages = Array.from({ length: totalPages }, () => ({ ...currentBg }));
     setPageBackgrounds(nextPages);
     saveToServer({ designSettings: { ...product?.designSettings, pages: nextPages } });
     toast({ title: "Background applied to all pages" });
-  }, [sections.length, backgroundImage, backgroundSettings, overlaySettings, product?.designSettings, saveToServer, toast, recordUndo]);
+  }, [totalPages, backgroundImage, backgroundSettings, overlaySettings, product?.designSettings, saveToServer, toast, recordUndo]);
 
   const applyGraphicsToAllPages = useCallback(() => {
     recordUndo();
     const currentGraphics = currentPageElements.map((e) => ({ ...e }));
-    const nextByPage = Array.from({ length: sections.length }, () => currentGraphics.map((e) => ({ ...e, id: `${e.type}-${Date.now()}-${Math.random().toString(36).slice(2)}` })));
+    const nextByPage = Array.from({ length: totalPages }, (_, i) =>
+      currentGraphics.map((e) => ({ ...e, id: `${e.type}-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}` }))
+    );
     setPlacedElementsByPage(nextByPage);
     saveToServer({ designSettings: { ...product?.designSettings, placedElementsByPage: nextByPage } });
     toast({ title: "Graphics applied to all pages" });
-  }, [sections.length, currentPageElements, product?.designSettings, saveToServer, toast, recordUndo]);
+  }, [totalPages, currentPageElements, product?.designSettings, saveToServer, toast, recordUndo]);
 
   const selectedGraphicElement = selectedElement ? currentPageElements.find((el) => el.id === selectedElement) : null;
 
@@ -1491,8 +1555,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
     });
     setPlacedElementsByPage(nextByPage);
     saveToServer({ designSettings: { ...product?.designSettings, placedElementsByPage: nextByPage } });
-    toast({ title: `Icon applied to all ${sections.length} pages` });
-  }, [selectedGraphicElement, sections.length, currentPageIndex, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo]);
+    toast({ title: "Icon applied to all pages" });
+  }, [selectedGraphicElement, currentPageIndex, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo]);
 
   const removeSelectedIconFromAllPages = useCallback(() => {
     if (!selectedGraphicElement) return;
@@ -1801,35 +1865,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     try {
       const title = product?.title ?? "Product";
       const safeName = title.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "") || "product";
-      // Re-read format at click time so we always route correctly
       const currentFormat = (product?.format ?? "").toLowerCase().trim();
-
-      if (currentFormat === "spreadsheet") {
-        // Spreadsheet products are tutorial guides → export as PDF
-        const res = await fetch("/api/generate-pdf-puppeteer", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            productId,
-            includeCover,
-            includeBackPage,
-          }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(typeof err?.error === "string" ? err.error : `Export failed (${res.status})`);
-        }
-        const blob = await res.blob();
-        const fileName = `${safeName}-tutorial.pdf`;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast({ title: "Tutorial PDF downloaded", description: `Saved as ${fileName}` });
-        return;
-      }
 
       if (currentFormat === "notion" || currentFormat === "notion template") {
         const res = await fetch("/api/generate-notion-template", {
@@ -1854,29 +1890,24 @@ export default function ProductEditor({ productId }: { productId: string }) {
         return;
       }
 
-      // All other formats (workbook, ebook, guide, checklist, etc.) → PDF
-      const res = await fetch("/api/generate-pdf-puppeteer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId,
-          includeCover,
-          includeBackPage,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(typeof err?.error === "string" ? err.error : `Export failed (${res.status})`);
+      // PDF export: client-side html2canvas + jsPDF (capture editor canvas as-is, no server)
+      const container = previewPagesContainerRef.current;
+      if (!container) {
+        throw new Error("Preview not ready. Try again in a moment.");
       }
-      const blob = await res.blob();
-      const fileName = `${safeName}.pdf`;
+      await new Promise((r) => setTimeout(r, 150));
+      const blob = await captureCanvasPagesToPdf(container);
+      const fileName = currentFormat === "spreadsheet" ? `${safeName}-tutorial.pdf` : `${safeName}.pdf`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
-      toast({ title: "PDF downloaded", description: `Saved as ${fileName}` });
+      toast({
+        title: currentFormat === "spreadsheet" ? "Tutorial PDF downloaded" : "PDF downloaded",
+        description: `Saved as ${fileName}`,
+      });
     } catch (err) {
       toast({
         title: "Export failed",
@@ -2158,6 +2189,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
               width: 100% !important; height: 100% !important; object-fit: cover !important;
               pointer-events: none !important;
             }
+            .product-editor-preview-layout { color: #1a1a1a; }
             .product-editor-preview-layout p { margin-bottom: var(--paragraph-spacing, 1rem); line-height: var(--line-height, 1.6); text-align: var(--text-align, left); }
             .product-editor-preview-layout h2 { margin-top: calc(var(--section-spacing, 2rem) * 1.5); margin-bottom: calc(var(--paragraph-spacing, 1rem) * 1.5); text-align: var(--text-align, left); }
             .product-editor-preview-layout h3 { margin-top: calc(var(--section-spacing, 2rem) * 0.75); margin-bottom: calc(var(--paragraph-spacing, 1rem) * 0.75); text-align: var(--text-align, left); }
@@ -2262,7 +2294,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </Tooltip>
                   </TooltipProvider>
                 </div>
-                {sections.length > 1 ? (
+                {totalPages > 1 ? (
                   <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
                     <button
                       type="button"
@@ -2276,15 +2308,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <span className={`text-sm font-medium min-w-[80px] text-center ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-                      {currentPageIndex + 1} / {sections.length}
+                      {currentPageIndex + 1} / {totalPages}
                     </span>
                     <button
                       type="button"
                       onClick={() => {
                         setEditingTextBoxId(null);
-                        setCurrentPageIndex((i) => Math.min(sections.length - 1, i + 1));
+                        setCurrentPageIndex((i) => Math.min(totalPages - 1, i + 1));
                       }}
-                      disabled={currentPageIndex >= sections.length - 1}
+                      disabled={currentPageIndex >= totalPages - 1}
                       className={`p-1 rounded disabled:opacity-40 disabled:cursor-not-allowed ${isDark ? "text-gray-400 hover:text-white hover:bg-[#2A2A2A]" : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"}`}
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -2292,11 +2324,22 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </div>
                 ) : null}
               </div>
-              {/* Outer card (max 928px) — background fills THIS so no white strip on sides */}
+              {/* Outer card (max 928px) — always document-like (white/light) regardless of app theme */}
               <div
-                className={`relative w-full max-w-[928px] mx-auto my-8 rounded-lg shadow-lg overflow-hidden ${isDark ? "bg-[#1A1A1A] border border-[#2A2A2A]" : "bg-white border border-gray-200"}`}
+                className="relative w-full max-w-[928px] mx-auto my-8 rounded-lg shadow-lg overflow-hidden bg-white border border-gray-200"
                 style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)" }}
               >
+                {showCoverBackHint ? (
+                  <div
+                    role="status"
+                    className="absolute top-0 left-0 right-0 z-30 px-4 py-3 bg-amber-50 border-b border-amber-200 text-amber-900 text-sm text-center cursor-pointer hover:bg-amber-100/80 transition-colors"
+                    onClick={() => setCoverBackHintDismissed(true)}
+                  >
+                    {isOnCoverPage
+                      ? "This is your cover page — add a background image, title and your branding using the panels on the right."
+                      : "This is your back cover — add your website, social links or a call to action."}
+                  </div>
+                ) : null}
                 {canvasBgUrl ? (
                   <>
                     <div
@@ -2350,15 +2393,23 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     margin: 0,
                     boxSizing: "border-box",
                     fontFamily: "var(--font-sans), sans-serif",
-                    backgroundColor: canvasBgUrl ? "transparent" : (isDark ? "#1A1A1A" : "#ffffff"),
+                    backgroundColor: canvasBgUrl ? "transparent" : "#ffffff",
                   }}
                   onClick={() => {
                     setSelectedElement(null);
                     setEditingTextBoxId(null);
                     deselectText();
+                    setCoverBackHintDismissed(true);
                   }}
                   role="presentation"
                 >
+                  <div
+                    className="absolute left-0 right-0 bottom-0 py-2 text-center text-[11px] text-gray-500 pointer-events-none select-none"
+                    style={{ opacity: 0.45, zIndex: 15 }}
+                    aria-hidden
+                  >
+                    Created with Content Flywheel
+                  </div>
                   <div
                     ref={contentAreaRef}
                     className={`relative z-10 product-editor-preview-layout ${product.format === "workbook" ? "format-workbook" : ""}`}
@@ -2368,78 +2419,79 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       zIndex: 10,
                       pointerEvents: "auto",
                       ...(canvasBgUrl ? { backgroundColor: "transparent" } : {}),
+                      minHeight: CANVAS_HEIGHT,
                     }}
                     onClick={(e) => {
                       handleTextClick(e);
                       e.stopPropagation();
                     }}
                   >
-                    <h2
-                      data-section-id="__product_title"
-                      data-text-type="heading"
-                      className="text-2xl font-bold border-b pb-2 cursor-pointer select-text"
-                      style={{
-                        ...(product.designSettings?.textStyles?.["__product_title"]?.title ?? {}),
-                        color: product.designSettings?.textStyles?.["__product_title"]?.title?.color ?? templatePreset.titleColor,
-                      }}
-                    >
-                      {product.title}
-                    </h2>
-                    {(sections.length > 1
-                      ? (sections[currentPageIndex] ? [sections[currentPageIndex]] : [])
-                      : sections
-                    ).map((section) => {
-                      const titleStyles = product.designSettings?.textStyles?.[section.id]?.title;
-                      const bodyStyles = product.designSettings?.textStyles?.[section.id]?.body;
-                      return (
-                        <section key={section.id} data-section-id={section.id}>
-                          <h3
-                            data-section-id={section.id}
-                            data-text-type="title"
-                            className="text-lg font-semibold cursor-pointer select-text"
-                            style={{ ...titleStyles, color: titleStyles?.color ?? templatePreset.headingColor }}
-                          >
-                            {section.title}
-                          </h3>
-                          {section.imageUrl?.trim() ? (
-                            <div className="my-4 flex justify-center">
-                              <img
-                                src={section.imageUrl}
-                                alt=""
-                                className="max-w-full max-h-80 object-contain rounded-lg shadow-md"
-                              />
-                            </div>
-                          ) : null}
-                          <div
-                            data-section-id={section.id}
-                            data-text-type="body"
-                            className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2 cursor-text"
-                            style={{ ...bodyStyles, color: bodyStyles?.color ?? templatePreset.bodyColor }}
-                            onClick={(e) => {
-                              console.log("Content area clicked");
-                              console.log("Target:", (e.target as HTMLElement).tagName, (e.target as HTMLElement).textContent?.substring(0, 30));
-                              const target = (e.target as HTMLElement).closest("h1, h2, h3, h4, p, li");
-                              console.log("Closest block:", target?.tagName, target?.textContent?.substring(0, 30));
-                              if (target) {
-                                (target as HTMLElement).style.outline = "2px dashed #f97316";
-                                (target as HTMLElement).style.outlineOffset = "2px";
-                              }
-                            }}
-                          >
-                            {section.content || section.contentHtml ? (
+                    {currentPageIndex === 0 || currentPageIndex === totalPages - 1 ? (
+                      <div className="min-h-[var(--canvas-height,1100px)] w-full" style={{ minHeight: CANVAS_HEIGHT }} aria-label={currentPageIndex === 0 ? "Cover page" : "Back cover"} />
+                    ) : (
+                      <>
+                        <h2
+                          data-section-id="__product_title"
+                          data-text-type="heading"
+                          className="text-2xl font-bold border-b pb-2 cursor-pointer select-text"
+                          style={{
+                            ...(product.designSettings?.textStyles?.["__product_title"]?.title ?? {}),
+                            color: product.designSettings?.textStyles?.["__product_title"]?.title?.color ?? templatePreset.titleColor,
+                          }}
+                        >
+                          {product.title}
+                        </h2>
+                        {(sections[currentPageIndex - 1] ? [sections[currentPageIndex - 1]] : []).map((section) => {
+                          const titleStyles = product.designSettings?.textStyles?.[section.id]?.title;
+                          const bodyStyles = product.designSettings?.textStyles?.[section.id]?.body;
+                          return (
+                            <section key={section.id} data-section-id={section.id}>
+                              <h3
+                                data-section-id={section.id}
+                                data-text-type="title"
+                                className="text-lg font-semibold cursor-pointer select-text"
+                                style={{ ...titleStyles, color: titleStyles?.color ?? templatePreset.headingColor }}
+                              >
+                                {section.title}
+                              </h3>
+                              {section.imageUrl?.trim() ? (
+                                <div className="my-4 flex justify-center">
+                                  <img
+                                    src={section.imageUrl}
+                                    alt=""
+                                    className="max-w-full max-h-80 object-contain rounded-lg shadow-md"
+                                  />
+                                </div>
+                              ) : null}
                               <div
-                                className="preview-content"
-                                dangerouslySetInnerHTML={{
-                                  __html: section.contentHtml ?? cleanMarkdownToHtml(section.content ?? ""),
+                                data-section-id={section.id}
+                                data-text-type="body"
+                                className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2 cursor-text"
+                                style={{ ...bodyStyles, color: bodyStyles?.color ?? templatePreset.bodyColor }}
+                                onClick={(e) => {
+                                  const target = (e.target as HTMLElement).closest("h1, h2, h3, h4, p, li");
+                                  if (target) {
+                                    (target as HTMLElement).style.outline = "2px dashed #f97316";
+                                    (target as HTMLElement).style.outlineOffset = "2px";
+                                  }
                                 }}
-                              />
-                            ) : (
-                              <span className="text-[#999]">(Empty)</span>
-                            )}
-                          </div>
-                        </section>
-                      );
-                    })}
+                              >
+                                {section.content || section.contentHtml ? (
+                                  <div
+                                    className="preview-content"
+                                    dangerouslySetInnerHTML={{
+                                      __html: section.contentHtml ?? cleanMarkdownToHtml(section.content ?? ""),
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="text-[#999]">(Empty)</span>
+                                )}
+                              </div>
+                            </section>
+                          );
+                        })}
+                      </>
+                    )}
                   </div>
                   {/* Placed elements layer (Canva-style) - above content; current page only */}
                   <div className="absolute inset-0 pointer-events-none z-20" aria-hidden>
@@ -4016,7 +4068,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* Full product preview modal – Save as PDF via browser print */}
+      {/* Full product preview modal – Save as PDF via canvas capture or browser print */}
       {showFullPreview && (
         <div className="pdf-print-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
           <style
@@ -4058,155 +4110,165 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 {pdfExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />} {pdfExporting ? exportGeneratingLabel : `Download ${exportLabel}`}
               </Button>
             </div>
-            <div data-print-source className="editor-canvas preview-pages-container flex-1 overflow-y-auto p-6 flex flex-col items-center gap-6">
-                {Array.from({ length: Math.max(sections.length, pageBackgrounds.length, placedElementsByPage.length, 1) }, (_, pageIdx) => {
-                  const section = sections[pageIdx] ?? { id: `page-${pageIdx}`, title: "", content: "", contentHtml: "" };
-                  const pageBg = pageBackgrounds[pageIdx];
-                  const bgUrl = pageBg?.backgroundImage ?? null;
-                  const bgSettings = pageBg?.backgroundSettings
-                    ? { ...DEFAULT_IMAGE_SETTINGS, ...pageBg.backgroundSettings }
-                    : DEFAULT_IMAGE_SETTINGS;
-                  const overlay = pageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...pageBg.overlaySettings } : DEFAULT_OVERLAY;
-                  const titleStyles = product.designSettings?.textStyles?.[section.id]?.title;
-                  const bodyStyles = product.designSettings?.textStyles?.[section.id]?.body;
-                  return (
-                    <div
-                      key={section.id}
-                      id={`preview-page-${pageIdx}`}
-                      data-pdf-page
-                      data-page
-                      className="preview-page product-page relative shrink-0 rounded-lg overflow-hidden border border-gray-200 bg-white shadow-lg"
-                      style={{
-                        width: CANVAS_WIDTH,
-                        height: CANVAS_HEIGHT,
-                        pageBreakAfter: "always",
-                        pageBreakInside: "avoid",
-                      }}
-                    >
-                    {bgUrl ? (
-                      <>
-                        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden>
-                          <img
-                            src={bgUrl}
-                            alt=""
-                            style={{
-                              position: "absolute",
-                              top: 0,
-                              left: 0,
-                              width: "100%",
-                              height: "100%",
-                              objectFit: (bgSettings.fit ?? "cover") as React.CSSProperties["objectFit"],
-                              objectPosition: bgSettings.position ?? "center center",
-                              opacity: bgSettings.opacity ?? 1,
-                              filter: (bgSettings.blur ?? 0) > 0
-                                ? `blur(${bgSettings.blur}px) brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`
-                                : `brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`,
-                            }}
-                          />
+            {/* When capturing for PDF, move pages off-screen so html2canvas can capture them without flashing */}
+            <div
+              className="editor-canvas flex-1 overflow-hidden flex flex-col"
+              style={pdfExporting ? { position: "fixed", left: "-9999px", top: 0, zIndex: -1 } : undefined}
+            >
+            <div ref={previewPagesContainerRef} data-print-source className="preview-pages-container flex-1 overflow-y-auto p-6 flex flex-col items-center gap-6">
+                {(() => {
+                  const contentPageCount = sections.length || 1;
+                  const pages: { type: "cover" | "content" | "back"; contentIndex?: number }[] = [];
+                  if (includeCover) pages.push({ type: "cover" });
+                  for (let i = 0; i < contentPageCount; i++) pages.push({ type: "content", contentIndex: i });
+                  if (includeBackPage) pages.push({ type: "back" });
+
+                  function renderPlacedElements(placed: PlacedElement[]) {
+                    return [...(placed ?? [])].sort((a, b) => a.zIndex - b.zIndex).map((element) => {
+                      const isIconify = element.type === "icon" && element.content.includes(":");
+                      const LucideIcon = !isIconify && element.type === "icon" ? GRAPHICS_ICONS.find((i) => i.name === element.content)?.icon : null;
+                      const iconColor = graphicsAccentColor;
+                      return (
+                        <div key={element.id} className="absolute flex items-center justify-center" style={{ left: element.position.x, top: element.position.y, width: element.size.width, height: element.size.height, zIndex: Math.max(1, element.zIndex) }}>
+                          {element.type === "icon" && isIconify ? <Icon icon={element.content} className="w-full h-full" style={{ color: iconColor }} /> : element.type === "icon" && LucideIcon ? <LucideIcon className="w-full h-full" style={{ color: iconColor }} /> : element.type === "image" ? (
+                            <img src={element.content} alt="" className="w-full h-full object-cover" style={{ opacity: element.imageSettings?.opacity ?? 1, filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)` }} />
+                          ) : element.type === "text" ? (
+                            <div className="w-full h-full overflow-auto p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color, textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word" }}>{element.content || ""}</div>
+                          ) : <span className="text-[#999] text-xs">?</span>}
                         </div>
+                      );
+                    });
+                  }
+
+                  return pages.map((page, pageIdx) => {
+                    if (page.type === "cover") {
+                      const coverPageBg = pageBackgrounds[0];
+                      const coverBgUrl = coverPageBg?.backgroundImage ?? null;
+                      const coverBgSettings = coverPageBg?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...coverPageBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS;
+                      const coverOverlay = coverPageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...coverPageBg.overlaySettings } : DEFAULT_OVERLAY;
+                      return (
                         <div
-                          className="absolute inset-0 z-[1] pointer-events-none"
-                          style={{ backgroundColor: overlay.color, opacity: overlay.opacity ?? 0.9 }}
-                          aria-hidden
-                        />
-                      </>
-                    ) : null}
-                    <div
-                      className={`relative z-10 product-editor-preview-layout ${product.format === "workbook" ? "format-workbook" : ""}`}
-                      style={{
-                        ...previewLayoutStyle,
-                        ...(bgUrl ? { backgroundColor: "transparent" } : {}),
-                        minHeight: "100%",
-                      }}
-                    >
-                      <h2 className="text-2xl font-bold border-b pb-2" style={{ color: templatePreset.titleColor }}>{product.title}</h2>
-                      <section>
-                        <h3 className="text-lg font-semibold" style={{ ...titleStyles, color: titleStyles?.color ?? templatePreset.headingColor }}>
-                          {section.title}
-                        </h3>
-                        {section.imageUrl?.trim() ? (
-                          <div className="my-4 flex justify-center">
-                            <img
-                              src={section.imageUrl}
-                              alt=""
-                              className="max-w-full max-h-80 object-contain rounded-lg shadow-md"
-                            />
-                          </div>
+                          key="cover"
+                          id="preview-page-0"
+                          data-pdf-page
+                          data-page
+                          data-page-type="cover"
+                          className="preview-page product-page relative shrink-0 rounded-lg overflow-hidden border border-gray-200 bg-white shadow-lg"
+                          style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, minHeight: CANVAS_HEIGHT, pageBreakAfter: "always", pageBreakInside: "avoid" }}
+                        >
+                          {coverBgUrl ? (
+                            <>
+                              <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden>
+                                <img src={coverBgUrl} alt="" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: (coverBgSettings.fit ?? "cover") as React.CSSProperties["objectFit"], objectPosition: coverBgSettings.position ?? "center center", opacity: coverBgSettings.opacity ?? 1, filter: (coverBgSettings.blur ?? 0) > 0 ? `blur(${coverBgSettings.blur}px) brightness(${coverBgSettings.brightness ?? 100}%) contrast(${coverBgSettings.contrast ?? 100}%) saturate(${coverBgSettings.saturation ?? 100}%)` : `brightness(${coverBgSettings.brightness ?? 100}%) contrast(${coverBgSettings.contrast ?? 100}%) saturate(${coverBgSettings.saturation ?? 100}%)` }} />
+                              </div>
+                              <div className="absolute inset-0 z-[1] pointer-events-none" style={{ backgroundColor: coverOverlay.color, opacity: coverOverlay.opacity ?? 0.9 }} aria-hidden />
+                            </>
+                          ) : (
+                            <div className="absolute inset-0 z-0 bg-gradient-to-b from-white to-gray-100" aria-hidden />
+                          )}
+                          <div className="absolute inset-0 pointer-events-none z-20">{renderPlacedElements(placedElementsByPage[0] ?? [])}</div>
+                          <div className="absolute left-0 right-0 bottom-0 py-2 text-center text-[11px] text-gray-500 pointer-events-none" style={{ opacity: 0.45, zIndex: 25 }} aria-hidden>Created with Content Flywheel</div>
+                        </div>
+                      );
+                    }
+                    if (page.type === "back") {
+                      const backIdx = totalPages - 1;
+                      const backPageBg = pageBackgrounds[backIdx];
+                      const backBgUrl = backPageBg?.backgroundImage ?? null;
+                      const backBgSettings = backPageBg?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...backPageBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS;
+                      const backOverlay = backPageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...backPageBg.overlaySettings } : DEFAULT_OVERLAY;
+                      return (
+                        <div
+                          key="back"
+                          id={`preview-page-${pageIdx}`}
+                          data-pdf-page
+                          data-page
+                          data-page-type="back"
+                          className="preview-page product-page relative shrink-0 rounded-lg overflow-hidden border border-gray-200 bg-white shadow-lg"
+                          style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, minHeight: CANVAS_HEIGHT, pageBreakAfter: "avoid", pageBreakInside: "avoid" }}
+                        >
+                          {backBgUrl ? (
+                            <>
+                              <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden>
+                                <img src={backBgUrl} alt="" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: (backBgSettings.fit ?? "cover") as React.CSSProperties["objectFit"], objectPosition: backBgSettings.position ?? "center center", opacity: backBgSettings.opacity ?? 1 }} />
+                              </div>
+                              <div className="absolute inset-0 z-[1] pointer-events-none" style={{ backgroundColor: backOverlay.color, opacity: backOverlay.opacity ?? 0.9 }} aria-hidden />
+                            </>
+                          ) : (
+                            <div className="absolute inset-0 z-0 bg-gradient-to-b from-white to-gray-100" aria-hidden />
+                          )}
+                          <div className="absolute inset-0 pointer-events-none z-20">{renderPlacedElements(placedElementsByPage[backIdx] ?? [])}</div>
+                          <div className="absolute left-0 right-0 bottom-0 py-2 text-center text-[11px] text-gray-500 pointer-events-none" style={{ opacity: 0.45, zIndex: 25 }} aria-hidden>Created with Content Flywheel</div>
+                        </div>
+                      );
+                    }
+                    const contentIdx = page.contentIndex!;
+                    const section = sections[contentIdx] ?? { id: `page-${contentIdx}`, title: "", content: "", contentHtml: "" };
+                    const pageBg = pageBackgrounds[contentIdx + 1];
+                    const bgUrl = pageBg?.backgroundImage ?? null;
+                    const bgSettings = pageBg?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...pageBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS;
+                    const overlay = pageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...pageBg.overlaySettings } : DEFAULT_OVERLAY;
+                    const titleStyles = product.designSettings?.textStyles?.[section.id]?.title;
+                    const bodyStyles = product.designSettings?.textStyles?.[section.id]?.body;
+                    return (
+                      <div
+                        key={section.id}
+                        id={`preview-page-${pageIdx}`}
+                        data-pdf-page
+                        data-page
+                        className="preview-page product-page relative shrink-0 rounded-lg overflow-hidden border border-gray-200 bg-white shadow-lg"
+                        style={{ width: CANVAS_WIDTH, minHeight: CANVAS_HEIGHT, pageBreakAfter: "always", pageBreakInside: "avoid" }}
+                      >
+                        {bgUrl ? (
+                          <>
+                            <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden>
+                              <img
+                                src={bgUrl}
+                                alt=""
+                                style={{
+                                  position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
+                                  objectFit: (bgSettings.fit ?? "cover") as React.CSSProperties["objectFit"],
+                                  objectPosition: bgSettings.position ?? "center center",
+                                  opacity: bgSettings.opacity ?? 1,
+                                  filter: (bgSettings.blur ?? 0) > 0
+                                    ? `blur(${bgSettings.blur}px) brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`
+                                    : `brightness(${bgSettings.brightness ?? 100}%) contrast(${bgSettings.contrast ?? 100}%) saturate(${bgSettings.saturation ?? 100}%)`,
+                                }}
+                              />
+                            </div>
+                            <div className="absolute inset-0 z-[1] pointer-events-none" style={{ backgroundColor: overlay.color, opacity: overlay.opacity ?? 0.9 }} aria-hidden />
+                          </>
                         ) : null}
                         <div
-                          className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2"
-                          style={{ ...bodyStyles, color: bodyStyles?.color ?? templatePreset.bodyColor }}
+                          className={`relative z-10 product-editor-preview-layout ${product.format === "workbook" ? "format-workbook" : ""}`}
+                          style={{ ...previewLayoutStyle, ...(bgUrl ? { backgroundColor: "transparent" } : {}), minHeight: "100%" }}
                         >
-                          {section.content || section.contentHtml ? (
-                            <div
-                              className="preview-content"
-                              dangerouslySetInnerHTML={{
-                                __html: section.contentHtml ?? cleanMarkdownToHtml(section.content ?? ""),
-                              }}
-                            />
-                          ) : (
-                            <span className="text-[#999]">(Empty)</span>
-                          )}
-                        </div>
-                      </section>
-                    </div>
-                    {/* Placed elements - per-page graphics */}
-                    <div className="absolute inset-0 pointer-events-none z-20">
-                      {[...(placedElementsByPage[pageIdx] ?? [])]
-                        .sort((a, b) => a.zIndex - b.zIndex)
-                        .map((element) => {
-                          const isIconify = element.type === "icon" && element.content.includes(":");
-                          const LucideIcon = !isIconify && element.type === "icon" ? GRAPHICS_ICONS.find((i) => i.name === element.content)?.icon : null;
-                          const iconColor = graphicsAccentColor;
-                          return (
-                            <div
-                              key={element.id}
-                              className="absolute flex items-center justify-center"
-                              style={{
-                                left: element.position.x,
-                                top: element.position.y,
-                                width: element.size.width,
-                                height: element.size.height,
-                                zIndex: Math.max(1, element.zIndex),
-                              }}
-                            >
-                              {element.type === "icon" && isIconify ? (
-                                <Icon icon={element.content} className="w-full h-full" style={{ color: iconColor }} />
-                              ) : element.type === "icon" && LucideIcon ? (
-                                <LucideIcon className="w-full h-full" style={{ color: iconColor }} />
-                              ) : element.type === "image" ? (
-                                <img
-                                  src={element.content}
-                                  alt=""
-                                  className="w-full h-full object-cover"
-                                  style={{
-                                    opacity: element.imageSettings?.opacity ?? 1,
-                                    filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)`,
-                                  }}
-                                />
-                              ) : element.type === "text" ? (
-                                <div
-                                  className="w-full h-full overflow-auto p-1 flex items-center"
-                                  style={{
-                                    fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize,
-                                    fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily,
-                                    color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color,
-                                    textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign,
-                                    wordBreak: "break-word",
-                                  }}
-                                >
-                                  {element.content || ""}
-                                </div>
+                          <h2 className="text-2xl font-bold border-b pb-2" style={{ color: templatePreset.titleColor }}>{product.title}</h2>
+                          <section>
+                            <h3 className="text-lg font-semibold" style={{ ...titleStyles, color: titleStyles?.color ?? templatePreset.headingColor }}>{section.title}</h3>
+                            {section.imageUrl?.trim() ? (
+                              <div className="my-4 flex justify-center">
+                                <img src={section.imageUrl} alt="" className="max-w-full max-h-80 object-contain rounded-lg shadow-md" />
+                              </div>
+                            ) : null}
+                            <div className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2" style={{ ...bodyStyles, color: bodyStyles?.color ?? templatePreset.bodyColor }}>
+                              {section.content || section.contentHtml ? (
+                                <div className="preview-content" dangerouslySetInnerHTML={{ __html: section.contentHtml ?? cleanMarkdownToHtml(section.content ?? "") }} />
                               ) : (
-                                <span className="text-[#999] text-xs">?</span>
+                                <span className="text-[#999]">(Empty)</span>
                               )}
                             </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-                  );
-                })}
+                          </section>
+                        </div>
+                        <div className="absolute inset-0 pointer-events-none z-20">
+                          {renderPlacedElements(placedElementsByPage[contentIdx + 1] ?? [])}
+                        </div>
+                        <div className="absolute left-0 right-0 bottom-0 py-2 text-center text-[11px] text-gray-500 pointer-events-none" style={{ opacity: 0.45, zIndex: 25 }} aria-hidden>Created with Content Flywheel</div>
+                      </div>
+                    );
+                  });
+                })()}
+            </div>
             </div>
           </div>
         </div>

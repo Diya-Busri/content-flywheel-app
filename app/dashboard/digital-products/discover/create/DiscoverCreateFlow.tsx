@@ -840,7 +840,7 @@ export default function DiscoverCreateFlow() {
         ) : (
           <>
             <Loader2 className="w-16 h-16 text-orange-500 animate-spin mb-6" />
-            <h2 className="text-xl font-semibold text-white mb-2">Generating your {productTitle}...</h2>
+            <h2 className="text-xl font-semibold text-white mb-2">Generating your {PRODUCT_FORMATS.find((f) => f.id === format)?.label ?? "Product"}...</h2>
             <div className="w-full max-w-md space-y-3 mt-6">
               {LOADING_STEPS.map((s, i) => (
                 <div key={i} className="flex items-center gap-3 text-sm">

@@ -12,17 +12,14 @@ export type ElevenLabsVoice = {
 };
 
 export const ELEVENLABS_VOICES: ElevenLabsVoice[] = [
-  { name: "Rachel", voiceId: "21m00Tcm4TlvDq8ikWAM", description: "Calm, narration", category: "Female" },
-  { name: "Drew", voiceId: "29vD33N1CtxCmqQRPOHJ", description: "Confident, conversational", category: "Male" },
-  { name: "Bella", voiceId: "EXAVITQu4vr4xnSDxMaL", description: "Soft, friendly", category: "Female" },
-  { name: "Antoni", voiceId: "ErXwobaYiN019PkySvjV", description: "Warm, storytelling", category: "Male" },
-  { name: "Elli", voiceId: "MF3mGyEYCl7XYWbV9V6O", description: "Young, energetic", category: "Female" },
-  { name: "Josh", voiceId: "TxGEqnHWrfWFTfGW9XjX", description: "Deep, authoritative", category: "Male" },
-  { name: "Arnold", voiceId: "VR6AewLTigWG4xSOukaG", description: "Bold, dramatic", category: "Male" },
-  { name: "Domi", voiceId: "AZnzlk1XvdvUeBnXmlld", description: "Strong, confident", category: "Female" },
-  { name: "Sam", voiceId: "yoZ06aMxZJJ28mfd3POQ", description: "Casual, relatable", category: "Male" },
-  { name: "Adam", voiceId: "pNInz6obpgDQGcFmaJgB", description: "Deep, professional", category: "Male" },
-  { name: "Clyde", voiceId: "2EiwWnXFnvU5JabPnv8n", description: "Character, versatile", category: "Character" },
+  { name: "Rachel", voiceId: "21m00Tcm4TlvDq8ikWAM", description: "Female, calm narration", category: "Female" },
+  { name: "Drew", voiceId: "29vD33N1CtxCmqQRPOHJ", description: "Male, confident", category: "Male" },
+  { name: "Bella", voiceId: "EXAVITQu4vr4xnSDxMaL", description: "Female, soft friendly", category: "Female" },
+  { name: "Antoni", voiceId: "ErXwobaYiN019PkySvjV", description: "Male, warm", category: "Male" },
+  { name: "Elli", voiceId: "MF3mGyEYCl7XYWbV9V6O", description: "Female, young energetic", category: "Female" },
+  { name: "Josh", voiceId: "TxGEqnHWrfWFTfGW9XjX", description: "Male, deep", category: "Male" },
+  { name: "Adam", voiceId: "pNInz6obpgDQGcFmaJgB", description: "Male, professional", category: "Male" },
+  { name: "Sam", voiceId: "yoZ06aMxZJJ28mfd3POQ", description: "Male, casual", category: "Male" },
 ];
 
 const VOICE_PREVIEW_TEXT = "Hey, check this out!";

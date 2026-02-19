@@ -3,13 +3,14 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and } from "drizzle-orm";
+import { createPdfPreviewToken } from "@/lib/pdf-preview-token";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// A4 at 96dpi: 210mm ≈ 794px, 297mm ≈ 1123px (so PDF matches editor and is standard A4)
-const CANVAS_WIDTH = 794;
-const CANVAS_HEIGHT = 1123;
+// Match editor canvas exactly (lib/product-print-constants: 800x1100)
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 1100;
 
 const DEFAULT_IMAGE = {
   opacity: 1,
@@ -334,8 +335,10 @@ function buildPageShell(product, pageIdx, pageCount, innerContentHtml) {
       (bgSettings.blur || 0) > 0
         ? `filter:blur(${bgSettings.blur}px) brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`
         : `filter:brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${bgSettings.fit};object-position:${bgSettings.position};opacity:${bgSettings.opacity};${filter}" /></div>`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${opacityVal};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
+    // Use CSS background with fixed attachment so each printed PDF page gets full-page coverage when section spans multiple pages
+    const bgStyle = `position:absolute;top:0;left:0;right:0;bottom:0;min-height:${CANVAS_HEIGHT}px;z-index:0;background-image:url(${escapeHtml(bgUrl)});background-size:cover;background-position:center;background-repeat:no-repeat;background-attachment:fixed;opacity:${bgSettings.opacity};${filter};-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+    html += `<div class="pdf-bg-layer" style="${bgStyle}"></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;min-height:${CANVAS_HEIGHT}px;z-index:1;background-color:${overlay.color};opacity:${opacityVal};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   }
 
   html += `<div class="section-content" style="position:relative;z-index:10;padding:60px;box-sizing:border-box;max-width:100%;min-height:${CANVAS_HEIGHT}px;font-family:${escapeHtml(fontFamily)};${bgUrl ? "background-color:transparent;" : "background-color:#fff;"}-webkit-print-color-adjust:exact;print-color-adjust:exact;">`;
@@ -401,8 +404,9 @@ function buildSectionBlock({ productTitle, section, pageBg, placedElements, grap
       (bgSettings.blur || 0) > 0
         ? `filter:blur(${bgSettings.blur}px) brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`
         : `filter:brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${bgSettings.fit};object-position:${bgSettings.position};opacity:${bgSettings.opacity};${filter}" /></div>`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${overlayOpacity(overlay)};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
+    const bgStyle = `position:absolute;top:0;left:0;right:0;bottom:0;min-height:${CANVAS_HEIGHT}px;z-index:0;background-image:url(${escapeHtml(bgUrl)});background-size:cover;background-position:center;background-repeat:no-repeat;background-attachment:fixed;opacity:${bgSettings.opacity};${filter};-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+    html += `<div class="pdf-bg-layer" style="${bgStyle}"></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;min-height:${CANVAS_HEIGHT}px;z-index:1;background-color:${overlay.color};opacity:${overlayOpacity(overlay)};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   }
 
   html += `<div class="section-content" style="position:relative;z-index:10;padding:60px;box-sizing:border-box;max-width:100%;min-height:${CANVAS_HEIGHT}px;font-family:${escapeHtml(fontFamily)};${bgUrl ? "background-color:transparent;" : "background-color:#fff;"}-webkit-print-color-adjust:exact;print-color-adjust:exact;">`;
@@ -464,8 +468,9 @@ function buildCoverPage(product, coverPageBg) {
       (bgSettings.blur || 0) > 0
         ? `filter:blur(${bgSettings.blur}px) brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`
         : `filter:brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${bgSettings.fit};object-position:${bgSettings.position};opacity:${bgSettings.opacity};${filter}" /></div>`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${overlayOpacity(overlay)};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
+    const bgStyle = `position:absolute;top:0;left:0;right:0;bottom:0;min-height:${CANVAS_HEIGHT}px;z-index:0;background-image:url(${escapeHtml(bgUrl)});background-size:cover;background-position:center;background-repeat:no-repeat;background-attachment:fixed;opacity:${bgSettings.opacity};${filter};-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+    html += `<div class="pdf-bg-layer" style="${bgStyle}"></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;min-height:${CANVAS_HEIGHT}px;z-index:1;background-color:${overlay.color};opacity:${overlayOpacity(overlay)};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   } else {
     const gradient = `linear-gradient(160deg, #ffffff 0%, ${graphicsAccentColor}12 40%, ${graphicsAccentColor}22 100%)`;
     html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;background:${gradient};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
@@ -518,8 +523,9 @@ function buildBackPage(product, coverPageBg) {
       (bgSettings.blur || 0) > 0
         ? `filter:blur(${bgSettings.blur}px) brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`
         : `filter:brightness(${bgSettings.brightness}%) contrast(${bgSettings.contrast}%) saturate(${bgSettings.saturation}%);`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><img src="${escapeHtml(bgUrl)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:${bgSettings.fit};object-position:${bgSettings.position};opacity:${bgSettings.opacity};${filter}" /></div>`;
-    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:1;background-color:${overlay.color};opacity:${overlayOpacity(overlay)};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
+    const bgStyle = `position:absolute;top:0;left:0;right:0;bottom:0;min-height:${CANVAS_HEIGHT}px;z-index:0;background-image:url(${escapeHtml(bgUrl)});background-size:cover;background-position:center;background-repeat:no-repeat;background-attachment:fixed;opacity:${bgSettings.opacity};${filter};-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+    html += `<div class="pdf-bg-layer" style="${bgStyle}"></div>`;
+    html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;min-height:${CANVAS_HEIGHT}px;z-index:1;background-color:${overlay.color};opacity:${overlayOpacity(overlay)};pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
   } else {
     const gradient = `linear-gradient(160deg, #ffffff 0%, ${graphicsAccentColor}12 40%, ${graphicsAccentColor}22 100%)`;
     html += `<div style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;background:${gradient};-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>`;
@@ -577,13 +583,14 @@ const BASE_PAGE_CSS = `
   table{border-collapse:collapse;margin:12px 0;width:100%;page-break-inside:avoid}table th,table td{border:1px solid #ddd;padding:8px 12px;text-align:left}
   @media print{
     *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color-adjust:exact !important}
+    /* Do not fix .pdf-bg-layer to 794x1123 here: it must fill the section-block so when a section spans multiple PDF pages the background extends to the bottom of the last page. */
   }
   .back-page,.back-page *{page-break-inside:avoid !important}
   .back-page{page-break-after:avoid !important}
 `;
 
 function getPageCss(extra = "") {
-  return BASE_PAGE_CSS + (extra ? `\n${extra}\n` : "") + `@page{size:A4;margin:0;}`;
+  return BASE_PAGE_CSS + (extra ? `\n${extra}\n` : "") + `@page{size:${CANVAS_WIDTH}px ${CANVAS_HEIGHT}px;margin:0;}`;
 }
 
 const FONT_LINKS =
@@ -964,9 +971,42 @@ function buildFullHtml(product, options = {}) {
 }
 
 /**
+ * Build full HTML for PDF preview (used by GET /api/products/[id]/pdf-preview and by POST when using page.goto).
+ * Fetches product, resolves images to data URLs, returns full document HTML.
+ */
+export async function getPdfPreviewHtml(productId, userId, options = {}) {
+  const [product] = await db
+    .select()
+    .from(productsTable)
+    .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId)));
+  if (!product) return null;
+
+  let baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  if (!baseUrl && process.env.VERCEL_URL) baseUrl = `https://${process.env.VERCEL_URL}`;
+  if (!baseUrl) baseUrl = "http://localhost:3000";
+  baseUrl = baseUrl.replace(/\/$/, "");
+
+  const imageUrls = collectImageUrls(product);
+  const urlToDataUrl = new Map();
+  await Promise.all(
+    imageUrls.map(async (url) => {
+      const dataUrl = await fetchUrlToDataUrl(url, baseUrl);
+      if (dataUrl) urlToDataUrl.set(url, dataUrl);
+    })
+  );
+  const resolvedProduct = resolveProductImages(product, urlToDataUrl);
+  return buildFullHtml(resolvedProduct, {
+    includeCover: options.includeCover !== false,
+    includeBackPage: options.includeBackPage !== false,
+  });
+}
+
+/**
  * POST /api/generate-pdf-puppeteer
- * Body: { productId: string, includeCover?: boolean, includeBackPage?: boolean }
- * Fetches product from DB, builds HTML, renders PDF with Puppeteer (setContent).
+ *
+ * Server-side PDF via Puppeteer (not used by the product editor; editor uses client-side html2canvas + jsPDF).
+ * Kept for server-side use if needed. Flow: auth → token → page.goto(pdf-preview) → wait → page.pdf().
+ * Env: NEXT_PUBLIC_APP_URL; optional PDF_PREVIEW_SECRET.
  */
 export async function POST(request) {
   let browser;
@@ -1000,16 +1040,8 @@ export async function POST(request) {
     if (!baseUrl) baseUrl = "http://localhost:3000";
     baseUrl = baseUrl.replace(/\/$/, "");
 
-    const imageUrls = collectImageUrls(product);
-    const urlToDataUrl = new Map();
-    await Promise.all(
-      imageUrls.map(async (url) => {
-        const dataUrl = await fetchUrlToDataUrl(url, baseUrl);
-        if (dataUrl) urlToDataUrl.set(url, dataUrl);
-      })
-    );
-    const resolvedProduct = resolveProductImages(product, urlToDataUrl);
-    const fullHtml = buildFullHtml(resolvedProduct, { includeCover, includeBackPage });
+    const token = createPdfPreviewToken(productId, userId, { includeCover, includeBackPage });
+    const previewUrl = `${baseUrl}/api/products/${encodeURIComponent(productId)}/pdf-preview?token=${encodeURIComponent(token)}`;
 
     const puppeteer = (await import("puppeteer")).default;
     browser = await puppeteer.launch({
@@ -1021,15 +1053,18 @@ export async function POST(request) {
     const page = await browser.newPage();
     page.setDefaultTimeout(60000);
     page.setDefaultNavigationTimeout(60000);
-    await page.setViewport({ width: CANVAS_WIDTH + 100, height: CANVAS_HEIGHT + 100 });
+    await page.setViewport({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT });
 
-    await page.setContent(fullHtml, {
+    await page.goto(previewUrl, {
       waitUntil: "networkidle0",
       timeout: 60000,
-      baseURL: baseUrl,
     });
+
+    // Wait for fonts (Google Fonts, etc.) so PDF text matches editor
     await page.evaluate(() => document.fonts?.ready);
-    // Wait for all images (background + content) to load so PDF includes them
+    await new Promise((r) => setTimeout(r, 300));
+
+    // Wait for all images (backgrounds, section images, placed images) to load
     await page.evaluate(async () => {
       const imgs = Array.from(document.querySelectorAll("img"));
       await Promise.all(
@@ -1043,7 +1078,7 @@ export async function POST(request) {
               const onDone = () => resolve();
               img.onload = onDone;
               img.onerror = onDone;
-              setTimeout(onDone, 15000);
+              setTimeout(onDone, 20000);
             })
         )
       );

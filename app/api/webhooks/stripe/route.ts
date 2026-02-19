@@ -133,6 +133,9 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 }
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
+  if (subscription.status !== "active" && subscription.status !== "trialing") {
+    return;
+  }
   const customerId = subscription.customer as string;
   const price = subscription.items.data[0]?.price;
   const interval = price?.recurring?.interval;
