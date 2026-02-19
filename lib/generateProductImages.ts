@@ -46,17 +46,17 @@ export async function generateProductImage(
     throw new Error("DALL-E did not return an image URL.");
   }
 
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.warn("[generateProductImages] BLOB_READ_WRITE_TOKEN not set. Returning temporary OpenAI URL.");
+    return url;
+  }
+
   const imageRes = await fetch(url);
   if (!imageRes.ok) {
     throw new Error(`Failed to fetch generated image: ${imageRes.status}`);
   }
   const arrayBuffer = await imageRes.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    console.warn("[generateProductImages] BLOB_READ_WRITE_TOKEN not set. Skipping image upload.");
-    return null;
-  }
 
   const folder = context.format ? `${context.format}-images` : "product-images";
   const ext = "png";

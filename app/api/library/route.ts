@@ -16,6 +16,7 @@ type LibraryItem = {
   videoId?: string;
   scriptId?: string;
   format?: string;
+  bundleId?: string | null;
   platform?: string;
   deletedAt?: string;
 };
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
     const typeFilter = searchParams.get("type") || "all";
     const showDeleted = searchParams.get("deleted") === "true";
 
-    let products: { id: string; title: string; status: string; format: string; createdAt: Date | null; deletedAt: Date | null }[] = [];
+    let products: { id: string; title: string; status: string; format: string; bundleId: string | null; createdAt: Date | null; deletedAt: Date | null }[] = [];
     let scripts: { id: string; title: string; status: string; createdAt: Date | null; videoId: string | null; productId: string | null; platform: string; deletedAt: Date | null }[] = [];
     let videos: { id: string; title: string; thumbnailUrl: string | null; status: string; createdAt: Date | null; productId: string | null; scriptId: string | null; deletedAt: Date | null }[] = [];
 
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
           title: productsTable.title,
           status: productsTable.status,
           format: productsTable.format,
+          bundleId: productsTable.bundleId,
           createdAt: productsTable.createdAt,
           deletedAt: productsTable.deletedAt,
         })
@@ -87,6 +89,7 @@ export async function GET(request: NextRequest) {
       status: (p as { status?: string }).status ?? "draft",
       createdAt: (p.createdAt as Date)?.toISOString?.() ?? String(p.createdAt),
       format: p.format,
+      bundleId: p.bundleId ?? undefined,
       ...(showDeleted && p.deletedAt && { deletedAt: (p.deletedAt as Date)?.toISOString?.() ?? String(p.deletedAt) }),
     }));
 
@@ -118,7 +121,9 @@ export async function GET(request: NextRequest) {
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
-    if (typeFilter !== "all") {
+    if (typeFilter === "bundles") {
+      items = items.filter((i) => i.type === "product" && i.bundleId != null);
+    } else if (typeFilter !== "all") {
       items = items.filter((i) => i.type === typeFilter || (typeFilter === "products" && i.type === "product"));
     }
 

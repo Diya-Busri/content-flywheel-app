@@ -36,9 +36,10 @@ function getOpenAI(): OpenAI {
   return new OpenAI({ apiKey: key });
 }
 
+/** Background-only prompt: no title or text in the image. Title is overlaid as HTML/CSS in the UI. */
 function buildPrompt(
   style: ThumbnailStyleId,
-  productTitle: string,
+  _productTitle: string,
   productType: string,
   niche: string
 ): string {
@@ -54,7 +55,7 @@ function buildPrompt(
             ? "spreadsheet template"
             : "ebook";
 
-  return `Professional digital product mockup for a ${typeLabel} called '${productTitle}' about ${niche || "digital products"}. Show an elegant 3D ${typeLabel} mockup on a premium background. ${styleDesc}. Modern, clean, marketplace-ready design. High quality, professional lighting, attractive colors. No text on the image.`;
+  return `Professional digital product mockup: elegant 3D ${typeLabel} mockup on a premium background, theme: ${niche || "digital products"}. ${styleDesc}. Modern, clean, marketplace-ready. High quality, professional lighting, attractive colors. No text, no words, no letters on the image.`;
 }
 
 export type GenerateThumbnailResult = { url: string; cached: boolean };

@@ -563,6 +563,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [photoTotalPages, setPhotoTotalPages] = useState(0);
   const [photoCurrentQuery, setPhotoCurrentQuery] = useState("");
   const [previewPhoto, setPreviewPhoto] = useState<{ id: string; url?: string; fullUrl?: string; thumb?: string } | null>(null);
+  const [addImageModalOpen, setAddImageModalOpen] = useState(false);
+  const [addImageTab, setAddImageTab] = useState<"stock" | "ai">("stock");
+  const [unsplashQuery, setUnsplashQuery] = useState("");
+  const [unsplashPhotos, setUnsplashPhotos] = useState<{ id: string; url?: string; fullUrl?: string; thumb?: string }[]>([]);
+  const [unsplashLoading, setUnsplashLoading] = useState(false);
+  const [unsplashPage, setUnsplashPage] = useState(1);
+  const [unsplashTotalPages, setUnsplashTotalPages] = useState(0);
+  const [aiImagePrompt, setAiImagePrompt] = useState("");
+  const [aiImageUrl, setAiImageUrl] = useState<string | null>(null);
+  const [aiImageLoading, setAiImageLoading] = useState(false);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [backgroundSettings, setBackgroundSettings] = useState<ImageSettings>(DEFAULT_IMAGE_SETTINGS);
   const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(DEFAULT_OVERLAY);
@@ -1328,6 +1338,79 @@ export default function ProductEditor({ productId }: { productId: string }) {
     if (photoTotalPages <= photoPage || isLoadingMorePhotos) return;
     searchPhotos(photoCurrentQuery || undefined, photoPage + 1, true);
   }, [photoPage, photoTotalPages, photoCurrentQuery, isLoadingMorePhotos, searchPhotos]);
+
+  const searchUnsplash = useCallback(
+    async (query?: string, page = 1) => {
+      const q = (query ?? unsplashQuery).trim() || "nature";
+      setUnsplashLoading(true);
+      try {
+        let res = await fetch(
+          `/api/unsplash-photos?query=${encodeURIComponent(q)}&per_page=24&page=${page}`
+        );
+        let data = (await res.json()) as {
+          photos?: { id: string; url?: string; fullUrl?: string; thumb?: string }[];
+          totalPages?: number;
+        };
+        if (!res.ok && res.status === 503) {
+          res = await fetch(
+            `/api/stock-photos?query=${encodeURIComponent(q)}&per_page=24&page=${page}`
+          );
+          data = (await res.json()) as typeof data;
+        }
+        if (!res.ok) throw new Error("Failed to fetch");
+        setUnsplashPhotos(data.photos ?? []);
+        setUnsplashPage(page);
+        setUnsplashTotalPages(data.totalPages ?? 0);
+      } catch {
+        setUnsplashPhotos([]);
+        toast({ title: "Could not load photos", description: "Configure UNSPLASH_ACCESS_KEY or PEXELS_API_KEY in env.", variant: "destructive" });
+      } finally {
+        setUnsplashLoading(false);
+      }
+    },
+    [unsplashQuery, toast]
+  );
+
+  const generateAiImage = useCallback(async () => {
+    const prompt = aiImagePrompt.trim();
+    if (!prompt) {
+      toast({ title: "Enter a prompt", variant: "destructive" });
+      return;
+    }
+    setAiImageLoading(true);
+    setAiImageUrl(null);
+    try {
+      const res = await fetch("/api/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Generation failed");
+      if (data.url) setAiImageUrl(data.url);
+      else throw new Error("No image URL returned");
+    } catch (err) {
+      toast({ title: "AI image failed", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
+    } finally {
+      setAiImageLoading(false);
+    }
+  }, [aiImagePrompt, toast]);
+
+  const addImageToCanvasAndClose = useCallback(
+    (url: string) => {
+      handleAddPhoto(url);
+      setAddImageModalOpen(false);
+      setAiImageUrl(null);
+      setAiImagePrompt("");
+    },
+    [handleAddPhoto]
+  );
+
+  useEffect(() => {
+    if (addImageModalOpen && addImageTab === "stock" && unsplashPhotos.length === 0 && !unsplashLoading) {
+      searchUnsplash("nature");
+    }
+  }, [addImageModalOpen, addImageTab]); // eslint-disable-line react-hooks/exhaustive-deps -- only run when modal/tab opens
 
   const selectedImageElement = selectedElement ? currentPageElements.find((el) => el.id === selectedElement && el.type === "image") : null;
 
@@ -2878,6 +2961,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </TabsContent>
               <TabsContent value="graphics" className="mt-0 p-4 space-y-6 overflow-y-auto">
                 <p className="text-xs text-gray-500 mb-3">Click to add to canvas. Drag to move and resize. Icons and graphics are on the current page only.</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setAddImageModalOpen(true)}
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  Add Image
+                </Button>
                 {sections.length > 1 && currentPageElements.length > 0 && (
                   <Button
                     type="button"
@@ -3501,6 +3593,120 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   )}
                   <p className="text-[10px] text-[#555] mt-1">Photos by Pexels (pexels.com)</p>
                 </div>
+
+                {/* Add Image modal: Stock (Unsplash) or AI-generated */}
+                <Dialog open={addImageModalOpen} onOpenChange={setAddImageModalOpen}>
+                  <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <ImageIcon className="w-5 h-5 text-orange-500" />
+                        Add Image
+                      </DialogTitle>
+                      <DialogDescription>
+                        Search free stock photos (Unsplash) or generate an image with AI. The image will be added to the current page and can be moved and resized on the canvas.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <Tabs value={addImageTab} onValueChange={(v) => setAddImageTab(v as "stock" | "ai")} className="flex-1 min-h-0 flex flex-col">
+                      <TabsList className="grid w-full grid-cols-2 mb-4">
+                        <TabsTrigger value="stock">Search stock (Unsplash)</TabsTrigger>
+                        <TabsTrigger value="ai">Generate AI image</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="stock" className="mt-0 flex-1 min-h-0 flex flex-col overflow-hidden">
+                        <div className="flex gap-2 mb-3">
+                          <Input
+                            placeholder="Search Unsplash..."
+                            value={unsplashQuery}
+                            onChange={(e) => setUnsplashQuery(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && searchUnsplash()}
+                            className="flex-1"
+                          />
+                          <Button type="button" onClick={() => searchUnsplash()} disabled={unsplashLoading}>
+                            {unsplashLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
+                          </Button>
+                        </div>
+                        {unsplashLoading ? (
+                          <div className="flex justify-center py-12">
+                            <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+                          </div>
+                        ) : unsplashPhotos.length > 0 ? (
+                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 overflow-y-auto max-h-[320px] pr-1">
+                            {unsplashPhotos.map((photo) => {
+                              const photoUrl = photo.fullUrl ?? photo.url ?? "";
+                              if (!photoUrl) return null;
+                              return (
+                                <button
+                                  key={photo.id}
+                                  type="button"
+                                  className="relative aspect-square rounded overflow-hidden border border-gray-200 hover:border-orange-500 focus:border-orange-500"
+                                  onClick={() => addImageToCanvasAndClose(photoUrl)}
+                                >
+                                  <img src={photo.thumb ?? photo.url} alt="" className="w-full h-full object-cover" />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500 py-8 text-center">Enter a search term and click Search. Free stock photos (Unsplash or Pexels).</p>
+                        )}
+                        {unsplashTotalPages > 1 && unsplashPhotos.length > 0 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mt-2 w-full"
+                            onClick={() => searchUnsplash(undefined, unsplashPage + 1)}
+                            disabled={unsplashLoading || unsplashPage >= unsplashTotalPages}
+                          >
+                            Load more
+                          </Button>
+                        )}
+                      </TabsContent>
+                      <TabsContent value="ai" className="mt-0 flex-1 min-h-0 flex flex-col">
+                        <div className="space-y-3">
+                          <Label>Describe the image you want</Label>
+                          <Textarea
+                            placeholder="e.g. Professional illustration of a person planning budget on a laptop, clean modern style"
+                            value={aiImagePrompt}
+                            onChange={(e) => setAiImagePrompt(e.target.value)}
+                            rows={3}
+                            className="resize-none"
+                          />
+                          <Button
+                            type="button"
+                            onClick={generateAiImage}
+                            disabled={aiImageLoading || !aiImagePrompt.trim()}
+                            className="w-full bg-orange-500 hover:bg-orange-600 gap-2"
+                          >
+                            {aiImageLoading ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Generating…
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-4 h-4" />
+                                Generate image
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        {aiImageUrl && (
+                          <div className="mt-4 space-y-2">
+                            <img src={aiImageUrl} alt="Generated" className="w-full max-h-64 object-contain rounded-lg border border-gray-200" />
+                            <Button
+                              type="button"
+                              onClick={() => addImageToCanvasAndClose(aiImageUrl!)}
+                              className="w-full bg-orange-500 hover:bg-orange-600"
+                            >
+                              Add to canvas
+                            </Button>
+                          </div>
+                        )}
+                      </TabsContent>
+                    </Tabs>
+                  </DialogContent>
+                </Dialog>
+
                 {/* Photo preview dialog */}
                 <Dialog open={!!previewPhoto} onOpenChange={(open) => !open && setPreviewPhoto(null)}>
                   <DialogContent className="max-w-2xl p-0 overflow-hidden">

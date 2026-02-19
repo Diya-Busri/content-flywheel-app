@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Package, Sparkles, Check, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Package, Sparkles, Check, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 const CARD_CLASS =
@@ -27,11 +27,14 @@ const BUNDLE_POLL_TIMEOUT_MS = 20 * 60 * 1000; // 20 min per product
 
 type BundleItemStatus = "pending" | "generating" | "done" | "failed";
 
+const AUTO_RETRY_DELAY_MS = 3000;
+
 type BundleItem = {
   productId: string;
   format: string;
   label: string;
   status: BundleItemStatus;
+  subFocus?: string;
 };
 
 async function pollProductUntilDone(
@@ -60,11 +63,37 @@ async function pollProductUntilDone(
   return last.isCompleted ? "done" : "failed";
 }
 
+/** Poll until done/failed; if failed, auto-retry once after 3s then poll again. */
+async function pollWithAutoRetry(
+  productId: string,
+  timeoutMs: number,
+  retryBody: { niche: string; productName: string; format: string; subFocus?: string }
+): Promise<"done" | "failed"> {
+  let result = await pollProductUntilDone(productId, timeoutMs);
+  if (result === "failed") {
+    await new Promise((r) => setTimeout(r, AUTO_RETRY_DELAY_MS));
+    const retryRes = await fetch(`/api/products/${productId}/process`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        retry: true,
+        niche: retryBody.niche,
+        productName: retryBody.productName,
+        format: retryBody.format,
+        subFocus: retryBody.subFocus ?? undefined,
+      }),
+    });
+    if (retryRes.ok) result = await pollProductUntilDone(productId, timeoutMs);
+  }
+  return result;
+}
+
 export default function DigitalProductsLanding() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [bundleOpen, setBundleOpen] = useState(false);
   const [topicInput, setTopicInput] = useState("");
   const [bundleItems, setBundleItems] = useState<BundleItem[]>([]);
+  const [bundleNiche, setBundleNiche] = useState("");
   const [bundleGenerating, setBundleGenerating] = useState(false);
   const [bundleComplete, setBundleComplete] = useState(false);
   const [bundleError, setBundleError] = useState<string | null>(null);
@@ -91,6 +120,7 @@ export default function DigitalProductsLanding() {
     }
     setBundleError(null);
     setBundleGenerating(true);
+    setBundleNiche(topic);
     try {
       const res = await fetch("/api/products/bundle", {
         method: "POST",
@@ -101,22 +131,33 @@ export default function DigitalProductsLanding() {
       if (!res.ok) {
         throw new Error(data.error ?? "Failed to start bundle");
       }
-      const items = (data.items ?? []).map((item: { productId: string; format: string; label: string }) => ({
+      const items = (data.items ?? []).map((item: { productId: string; format: string; label: string; subFocus?: string }) => ({
         ...item,
         status: "generating" as BundleItemStatus,
+        subFocus: item.subFocus,
       }));
       setBundleItems(items);
       const updateItem = (productId: string, status: BundleItemStatus) => {
         setBundleItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, status } : i)));
       };
-      await Promise.all(
+      const results = await Promise.all(
         items.map(async (item: BundleItem) => {
-          const result = await pollProductUntilDone(item.productId, BUNDLE_POLL_TIMEOUT_MS);
+          const result = await pollWithAutoRetry(
+            item.productId,
+            BUNDLE_POLL_TIMEOUT_MS,
+            { niche: topic, productName: item.label, format: item.format, subFocus: item.subFocus }
+          );
           updateItem(item.productId, result);
+          return result;
         })
       );
       setBundleComplete(true);
-      toast({ title: "Bundle complete", description: "All 8 products are in My Library." });
+      const failed = results.filter((r) => r === "failed").length;
+      if (failed > 0) {
+        toast({ title: "Partially complete", description: `${failed} format(s) failed. You can retry them below.` });
+      } else {
+        toast({ title: "Bundle complete", description: "All 8 products are in My Library." });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to generate bundle";
       setBundleError(msg);
@@ -126,10 +167,39 @@ export default function DigitalProductsLanding() {
     }
   };
 
+  const handleRetryBundleItem = async (item: BundleItem) => {
+    setBundleItems((prev) => prev.map((i) => (i.productId === item.productId ? { ...i, status: "generating" as BundleItemStatus } : i)));
+    try {
+      const res = await fetch(`/api/products/${item.productId}/process`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          retry: true,
+          niche: bundleNiche,
+          productName: item.label,
+          format: item.format,
+          subFocus: item.subFocus ?? undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error ?? "Retry failed");
+      }
+      const result = await pollProductUntilDone(item.productId, BUNDLE_POLL_TIMEOUT_MS);
+      setBundleItems((prev) => prev.map((i) => (i.productId === item.productId ? { ...i, status: result } : i)));
+      if (result === "done") toast({ title: "Done", description: `${item.label} generated successfully.` });
+      else toast({ title: "Retry failed", description: `${item.label} failed again. Try again later.`, variant: "destructive" });
+    } catch (err) {
+      setBundleItems((prev) => prev.map((i) => (i.productId === item.productId ? { ...i, status: "failed" as BundleItemStatus } : i)));
+      toast({ title: "Retry failed", description: err instanceof Error ? err.message : "Could not retry.", variant: "destructive" });
+    }
+  };
+
   const closeBundleDialog = () => {
     setBundleOpen(false);
     setTopicInput("");
     setBundleItems([]);
+    setBundleNiche("");
     setBundleComplete(false);
     setBundleError(null);
   };
@@ -301,7 +371,9 @@ export default function DigitalProductsLanding() {
               {bundleItems.length === 0
                 ? "Enter your niche or topic. We'll create all 8 product formats for the same topic."
                 : bundleComplete
-                  ? "All products are ready. They appear in My Library as a bundle."
+                  ? bundleItems.some((i) => i.status === "failed")
+                    ? "Partially complete. Retry failed formats below or view the rest in My Library."
+                    : "All products are ready. They appear in My Library as a bundle."
                   : "Generating each format. This may take several minutes."}
             </DialogDescription>
           </DialogHeader>
@@ -370,8 +442,18 @@ export default function DigitalProductsLanding() {
                     )}
                     {item.status === "failed" && (
                       <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
-                        <XCircle className="w-4 h-4" />
+                        <XCircle className="w-4 h-4 shrink-0" />
                         Failed
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 shrink-0"
+                          onClick={() => handleRetryBundleItem(item)}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                          Retry
+                        </Button>
                       </span>
                     )}
                   </li>

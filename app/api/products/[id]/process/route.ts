@@ -35,25 +35,37 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id: productId } = await params;
   if (!productId) return NextResponse.json({ error: "Product ID required" }, { status: 400 });
 
+  let existing: { id: string; status: string; format: string; title: string; niche: string; customizationOptions: unknown } | undefined;
   try {
     const body = await request.json().catch(() => ({}));
-    const niche = body.niche != null ? (typeof body.niche === "string" ? body.niche : (body.niche as { name?: string }).name ?? "") : "";
-    const product = body.product as { name?: string; included?: string; why?: string } | undefined;
-    const productName = (product?.name ?? body.productName ?? "").trim();
-    const productIncluded = product?.included ?? body.productIncluded ?? "";
-    const productWhy = product?.why ?? body.productWhy ?? "";
-    let productDescription = (typeof body.productDescription === "string" ? body.productDescription : "") || (productName ? `${productIncluded}. ${productWhy}` : "");
-    const [existing] = await db
+    const [existingRow] = await db
       .select({
         id: productsTable.id,
         status: productsTable.status,
         format: productsTable.format,
+        title: productsTable.title,
+        niche: productsTable.niche,
         customizationOptions: productsTable.customizationOptions,
       })
       .from(productsTable)
       .where(eq(productsTable.id, productId))
       .limit(1);
+    existing = existingRow;
 
+    const isRetry = body.retry === true && existing?.status === "failed";
+    if (isRetry) {
+      await db
+        .update(productsTable)
+        .set({ status: "generating", generationError: null, updatedAt: new Date() })
+        .where(eq(productsTable.id, productId));
+    }
+
+    const niche = body.niche != null ? (typeof body.niche === "string" ? body.niche : (body.niche as { name?: string }).name ?? "") : "";
+    const product = body.product as { name?: string; included?: string; why?: string } | undefined;
+    const productName = (product?.name ?? body.productName ?? (isRetry ? existing?.title : "") ?? "").trim();
+    const productIncluded = product?.included ?? body.productIncluded ?? "";
+    const productWhy = product?.why ?? body.productWhy ?? "";
+    let productDescription = (typeof body.productDescription === "string" ? body.productDescription : "") || (productName ? `${productIncluded}. ${productWhy}` : "");
     const formatFromBody = body.format != null ? String(body.format).trim() : "";
     const formatFromDb = existing?.format ?? "";
     const format = normalizeFormat(formatFromBody || formatFromDb, "ebook");
@@ -65,13 +77,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const ctas = Array.isArray(body.ctas) ? body.ctas : [];
     const hookTexts = hooks.map((h: string | { text?: string }) => (typeof h === "string" ? h : h?.text ?? ""));
     const ctaTexts = ctas.map((c: string | { text?: string }) => (typeof c === "string" ? c : c?.text ?? ""));
-    const nicheName = typeof niche === "string" ? niche : (niche as { name?: string })?.name ?? "";
+    const nicheName = (typeof niche === "string" ? niche : (niche as { name?: string })?.name ?? "") || (isRetry ? existing?.niche ?? "" : "") || "";
 
     if (!existing) {
       console.error("[products/process] Product not found:", productId);
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
-    if (existing.status !== "generating") {
+    if (!isRetry && existing.status !== "generating") {
       return NextResponse.json({ message: "Already processed" });
     }
 
@@ -82,6 +94,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           ? (existing.customizationOptions as GenerateProductContentParams["customizationOptions"])
           : undefined;
 
+    const subFocus = typeof body.subFocus === "string" ? body.subFocus.trim() : undefined;
     const params: GenerateProductContentParams = {
       productName,
       productDescription,
@@ -89,13 +102,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       productWhy,
       niche: nicheName,
       format,
+      subFocus: subFocus || undefined,
       hookTexts: hookTexts.filter(Boolean),
       ctaTexts: ctaTexts.filter(Boolean),
       customizationOptions,
     };
 
-    // 1. Generate outline only (fast), save so client can show "Generating chapter 1 of N"
-    const outline = await generateProductOutline(params);
+    // 1. Generate outline (retry once on failure so products are generated no matter what)
+    let outline: { id: string; title: string }[];
+    try {
+      outline = await generateProductOutline(params);
+    } catch (outlineErr) {
+      console.warn("[products/process] Outline failed, retrying once:", outlineErr);
+      outline = await generateProductOutline(params);
+    }
+    if (!outline?.length) {
+      outline = [{ id: "intro", title: productName ? `${productName} – Getting started` : "Introduction" }];
+    }
     const initialSections: SectionRow[] = outline.map((s, i) => ({
       id: s.id,
       title: s.title,
@@ -110,10 +133,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         updatedAt: new Date(),
       })
       .where(eq(productsTable.id, productId));
+    if (format !== "planner") {
+      console.log("[DIAG] OUTLINE step 4 — saved to DB", { productId, format, sectionCount: initialSections.length });
+    }
 
     const imageContext = { productName, niche: nicheName, format };
     const sectionsWithContent: SectionRow[] = [];
-    const wantAiImages = customizationOptions?.contentStyle === "text_with_ai_images";
+
+    /** Build a DALL-E prompt from section title and topic when the LLM did not return imagePrompt. */
+    function sectionImagePrompt(section: { id: string; title: string }, promptFromLlm: string | undefined): string {
+      if (typeof promptFromLlm === "string" && promptFromLlm.trim()) return promptFromLlm.trim();
+      return `Professional illustration for "${section.title}". Product: ${productName}. Audience: ${nicheName}. Clean, modern, high-quality, suitable for digital product. No text in image.`;
+    }
 
     for (let start = 0; start < outline.length; start += BATCH_SIZE) {
       const batch = outline.slice(start, start + BATCH_SIZE);
@@ -151,8 +182,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       const imageUrls = await Promise.all(
         batch.map((section, j) => {
-          const prompt = bodiesAndPrompts[j].imagePrompt?.trim();
-          if (!wantAiImages || !prompt) return Promise.resolve(undefined);
+          const prompt = sectionImagePrompt(section, bodiesAndPrompts[j].imagePrompt);
           return generateProductImage(prompt, imageContext).catch((err) => {
             console.warn("[products/process] Image gen failed for", section.id, err);
             return undefined;
@@ -167,7 +197,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           content: bodiesAndPrompts[j].bodyHtml,
           contentHtml: bodiesAndPrompts[j].bodyHtml,
           order: batchIndices[j] + 1,
-          imageUrl: imageUrls[j],
+          imageUrl: imageUrls[j] ?? undefined,
         });
       }
 
@@ -178,6 +208,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           updatedAt: new Date(),
         })
         .where(eq(productsTable.id, productId));
+      if (format !== "planner") {
+        console.log("[DIAG] BATCH saved to DB", { productId, format, sectionsCount: sectionsWithContent.length });
+      }
+    }
+
+    if (format === "planner") {
+      console.log("[products/process] Planner raw AI response (sections before final save):", JSON.stringify(sectionsWithContent.map((s) => ({ id: s.id, title: s.title, contentLength: (s.content ?? "").length, contentPreview: (s.content ?? "").slice(0, 200) })), null, 2));
     }
 
     const designSettings: Record<string, unknown> = {
@@ -202,21 +239,54 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         updatedAt: new Date(),
       })
       .where(eq(productsTable.id, productId));
+    if (format !== "planner") {
+      console.log("[DIAG] Final save to DB — status=draft", { productId, format, totalSections: sectionsWithContent.length });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[products/process] Error:", err);
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    const timestamp = new Date().toISOString();
+    const formatForLog = (existing as { format?: string } | undefined)?.format ?? "unknown";
+    const nicheForLog = (existing as { niche?: string } | undefined)?.niche ?? "";
+    console.error("[products/process] Generation error (saving fallback draft):", {
+      format: formatForLog,
+      niche: nicheForLog,
+      productId,
+      timestamp,
+      error: errorMessage,
+    });
+    const fallbackSections: SectionRow[] = [
+      {
+        id: "intro",
+        title: "Getting started",
+        content: "<p>Content generation hit a temporary issue. You can edit this product and add your own content, or use <strong>Regenerate</strong> in the editor to try again.</p>",
+        order: 1,
+      },
+    ];
+    const fallbackDesignSettings: Record<string, unknown> = {
+      template: "modern",
+      colors: { primary: "#FF6B35", secondary: "#004E89", accent: "#F7B32B", graphics: "#FF6B35" },
+      typography: { heading: "Inter", body: "Open Sans", size: 16 },
+    };
     try {
       await db
         .update(productsTable)
-        .set({ status: "failed", updatedAt: new Date() })
+        .set({
+          content: { sections: fallbackSections },
+          designSettings: fallbackDesignSettings,
+          status: "draft",
+          generationError: errorMessage.slice(0, 2000),
+          updatedAt: new Date(),
+        })
         .where(eq(productsTable.id, productId));
-    } catch {
-      // ignore
+    } catch (dbErr) {
+      console.error("[products/process] Could not save fallback draft:", dbErr);
+      return NextResponse.json(
+        { error: errorMessage },
+        { status: 500 }
+      );
     }
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Generation failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: true });
   }
 }

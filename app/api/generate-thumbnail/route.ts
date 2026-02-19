@@ -13,20 +13,20 @@ const STYLES = [
 ] as const;
 type StyleId = (typeof STYLES)[number];
 
+/** Background-only prompts: no text or title in the image. Title is overlaid as HTML/CSS in the UI. */
 const STYLE_PROMPTS: Record<StyleId, string> = {
   "modern-gradient":
-    "Professional digital product thumbnail with modern gradient background, title: [title], clean typography, no text in image, abstract shapes",
+    "Professional digital product thumbnail background, modern gradient, abstract shapes, clean and elegant, no text, no words, no letters",
   "clean-minimal":
-    "Minimalist product thumbnail, clean white background, subtle accents, professional, no text in image",
+    "Minimalist product thumbnail background, clean white, subtle shadows and accents, professional, no text, no words",
   "bold-dark":
-    "Bold dark themed product thumbnail, dramatic lighting, professional, no text in image",
+    "Bold dark product thumbnail background, dramatic lighting, premium feel, no text, no words",
   lifestyle:
-    "Warm lifestyle themed product thumbnail, cozy aesthetic, professional, no text in image",
+    "Warm lifestyle product thumbnail background, cozy aesthetic, flat lay or desk setting, no text, no words",
 };
 
-function buildPrompt(style: StyleId, title: string): string {
-  const base = STYLE_PROMPTS[style];
-  return base.replace("[title]", title || "Digital Product");
+function buildPrompt(style: StyleId): string {
+  return STYLE_PROMPTS[style];
 }
 
 export async function POST(request: NextRequest) {
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     const openai = new OpenAI({ apiKey });
-    const prompt = buildPrompt(style, title || productType);
+    const prompt = buildPrompt(style);
 
     const response = await openai.images.generate({
       model: "dall-e-3",

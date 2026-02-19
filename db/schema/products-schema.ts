@@ -15,7 +15,7 @@ export const productsTable = pgTable("products", {
   title: text("title").notNull(),
   niche: text("niche").notNull(),
   format: text("format").notNull(),
-  content: jsonb("content").$type<{ sections: Array<{ id: string; title: string; content: string; order: number }> }>().notNull(),
+  content: jsonb("content").$type<{ sections: Array<{ id: string; title: string; content: string; order: number; imageUrl?: string }> }>().notNull(),
   designSettings: jsonb("design_settings").$type<Record<string, unknown>>(),
   placedElements: jsonb("placed_elements").$type<unknown[]>(),
   /** Discovery customization (chapters, length, tone, format-specific options). Null for existing products before migration. */
@@ -23,6 +23,12 @@ export const productsTable = pgTable("products", {
   /** Marketing assets for marketplaces (Etsy, Gumroad, etc.): title, description, hashtags, seoKeywords, thumbnailUrl. */
   marketingAssets: jsonb("marketing_assets").$type<MarketingAssets | null>(),
   status: text("status").default("draft").notNull(),
+  /** When status is "failed", store the error message for logging and display. */
+  generationError: text("generation_error"),
+  /** Granular generation state: 'pending' | 'generating' | 'complete' | 'failed' | 'partial'. */
+  generationStatus: text("generation_status"),
+  /** When set, this product belongs to a bundle (same bundleId = same bundle). */
+  bundleId: uuid("bundle_id"),
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -35,6 +35,8 @@ export type GenerateProductContentParams = {
   productWhy?: string;
   niche: string;
   format: string;
+  /** When set (e.g. in a bundle), focus this product on a specific angle of the niche to avoid repetition. */
+  subFocus?: string;
   hookTexts: string[];
   ctaTexts: string[];
   customizationOptions?: CustomizationOptions;
@@ -50,6 +52,7 @@ const CONTEXT_BLOCK = (params: GenerateProductContentParams) =>
 - Why it sells / audience: ${params.productWhy || "N/A"}
 ${params.productDescription ? `- Description: ${params.productDescription}` : ""}
 NICHE: ${params.niche || "General audience"}
+${params.subFocus ? `SUB-FOCUS (this product must cover ONLY this angle of the niche; do not repeat the same content as other products): ${params.subFocus}` : ""}
 ${params.hookTexts?.length ? `HOOKS (weave into content): ${params.hookTexts.join(" | ")}` : ""}
 ${params.ctaTexts?.length ? `CTAs: ${params.ctaTexts.join(" | ")}` : ""}
 ${params.customizationOptions?.tone ? `TONE: Write in a ${params.customizationOptions.tone} tone throughout.` : ""}`;
@@ -80,43 +83,40 @@ const htmlRules = `OUTPUT RULES: Return body as clean HTML only. Use <p>, <stron
 
 function buildPrompt(params: GenerateProductContentParams): { prompt: string; useGpt4: boolean; maxTokens: number } {
   const { productName, format = "ebook", niche } = params;
+  const subTopic = params.subFocus?.trim() || niche || "the topic";
   let normalizedFormat = (format || "ebook").toLowerCase().trim();
   if (normalizedFormat === "course outline") normalizedFormat = "course";
   if (normalizedFormat === "checklist pack") normalizedFormat = "checklist";
   if (normalizedFormat === "notion template") normalizedFormat = "notion";
   const ctx = CONTEXT_BLOCK(params);
 
-  if (normalizedFormat === "workbook") {
-    return {
-      useGpt4: true,
-      maxTokens: 16000,
-      prompt: `Create a WORKBOOK (15-40 pages) titled "${productName}" for the ${niche} niche.
-
-WORKBOOK FORMAT ONLY: Interactive PDF with writing spaces. Structure: brief explanation, prompt pages, blank writing spaces, fill-in fields (underscores/boxes). Layout: big white spaces, lines, boxes, check prompts. MINIMAL THEORY — no long teaching paragraphs.
-
-${ctx}
-
-Each main section (intro, prompt1, prompt2, ch1, ch2...): (1) Very brief explanation (2-3 sentences), (2) A prompt or question, (3) <div class="writing-space"> with ___ or lines for writing, (4) Optional <ul class="checklist"><li>☐</li></ul>. Use [FILL IN] or ___ for user input. No 500-word paragraphs.
-
-Sections: outcome-promise, fast-start, framework, intro, then 4-8 prompt/writing sections (ids: prompt1, prompt2... or ch1, ch2...), disclaimer. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"..."}]}. Body = HTML with writing-space divs, ___ fill-ins, minimal text. ${htmlRules}`,
-    };
-  }
-
   if (normalizedFormat === "ebook") {
     return {
       useGpt4: true,
       maxTokens: 16000,
-      prompt: `Create an EBOOK/GUIDE (20-80 pages) titled "${productName}" for the ${niche} niche.
+      prompt: `Create an EBOOK titled "${productName}" for the ${niche} niche.
 
-EBOOK FORMAT: PDF, teaching/explanatory tone. Structure: cover (title only), intro, chapters with step-by-step learning, examples, case study, summary, CTA. Layout: big headers, clean margins, callout boxes (<div class="callout">). Do NOT use workbook fill-ins or writing spaces.
+Write a fully prose-based ebook on ${subTopic}. 6-8 chapters. Each chapter has: title, intro paragraph, 3-4 subheadings with written content, a real-world example, and a chapter summary. No fill-in sections. No checklists. Pure educational reading content.
 
 ${ctx}
 ${SELLABLE_STRUCTURE}
 ${CHAPTER_TITLES_RULE}
 
-CHAPTER STRUCTURE: Step-by-step learning, real examples, one case study in <div class="example-box"> or <div class="callout">, summary, CTA. Use <h2>, <h3> for big headers. 500-800 words per chapter. ${htmlRules}
+Use <h2>, <h3> for chapters and subheadings. Use <p> for paragraphs. You may use <div class="callout"> for key tips. No workbook fill-ins, no □ checklists, no <table>. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"...","imagePrompt":"..."}]}. ${htmlRules} No markdown.`,
+    };
+  }
 
-Sections: outcome-promise, fast-start, framework, intro, ch1, ch2, ch3, ch4, ch5, ch6, disclaimer. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"...","imagePrompt":"..."}]}. No markdown.`,
+  if (normalizedFormat === "workbook") {
+    return {
+      useGpt4: true,
+      maxTokens: 16000,
+      prompt: `Create a WORKBOOK titled "${productName}" for the ${niche} niche.
+
+Write a chapter-based workbook on ${subTopic}. 5-6 chapters. Each chapter must follow this exact structure: (1) Chapter title + 2-paragraph teaching intro explaining the concept, (2) Core lesson — 3-4 paragraphs going deeper with examples, (3) 3 exercises directly based on that chapter's content with instructions and fill-in response lines, (4) 3 reflection questions linking the chapter to the reader's personal situation, (5) Chapter summary and key takeaway. Exercises must relate directly to the chapter content, never generic.
+
+${ctx}
+
+Use <div class="writing-space"> with ___ or blank lines for written responses. Use <ul class="checklist"><li>☐</li></ul> for checklists. Sections: outcome-promise, fast-start, framework, intro, then ch1, ch2, ch3, ch4, ch5 (and ch6 if 6 chapters), disclaimer. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"..."}]}. Body = HTML with writing-space divs, ___ fill-ins. ${htmlRules}`,
     };
   }
 
@@ -124,92 +124,15 @@ Sections: outcome-promise, fast-start, framework, intro, ch1, ch2, ch3, ch4, ch5
     return {
       useGpt4: true,
       maxTokens: 16000,
-      prompt: `Create a GUIDE (20-80 pages) titled "${productName}" for the ${niche} niche.
+      prompt: `Create a GUIDE titled "${productName}" for the ${niche} niche.
 
-GUIDE FORMAT: Same as ebook — PDF, teaching/explanatory tone. Structure: intro, chapters with step-by-step learning, examples, case study, summary, CTA. Layout: big headers, clean margins, callout boxes. Use <div class="callout"> for key tips. No workbook fill-ins.
-
-${ctx}
-${SELLABLE_STRUCTURE}
-${CHAPTER_TITLES_RULE}
-
-Sections: outcome-promise, fast-start, framework, intro, step1, step2, step3, step4, step5, step6, disclaimer. Each step: <h2>Step N: Title</h2>, instructions, examples, callout. 500-700 words per step. ${htmlRules} Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"..."}]}.`,
-    };
-  }
-
-  if (normalizedFormat === "checklist" || normalizedFormat === "checklist pack") {
-    return {
-      useGpt4: true,
-      maxTokens: 8000,
-      prompt: `Create a CHECKLIST PACK (1-10 pages) for "${productName}" (${niche} niche).
-
-CHECKLIST PACK FORMAT ONLY: Minimal design. Tick boxes only. Simple checkbox lists using □ (empty box) with short action items. NO long paragraphs — only <ul class="checklist"><li>□ Action item.</li></ul>. 10-30 items per section.
-
-${ctx}
-
-Sections: outcome-promise, fast-start, framework, check1, check2, check3, check4, check5, disclaimer. Each check section: ONLY <ul class="checklist"><li>□ one short action line</li></ul>. No prose. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"..."}]}. ${htmlRules}`,
-    };
-  }
-
-  if (normalizedFormat === "journal") {
-    return {
-      useGpt4: true,
-      maxTokens: 12000,
-      prompt: `Create a JOURNAL for "${productName}" (${niche} niche).
-
-JOURNAL FORMAT: Aesthetic, lots of whitespace. Repeating daily structure. Each page: (1) Date field, (2) 2-3 reflection prompts, (3) writing space, (4) affirmation section. Mindset/reflective tone. No long essays.
-
-${ctx}
-${SELLABLE_STRUCTURE}
-
-Each content section (p1, p2, ...): Include "Date: _______________", 2-3 reflection prompts, <div class="writing-space"> for writing, and an affirmation. Use minimal HTML. Lots of whitespace. Return ONLY JSON: {"sections":[{"id":"outcome-promise","title":"...","body":"..."},{"id":"fast-start",...},{"id":"framework",...},{"id":"p1",...},...,{"id":"disclaimer",...}]}. ${htmlRules}`,
-    };
-  }
-
-  if (normalizedFormat === "course" || normalizedFormat === "course outline") {
-    return {
-      useGpt4: true,
-      maxTokens: 16000,
-      prompt: `Create a COURSE OUTLINE for "${productName}" (${niche} niche).
-
-Generate a course with 8–12 modules. Each module 500–700 words: module overview, 5–8 lesson titles, learning objectives, resources, and assignments. This is premium content users will pay $37–97 for.
+Write a practical how-to guide on ${subTopic}. Structure: introduction explaining the problem this guide solves, 5-7 numbered steps or sections each with a title, explanation, and concrete example, a quick reference summary section at the end. Conversational tone. Action-focused. No fill-in sections.
 
 ${ctx}
 ${SELLABLE_STRUCTURE}
 ${CHAPTER_TITLES_RULE}
 
-MODULE STRUCTURE (every module must follow this):
-1. Module overview (1–2 paragraphs)
-2. Learning objectives (3–5 bullet points in <ul>)
-3. Lesson breakdown: 5–8 lessons per module – each with title and 2–4 sentences (use <h3>Lessons</h3><ol><li>Lesson title: description.</li></ol>). Module and lesson titles must be benefit-driven.
-4. Resources / materials
-5. Assignments or activities
-6. Key takeaways (summary)
-
-Format: <h2>Module 1: Title</h2><h3>Lessons</h3><ol><li>Lesson 1: Description.</li></ol><h3>Learning objectives</h3><ul>...</ul><h3>Resources</h3>... ${htmlRules}
-
-IMAGE PROMPTS: For each module (mod1, mod2, …), add "imagePrompt": a 1-sentence DALL-E prompt for an educational illustration. Example: "Educational illustration of [topic], clean tech style" – match the module topic.
-
-Generate sections in this order:
-- outcome-promise, fast-start, framework (as in SELLABLE CONTENT)
-- 8–12 modules (ids: mod1, mod2, …). Each module body 500–700 words of HTML. Module titles benefit-driven.
-- disclaimer at the end.
-
-Return ONLY a JSON object: {"sections":[{"id":"outcome-promise","title":"...","body":"..."},{"id":"fast-start","title":"Quick Wins: 3 Things You Can Do Today","body":"..."},{"id":"framework","title":"...","body":"..."},{"id":"mod1","title":"Module 1: ...","body":"...","imagePrompt":"Educational illustration of [topic], clean tech style"},...,{"id":"disclaimer","title":"...","body":"..."}]}. No markdown, HTML only.`,
-    };
-  }
-
-  if (normalizedFormat === "planner" || normalizedFormat === "notebook") {
-    return {
-      useGpt4: true,
-      maxTokens: 12000,
-      prompt: `Create a PLANNER for "${productName}" (${niche} niche).
-
-PLANNER FORMAT ONLY: Execution-focused. Structure: monthly overview, weekly breakdown, task sections, goal trackers, progress trackers. Layout: calendars, time blocks, goal tracking. NO chapters, NO long paragraphs — only planning layouts.
-
-${ctx}
-${SELLABLE_STRUCTURE}
-
-Sections: outcome-promise, fast-start, framework, monthly-overview, weekly-breakdown, task-section, goal-tracker, progress-tracker, disclaimer. Each layout section: <table> for grids, <th> for days/times, [FILL IN] or ___. Time blocks, date placeholders, "Top 3", "To-do", "Notes". No prose. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"..."}]}. ${htmlRules}`,
+Sections: outcome-promise, fast-start, framework, intro, step1, step2, step3, step4, step5, step6 (and step7 if 7 steps), summary, disclaimer. Each step: <h2>Step N: Title</h2>, explanation, concrete example. ${htmlRules} Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"..."}]}.`,
     };
   }
 
@@ -217,51 +140,13 @@ Sections: outcome-promise, fast-start, framework, monthly-overview, weekly-break
     return {
       useGpt4: true,
       maxTokens: 16000,
-      prompt: `Generate a comprehensive step-by-step tutorial for creating a ${niche} spreadsheet in Microsoft Excel or Google Sheets. Product: "${productName}".
+      prompt: `Generate a SPREADSHEET TUTORIAL titled "${productName}" for the ${niche} niche.
+
+Generate a practical spreadsheet tutorial on ${subTopic}. Include: what the spreadsheet tracks and why, step-by-step setup instructions with actual column names, real formula examples like =AVERAGE(), =COUNTIF(), =IF() relevant to the topic, conditional formatting rules, 3 example use cases with realistic sample data, and a tips/troubleshooting section.
 
 ${ctx}
 
-For each section, write 600–800 words covering:
-1. What this section accomplishes
-2. Exact step-by-step instructions (e.g., "Click cell A1, type 'Date'")
-3. Formulas to use (e.g., =SUM(B2:B10), =AVERAGE(C:C))
-4. Formatting tips (borders, colors, conditional formatting)
-5. Advanced formulas (VLOOKUP, IF statements, COUNTIF, etc.)
-6. Creating charts and graphs from the data
-7. Setting up navigation between sheets (hyperlinks, tabs)
-8. Adding data validation (dropdowns, date pickers)
-9. Conditional formatting rules (highlight cells based on values)
-10. Protecting cells/sheets
-11. Creating print-friendly layouts
-12. Common mistakes to avoid
-13. Screenshot descriptions (what it should look like)
-
-IMAGE PROMPTS: For each section, add "imagePrompt": a 1-sentence DALL-E prompt. Example: "Professional screenshot-style illustration of organized spreadsheet layout" – match the section topic.
-
-Write in tutorial format with clear instructions. Use HTML tags: <h2>, <h3>, <p>, <ul>, <ol>, <strong>.
-
-Example structure:
-<h2>Setting Up Your Budget Tracker</h2>
-<p>In this section, you'll create the foundation of your budget spreadsheet...</p>
-<h3>Step 1: Create Column Headers</h3>
-<ol>
-  <li>Click on cell A1 and type 'Date'</li>
-  <li>Click on cell B1 and type 'Category'</li>
-  <li>Click on cell C1 and type 'Amount'</li>
-</ol>
-<h3>Step 2: Add Formulas</h3>
-<p>In cell D2, enter this formula: <strong>=SUM(C2:C100)</strong></p>
-<h3>Step 3: Add Advanced Formulas</h3>
-<p>In cell E2, create a conditional formula: <strong>=IF(C2>1000,"Over Budget","Within Budget")</strong></p>
-<p>This will automatically flag expenses that exceed your budget.</p>
-<h3>Step 4: Create a Summary Chart</h3>
-<ol>
-  <li>Select cells A1:C10</li>
-  <li>Click Insert > Chart > Pie Chart</li>
-  <li>Customize colors and labels in the Chart Design tab</li>
-</ol>
-
-Make each section 600–800 words with comprehensive Excel instruction. Include "imagePrompt" for each section: a 1-sentence DALL-E prompt for a spreadsheet screenshot-style illustration. Return 4–8 sections as valid JSON: {"sections":[{"id":"s1","title":"Section title","body":"<h2>...</h2><p>...</p>","imagePrompt":"Professional spreadsheet layout illustration"}]}. No markdown, HTML only in body.`,
+Write in tutorial format. Use HTML: <h2>, <h3>, <p>, <ul>, <ol>, <strong>. Include "imagePrompt" for each section: a 1-sentence DALL-E prompt for a spreadsheet screenshot-style illustration. Return 4-8 sections as valid JSON: {"sections":[{"id":"...","title":"...","body":"...","imagePrompt":"..."}]}. ${htmlRules} No markdown.`,
     };
   }
 
@@ -269,21 +154,80 @@ Make each section 600–800 words with comprehensive Excel instruction. Include 
     return {
       useGpt4: true,
       maxTokens: 12000,
-      prompt: `Create a NOTION TEMPLATE setup guide for "${productName}" (${niche} niche).
+      prompt: `Create a NOTION TEMPLATE for "${productName}" (${niche} niche).
 
-NOTION FORMAT ONLY: Structured Notion setup guide. Include these components: Dashboard, Calendar view, Table view, Revenue tracker, Weekly planning template. For each: databases, views, tags, filters, templates. Step-by-step how to set up in Notion.
+Generate a Notion template for ${subTopic} in markdown format. Include: template name and purpose, all pages and databases with their exact property names and types (text, select, multi-select, date, checkbox, number, relation), how pages link together, 3-5 realistic sample entries showing real data, and step-by-step usage instructions.
 
 ${ctx}
 
-Sections (use these ids): dashboard (Dashboard overview), calendar-view (Calendar view), table-view (Table view), revenue-tracker (Revenue tracker), weekly-planning (Weekly planning template), disclaimer. Each section body: HTML describing properties, views, filters, template blocks. 300-500 words per section. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"..."}]}. No workbook content.`,
+Sections: outcome-promise, fast-start, framework, template-overview, pages-databases, sample-entries, usage-instructions, disclaimer. Body may use markdown or HTML describing structure, properties, and usage. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"..."}]}. ${htmlRules}`,
     };
   }
 
-  // Default: ebook-style with full length (templates, generic content)
+  if (normalizedFormat === "checklist" || normalizedFormat === "checklist pack") {
+    return {
+      useGpt4: true,
+      maxTokens: 8000,
+      prompt: `Create a CHECKLIST PACK for "${productName}" (${niche} niche).
+
+Generate 6 standalone checklists on ${subTopic}. Each checklist has: a unique title targeting a specific situation, one sentence of context, 15-20 checkbox items that are concrete actions not vague concepts. No long explanations. Each item must be immediately actionable.
+
+${ctx}
+
+Use <ul class="checklist"><li>☐ Action item.</li></ul>. Sections: outcome-promise, fast-start, framework, check1, check2, check3, check4, check5, check6, disclaimer. Each check section: unique title, one sentence context, then 15-20 ☐ items. No prose. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"..."}]}. ${htmlRules}`,
+    };
+  }
+
+  if (normalizedFormat === "journal") {
+    return {
+      useGpt4: true,
+      maxTokens: 14000,
+      prompt: `Create a JOURNAL titled "${productName}" for the ${niche} niche.
+
+Generate a guided journal on ${subTopic}. Include: a brief welcome/how to use section, 30 daily journal entries each with a unique prompt, a weekly reflection page every 7 days with 4-5 deeper questions, and a monthly review page with prompts for tracking growth. Prompts must be specific to ${subTopic}, not generic. Include fill-in lines throughout.
+
+${ctx}
+${SELLABLE_STRUCTURE}
+
+Sections: outcome-promise, fast-start, framework, welcome, then daily1-daily30 (or grouped), weekly-reflection pages, monthly-review, disclaimer. Use <div class="writing-space"> and ___ for fill-in lines. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"..."}]}. ${htmlRules}`,
+    };
+  }
+
+  if (normalizedFormat === "planner" || normalizedFormat === "notebook") {
+    return {
+      useGpt4: true,
+      maxTokens: 12000,
+      prompt: `Create a PLANNER titled "${productName}" for the ${niche} niche.
+
+Generate a planner focused on ${subTopic}. Include: monthly overview table (weeks, focus area, top 3 goals, mood/progress tracker, notes), weekly spread (7 days with morning/midday/evening blocks), daily task page (top 3 priorities, to-do list, time blocks, progress tracker), habit tracker grid (30 days), and monthly reflection page. Mostly tables and grids. Minimal prose.
+
+${ctx}
+${SELLABLE_STRUCTURE}
+
+Sections: outcome-promise, fast-start, framework, monthly-overview, weekly-spread, daily-task-page, habit-tracker, monthly-reflection, disclaimer. Use <table> for grids, <th> for headers, ___ or [FILL IN] for user input. No explanatory paragraphs. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"..."}]}. ${htmlRules}`,
+    };
+  }
+
+  if (normalizedFormat === "course" || normalizedFormat === "course outline") {
+    return {
+      useGpt4: true,
+      maxTokens: 16000,
+      prompt: `Create a COURSE OUTLINE titled "${productName}" for the ${niche} niche.
+
+Generate a structured course outline on ${subTopic}. Include: course title, learning objectives, 4-5 modules each with a module title, description, 4-5 lesson titles with one-line descriptions, and key takeaways. Format like a curriculum document.
+
+${ctx}
+${SELLABLE_STRUCTURE}
+
+Each module = <h2>Module N: Title</h2>, short description, <h3>Learning objectives</h3><ul>...</ul>, <h3>Lessons</h3><ol><li>Lesson title: one-line description.</li></ol>, <h3>Key takeaways</h3>. Sections: outcome-promise, fast-start, framework, mod1, mod2, mod3, mod4, mod5, disclaimer. Add "imagePrompt" per module. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"...","imagePrompt":"..."}]}. ${htmlRules}`,
+    };
+  }
+
+  // Default: ebook-style with full length (unknown format)
   return {
     useGpt4: true,
     maxTokens: 16000,
-    prompt: `Generate full CONTENT for "${productName}" (${niche} niche). Format: ${format}.
+    prompt: `Generate full CONTENT for "${productName}" (${niche} niche). Format: ${format}. Focus on: ${subTopic}.
 
 This is premium content users will pay $37–97 for. Make it extremely valuable and comprehensive. Write comprehensive, in-depth content that fills 2–3 full pages per section.
 ${ctx}
@@ -366,20 +310,20 @@ export async function generateProductOutline(params: GenerateProductContentParam
       formatStructureNote = "WORKBOOK: 15-40 pages. Structure: brief explanation, prompt pages, blank writing spaces, fill-in fields. Minimal theory.";
       break;
     case "notion":
-      sectionCountHint = "dashboard, calendar-view, table-view, revenue-tracker, weekly-planning, disclaimer";
-      formatStructureNote = "NOTION TEMPLATE: Structured setup guide. Include: Dashboard, Calendar view, Table view, Revenue tracker, Weekly planning template. Databases, views, tags, filters, templates.";
+      sectionCountHint = "outcome-promise, fast-start, framework, template-overview, pages-databases, sample-entries, usage-instructions, disclaimer";
+      formatStructureNote = "NOTION TEMPLATE: Template name and purpose, all pages and databases with property names and types, how pages link, 3-5 sample entries, step-by-step usage instructions.";
       break;
     case "checklist":
-      sectionCountHint = `outcome-promise, fast-start, framework, check1, check2, check3, check4, check5, disclaimer`;
-      formatStructureNote = "CHECKLIST PACK: 1-10 pages. Minimal design. Tick boxes (□) and action items only. No long paragraphs.";
+      sectionCountHint = `outcome-promise, fast-start, framework, check1, check2, check3, check4, check5, check6, disclaimer`;
+      formatStructureNote = "CHECKLIST PACK: 6 standalone checklists. Each has a unique title, one sentence context, 15-20 checkbox action items. No long explanations.";
       break;
     case "journal":
-      sectionCountHint = `outcome-promise, fast-start, framework, p1, p2, p3, p4, p5, p6, p7, p8, disclaimer`;
-      formatStructureNote = "JOURNAL: Repeating daily structure. Each page: Date field, 2-3 reflection prompts, writing space, affirmation section. Mindset/reflective tone. Lots of whitespace.";
+      sectionCountHint = `outcome-promise, fast-start, framework, welcome, daily1, daily2, daily3, daily4, daily5, daily6, daily7, weekly1, daily8, daily9, daily10, daily11, daily12, daily13, daily14, weekly2, daily15, daily16, daily17, daily18, daily19, daily20, daily21, weekly3, daily22, daily23, daily24, daily25, daily26, daily27, daily28, weekly4, daily29, daily30, monthly-review, disclaimer`;
+      formatStructureNote = "JOURNAL: Welcome/how to use, 30 daily entry sections (daily1-daily30), 4 weekly reflection sections (weekly1-weekly4), monthly-review. Prompts specific to sub-topic. Fill-in lines throughout.";
       break;
     case "planner":
-      sectionCountHint = "outcome-promise, fast-start, framework, monthly-overview, weekly-breakdown, task-section, goal-tracker, progress-tracker, disclaimer";
-      formatStructureNote = "PLANNER: Execution-focused. Structure: monthly overview, weekly breakdown, task sections, goal trackers, progress trackers. Calendars, time blocks. No chapters or paragraphs.";
+      sectionCountHint = "outcome-promise, fast-start, framework, monthly-overview, weekly-spread, daily-task-page, habit-tracker, monthly-reflection, disclaimer";
+      formatStructureNote = "PLANNER: Monthly overview table, weekly spread (7 days, morning/midday/evening), daily task page, habit tracker grid (30 days), monthly reflection. Mostly tables and grids. Minimal prose.";
       break;
     case "course":
       sectionCountHint = `outcome-promise, fast-start, framework, ${courseModules} modules, disclaimer`;
@@ -427,6 +371,18 @@ ${(normalizedFormat === "ebook" || normalizedFormat === "guide" || normalizedFor
   : ""}
 Section titles must be benefit-driven and match the format. No markdown, no explanation.`;
 
+  const isNonPlanner = normalizedFormat !== "planner";
+  if (isNonPlanner) {
+    console.log("[DIAG] OUTLINE step 1 — prompt sent to OpenAI", { format: normalizedFormat, promptLength: prompt.length, promptPreview: prompt.slice(0, 200) });
+  }
+
+  // Minimal Ebook diagnostic: minimal prompt to isolate parser vs API
+  const useMinimalEbook =
+    normalizedFormat === "ebook" && process.env.DIAG_EBOOK_MINIMAL === "1";
+  const outlinePrompt = useMinimalEbook
+    ? `Return ONLY this exact JSON, no other text: {"sections":[{"id":"outcome-promise","title":"Outcome"},{"id":"fast-start","title":"Quick Wins"},{"id":"framework","title":"Framework"},{"id":"intro","title":"Intro"},{"id":"ch1","title":"Chapter 1"},{"id":"disclaimer","title":"Disclaimer"}]}`
+    : prompt;
+
   // gpt-4o-mini: outline/table-of-contents only, low complexity
   const completion = await withRetry429(
     () =>
@@ -434,9 +390,9 @@ Section titles must be benefit-driven and match the format. No markdown, no expl
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: "You are a digital product outline expert. Return only valid JSON with a 'sections' array of {id, title}. No other keys." },
-          { role: "user", content: prompt },
+          { role: "user", content: outlinePrompt },
         ],
-        temperature: 0.6,
+        temperature: useMinimalEbook ? 0 : 0.6,
         max_tokens: 4000,
       }),
     {
@@ -445,12 +401,38 @@ Section titles must be benefit-driven and match the format. No markdown, no expl
     }
   );
   const raw = completion.choices[0]?.message?.content?.trim() || "";
+  if (isNonPlanner) {
+    console.log("[DIAG] OUTLINE step 2 — raw response from OpenAI", {
+      format: normalizedFormat,
+      rawLength: raw.length,
+      rawPreview: raw.slice(0, 600),
+      useMinimalEbook: !!useMinimalEbook,
+    });
+    if (useMinimalEbook) {
+      console.log("[DIAG] DIAG_EBOOK_MINIMAL: full raw response (parser test) —", raw);
+    }
+  }
   const jsonStr = raw.replace(/^```json\s*/i, "").replace(/\s*```\s*$/i, "").trim();
-  const parsed = JSON.parse(jsonStr) as { sections?: Array<{ id?: string; title?: string }> };
+  let parsed: { sections?: Array<{ id?: string; title?: string }> };
+  try {
+    parsed = JSON.parse(jsonStr) as { sections?: Array<{ id?: string; title?: string }> };
+  } catch (parseErr) {
+    if (isNonPlanner) {
+      console.error("[DIAG] OUTLINE step 3 — JSON.parse FAILED", {
+        format: normalizedFormat,
+        parseError: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        jsonStrPreview: jsonStr.slice(0, 800),
+      });
+    }
+    throw parseErr;
+  }
   let sections: OutlineSection[] = (parsed.sections || []).map((s, i) => ({
     id: typeof s.id === "string" && s.id ? s.id : `section-${i + 1}`,
     title: typeof s.title === "string" && s.title ? s.title : `Section ${i + 1}`,
   }));
+  if (isNonPlanner) {
+    console.log("[DIAG] OUTLINE step 3 — parsed into sections", { format: normalizedFormat, sectionCount: sections.length, sectionIds: sections.map((s) => s.id) });
+  }
   if (sections.length === 0) throw new Error("AI returned no outline sections");
 
   // Enforce requested chapter count so the model cannot override it (e.g. return 8 when user asked for 4)
@@ -643,6 +625,11 @@ ${imageLine}
 
 Return ONLY valid JSON: {"body": "<p>...</p>", "imagePrompt": "optional one sentence only if requested"}. No code fences.`;
 
+  const isNonPlannerSection = normalizedFormat !== "planner";
+  if (isNonPlannerSection) {
+    console.log("[DIAG] SECTION step 1 — prompt sent to OpenAI", { format: normalizedFormat, sectionId: section.id, promptLength: prompt.length });
+  }
+
   const systemMessage =
     normalizedFormat === "checklist"
       ? "You write checklist pack content. Output ONLY checkbox lists (□) and short action items. No long paragraphs. Return only valid JSON with body and optional imagePrompt. No markdown."
@@ -673,10 +660,38 @@ Return ONLY valid JSON: {"body": "<p>...</p>", "imagePrompt": "optional one sent
   );
 
   const raw = completion.choices[0]?.message?.content?.trim() || "";
+  if (isNonPlannerSection) {
+    console.log("[DIAG] SECTION step 2 — raw response from OpenAI", {
+      format: normalizedFormat,
+      sectionId: section.id,
+      rawLength: raw.length,
+      rawPreview: raw.slice(0, 400),
+    });
+  }
   const jsonStr = raw.replace(/^```json\s*/i, "").replace(/\s*```\s*$/i, "").trim();
-  const parsed = JSON.parse(jsonStr) as { body?: string; imagePrompt?: string };
+  let parsed: { body?: string; imagePrompt?: string };
+  try {
+    parsed = JSON.parse(jsonStr) as { body?: string; imagePrompt?: string };
+  } catch (parseErr) {
+    if (isNonPlannerSection) {
+      console.error("[DIAG] SECTION step 3 — JSON.parse FAILED", {
+        format: normalizedFormat,
+        sectionId: section.id,
+        parseError: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        jsonStrPreview: jsonStr.slice(0, 500),
+      });
+    }
+    throw parseErr;
+  }
   const body = typeof parsed.body === "string" && parsed.body ? parsed.body : "";
   const imagePrompt =
     typeof parsed.imagePrompt === "string" && parsed.imagePrompt.trim() ? parsed.imagePrompt.trim() : undefined;
+  if (isNonPlannerSection) {
+    console.log("[DIAG] SECTION step 3 — parsed, saving (caller will persist to DB)", {
+      format: normalizedFormat,
+      sectionId: section.id,
+      bodyLength: body.length,
+    });
+  }
   return { body, imagePrompt };
 }

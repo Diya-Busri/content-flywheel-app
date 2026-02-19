@@ -3,15 +3,21 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 
-const BUNDLE_FORMATS: { format: string; label: string }[] = [
-  { format: "ebook", label: "Ebook" },
-  { format: "workbook", label: "Workbook" },
-  { format: "planner", label: "Planner" },
-  { format: "journal", label: "Journal" },
-  { format: "checklist", label: "Checklist Pack" },
-  { format: "course", label: "Course Outline" },
-  { format: "notion", label: "Notion Template" },
-  { format: "spreadsheet", label: "Spreadsheet Guide" },
+/**
+ * Sub-topic map per bundle: each of the 8 products gets a distinct angle of the niche
+ * so no two products cover the same content. The assigned sub-topic is passed into each
+ * product's generation prompt. Example (Mental Wellness): Ebook = mindset theory,
+ * Workbook = emotional processing, Spreadsheet = mood/habit tracking, etc.
+ */
+const BUNDLE_FORMATS: { format: string; label: string; subFocus: string }[] = [
+  { format: "ebook", label: "Ebook", subFocus: "mindset and resilience theory" },
+  { format: "workbook", label: "Workbook", subFocus: "emotional processing" },
+  { format: "spreadsheet", label: "Spreadsheet Tutorial", subFocus: "mood and habit tracking" },
+  { format: "guide", label: "Guide", subFocus: "building a daily routine" },
+  { format: "notion", label: "Notion Template", subFocus: "system organisation and templates" },
+  { format: "checklist", label: "Checklist Pack", subFocus: "daily and weekly routines" },
+  { format: "journal", label: "Journal", subFocus: "daily self-reflection practice" },
+  { format: "planner", label: "Planner", subFocus: "goal setting and scheduling" },
 ];
 
 const designSettings = {
@@ -43,10 +49,11 @@ export async function POST(request: Request) {
       (typeof request.url === "string" ? new URL(request.url).origin : null) ||
       "http://localhost:3000";
 
+    const bundleId = crypto.randomUUID();
     const productIds: string[] = [];
     const items: { productId: string; format: string; label: string }[] = [];
 
-    for (const { format, label } of BUNDLE_FORMATS) {
+    for (const { format, label, subFocus } of BUNDLE_FORMATS) {
       const title = `${niche} - ${label}`;
       const [inserted] = await db
         .insert(productsTable)
@@ -60,6 +67,7 @@ export async function POST(request: Request) {
           placedElements: [],
           customizationOptions: null,
           status: "generating",
+          bundleId,
         })
         .returning({ id: productsTable.id });
 
@@ -69,13 +77,14 @@ export async function POST(request: Request) {
       }
 
       productIds.push(inserted.id);
-      items.push({ productId: inserted.id, format, label });
+      items.push({ productId: inserted.id, format, label, subFocus });
 
       const processBody = {
         niche,
         product: { name: title, included: "", why: "" },
         productName: title,
         format,
+        subFocus,
         hooks: [],
         ctas: [],
       };

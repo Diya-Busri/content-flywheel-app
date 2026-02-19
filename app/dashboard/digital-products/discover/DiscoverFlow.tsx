@@ -156,7 +156,12 @@ const CTA_EXAMPLES = [
   "DM me 'SAVE' for instant access",
 ];
 
-const PROGRESS_VALUES = [17, 33, 50, 67, 83, 100];
+const TOTAL_STEPS = 7;
+
+/** Progress bar percentage for the current step (1–7). Step 1 ≈ 14%, step 7 = 100%. */
+function progressForStep(step: number): number {
+  return Math.round((Math.min(Math.max(step, 1), TOTAL_STEPS) / TOTAL_STEPS) * 100);
+}
 
 const PRODUCT_FORMATS = [
   { id: "ebook", label: "Ebook/Guide", icon: BookOpen, desc: "PDF with chapters & TOC" },
@@ -168,8 +173,6 @@ const PRODUCT_FORMATS = [
   { id: "journal", label: "Journal", icon: NotebookPen, desc: "Guided prompts & writing space" },
   { id: "planner", label: "Planner", icon: Calendar, desc: "Lined pages for planning & notes" },
 ] as const;
-
-const TOTAL_STEPS = 7;
 
 const GENERATE_STEPS = [
   "Creating outline...",
@@ -288,9 +291,11 @@ export default function DiscoverFlow() {
   const [timeoutStillGenerating, setTimeoutStillGenerating] = useState<string | null>(null);
   const [showVideoPromptModal, setShowVideoPromptModal] = useState(false);
   const [bundleGenerating, setBundleGenerating] = useState(false);
-  const [bundleItems, setBundleItems] = useState<{ productId: string; format: string; label: string; status: "generating" | "done" | "failed" }[]>([]);
+  const [bundleItems, setBundleItems] = useState<{ productId: string; format: string; label: string; status: "generating" | "done" | "failed"; subFocus?: string }[]>([]);
+  const [bundleNiche, setBundleNiche] = useState<string>("");
   const [bundleComplete, setBundleComplete] = useState(false);
   const [bundleError, setBundleError] = useState<string | null>(null);
+  const [bundleDialogDismissed, setBundleDialogDismissed] = useState(false);
 
   // Step 1: must select goal (experienced/beginner) + interests min 3 chars OR "I'm not sure"
   const canProceedStep1 = !!goal && (interests.trim().length >= 3 || dontKnowYet);
@@ -1009,6 +1014,8 @@ export default function DiscoverFlow() {
   };
 
   const BUNDLE_POLL_TIMEOUT_MS = 20 * 60 * 1000;
+  const AUTO_RETRY_DELAY_MS = 3000;
+
   const pollBundleProductUntilDone = async (productId: string): Promise<"done" | "failed"> => {
     const start = Date.now();
     const fetchStatus = async (): Promise<{ isCompleted: boolean; isFailed: boolean }> => {
@@ -1030,6 +1037,30 @@ export default function DiscoverFlow() {
     return last.isCompleted ? "done" : "failed";
   };
 
+  /** Poll until done/failed; if failed, auto-retry once after 3s then poll again. */
+  const pollBundleProductWithAutoRetry = async (
+    productId: string,
+    retryBody: { niche: string; productName: string; format: string; subFocus?: string }
+  ): Promise<"done" | "failed"> => {
+    let result = await pollBundleProductUntilDone(productId);
+    if (result === "failed") {
+      await new Promise((r) => setTimeout(r, AUTO_RETRY_DELAY_MS));
+      const retryRes = await fetch(`/api/products/${productId}/process`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          retry: true,
+          niche: retryBody.niche,
+          productName: retryBody.productName,
+          format: retryBody.format,
+          subFocus: retryBody.subFocus ?? undefined,
+        }),
+      });
+      if (retryRes.ok) result = await pollBundleProductUntilDone(productId);
+    }
+    return result;
+  };
+
   const startFullBundle = async () => {
     const nicheName = selectedNiche?.name ?? customNiche.trim();
     if (!nicheName) {
@@ -1037,7 +1068,9 @@ export default function DiscoverFlow() {
       return;
     }
     setBundleError(null);
+    setBundleDialogDismissed(false);
     setBundleGenerating(true);
+    setBundleNiche(nicheName);
     try {
       const res = await fetch("/api/products/bundle", {
         method: "POST",
@@ -1046,19 +1079,34 @@ export default function DiscoverFlow() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Failed to start bundle");
-      const items = (data.items ?? []).map((item: { productId: string; format: string; label: string }) => ({ ...item, status: "generating" as const }));
+      const items = (data.items ?? []).map((item: { productId: string; format: string; label: string; subFocus?: string }) => ({
+        ...item,
+        status: "generating" as const,
+        subFocus: item.subFocus,
+      }));
       setBundleItems(items);
       const updateBundleItem = (productId: string, status: "done" | "failed") => {
         setBundleItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, status } : i)));
       };
-      await Promise.all(
-        items.map(async (item: { productId: string; format: string; label: string; status: "generating" | "done" | "failed" }) => {
-          const result = await pollBundleProductUntilDone(item.productId);
+      const results = await Promise.all(
+        items.map(async (item: { productId: string; format: string; label: string; status: "generating" | "done" | "failed"; subFocus?: string }) => {
+          const result = await pollBundleProductWithAutoRetry(item.productId, {
+            niche: nicheName,
+            productName: item.label,
+            format: item.format,
+            subFocus: item.subFocus,
+          });
           updateBundleItem(item.productId, result);
+          return result;
         })
       );
       setBundleComplete(true);
-      toast({ title: "Bundle complete", description: "All 8 products are in My Library." });
+      const failed = results.filter((r) => r === "failed").length;
+      if (failed > 0) {
+        toast({ title: "Partially complete", description: `${failed} format(s) failed. You can retry them below.` });
+      } else {
+        toast({ title: "Bundle complete", description: "All 8 products are in My Library." });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to generate bundle";
       setBundleError(msg);
@@ -1068,7 +1116,36 @@ export default function DiscoverFlow() {
     }
   };
 
+  const handleRetryBundleItem = async (item: { productId: string; format: string; label: string; subFocus?: string }) => {
+    setBundleItems((prev) => prev.map((i) => (i.productId === item.productId ? { ...i, status: "generating" as const } : i)));
+    try {
+      const res = await fetch(`/api/products/${item.productId}/process`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          retry: true,
+          niche: bundleNiche,
+          productName: item.label,
+          format: item.format,
+          subFocus: item.subFocus ?? undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error ?? "Retry failed");
+      }
+      const result = await pollBundleProductUntilDone(item.productId);
+      setBundleItems((prev) => prev.map((i) => (i.productId === item.productId ? { ...i, status: result } : i)));
+      if (result === "done") toast({ title: "Done", description: `${item.label} generated successfully.` });
+      else toast({ title: "Retry failed", description: `${item.label} failed again. Try again later.`, variant: "destructive" });
+    } catch (err) {
+      setBundleItems((prev) => prev.map((i) => (i.productId === item.productId ? { ...i, status: "failed" as const } : i)));
+      toast({ title: "Retry failed", description: err instanceof Error ? err.message : "Could not retry.", variant: "destructive" });
+    }
+  };
+
   const closeBundleDialog = () => {
+    setBundleDialogDismissed(true);
     setBundleItems([]);
     setBundleComplete(false);
     setBundleError(null);
@@ -1443,9 +1520,9 @@ export default function DiscoverFlow() {
           )}
         </div>
 
-        {/* Progress bar */}
-        <div className="mb-8">
-          <Progress value={PROGRESS_VALUES[step - 1]} className="h-2 bg-[#2A2A2A]" />
+        {/* Progress bar: fills proportionally from step 1 (~14%) to step 7 (100%), brand amber #F59E0B */}
+        <div className="mb-8 [&>div>div]:bg-[#F59E0B]">
+          <Progress value={progressForStep(step)} className="h-2 bg-[#2A2A2A]" />
         </div>
 
         {/* STEP 1 */}
@@ -2362,28 +2439,6 @@ export default function DiscoverFlow() {
               </Button>
             </div>
 
-            <div className="mb-6">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto border-orange-500/50 text-orange-500 hover:bg-orange-500/10 hover:border-orange-500 gap-2"
-                onClick={startFullBundle}
-                disabled={bundleGenerating}
-              >
-                {bundleGenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Generating all 8…
-                  </>
-                ) : (
-                  <>
-                    <Layers className="w-4 h-4" />
-                    Generate all 8 formats at once →
-                  </>
-                )}
-              </Button>
-            </div>
-
             {productFormat === "course" && (
               <Card className={`${cardClass} mb-6`}>
                 <CardContent className="p-5">
@@ -2428,7 +2483,7 @@ export default function DiscoverFlow() {
             )}
 
             {/* Full bundle progress dialog */}
-            <Dialog open={bundleGenerating || bundleItems.length > 0} onOpenChange={(open) => !open && bundleComplete && closeBundleDialog()}>
+            <Dialog open={((bundleGenerating || bundleItems.length > 0) && !bundleDialogDismissed)} onOpenChange={(open) => !open && closeBundleDialog()}>
               <DialogContent className="sm:max-w-md bg-[#1A1A1A] border-[#2A2A2A]">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 text-white">
@@ -2439,7 +2494,9 @@ export default function DiscoverFlow() {
                     {bundleItems.length === 0
                       ? "Starting all 8 formats…"
                       : bundleComplete
-                        ? "All products are in My Library."
+                        ? bundleItems.some((i) => i.status === "failed")
+                          ? "Partially complete. Retry failed formats below or view the rest in My Library."
+                          : "All products are in My Library."
                         : "Generating each format. This may take several minutes."}
                   </DialogDescription>
                 </DialogHeader>
@@ -2468,8 +2525,18 @@ export default function DiscoverFlow() {
                         )}
                         {item.status === "failed" && (
                           <span className="flex items-center gap-1.5 text-red-400">
-                            <XCircle className="w-4 h-4" />
+                            <XCircle className="w-4 h-4 shrink-0" />
                             Failed
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] hover:text-white shrink-0"
+                              onClick={() => handleRetryBundleItem(item)}
+                            >
+                              <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                              Retry
+                            </Button>
                           </span>
                         )}
                       </li>
@@ -2835,7 +2902,7 @@ export default function DiscoverFlow() {
       </div>
 
       {/* Full bundle progress dialog (from Step 6) */}
-      <Dialog open={bundleGenerating || bundleItems.length > 0} onOpenChange={(open) => !open && closeBundleDialog()}>
+      <Dialog open={((bundleGenerating || bundleItems.length > 0) && !bundleDialogDismissed)} onOpenChange={(open) => !open && closeBundleDialog()}>
         <DialogContent className="sm:max-w-md bg-[#1A1A1A] border-[#2A2A2A] text-white">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-white">
@@ -2846,7 +2913,9 @@ export default function DiscoverFlow() {
               {bundleItems.length === 0
                 ? "Starting all 8 formats for your topic…"
                 : bundleComplete
-                  ? "All products are ready. They appear in My Library."
+                  ? bundleItems.some((i) => i.status === "failed")
+                    ? "Partially complete. Retry failed formats below or view the rest in My Library."
+                    : "All products are ready. They appear in My Library."
                   : "Generating each format. This may take several minutes."}
             </DialogDescription>
           </DialogHeader>
@@ -2878,8 +2947,18 @@ export default function DiscoverFlow() {
                   )}
                   {item.status === "failed" && (
                     <span className="flex items-center gap-1.5 text-red-400">
-                      <XCircle className="w-4 h-4" />
+                      <XCircle className="w-4 h-4 shrink-0" />
                       Failed
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] hover:text-white shrink-0"
+                        onClick={() => handleRetryBundleItem(item)}
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                        Retry
+                      </Button>
                     </span>
                   )}
                 </li>

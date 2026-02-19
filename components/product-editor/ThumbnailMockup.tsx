@@ -106,6 +106,7 @@ export function ThumbnailMockup({
   if (isDalleMode) {
     const dalleInner = (
       <div ref={innerRef} style={containerStyle} className={className}>
+        {/* AI-generated background only; no text in the image */}
         <div
           style={{
             position: "absolute",
@@ -115,15 +116,42 @@ export function ThumbnailMockup({
             backgroundPosition: "center",
           }}
         />
-        {/* Subtle gradient overlay so text is readable on any background */}
+        {/* Product title overlay: bottom-left, real HTML/CSS text, semi-transparent dark bar for readability */}
         <div
           style={{
             position: "absolute",
-            inset: 0,
-            background: "linear-gradient(135deg, rgba(0,0,0,0.5) 0%, transparent 50%, transparent 70%, rgba(0,0,0,0.35) 100%)",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            padding: "24px 32px 28px 32px",
+            background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.5) 60%, transparent 100%)",
             pointerEvents: "none",
           }}
-        />
+        >
+          <div
+            style={{
+              display: "inline-block",
+              maxWidth: "85%",
+              padding: "14px 20px 14px 20px",
+              background: "rgba(0,0,0,0.55)",
+              borderRadius: 8,
+            }}
+          >
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 42,
+                fontWeight: 700,
+                lineHeight: 1.2,
+                color: "#ffffff",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {productTitle}
+            </h2>
+          </div>
+        </div>
+        {/* Optional badge top-right */}
         <div
           style={{
             position: "absolute",
@@ -139,48 +167,6 @@ export function ThumbnailMockup({
           }}
         >
           DIGITAL DOWNLOAD
-        </div>
-        <div
-          style={{
-            position: "absolute",
-            left: 80,
-            right: 80,
-            bottom: 80,
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 56,
-              fontWeight: 800,
-              lineHeight: 1.15,
-              color: "#fff",
-              letterSpacing: "-0.02em",
-              marginBottom: 24,
-              textShadow: "0 2px 20px rgba(0,0,0,0.5)",
-            }}
-          >
-            {productTitle}
-          </h2>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-            {sellingPoints.map((text) => (
-              <span
-                key={text}
-                style={{
-                  display: "inline-block",
-                  padding: "10px 18px",
-                  background: "rgba(255,255,255,0.2)",
-                  color: "#fff",
-                  fontSize: 16,
-                  fontWeight: 600,
-                  borderRadius: 8,
-                  textShadow: "0 1px 4px rgba(0,0,0,0.3)",
-                }}
-              >
-                {text}
-              </span>
-            ))}
-          </div>
         </div>
       </div>
     );

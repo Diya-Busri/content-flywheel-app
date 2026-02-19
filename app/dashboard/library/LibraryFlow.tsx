@@ -47,8 +47,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 
-type LibraryTab = "products" | "scripts" | "all" | "trash";
+type LibraryTab = "products" | "scripts" | "all" | "bundles" | "trash";
 
 type LibraryItem = {
   id: string;
@@ -61,6 +62,8 @@ type LibraryItem = {
   videoId?: string;
   scriptId?: string;
   platform?: string;
+  format?: string;
+  bundleId?: string;
 };
 
 function formatDate(iso: string): string {
@@ -93,6 +96,41 @@ function typeIcon(type: string) {
   }
 }
 
+const FORMAT_LABELS: Record<string, string> = {
+  ebook: "Ebook",
+  guide: "Guide",
+  workbook: "Workbook",
+  planner: "Planner",
+  journal: "Journal",
+  checklist: "Checklist Pack",
+  course: "Course Outline",
+  notion: "Notion Template",
+  template: "Template",
+  spreadsheet: "Spreadsheet Guide",
+};
+
+function formatLabel(format: string | undefined): string {
+  if (!format) return "";
+  return FORMAT_LABELS[format] ?? format.charAt(0).toUpperCase() + format.slice(1);
+}
+
+/** Group bundle products by bundleId; returns array of { bundleId, bundleName, items }. */
+function groupByBundle(items: LibraryItem[]): { bundleId: string; bundleName: string; items: LibraryItem[] }[] {
+  const byId = new Map<string, LibraryItem[]>();
+  for (const item of items) {
+    if (item.type !== "product" || !item.bundleId) continue;
+    const list = byId.get(item.bundleId) ?? [];
+    list.push(item);
+    byId.set(item.bundleId, list);
+  }
+  return Array.from(byId.entries()).map(([bundleId, list]) => {
+    const first = list[0];
+    const title = first?.title ?? "";
+    const bundleName = title.replace(/\s*-\s*(Ebook|Workbook|Planner|Journal|Checklist Pack|Course Outline|Notion Template|Spreadsheet Guide)\s*$/i, "").trim() || title;
+    return { bundleId, bundleName, items: list };
+  });
+}
+
 export default function LibraryFlow() {
   const [tab, setTab] = useState<LibraryTab>("all");
   const [items, setItems] = useState<LibraryItem[]>([]);
@@ -106,7 +144,7 @@ export default function LibraryFlow() {
     setLoading(true);
     try {
       const isTrash = tab === "trash";
-      const typeParam = isTrash ? "all" : tab === "all" ? "all" : tab;
+      const typeParam = isTrash ? "all" : tab === "bundles" ? "bundles" : tab === "all" ? "all" : tab;
       const url = isTrash
         ? `/api/library?type=all&deleted=true`
         : `/api/library?type=${typeParam}`;
@@ -215,6 +253,7 @@ export default function LibraryFlow() {
           <TabsList className="bg-gray-200 dark:bg-[#1A1A1A] border border-[#E5E7EB] dark:border-[#2A2A2A]">
             <TabsTrigger value="all" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">All items</TabsTrigger>
             <TabsTrigger value="products" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Digital Products</TabsTrigger>
+            <TabsTrigger value="bundles" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Bundles</TabsTrigger>
             <TabsTrigger value="scripts" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Scripts</TabsTrigger>
             <TabsTrigger value="trash" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Trash</TabsTrigger>
           </TabsList>
@@ -291,6 +330,17 @@ export default function LibraryFlow() {
                       Deleted items appear here. Restore them or delete permanently.
                     </p>
                   </>
+                ) : tab === "bundles" ? (
+                  <>
+                    <Package className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
+                    <p className="text-gray-600 dark:text-gray-400 mb-2">No bundles yet</p>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Generate a full bundle from Digital Products (one topic → all 8 formats) to see it here.
+                    </p>
+                    <Button asChild className="bg-orange-500 hover:bg-orange-600">
+                      <Link href="/dashboard/digital-products">Digital Products</Link>
+                    </Button>
+                  </>
                 ) : (
                   <>
                     <Package className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
@@ -310,6 +360,92 @@ export default function LibraryFlow() {
                 )}
               </CardContent>
             </Card>
+          ) : tab === "bundles" ? (
+            <div className="space-y-10">
+              {groupByBundle(filtered).map(({ bundleId, bundleName, items: bundleItems }) => (
+                <section key={bundleId}>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{bundleName}</h2>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {bundleItems.map((item) => (
+                      <Card key={item.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
+                        <div className="aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center">
+                          {item.thumbnail ? (
+                            <img src={item.thumbnail} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            typeIcon(item.type)
+                          )}
+                        </div>
+                        <CardHeader className="pb-2 pt-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <CardTitle className="text-base truncate text-gray-900 dark:text-white">{item.title}</CardTitle>
+                              {item.type === "product" && item.format && (
+                                <Badge variant="secondary" className="mt-1.5 text-xs font-normal bg-orange-500/10 text-orange-600 dark:text-orange-400 border-0">
+                                  {formatLabel(item.format)}
+                                </Badge>
+                              )}
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                                  <MoreVertical className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                  <Link href={getEditLink(item)}>
+                                    <Pencil className="w-4 h-4 mr-2" />
+                                    Edit
+                                  </Link>
+                                </DropdownMenuItem>
+                                {item.type === "product" && (
+                                  <DropdownMenuItem asChild>
+                                    <Link href={`/dashboard/digital-products/scripts?productId=${encodeURIComponent(item.id)}`}>
+                                      <Video className="w-4 h-4 mr-2" />
+                                      Create Videos
+                                    </Link>
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={() => navigator.clipboard.writeText(item.title)}>
+                                  <Copy className="w-4 h-4 mr-2" />
+                                  Duplicate
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => handleDelete(item, false)}>
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Move to Trash
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                          <CardDescription className="text-xs">
+                            {formatDate(item.createdAt)} • {statusLabel(item.status)}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-0 flex gap-2">
+                          <Button variant="outline" size="sm" className="flex-1" asChild>
+                            <Link href={getEditLink(item)}>
+                              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                              Open
+                            </Link>
+                          </Button>
+                          {item.type === "product" && (
+                            <Button variant="outline" size="sm" asChild title="Create Videos">
+                              <Link href={`/dashboard/digital-products/scripts?productId=${encodeURIComponent(item.id)}`}>
+                                <Video className="w-3.5 h-3.5" />
+                              </Link>
+                            </Button>
+                          )}
+                          <Button variant="outline" size="sm">
+                            <Download className="w-3.5 h-3.5" />
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((item) => (
@@ -327,7 +463,14 @@ export default function LibraryFlow() {
                   </div>
                   <CardHeader className="pb-2 pt-3">
                     <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-base truncate text-gray-900 dark:text-white">{item.title}</CardTitle>
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="text-base truncate text-gray-900 dark:text-white">{item.title}</CardTitle>
+                        {item.type === "product" && item.format && (
+                          <Badge variant="secondary" className="mt-1.5 text-xs font-normal bg-orange-500/10 text-orange-600 dark:text-orange-400 border-0">
+                            {formatLabel(item.format)}
+                          </Badge>
+                        )}
+                      </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
