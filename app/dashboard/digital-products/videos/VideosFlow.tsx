@@ -336,6 +336,9 @@ export default function VideosFlow() {
                       Play 5-second sample
                     </Button>
                   </div>
+                  <p className="text-xs text-[#A0A0A0] mt-2">
+                    Default voices from ElevenLabs are shown. Add custom voices in your ElevenLabs account under Voices — they&apos;ll appear here automatically.
+                  </p>
                 </div>
                 <div>
                   <Label className="text-white">Voice Speed: {speed[0].toFixed(1)}x</Label>

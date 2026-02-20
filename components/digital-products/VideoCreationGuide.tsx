@@ -342,19 +342,10 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
   const fullScriptText = `${script.hook}\n\n${script.body}\n\n${script.cta}`;
 
+  /** Full script text split by scene for voiceover. Uses full hook/body/cta (no truncation). */
   const getSceneTexts = useCallback((): string[] => {
     const n = scenes.length;
     if (n === 0) return [];
-    const overlayTexts = scenes.map((s) => {
-      const raw = (s as { textOverlay?: unknown }).textOverlay;
-      if (raw == null) return null;
-      const objs: TextOverlayObj[] = typeof raw === "string" ? [{ exactText: raw }] : Array.isArray(raw) ? (raw as TextOverlayObj[]) : [raw as TextOverlayObj];
-      const t = objs.map((o) => o.exactText).filter(Boolean).join(" ");
-      return t || null;
-    });
-    if (overlayTexts.every(Boolean)) {
-      return overlayTexts as string[];
-    }
     if (n === 1) return [fullScriptText];
     if (n === 2) return [script.hook, script.cta];
     const parts: string[] = [script.hook];
@@ -1252,7 +1243,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   AI Voiceover (ElevenLabs)
                 </CardTitle>
                 <CardDescription className="text-gray-600 dark:text-[#A0A0A0]">
-                  Choose a voice, adjust style, then generate. Your last selected voice is saved as default.
+                  Choose a voice, adjust style, then generate. Your last selected voice is saved as default. To see more voices, add custom ones in your ElevenLabs account under Voices — they appear automatically on the customization page.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
