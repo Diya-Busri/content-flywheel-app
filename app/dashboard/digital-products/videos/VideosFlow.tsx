@@ -95,15 +95,25 @@ export default function VideosFlow() {
     let cancelled = false;
     setVoicesLoading(true);
     fetch("/api/elevenlabs/voices")
-      .then((res) => res.json())
-      .then((data: { voices?: VoiceItem[]; error?: string }) => {
+      .then(async (res) => {
+        const data = (await res.json()) as { voices?: VoiceItem[]; error?: string };
         if (cancelled) return;
+        if (!res.ok) {
+          const msg = data?.error ?? `Failed to load voices (${res.status})`;
+          toast({ title: "Voices unavailable", description: msg, variant: "destructive" });
+          setVoices([]);
+          return;
+        }
         const list = Array.isArray(data.voices) ? data.voices : [];
         setVoices(list);
         if (list.length > 0 && !selectedVoiceId) setSelectedVoiceId(list[0].voice_id);
       })
-      .catch(() => {
-        if (!cancelled) setVoices([]);
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("[VideosFlow] Fetch voices error:", err);
+          toast({ title: "Voices unavailable", description: err instanceof Error ? err.message : "Network error", variant: "destructive" });
+          setVoices([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setVoicesLoading(false);

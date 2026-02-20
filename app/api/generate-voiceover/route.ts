@@ -6,16 +6,17 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
+    const apiKey = getElevenLabsApiKey();
     if (!apiKey) {
       return NextResponse.json(
-        { error: "ELEVENLABS_API_KEY is not configured. Add it to .env.local." },
+        { error: "ELEVENLABS_API_KEY is not configured. Add it to .env.local (local) or Vercel env vars, then restart or redeploy." },
         { status: 503 }
       );
     }

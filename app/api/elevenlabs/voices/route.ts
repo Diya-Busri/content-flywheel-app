@@ -4,6 +4,7 @@
  */
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 
 export type ElevenLabsVoiceItem = { voice_id: string; name: string };
 
@@ -12,10 +13,13 @@ export async function GET() {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
+    const apiKey = getElevenLabsApiKey();
+    console.log("[elevenlabs/voices] ELEVENLABS_API_KEY present:", !!apiKey, "length:", apiKey?.length ?? 0);
+
     if (!apiKey) {
+      console.error("[elevenlabs/voices] Missing ELEVENLABS_API_KEY. Set it in Vercel Project Settings > Environment Variables (or .env.local for local).");
       return NextResponse.json(
-        { error: "ELEVENLABS_API_KEY is not configured. Add it to .env.local." },
+        { error: "ELEVENLABS_API_KEY is not configured. Add it in project environment variables (e.g. Vercel)." },
         { status: 503 }
       );
     }
@@ -28,9 +32,11 @@ export async function GET() {
       },
     });
 
+    const bodyText = await res.text();
+    console.log("[elevenlabs/voices] ElevenLabs response status:", res.status, "body length:", bodyText.length);
+
     if (!res.ok) {
-      const errText = await res.text();
-      console.error("[elevenlabs/voices] API error:", res.status, errText);
+      console.error("[elevenlabs/voices] ElevenLabs API error:", res.status, "body:", bodyText.slice(0, 500));
       return NextResponse.json(
         {
           error:
@@ -44,16 +50,34 @@ export async function GET() {
       );
     }
 
-    const data = (await res.json()) as { voices?: Array<{ voice_id?: string; name?: string }> };
+    let data: { voices?: Array<{ voice_id?: string; id?: string; name?: string }> };
+    try {
+      data = JSON.parse(bodyText) as typeof data;
+    } catch (parseErr) {
+      console.error("[elevenlabs/voices] Failed to parse response JSON:", parseErr);
+      return NextResponse.json({ error: "Invalid response from voice service" }, { status: 502 });
+    }
+
     const raw = Array.isArray(data.voices) ? data.voices : [];
+    if (raw.length > 0) {
+      const first = raw[0] as Record<string, unknown>;
+      console.log("[elevenlabs/voices] First voice keys:", Object.keys(first ?? {}));
+    } else {
+      console.warn("[elevenlabs/voices] No voices in response. Top-level keys:", Object.keys(data));
+    }
+
     const voices: ElevenLabsVoiceItem[] = raw
-      .filter((v) => v?.voice_id && v?.name)
-      .map((v) => ({ voice_id: String(v.voice_id), name: String(v.name) }))
+      .filter((v) => v && (v.voice_id ?? (v as { id?: string }).id) && v.name)
+      .map((v) => ({
+        voice_id: String((v as { voice_id?: string }).voice_id ?? (v as { id?: string }).id),
+        name: String(v.name),
+      }))
       .sort((a, b) => a.name.localeCompare(b.name));
 
+    console.log("[elevenlabs/voices] Returning voices count:", voices.length);
     return NextResponse.json({ voices });
   } catch (e) {
-    console.error("[elevenlabs/voices]", e);
+    console.error("[elevenlabs/voices] Unexpected error:", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed to load voices" },
       { status: 500 }
