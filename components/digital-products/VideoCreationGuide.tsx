@@ -35,6 +35,8 @@ import {
   Share2,
   Play,
   RefreshCw,
+  Video,
+  ExternalLink,
 } from "lucide-react";
 
 /** Social Media Kit shape (matches API response). */
@@ -191,6 +193,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const [characterRefPreviewUrl, setCharacterRefPreviewUrl] = useState<string | null>(null);
   const [characterRefPublicUrl, setCharacterRefPublicUrl] = useState<string | null>(null);
   const [copyFormatByScene, setCopyFormatByScene] = useState<Record<number, PromptPlatform>>({});
+  const [activeTab, setActiveTab] = useState("scenes");
   const [socialKitProofFile, setSocialKitProofFile] = useState<File | null>(null);
   const [socialKit, setSocialKit] = useState<SocialMediaKit | null>(() => {
     if (typeof window === "undefined") return null;
@@ -769,7 +772,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="scenes" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="bg-gray-100 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] flex flex-wrap gap-1 p-1">
             <TabsTrigger value="scenes" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
               Scene Breakdown
@@ -1063,7 +1066,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             )}
           </TabsContent>
 
-          <TabsContent value="social-kit" className="mt-6 space-y-4">
+          <TabsContent value="social-kit" className="mt-6 space-y-4" id="social-media-kit-section">
             {!socialKit ? (
               <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
                 <CardContent className="pt-6 pb-6">
@@ -1470,6 +1473,43 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Ready to create your video? */}
+        <Card className="mt-8 border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+          <CardHeader>
+            <CardTitle className="text-lg font-medium text-gray-900 dark:text-white">
+              Ready to create your video?
+            </CardTitle>
+            <CardDescription className="text-gray-600 dark:text-[#B0B0B0]">
+              Build your timeline here or copy titles, hashtags, and captions to use in another editor.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            <Button
+              asChild
+              className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+            >
+              <Link href="/dashboard/video-timeline?importVoiceover=1">
+                <Video className="w-4 h-4" />
+                Create here
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-[#2A2A2A] gap-2"
+              onClick={() => {
+                setActiveTab("social-kit");
+                setTimeout(() => {
+                  document.getElementById("social-media-kit-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }, 80);
+              }}
+            >
+              <ExternalLink className="w-4 h-4" />
+              Use another tool
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </main>
   );
