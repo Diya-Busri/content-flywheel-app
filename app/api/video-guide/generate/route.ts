@@ -283,6 +283,7 @@ export async function POST(request: NextRequest) {
       platforms: platformsReq,
       durationSeconds: durationSecondsReq,
       targetDurationSec: targetDurationSecReq,
+      logoDataUrl,
     } = body as {
       hook?: string;
       body?: string;
@@ -294,6 +295,7 @@ export async function POST(request: NextRequest) {
       platforms?: string[];
       durationSeconds?: number;
       targetDurationSec?: number;
+      logoDataUrl?: string;
     };
     const durationSeconds =
       (typeof durationSecondsReq === "number" && [15, 30, 60, 90].includes(durationSecondsReq) ? durationSecondsReq : null) ??
@@ -581,6 +583,7 @@ export async function POST(request: NextRequest) {
       contentCalendar,
       repurposingGuide,
       thumbnailGuide,
+      ...(typeof logoDataUrl === "string" && logoDataUrl.startsWith("data:") && { logoDataUrl }),
     };
 
     // Save video guide to library so it appears in My Library alongside products and scripts

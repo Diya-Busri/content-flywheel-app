@@ -83,10 +83,10 @@ Generate 4 scripts with these exact angles (in this order):
 3. "Social Proof/Results Angle" — e.g. "1000+ people have already used this to..." Hook with results or numbers; body with social proof and outcomes; CTA.
 4. "Curiosity/Controversy Angle" — e.g. "Nobody talks about this passive income method..." Hook with curiosity gap or mild controversy; body reveals value without giving everything away; CTA.
 
-HIGHLIGHTING (required): Wrap text in tags where they fit:
+HIGHLIGHTING (required): Wrap only pain/emotional triggers in tags:
 - Pain/emotional triggers: [PAIN]...[/PAIN]
-- Benefits/transformation: [BENEFIT]...[/BENEFIT]
-Only tag the strongest phrases.
+- Benefits/transformation: output the benefit text directly as plain text. Do not use [BENEFIT] or [/BENEFIT] anywhere.
+Only tag the strongest pain phrases.
 
 DURATION AND LENGTH (strict):
 - Generate a script for a ${durationSec}-second video. Target word count: ${wordsMin}–${wordsMax} words total.
@@ -119,7 +119,7 @@ Return ONLY valid JSON (no markdown, no code fence):
           {
             role: "system",
             content:
-              "You generate short-form video scripts for digital products. Return only valid JSON with a 'scripts' array. Each item has title, hook, body, cta (strings). Use [PAIN]...[/PAIN] for pain/emotional triggers and [BENEFIT]...[/BENEFIT] for benefits where they appear in the text.",
+              "You generate short-form video scripts for digital products. Return only valid JSON with a 'scripts' array. Each item has title, hook, body, cta (strings). Use [PAIN]...[/PAIN] only for pain/emotional triggers. Output benefit text as plain text only — never output [BENEFIT] or [/BENEFIT] tags.",
           },
           { role: "user", content: prompt },
         ],

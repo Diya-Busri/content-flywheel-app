@@ -102,7 +102,6 @@ export default function TikTokShopFlow() {
   const [hookStyle, setHookStyle] = useState("tiktok-made-me-buy");
   const [tone, setTone] = useState("ugc-style");
   const [targetDurationSec, setTargetDurationSec] = useState(DEFAULT_VIDEO_LENGTH_SEC);
-  const [guideLoading, setGuideLoading] = useState(false);
 
   useEffect(() => {
     try {
@@ -244,38 +243,30 @@ export default function TikTokShopFlow() {
     };
   };
 
-  const handleCreateVideoGuide = async (script: ScriptResult) => {
+  /** Go to video customization page (step 4). User completes customization there before generating the guide. */
+  const goToVideoCustomization = (script: ScriptResult) => {
     if (!breakdown) return;
     const { hook, body, cta } = scenesToHookBodyCta(script.scenes);
-    setGuideLoading(true);
+    const title = (script as ScriptResult & { title?: string }).title ?? "TikTok Shop Script";
+    const scriptForVideo = {
+      id: script.id ?? "tiktok-1",
+      title,
+      length: targetDurationSec ?? 30,
+      hook,
+      body,
+      cta,
+    };
     try {
-      const res = await fetch("/api/video-guide/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          hook,
-          body,
-          cta,
-          productName: breakdown.productName,
-          productDescription: breakdown.productDescription,
-          platforms: ["tiktok"],
-          durationSeconds: targetDurationSec,
-        }),
-      });
-      const guide = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(guide.error ?? "Failed to generate guide");
-      sessionStorage.setItem("videoCreationGuide", JSON.stringify({ ...guide, scriptTitle: (script as ScriptResult & { title?: string }).title ?? "TikTok Shop Script" }));
-      toast({ title: "Video guide ready", description: "Opening your guide." });
-      router.push("/dashboard/digital-products/video-guide");
-    } catch (err) {
-      toast({
-        title: "Guide failed",
-        description: err instanceof Error ? err.message : "Could not generate video guide",
-        variant: "destructive",
-      });
-    } finally {
-      setGuideLoading(false);
+      sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify([scriptForVideo]));
+      sessionStorage.setItem("productContextForVideos", JSON.stringify({ productId: undefined }));
+      sessionStorage.setItem("digitalProductForm", JSON.stringify({
+        productName: breakdown.productName,
+        productDescription: breakdown.productDescription,
+      }));
+    } catch {
+      // ignore
     }
+    router.push("/dashboard/digital-products/videos");
   };
 
   return (
@@ -539,12 +530,11 @@ export default function TikTokShopFlow() {
                     <p><span className="font-medium text-orange-400">CTA:</span> {script.scenes.cta}</p>
                   </div>
                   <Button
-                    onClick={() => handleCreateVideoGuide(script)}
-                    disabled={guideLoading}
+                    onClick={() => goToVideoCustomization(script)}
                     className="w-full gap-2 bg-orange-500 hover:bg-orange-600"
                   >
-                    {guideLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                    {guideLoading ? "Generating…" : "Create Video Guide"}
+                    <FileText className="w-4 h-4" />
+                    Create Video Guide
                   </Button>
                 </div>
               );

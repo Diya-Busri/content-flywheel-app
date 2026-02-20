@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Check, Play, Loader2, User, Image, Package, Sparkles, AlertCircle, FileText } from "lucide-react";
+import { ArrowLeft, Check, Play, Loader2, User, Image, Package, Sparkles, AlertCircle, FileText, Plus, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { VIDEO_GUIDE_PLATFORMS } from "@/lib/video-guide-platforms";
 
@@ -31,6 +31,14 @@ const BACKGROUND_OPTIONS = [
 ];
 
 const CAPTION_PRESETS = ["Bold sans", "Minimal serif", "High contrast", "Subtle overlay", "Animated words"];
+
+function toValidHex(hex: string): string {
+  const m = hex.trim().match(/^#?([0-9A-Fa-f]{3,6})$/);
+  if (!m) return "#FF6B35";
+  let s = m[1];
+  if (s.length === 3) s = s[0] + s[0] + s[1] + s[1] + s[2] + s[2];
+  return "#" + s.padEnd(6, "0").slice(0, 6);
+}
 
 export interface SelectedScriptForVideo {
   id: string;
@@ -62,6 +70,8 @@ export default function VideosFlow() {
   const [background, setBackground] = useState<string>("clean");
   const [captionStyle, setCaptionStyle] = useState<string>(CAPTION_PRESETS[0]);
   const [addLogo, setAddLogo] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [brandColors, setBrandColors] = useState<string[]>(["#FF6B35"]);
   const [platforms, setPlatforms] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(VIDEO_GUIDE_PLATFORMS.map((p) => [p.id, p.id === "tiktok" || p.id === "instagram_reels"]))
   );
@@ -185,6 +195,16 @@ export default function VideosFlow() {
     sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify(selectedScripts));
 
     try {
+      let logoDataUrl: string | undefined;
+      if (addLogo && logoFile) {
+        logoDataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Failed to read logo file"));
+          reader.readAsDataURL(logoFile);
+        });
+      }
+
       const res = await fetch("/api/video-guide/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -194,13 +214,14 @@ export default function VideosFlow() {
           cta: script.cta,
           productId: productId || undefined,
           platforms: selectedPlatformIds.length > 0 ? selectedPlatformIds : ["tiktok"],
+          ...(logoDataUrl && { logoDataUrl }),
         }),
       });
       const guide = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(guide.error || `Request failed: ${res.status}`);
       }
-      sessionStorage.setItem("videoCreationGuide", JSON.stringify({ ...guide, scriptTitle: script.title }));
+      sessionStorage.setItem("videoCreationGuide", JSON.stringify({ ...guide, scriptTitle: script.title, preferredVoiceId: selectedVoiceId, scriptsForGuide: selectedScripts, productIdForGuide: productId || undefined }));
       toast({ title: "Guide ready", description: "Your personalised video creation guide is ready." });
       router.push("/dashboard/digital-products/video-guide");
     } catch (e) {
@@ -381,16 +402,84 @@ export default function VideosFlow() {
                   <Checkbox
                     id="add-logo"
                     checked={addLogo}
-                    onCheckedChange={(c) => setAddLogo(!!c)}
+                    onCheckedChange={(c) => {
+                      const checked = !!c;
+                      setAddLogo(checked);
+                      if (!checked) setLogoFile(null);
+                    }}
                   />
                   <Label htmlFor="add-logo" className="text-sm text-[#E0E0E0] cursor-pointer">Add my logo (upload)</Label>
                 </div>
+                {addLogo && (
+                  <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 space-y-2">
+                    <input
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/jpg,image/svg+xml"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) setLogoFile(file);
+                        e.target.value = "";
+                      }}
+                      className="block w-full text-sm text-[#A0A0A0] file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-[#2A2A2A] file:text-white file:text-sm file:cursor-pointer"
+                    />
+                    {logoFile && (
+                      <p className="text-xs text-[#A0A0A0]">
+                        Selected: {logoFile.name}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div>
-                  <Label className="text-white text-sm">Brand color</Label>
-                  <p className="text-xs text-[#A0A0A0]">Auto-suggested from product</p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-lg bg-orange-500 border-2 border-[#2A2A2A]" />
-                    <span className="text-sm text-[#A0A0A0]">#FF6B35</span>
+                  <Label className="text-white text-sm">Brand colors</Label>
+                  <p className="text-xs text-[#A0A0A0] mb-2">Add up to 5 colors. Each can have a hex input and color picker.</p>
+                  <div className="space-y-2">
+                    {brandColors.map((hex, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={toValidHex(hex)}
+                          onChange={(e) => {
+                            const next = [...brandColors];
+                            next[i] = e.target.value;
+                            setBrandColors(next);
+                          }}
+                          className="w-10 h-10 rounded-lg border-2 border-[#2A2A2A] cursor-pointer bg-transparent"
+                        />
+                        <input
+                          type="text"
+                          value={hex}
+                          onChange={(e) => {
+                            const next = [...brandColors];
+                            next[i] = e.target.value;
+                            setBrandColors(next);
+                          }}
+                          placeholder="#FFFFFF"
+                          className="flex-1 min-w-0 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-white placeholder:text-[#6A6A6A]"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 h-9 w-9 text-[#A0A0A0] hover:text-white hover:bg-[#2A2A2A]"
+                          onClick={() => setBrandColors((prev) => prev.filter((_, j) => j !== i))}
+                          disabled={brandColors.length <= 1}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    {brandColors.length < 5 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] hover:text-white"
+                        onClick={() => setBrandColors((prev) => [...prev, "#999999"])}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add color
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>

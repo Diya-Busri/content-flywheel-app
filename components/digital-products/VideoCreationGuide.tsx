@@ -16,6 +16,8 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import {
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Download,
   FileText,
@@ -135,15 +137,47 @@ export type VideoGuideData = {
   platformTips?: string[];
 };
 
+export type ScriptForGuide = { id: string; title: string; length: number; hook: string; body: string; cta: string };
+
 type Props = {
   guide: VideoGuideData;
   scriptTitle?: string;
+  /** Voice ID from the video customization page; used as initial selection for voiceover. */
+  preferredVoiceId?: string;
+  /** All scripts for this product (enables left/right navigation and angle name). */
+  scripts?: ScriptForGuide[];
+  /** Product ID for Regenerate Script API. */
+  productId?: string;
 };
 
-export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
+export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceId, scripts: scriptsProp, productId }: Props) {
   const { toast } = useToast();
+  const [scripts, setScripts] = useState<ScriptForGuide[]>(() => (Array.isArray(scriptsProp) && scriptsProp.length > 0 ? scriptsProp : []));
+  const [currentScriptIndex, setCurrentScriptIndex] = useState(0);
+  const [regeneratingScript, setRegeneratingScript] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [voiceId, setVoiceId] = useState<string>(() => (typeof window !== "undefined" ? getDefaultVoiceId() : ELEVENLABS_VOICES[0].voiceId));
+  const [voiceId, setVoiceId] = useState<string>(() =>
+    preferredVoiceId && preferredVoiceId.trim()
+      ? preferredVoiceId.trim()
+      : typeof window !== "undefined"
+        ? getDefaultVoiceId()
+        : ELEVENLABS_VOICES[0].voiceId
+  );
+
+  useEffect(() => {
+    if (Array.isArray(scriptsProp) && scriptsProp.length > 0) {
+      setScripts(scriptsProp);
+      setCurrentScriptIndex((i) => (i >= scriptsProp.length ? 0 : i));
+    }
+  }, [scriptsProp?.length]);
+
+  const hasMultipleScripts = scripts.length > 1;
+  const effectiveScript = scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length
+    ? { hook: scripts[currentScriptIndex].hook, body: scripts[currentScriptIndex].body, cta: scripts[currentScriptIndex].cta }
+    : guide.script;
+  const effectiveScriptTitle = scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length
+    ? scripts[currentScriptIndex].title
+    : scriptTitle;
   const [stability, setStability] = useState(0.5);
   const [similarity, setSimilarity] = useState(0.75);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -176,7 +210,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
     setDefaultVoiceId(voiceId);
   }, [voiceId]);
 
-  const script = guide.script;
+  const script = effectiveScript;
   const scenes = guide.scenes ?? guide.scenePrompts.map((s, i) => ({
     scene: s.scene,
     timing: s.timing,
@@ -430,6 +464,38 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
     }
   }, [getSceneTexts, generateVoiceover, toast]);
 
+  const handleGenerateSingleSceneVoiceover = useCallback(
+    async (index: number) => {
+      const texts = getSceneTexts();
+      if (index < 0 || index >= texts.length || !texts[index]?.trim()) {
+        toast({ title: "No text for this scene", variant: "destructive" });
+        return;
+      }
+      setGeneratingSceneIndex(index);
+      try {
+        const blob = await generateVoiceover(texts[index]);
+        const url = URL.createObjectURL(blob);
+        setPerSceneUrls((prev) => {
+          const next = [...prev];
+          while (next.length <= index) next.push(null);
+          if (next[index]) URL.revokeObjectURL(next[index]);
+          next[index] = url;
+          return next;
+        });
+        toast({ title: "Voiceover ready", description: `Scene ${index + 1} audio generated.` });
+      } catch (e) {
+        toast({
+          title: "Voiceover failed",
+          description: e instanceof Error ? e.message : "Something went wrong",
+          variant: "destructive",
+        });
+      } finally {
+        setGeneratingSceneIndex(null);
+      }
+    },
+    [getSceneTexts, generateVoiceover, toast]
+  );
+
   const handleRegenerateVoiceover = useCallback(() => {
     if (fullVoiceoverUrl) URL.revokeObjectURL(fullVoiceoverUrl);
     setFullVoiceoverUrl(null);
@@ -500,7 +566,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `video-guide-${(scriptTitle ?? guide.productName ?? "guide").replace(/\s+/g, "-")}.txt`;
+    a.download = `video-guide-${(effectiveScriptTitle ?? guide.productName ?? "guide").replace(/\s+/g, "-")}.txt`;
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: "Downloaded", description: "Full guide saved" });
@@ -514,9 +580,44 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
     music,
     exportSettings,
     platformTips,
-    scriptTitle,
+    effectiveScriptTitle,
     toast,
   ]);
+
+  const handleRegenerateScript = useCallback(async () => {
+    if (!productId || scripts.length === 0 || currentScriptIndex < 0 || currentScriptIndex >= scripts.length) {
+      toast({ title: "Cannot regenerate", description: "Product or script missing.", variant: "destructive" });
+      return;
+    }
+    const angle = scripts[currentScriptIndex].title;
+    setRegeneratingScript(true);
+    try {
+      const res = await fetch("/api/digital-products/regenerate-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId, angle }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Regeneration failed");
+      const newScript = data.script as ScriptForGuide | undefined;
+      if (newScript) {
+        setScripts((prev) => {
+          const next = [...prev];
+          next[currentScriptIndex] = { ...newScript, id: next[currentScriptIndex].id };
+          return next;
+        });
+        toast({ title: "Script updated", description: `New "${angle}" variation ready.` });
+      }
+    } catch (e) {
+      toast({
+        title: "Regenerate failed",
+        description: e instanceof Error ? e.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setRegeneratingScript(false);
+    }
+  }, [productId, scripts, currentScriptIndex, toast]);
 
   return (
     <main className="min-h-screen bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white p-6 md:p-10">
@@ -528,6 +629,50 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
           <ArrowLeft className="w-4 h-4" />
           Back to Results
         </Link>
+
+        {scripts.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 p-3 rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+            <div className="flex items-center gap-2">
+              {hasMultipleScripts && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]"
+                  onClick={() => setCurrentScriptIndex((i) => (i <= 0 ? scripts.length - 1 : i - 1))}
+                  aria-label="Previous script"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+              )}
+              <span className="font-medium text-gray-900 dark:text-white min-w-[140px] text-center">
+                {effectiveScriptTitle ?? `Script ${currentScriptIndex + 1}`}
+              </span>
+              {hasMultipleScripts && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]"
+                  onClick={() => setCurrentScriptIndex((i) => (i >= scripts.length - 1 ? 0 : i + 1))}
+                  aria-label="Next script"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+            {productId && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-1.5"
+                onClick={handleRegenerateScript}
+                disabled={regeneratingScript}
+              >
+                {regeneratingScript ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                Regenerate Script
+              </Button>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
           <div>
@@ -1157,9 +1302,9 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                   </div>
                 </div>
 
-                {/* Generation mode */}
+                {/* Full Script / Scene by Scene tabs */}
                 <div>
-                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Generation mode</p>
+                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Voiceover</p>
                   <div className="flex rounded-lg border border-gray-200 dark:border-[#2A2A2A] p-1 bg-gray-100 dark:bg-[#0F0F0F] w-full max-w-md">
                     <button
                       type="button"
@@ -1185,7 +1330,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                     </button>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-1">
-                    {voiceoverMode === "full" ? "One audio file for Hook + Body + CTA." : "Separate clips per scene with individual play/download."}
+                    {voiceoverMode === "full" ? "One audio file for Hook + Body + CTA." : "Generate audio per scene with individual play/download."}
                   </p>
                 </div>
 
@@ -1227,76 +1372,108 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                   </div>
                 </div>
 
-                {/* Generate / Regenerate */}
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
-                    onClick={voiceoverMode === "full" ? handleGenerateFullVoiceover : handleGeneratePerSceneVoiceover}
-                    disabled={
-                      (voiceoverMode === "full" ? generatingFull : generatingPerScene) ||
-                      (voiceoverMode === "full" ? !fullScriptText.trim() : getSceneTexts().length === 0)
-                    }
-                  >
-                    {(voiceoverMode === "full" ? generatingFull : generatingPerScene) ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Mic className="w-4 h-4" />
-                    )}
-                    {voiceoverMode === "full" ? "Generate Voiceover" : "Generate Scene by Scene"}
-                  </Button>
-                  {(fullVoiceoverUrl || perSceneUrls.some(Boolean)) && (
-                    <Button
-                      variant="outline"
-                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
-                      onClick={handleRegenerateVoiceover}
-                      disabled={generatingFull || generatingPerScene}
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      Regenerate
-                    </Button>
-                  )}
-                </div>
-
-                {/* Full script result */}
-                {fullVoiceoverUrl && (
-                  <div>
-                    <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Full script audio</p>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <AudioWithSpeed src={fullVoiceoverUrl} speed={playbackSpeed} controls className="max-w-full h-9" />
-                      <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]" asChild>
-                        <a href={fullVoiceoverUrl} download="voiceover-full.mp3">Download</a>
+                {/* Generate: Full Script = one button; Scene by Scene = list with per-scene buttons */}
+                {voiceoverMode === "full" ? (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                        onClick={handleGenerateFullVoiceover}
+                        disabled={generatingFull || !fullScriptText.trim()}
+                      >
+                        {generatingFull ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
+                        Generate Voiceover
                       </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Per-scene results */}
-                {perSceneUrls.length > 0 && (
-                  <div>
-                    <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Per-scene clips</p>
-                    <div className="space-y-3">
-                      {perSceneUrls.map((url, i) =>
-                        url ? (
-                          <div key={i} className="flex flex-wrap items-center gap-3 rounded-lg bg-gray-100 dark:bg-[#0F0F0F] p-3">
-                            <span className="text-sm text-gray-500 dark:text-[#A0A0A0] w-20">Scene {i + 1}</span>
-                            <AudioWithSpeed src={url} speed={playbackSpeed} controls className="flex-1 min-w-0 max-w-md h-9" />
-                            <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0" asChild>
-                              <a href={url} download={`voiceover-scene-${i + 1}.mp3`}>Download</a>
-                            </Button>
-                          </div>
-                        ) : generatingSceneIndex === i ? (
-                          <div key={i} className="flex items-center gap-2 rounded-lg bg-gray-100 dark:bg-[#0F0F0F] p-3">
-                            <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
-                            <span className="text-sm text-gray-500 dark:text-[#A0A0A0]">Scene {i + 1}…</span>
-                          </div>
-                        ) : (
-                          <div key={i} className="flex items-center gap-2 rounded-lg bg-gray-100 dark:bg-[#0F0F0F] p-3">
-                            <span className="text-sm text-gray-500 dark:text-[#A0A0A0]">Scene {i + 1} — failed or pending</span>
-                          </div>
-                        )
+                      {fullVoiceoverUrl && (
+                        <Button
+                          variant="outline"
+                          className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
+                          onClick={handleRegenerateVoiceover}
+                          disabled={generatingFull}
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Regenerate
+                        </Button>
                       )}
                     </div>
-                  </div>
+                    {fullVoiceoverUrl && (
+                      <div>
+                        <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Full script audio</p>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <AudioWithSpeed src={fullVoiceoverUrl} speed={playbackSpeed} controls className="max-w-full h-9" />
+                          <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]" asChild>
+                            <a href={fullVoiceoverUrl} download="voiceover-full.mp3">Download</a>
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      <Button
+                        variant="outline"
+                        className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
+                        onClick={handleGeneratePerSceneVoiceover}
+                        disabled={generatingPerScene || getSceneTexts().length === 0}
+                      >
+                        {generatingPerScene ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
+                        Generate all scenes
+                      </Button>
+                      {perSceneUrls.some(Boolean) && (
+                        <Button
+                          variant="outline"
+                          className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
+                          onClick={() => {
+                            perSceneUrls.forEach((u) => u && URL.revokeObjectURL(u));
+                            setPerSceneUrls([]);
+                          }}
+                          disabled={generatingPerScene || generatingSceneIndex !== null}
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Clear all
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Scenes from script breakdown</p>
+                    <div className="space-y-3">
+                      {scenes.map((scene, i) => {
+                        const texts = getSceneTexts();
+                        const sceneText = texts[i]?.trim() ?? "";
+                        const url = perSceneUrls[i] ?? null;
+                        const loading = generatingSceneIndex === i;
+                        return (
+                          <div key={i} className="rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] p-3 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-sm font-medium text-gray-700 dark:text-[#E0E0E0]">
+                                Scene {i + 1} {scene.timing ? `(${scene.timing})` : ""}
+                              </span>
+                              <Button
+                                className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+                                size="sm"
+                                onClick={() => handleGenerateSingleSceneVoiceover(i)}
+                                disabled={loading || !sceneText || generatingPerScene}
+                              >
+                                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mic className="w-3.5 h-3.5" />}
+                                Generate Voiceover
+                              </Button>
+                            </div>
+                            {sceneText && (
+                              <p className="text-xs text-gray-500 dark:text-[#A0A0A0] line-clamp-2">{sceneText}</p>
+                            )}
+                            {url && (
+                              <div className="flex flex-wrap items-center gap-2 pt-1">
+                                <AudioWithSpeed src={url} speed={playbackSpeed} controls className="flex-1 min-w-0 max-w-md h-9" />
+                                <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0" asChild>
+                                  <a href={url} download={`voiceover-scene-${i + 1}.mp3`}>Download</a>
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>

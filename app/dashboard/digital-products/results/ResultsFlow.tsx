@@ -14,8 +14,6 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Download, Copy, FileText, Loader2, RefreshCw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { VideoCustomizationModal } from "@/components/digital-products/VideoCustomizationModal";
-import type { VideoCustomizationSettings } from "@/components/digital-products/VideoCustomizationModal";
 
 /** Matches the 4 angles from generate-scripts; used for Regenerate dropdown. */
 const SCRIPT_ANGLES = [
@@ -130,11 +128,6 @@ export default function ResultsFlow() {
   const { toast } = useToast();
   const [scripts, setScripts] = useState<ScriptForDisplay[]>([]);
   const [productId, setProductId] = useState<string | null>(null);
-  const [guideLoading, setGuideLoading] = useState(false);
-  const [progressStage, setProgressStage] = useState<string | null>(null);
-  const [customizationModalOpen, setCustomizationModalOpen] = useState(false);
-  const [customizationScript, setCustomizationScript] = useState<ScriptForDisplay | null>(null);
-  const [customizationScripts, setCustomizationScripts] = useState<ScriptForDisplay[] | null>(null);
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
   const [regenerateAngleByIndex, setRegenerateAngleByIndex] = useState<Record<number, string>>({});
 
@@ -216,42 +209,15 @@ export default function ResultsFlow() {
     }
   };
 
-  const createVideoGuide = async (script: ScriptForDisplay, settings?: VideoCustomizationSettings, platforms?: string[]) => {
-    setCustomizationModalOpen(false);
-    setGuideLoading(true);
-    setProgressStage("Creating your multi-platform video creation guide...");
-    sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify(scripts));
+  /** Navigate to the video customization page (step 4) with the given script. User must complete customization there before generating the guide. */
+  const goToVideoCustomization = (script: ScriptForDisplay) => {
     try {
-      const res = await fetch("/api/video-guide/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          hook: settings?.hook ?? script.hook,
-          body: settings?.body ?? script.body,
-          cta: settings?.cta ?? script.cta,
-          productId: productId || undefined,
-          platforms: platforms && platforms.length > 0 ? platforms : ["tiktok"],
-          durationSeconds: [15, 30, 60, 90].includes(script.length) ? script.length : 30,
-        }),
-      });
-      const guide = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(guide.error || `Request failed: ${res.status}`);
-      }
-      sessionStorage.setItem("videoCreationGuide", JSON.stringify({ ...guide, scriptTitle: script.title }));
-      toast({ title: "Guide ready", description: "Your personalised video creation guide is ready." });
-      router.push("/dashboard/digital-products/video-guide");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Something went wrong";
-      toast({
-        title: "Guide creation failed",
-        description: msg,
-        variant: "destructive",
-      });
-    } finally {
-      setGuideLoading(false);
-      setProgressStage(null);
+      sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify([script]));
+      sessionStorage.setItem("productContextForVideos", JSON.stringify({ productId: productId || undefined }));
+    } catch {
+      // ignore
     }
+    router.push("/dashboard/digital-products/videos");
   };
 
   if (scripts.length === 0) {
@@ -300,37 +266,14 @@ export default function ResultsFlow() {
           Get a personalised Video Creation Guide for each script. Each guide includes AI image prompts, editing steps, and export settings.
         </p>
 
-        {progressStage && (
-          <Card className="mb-6 border-orange-500/30 bg-orange-500/10">
-            <CardContent className="p-4 flex items-center gap-3">
-              <Loader2 className="w-6 h-6 animate-spin text-orange-500 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-orange-200">{progressStage}</p>
-                <p className="text-xs text-orange-200/80 mt-0.5">Creating your guide. Don&apos;t close this page.</p>
-              </div>
-              <div className="w-24 h-2 rounded-full bg-gray-200 dark:bg-[#2A2A2A] overflow-hidden">
-                <div className="h-full w-2/3 animate-pulse rounded-full bg-orange-500" style={{ animationDuration: "1.5s" }} />
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         <div className="mb-6">
           <Button
             className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 gap-2"
             size="lg"
-            onClick={() => {
-              setCustomizationScript(scripts[0] ?? null);
-              setCustomizationScripts(undefined);
-              setCustomizationModalOpen(true);
-            }}
-            disabled={guideLoading || scripts.length === 0}
+            onClick={() => scripts[0] && goToVideoCustomization(scripts[0])}
+            disabled={scripts.length === 0}
           >
-            {guideLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <FileText className="w-5 h-5" />
-            )}
+            <FileText className="w-5 h-5" />
             Create Video Guide
           </Button>
         </div>
@@ -364,7 +307,7 @@ export default function ResultsFlow() {
                       size="sm"
                       className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]"
                       onClick={() => handleRegenerateScript(index)}
-                      disabled={guideLoading || !productId || regeneratingIndex !== null}
+                      disabled={!productId || regeneratingIndex !== null}
                     >
                       {regeneratingIndex === index ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
@@ -378,7 +321,6 @@ export default function ResultsFlow() {
                       size="sm"
                       className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]"
                       onClick={() => copyScript(script)}
-                      disabled={guideLoading}
                     >
                       <Copy className="w-3.5 h-3.5 mr-1.5" />
                       Copy
@@ -394,44 +336,15 @@ export default function ResultsFlow() {
                 <Button
                   className="w-full mt-2 bg-orange-500 hover:bg-orange-600 gap-2"
                   size="lg"
-                  onClick={() => {
-                    setCustomizationScript(script);
-                    setCustomizationScripts(undefined);
-                    setCustomizationModalOpen(true);
-                  }}
-                  disabled={guideLoading}
+                  onClick={() => goToVideoCustomization(script)}
                 >
-                  {guideLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <FileText className="w-5 h-5" />
-                  )}
+                  <FileText className="w-5 h-5" />
                   Create Video Guide for this Script
                 </Button>
               </CardContent>
             </Card>
           ))}
         </div>
-
-        {customizationScript && (
-          <VideoCustomizationModal
-            open={customizationModalOpen}
-            onClose={() => {
-              if (!guideLoading) {
-                setCustomizationModalOpen(false);
-                setCustomizationScript(null);
-                setCustomizationScripts(null);
-              }
-            }}
-            script={customizationScript}
-            scripts={customizationScripts ?? undefined}
-            onGenerate={(settings, scriptsWithEdits, platforms) => {
-              createVideoGuide(scriptsWithEdits[0], settings, platforms);
-            }}
-            isGenerating={guideLoading}
-            createGuide
-          />
-        )}
 
         <div className="flex flex-col sm:flex-row gap-3">
           <Button

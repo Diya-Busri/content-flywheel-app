@@ -17,6 +17,9 @@ const STORAGE_KEY = "videoCreationGuide";
 export default function VideoGuidePage() {
   const [guide, setGuide] = useState<VideoGuideData | null>(null);
   const [scriptTitle, setScriptTitle] = useState<string>("");
+  const [preferredVoiceId, setPreferredVoiceId] = useState<string | undefined>(undefined);
+  const [scriptsForGuide, setScriptsForGuide] = useState<Array<{ id: string; title: string; length: number; hook: string; body: string; cta: string }> | undefined>(undefined);
+  const [productIdForGuide, setProductIdForGuide] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const libraryScriptId = searchParams.get("libraryScriptId");
@@ -54,6 +57,9 @@ export default function VideoGuidePage() {
         if (data && data.script && Array.isArray(data.scenePrompts)) {
           setGuide(data as VideoGuideData);
           if (typeof data.scriptTitle === "string") setScriptTitle(data.scriptTitle);
+          if (typeof data.preferredVoiceId === "string" && data.preferredVoiceId) setPreferredVoiceId(data.preferredVoiceId);
+          if (Array.isArray(data.scriptsForGuide) && data.scriptsForGuide.length > 0) setScriptsForGuide(data.scriptsForGuide);
+          if (typeof data.productIdForGuide === "string" && data.productIdForGuide) setProductIdForGuide(data.productIdForGuide);
           return;
         }
       }
@@ -97,5 +103,5 @@ export default function VideoGuidePage() {
     );
   }
 
-  return <VideoCreationGuide guide={guide} scriptTitle={scriptTitle || undefined} />;
+  return <VideoCreationGuide guide={guide} scriptTitle={scriptTitle || undefined} preferredVoiceId={preferredVoiceId} scripts={scriptsForGuide} productId={productIdForGuide} />;
 }

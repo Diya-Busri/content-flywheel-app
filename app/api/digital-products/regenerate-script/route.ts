@@ -1,7 +1,7 @@
 /**
  * POST: Generate a single new script for a digital product with a chosen angle.
  * Body: { productId: string, angle: "Story Angle" | "Problem/Solution Angle" | "Before/After Angle" | "Social Proof Angle" | "Curiosity/Mystery Angle" }
- * Returns: { script: { id, title, length, hook, body, cta } } with [PAIN] and [BENEFIT] tags for frontend highlighting.
+ * Returns: { script: { id, title, length, hook, body, cta } } with [PAIN] tags for frontend highlighting; benefit text is plain.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
@@ -104,10 +104,10 @@ PRODUCT:
 ANGLE: ${angle}
 ${angleInstructions(angle)}
 
-HIGHLIGHTING (required): So the frontend can highlight pain points and benefits, wrap text in tags:
+HIGHLIGHTING (required): So the frontend can highlight pain points, wrap only pain/emotional triggers in tags:
 - For pain points and emotional triggers (e.g. struggling, stressed, frustrated, overwhelmed, broke, stuck, failing, worried, anxious, can't afford, tired of): wrap in [PAIN]...[/PAIN]. Example: "I was [PAIN]stressed[/PAIN] about money."
-- For benefits and transformation words (e.g. thriving, freedom, transformed, saved, confident, calm, organized, successful, easy, finally): wrap in [BENEFIT]...[/BENEFIT]. Example: "Now I'm [BENEFIT]thriving[/BENEFIT]."
-Use these tags in hook, body, and cta where they naturally appear. Do not tag every word — only the strongest pain and benefit phrases.
+- For benefits and transformation: output the benefit text as plain text only. Never use [BENEFIT] or [/BENEFIT] anywhere.
+Use [PAIN] tags only where they naturally appear. Do not tag every word — only the strongest pain phrases.
 
 RULES:
 - Hook: 1–2 sentences, under ~100 chars, punchy and scroll-stopping.
@@ -136,7 +136,7 @@ Return ONLY valid JSON (no markdown, no code fence):
           {
             role: "system",
             content:
-              "You generate one short-form video script for digital products. Return only valid JSON with title, hook, body, cta (strings). Use [PAIN]...[/PAIN] for pain/emotional triggers and [BENEFIT]...[/BENEFIT] for benefits where they appear.",
+              "You generate one short-form video script for digital products. Return only valid JSON with title, hook, body, cta (strings). Use [PAIN]...[/PAIN] only for pain/emotional triggers. Output benefit text as plain text only — never output [BENEFIT] or [/BENEFIT] tags.",
           },
           { role: "user", content: prompt },
         ],
