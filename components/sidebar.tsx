@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, FlaskConical, Sun, Moon } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, FlaskConical, Sun, Moon, Star, PanelLeftClose, PanelLeft } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -18,16 +18,41 @@ import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 interface SidebarProps {
   profile: SelectProfile | null;
   userEmail?: string;
+  onOpenReview?: () => void;
 }
 
-export default function Sidebar({ profile, userEmail }: SidebarProps) {
+const SIDEBAR_COLLAPSED_KEY = "content_flywheel_sidebar_collapsed";
+
+function getInitialCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+  return stored === "true";
+}
+
+export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarProps) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const { theme, toggleTheme } = useDashboardTheme();
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    setIsCollapsed(getInitialCollapsed());
+  }, [mounted]);
+
+  const toggleCollapsed = () => {
+    const next = !isCollapsed;
+    setIsCollapsed(next);
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+    } catch {
+      // ignore
+    }
+  };
 
   const isActive = (path: string) => pathname === path;
 
@@ -45,7 +70,12 @@ export default function Sidebar({ profile, userEmail }: SidebarProps) {
   ];
 
   return (
-    <div className="sidebar no-print h-screen w-[60px] md:w-[220px] flex-shrink-0 bg-white dark:bg-[#1A1A1A] backdrop-blur-xl border-r border-[#E5E7EB] dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20">
+    <div
+      className={`sidebar no-print h-screen flex-shrink-0 bg-white dark:bg-[#1A1A1A] backdrop-blur-xl border-r border-[#E5E7EB] dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20 transition-[width] duration-200 ease-in-out ${
+        isCollapsed ? "w-[60px]" : "w-[60px] md:w-[220px]"
+      }`}
+      style={mounted ? { width: isCollapsed ? 60 : undefined } : undefined}
+    >
         {/* Subtle gradient */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/[0.02] dark:from-white/[0.03] via-transparent to-transparent pointer-events-none" />
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 dark:via-white/20 to-transparent" />
@@ -103,8 +133,22 @@ export default function Sidebar({ profile, userEmail }: SidebarProps) {
           </div>
         </nav>
 
-        {/* Bottom Section - Theme toggle, Billing, Account */}
+        {/* Bottom Section - Leave a Review, Theme toggle, Billing, Account */}
         <div className="mt-auto pt-4 relative z-10">
+          {onOpenReview && (
+            <div className="px-3 mb-3">
+              <motion.button
+                type="button"
+                onClick={onOpenReview}
+                className="w-full flex items-center justify-center md:justify-start gap-1.5 py-2 px-3 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white transition-colors"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Star size={18} />
+                <span className="hidden md:block text-sm font-medium">Leave a review</span>
+              </motion.button>
+            </div>
+          )}
           {/* Theme toggle */}
           <div className="px-3 mb-3">
             <motion.button

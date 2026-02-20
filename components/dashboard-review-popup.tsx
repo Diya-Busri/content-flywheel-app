@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { ReviewPopup } from "@/components/review-popup";
 import { useToast } from "@/components/ui/use-toast";
-import { Button } from "@/components/ui/button";
 
 const STORAGE_KEYS = {
   reviewed: "content_flywheel_review_submitted",
@@ -15,8 +14,19 @@ const VIDEOS_AFTER_MAYBE_LATER = 5;
 
 type Profile = { usedCredits?: number | null; userId: string };
 
-export function DashboardReviewPopup({ profile }: { profile: Profile }) {
-  const [showPopup, setShowPopup] = useState(false);
+export function DashboardReviewPopup({
+  profile,
+  open: controlledOpen,
+  onOpenChange,
+}: {
+  profile: Profile;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined && onOpenChange != null;
+  const showPopup = isControlled ? controlledOpen : internalOpen;
+  const setShowPopup = isControlled ? onOpenChange! : setInternalOpen;
   const { toast } = useToast();
   const usedCredits = profile?.usedCredits ?? 0;
 
@@ -102,22 +112,12 @@ export function DashboardReviewPopup({ profile }: { profile: Profile }) {
   };
 
   return (
-    <>
-      <ReviewPopup
-        open={showPopup}
-        onOpenChange={setShowPopup}
-        onSubmitReview={handleSubmitReview}
-        onSubmitFeedback={handleSubmitFeedback}
-        onMaybeLater={handleMaybeLater}
-      />
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setShowPopup(true)}
-        className="fixed bottom-4 right-4 z-40"
-      >
-        Leave a review
-      </Button>
-    </>
+    <ReviewPopup
+      open={showPopup}
+      onOpenChange={setShowPopup}
+      onSubmitReview={handleSubmitReview}
+      onSubmitFeedback={handleSubmitFeedback}
+      onMaybeLater={handleMaybeLater}
+    />
   );
 }
