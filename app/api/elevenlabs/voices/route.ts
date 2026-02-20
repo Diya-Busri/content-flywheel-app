@@ -14,7 +14,7 @@ export async function GET() {
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const apiKey = getElevenLabsApiKey();
-    console.log("[elevenlabs/voices] ELEVENLABS_API_KEY present:", !!apiKey, "length:", apiKey?.length ?? 0);
+    console.log("[elevenlabs/voices] ELEVENLABS_API_KEY present:", !!apiKey, "length:", apiKey?.length ?? 0, "first 10 chars:", apiKey ? `${apiKey.slice(0, 10)}...` : "n/a");
 
     if (!apiKey) {
       console.error("[elevenlabs/voices] Missing ELEVENLABS_API_KEY. Set it in Vercel Project Settings > Environment Variables (or .env.local for local).");
@@ -37,15 +37,14 @@ export async function GET() {
 
     if (!res.ok) {
       console.error("[elevenlabs/voices] ElevenLabs API error:", res.status, "body:", bodyText.slice(0, 500));
+      const message =
+        res.status === 401
+          ? "Invalid API key. Check the key at elevenlabs.io and in Vercel env vars. If you just updated it, redeploy the site so the new key is used."
+          : res.status === 403
+            ? "Access denied"
+            : "Failed to load voices";
       return NextResponse.json(
-        {
-          error:
-            res.status === 401
-              ? "Invalid API key"
-              : res.status === 403
-                ? "Access denied"
-                : "Failed to load voices",
-        },
+        { error: message },
         { status: res.status === 401 || res.status === 403 ? res.status : 502 }
       );
     }
