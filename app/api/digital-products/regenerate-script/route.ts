@@ -1,7 +1,7 @@
 /**
  * POST: Generate a single new script for a digital product with a chosen angle.
  * Body: { productId: string, angle: "Story Angle" | "Problem/Solution Angle" | "Before/After Angle" | "Social Proof Angle" | "Curiosity/Mystery Angle" }
- * Returns: { script: { id, title, length, hook, body, cta } } with [PAIN] tags for frontend highlighting; benefit text is plain.
+ * Returns: { script: { id, title, length, hook, body, cta } }. Script text is plain (no [PAIN]/[BENEFIT] tags); pain and benefits are written as real sentences.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
@@ -104,10 +104,7 @@ PRODUCT:
 ANGLE: ${angle}
 ${angleInstructions(angle)}
 
-HIGHLIGHTING (required): So the frontend can highlight pain points, wrap only pain/emotional triggers in tags:
-- For pain points and emotional triggers (e.g. struggling, stressed, frustrated, overwhelmed, broke, stuck, failing, worried, anxious, can't afford, tired of): wrap in [PAIN]...[/PAIN]. Example: "I was [PAIN]stressed[/PAIN] about money."
-- For benefits and transformation: output the benefit text as plain text only. Never use [BENEFIT] or [/BENEFIT] anywhere.
-Use [PAIN] tags only where they naturally appear. Do not tag every word — only the strongest pain phrases.
+PAIN AND BENEFITS (no tags): Do not use [PAIN], [/PAIN], [BENEFIT], or [/BENEFIT] anywhere. From the product name, description, and niche, identify the audience's real pain points and the product's real benefits, and write them directly into the script as natural, compelling sentences. Example: instead of "I was [PAIN]stressed[/PAIN]", write "I was stressed about money every single month."
 
 RULES:
 - Hook: 1–2 sentences, under ~100 chars, punchy and scroll-stopping.
@@ -136,7 +133,7 @@ Return ONLY valid JSON (no markdown, no code fence):
           {
             role: "system",
             content:
-              "You generate one short-form video script for digital products. Return only valid JSON with title, hook, body, cta (strings). Use [PAIN]...[/PAIN] only for pain/emotional triggers. Output benefit text as plain text only — never output [BENEFIT] or [/BENEFIT] tags.",
+              "You generate one short-form video script for digital products. Return only valid JSON with title, hook, body, cta (strings). Do not use any tags like [PAIN], [/PAIN], [BENEFIT], [/BENEFIT]. Write pain points and benefits as normal sentences drawn from the product data.",
           },
           { role: "user", content: prompt },
         ],

@@ -83,10 +83,7 @@ Generate 4 scripts with these exact angles (in this order):
 3. "Social Proof/Results Angle" — e.g. "1000+ people have already used this to..." Hook with results or numbers; body with social proof and outcomes; CTA.
 4. "Curiosity/Controversy Angle" — e.g. "Nobody talks about this passive income method..." Hook with curiosity gap or mild controversy; body reveals value without giving everything away; CTA.
 
-HIGHLIGHTING (required): Wrap only pain/emotional triggers in tags:
-- Pain/emotional triggers: [PAIN]...[/PAIN]
-- Benefits/transformation: output the benefit text directly as plain text. Do not use [BENEFIT] or [/BENEFIT] anywhere.
-Only tag the strongest pain phrases.
+PAIN AND BENEFITS (no tags): Do not use [PAIN], [/PAIN], [BENEFIT], or [/BENEFIT] anywhere. From the product name, description, and niche, identify the audience's real pain points and the product's real benefits, and write them directly into the script as natural, compelling sentences. Example: instead of "I was [PAIN]stressed[/PAIN]", write "I was stressed about money every single month."
 
 DURATION AND LENGTH (strict):
 - Generate a script for a ${durationSec}-second video. Target word count: ${wordsMin}–${wordsMax} words total.
@@ -119,7 +116,7 @@ Return ONLY valid JSON (no markdown, no code fence):
           {
             role: "system",
             content:
-              "You generate short-form video scripts for digital products. Return only valid JSON with a 'scripts' array. Each item has title, hook, body, cta (strings). Use [PAIN]...[/PAIN] only for pain/emotional triggers. Output benefit text as plain text only — never output [BENEFIT] or [/BENEFIT] tags.",
+              "You generate short-form video scripts for digital products. Return only valid JSON with a 'scripts' array. Each item has title, hook, body, cta (strings). Do not use any tags like [PAIN], [/PAIN], [BENEFIT], [/BENEFIT]. Write pain points and benefits as normal sentences drawn from the product data.",
           },
           { role: "user", content: prompt },
         ],
