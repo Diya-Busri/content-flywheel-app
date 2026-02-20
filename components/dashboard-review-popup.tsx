@@ -116,7 +116,7 @@ export function DashboardReviewPopup({ profile }: { profile: Profile }) {
         onClick={() => setShowPopup(true)}
         className="fixed bottom-4 right-4 z-40"
       >
-        Leave a review (test)
+        Leave a review
       </Button>
     </>
   );

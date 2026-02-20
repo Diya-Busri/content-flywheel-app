@@ -459,6 +459,18 @@ export default function DigitalProductsLanding() {
                   </li>
                 ))}
               </ul>
+              {bundleItems.some((i) => i.status === "done") && (
+                <div className="rounded-md border border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]/50 px-4 py-3 text-sm">
+                  <p className="text-gray-700 dark:text-[#E0E0E0] mb-3">
+                    Ready to view? Head to My Library to start editing completed products — the rest will appear there automatically once generated.
+                  </p>
+                  <Button asChild size="sm" className="bg-orange-500 hover:bg-orange-600">
+                    <Link href="/dashboard/library" onClick={closeBundleDialog}>
+                      Open My Library
+                    </Link>
+                  </Button>
+                </div>
+              )}
               {bundleComplete && (
                 <DialogFooter>
                   <Button asChild className="bg-orange-500 hover:bg-orange-600">
