@@ -124,7 +124,10 @@ export async function GET(request: NextRequest) {
     if (typeFilter === "bundles") {
       items = items.filter((i) => i.type === "product" && i.bundleId != null);
     } else if (typeFilter !== "all") {
-      items = items.filter((i) => i.type === typeFilter || (typeFilter === "products" && i.type === "product"));
+      // Tab "scripts" sends type=scripts; LibraryItem uses type "script". Tab "products" sends type=products; we use "product".
+      const matchType =
+        typeFilter === "products" ? "product" : typeFilter === "scripts" ? "script" : typeFilter;
+      items = items.filter((i) => i.type === matchType);
     }
 
     return NextResponse.json(items);
