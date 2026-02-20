@@ -216,7 +216,7 @@ export default function VideosFlow() {
   const cardClass = "border-[#2A2A2A] bg-[#1A1A1A]";
 
   return (
-    <main className="min-h-screen bg-[#0F0F0F] text-white pb-52 md:pb-48">
+    <main className="min-h-screen bg-[#0F0F0F] text-white pb-24">
       <div className="max-w-4xl mx-auto p-6 md:p-10">
         <Link
           href="/dashboard/digital-products/scripts"
