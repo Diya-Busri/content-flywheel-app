@@ -1,7 +1,8 @@
 /**
  * POST /api/generate-voiceover
- * ElevenLabs text-to-speech. Body: { text, voiceId, stability?, similarity? }
- * Returns: MP3 audio file.
+ * ElevenLabs text-to-speech using ELEVENLABS_API_KEY from environment.
+ * Body: { text, voiceId, stability?, similarity? }
+ * Returns: MP3 audio file (downloadable).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";

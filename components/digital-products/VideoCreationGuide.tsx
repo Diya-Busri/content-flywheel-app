@@ -1242,7 +1242,7 @@ export default function VideoCreationGuide({ guide, scriptTitle }: Props) {
                     ) : (
                       <Mic className="w-4 h-4" />
                     )}
-                    {voiceoverMode === "full" ? "Generate Full Voiceover" : "Generate Scene by Scene"}
+                    {voiceoverMode === "full" ? "Generate Voiceover" : "Generate Scene by Scene"}
                   </Button>
                   {(fullVoiceoverUrl || perSceneUrls.some(Boolean)) && (
                     <Button
