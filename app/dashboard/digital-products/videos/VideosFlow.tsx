@@ -176,8 +176,8 @@ export default function VideosFlow() {
           <div className="space-y-10">
             {/* VIDEO STYLE - 4 visual cards */}
             <div>
-              <Label className="text-white text-base font-medium mb-4 block">Video style</Label>
-              <p className="text-sm text-[#A0A0A0] mb-4">Choose how your video looks</p>
+              <Label className="text-white text-base font-medium mb-4 block">What type of video are you making?</Label>
+              <p className="text-sm text-[#A0A0A0] mb-4">Your guide will be tailored to your chosen style.</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {VIDEO_STYLES.map((s) => {
                   const Icon = s.icon;
