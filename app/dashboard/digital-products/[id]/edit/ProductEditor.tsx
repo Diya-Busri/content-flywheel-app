@@ -49,6 +49,7 @@ import {
   Megaphone,
   Download,
   Video,
+  Upload,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { HexColorPicker } from "react-colorful";
@@ -564,7 +565,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [photoCurrentQuery, setPhotoCurrentQuery] = useState("");
   const [previewPhoto, setPreviewPhoto] = useState<{ id: string; url?: string; fullUrl?: string; thumb?: string } | null>(null);
   const [addImageModalOpen, setAddImageModalOpen] = useState(false);
-  const [addImageTab, setAddImageTab] = useState<"stock" | "ai">("stock");
+  const [addImageTab, setAddImageTab] = useState<"stock" | "ai" | "upload">("stock");
   const [unsplashQuery, setUnsplashQuery] = useState("");
   const [unsplashPhotos, setUnsplashPhotos] = useState<{ id: string; url?: string; fullUrl?: string; thumb?: string }[]>([]);
   const [unsplashLoading, setUnsplashLoading] = useState(false);
@@ -3603,13 +3604,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         Add Image
                       </DialogTitle>
                       <DialogDescription>
-                        Search free stock photos (Unsplash) or generate an image with AI. The image will be added to the current page and can be moved and resized on the canvas.
+                        Search stock photos (Unsplash), generate an image with AI, or upload your own image (JPG, PNG, WEBP). The image will be added to the current page and can be moved and resized on the canvas.
                       </DialogDescription>
                     </DialogHeader>
-                    <Tabs value={addImageTab} onValueChange={(v) => setAddImageTab(v as "stock" | "ai")} className="flex-1 min-h-0 flex flex-col">
-                      <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <Tabs value={addImageTab} onValueChange={(v) => setAddImageTab(v as "stock" | "ai" | "upload")} className="flex-1 min-h-0 flex flex-col">
+                      <TabsList className="grid w-full grid-cols-3 mb-4">
                         <TabsTrigger value="stock">Search stock (Unsplash)</TabsTrigger>
                         <TabsTrigger value="ai">Generate AI image</TabsTrigger>
+                        <TabsTrigger value="upload">Upload file</TabsTrigger>
                       </TabsList>
                       <TabsContent value="stock" className="mt-0 flex-1 min-h-0 flex flex-col overflow-hidden">
                         <div className="flex gap-2 mb-3">
@@ -3702,6 +3704,34 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             </Button>
                           </div>
                         )}
+                      </TabsContent>
+                      <TabsContent value="upload" className="mt-0 flex-1 min-h-0 flex flex-col">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                          Choose a JPG, PNG, or WEBP image from your device. It will be placed on the canvas like other images.
+                        </p>
+                        <label className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-orange-500 dark:hover:border-orange-500 transition-colors cursor-pointer py-10 px-6">
+                          <Upload className="w-10 h-10 text-gray-400 dark:text-gray-500" />
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Click to upload or drag and drop</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">JPG, PNG or WEBP</span>
+                          <input
+                            type="file"
+                            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                const dataUrl = reader.result;
+                                if (typeof dataUrl === "string") {
+                                  addImageToCanvasAndClose(dataUrl);
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
                       </TabsContent>
                     </Tabs>
                   </DialogContent>
