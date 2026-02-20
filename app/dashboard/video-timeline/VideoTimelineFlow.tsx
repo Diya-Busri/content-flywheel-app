@@ -223,7 +223,7 @@ export default function VideoTimelineFlow() {
           Video Timeline
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Upload video clips and voiceover audio, arrange them on the timeline, and preview. No rendering yet.
+          Preview at the top, timeline track below. Upload video clips and audio, drag blocks to reorder. No rendering or export yet.
         </p>
       </div>
 
@@ -283,17 +283,19 @@ export default function VideoTimelineFlow() {
         </CardContent>
       </Card>
 
+      {/* Timeline track: upload + draggable clip blocks */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Plus className="w-4 h-4" />
-            Add clips
+            Timeline track
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Add video clips and generated voiceover audio. Order in the timeline is the sequence order.
+            Upload video clips and audio files. Clips appear as blocks on the track — drag to reorder.
           </p>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
           <label className="cursor-pointer">
             <input
               type="file"
@@ -324,20 +326,10 @@ export default function VideoTimelineFlow() {
               <span>Add voiceover</span>
             </Button>
           </label>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Timeline</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Clips appear as blocks. Drag to reorder.
-          </p>
-        </CardHeader>
-        <CardContent>
+          </div>
           {clips.length === 0 ? (
             <p className="text-sm text-muted-foreground py-8 text-center rounded-lg border border-dashed">
-              No clips yet. Add video clips or voiceover above.
+              No clips on the track yet. Add video clips or audio above.
             </p>
           ) : (
             <DndContext

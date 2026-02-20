@@ -71,12 +71,27 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
   ];
 
   return (
-    <div
-      className={`sidebar no-print h-screen flex-shrink-0 bg-white dark:bg-[#1A1A1A] backdrop-blur-xl border-r border-[#E5E7EB] dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20 transition-[width] duration-200 ease-in-out ${
-        isCollapsed ? "w-[60px]" : "w-[60px] md:w-[220px]"
-      }`}
-      style={mounted ? { width: isCollapsed ? 60 : undefined } : undefined}
-    >
+    <>
+      {/* When collapsed: small expand button on left edge only */}
+      {isCollapsed && (
+        <motion.button
+          type="button"
+          onClick={toggleCollapsed}
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-30 flex items-center justify-center w-8 h-12 rounded-r-md bg-white dark:bg-[#1A1A1A] border border-l-0 border-[#E5E7EB] dark:border-white/10 shadow-sm text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-700 dark:hover:text-white transition-colors"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          aria-label="Expand sidebar"
+        >
+          <PanelLeft size={18} />
+        </motion.button>
+      )}
+
+      <div
+        className={`sidebar no-print h-screen flex-shrink-0 bg-white dark:bg-[#1A1A1A] backdrop-blur-xl border-r border-[#E5E7EB] dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20 transition-[width] duration-200 ease-in-out ${
+          isCollapsed ? "w-0 min-w-0 border-r-0" : "w-[60px] md:w-[220px]"
+        }`}
+        style={mounted && isCollapsed ? { width: 0, minWidth: 0 } : undefined}
+      >
         {/* Subtle gradient */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/[0.02] dark:from-white/[0.03] via-transparent to-transparent pointer-events-none" />
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 dark:via-white/20 to-transparent" />
@@ -85,24 +100,17 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
         {/* Logo + Collapse toggle */}
         <div className="px-3 mb-8 relative z-10 flex items-center justify-between gap-2">
           <Link href="/dashboard" className="min-w-0 flex-1">
-            <motion.div 
+            <motion.div
               className="flex items-center justify-center md:justify-start"
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              {!isCollapsed && (
-                <>
-                  <div className="hidden md:block">
-                    <span className="font-bold text-lg text-gray-900 dark:text-white">Content Flywheel</span>
-                  </div>
-                  <div className="block md:hidden text-center">
-                    <span className="font-bold text-sm text-gray-900 dark:text-white">CF</span>
-                  </div>
-                </>
-              )}
-              {isCollapsed && (
+              <div className="hidden md:block">
+                <span className="font-bold text-lg text-gray-900 dark:text-white">Content Flywheel</span>
+              </div>
+              <div className="block md:hidden text-center">
                 <span className="font-bold text-sm text-gray-900 dark:text-white">CF</span>
-              )}
+              </div>
             </motion.div>
           </Link>
           <motion.button
@@ -111,9 +119,9 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
             className="flex-shrink-0 p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-700 dark:hover:text-white transition-colors"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label="Collapse sidebar"
           >
-            {isCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
+            <PanelLeftClose size={18} />
           </motion.button>
         </div>
 
@@ -124,14 +132,14 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
               const isSub = "subItem" in item && item.subItem;
               return (
                 <Link key={item.href} href={item.href} className="block">
-                  <motion.div 
+                  <motion.div
                     className={`flex items-center py-2 px-3 rounded-lg cursor-pointer transition-all ${isSub ? "pl-4 md:pl-5" : ""} ${
-                      isActive(item.href) 
-                        ? "bg-orange-500 text-white shadow-sm" 
+                      isActive(item.href)
+                        ? "bg-orange-500 text-white shadow-sm"
                         : "text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
                     }`}
-                    whileHover={{ 
-                      scale: 1.03, 
+                    whileHover={{
+                      scale: 1.03,
                       x: 4,
                       transition: { duration: 0.2 }
                     }}
@@ -141,7 +149,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
                     <div className="flex items-center justify-center">
                       {item.icon}
                     </div>
-                    <span className={`ml-3 text-sm font-medium ${isCollapsed ? "hidden" : "hidden md:block"}`}>
+                    <span className="ml-3 text-sm font-medium hidden md:block">
                       {item.emoji} {item.label}
                     </span>
                   </motion.div>
@@ -163,7 +171,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
                 whileTap={{ scale: 0.98 }}
               >
                 <Star size={18} />
-                <span className={`text-sm font-medium ${isCollapsed ? "hidden" : "hidden md:block"}`}>Leave a review</span>
+                <span className="text-sm font-medium hidden md:block">Leave a review</span>
               </motion.button>
             </div>
           )}
@@ -178,7 +186,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
               aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
               {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-              <span className={`text-sm font-medium ${isCollapsed ? "hidden" : "hidden md:block"}`}>
+              <span className="text-sm font-medium hidden md:block">
                 {theme === "dark" ? "Light mode" : "Dark mode"}
               </span>
             </motion.button>
@@ -197,7 +205,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
                   className="w-full flex items-center justify-center md:justify-start gap-1.5 border-[#E5E7EB] dark:border-white/20 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-gray-700 dark:text-gray-300 py-1.5 h-auto transition-all"
                 >
                   <CreditCard size={14} className="text-gray-500 dark:text-gray-400" />
-                  <span className={`text-xs ${isCollapsed ? "hidden" : "hidden md:block"}`}>Billing</span>
+                  <span className="text-xs hidden md:block">Billing</span>
                 </Button>
               </motion.div>
             </Link>
@@ -205,9 +213,9 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
 
           {/* User Profile Section */}
           <div className="h-px bg-gradient-to-r from-transparent via-black/10 dark:via-white/10 to-transparent" />
-          <motion.div 
+          <motion.div
             className="flex items-center px-3 py-3 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg mx-2 cursor-pointer"
-            whileHover={{ 
+            whileHover={{
               scale: 1.02,
               transition: { duration: 0.2 }
             }}
@@ -215,24 +223,25 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
           >
             <div className="w-7 h-7 rounded-full overflow-hidden border border-[#E5E7EB] dark:border-white/20 flex items-center justify-center bg-black/5 dark:bg-white/10 shadow-sm">
               {mounted ? (
-                <UserButton 
+                <UserButton
                   afterSignOutUrl="/"
                   appearance={{
                     elements: {
                       userButtonAvatarBox: "w-7 h-7",
                       userButtonTrigger: "w-7 h-7 rounded-full"
                     }
-                  }} 
+                  }}
                 />
               ) : (
                 <div className="w-7 h-7 rounded-full bg-white/20" aria-hidden />
               )}
             </div>
-            <span className={`text-xs text-gray-600 dark:text-gray-400 font-medium truncate max-w-[120px] ml-3 ${isCollapsed ? "hidden" : "hidden md:block"}`}>
+            <span className="text-xs text-gray-600 dark:text-gray-400 font-medium truncate max-w-[120px] ml-3 hidden md:block">
               {userEmail || "Account"}
             </span>
           </motion.div>
         </div>
       </div>
+    </>
   );
 } 
