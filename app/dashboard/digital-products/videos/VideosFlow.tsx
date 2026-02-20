@@ -19,13 +19,9 @@ import { ArrowLeft, Check, Play, Loader2, User, Image, Package, Sparkles, AlertC
 import { useToast } from "@/components/ui/use-toast";
 import { VIDEO_GUIDE_PLATFORMS } from "@/lib/video-guide-platforms";
 
-const VOICE_OPTIONS = [
-  "Professional Male (British)",
-  "Friendly Female (American)",
-  "Energetic Male (Australian)",
-  "Professional Female (British)",
-  "Calm & Authoritative (American)",
-];
+type VoiceItem = { voice_id: string; name: string };
+
+const VOICE_PREVIEW_SAMPLE_TEXT = "Hi, this is your AI voiceover for your digital product.";
 
 const BACKGROUND_OPTIONS = [
   { value: "clean", label: "Clean Minimal (white/gradient)" },
@@ -59,7 +55,9 @@ export default function VideosFlow() {
   const [productId, setProductId] = useState<string | null>(null);
   const [selectedScripts, setSelectedScripts] = useState<SelectedScriptForVideo[]>([]);
   const [videoStyle, setVideoStyle] = useState<string>("broll");
-  const [voice, setVoice] = useState<string>(VOICE_OPTIONS[0]);
+  const [voices, setVoices] = useState<VoiceItem[]>([]);
+  const [voicesLoading, setVoicesLoading] = useState(true);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>("");
   const [speed, setSpeed] = useState<number[]>([1]);
   const [background, setBackground] = useState<string>("clean");
   const [captionStyle, setCaptionStyle] = useState<string>(CAPTION_PRESETS[0]);
@@ -93,15 +91,80 @@ export default function VideosFlow() {
     }
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    setVoicesLoading(true);
+    fetch("/api/elevenlabs/voices")
+      .then((res) => res.json())
+      .then((data: { voices?: VoiceItem[]; error?: string }) => {
+        if (cancelled) return;
+        const list = Array.isArray(data.voices) ? data.voices : [];
+        setVoices(list);
+        if (list.length > 0 && !selectedVoiceId) setSelectedVoiceId(list[0].voice_id);
+      })
+      .catch(() => {
+        if (!cancelled) setVoices([]);
+      })
+      .finally(() => {
+        if (!cancelled) setVoicesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const togglePlatform = (id: string) => {
     setPlatforms((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const selectedPlatformIds = VIDEO_GUIDE_PLATFORMS.filter((p) => platforms[p.id]).map((p) => p.id);
 
-  const handlePreview = () => {
+  const handlePreview = async () => {
+    const voiceId = selectedVoiceId || voices[0]?.voice_id;
+    if (!voiceId) {
+      toast({ title: "No voice selected", variant: "destructive" });
+      return;
+    }
     setPreviewLoading(true);
-    setTimeout(() => setPreviewLoading(false), 2500);
+    let objectUrl: string | null = null;
+    try {
+      const res = await fetch("/api/generate-voiceover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: VOICE_PREVIEW_SAMPLE_TEXT,
+          voiceId,
+          stability: 0.5,
+          similarity: 0.75,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({
+          title: "Preview failed",
+          description: (err as { error?: string }).error ?? "Could not play sample",
+          variant: "destructive",
+        });
+        return;
+      }
+      const blob = await res.blob();
+      objectUrl = URL.createObjectURL(blob);
+      const audio = new Audio(objectUrl);
+      await new Promise<void>((resolve, reject) => {
+        audio.onended = () => resolve();
+        audio.onerror = () => reject(new Error("Playback failed"));
+        audio.play().catch(reject);
+      });
+    } catch (e) {
+      toast({
+        title: "Preview failed",
+        description: e instanceof Error ? e.message : "Could not play sample",
+        variant: "destructive",
+      });
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setPreviewLoading(false);
+    }
   };
 
   const handleGenerateGuide = async () => {
@@ -211,18 +274,35 @@ export default function VideosFlow() {
                 <div>
                   <Label className="text-white">AI Voice</Label>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <Select value={voice} onValueChange={setVoice}>
+                    <Select
+                      value={selectedVoiceId}
+                      onValueChange={setSelectedVoiceId}
+                      disabled={voicesLoading}
+                    >
                       <SelectTrigger className="w-full max-w-[280px] bg-[#0F0F0F] border-[#2A2A2A] text-white">
-                        <SelectValue />
+                        <SelectValue placeholder={voicesLoading ? "Loading voices…" : "Select a voice"} />
                       </SelectTrigger>
                       <SelectContent className="bg-[#1A1A1A] border-[#2A2A2A]">
-                        {VOICE_OPTIONS.map((v) => (
-                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        {voices.map((v) => (
+                          <SelectItem key={v.voice_id} value={v.voice_id}>
+                            {v.name}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button variant="outline" size="sm" className="gap-1 border-[#2A2A2A] text-[#A0A0A0]">
-                      <Play className="w-3.5 h-3.5" /> Play 5-second sample
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 border-[#2A2A2A] text-[#A0A0A0]"
+                      onClick={handlePreview}
+                      disabled={previewLoading || !selectedVoiceId}
+                    >
+                      {previewLoading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Play className="w-3.5 h-3.5" />
+                      )}
+                      Play 5-second sample
                     </Button>
                   </div>
                 </div>
