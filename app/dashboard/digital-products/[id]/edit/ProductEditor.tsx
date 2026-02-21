@@ -190,6 +190,7 @@ type Product = {
     overlaySettings?: OverlaySettings;
     pages?: PageBackground[];
     textStyles?: Record<string, { title?: TextStyles; body?: TextStyles; blocks?: TextStyles[] }>;
+    backCoverSocialLinks?: { tiktok?: string; instagram?: string; youtube?: string; facebook?: string };
   } | null;
   placedElements?: unknown[] | null;
   marketingAssets?: {
@@ -242,7 +243,7 @@ const DEFAULT_TEXT_BOX: TextBoxSettings = {
 
 export type PlacedElement = {
   id: string;
-  type: "icon" | "image" | "text";
+  type: "icon" | "image" | "text" | "social";
   content: string;
   position: { x: number; y: number };
   size: { width: number; height: number };
@@ -250,6 +251,7 @@ export type PlacedElement = {
   zIndex: number;
   imageSettings?: ImageSettings;
   textSettings?: TextBoxSettings;
+  linkUrl?: string;
 };
 
 type EditorSnapshot = {
@@ -297,6 +299,14 @@ const GRAPHICS_ICONS: { name: string; icon: React.ComponentType<{ className?: st
 const ICON_NAME_TO_LUCIDE: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = Object.fromEntries(
   GRAPHICS_ICONS.map((i) => [i.name, i.icon])
 );
+
+const SOCIAL_PLATFORMS = ["tiktok", "instagram", "youtube", "facebook"] as const;
+const SOCIAL_ICON_MAP: Record<string, string> = {
+  tiktok: "simple-icons:tiktok",
+  instagram: "simple-icons:instagram",
+  youtube: "simple-icons:youtube",
+  facebook: "simple-icons:facebook",
+};
 
 const ICON_CATEGORIES: Record<string, string[]> = {
   Business: [
@@ -654,6 +664,7 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
 
   return (
     <Rnd
+      data-placed-element
       position={{ x: element.position.x, y: element.position.y }}
       size={{ width: element.size.width, height: element.size.height }}
       onDragStop={handleDragStop}
@@ -679,6 +690,23 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
               filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)`,
             }}
           />
+        ) : element.type === "social" ? (
+          element.linkUrl ? (
+            <a
+              href={element.linkUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full h-full flex items-center justify-center hover:opacity-80 transition-opacity"
+              onClick={(e) => e.stopPropagation()}
+              style={{ color: graphicsAccentColor }}
+            >
+              <Icon icon={SOCIAL_ICON_MAP[element.content] || "simple-icons:link"} className="w-full h-full" />
+            </a>
+          ) : (
+            <span className="w-full h-full flex items-center justify-center" style={{ color: graphicsAccentColor }}>
+              <Icon icon={SOCIAL_ICON_MAP[element.content] || "simple-icons:link"} className="w-full h-full" />
+            </span>
+          )
         ) : element.type === "text" ? (
           isEditing ? (
             <textarea
@@ -2011,6 +2039,80 @@ export default function ProductEditor({ productId }: { productId: string }) {
     toast({ title: "Background applied to back cover" });
   }, [pageBackgrounds, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo]);
 
+  const applyBackBackgroundToCover = useCallback(() => {
+    const backIdx = pageBackgrounds.length - 1;
+    const backPage = pageBackgrounds[backIdx];
+    if (!backPage) return;
+    recordUndo();
+    const coverBg: PageBackground = {
+      backgroundImage: backPage.backgroundImage ?? undefined,
+      backgroundSettings: backPage.backgroundSettings ? { ...backPage.backgroundSettings } : undefined,
+      overlaySettings: backPage.overlaySettings ? { ...backPage.overlaySettings } : undefined,
+    };
+    const nextPages = [...pageBackgrounds];
+    nextPages[0] = coverBg;
+    setPageBackgrounds(nextPages);
+    if (currentPageIndex === 0) {
+      setBackgroundImage(coverBg.backgroundImage ?? null);
+      setBackgroundSettings(coverBg.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...coverBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS);
+      setOverlaySettings(coverBg.overlaySettings ? { ...DEFAULT_OVERLAY, ...coverBg.overlaySettings } : DEFAULT_OVERLAY);
+    }
+    saveToServer({ designSettings: { ...product?.designSettings, pages: nextPages, placedElementsByPage } });
+    toast({ title: "Background applied to front cover" });
+  }, [pageBackgrounds, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo, currentPageIndex]);
+
+  const backCoverSocialLinks = product?.designSettings?.backCoverSocialLinks ?? {};
+
+  const updateBackCoverSocialLink = useCallback(
+    (platform: "tiktok" | "instagram" | "youtube" | "facebook", url: string) => {
+      recordUndo();
+      const trimmed = url.trim();
+      const nextLinks = { ...backCoverSocialLinks, [platform]: trimmed || undefined };
+      if (!trimmed) delete nextLinks[platform];
+      setProduct((p) =>
+        p ? { ...p, designSettings: { ...p.designSettings, backCoverSocialLinks: nextLinks } } : null
+      );
+      const backIdx = placedElementsByPage.length - 1;
+      if (backIdx < 0) return;
+      const socialSize = 40;
+      const startXForPlatform = (idx: number) =>
+        CANVAS_WIDTH / 2 - (SOCIAL_PLATFORMS.length * (socialSize + 12)) / 2 + idx * (socialSize + 12);
+      const backPage = placedElementsByPage[backIdx] ?? [];
+      let nextBackPage: PlacedElement[];
+      if (trimmed) {
+        const existing = backPage.find((el) => el.type === "social" && el.content === platform);
+        if (existing) {
+          nextBackPage = backPage.map((el) =>
+            el.type === "social" && el.content === platform ? { ...el, linkUrl: trimmed } : el
+          );
+        } else {
+          nextBackPage = [
+            ...backPage,
+            {
+              id: `social-${platform}-${Date.now()}`,
+              type: "social" as const,
+              content: platform,
+              position: { x: startXForPlatform(SOCIAL_PLATFORMS.indexOf(platform)), y: CANVAS_HEIGHT - 120 },
+              size: { width: socialSize, height: socialSize },
+              rotation: 0,
+              zIndex: 10,
+              linkUrl: trimmed,
+            },
+          ];
+        }
+      } else {
+        nextBackPage = backPage.filter((el) => !(el.type === "social" && el.content === platform));
+      }
+      const nextPlacedElementsByPage = placedElementsByPage.map((arr, i) => (i === backIdx ? nextBackPage : arr));
+      setPlacedElementsByPage(nextPlacedElementsByPage);
+      saveToServer({
+        designSettings: { ...product?.designSettings, backCoverSocialLinks: nextLinks },
+        placedElementsByPage: nextPlacedElementsByPage,
+      });
+    },
+    [backCoverSocialLinks, placedElementsByPage, product?.designSettings, saveToServer, recordUndo]
+  );
+
   const selectedGraphicElement = selectedElement ? currentPageElements.find((el) => el.id === selectedElement) : null;
 
   const pagesWithSelectedIconCount = selectedGraphicElement
@@ -2991,9 +3093,23 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       </>
                     )}
                   </div>
-                  {/* Placed elements layer (Canva-style) - above content; current page only; memoized per element */}
-                  <div className="absolute inset-0 pointer-events-none z-20" aria-hidden>
-                    <div className="w-full h-full relative pointer-events-none">
+                  {/* Placed elements layer (Canva-style) - above content; current page only; memoized per element. On cover/back we need pointer-events so text boxes are clickable; on content pages leave pointer-events-none so section text can be selected. */}
+                  <div
+                    className="absolute inset-0 z-20"
+                    style={{ pointerEvents: isOnCoverPage || isOnBackPage ? "auto" : "none" }}
+                    onClick={(e) => {
+                      if (!(isOnCoverPage || isOnBackPage)) return;
+                      const target = (e.target as HTMLElement).closest("[data-placed-element]");
+                      if (!target) {
+                        setSelectedElement(null);
+                        setEditingTextBoxId(null);
+                        deselectText();
+                        setCoverBackHintDismissed(true);
+                      }
+                    }}
+                    role="presentation"
+                  >
+                    <div className="w-full h-full relative">
                       {sortedPageElements.map((element) => (
                         <CanvasPlacedElement
                           key={element.id}
@@ -3324,9 +3440,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 </div>
                 <p className="text-xs text-gray-500 mt-3">Preview updates as you edit.</p>
 
-                {isOnCoverPage && backgroundImage && (
+                {(isOnCoverPage || isOnBackPage) && backgroundImage && (
                   <div className="mt-6 pt-6 border-t border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-1">Cover background overlay</h3>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-1">{isOnCoverPage ? "Cover" : "Back cover"} background overlay</h3>
                     <p className="text-xs text-gray-500 mb-3">A semi-transparent layer between the background image and text so the cover stays readable.</p>
                     <div className="space-y-3">
                       <div>
@@ -3361,6 +3477,24 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 )}
               </TabsContent>
               <TabsContent value="graphics" className="mt-0 p-4 space-y-6 overflow-y-auto">
+                {isOnBackPage && (
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-900">Social Links</h3>
+                    <p className="text-xs text-gray-500">Add URLs to show clickable social icons on the back cover. Drag icons on the canvas to reposition.</p>
+                    {(["tiktok", "instagram", "youtube", "facebook"] as const).map((platform) => (
+                      <div key={platform}>
+                        <label className="text-xs text-gray-600 font-medium block mb-1 capitalize">{platform}</label>
+                        <input
+                          type="url"
+                          value={backCoverSocialLinks[platform] ?? ""}
+                          onChange={(e) => updateBackCoverSocialLink(platform, e.target.value)}
+                          placeholder={`https://${platform}.com/...`}
+                          className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <p className="text-xs text-gray-500 mb-3">Click to add to canvas. Drag to move and resize. Icons and graphics are on the current page only.</p>
                 <Button
                   type="button"
@@ -3391,7 +3525,18 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       onClick={applyCoverBackgroundToBackCover}
                       className="w-full border-gray-200 text-gray-600 hover:bg-gray-100"
                     >
-                      Apply to back cover
+                      Copy background to back cover
+                    </Button>
+                  )}
+                  {isOnBackPage && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={applyBackBackgroundToCover}
+                      className="w-full border-gray-200 text-gray-600 hover:bg-gray-100"
+                    >
+                      Copy background to front cover
                     </Button>
                   )}
                 </div>
@@ -4916,6 +5061,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         <div key={element.id} className="absolute flex items-center justify-center" style={{ left: element.position.x, top: element.position.y, width: element.size.width, height: element.size.height, zIndex: Math.max(1, element.zIndex) }}>
                           {element.type === "icon" && isIconify ? <Icon icon={element.content} className="w-full h-full" style={{ color: iconColor }} /> : element.type === "icon" && LucideIcon ? <LucideIcon className="w-full h-full" style={{ color: iconColor }} /> : element.type === "image" ? (
                             <img src={element.content} alt="" className="w-full h-full object-cover" style={{ opacity: element.imageSettings?.opacity ?? 1, filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)` }} />
+                          ) : element.type === "social" ? (
+                            element.linkUrl ? (
+                              <a href={element.linkUrl} target="_blank" rel="noopener noreferrer" className="w-full h-full flex items-center justify-center" style={{ color: iconColor }}>
+                                <Icon icon={SOCIAL_ICON_MAP[element.content] || "simple-icons:link"} className="w-full h-full" />
+                              </a>
+                            ) : (
+                              <span className="w-full h-full flex items-center justify-center" style={{ color: iconColor }}>
+                                <Icon icon={SOCIAL_ICON_MAP[element.content] || "simple-icons:link"} className="w-full h-full" />
+                              </span>
+                            )
                           ) : element.type === "text" ? (
                             <div className="w-full h-full overflow-auto p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color, textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word", textShadow: (element.textSettings?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? `${element.textSettings?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX}px ${element.textSettings?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY}px ${element.textSettings?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur}px ${element.textSettings?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor}` : "none", WebKitTextStroke: (element.textSettings?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${element.textSettings?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${element.textSettings?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none" }}>{element.content || ""}</div>
                           ) : <span className="text-[#999] text-xs">?</span>}
