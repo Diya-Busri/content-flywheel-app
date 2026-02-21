@@ -638,10 +638,11 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
     [element.id, element.content, onStartEditTextBox]
   );
   const ts = element.textSettings;
+  const textColor = ts?.color ?? DEFAULT_TEXT_BOX.color;
   const textStyle = element.type === "text" ? {
     fontSize: ts?.fontSize ?? DEFAULT_TEXT_BOX.fontSize,
     fontFamily: ts?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily,
-    color: ts?.color ?? DEFAULT_TEXT_BOX.color,
+    color: textColor,
     textAlign: (ts?.textAlign ?? DEFAULT_TEXT_BOX.textAlign) as React.CSSProperties["textAlign"],
     fontWeight: ts?.fontWeight ?? DEFAULT_TEXT_BOX.fontWeight,
     fontStyle: (ts?.fontStyle ?? DEFAULT_TEXT_BOX.fontStyle) as React.CSSProperties["fontStyle"],
@@ -693,8 +694,9 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
             />
           ) : (
             <div
+              key={`text-display-${element.id}-${textColor}`}
               className="w-full h-full overflow-auto p-1 flex items-center cursor-text select-text"
-              style={textStyle}
+              style={{ ...textStyle, color: textColor }}
               onDoubleClick={handleDoubleClickText}
             >
               {element.content || "Double-click to edit"}
@@ -1724,7 +1726,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
     [imageSettings, selectedElement, recordUndoDebounced, setCurrentPageElements]
   );
 
-  const selectedTextElement = selectedElement ? currentPageElements.find((el) => el.id === selectedElement && el.type === "text") : null;
+  const selectedTextElement = useMemo(
+    () =>
+      selectedElement
+        ? (placedElementsByPage.flat().find((el) => el.id === selectedElement && el.type === "text") ?? null)
+        : null,
+    [selectedElement, placedElementsByPage]
+  );
 
   useEffect(() => {
     if (editingTextBoxId) {
@@ -1738,45 +1746,56 @@ export default function ProductEditor({ productId }: { productId: string }) {
     (content: string) => {
       if (!selectedElement) return;
       recordUndoDebounced();
-      setCurrentPageElements((prev) =>
-        prev.map((el) => (el.id === selectedElement ? { ...el, content } : el))
+      setPlacedElementsByPage((prev) =>
+        prev.map((pageArr) =>
+          pageArr.map((el) => (el.id === selectedElement ? { ...el, content } : el))
+        )
       );
     },
-    [selectedElement, recordUndoDebounced, setCurrentPageElements]
+    [selectedElement, recordUndoDebounced]
   );
 
   const saveTextBoxContentById = useCallback(
     (elementId: string, content: string) => {
       recordUndoDebounced();
-      setCurrentPageElements((prev) =>
-        prev.map((el) => (el.id === elementId && el.type === "text" ? { ...el, content } : el))
-      );
-      setEditingTextBoxId(null);
-    },
-    [recordUndoDebounced, setCurrentPageElements]
-  );
-
-  const handleSelectElement = useCallback((id: string) => setSelectedElement(id), []);
-  const updateTextBoxContentById = useCallback(
-    (elementId: string, value: string) => {
-      recordUndoDebounced();
-      setCurrentPageElements((prev) =>
-        prev.map((el) => (el.id === elementId && el.type === "text" ? { ...el, content: value } : el))
-      );
-    },
-    [recordUndoDebounced, setCurrentPageElements]
-  );
-  const cancelTextBoxEdit = useCallback(
-    (elementId: string) => {
-      setCurrentPageElements((prev) =>
-        prev.map((el) =>
-          el.id === elementId && el.type === "text" ? { ...el, content: editingTextBoxInitialContentRef.current } : el
+      setPlacedElementsByPage((prev) =>
+        prev.map((pageArr) =>
+          pageArr.map((el) => (el.id === elementId && el.type === "text" ? { ...el, content } : el))
         )
       );
       setEditingTextBoxId(null);
     },
-    [setCurrentPageElements]
+    [recordUndoDebounced]
   );
+
+  const handleSelectElement = useCallback(
+    (id: string) => {
+      deselectText();
+      setSelectedElement(id);
+    },
+    [deselectText]
+  );
+  const updateTextBoxContentById = useCallback(
+    (elementId: string, value: string) => {
+      recordUndoDebounced();
+      setPlacedElementsByPage((prev) =>
+        prev.map((pageArr) =>
+          pageArr.map((el) => (el.id === elementId && el.type === "text" ? { ...el, content: value } : el))
+        )
+      );
+    },
+    [recordUndoDebounced]
+  );
+  const cancelTextBoxEdit = useCallback((elementId: string) => {
+    setPlacedElementsByPage((prev) =>
+      prev.map((pageArr) =>
+        pageArr.map((el) =>
+          el.id === elementId && el.type === "text" ? { ...el, content: editingTextBoxInitialContentRef.current } : el
+        )
+      )
+    );
+    setEditingTextBoxId(null);
+  }, []);
   const handleStartEditTextBox = useCallback((elementId: string, content: string) => {
     editingTextBoxInitialContentRef.current = content || "";
     setEditingTextBoxId(elementId);
@@ -1787,15 +1806,62 @@ export default function ProductEditor({ productId }: { productId: string }) {
     (key: keyof TextBoxSettings, value: string | number | boolean) => {
       if (!selectedElement) return;
       recordUndoDebounced();
-      setCurrentPageElements((prev) =>
-        prev.map((el) => {
-          if (el.id !== selectedElement || el.type !== "text") return el;
-          const next = { ...el.textSettings, [key]: value } as TextBoxSettings;
-          return { ...el, textSettings: { ...DEFAULT_TEXT_BOX, ...next } };
-        })
+      const normalizedValue = key === "color" && typeof value === "string"
+        ? (value.startsWith("#") ? value : `#${value}`).toLowerCase()
+        : value;
+      setPlacedElementsByPage((prev) =>
+        prev.map((pageArr) =>
+          pageArr.map((el) => {
+            if (el.id !== selectedElement || el.type !== "text") return el;
+            const next = { ...el.textSettings, [key]: normalizedValue } as TextBoxSettings;
+            return { ...el, textSettings: { ...DEFAULT_TEXT_BOX, ...next } };
+          })
+        )
       );
+      const pageOfElement = placedElementsByPage.findIndex((pageArr) =>
+        pageArr.some((el) => el.id === selectedElement && el.type === "text")
+      );
+      if (pageOfElement >= 0 && pageOfElement !== currentPageIndex) {
+        setCurrentPageIndex(pageOfElement);
+      }
     },
-    [selectedElement, recordUndoDebounced, setCurrentPageElements]
+    [selectedElement, recordUndoDebounced, placedElementsByPage, currentPageIndex]
+  );
+
+  const applyTextColorToCurrentPage = useCallback(
+    (color: string) => {
+      recordUndo();
+      setPlacedElementsByPage((prev) =>
+        prev.map((pageArr, pageIndex) =>
+          pageIndex === currentPageIndex
+            ? pageArr.map((el) =>
+                el.type === "text"
+                  ? { ...el, textSettings: { ...DEFAULT_TEXT_BOX, ...el.textSettings, color } }
+                  : el
+              )
+            : pageArr
+        )
+      );
+      toast({ title: "Colour applied to all text on this page" });
+    },
+    [currentPageIndex, recordUndo, toast]
+  );
+
+  const applyTextColorToAllPages = useCallback(
+    (color: string) => {
+      recordUndo();
+      setPlacedElementsByPage((prev) =>
+        prev.map((pageArr) =>
+          pageArr.map((el) =>
+            el.type === "text"
+              ? { ...el, textSettings: { ...DEFAULT_TEXT_BOX, ...el.textSettings, color } }
+              : el
+          )
+        )
+      );
+      toast({ title: "Colour applied to all text on every page" });
+    },
+    [recordUndo, toast]
   );
 
   const setBackgroundFromUrl = useCallback(
@@ -3109,6 +3175,83 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 </Button>
               </div>
             )}
+            {selectedTextElement && (
+              <div className="p-3 border-b border-gray-200 bg-gray-50 space-y-3">
+                <p className="text-xs font-medium text-gray-900">Text box — format</p>
+                <div>
+                  <label className="text-xs text-gray-600 font-medium block mb-1.5">Bold · Italic · Underline</label>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => updateTextBoxSetting("fontWeight", (selectedTextElement.textSettings?.fontWeight ?? DEFAULT_TEXT_BOX.fontWeight) === "700" ? "400" : "700")}
+                      className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-colors ${(selectedTextElement.textSettings?.fontWeight ?? DEFAULT_TEXT_BOX.fontWeight) === "700" ? "bg-orange-500 text-white border-orange-500" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                      title="Bold"
+                    >
+                      B
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateTextBoxSetting("fontStyle", (selectedTextElement.textSettings?.fontStyle ?? DEFAULT_TEXT_BOX.fontStyle) === "italic" ? "normal" : "italic")}
+                      className={`flex-1 py-2 rounded-lg text-sm italic border transition-colors ${(selectedTextElement.textSettings?.fontStyle ?? DEFAULT_TEXT_BOX.fontStyle) === "italic" ? "bg-orange-500 text-white border-orange-500" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                      title="Italic"
+                    >
+                      I
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateTextBoxSetting("textDecoration", (selectedTextElement.textSettings?.textDecoration ?? DEFAULT_TEXT_BOX.textDecoration) === "underline" ? "none" : "underline")}
+                      className={`flex-1 py-2 rounded-lg text-sm border transition-colors ${(selectedTextElement.textSettings?.textDecoration ?? DEFAULT_TEXT_BOX.textDecoration) === "underline" ? "bg-orange-500 text-white border-orange-500" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                      style={{ textDecoration: "underline" }}
+                      title="Underline"
+                    >
+                      U
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600 font-medium block mb-1">Font size: {(selectedTextElement.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize)}px</label>
+                  <input
+                    type="range"
+                    min="10"
+                    max="72"
+                    step="2"
+                    value={selectedTextElement.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize}
+                    onChange={(e) => updateTextBoxSetting("fontSize", parseInt(e.target.value, 10))}
+                    className="w-full h-2 bg-gray-200 rounded-lg accent-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600 font-medium block mb-1">Font</label>
+                  <select
+                    value={(selectedTextElement.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily).split(",")[0].trim()}
+                    onChange={(e) => updateTextBoxSetting("fontFamily", e.target.value + ", system-ui, sans-serif")}
+                    className="w-full p-2.5 bg-white rounded-lg text-sm text-gray-900 border border-gray-200"
+                  >
+                    {["Inter", "Arial", "Georgia", "Times New Roman", "Courier New", "Verdana", "Helvetica", "Playfair Display", "Roboto", "Open Sans", "Lato", "Montserrat"].map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                  <label className="text-xs text-gray-600 font-medium block mt-2 mb-1">Weight</label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[
+                      { label: "Light", value: "300" },
+                      { label: "Normal", value: "400" },
+                      { label: "Semi", value: "600" },
+                      { label: "Bold", value: "700" },
+                    ].map(({ label, value }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => updateTextBoxSetting("fontWeight", value)}
+                        className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${(selectedTextElement.textSettings?.fontWeight ?? DEFAULT_TEXT_BOX.fontWeight) === value ? "bg-orange-500 text-white border-orange-500" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
             <Tabs defaultValue="content" className="w-full flex flex-col flex-1 min-h-0">
               <TabsList className="bg-gray-50 border-b border-gray-200 w-full grid grid-cols-7 rounded-none h-11 px-0">
                 <TabsTrigger value="content" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
@@ -3380,6 +3523,26 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         onChange={(e) => updateTextBoxSetting("color", e.target.value)}
                         className="w-full mt-2 p-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 font-mono"
                       />
+                      <div className="flex flex-col gap-1.5 mt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => applyTextColorToCurrentPage(selectedTextElement.textSettings?.color ?? DEFAULT_TEXT_BOX.color)}
+                          className="w-full border-gray-200 text-gray-600 hover:bg-gray-100 text-xs"
+                        >
+                          Apply to this page
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => applyTextColorToAllPages(selectedTextElement.textSettings?.color ?? DEFAULT_TEXT_BOX.color)}
+                          className="w-full border-gray-200 text-gray-600 hover:bg-gray-100 text-xs"
+                        >
+                          Apply colour to all pages
+                        </Button>
+                      </div>
                     </div>
                     <div>
                       <label className="text-xs text-gray-600 font-medium block mb-1">Alignment</label>
