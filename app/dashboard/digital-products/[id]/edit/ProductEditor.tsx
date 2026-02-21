@@ -3295,6 +3295,36 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       />
                     </div>
                     <div>
+                      <label className="text-xs text-gray-600 font-medium block mb-1.5">Bold · Italic · Underline</label>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => updateTextBoxSetting("fontWeight", (selectedTextElement.textSettings?.fontWeight ?? DEFAULT_TEXT_BOX.fontWeight) === "700" ? "400" : "700")}
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-colors ${(selectedTextElement.textSettings?.fontWeight ?? DEFAULT_TEXT_BOX.fontWeight) === "700" ? "bg-orange-500 text-white border-orange-500" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                          title="Bold"
+                        >
+                          B
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateTextBoxSetting("fontStyle", (selectedTextElement.textSettings?.fontStyle ?? DEFAULT_TEXT_BOX.fontStyle) === "italic" ? "normal" : "italic")}
+                          className={`flex-1 py-2 rounded-lg text-sm italic border transition-colors ${(selectedTextElement.textSettings?.fontStyle ?? DEFAULT_TEXT_BOX.fontStyle) === "italic" ? "bg-orange-500 text-white border-orange-500" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                          title="Italic"
+                        >
+                          I
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateTextBoxSetting("textDecoration", (selectedTextElement.textSettings?.textDecoration ?? DEFAULT_TEXT_BOX.textDecoration) === "underline" ? "none" : "underline")}
+                          className={`flex-1 py-2 rounded-lg text-sm border transition-colors ${(selectedTextElement.textSettings?.textDecoration ?? DEFAULT_TEXT_BOX.textDecoration) === "underline" ? "bg-orange-500 text-white border-orange-500" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                          style={{ textDecoration: "underline" }}
+                          title="Underline"
+                        >
+                          U
+                        </button>
+                      </div>
+                    </div>
+                    <div>
                       <label className="text-xs text-gray-600 font-medium block mb-1">Font size: {(selectedTextElement.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize)}px</label>
                       <input
                         type="range"
@@ -3317,6 +3347,24 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           <option key={f} value={f}>{f}</option>
                         ))}
                       </select>
+                      <label className="text-xs text-gray-600 font-medium block mt-2 mb-1">Weight</label>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[
+                          { label: "Light", value: "300" },
+                          { label: "Normal", value: "400" },
+                          { label: "Semi", value: "600" },
+                          { label: "Bold", value: "700" },
+                        ].map(({ label, value }) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => updateTextBoxSetting("fontWeight", value)}
+                            className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${(selectedTextElement.textSettings?.fontWeight ?? DEFAULT_TEXT_BOX.fontWeight) === value ? "bg-orange-500 text-white border-orange-500" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div>
                       <label className="text-xs text-gray-600 font-medium block mb-1">Color</label>
