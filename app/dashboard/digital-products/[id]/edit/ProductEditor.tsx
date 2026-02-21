@@ -866,17 +866,34 @@ export default function ProductEditor({ productId }: { productId: string }) {
       setTemplate(savedTemplate);
       const byPage = (data.designSettings as { placedElementsByPage?: unknown[] })?.placedElementsByPage;
       const sectionsCountForPlaced = (data.content?.sections ?? []).length || 1;
+      const totalPagesForPlaced = sectionsCountForPlaced + 2; // cover + content + back
       if (Array.isArray(byPage) && byPage.length > 0) {
         const parsed = byPage.map((pageArr) => (Array.isArray(pageArr) ? parsePlacedElements(pageArr) : []));
-        if (parsed.length === sectionsCountForPlaced + 2) {
-          setPlacedElementsByPage(parsed);
-        } else {
+        // Ensure we have exactly totalPagesForPlaced: [cover, ...content, back]
+        if (parsed.length >= totalPagesForPlaced) {
+          setPlacedElementsByPage(parsed.slice(0, totalPagesForPlaced));
+        } else if (parsed.length === sectionsCountForPlaced) {
+          // Legacy: only content pages — wrap with empty cover and back
           setPlacedElementsByPage([[], ...parsed, []]);
+        } else if (parsed.length > 0) {
+          const padded = Array.from({ length: totalPagesForPlaced }, (_, i) => parsed[i] ?? []);
+          setPlacedElementsByPage(padded);
+        } else {
+          setPlacedElementsByPage(Array.from({ length: totalPagesForPlaced }, () => []));
         }
       } else {
         const legacy = parsePlacedElements(data.placedElements ?? []);
         const contentOnly = legacy.length ? [legacy] : [[]];
         setPlacedElementsByPage([[], ...contentOnly, []]);
+      }
+
+      // Debug: cover and back placed elements loaded
+      const loadedByPage = (data.designSettings as { placedElementsByPage?: unknown[] })?.placedElementsByPage;
+      if (Array.isArray(loadedByPage) && loadedByPage.length > 0) {
+        const coverEls = Array.isArray(loadedByPage[0]) ? loadedByPage[0] : [];
+        const backEls = Array.isArray(loadedByPage[loadedByPage.length - 1]) ? loadedByPage[loadedByPage.length - 1] : [];
+        console.log("[ProductEditor] Load — cover page placed elements (count):", coverEls.length, coverEls);
+        console.log("[ProductEditor] Load — back cover placed elements (count):", backEls.length, backEls);
       }
       const colors = (data.designSettings as { colors?: Record<string, string> })?.colors;
       const preset = TEMPLATE_PRESETS[savedTemplate] ?? TEMPLATE_PRESETS.modern;
@@ -898,16 +915,26 @@ export default function ProductEditor({ productId }: { productId: string }) {
         pages?: PageBackground[];
       } | undefined;
       const sectionsCount = (data.content?.sections ?? []).length || 1;
+      const totalPagesExpected = sectionsCount + 2; // cover + content pages + back
       const legacyBgUrl = ds?.backgroundImage ?? ds?.background_image ?? null;
-      let contentPages: PageBackground[];
-      if (Array.isArray(ds?.pages) && ds.pages.length >= sectionsCount) {
-        contentPages = ds.pages.slice(0, sectionsCount).map((p) => ({
+      let pages: PageBackground[];
+      if (Array.isArray(ds?.pages) && ds.pages.length >= totalPagesExpected) {
+        // Saved format: [cover, ...content, back] — use as-is (index 0 = cover, last = back)
+        pages = ds.pages.slice(0, totalPagesExpected).map((p) => ({
           backgroundImage: p?.backgroundImage ?? null,
           backgroundSettings: p?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...p.backgroundSettings } : undefined,
           overlaySettings: p?.overlaySettings ? { ...DEFAULT_OVERLAY, ...p.overlaySettings } : undefined,
         }));
+      } else if (Array.isArray(ds?.pages) && ds.pages.length >= sectionsCount) {
+        // Legacy: only content pages saved — wrap with empty cover and back
+        const contentPages = ds.pages.slice(0, sectionsCount).map((p) => ({
+          backgroundImage: p?.backgroundImage ?? null,
+          backgroundSettings: p?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...p.backgroundSettings } : undefined,
+          overlaySettings: p?.overlaySettings ? { ...DEFAULT_OVERLAY, ...p.overlaySettings } : undefined,
+        }));
+        pages = [{}, ...contentPages, {}];
       } else {
-        contentPages = Array.from({ length: sectionsCount }, (_, i) =>
+        const contentPages = Array.from({ length: sectionsCount }, (_, i) =>
           i === 0 && legacyBgUrl
             ? {
                 backgroundImage: legacyBgUrl,
@@ -916,9 +943,21 @@ export default function ProductEditor({ productId }: { productId: string }) {
               }
             : {}
         );
+        pages = [{}, ...contentPages, {}];
       }
-      const pages: PageBackground[] = [{}, ...contentPages, {}];
       setPageBackgrounds(pages);
+
+      // Debug: cover and back page data loaded
+      const coverPage = pages[0];
+      const backPage = pages[pages.length - 1];
+      console.log("[ProductEditor] Load — cover page (index 0):", {
+        backgroundImage: coverPage?.backgroundImage ?? null,
+        overlaySettings: coverPage?.overlaySettings ?? null,
+      });
+      console.log("[ProductEditor] Load — back cover page (index " + (pages.length - 1) + "):", {
+        backgroundImage: backPage?.backgroundImage ?? null,
+        overlaySettings: backPage?.overlaySettings ?? null,
+      });
       setCurrentPageIndex(0);
       setUndoStack([]);
       setRedoStack([]);
@@ -1146,6 +1185,25 @@ export default function ProductEditor({ productId }: { productId: string }) {
       marketingAssets?: Record<string, unknown>;
     }) => {
       if (!productId) return;
+      if (payload.designSettings) {
+        const ds = payload.designSettings as { pages?: PageBackground[]; placedElementsByPage?: PlacedElement[][] };
+        const pages = ds.pages ?? [];
+        const byPage = ds.placedElementsByPage ?? [];
+        const coverPage = pages[0];
+        const backPage = pages.length > 0 ? pages[pages.length - 1] : undefined;
+        const coverEls = byPage[0] ?? [];
+        const backEls = byPage.length > 0 ? (byPage[byPage.length - 1] ?? []) : [];
+        console.log("[ProductEditor] Save — cover page (index 0):", {
+          backgroundImage: coverPage?.backgroundImage ?? null,
+          overlaySettings: coverPage?.overlaySettings ?? null,
+          placedElementsCount: coverEls.length,
+        });
+        console.log("[ProductEditor] Save — back cover page (index " + (pages.length - 1) + "):", {
+          backgroundImage: backPage?.backgroundImage ?? null,
+          overlaySettings: backPage?.overlaySettings ?? null,
+          placedElementsCount: backEls.length,
+        });
+      }
       setSaving(true);
       try {
         const res = await fetch(`/api/products/${productId}`, {
@@ -1180,7 +1238,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
           template: templateId,
           colors: { ...product?.designSettings?.colors, graphics: preset.accentColor },
           typography: product?.designSettings?.typography,
-          pages: pageBackgrounds.length ? pageBackgrounds : undefined,
+          pages: pageBackgrounds.length ? pageBackgrounds : Array.from({ length: Math.max(2, sections.length + 2) }, () => ({})),
           layout: { ...layoutSettings, ...preset.layout },
           placedElementsByPage,
         },
@@ -1191,7 +1249,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   useEffect(() => {
     if (!product || sections.length === 0) return;
+    const totalPages = Math.max(2, sections.length + 2);
     autoSaveTimerRef.current = setInterval(() => {
+      // Always send full pages and placedElementsByPage (cover + content + back) so Supabase persists them
+      const pagesToSave = pageBackgrounds.length >= totalPages ? pageBackgrounds : Array.from({ length: totalPages }, (_, i) => pageBackgrounds[i] ?? {});
+      const elementsToSave = placedElementsByPage.length >= totalPages ? placedElementsByPage : Array.from({ length: totalPages }, (_, i) => placedElementsByPage[i] ?? []);
       saveToServer({
         content: { sections },
         designSettings: {
@@ -1200,8 +1262,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
           layout: layoutSettings,
           colors: { ...product.designSettings?.colors, graphics: graphicsAccentColor },
           typography: product.designSettings?.typography,
-          pages: pageBackgrounds.length ? pageBackgrounds : undefined,
-          placedElementsByPage: placedElementsByPage,
+          pages: pagesToSave,
+          placedElementsByPage: elementsToSave,
         },
       });
     }, 5000);
@@ -1753,6 +1815,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       saveToServer({
         designSettings: {
           ...product?.designSettings,
+          placedElementsByPage,
           pages: (() => {
             const next = [...pageBackgrounds];
             while (next.length <= currentPageIndex) next.push({});
@@ -1763,7 +1826,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       });
       toast({ title: "Background set for this page. Adjust opacity and overlay below." });
     },
-    [toast, product?.designSettings, saveToServer, persistCurrentPageBackground, pageBackgrounds, currentPageIndex, recordUndo]
+    [toast, product?.designSettings, saveToServer, persistCurrentPageBackground, pageBackgrounds, placedElementsByPage, currentPageIndex, recordUndo]
   );
 
   const setAsBackground = useCallback(() => {
@@ -1838,9 +1901,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
     const nextPages = [...pageBackgrounds];
     while (nextPages.length <= currentPageIndex) nextPages.push({});
     nextPages[currentPageIndex] = {};
-    saveToServer({ designSettings: { ...product?.designSettings, pages: nextPages } });
+    saveToServer({ designSettings: { ...product?.designSettings, pages: nextPages, placedElementsByPage } });
     toast({ title: "Background removed from this page" });
-  }, [toast, persistCurrentPageBackground, pageBackgrounds, currentPageIndex, product?.designSettings, saveToServer, recordUndo]);
+  }, [toast, persistCurrentPageBackground, pageBackgrounds, placedElementsByPage, currentPageIndex, product?.designSettings, saveToServer, recordUndo]);
 
   const applyBackgroundToAllPages = useCallback(() => {
     recordUndo();
@@ -1851,9 +1914,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
     };
     const nextPages = Array.from({ length: totalPages }, () => ({ ...currentBg }));
     setPageBackgrounds(nextPages);
-    saveToServer({ designSettings: { ...product?.designSettings, pages: nextPages } });
+    saveToServer({ designSettings: { ...product?.designSettings, pages: nextPages, placedElementsByPage } });
     toast({ title: "Background applied to all pages" });
-  }, [totalPages, backgroundImage, backgroundSettings, overlaySettings, product?.designSettings, saveToServer, toast, recordUndo]);
+  }, [totalPages, backgroundImage, backgroundSettings, overlaySettings, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo]);
 
   const applyGraphicsToAllPages = useCallback(() => {
     recordUndo();
@@ -1862,9 +1925,25 @@ export default function ProductEditor({ productId }: { productId: string }) {
       currentGraphics.map((e) => ({ ...e, id: `${e.type}-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}` }))
     );
     setPlacedElementsByPage(nextByPage);
-    saveToServer({ designSettings: { ...product?.designSettings, placedElementsByPage: nextByPage } });
+    saveToServer({ designSettings: { ...product?.designSettings, pages: pageBackgrounds, placedElementsByPage: nextByPage } });
     toast({ title: "Graphics applied to all pages" });
-  }, [totalPages, currentPageElements, product?.designSettings, saveToServer, toast, recordUndo]);
+  }, [totalPages, currentPageElements, pageBackgrounds, product?.designSettings, saveToServer, toast, recordUndo]);
+
+  const applyCoverBackgroundToBackCover = useCallback(() => {
+    const coverPage = pageBackgrounds[0];
+    if (!coverPage) return;
+    recordUndo();
+    const backBg: PageBackground = {
+      backgroundImage: coverPage.backgroundImage ?? undefined,
+      backgroundSettings: coverPage.backgroundSettings ? { ...coverPage.backgroundSettings } : undefined,
+      overlaySettings: coverPage.overlaySettings ? { ...coverPage.overlaySettings } : undefined,
+    };
+    const nextPages = [...pageBackgrounds];
+    nextPages[nextPages.length - 1] = backBg;
+    setPageBackgrounds(nextPages);
+    saveToServer({ designSettings: { ...product?.designSettings, pages: nextPages, placedElementsByPage } });
+    toast({ title: "Background applied to back cover" });
+  }, [pageBackgrounds, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo]);
 
   const selectedGraphicElement = selectedElement ? currentPageElements.find((el) => el.id === selectedElement) : null;
 
@@ -1893,9 +1972,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
       return [...pageArr, copy];
     });
     setPlacedElementsByPage(nextByPage);
-    saveToServer({ designSettings: { ...product?.designSettings, placedElementsByPage: nextByPage } });
+    saveToServer({ designSettings: { ...product?.designSettings, pages: pageBackgrounds, placedElementsByPage: nextByPage } });
     toast({ title: "Icon applied to all pages" });
-  }, [selectedGraphicElement, currentPageIndex, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo]);
+  }, [selectedGraphicElement, currentPageIndex, placedElementsByPage, pageBackgrounds, product?.designSettings, saveToServer, toast, recordUndo]);
 
   const removeSelectedIconFromAllPages = useCallback(() => {
     if (!selectedGraphicElement) return;
@@ -1910,9 +1989,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
     ).length;
     setPlacedElementsByPage(nextByPage);
     setSelectedElement(null);
-    saveToServer({ designSettings: { ...product?.designSettings, placedElementsByPage: nextByPage } });
+    saveToServer({ designSettings: { ...product?.designSettings, pages: pageBackgrounds, placedElementsByPage: nextByPage } });
     toast({ title: `Icon removed from all ${pagesAffected} pages` });
-  }, [selectedGraphicElement, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo]);
+  }, [selectedGraphicElement, placedElementsByPage, pageBackgrounds, product?.designSettings, saveToServer, toast, recordUndo]);
 
   const updateOverlay = useCallback((key: keyof OverlaySettings, value: string | number) => {
     recordUndoDebounced();
@@ -3149,17 +3228,30 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   <ImageIcon className="w-4 h-4" />
                   Add Image
                 </Button>
-                {sections.length > 1 && currentPageElements.length > 0 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={applyGraphicsToAllPages}
-                    className="w-full border-gray-200 text-gray-600 hover:bg-gray-100"
-                  >
-                    Apply graphics to all pages
-                  </Button>
-                )}
+                <div className="flex flex-col gap-2">
+                  {sections.length > 1 && currentPageElements.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={applyGraphicsToAllPages}
+                      className="w-full border-gray-200 text-gray-600 hover:bg-gray-100"
+                    >
+                      Apply graphics to all pages
+                    </Button>
+                  )}
+                  {isOnCoverPage && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={applyCoverBackgroundToBackCover}
+                      className="w-full border-gray-200 text-gray-600 hover:bg-gray-100"
+                    >
+                      Apply to back cover
+                    </Button>
+                  )}
+                </div>
 
                 {selectedGraphicElement && (
                   <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
