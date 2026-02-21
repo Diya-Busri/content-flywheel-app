@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Rnd } from "react-rnd";
@@ -50,6 +50,10 @@ import {
   Download,
   Video,
   Upload,
+  Bold,
+  Italic,
+  Underline,
+  Crown,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { HexColorPicker } from "react-colorful";
@@ -105,6 +109,16 @@ function rgbToHex(rgb: string): string {
   if (!m) return rgb.startsWith("#") ? rgb : "#333333";
   const hex = (x: number) => ("0" + Math.min(255, Math.max(0, x)).toString(16)).slice(-2);
   return "#" + hex(parseInt(m[1], 10)) + hex(parseInt(m[2], 10)) + hex(parseInt(m[3], 10));
+}
+
+function overlayColorToHex(color: string): string {
+  if (color.startsWith("#")) return color;
+  const rgba = color.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (rgba) {
+    const hex = (x: number) => ("0" + Math.min(255, Math.max(0, x)).toString(16)).slice(-2);
+    return "#" + hex(parseInt(rgba[1], 10)) + hex(parseInt(rgba[2], 10)) + hex(parseInt(rgba[3], 10));
+  }
+  return rgbToHex(color);
 }
 
 const DEFAULT_TEXT_STYLES: TextStyles = {
@@ -193,6 +207,19 @@ export type TextBoxSettings = {
   fontFamily: string;
   color: string;
   textAlign: "left" | "center" | "right";
+  fontWeight?: string;
+  fontStyle?: string;
+  textDecoration?: string;
+  // Text shadow
+  textShadowEnabled?: boolean;
+  textShadowOffsetX?: number;
+  textShadowOffsetY?: number;
+  textShadowBlur?: number;
+  textShadowColor?: string;
+  // Text stroke / outline
+  textStrokeEnabled?: boolean;
+  textStrokeWidth?: number;
+  textStrokeColor?: string;
 };
 
 const DEFAULT_TEXT_BOX: TextBoxSettings = {
@@ -200,6 +227,17 @@ const DEFAULT_TEXT_BOX: TextBoxSettings = {
   fontFamily: "Inter, system-ui, sans-serif",
   color: "#333333",
   textAlign: "left",
+  fontWeight: "400",
+  fontStyle: "normal",
+  textDecoration: "none",
+  textShadowEnabled: false,
+  textShadowOffsetX: 0,
+  textShadowOffsetY: 2,
+  textShadowBlur: 4,
+  textShadowColor: "#000000",
+  textStrokeEnabled: false,
+  textStrokeWidth: 1,
+  textStrokeColor: "#000000",
 };
 
 export type PlacedElement = {
@@ -254,6 +292,11 @@ const GRAPHICS_ICONS: { name: string; icon: React.ComponentType<{ className?: st
   { name: "Check", icon: Check },
   { name: "BookOpen", icon: BookOpen },
 ];
+
+// Memoized map for O(1) icon lookup on canvas (avoids .find() on every element render)
+const ICON_NAME_TO_LUCIDE: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = Object.fromEntries(
+  GRAPHICS_ICONS.map((i) => [i.name, i.icon])
+);
 
 const ICON_CATEGORIES: Record<string, string[]> = {
   Business: [
@@ -512,6 +555,187 @@ const TEMPLATES = [
   { id: "creative" as TemplateId, label: "Creative", desc: "Playful and fun" },
 ];
 
+type CanvasPlacedElementProps = {
+  element: PlacedElement;
+  isSelected: boolean;
+  isEditing: boolean;
+  graphicsAccentColor: string;
+  editingTextAreaRef: React.RefObject<HTMLTextAreaElement | null>;
+  onSelectElement: (id: string) => void;
+  onElementDragStop: (id: string, position: { x: number; y: number }) => void;
+  onElementResizeStop: (id: string, size: { width: number; height: number }, position: { x: number; y: number }) => void;
+  onTextContentChange: (id: string, value: string) => void;
+  onTextBlur: (id: string, value: string) => void;
+  onTextEscape: (id: string) => void;
+  onStartEditTextBox: (id: string, content: string) => void;
+  updateTextBoxSetting: (key: keyof TextBoxSettings, value: string | number | boolean) => void;
+  deleteElement: (id: string) => void;
+  duplicateElement: (id: string) => void;
+  bringToFront: () => void;
+  sendToBack: () => void;
+};
+
+const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
+  element,
+  isSelected,
+  isEditing,
+  graphicsAccentColor,
+  editingTextAreaRef,
+  onSelectElement,
+  onElementDragStop,
+  onElementResizeStop,
+  onTextContentChange,
+  onTextBlur,
+  onTextEscape,
+  onStartEditTextBox,
+  updateTextBoxSetting,
+  deleteElement,
+  duplicateElement,
+  bringToFront,
+  sendToBack,
+}: CanvasPlacedElementProps) {
+  const isIconify = element.type === "icon" && element.content.includes(":");
+  const LucideIcon = !isIconify && element.type === "icon" ? ICON_NAME_TO_LUCIDE[element.content] : null;
+  const handleRndClick = React.useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onSelectElement(element.id);
+    },
+    [element.id, onSelectElement]
+  );
+  const handleDragStop = React.useCallback(
+    (_e: unknown, d: { x: number; y: number }) => onElementDragStop(element.id, { x: d.x, y: d.y }),
+    [element.id, onElementDragStop]
+  );
+  const handleResizeStop = React.useCallback(
+    (_e: unknown, _dir: unknown, ref: HTMLElement, _delta: unknown, position: { x: number; y: number }) =>
+      onElementResizeStop(element.id, { width: ref.offsetWidth, height: ref.offsetHeight }, position),
+    [element.id, onElementResizeStop]
+  );
+  const handleTextChange = React.useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => onTextContentChange(element.id, e.target.value),
+    [element.id, onTextContentChange]
+  );
+  const handleTextBlur = React.useCallback(
+    (e: React.FocusEvent<HTMLTextAreaElement>) => onTextBlur(element.id, e.target.value),
+    [element.id, onTextBlur]
+  );
+  const handleTextKeyDown = React.useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onTextEscape(element.id);
+      }
+    },
+    [element.id, onTextEscape]
+  );
+  const handleDoubleClickText = React.useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      onStartEditTextBox(element.id, element.content || "");
+    },
+    [element.id, element.content, onStartEditTextBox]
+  );
+  const ts = element.textSettings;
+  const textStyle = element.type === "text" ? {
+    fontSize: ts?.fontSize ?? DEFAULT_TEXT_BOX.fontSize,
+    fontFamily: ts?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily,
+    color: ts?.color ?? DEFAULT_TEXT_BOX.color,
+    textAlign: (ts?.textAlign ?? DEFAULT_TEXT_BOX.textAlign) as React.CSSProperties["textAlign"],
+    fontWeight: ts?.fontWeight ?? DEFAULT_TEXT_BOX.fontWeight,
+    fontStyle: (ts?.fontStyle ?? DEFAULT_TEXT_BOX.fontStyle) as React.CSSProperties["fontStyle"],
+    textDecoration: (ts?.textDecoration ?? DEFAULT_TEXT_BOX.textDecoration) as React.CSSProperties["textDecoration"],
+    wordBreak: "break-word" as const,
+    textShadow: (ts?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? `${ts?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX}px ${ts?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY}px ${ts?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur}px ${ts?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor}` : "none",
+    WebKitTextStroke: (ts?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${ts?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${ts?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none",
+  } : undefined;
+
+  return (
+    <Rnd
+      position={{ x: element.position.x, y: element.position.y }}
+      size={{ width: element.size.width, height: element.size.height }}
+      onDragStop={handleDragStop}
+      onResizeStop={handleResizeStop}
+      bounds="parent"
+      disableDragging={element.type === "text" && isEditing}
+      className={`pointer-events-auto ${element.type === "text" && isEditing ? "cursor-text" : "cursor-move"} ${isSelected ? "ring-2 ring-orange-500 ring-offset-1" : ""}`}
+      onClick={handleRndClick}
+      style={{ zIndex: Math.max(1, element.zIndex) }}
+    >
+      <div className="w-full h-full flex items-center justify-center bg-transparent">
+        {element.type === "icon" && isIconify ? (
+          <Icon icon={element.content} className="w-full h-full" style={{ color: graphicsAccentColor }} />
+        ) : element.type === "icon" && LucideIcon ? (
+          <LucideIcon className="w-full h-full" style={{ color: graphicsAccentColor }} />
+        ) : element.type === "image" ? (
+          <img
+            src={element.content}
+            alt=""
+            className="w-full h-full object-cover"
+            style={{
+              opacity: element.imageSettings?.opacity ?? 1,
+              filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)`,
+            }}
+          />
+        ) : element.type === "text" ? (
+          isEditing ? (
+            <textarea
+              ref={editingTextAreaRef}
+              className="w-full h-full overflow-auto p-1 resize-none bg-white/95 border border-orange-400 rounded outline-none"
+              style={textStyle}
+              value={element.content}
+              onChange={handleTextChange}
+              onBlur={handleTextBlur}
+              onKeyDown={handleTextKeyDown}
+              onClick={(e) => e.stopPropagation()}
+              placeholder="Enter text..."
+            />
+          ) : (
+            <div
+              className="w-full h-full overflow-auto p-1 flex items-center cursor-text select-text"
+              style={textStyle}
+              onDoubleClick={handleDoubleClickText}
+            >
+              {element.content || "Double-click to edit"}
+            </div>
+          )
+        ) : (
+          <span className="text-[#999] text-xs">?</span>
+        )}
+      </div>
+      {isSelected && (
+        element.type === "text" ? (
+          <div
+            className="absolute left-1/2 -translate-x-1/2 -top-11 flex items-center gap-0.5 bg-white text-gray-800 rounded-xl px-2 py-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.12)] border border-gray-200/80"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button type="button" onClick={(e) => { e.stopPropagation(); updateTextBoxSetting("fontWeight", (ts?.fontWeight ?? DEFAULT_TEXT_BOX.fontWeight) === "700" ? "400" : "700"); }} className={`rounded-lg p-1.5 transition-colors ${(ts?.fontWeight ?? DEFAULT_TEXT_BOX.fontWeight) === "700" ? "bg-gray-200 text-gray-900" : "hover:bg-gray-100"}`} title="Bold"><Bold className="w-4 h-4" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); updateTextBoxSetting("fontStyle", (ts?.fontStyle ?? DEFAULT_TEXT_BOX.fontStyle) === "italic" ? "normal" : "italic"); }} className={`rounded-lg p-1.5 transition-colors ${(ts?.fontStyle ?? DEFAULT_TEXT_BOX.fontStyle) === "italic" ? "bg-gray-200 text-gray-900" : "hover:bg-gray-100"}`} title="Italic"><Italic className="w-4 h-4" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); updateTextBoxSetting("textDecoration", (ts?.textDecoration ?? DEFAULT_TEXT_BOX.textDecoration) === "underline" ? "none" : "underline"); }} className={`rounded-lg p-1.5 transition-colors ${(ts?.textDecoration ?? DEFAULT_TEXT_BOX.textDecoration) === "underline" ? "bg-gray-200 text-gray-900" : "hover:bg-gray-100"}`} title="Underline"><Underline className="w-4 h-4" /></button>
+            <div className="w-px h-5 bg-gray-200 mx-0.5" />
+            <input type="number" min={8} max={200} value={ts?.fontSize ?? DEFAULT_TEXT_BOX.fontSize} onChange={(e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v)) updateTextBoxSetting("fontSize", Math.min(200, Math.max(8, v))); }} onClick={(e) => e.stopPropagation()} className="w-11 text-center text-sm border-0 bg-transparent focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+            <div className="w-px h-5 bg-gray-200 mx-0.5" />
+            <input type="color" value={ts?.color ?? DEFAULT_TEXT_BOX.color} onChange={(e) => updateTextBoxSetting("color", e.target.value)} onClick={(e) => e.stopPropagation()} className="w-6 h-6 rounded cursor-pointer border border-gray-200 p-0 bg-transparent" title="Text colour" />
+            <div className="w-px h-5 bg-gray-200 mx-0.5" />
+            <button type="button" onClick={(e) => { e.stopPropagation(); deleteElement(element.id); }} className="hover:bg-gray-100 rounded-lg p-1.5" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); duplicateElement(element.id); }} className="hover:bg-gray-100 rounded-lg p-1.5" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); bringToFront(); }} className="hover:bg-gray-100 rounded-lg p-1.5" title="Bring to front"><ArrowUp className="w-3.5 h-3.5" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); sendToBack(); }} className="hover:bg-gray-100 rounded-lg p-1.5" title="Send to back"><ArrowDown className="w-3.5 h-3.5" /></button>
+          </div>
+        ) : (
+          <div className="absolute -top-9 left-0 flex gap-1 bg-white text-gray-700 rounded-lg px-2 py-1.5 text-xs border border-gray-200 shadow-lg">
+            <button type="button" onClick={(e) => { e.stopPropagation(); deleteElement(element.id); }} className="hover:bg-gray-100 rounded p-1" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); duplicateElement(element.id); }} className="hover:bg-gray-100 rounded p-1" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); bringToFront(); }} className="hover:bg-gray-100 rounded p-1" title="Bring to front"><ArrowUp className="w-3.5 h-3.5" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); sendToBack(); }} className="hover:bg-gray-100 rounded p-1" title="Send to back"><ArrowDown className="w-3.5 h-3.5" /></button>
+          </div>
+        )
+      )}
+    </Rnd>
+  );
+});
+
 export default function ProductEditor({ productId }: { productId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -592,6 +816,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const currentPageElements = useMemo(
     () => placedElementsByPage[currentPageIndex] ?? [],
     [placedElementsByPage, currentPageIndex]
+  );
+  const sortedPageElements = useMemo(
+    () => [...currentPageElements].sort((a, b) => a.zIndex - b.zIndex),
+    [currentPageElements]
   );
 
   const setCurrentPageElements = useCallback(
@@ -1466,8 +1694,35 @@ export default function ProductEditor({ productId }: { productId: string }) {
     [recordUndoDebounced, setCurrentPageElements]
   );
 
+  const handleSelectElement = useCallback((id: string) => setSelectedElement(id), []);
+  const updateTextBoxContentById = useCallback(
+    (elementId: string, value: string) => {
+      recordUndoDebounced();
+      setCurrentPageElements((prev) =>
+        prev.map((el) => (el.id === elementId && el.type === "text" ? { ...el, content: value } : el))
+      );
+    },
+    [recordUndoDebounced, setCurrentPageElements]
+  );
+  const cancelTextBoxEdit = useCallback(
+    (elementId: string) => {
+      setCurrentPageElements((prev) =>
+        prev.map((el) =>
+          el.id === elementId && el.type === "text" ? { ...el, content: editingTextBoxInitialContentRef.current } : el
+        )
+      );
+      setEditingTextBoxId(null);
+    },
+    [setCurrentPageElements]
+  );
+  const handleStartEditTextBox = useCallback((elementId: string, content: string) => {
+    editingTextBoxInitialContentRef.current = content || "";
+    setEditingTextBoxId(elementId);
+    setSelectedElement(elementId);
+  }, []);
+
   const updateTextBoxSetting = useCallback(
-    (key: keyof TextBoxSettings, value: string | number) => {
+    (key: keyof TextBoxSettings, value: string | number | boolean) => {
       if (!selectedElement) return;
       recordUndoDebounced();
       setCurrentPageElements((prev) =>
@@ -2348,7 +2603,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
           <div className="flex flex-col items-center px-4 py-8">
               {/* Toolbar above canvas */}
               <div className="flex items-center justify-between w-full max-w-[816px] mb-4">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
+                  {(isOnCoverPage || isOnBackPage) && (
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${isDark ? "bg-orange-500/20 text-orange-300 border border-orange-500/40" : "bg-orange-100 text-orange-800 border border-orange-200"}`}>
+                      {isOnCoverPage ? <Crown className="w-3.5 h-3.5" /> : <Star className="w-3.5 h-3.5" />}
+                      Cover Mode
+                    </span>
+                  )}
+                  <div className="flex items-center gap-1">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -2377,6 +2639,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       <TooltipContent>Redo (Ctrl+Y)</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
+                  </div>
                 </div>
                 {totalPages > 1 ? (
                   <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
@@ -2391,8 +2654,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
-                    <span className={`text-sm font-medium min-w-[80px] text-center ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-                      {currentPageIndex + 1} / {totalPages}
+                    <span className={`text-sm font-medium min-w-[100px] text-center flex items-center justify-center gap-1.5 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                      {currentPageIndex === 0 ? (
+                        <><Crown className="w-3.5 h-3.5 shrink-0" /> Cover</>
+                      ) : currentPageIndex === totalPages - 1 ? (
+                        <><Star className="w-3.5 h-3.5 shrink-0" /> Back Cover</>
+                      ) : (
+                        <>Page {currentPageIndex + 1}</>
+                      )}
                     </span>
                     <button
                       type="button"
@@ -2577,158 +2846,31 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       </>
                     )}
                   </div>
-                  {/* Placed elements layer (Canva-style) - above content; current page only */}
+                  {/* Placed elements layer (Canva-style) - above content; current page only; memoized per element */}
                   <div className="absolute inset-0 pointer-events-none z-20" aria-hidden>
                     <div className="w-full h-full relative pointer-events-none">
-                  {[...currentPageElements]
-                    .sort((a, b) => a.zIndex - b.zIndex)
-                    .map((element) => {
-                      const isIconify = element.type === "icon" && element.content.includes(":");
-                      const LucideIcon = !isIconify && element.type === "icon" ? GRAPHICS_ICONS.find((i) => i.name === element.content)?.icon : null;
-                      const iconColor = graphicsAccentColor;
-                      return (
-                        <Rnd
+                      {sortedPageElements.map((element) => (
+                        <CanvasPlacedElement
                           key={element.id}
-                          position={{ x: element.position.x, y: element.position.y }}
-                          size={{ width: element.size.width, height: element.size.height }}
-                          onDragStop={(_e, d) => updateElementPosition(element.id, { x: d.x, y: d.y })}
-                          onResizeStop={(_e, _dir, ref, _delta, position) => {
-                            updateElementSize(element.id, { width: ref.offsetWidth, height: ref.offsetHeight }, position);
-                          }}
-                          bounds="parent"
-                          disableDragging={element.type === "text" && editingTextBoxId === element.id}
-                          className={`pointer-events-auto ${element.type === "text" && editingTextBoxId === element.id ? "cursor-text" : "cursor-move"} ${selectedElement === element.id ? "ring-2 ring-orange-500 ring-offset-1" : ""}`}
-                          onClick={(e: React.MouseEvent) => {
-                            e.stopPropagation();
-                            setSelectedElement(element.id);
-                          }}
-                          style={{ zIndex: Math.max(1, element.zIndex) }}
-                        >
-                          <div className="w-full h-full flex items-center justify-center bg-transparent">
-                            {element.type === "icon" && isIconify ? (
-                              <Icon icon={element.content} className="w-full h-full" style={{ color: iconColor }} />
-                            ) : element.type === "icon" && LucideIcon ? (
-                              <LucideIcon className="w-full h-full" style={{ color: iconColor }} />
-                            ) : element.type === "image" ? (
-                              <img
-                                src={element.content}
-                                alt=""
-                                className="w-full h-full object-cover"
-                                style={{
-                                  opacity: element.imageSettings?.opacity ?? 1,
-                                  filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)`,
-                                }}
-                              />
-                            ) : element.type === "text" ? (
-                              editingTextBoxId === element.id ? (
-                                <textarea
-                                  ref={(el) => {
-                                    editingTextAreaRef.current = el;
-                                  }}
-                                  className="w-full h-full overflow-auto p-1 resize-none bg-white/95 border border-orange-400 rounded outline-none"
-                                  style={{
-                                    fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize,
-                                    fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily,
-                                    color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color,
-                                    textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign,
-                                    wordBreak: "break-word",
-                                  }}
-                                  value={element.content}
-                                  onChange={(e) => {
-                                    recordUndoDebounced();
-                                    setCurrentPageElements((prev) =>
-                                      prev.map((el) => (el.id === element.id && el.type === "text" ? { ...el, content: e.target.value } : el))
-                                    );
-                                  }}
-                                  onBlur={(e) => saveTextBoxContentById(element.id, e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Escape") {
-                                      e.preventDefault();
-                                      setCurrentPageElements((prev) =>
-                                        prev.map((el) => (el.id === element.id && el.type === "text" ? { ...el, content: editingTextBoxInitialContentRef.current } : el))
-                                      );
-                                      setEditingTextBoxId(null);
-                                    }
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  placeholder="Enter text..."
-                                />
-                              ) : (
-                              <div
-                                className="w-full h-full overflow-auto p-1 flex items-center cursor-text select-text"
-                                style={{
-                                  fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize,
-                                  fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily,
-                                  color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color,
-                                  textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign,
-                                  wordBreak: "break-word",
-                                }}
-                                onDoubleClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  editingTextBoxInitialContentRef.current = element.content || "";
-                                  setEditingTextBoxId(element.id);
-                                  setSelectedElement(element.id);
-                                }}
-                              >
-                                {element.content || "Double-click to edit"}
-                              </div>
-                              )
-                            ) : (
-                              <span className="text-[#999] text-xs">?</span>
-                            )}
-                          </div>
-                          {selectedElement === element.id && (
-                            <div className="absolute -top-9 left-0 flex gap-1 bg-white text-gray-700 rounded-lg px-2 py-1.5 text-xs border border-gray-200 shadow-lg">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteElement(element.id);
-                                }}
-                                className="hover:bg-gray-100 rounded p-1"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  duplicateElement(element.id);
-                                }}
-                                className="hover:bg-gray-100 rounded p-1"
-                                title="Duplicate"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  bringToFront();
-                                }}
-                                className="hover:bg-gray-100 rounded p-1"
-                                title="Bring to front"
-                              >
-                                <ArrowUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  sendToBack();
-                                }}
-                                className="hover:bg-gray-100 rounded p-1"
-                                title="Send to back"
-                              >
-                                <ArrowDown className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
-                        </Rnd>
-                      );
-                    })}
+                          element={element}
+                          isSelected={selectedElement === element.id}
+                          isEditing={editingTextBoxId === element.id}
+                          graphicsAccentColor={graphicsAccentColor}
+                          editingTextAreaRef={editingTextAreaRef}
+                          onSelectElement={handleSelectElement}
+                          onElementDragStop={updateElementPosition}
+                          onElementResizeStop={updateElementSize}
+                          onTextContentChange={updateTextBoxContentById}
+                          onTextBlur={saveTextBoxContentById}
+                          onTextEscape={cancelTextBoxEdit}
+                          onStartEditTextBox={handleStartEditTextBox}
+                          updateTextBoxSetting={updateTextBoxSetting}
+                          deleteElement={deleteElement}
+                          duplicateElement={duplicateElement}
+                          bringToFront={bringToFront}
+                          sendToBack={sendToBack}
+                        />
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -2959,6 +3101,42 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   ))}
                 </div>
                 <p className="text-xs text-gray-500 mt-3">Preview updates as you edit.</p>
+
+                {isOnCoverPage && backgroundImage && (
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <h3 className="text-sm font-semibold text-gray-900 mb-1">Cover background overlay</h3>
+                    <p className="text-xs text-gray-500 mb-3">A semi-transparent layer between the background image and text so the cover stays readable.</p>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs text-gray-600 font-medium block mb-1.5">Overlay colour</label>
+                        <div className="[&_.react-colorful]:h-20 [&_.react-colorful]:w-full [&_.react-colorful]:rounded-lg">
+                          <HexColorPicker
+                            color={overlayColorToHex(overlaySettings.color)}
+                            onChange={(c) => updateOverlay("color", c)}
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          value={overlayColorToHex(overlaySettings.color)}
+                          onChange={(e) => updateOverlay("color", e.target.value || "#ffffff")}
+                          className="w-full mt-2 p-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 font-medium block mb-1">Overlay opacity: {Math.round((overlaySettings.opacity ?? 0.9) * 100)}%</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={overlaySettings.opacity ?? 0.9}
+                          onChange={(e) => updateOverlay("opacity", parseFloat(e.target.value))}
+                          className="w-full h-2 bg-gray-200 rounded-lg accent-orange-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </TabsContent>
               <TabsContent value="graphics" className="mt-0 p-4 space-y-6 overflow-y-auto">
                 <p className="text-xs text-gray-500 mb-3">Click to add to canvas. Drag to move and resize. Icons and graphics are on the current page only.</p>
@@ -3076,6 +3254,73 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             {align === "left" ? "Left" : align === "center" ? "Center" : "Right"}
                           </button>
                         ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-600 font-medium block mb-1">Effects</label>
+                      <div className="space-y-3">
+                        <div className="rounded-lg border border-gray-200 bg-white p-2.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-700">Text shadow</span>
+                            <button
+                              type="button"
+                              onClick={() => updateTextBoxSetting("textShadowEnabled", !(selectedTextElement.textSettings?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled))}
+                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-1 ${(selectedTextElement.textSettings?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? "border-orange-500 bg-orange-500" : "border-gray-200 bg-gray-200"}`}
+                            >
+                              <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform ${(selectedTextElement.textSettings?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? "translate-x-4" : "translate-x-0.5"} mt-0.5`} />
+                            </button>
+                          </div>
+                          {(selectedTextElement.textSettings?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) && (
+                            <div className="space-y-1.5 pt-1 border-t border-gray-100">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-gray-500 w-6">X</span>
+                                <input type="range" min="-20" max="20" value={selectedTextElement.textSettings?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX} onChange={(e) => updateTextBoxSetting("textShadowOffsetX", parseInt(e.target.value, 10))} className="flex-1 h-2 bg-gray-200 rounded-lg accent-orange-500" />
+                                <span className="text-[10px] text-gray-500 w-5">{(selectedTextElement.textSettings?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX)}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-gray-500 w-6">Y</span>
+                                <input type="range" min="-20" max="20" value={selectedTextElement.textSettings?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY} onChange={(e) => updateTextBoxSetting("textShadowOffsetY", parseInt(e.target.value, 10))} className="flex-1 h-2 bg-gray-200 rounded-lg accent-orange-500" />
+                                <span className="text-[10px] text-gray-500 w-5">{(selectedTextElement.textSettings?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY)}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-gray-500 w-6">Blur</span>
+                                <input type="range" min="0" max="24" value={selectedTextElement.textSettings?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur} onChange={(e) => updateTextBoxSetting("textShadowBlur", parseInt(e.target.value, 10))} className="flex-1 h-2 bg-gray-200 rounded-lg accent-orange-500" />
+                                <span className="text-[10px] text-gray-500 w-5">{(selectedTextElement.textSettings?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur)}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-gray-500">Color</span>
+                                <input type="color" value={selectedTextElement.textSettings?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor} onChange={(e) => updateTextBoxSetting("textShadowColor", e.target.value)} className="w-7 h-7 rounded border border-gray-200 cursor-pointer p-0" />
+                                <input type="text" value={selectedTextElement.textSettings?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor} onChange={(e) => updateTextBoxSetting("textShadowColor", e.target.value)} className="flex-1 min-w-0 p-1.5 text-xs font-mono bg-gray-50 border border-gray-200 rounded" />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="rounded-lg border border-gray-200 bg-white p-2.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-700">Text stroke / outline</span>
+                            <button
+                              type="button"
+                              onClick={() => updateTextBoxSetting("textStrokeEnabled", !(selectedTextElement.textSettings?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled))}
+                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-1 ${(selectedTextElement.textSettings?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? "border-orange-500 bg-orange-500" : "border-gray-200 bg-gray-200"}`}
+                            >
+                              <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform ${(selectedTextElement.textSettings?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? "translate-x-4" : "translate-x-0.5"} mt-0.5`} />
+                            </button>
+                          </div>
+                          {(selectedTextElement.textSettings?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) && (
+                            <div className="space-y-1.5 pt-1 border-t border-gray-100">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-gray-500">Thickness</span>
+                                <input type="range" min="1" max="12" value={selectedTextElement.textSettings?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth} onChange={(e) => updateTextBoxSetting("textStrokeWidth", parseInt(e.target.value, 10))} className="flex-1 h-2 bg-gray-200 rounded-lg accent-orange-500" />
+                                <span className="text-[10px] text-gray-500 w-5">{(selectedTextElement.textSettings?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth)}px</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-gray-500">Color</span>
+                                <input type="color" value={selectedTextElement.textSettings?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor} onChange={(e) => updateTextBoxSetting("textStrokeColor", e.target.value)} className="w-7 h-7 rounded border border-gray-200 cursor-pointer p-0" />
+                                <input type="text" value={selectedTextElement.textSettings?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor} onChange={(e) => updateTextBoxSetting("textStrokeColor", e.target.value)} className="flex-1 min-w-0 p-1.5 text-xs font-mono bg-gray-50 border border-gray-200 rounded" />
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -4369,7 +4614,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           {element.type === "icon" && isIconify ? <Icon icon={element.content} className="w-full h-full" style={{ color: iconColor }} /> : element.type === "icon" && LucideIcon ? <LucideIcon className="w-full h-full" style={{ color: iconColor }} /> : element.type === "image" ? (
                             <img src={element.content} alt="" className="w-full h-full object-cover" style={{ opacity: element.imageSettings?.opacity ?? 1, filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)` }} />
                           ) : element.type === "text" ? (
-                            <div className="w-full h-full overflow-auto p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color, textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word" }}>{element.content || ""}</div>
+                            <div className="w-full h-full overflow-auto p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color, textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word", textShadow: (element.textSettings?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? `${element.textSettings?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX}px ${element.textSettings?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY}px ${element.textSettings?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur}px ${element.textSettings?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor}` : "none", WebKitTextStroke: (element.textSettings?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${element.textSettings?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${element.textSettings?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none" }}>{element.content || ""}</div>
                           ) : <span className="text-[#999] text-xs">?</span>}
                         </div>
                       );
