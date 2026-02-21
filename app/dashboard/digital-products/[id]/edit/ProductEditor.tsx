@@ -490,6 +490,23 @@ function parsePlacedElements(raw: unknown[] | null | undefined): PlacedElement[]
     });
 }
 
+/**
+ * Migration: ensure cover (page 0) and back (last page) text elements have full formatting
+ * properties so bold, italic, underline, and colour controls work for existing products.
+ */
+function migrateCoverBackTextFormatting(placedElementsByPage: PlacedElement[][]): PlacedElement[][] {
+  if (!Array.isArray(placedElementsByPage) || placedElementsByPage.length < 2) return placedElementsByPage;
+  const lastIdx = placedElementsByPage.length - 1;
+  return placedElementsByPage.map((pageArr, pageIndex) => {
+    if (pageIndex !== 0 && pageIndex !== lastIdx) return pageArr;
+    return pageArr.map((el) => {
+      if (el.type !== "text") return el;
+      const merged = { ...DEFAULT_TEXT_BOX, ...el.textSettings };
+      return { ...el, textSettings: merged };
+    });
+  });
+}
+
 const DEFAULT_LAYOUT = {
   paragraphSpacing: 1,
   lineHeight: 1.6,
@@ -897,25 +914,25 @@ export default function ProductEditor({ productId }: { productId: string }) {
       const byPage = (data.designSettings as { placedElementsByPage?: unknown[] })?.placedElementsByPage;
       const sectionsCountForPlaced = (data.content?.sections ?? []).length || 1;
       const totalPagesForPlaced = sectionsCountForPlaced + 2; // cover + content + back
+      let elementsToSet: PlacedElement[][];
       if (Array.isArray(byPage) && byPage.length > 0) {
         const parsed = byPage.map((pageArr) => (Array.isArray(pageArr) ? parsePlacedElements(pageArr) : []));
         // Ensure we have exactly totalPagesForPlaced: [cover, ...content, back]
         if (parsed.length >= totalPagesForPlaced) {
-          setPlacedElementsByPage(parsed.slice(0, totalPagesForPlaced));
+          elementsToSet = parsed.slice(0, totalPagesForPlaced);
         } else if (parsed.length === sectionsCountForPlaced) {
-          // Legacy: only content pages — wrap with empty cover and back
-          setPlacedElementsByPage([[], ...parsed, []]);
+          elementsToSet = [[], ...parsed, []];
         } else if (parsed.length > 0) {
-          const padded = Array.from({ length: totalPagesForPlaced }, (_, i) => parsed[i] ?? []);
-          setPlacedElementsByPage(padded);
+          elementsToSet = Array.from({ length: totalPagesForPlaced }, (_, i) => parsed[i] ?? []);
         } else {
-          setPlacedElementsByPage(Array.from({ length: totalPagesForPlaced }, () => []));
+          elementsToSet = Array.from({ length: totalPagesForPlaced }, () => []);
         }
       } else {
         const legacy = parsePlacedElements(data.placedElements ?? []);
         const contentOnly = legacy.length ? [legacy] : [[]];
-        setPlacedElementsByPage([[], ...contentOnly, []]);
+        elementsToSet = [[], ...contentOnly, []];
       }
+      setPlacedElementsByPage(migrateCoverBackTextFormatting(elementsToSet));
 
       // Debug: cover and back placed elements loaded
       const loadedByPage = (data.designSettings as { placedElementsByPage?: unknown[] })?.placedElementsByPage;
