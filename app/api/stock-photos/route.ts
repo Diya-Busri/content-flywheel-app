@@ -1,10 +1,14 @@
 /**
  * Stock photos via Pexels (free API key at https://www.pexels.com/api/)
  * Keeps same response shape as before for the Graphics tab.
+ * Banned keywords (door, building, architecture, etc.) are replaced with a safe default.
  */
+import { sanitizePexelsQuery } from "@/lib/auto-design-suggestion";
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const query = searchParams.get("query") || "relationships";
+  const rawQuery = searchParams.get("query") || "golden bokeh light";
+  const query = sanitizePexelsQuery(rawQuery);
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const perPage = Math.min(30, Math.max(1, parseInt(searchParams.get("per_page") || "24", 10)));
 

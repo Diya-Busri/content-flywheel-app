@@ -48,6 +48,7 @@ export async function GET() {
       secondaryColor: row.secondaryColor ?? "#475569",
       logoUrl: row.logoUrl ?? undefined,
       preferAiColors: row.preferAiColors ?? false,
+      coverBackgroundPreference: row.coverBackgroundPreference ?? "match_product",
     });
   } catch (e) {
     console.error("[brand-profile] GET error:", e);
@@ -115,6 +116,7 @@ export async function POST(request: NextRequest) {
         secondaryColor,
         logoUrl,
         preferAiColors: Boolean(body.preferAiColors),
+        coverBackgroundPreference: body.coverBackgroundPreference === "random" ? "random" : "match_product",
       })
       .onConflictDoUpdate({
         target: brandProfilesTable.userId,
@@ -128,6 +130,7 @@ export async function POST(request: NextRequest) {
           secondaryColor,
           logoUrl: logoUrl ?? undefined,
           preferAiColors: body.preferAiColors !== undefined ? Boolean(body.preferAiColors) : undefined,
+          coverBackgroundPreference: body.coverBackgroundPreference === "random" ? "random" : "match_product",
           updatedAt: new Date(),
         },
       });
@@ -147,6 +150,7 @@ export async function POST(request: NextRequest) {
       secondaryColor: row?.secondaryColor ?? secondaryColor,
       logoUrl: row?.logoUrl ?? logoUrl ?? undefined,
       preferAiColors: row?.preferAiColors ?? false,
+      coverBackgroundPreference: row?.coverBackgroundPreference ?? "match_product",
     });
   } catch (e) {
     console.error("[brand-profile] POST error:", e);
@@ -174,6 +178,8 @@ export async function PATCH(request: NextRequest) {
     if (body.youtubeUrl !== undefined) updates.youtubeUrl = (body.youtubeUrl as string)?.trim() || null;
     if (body.facebookUrl !== undefined) updates.facebookUrl = (body.facebookUrl as string)?.trim() || null;
     if (body.websiteUrl !== undefined) updates.websiteUrl = (body.websiteUrl as string)?.trim() || null;
+    if (body.coverBackgroundPreference !== undefined)
+      updates.coverBackgroundPreference = body.coverBackgroundPreference === "random" ? "random" : "match_product";
 
     await db
       .update(brandProfilesTable)
@@ -199,6 +205,7 @@ export async function PATCH(request: NextRequest) {
       secondaryColor: row.secondaryColor ?? "#475569",
       logoUrl: row.logoUrl ?? undefined,
       preferAiColors: row.preferAiColors ?? false,
+      coverBackgroundPreference: row.coverBackgroundPreference ?? "match_product",
     });
   } catch (e) {
     console.error("[brand-profile] PATCH error:", e);

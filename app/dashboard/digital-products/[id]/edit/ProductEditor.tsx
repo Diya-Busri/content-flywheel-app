@@ -284,6 +284,48 @@ function getBlockType(el: HTMLElement): "heading" | "subheading" | "body" {
   return "body";
 }
 
+/** Get character offset from the start of blockEl to the given (node, offset). */
+function getCharacterOffsetWithinBlock(blockEl: HTMLElement, targetNode: Node, targetOffset: number): number {
+  const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT, null);
+  let count = 0;
+  let node: Node | null = walker.nextNode();
+  while (node) {
+    const len = node.textContent?.length ?? 0;
+    if (node === targetNode) return count + Math.min(targetOffset, len);
+    count += len;
+    node = walker.nextNode();
+  }
+  return count;
+}
+
+/** Set the cursor/collapse selection to the given character offset within blockEl. */
+function setCursorToCharacterOffset(blockEl: HTMLElement, charOffset: number): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT, null);
+  let count = 0;
+  let node: Node | null = walker.nextNode();
+  while (node) {
+    const len = node.textContent?.length ?? 0;
+    if (count + len >= charOffset) {
+      const offsetInNode = Math.min(charOffset - count, len);
+      const range = document.createRange();
+      range.setStart(node, offsetInNode);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+    count += len;
+    node = walker.nextNode();
+  }
+  const range = document.createRange();
+  range.selectNodeContents(blockEl);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 // Legacy Lucide icons (by name) for backward compatibility with existing canvases
 const GRAPHICS_ICONS: { name: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }[] = [
   { name: "Star", icon: Star },
@@ -338,7 +380,8 @@ function ensureBackPageSocialElements(
 
 function SocialIconSvg({ platform, className, style }: { platform: string; className?: string; style?: React.CSSProperties }) {
   const props = { className: className ?? "w-full h-full", style: style ?? {}, viewBox: "0 0 24 24" as const, fill: "currentColor" };
-  switch (platform) {
+  const p = (platform ?? "").toLowerCase().trim();
+  switch (p) {
     case "tiktok":
       return (
         <svg {...props} xmlns="http://www.w3.org/2000/svg">
@@ -528,24 +571,29 @@ function parsePlacedElements(raw: unknown[] | null | undefined): PlacedElement[]
         (item as PlacedElement).size != null
     )
     .map((item) => {
-      const raw = item as PlacedElement & { imageSettings?: unknown; textSettings?: unknown };
+      const raw = item as PlacedElement & { imageSettings?: unknown; textSettings?: unknown; linkUrl?: string };
       const imgSettings = raw.imageSettings && typeof raw.imageSettings === "object" ? raw.imageSettings as ImageSettings : undefined;
       const txtSettings = raw.textSettings && typeof raw.textSettings === "object" ? raw.textSettings as Partial<TextBoxSettings> : undefined;
-      const type = raw.type === "text" ? "text" : raw.type === "image" ? "image" : "icon";
+      const type = raw.type === "text" ? "text" : raw.type === "image" ? "image" : raw.type === "social" ? "social" : "icon";
+      const content = type === "social" && typeof raw.content === "string" ? raw.content.toLowerCase().trim() : (raw.content ?? "");
       const base = {
         id: raw.id,
         type,
-        content: raw.content ?? "",
+        content,
         position: { x: Number(raw.position?.x) || 0, y: Number(raw.position?.y) || 0 },
         size: {
-          width: Number(raw.size?.width) || (type === "text" ? 200 : 80),
-          height: Number(raw.size?.height) || (type === "text" ? 48 : 80),
+          width: Number(raw.size?.width) || (type === "text" ? 200 : type === "social" ? 40 : 80),
+          height: Number(raw.size?.height) || (type === "text" ? 48 : type === "social" ? 40 : 80),
         },
         rotation: Number(raw.rotation) || 0,
         zIndex: Number(raw.zIndex) ?? 0,
       };
       if (type === "text") {
         return { ...base, textSettings: { ...DEFAULT_TEXT_BOX, ...txtSettings } };
+      }
+      if (type === "social") {
+        const linkUrl = typeof raw.linkUrl === "string" ? raw.linkUrl.trim() : undefined;
+        return { ...base, ...(linkUrl ? { linkUrl } : {}) };
       }
       if (imgSettings) {
         return { ...base, imageSettings: { ...DEFAULT_IMAGE_SETTINGS, ...imgSettings } };
@@ -694,6 +742,20 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
     },
     [element.id, onSelectElement]
   );
+  const handleRndDoubleClick = React.useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (element.type === "text") {
+        e.preventDefault();
+        onStartEditTextBox(element.id, element.content || "");
+        return;
+      }
+      if (element.type === "social" && element.linkUrl) {
+        window.open(element.linkUrl, "_blank", "noopener,noreferrer");
+      }
+    },
+    [element.type, element.id, element.content, element.linkUrl, onStartEditTextBox]
+  );
   const handleDragStop = React.useCallback(
     (_e: unknown, d: { x: number; y: number }) => onElementDragStop(element.id, { x: d.x, y: d.y }),
     [element.id, onElementDragStop]
@@ -742,6 +804,7 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
     textShadow: (ts?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? `${ts?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX}px ${ts?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY}px ${ts?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur}px ${ts?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor}` : "none",
     WebKitTextStroke: (ts?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${ts?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${ts?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none",
   } : undefined;
+  const textStyleNoBackground = textStyle ? (() => { const { backgroundColor: _b, ...rest } = textStyle as React.CSSProperties & { backgroundColor?: string }; return rest; })() : undefined;
 
   return (
     <Rnd
@@ -752,11 +815,16 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
       onResizeStop={handleResizeStop}
       bounds="parent"
       disableDragging={element.type === "text" && isEditing}
-      className={`pointer-events-auto ${element.type === "text" && isEditing ? "cursor-text" : "cursor-move"} ${isSelected ? "ring-2 ring-orange-500 ring-offset-1" : ""}`}
+      enableResizing={true}
+      className={`pointer-events-auto ${element.type === "text" ? "!bg-transparent" : ""} ${element.type === "text" && isEditing ? "cursor-text" : "cursor-move"} ${isSelected ? "outline outline-2 outline-orange-500 outline-offset-0" : ""}`}
       onClick={handleRndClick}
-      style={{ zIndex: Math.max(1, element.zIndex) }}
+      onDoubleClick={handleRndDoubleClick}
+      style={{
+        zIndex: Math.max(1, element.zIndex),
+        ...(element.type === "text" ? { backgroundColor: "transparent" } : {}),
+      }}
     >
-      <div className="w-full h-full flex items-center justify-center bg-transparent">
+      <div className="w-full h-full flex items-center justify-center bg-transparent" style={element.type === "text" ? { backgroundColor: "transparent" } : undefined} data-placed-element>
         {element.type === "icon" && isIconify ? (
           <Icon icon={element.content} className="w-full h-full" style={{ color: graphicsAccentColor }} />
         ) : element.type === "icon" && LucideIcon ? (
@@ -777,14 +845,15 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
               href={element.linkUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full h-full flex items-center justify-center hover:opacity-80 transition-opacity"
-              onClick={(e) => e.stopPropagation()}
+              draggable={false}
+              className="w-full h-full flex items-center justify-center hover:opacity-80 transition-opacity pointer-events-none"
               style={{ color: graphicsAccentColor }}
+              aria-label={`Open ${element.content}`}
             >
               <SocialIconSvg platform={element.content} style={{ color: graphicsAccentColor }} />
             </a>
           ) : (
-            <span className="w-full h-full flex items-center justify-center" style={{ color: graphicsAccentColor }}>
+            <span className="w-full h-full flex items-center justify-center pointer-events-none" style={{ color: graphicsAccentColor }}>
               <SocialIconSvg platform={element.content} style={{ color: graphicsAccentColor }} />
             </span>
           )
@@ -792,8 +861,8 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
           isEditing ? (
             <textarea
               ref={editingTextAreaRef}
-              className="w-full h-full overflow-auto p-1 resize-none bg-white/95 border border-orange-400 rounded outline-none"
-              style={textStyle}
+              className="w-full h-full overflow-auto p-1 resize-none bg-transparent border border-orange-400 rounded outline-none"
+              style={{ ...textStyleNoBackground, backgroundColor: "transparent" }}
               value={element.content}
               onChange={handleTextChange}
               onBlur={handleTextBlur}
@@ -805,7 +874,7 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
             <div
               key={`text-display-${element.id}-${textColor}`}
               className="w-full h-full overflow-auto p-1 flex items-center cursor-text select-text"
-              style={{ ...textStyle, color: textColor }}
+              style={{ ...textStyleNoBackground, color: textColor, backgroundColor: "transparent" }}
               onDoubleClick={handleDoubleClickText}
             >
               {element.content || "Double-click to edit"}
@@ -831,8 +900,6 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
             <div className="w-px h-5 bg-gray-200 mx-0.5" />
             <button type="button" onClick={(e) => { e.stopPropagation(); deleteElement(element.id); }} className="hover:bg-gray-100 rounded-lg p-1.5" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
             <button type="button" onClick={(e) => { e.stopPropagation(); duplicateElement(element.id); }} className="hover:bg-gray-100 rounded-lg p-1.5" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
-            <button type="button" onClick={(e) => { e.stopPropagation(); bringToFront(); }} className="hover:bg-gray-100 rounded-lg p-1.5" title="Bring to front"><ArrowUp className="w-3.5 h-3.5" /></button>
-            <button type="button" onClick={(e) => { e.stopPropagation(); sendToBack(); }} className="hover:bg-gray-100 rounded-lg p-1.5" title="Send to back"><ArrowDown className="w-3.5 h-3.5" /></button>
           </div>
         ) : (
           <div className="absolute -top-9 left-0 flex gap-1 bg-white text-gray-700 rounded-lg px-2 py-1.5 text-xs border border-gray-200 shadow-lg">
@@ -906,6 +973,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [addImageModalOpen, setAddImageModalOpen] = useState(false);
   const [addImageTab, setAddImageTab] = useState<"stock" | "ai" | "upload">("stock");
   const [autoDesignLoading, setAutoDesignLoading] = useState(false);
+  const [regenerateDesignLoading, setRegenerateDesignLoading] = useState(false);
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
   const [showAutoDesignChoiceDialog, setShowAutoDesignChoiceDialog] = useState(false);
   const [brandProfile, setBrandProfile] = useState<{
@@ -930,6 +998,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
     logoBase64: "",
   });
   const [autoDesignChoice, setAutoDesignChoice] = useState<"brand" | "ai">("brand");
+  const [coverBackgroundPreference, setCoverBackgroundPreference] = useState<"match_product" | "random">("match_product");
+  const [autoDesignSuccessView, setAutoDesignSuccessView] = useState(false);
+  const preventAutoDesignCloseRef = useRef(false);
   const [unsplashQuery, setUnsplashQuery] = useState("");
   const [unsplashPhotos, setUnsplashPhotos] = useState<{ id: string; url?: string; fullUrl?: string; thumb?: string }[]>([]);
   const [unsplashLoading, setUnsplashLoading] = useState(false);
@@ -945,6 +1016,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [imageSettings, setImageSettings] = useState<ImageSettings>(DEFAULT_IMAGE_SETTINGS);
   const selectedTextRef = useRef<HTMLElement | null>(null);
+  const pendingContentCursorRef = useRef<{ sectionId: string; type: string; blockIndex?: number; offset: number } | null>(null);
   const contentAreaRef = useRef<HTMLDivElement | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const [coverThumbnailCaptureTrigger, setCoverThumbnailCaptureTrigger] = useState(0);
@@ -973,7 +1045,21 @@ export default function ProductEditor({ productId }: { productId: string }) {
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { websiteUrl?: string } | null) => {
         if (cancelled || !data) return;
-        setBackCoverWebsiteUrl(data.websiteUrl?.trim() ?? null);
+        const url = data.websiteUrl?.trim() ?? null;
+        setBackCoverWebsiteUrl(url);
+        setPlacedElementsByPage((prev) => {
+          const lastIdx = prev.length - 1;
+          if (lastIdx < 0) return prev;
+          return prev.map((pageArr, i) =>
+            i !== lastIdx
+              ? pageArr
+              : pageArr.map((el) =>
+                  el.id === "back-url" && el.type === "text"
+                    ? { ...el, content: url || "Add your website in brand profile" }
+                    : el
+                )
+          );
+        });
       })
       .catch(() => {});
     return () => {
@@ -1241,15 +1327,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const totalPages = Math.max(2, sections.length + 2);
 
   const displayPageElements = useMemo(() => {
-    const onBackPage = currentPageIndex === totalPages - 1 && totalPages >= 2;
-    const websiteDisplay = backCoverWebsiteUrl?.trim() || "Add your website in brand profile";
-    if (onBackPage) {
-      return sortedPageElements.map((el) =>
-        el.id === "back-url" ? { ...el, content: websiteDisplay } : el
-      );
-    }
     return sortedPageElements;
-  }, [sortedPageElements, currentPageIndex, totalPages, backCoverWebsiteUrl]);
+  }, [sortedPageElements]);
 
   useEffect(() => {
     setPageBackgrounds((prev) => {
@@ -1315,6 +1394,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
   useEffect(() => {
     const safeIndex = Math.min(currentPageIndex, Math.max(0, totalPages - 1));
     if (safeIndex !== currentPageIndex) setCurrentPageIndex(safeIndex);
+  }, [currentPageIndex, totalPages]);
+
+  const prevPageIndexRef = useRef(currentPageIndex);
+  useEffect(() => {
+    if (currentPageIndex === 0 && prevPageIndexRef.current === totalPages - 1 && totalPages > 1) {
+      setCurrentPageIndex(totalPages - 1);
+    }
+    prevPageIndexRef.current = currentPageIndex;
   }, [currentPageIndex, totalPages]);
 
   const seededCoverBackRef = useRef<string | null>(null);
@@ -2066,6 +2153,47 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
   }, [editingTextBoxId]);
 
+  useEffect(() => {
+    const pending = pendingContentCursorRef.current;
+    if (!pending || !selectedTextMeta) return;
+    if (
+      pending.sectionId !== selectedTextMeta.sectionId ||
+      pending.type !== selectedTextMeta.type ||
+      (pending.blockIndex ?? -1) !== (selectedTextMeta.blockIndex ?? -1)
+    ) {
+      return;
+    }
+    const root = contentAreaRef.current;
+    if (!root) return;
+    let block: HTMLElement | null = null;
+    if (pending.sectionId === "__product_title" && pending.type === "heading") {
+      block = root.querySelector('h2[data-section-id="__product_title"]');
+    } else {
+      const section = root.querySelector(`section[data-section-id="${pending.sectionId}"]`);
+      if (!section) return;
+      if (pending.type === "title") {
+        block = section.querySelector("h3[data-text-type='title']");
+      } else {
+        const preview = section.querySelector(".preview-content");
+        const blocks = preview?.querySelectorAll("h1, h2, h3, h4, p, li");
+        if (blocks && pending.blockIndex !== undefined && blocks[pending.blockIndex]) {
+          block = blocks[pending.blockIndex] as HTMLElement;
+        }
+      }
+    }
+    if (block) {
+      const offset = Math.min(pending.offset, block.textContent?.length ?? 0);
+      pendingContentCursorRef.current = null;
+      requestAnimationFrame(() => {
+        if (!contentAreaRef.current?.contains(block)) return;
+        setCursorToCharacterOffset(block, offset);
+        block.focus({ preventScroll: false });
+      });
+    } else {
+      pendingContentCursorRef.current = null;
+    }
+  }, [selectedTextMeta]);
+
   const updateTextBoxContent = useCallback(
     (content: string) => {
       if (!selectedElement) return;
@@ -2088,6 +2216,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
         )
       );
       setEditingTextBoxId(null);
+      if (elementId === "back-url") {
+        const trimmed = content.trim() || "";
+        setBackCoverWebsiteUrl(trimmed || null);
+        fetch("/api/brand-profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ websiteUrl: trimmed }),
+        }).catch(() => {});
+      }
     },
     [recordUndoDebounced]
   );
@@ -2416,6 +2553,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const runAutoDesign = useCallback(
     async (options?: {
       useBrandColors?: boolean;
+      regenerate?: boolean;
       brand?: {
         primaryColor: string;
         secondaryColor: string;
@@ -2437,6 +2575,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
           body: JSON.stringify({
             title,
             niche,
+            ...(product?.format ? { format: product.format } : {}),
+            ...(options?.regenerate ? { regenerate: true } : {}),
             ...(useBrand && options?.brand
               ? {
                   brandPrimary: options.brand.primaryColor,
@@ -2457,8 +2597,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
         bodyFont: string;
         pexelsKeyword: string;
       };
+      const pexelsPage = options?.regenerate ? Math.min(5, 1 + Math.floor(Math.random() * 5)) : 1;
       const pexelsRes = await fetch(
-        `/api/stock-photos?query=${encodeURIComponent(design.pexelsKeyword)}&per_page=1&page=1`
+        `/api/stock-photos?query=${encodeURIComponent(design.pexelsKeyword)}&per_page=1&page=${pexelsPage}`
       );
       let bgImageUrl: string | null = null;
       if (pexelsRes.ok) {
@@ -2614,35 +2755,76 @@ export default function ProductEditor({ productId }: { productId: string }) {
   );
 
   const handleAutoDesignClick = useCallback(async () => {
-    const res = await fetch("/api/brand-profile");
-    if (res.status === 404) {
-      setBrandProfile(null);
-      setShowBrandSetupDialog(true);
-      return;
+    try {
+      const res = await fetch("/api/brand-profile");
+      if (res.status === 404) {
+        setBrandProfile(null);
+        setShowBrandSetupDialog(true);
+        return;
+      }
+      if (!res.ok) {
+        toast({ title: "Could not load brand profile", variant: "destructive" });
+        return;
+      }
+      const data = (await res.json()) as {
+        primaryColor: string;
+        secondaryColor: string;
+        tiktokUrl?: string;
+        instagramUrl?: string;
+        youtubeUrl?: string;
+        facebookUrl?: string;
+        websiteUrl?: string;
+        preferAiColors: boolean;
+        coverBackgroundPreference?: string;
+      };
+      setBrandProfile({
+        ...data,
+        primaryColor: data.primaryColor ?? "#1a1a1a",
+        secondaryColor: data.secondaryColor ?? "#475569",
+        preferAiColors: data.preferAiColors ?? false,
+      });
+      setAutoDesignChoice(data.preferAiColors ? "ai" : "brand");
+      setCoverBackgroundPreference(data.coverBackgroundPreference === "random" ? "random" : "match_product");
+      setShowAutoDesignChoiceDialog(true);
+    } catch {
+      toast({ title: "Could not load brand profile. Check your connection and try again.", variant: "destructive" });
     }
-    if (!res.ok) {
-      toast({ title: "Could not load brand profile", variant: "destructive" });
-      return;
-    }
-    const data = (await res.json()) as {
-      primaryColor: string;
-      secondaryColor: string;
-      tiktokUrl?: string;
-      instagramUrl?: string;
-      youtubeUrl?: string;
-      facebookUrl?: string;
-      websiteUrl?: string;
-      preferAiColors: boolean;
-    };
-    setBrandProfile({
-      ...data,
-      primaryColor: data.primaryColor ?? "#1a1a1a",
-      secondaryColor: data.secondaryColor ?? "#475569",
-      preferAiColors: data.preferAiColors ?? false,
-    });
-    setAutoDesignChoice(data.preferAiColors ? "ai" : "brand");
-    setShowAutoDesignChoiceDialog(true);
   }, [toast]);
+
+  const handleRegenerateDesign = useCallback(async () => {
+    if (!productId) return;
+    setRegenerateDesignLoading(true);
+    try {
+      const url = `/api/products/${productId}/apply-design`;
+      const body = { useBrandColors: false, regenerate: true, pageSeed: Date.now() };
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        credentials: "same-origin",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const apiError = typeof data?.error === "string" ? data.error : data?.message ?? "Regenerate failed";
+        console.log("[Regenerate Design] API error:", {
+          status: res.status,
+          statusText: res.statusText,
+          error: apiError,
+          productId,
+          bodySent: body,
+        });
+        throw new Error(apiError);
+      }
+      await fetchProduct();
+      toast({ title: "Design updated" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not regenerate design";
+      console.log("[Regenerate Design] Error:", message, err);
+      toast({ title: "Could not regenerate design", description: message, variant: "destructive" });
+    } finally {
+      setRegenerateDesignLoading(false);
+    }
+  }, [productId, fetchProduct, toast]);
 
   const backCoverSocialLinks = product?.designSettings?.backCoverSocialLinks ?? {};
 
@@ -2785,7 +2967,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       }
       if (selectedTextRef.current) clearSelectionOutline(selectedTextRef.current);
 
-      blockEl.style.outline = "2px dashed #f97316";
+      blockEl.style.outline = "2px solid #f97316";
       blockEl.style.outlineOffset = "2px";
       blockEl.setAttribute("data-selected", "true");
       selectedTextRef.current = blockEl;
@@ -2819,6 +3001,18 @@ export default function ProductEditor({ productId }: { productId: string }) {
         blockIndex = Array.prototype.indexOf.call(blocks, blockEl);
       } else {
         type = getBlockType(blockEl);
+      }
+
+      let cursorOffset = 0;
+      const doc = blockEl.ownerDocument;
+      const range = typeof doc.caretRangeFromPoint === "function"
+        ? doc.caretRangeFromPoint(e.clientX, e.clientY)
+        : null;
+      if (range && blockEl.contains(range.startContainer)) {
+        cursorOffset = getCharacterOffsetWithinBlock(blockEl, range.startContainer, range.startOffset);
+        pendingContentCursorRef.current = { sectionId, type, blockIndex, offset: cursorOffset };
+      } else {
+        pendingContentCursorRef.current = null;
       }
 
       const comp = window.getComputedStyle(blockEl);
@@ -2937,6 +3131,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
     [selectedTextMeta, sections, saveToServer]
   );
 
+  const persistBodyHtml = useCallback(
+    (sectionId: string, html: string) => {
+      const nextSections = sections.map((s) => (s.id === sectionId ? { ...s, contentHtml: html } : s));
+      setSections(nextSections);
+      saveToServer({ content: { sections: nextSections } });
+    },
+    [sections, saveToServer]
+  );
+
   const resetTextStyles = useCallback(() => {
     if (!selectedTextMeta) return;
     Object.entries(DEFAULT_TEXT_STYLES).forEach(([key, value]) => {
@@ -2960,6 +3163,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (!selectedElement) return;
+      const target = e.target as Node | null;
+      const isEditingText = target && (
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLInputElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      );
+      if (isEditingText) return;
       switch (e.key) {
         case "Delete":
         case "Backspace":
@@ -3540,50 +3750,146 @@ export default function ProductEditor({ productId }: { productId: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* Auto-Design choice: use brand vs AI */}
-      <Dialog open={showAutoDesignChoiceDialog} onOpenChange={setShowAutoDesignChoiceDialog}>
+      {/* Auto-Design choice: use brand vs AI; after apply: Regenerate / Done */}
+      <Dialog
+        open={showAutoDesignChoiceDialog}
+        onOpenChange={(open) => {
+          if (open) preventAutoDesignCloseRef.current = false;
+          if (!open && preventAutoDesignCloseRef.current) return;
+          setShowAutoDesignChoiceDialog(open);
+          if (!open) setAutoDesignSuccessView(false);
+        }}
+      >
         <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Auto-Design</DialogTitle>
-            <DialogDescription>Use your brand colours or let AI choose the best colours for this product.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 dark:hover:bg-[#2A2A2A]">
-              <input type="radio" name="autoDesignChoice" checked={autoDesignChoice === "brand"} onChange={() => setAutoDesignChoice("brand")} className="text-orange-500" />
-              <span className="text-sm font-medium">Use my brand colours</span>
-            </label>
-            <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 dark:hover:bg-[#2A2A2A]">
-              <input type="radio" name="autoDesignChoice" checked={autoDesignChoice === "ai"} onChange={() => setAutoDesignChoice("ai")} className="text-orange-500" />
-              <span className="text-sm font-medium">Let AI decide</span>
-            </label>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAutoDesignChoiceDialog(false)}>Cancel</Button>
-            <Button
-              onClick={async () => {
-                setShowAutoDesignChoiceDialog(false);
-                await fetch("/api/brand-profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferAiColors: autoDesignChoice === "ai" }) });
-                if (autoDesignChoice === "brand" && brandProfile) {
-                  await runAutoDesign({
-                    useBrandColors: true,
-                    brand: {
-                      primaryColor: brandProfile.primaryColor,
-                      secondaryColor: brandProfile.secondaryColor,
-                      tiktokUrl: brandProfile.tiktokUrl,
-                      instagramUrl: brandProfile.instagramUrl,
-                      youtubeUrl: brandProfile.youtubeUrl,
-                      facebookUrl: brandProfile.facebookUrl,
-                      websiteUrl: brandProfile.websiteUrl,
-                    },
-                  });
-                } else {
-                  await runAutoDesign();
-                }
-              }}
-            >
-              Continue
-            </Button>
-          </DialogFooter>
+          {autoDesignSuccessView ? (
+            <>
+              <div className="flex flex-col items-center gap-4 py-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
+                  <Check className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <p className="text-center text-lg font-medium">Design applied!</p>
+                <p className="text-center text-sm text-muted-foreground">Your product has been styled with new colours, fonts, and a cover image. Try Regenerate for a different look.</p>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (!productId) return;
+                    setAutoDesignLoading(true);
+                    try {
+                      const res = await fetch(`/api/products/${productId}/apply-design`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          useBrandColors: autoDesignChoice === "brand",
+                          regenerate: true,
+                          pageSeed: Date.now(),
+                        }),
+                      });
+                      if (!res.ok) throw new Error("Regenerate failed");
+                      await fetchProduct();
+                      toast({ title: "Design updated" });
+                    } catch {
+                      toast({ title: "Could not regenerate design", variant: "destructive" });
+                    } finally {
+                      setAutoDesignLoading(false);
+                    }
+                  }}
+                  disabled={autoDesignLoading}
+                >
+                  {autoDesignLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Regenerating...
+                    </>
+                  ) : (
+                    "Regenerate"
+                  )}
+                </Button>
+                <Button onClick={() => { setShowAutoDesignChoiceDialog(false); setAutoDesignSuccessView(false); }}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Auto-Design</DialogTitle>
+                <DialogDescription>Use your brand colours or let AI choose the best colours for this product.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Colours</p>
+                <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 dark:hover:bg-[#2A2A2A]">
+                  <input type="radio" name="autoDesignChoice" checked={autoDesignChoice === "brand"} onChange={() => setAutoDesignChoice("brand")} className="text-orange-500" />
+                  <span className="text-sm font-medium">Use my brand colours</span>
+                </label>
+                <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 dark:hover:bg-[#2A2A2A]">
+                  <input type="radio" name="autoDesignChoice" checked={autoDesignChoice === "ai"} onChange={() => setAutoDesignChoice("ai")} className="text-orange-500" />
+                  <span className="text-sm font-medium">Let AI decide</span>
+                </label>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 pt-2">Cover background image</p>
+                <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 dark:hover:bg-[#2A2A2A]">
+                  <input type="radio" name="coverBackgroundPreference" checked={coverBackgroundPreference === "match_product"} onChange={() => setCoverBackgroundPreference("match_product")} className="text-orange-500" />
+                  <span className="text-sm font-medium">Match my product</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">— Pexels search based on your product niche and type</span>
+                </label>
+                <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 dark:hover:bg-[#2A2A2A]">
+                  <input type="radio" name="coverBackgroundPreference" checked={coverBackgroundPreference === "random"} onChange={() => setCoverBackgroundPreference("random")} className="text-orange-500" />
+                  <span className="text-sm font-medium">Random / Surprise me</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">— A random aesthetic background unrelated to your niche</span>
+                </label>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowAutoDesignChoiceDialog(false)}>Cancel</Button>
+                <Button
+                  onClick={async () => {
+                    if (!productId) return;
+                    preventAutoDesignCloseRef.current = true;
+                    setAutoDesignLoading(true);
+                    try {
+                      await fetch("/api/brand-profile", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          preferAiColors: autoDesignChoice === "ai",
+                          coverBackgroundPreference: coverBackgroundPreference === "random" ? "random" : "match_product",
+                        }),
+                      });
+                      const res = await fetch(`/api/products/${productId}/apply-design`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          useBrandColors: autoDesignChoice === "brand",
+                          coverBackgroundPreference: coverBackgroundPreference === "random" ? "random" : "match_product",
+                        }),
+                      });
+                      if (!res.ok) throw new Error("Apply design failed");
+                      await fetchProduct();
+                      setAutoDesignSuccessView(true);
+                      toast({ title: "Auto-design applied" });
+                    } catch {
+                      toast({ title: "Auto-design failed", variant: "destructive" });
+                    } finally {
+                      setAutoDesignLoading(false);
+                      setTimeout(() => {
+                        preventAutoDesignCloseRef.current = false;
+                      }, 0);
+                    }
+                  }}
+                  disabled={autoDesignLoading}
+                >
+                  {autoDesignLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Applying...
+                    </>
+                  ) : (
+                    "Continue"
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -3615,7 +3921,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     variant="outline"
                     className={isDark ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white" : "border-gray-200 text-gray-700 hover:bg-gray-100"}
                     onClick={handleAutoDesignClick}
-                    disabled={autoDesignLoading}
+                    disabled={autoDesignLoading || regenerateDesignLoading}
                   >
                     {autoDesignLoading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -3626,6 +3932,25 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Apply AI-suggested colours, fonts, and cover background</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={isDark ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white" : "border-gray-200 text-gray-700 hover:bg-gray-100"}
+                    onClick={handleRegenerateDesign}
+                    disabled={regenerateDesignLoading}
+                  >
+                    {regenerateDesignLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                    <span className="hidden sm:inline ml-1.5">Regenerate Design</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Apply a new AI-generated design (colours, fonts, cover image)</TooltipContent>
               </Tooltip>
             </TooltipProvider>
             <Tooltip>
@@ -3832,27 +4157,40 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     style={{
                       ...previewLayoutStyle,
                       position: "relative",
-                      zIndex: 10,
+                      zIndex: currentPageIndex > 0 && currentPageIndex < totalPages - 1 ? 25 : 10,
                       pointerEvents: "auto",
                       ...(canvasBgUrl ? { backgroundColor: "transparent" } : {}),
                       minHeight: CANVAS_HEIGHT,
                     }}
                     onClick={(e) => {
-                      handleTextClick(e);
+                      const blockEl = (e.target as HTMLElement).closest("h1, h2, h3, h4, p, li");
+                      if (!blockEl) {
+                        deselectText();
+                      } else {
+                        handleTextClick(e);
+                      }
                       e.stopPropagation();
                     }}
                   >
                     {currentPageIndex === 0 || currentPageIndex === totalPages - 1 ? (
-                      <div className="min-h-[var(--canvas-height,1100px)] w-full" style={{ minHeight: CANVAS_HEIGHT }} aria-label={currentPageIndex === 0 ? "Cover page" : "Back cover"} />
+                      <div className="min-h-[var(--canvas-height,1100px)] w-full pointer-events-none" style={{ minHeight: CANVAS_HEIGHT }} aria-label={currentPageIndex === 0 ? "Cover page" : "Back cover"} />
                     ) : (
                       <>
                         <h2
                           data-section-id="__product_title"
                           data-text-type="heading"
-                          className="text-2xl font-bold border-b pb-2 cursor-pointer select-text"
+                          contentEditable
+                          suppressContentEditableWarning
+                          className="text-2xl font-bold border-b pb-2 cursor-text select-text outline-none focus:outline-none"
                           style={{
                             ...(product.designSettings?.textStyles?.["__product_title"]?.title ?? {}),
                             color: product.designSettings?.textStyles?.["__product_title"]?.title?.color ?? templatePreset.titleColor,
+                          }}
+                          onBlur={(e) => {
+                            const text = e.currentTarget.textContent ?? "";
+                            setProduct((p) => (p ? { ...p, title: text } : null));
+                            setSelectedTextMeta((prev) => (prev && prev.sectionId === "__product_title" ? { ...prev, content: text } : prev));
+                            saveToServer({ title: text });
                           }}
                         >
                           {product.title}
@@ -3865,8 +4203,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
                               <h3
                                 data-section-id={section.id}
                                 data-text-type="title"
-                                className="text-lg font-semibold cursor-pointer select-text"
+                                contentEditable
+                                suppressContentEditableWarning
+                                className="text-lg font-semibold cursor-text select-text outline-none focus:outline-none"
                                 style={{ ...titleStyles, color: titleStyles?.color ?? templatePreset.headingColor }}
+                                onBlur={(e) => {
+                                  const text = e.currentTarget.textContent ?? "";
+                                  const nextSections = sections.map((s) => (s.id === section.id ? { ...s, title: text } : s));
+                                  setSections(nextSections);
+                                  setSelectedTextMeta((prev) => (prev && prev.sectionId === section.id && prev.type === "title" ? { ...prev, content: text } : prev));
+                                  saveToServer({ content: { sections: nextSections } });
+                                }}
                               >
                                 {section.title}
                               </h3>
@@ -3882,26 +4229,22 @@ export default function ProductEditor({ productId }: { productId: string }) {
                               <div
                                 data-section-id={section.id}
                                 data-text-type="body"
-                                className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2 cursor-text"
+                                className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2 cursor-text [&_.preview-content]:outline-none [&_.preview-content]:focus:outline-none"
                                 style={{ ...bodyStyles, color: bodyStyles?.color ?? templatePreset.bodyColor }}
-                                onClick={(e) => {
-                                  const target = (e.target as HTMLElement).closest("h1, h2, h3, h4, p, li");
-                                  if (target) {
-                                    (target as HTMLElement).style.outline = "2px dashed #f97316";
-                                    (target as HTMLElement).style.outlineOffset = "2px";
-                                  }
-                                }}
                               >
-                                {section.content || section.contentHtml ? (
-                                  <div
-                                    className="preview-content"
-                                    dangerouslySetInnerHTML={{
-                                      __html: section.contentHtml ?? cleanMarkdownToHtml(section.content ?? ""),
-                                    }}
-                                  />
-                                ) : (
-                                  <span className="text-[#999]">(Empty)</span>
-                                )}
+                                <div
+                                  className="preview-content min-h-[1.5em] empty:before:content-[attr(data-placeholder)] empty:before:text-[#999]"
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  dangerouslySetInnerHTML={{
+                                    __html: section.contentHtml ?? cleanMarkdownToHtml(section.content ?? "") || "",
+                                  }}
+                                  onBlur={(e) => {
+                                    const html = e.currentTarget.innerHTML.trim();
+                                    persistBodyHtml(section.id, html || "");
+                                  }}
+                                  data-placeholder="Click to add content..."
+                                />
                               </div>
                             </section>
                           );
@@ -3914,13 +4257,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     className="absolute inset-0 z-20"
                     style={{ pointerEvents: "auto" }}
                     onClick={(e) => {
-                      const target = (e.target as HTMLElement).closest("[data-placed-element]");
-                      if (!target) {
-                        setSelectedElement(null);
-                        setEditingTextBoxId(null);
-                        deselectText();
-                        setCoverBackHintDismissed(true);
+                      const insidePlacedElement = (e.target as HTMLElement).closest("[data-placed-element]");
+                      if (insidePlacedElement) {
+                        e.stopPropagation();
+                        return;
                       }
+                      setSelectedElement(null);
+                      setEditingTextBoxId(null);
+                      deselectText();
+                      setCoverBackHintDismissed(true);
                     }}
                     role="presentation"
                   >

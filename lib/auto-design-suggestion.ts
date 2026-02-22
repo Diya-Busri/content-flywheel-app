@@ -1,6 +1,84 @@
 /**
  * Server-side auto-design suggestion (OpenAI). Used by /api/auto-design and /api/products/[id]/apply-design.
  */
+
+/** Banned Pexels keywords that return architecture/buildings/interiors — never use for cover. */
+export const BANNED_PEXELS_KEYWORDS = [
+  "door",
+  "building",
+  "architecture",
+  "hallway",
+  "room",
+  "interior",
+  "window",
+  "wall",
+  "house",
+] as const;
+
+/** Safe cover keywords by niche — ONLY these are used for cover background searches. */
+const SAFE_COVER_KEYWORDS = {
+  personalDevelopment: "golden bokeh light",
+  wellnessHealth: "soft green nature blur",
+  relationships: "soft pink bokeh",
+  business: "clean white desk blur",
+  journalPlanner: "soft pastel abstract",
+} as const;
+
+const DEFAULT_SAFE_KEYWORD = SAFE_COVER_KEYWORDS.personalDevelopment;
+
+/** Safe aesthetic keywords for "Random/Surprise me" — unrelated to product niche. */
+const RANDOM_COVER_KEYWORDS = [
+  "golden bokeh light",
+  "soft green nature blur",
+  "soft pink bokeh",
+  "clean white desk blur",
+  "soft pastel abstract",
+  "warm gradient blur",
+  "minimal soft light",
+  "abstract blue gradient",
+  "soft lavender blur",
+  "neutral texture soft",
+] as const;
+
+/**
+ * Return a random safe Pexels keyword for cover backgrounds (used when preference is "random").
+ */
+export function getRandomCoverKeyword(): string {
+  return RANDOM_COVER_KEYWORDS[Math.floor(Math.random() * RANDOM_COVER_KEYWORDS.length)];
+}
+
+/**
+ * Return the ONLY allowed Pexels keyword for cover backgrounds, based on niche and format.
+ * Ensures no architecture/building/interior photos can be returned.
+ */
+export function getSafeCoverKeyword(niche: string, format?: string): string {
+  const n = (niche ?? "").toLowerCase().trim();
+  const f = (format ?? "").toLowerCase().trim();
+
+  if (f === "journal" || f === "planner" || /\b(journal|planner|diary|notebook)\b/.test(n)) {
+    return SAFE_COVER_KEYWORDS.journalPlanner;
+  }
+  if (/\b(wellness|health|fitness|yoga|meditation|mindfulness)\b/.test(n)) {
+    return SAFE_COVER_KEYWORDS.wellnessHealth;
+  }
+  if (/\b(relationship|relationships|love|dating|marriage|family)\b/.test(n)) {
+    return SAFE_COVER_KEYWORDS.relationships;
+  }
+  if (/\b(business|entrepreneur|productivity|career|marketing)\b/.test(n)) {
+    return SAFE_COVER_KEYWORDS.business;
+  }
+  return DEFAULT_SAFE_KEYWORD;
+}
+
+/** If query contains any banned keyword, return default safe query; otherwise return query as-is. */
+export function sanitizePexelsQuery(query: string): string {
+  const q = (query ?? "").trim().toLowerCase();
+  if (!q) return DEFAULT_SAFE_KEYWORD;
+  const hasBanned = BANNED_PEXELS_KEYWORDS.some((banned) => q.includes(banned));
+  if (hasBanned) return DEFAULT_SAFE_KEYWORD;
+  return query.trim();
+}
+
 export type AutoDesignSuggestion = {
   primary: string;
   secondary: string;
@@ -35,12 +113,16 @@ export type AutoDesignInput = {
   format?: string;
   brandPrimary?: string;
   brandSecondary?: string;
+  /** When true, ask for a noticeably different design (different colours, fonts, image keyword). */
+  regenerate?: boolean;
+  /** Fingerprints of designs already used (e.g. "primary|secondary|headingFont|bodyFont") — avoid suggesting these again. */
+  previousDesignFingerprints?: string[];
 };
 
 export async function getAutoDesignSuggestion(
   input: AutoDesignInput
 ): Promise<AutoDesignSuggestion> {
-  const { title, niche, format, brandPrimary, brandSecondary } = input;
+  const { title, niche, format, brandPrimary, brandSecondary, regenerate, previousDesignFingerprints } = input;
   const useBrandColors = Boolean(
     brandPrimary?.trim() && brandSecondary?.trim()
   );
@@ -51,24 +133,20 @@ export async function getAutoDesignSuggestion(
     throw new Error("OPENAI_API_KEY is not configured");
   }
 
-  const formatPexelsExamples: Record<string, string> = {
-    ebook: "morning light bokeh",
-    workbook: "soft gradient pastel",
-    planner: "clean desk minimal",
-    journal: "open notebook flat lay",
-    checklist: "soft pastel paper",
-    course: "soft abstract blur",
-    notion: "minimal workspace soft",
-    spreadsheet: "soft blue gradient",
-  };
-  const suggestedKeyword =
-    formatPexelsExamples[productFormat] ?? "soft abstract minimal";
+  const avoidList =
+    regenerate && previousDesignFingerprints?.length
+      ? `\n\nThe user has already seen these design combinations (do NOT suggest the same again). Each is "primary|secondary|headingFont|bodyFont". Pick clearly different colours and different fonts:\n${previousDesignFingerprints.slice(-10).join("\n")}`
+      : "";
+  const regenerateHint = regenerate
+    ? `\n\nIMPORTANT: This is a REGENERATION. The user already saw a previous design. Choose a COMPLETELY DIFFERENT style: different colour palette (different hues, not just shades), different heading and body fonts. Surprise them with a fresh look.${avoidList}`
+    : "";
 
   const prompt = `You are a digital product design expert. Suggest a UNIQUE design for THIS product type. Each format (Ebook, Workbook, Planner, Journal, etc.) must look different.
 
 Product title: ${title || "Untitled"}
 Topic/niche: ${niche || "General"}
 Product format: ${productFormat}
+${regenerateHint}
 
 Choose a distinct style and colour palette that fits this format. Ebook = elegant/readable; Workbook = inviting/activity feel; Planner = clean/organised; Journal = calm/reflective. Use different fonts and colours per format.
 
@@ -79,18 +157,9 @@ Return ONLY a valid JSON object (no markdown, no code fence) with exactly these 
 - "accent": string, hex for subheadings/highlights.
 - "headingFont": string, one CSS-safe font (e.g. Playfair Display, Montserrat, Georgia, Inter). Vary by format.
 - "bodyFont": string, one CSS-safe font (e.g. Inter, Open Sans, Lato). Vary by format.
-- "pexelsKeyword": string, ONE search term for a CLEAN, SOFT cover photo. Use ONLY terms like these (no architecture, no buildings, no stripes):
-  - Personal development / general: "morning light bokeh", "soft bokeh light"
-  - Journal: "open notebook flat lay", "journal flat lay soft"
-  - Planner: "clean desk minimal", "minimal desk pastel"
-  - Workbook: "soft gradient pastel", "pastel gradient soft"
-  - Ebook / other: "soft abstract minimal", "blurred nature soft", "soft gradient"
-  NEVER use: architecture, building, office, stripes, geometric pattern, wood, fabric, brick, concrete, or any term that could return busy or striped images.
 - "overlayColor": string, SOLID hex only (#000000 or #1a1a2e for dark; #ffffff or #f8fafc for light). No patterns.
 - "overlayOpacity": number, 0.35 to 0.6. Prefer 0.45-0.55.
-- "contentPageBackgroundColor": string, hex for content pages (#ffffff, #f8fafc, etc.).
-
-For this format ("${productFormat}") a good pexelsKeyword example is: "${suggestedKeyword}". You may use that or a similar soft/minimal term. Never use architecture or buildings.`;
+- "contentPageBackgroundColor": string, hex for content pages (#ffffff, #f8fafc, etc.).`;
 
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -109,7 +178,7 @@ For this format ("${productFormat}") a good pexelsKeyword example is: "${suggest
         },
         { role: "user", content: prompt },
       ],
-      temperature: 0.6,
+      temperature: regenerate ? 0.9 : 0.6,
       max_tokens: 400,
     }),
   });
@@ -136,13 +205,8 @@ For this format ("${productFormat}") a good pexelsKeyword example is: "${suggest
       : 0.5;
   const overlayOpacity = Math.min(0.6, overlayOpacityUnclamped);
 
-  const rawKeyword = String(parsed.pexelsKeyword ?? suggestedKeyword).trim().toLowerCase();
-  const badKeyword =
-    rawKeyword === "" ||
-    /\b(stripe|striped|pattern|texture|geometric|busy|wood|fabric|noise|architecture|building|buildings|office|brick|concrete|grid|lines)\b/.test(
-      rawKeyword
-    );
-  const pexelsKeyword = badKeyword ? suggestedKeyword : rawKeyword;
+  // Cover background uses ONLY safe niche-based keywords — never AI-suggested (avoids architecture/buildings).
+  const pexelsKeyword = getSafeCoverKeyword(niche, productFormat);
 
   return {
     primary: useBrandColors
@@ -156,7 +220,7 @@ For this format ("${productFormat}") a good pexelsKeyword example is: "${suggest
       : normalizeHex(String(parsed.accent ?? "#f97316")),
     headingFont: String(parsed.headingFont ?? "Inter").trim(),
     bodyFont: String(parsed.bodyFont ?? "Inter").trim(),
-    pexelsKeyword: pexelsKeyword || "soft abstract minimal",
+    pexelsKeyword,
     overlayColor: normalizeHex(String(parsed.overlayColor ?? "#000000")),
     overlayOpacity,
     contentPageBackgroundColor: normalizeHex(

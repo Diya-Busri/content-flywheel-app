@@ -13,10 +13,11 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { brandProfilesTable } from "@/db/schema/brand-profiles-schema";
 import { eq, and, isNull } from "drizzle-orm";
-import { getAutoDesignSuggestion } from "@/lib/auto-design-suggestion";
+import { getAutoDesignSuggestion, getSafeCoverKeyword, getRandomCoverKeyword } from "@/lib/auto-design-suggestion";
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 1100;
+const USED_IMAGES_CAP = 30;
 const SOCIAL_PLATFORMS = ["tiktok", "instagram", "youtube", "facebook"] as const;
 const SOCIAL_SIZE = 40;
 const SOCIAL_GAP = 12;
@@ -46,68 +47,49 @@ type PlacedElement = {
   linkUrl?: string;
 };
 
-/** Format-specific safe Pexels keywords (no architecture, buildings, or stripes). */
-const FORMAT_PEXELS_SAFE: Record<string, string> = {
-  ebook: "morning light bokeh",
-  workbook: "soft gradient pastel",
-  planner: "clean desk minimal",
-  journal: "open notebook flat lay",
-  checklist: "soft pastel paper",
-  course: "soft abstract blur",
-  notion: "minimal workspace soft",
-  spreadsheet: "soft blue gradient",
+/** Options for Pexels fetch when regenerating to get different results. */
+type PexelsFetchOptions = {
+  /** URLs already used for this product — exclude from results. */
+  excludeUrls?: string[];
+  /** Seed for page offset (e.g. Date.now() or random) so each call gets a different page. */
+  pageSeed?: number;
+  /** Override search query (e.g. from getRandomCoverKeyword when preference is "random"). */
+  queryOverride?: string;
 };
 
-/** Sanitize Pexels keyword: only clean soft/minimal terms; never architecture, buildings, or patterns. */
-function sanitizePexelsKeyword(keyword: string, format?: string): string {
-  const k = keyword.trim().toLowerCase();
-  const safeDefault =
-    format && FORMAT_PEXELS_SAFE[format.toLowerCase()]
-      ? FORMAT_PEXELS_SAFE[format.toLowerCase()]
-      : "soft abstract minimal";
-  if (!k) return safeDefault;
-  const bad =
-    /\b(stripe|striped|pattern|texture|geometric|busy|wood|fabric|noise|grid|lines|architecture|building|buildings|office|brick|concrete)\b/i.test(
-      k
-    );
-  if (bad) return safeDefault;
-  if (
-    /\b(soft|minimal|blur|abstract|blurred|gradient|pastel|neutral|bokeh|notebook|desk|flat lay)\b/i.test(
-      k
-    )
-  )
-    return k;
-  return `${k} soft minimal`;
-}
-
 async function fetchOnePexelsPhoto(
-  keyword: string,
-  format?: string
+  niche: string,
+  format: string | undefined,
+  options: PexelsFetchOptions = {}
 ): Promise<string | null> {
   const apiKey =
     process.env.PEXELS_API_KEY || process.env.NEXT_PUBLIC_PEXELS_API_KEY;
   if (!apiKey) return null;
-  const query = sanitizePexelsKeyword(keyword, format);
-  const url = new URL("https://api.pexels.com/v1/search");
-  url.searchParams.set("query", query);
-  url.searchParams.set("per_page", "1");
-  url.searchParams.set("page", "1");
-  url.searchParams.set("orientation", "square");
-  const res = await fetch(url.toString(), { headers: { Authorization: apiKey } });
-  if (!res.ok) return null;
-  const data = (await res.json()) as {
-    photos?: Array<{
-      src?: { original?: string; large2x?: string; large?: string; medium?: string };
-    }>;
-  };
-  const first = data.photos?.[0];
-  return (
-    first?.src?.original ??
-    first?.src?.large2x ??
-    first?.src?.large ??
-    first?.src?.medium ??
-    null
-  );
+  const { excludeUrls = [], pageSeed = Math.random(), queryOverride } = options;
+  const query = queryOverride ?? getSafeCoverKeyword(niche, format);
+  const excludeSet = new Set(excludeUrls.map((u) => u.trim()).filter(Boolean));
+  const pick = (p: { src?: { original?: string; large2x?: string; large?: string; medium?: string } }) =>
+    p?.src?.original ?? p?.src?.large2x ?? p?.src?.large ?? p?.src?.medium ?? null;
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const page = 1 + (Math.floor((pageSeed + attempt * 0.33) * 1000) % 30);
+    const url = new URL("https://api.pexels.com/v1/search");
+    url.searchParams.set("query", query);
+    url.searchParams.set("per_page", "15");
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("orientation", "square");
+    const res = await fetch(url.toString(), { headers: { Authorization: apiKey } });
+    if (!res.ok) continue;
+    const data = (await res.json()) as {
+      photos?: Array<{ src?: { original?: string; large2x?: string; large?: string; medium?: string } }>;
+    };
+    const photos = data.photos ?? [];
+    const candidates = photos.map(pick).filter((u): u is string => !!u && !excludeSet.has(u));
+    if (candidates.length > 0) {
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+  }
+  return null;
 }
 
 /** Return true if hex color is dark (needs light text). */
@@ -139,6 +121,10 @@ export async function POST(
 
     const body = await request.json().catch(() => ({}));
     const useBrandColors = Boolean(body.useBrandColors);
+    const regenerate = Boolean(body.regenerate);
+    if (regenerate) {
+      console.log("[apply-design] regenerate: true", { productId, useBrandColors, hasPageSeed: typeof body.pageSeed === "number" });
+    }
 
     const [product] = await db
       .select()
@@ -182,18 +168,32 @@ export async function POST(
     const backCoverWebsiteText =
       brandProfile?.websiteUrl?.trim() || "Add your website in brand profile";
 
+    const coverBackgroundPreference =
+      body.coverBackgroundPreference === "random"
+        ? "random"
+        : (brandProfile?.coverBackgroundPreference === "random" ? "random" : "match_product");
+
     const productFormat = (product.format ?? "ebook").toLowerCase().trim();
+    const usedCoverImageUrls = (existingDesign.usedCoverImageUrls as string[] | undefined) ?? [];
+    const usedDesignFingerprints = (existingDesign.usedDesignFingerprints as string[] | undefined) ?? [];
+
     const design = await getAutoDesignSuggestion({
       title,
       niche,
       format: productFormat,
       ...(brandPrimary && brandSecondary ? { brandPrimary, brandSecondary } : {}),
+      ...(regenerate ? { regenerate: true } : {}),
+      ...(regenerate && usedDesignFingerprints.length > 0 ? { previousDesignFingerprints: usedDesignFingerprints } : {}),
     });
 
-    const bgImageUrl = await fetchOnePexelsPhoto(
-      design.pexelsKeyword,
-      productFormat
-    );
+    const pageSeed = typeof body.pageSeed === "number" ? body.pageSeed : Date.now();
+    const pexelsQuery =
+      coverBackgroundPreference === "random" ? getRandomCoverKeyword() : undefined;
+    const bgImageUrl = await fetchOnePexelsPhoto(niche, productFormat, {
+      excludeUrls: usedCoverImageUrls,
+      pageSeed,
+      queryOverride: pexelsQuery,
+    });
     const primary = design.primary.startsWith("#") ? design.primary : `#${design.primary}`;
     const secondary = design.secondary.startsWith("#") ? design.secondary : `#${design.secondary}`;
     const accent = design.accent.startsWith("#") ? design.accent : `#${design.accent}`;
@@ -318,12 +318,23 @@ export async function POST(
     }
 
     const existingColors = (existingDesign.colors ?? {}) as Record<string, string>;
+    const nextUsedCoverImageUrls =
+      bgImageUrl && typeof bgImageUrl === "string"
+        ? [...usedCoverImageUrls.filter((u) => u !== bgImageUrl), bgImageUrl].slice(-USED_IMAGES_CAP)
+        : usedCoverImageUrls;
+    const designFingerprint = `${primary}|${secondary}|${headingFont}|${bodyFont}`;
+    const nextUsedDesignFingerprints =
+      regenerate && designFingerprint
+        ? [...usedDesignFingerprints.filter((f) => f !== designFingerprint), designFingerprint].slice(-15)
+        : usedDesignFingerprints;
     const designSettings = {
       ...existingDesign,
       colors: { ...existingColors, graphics: accent },
       textStyles: nextTextStyles,
       pages,
       placedElementsByPage,
+      usedCoverImageUrls: nextUsedCoverImageUrls,
+      usedDesignFingerprints: nextUsedDesignFingerprints,
       ...(Object.keys(backCoverSocialLinks ?? {}).length > 0
         ? { backCoverSocialLinks }
         : {}),
@@ -346,12 +357,10 @@ export async function POST(
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[products/apply-design] Error:", err);
+    const message = err instanceof Error ? err.message : "Failed to apply design";
+    console.error("[products/apply-design] Error:", message, err);
     return NextResponse.json(
-      {
-        error:
-          err instanceof Error ? err.message : "Failed to apply design",
-      },
+      { error: message },
       { status: 500 }
     );
   }

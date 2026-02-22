@@ -17,11 +17,13 @@ export async function POST(request: NextRequest) {
     const niche = typeof body.niche === "string" ? body.niche.trim() : "";
     const brandPrimary = typeof body.brandPrimary === "string" ? body.brandPrimary.trim() : "";
     const brandSecondary = typeof body.brandSecondary === "string" ? body.brandSecondary.trim() : "";
+    const regenerate = Boolean(body.regenerate);
 
     const result = await getAutoDesignSuggestion({
       title,
       niche,
       ...(brandPrimary && brandSecondary ? { brandPrimary, brandSecondary } : {}),
+      ...(regenerate ? { regenerate: true } : {}),
     });
     return NextResponse.json(result);
   } catch (e) {

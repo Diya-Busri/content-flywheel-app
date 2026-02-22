@@ -15,6 +15,8 @@ export const brandProfilesTable = pgTable("brand_profiles", {
   logoUrl: text("logo_url"),
   /** When true, Auto-Design uses "Let AI decide" by default; when false, uses "Use my brand colours". */
   preferAiColors: boolean("prefer_ai_colors").notNull().default(false),
+  /** "match_product" = Pexels keyword from product niche/type; "random" = random aesthetic unrelated to niche. */
+  coverBackgroundPreference: text("cover_background_preference").notNull().default("match_product"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
