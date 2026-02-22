@@ -43,6 +43,7 @@ export async function GET() {
       instagramUrl: row.instagramUrl ?? undefined,
       youtubeUrl: row.youtubeUrl ?? undefined,
       facebookUrl: row.facebookUrl ?? undefined,
+      websiteUrl: row.websiteUrl ?? undefined,
       primaryColor: row.primaryColor ?? "#1a1a1a",
       secondaryColor: row.secondaryColor ?? "#475569",
       logoUrl: row.logoUrl ?? undefined,
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
         instagramUrl: (body.instagramUrl as string)?.trim() || null,
         youtubeUrl: (body.youtubeUrl as string)?.trim() || null,
         facebookUrl: (body.facebookUrl as string)?.trim() || null,
+        websiteUrl: (body.websiteUrl as string)?.trim() || null,
         primaryColor,
         secondaryColor,
         logoUrl,
@@ -121,6 +123,7 @@ export async function POST(request: NextRequest) {
           instagramUrl: (body.instagramUrl as string)?.trim() || null,
           youtubeUrl: (body.youtubeUrl as string)?.trim() || null,
           facebookUrl: (body.facebookUrl as string)?.trim() || null,
+          websiteUrl: (body.websiteUrl as string)?.trim() || null,
           primaryColor,
           secondaryColor,
           logoUrl: logoUrl ?? undefined,
@@ -139,6 +142,7 @@ export async function POST(request: NextRequest) {
       instagramUrl: row?.instagramUrl ?? undefined,
       youtubeUrl: row?.youtubeUrl ?? undefined,
       facebookUrl: row?.facebookUrl ?? undefined,
+      websiteUrl: row?.websiteUrl ?? undefined,
       primaryColor: row?.primaryColor ?? primaryColor,
       secondaryColor: row?.secondaryColor ?? secondaryColor,
       logoUrl: row?.logoUrl ?? logoUrl ?? undefined,
@@ -169,6 +173,7 @@ export async function PATCH(request: NextRequest) {
     if (body.instagramUrl !== undefined) updates.instagramUrl = (body.instagramUrl as string)?.trim() || null;
     if (body.youtubeUrl !== undefined) updates.youtubeUrl = (body.youtubeUrl as string)?.trim() || null;
     if (body.facebookUrl !== undefined) updates.facebookUrl = (body.facebookUrl as string)?.trim() || null;
+    if (body.websiteUrl !== undefined) updates.websiteUrl = (body.websiteUrl as string)?.trim() || null;
 
     await db
       .update(brandProfilesTable)
@@ -189,6 +194,7 @@ export async function PATCH(request: NextRequest) {
       instagramUrl: row.instagramUrl ?? undefined,
       youtubeUrl: row.youtubeUrl ?? undefined,
       facebookUrl: row.facebookUrl ?? undefined,
+      websiteUrl: row.websiteUrl ?? undefined,
       primaryColor: row.primaryColor ?? "#1a1a1a",
       secondaryColor: row.secondaryColor ?? "#475569",
       logoUrl: row.logoUrl ?? undefined,

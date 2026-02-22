@@ -9,6 +9,7 @@ export const brandProfilesTable = pgTable("brand_profiles", {
   instagramUrl: text("instagram_url"),
   youtubeUrl: text("youtube_url"),
   facebookUrl: text("facebook_url"),
+  websiteUrl: text("website_url"),
   primaryColor: text("primary_color").notNull().default("#1a1a1a"),
   secondaryColor: text("secondary_color").notNull().default("#475569"),
   logoUrl: text("logo_url"),

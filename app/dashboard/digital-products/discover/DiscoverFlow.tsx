@@ -34,9 +34,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ArrowLeft, ArrowRight, Loader2, User, Video, RefreshCw, Filter, BookOpen, ClipboardList, Sheet, FileStack, GraduationCap, ListChecks, NotebookPen, Calendar, Play, Sparkles, Trash2, Copy, Check, AlertCircle, Target, Zap, MessageCircle, ChevronDown, ChevronUp, Layers, CheckCircle2, XCircle } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/components/ui/use-toast";
+import { HexColorPicker } from "react-colorful";
 
 const STEP_GOALS = [
   { value: "side", label: "Side income ($500-2k/month)" },
@@ -306,6 +308,7 @@ export default function DiscoverFlow() {
     instagramUrl?: string;
     youtubeUrl?: string;
     facebookUrl?: string;
+    websiteUrl?: string;
   } | null>(null);
   const [bundleBrandForm, setBundleBrandForm] = useState({
     primaryColor: "#1a1a1a",
@@ -314,6 +317,7 @@ export default function DiscoverFlow() {
     instagramUrl: "",
     youtubeUrl: "",
     facebookUrl: "",
+    websiteUrl: "",
   });
   const [bundleBrandFormSaving, setBundleBrandFormSaving] = useState(false);
   const [applyingDesign, setApplyingDesign] = useState(false);
@@ -1085,7 +1089,19 @@ export default function DiscoverFlow() {
     return result;
   };
 
+  /** Opens the design choice modal. Generation must only start after user picks an option. */
+  const openDesignChoiceModal = () => {
+    if (bundleGenerating) return;
+    designChoiceModalBrandFetchedRef.current = false;
+    setBundleDesignChoice(null);
+    setShowDesignChoiceModal(true);
+  };
+
   const startFullBundle = async () => {
+    if (!bundleDesignChoice) {
+      setShowDesignChoiceModal(true);
+      return;
+    }
     const nicheName = selectedNiche?.name ?? customNiche.trim();
     if (!nicheName) {
       toast({ title: "No topic", description: "Select or enter a niche first.", variant: "destructive" });
@@ -1204,6 +1220,7 @@ export default function DiscoverFlow() {
           instagramUrl: data.instagramUrl,
           youtubeUrl: data.youtubeUrl,
           facebookUrl: data.facebookUrl,
+          websiteUrl: data.websiteUrl,
         });
       })
       .catch(() => {});
@@ -2517,12 +2534,7 @@ export default function DiscoverFlow() {
                 type="button"
                 variant="outline"
                 className="w-full sm:w-auto border-orange-500/50 text-orange-500 hover:bg-orange-500/10 hover:border-orange-500 gap-2"
-                onClick={() => {
-                  if (bundleGenerating) return;
-                  designChoiceModalBrandFetchedRef.current = false;
-                  setBundleDesignChoice(null);
-                  setShowDesignChoiceModal(true);
-                }}
+                onClick={openDesignChoiceModal}
                 disabled={bundleGenerating}
               >
                 {bundleGenerating ? (
@@ -2866,6 +2878,27 @@ export default function DiscoverFlow() {
               </Card>
             )}
 
+            <div className="mb-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto border-orange-500/50 text-orange-500 hover:bg-orange-500/10 hover:border-orange-500 gap-2"
+                onClick={openDesignChoiceModal}
+                disabled={bundleGenerating}
+              >
+                {bundleGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating all 8…
+                  </>
+                ) : (
+                  <>
+                    <Layers className="w-4 h-4" />
+                    Generate all 8 formats at once →
+                  </>
+                )}
+              </Button>
+            </div>
             <div className="flex justify-between">
               <Button type="button" variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(6)}>← Back</Button>
               <Button
@@ -2927,13 +2960,17 @@ export default function DiscoverFlow() {
         )}
       </div>
 
-      {/* Design choice modal — shown when user clicks "Generate all 8" (before starting bundle) */}
+      {/* Design choice modal — shown as soon as user clicks "Generate all 8"; generation starts only after they pick an option */}
       <Dialog open={showDesignChoiceModal} onOpenChange={(open) => { if (!open) setShowDesignChoiceModal(false); }}>
-        <DialogContent className="sm:max-w-md bg-[#1A1A1A] border-[#2A2A2A] text-white">
+        <DialogContent
+          className="sm:max-w-md bg-[#1A1A1A] border-[#2A2A2A] text-white z-[100]"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => { setShowDesignChoiceModal(false); e.preventDefault(); }}
+        >
           <DialogHeader>
             <DialogTitle className="text-white">Choose how to design your products</DialogTitle>
             <DialogDescription className="text-[#A0A0A0]">
-              We&apos;ll generate 8 products. Pick how they should look — you can always edit anything in the editor.
+              Pick an option below. Generation will start only after you continue — we&apos;ll then apply your choice to all 8 products when they&apos;re ready. You can edit anything later in the editor.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
@@ -2962,12 +2999,72 @@ export default function DiscoverFlow() {
           {bundleDesignChoice === "brand" && bundleBrandProfile === null && (
             <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]/80 p-4 space-y-3">
               <p className="text-sm font-medium text-white">Set up your brand first</p>
-              <Label className="text-xs text-[#E0E0E0]">Primary colour</Label>
-              <Input type="text" value={bundleBrandForm.primaryColor} onChange={(e) => setBundleBrandForm((f) => ({ ...f, primaryColor: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="#1a1a1a" />
-              <Label className="text-xs text-[#E0E0E0]">Secondary colour</Label>
-              <Input type="text" value={bundleBrandForm.secondaryColor} onChange={(e) => setBundleBrandForm((f) => ({ ...f, secondaryColor: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="#475569" />
-              <Input type="url" value={bundleBrandForm.tiktokUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, tiktokUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="TikTok URL (optional)" />
-              <Input type="url" value={bundleBrandForm.instagramUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, instagramUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="Instagram URL (optional)" />
+              <div>
+                <Label className="text-xs text-[#E0E0E0]">Primary colour</Label>
+                <div className="flex gap-2 mt-1.5 items-center">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="h-9 w-9 shrink-0 rounded-md border border-[#2A2A2A] bg-[#1A1A1A] hover:ring-2 hover:ring-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        style={{ backgroundColor: bundleBrandForm.primaryColor }}
+                        aria-label="Pick primary colour"
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3 bg-[#1A1A1A] border-[#2A2A2A]" align="start">
+                      <div className="[&_.react-colorful]:h-32 [&_.react-colorful]:w-44 [&_.react-colorful]:rounded-md">
+                        <HexColorPicker
+                          color={bundleBrandForm.primaryColor}
+                          onChange={(c) => setBundleBrandForm((f) => ({ ...f, primaryColor: c }))}
+                        />
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  <Input
+                    type="text"
+                    value={bundleBrandForm.primaryColor}
+                    onChange={(e) => setBundleBrandForm((f) => ({ ...f, primaryColor: e.target.value }))}
+                    className="h-9 w-24 font-mono text-sm bg-[#1A1A1A] border-[#2A2A2A] text-white"
+                    placeholder="#1a1a1a"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs text-[#E0E0E0]">Secondary colour</Label>
+                <div className="flex gap-2 mt-1.5 items-center">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="h-9 w-9 shrink-0 rounded-md border border-[#2A2A2A] bg-[#1A1A1A] hover:ring-2 hover:ring-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        style={{ backgroundColor: bundleBrandForm.secondaryColor }}
+                        aria-label="Pick secondary colour"
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3 bg-[#1A1A1A] border-[#2A2A2A]" align="start">
+                      <div className="[&_.react-colorful]:h-32 [&_.react-colorful]:w-44 [&_.react-colorful]:rounded-md">
+                        <HexColorPicker
+                          color={bundleBrandForm.secondaryColor}
+                          onChange={(c) => setBundleBrandForm((f) => ({ ...f, secondaryColor: c }))}
+                        />
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  <Input
+                    type="text"
+                    value={bundleBrandForm.secondaryColor}
+                    onChange={(e) => setBundleBrandForm((f) => ({ ...f, secondaryColor: e.target.value }))}
+                    className="h-9 w-24 font-mono text-sm bg-[#1A1A1A] border-[#2A2A2A] text-white"
+                    placeholder="#475569"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-[#A0A0A0] pt-1">Social links (optional)</p>
+              <Input type="url" value={bundleBrandForm.tiktokUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, tiktokUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="TikTok URL" />
+              <Input type="url" value={bundleBrandForm.instagramUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, instagramUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="Instagram URL" />
+              <Input type="url" value={bundleBrandForm.youtubeUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, youtubeUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="YouTube URL" />
+              <Input type="url" value={bundleBrandForm.facebookUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, facebookUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="Facebook URL" />
+              <Input type="url" value={bundleBrandForm.websiteUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, websiteUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="Website/Store URL" />
             </div>
           )}
           <DialogFooter className="gap-2 sm:gap-0">
@@ -2989,11 +3086,12 @@ export default function DiscoverFlow() {
                         instagramUrl: bundleBrandForm.instagramUrl.trim() || undefined,
                         youtubeUrl: bundleBrandForm.youtubeUrl.trim() || undefined,
                         facebookUrl: bundleBrandForm.facebookUrl.trim() || undefined,
+                        websiteUrl: bundleBrandForm.websiteUrl.trim() || undefined,
                       }),
                     });
                     if (!res.ok) throw new Error("Failed to save");
                     const data = await res.json();
-                    setBundleBrandProfile({ primaryColor: data.primaryColor ?? "#1a1a1a", secondaryColor: data.secondaryColor ?? "#475569", tiktokUrl: data.tiktokUrl, instagramUrl: data.instagramUrl, youtubeUrl: data.youtubeUrl, facebookUrl: data.facebookUrl });
+                    setBundleBrandProfile({ primaryColor: data.primaryColor ?? "#1a1a1a", secondaryColor: data.secondaryColor ?? "#475569", tiktokUrl: data.tiktokUrl, instagramUrl: data.instagramUrl, youtubeUrl: data.youtubeUrl, facebookUrl: data.facebookUrl, websiteUrl: data.websiteUrl });
                     setShowDesignChoiceModal(false);
                     toast({ title: "Brand saved", description: "Starting generation with your brand colours." });
                     startFullBundle();

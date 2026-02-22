@@ -73,6 +73,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 
 type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string };
@@ -301,6 +302,39 @@ const ICON_NAME_TO_LUCIDE: Record<string, React.ComponentType<{ className?: stri
 );
 
 const SOCIAL_PLATFORMS = ["tiktok", "instagram", "youtube", "facebook"] as const;
+const SOCIAL_SIZE = 40;
+const SOCIAL_GAP = 12;
+
+/** Sync back cover page elements with backCoverSocialLinks: add/update social elements for each URL, remove for empty. */
+function ensureBackPageSocialElements(
+  backPage: PlacedElement[],
+  links: Record<string, string>
+): PlacedElement[] {
+  const nonSocial = backPage.filter((el) => el.type !== "social");
+  const startXForPlatform = (idx: number) =>
+    CANVAS_WIDTH / 2 - (SOCIAL_PLATFORMS.length * (SOCIAL_SIZE + SOCIAL_GAP)) / 2 + idx * (SOCIAL_SIZE + SOCIAL_GAP);
+  const socialElements: PlacedElement[] = [];
+  SOCIAL_PLATFORMS.forEach((platform, idx) => {
+    const url = links[platform]?.trim();
+    if (!url) return;
+    const existing = backPage.find((el) => el.type === "social" && el.content === platform);
+    if (existing) {
+      socialElements.push({ ...existing, linkUrl: url });
+    } else {
+      socialElements.push({
+        id: `social-${platform}-${Date.now()}`,
+        type: "social",
+        content: platform,
+        position: { x: startXForPlatform(idx), y: CANVAS_HEIGHT - 120 },
+        size: { width: SOCIAL_SIZE, height: SOCIAL_SIZE },
+        rotation: 0,
+        zIndex: 10,
+        linkUrl: url,
+      });
+    }
+  });
+  return [...nonSocial, ...socialElements];
+}
 
 function SocialIconSvg({ platform, className, style }: { platform: string; className?: string; style?: React.CSSProperties }) {
   const props = { className: className ?? "w-full h-full", style: style ?? {}, viewBox: "0 0 24 24" as const, fill: "currentColor" };
@@ -879,6 +913,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     instagramUrl?: string;
     youtubeUrl?: string;
     facebookUrl?: string;
+    websiteUrl?: string;
     primaryColor: string;
     secondaryColor: string;
     logoUrl?: string;
@@ -889,6 +924,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     instagramUrl: "",
     youtubeUrl: "",
     facebookUrl: "",
+    websiteUrl: "",
     primaryColor: "#1a1a1a",
     secondaryColor: "#475569",
     logoBase64: "",
@@ -918,6 +954,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([]);
   const [redoStack, setRedoStack] = useState<EditorSnapshot[]>([]);
   const [coverBackHintDismissed, setCoverBackHintDismissed] = useState(false);
+  const [backCoverWebsiteUrl, setBackCoverWebsiteUrl] = useState<string | null>(null);
   const recordingRef = useRef(false);
   const recordUndoDebouncedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentPageElements = useMemo(
@@ -928,6 +965,21 @@ export default function ProductEditor({ productId }: { productId: string }) {
     () => [...currentPageElements].sort((a, b) => a.zIndex - b.zIndex),
     [currentPageElements]
   );
+
+  useEffect(() => {
+    if (!productId) return;
+    let cancelled = false;
+    fetch("/api/brand-profile")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { websiteUrl?: string } | null) => {
+        if (cancelled || !data) return;
+        setBackCoverWebsiteUrl(data.websiteUrl?.trim() ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [productId]);
 
   const setCurrentPageElements = useCallback(
     (updater: (prev: PlacedElement[]) => PlacedElement[]) => {
@@ -992,16 +1044,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
         const contentOnly = legacy.length ? [legacy] : [[]];
         elementsToSet = [[], ...contentOnly, []];
       }
-      setPlacedElementsByPage(migrateCoverBackTextFormatting(elementsToSet));
-
-      // Debug: cover and back placed elements loaded
-      const loadedByPage = (data.designSettings as { placedElementsByPage?: unknown[] })?.placedElementsByPage;
-      if (Array.isArray(loadedByPage) && loadedByPage.length > 0) {
-        const coverEls = Array.isArray(loadedByPage[0]) ? loadedByPage[0] : [];
-        const backEls = Array.isArray(loadedByPage[loadedByPage.length - 1]) ? loadedByPage[loadedByPage.length - 1] : [];
-        console.log("[ProductEditor] Load — cover page placed elements (count):", coverEls.length, coverEls);
-        console.log("[ProductEditor] Load — back cover placed elements (count):", backEls.length, backEls);
+      const migrated = migrateCoverBackTextFormatting(elementsToSet);
+      const backCoverSocialLinksFromProduct = (data.designSettings as { backCoverSocialLinks?: Record<string, string> })?.backCoverSocialLinks ?? {};
+      const lastPageIdx = migrated.length - 1;
+      if (lastPageIdx >= 0) {
+        migrated[lastPageIdx] = ensureBackPageSocialElements(migrated[lastPageIdx] ?? [], backCoverSocialLinksFromProduct);
       }
+      setPlacedElementsByPage(migrated);
+
       const colors = (data.designSettings as { colors?: Record<string, string> })?.colors;
       const preset = TEMPLATE_PRESETS[savedTemplate] ?? TEMPLATE_PRESETS.modern;
       setGraphicsAccentColor(colors?.graphics ?? preset.accentColor);
@@ -1084,6 +1134,57 @@ export default function ProductEditor({ productId }: { productId: string }) {
     fetchProduct();
   }, [fetchProduct]);
 
+  const saveToServer = useCallback(
+    async (payload: {
+      content?: { sections: Section[] };
+      designSettings?: Record<string, unknown>;
+      placedElements?: PlacedElement[];
+      placedElementsByPage?: PlacedElement[][];
+      marketingAssets?: Record<string, unknown>;
+    }) => {
+      if (!productId) return;
+      if (payload.designSettings) {
+        const ds = payload.designSettings as { pages?: PageBackground[]; placedElementsByPage?: PlacedElement[][] };
+        const pages = ds.pages ?? [];
+        const byPage = ds.placedElementsByPage ?? [];
+        const coverPage = pages[0];
+        const backPage = pages.length > 0 ? pages[pages.length - 1] : undefined;
+        const coverEls = byPage[0] ?? [];
+        const backEls = byPage.length > 0 ? (byPage[byPage.length - 1] ?? []) : [];
+        console.log("[ProductEditor] Save — cover page (index 0):", {
+          backgroundImage: coverPage?.backgroundImage ?? null,
+          overlaySettings: coverPage?.overlaySettings ?? null,
+          placedElementsCount: coverEls.length,
+        });
+        console.log("[ProductEditor] Save — back cover page (index " + (pages.length - 1) + "):", {
+          backgroundImage: backPage?.backgroundImage ?? null,
+          overlaySettings: backPage?.overlaySettings ?? null,
+          placedElementsCount: backEls.length,
+        });
+      }
+      setSaving(true);
+      try {
+        const res = await fetch(`/api/products/${productId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          setLastSaved(new Date());
+          setCoverThumbnailCaptureTrigger((v) => v + 1);
+          // Do not switch to cover page here — stay on current page so the user is not
+          // sent back to page 1 when clicking on the back cover (which can trigger save).
+          // Cover thumbnail is captured only when the user is already on page 0 (see effect below).
+        }
+      } catch {
+        // ignore
+      } finally {
+        setSaving(false);
+      }
+    },
+    [productId]
+  );
+
   const brandSocialsAppliedForProductRef = useRef<string | null>(null);
   useEffect(() => {
     const pid = product?.id;
@@ -1138,6 +1239,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
   }, [searchParams]);
 
   const totalPages = Math.max(2, sections.length + 2);
+
+  const displayPageElements = useMemo(() => {
+    const onBackPage = currentPageIndex === totalPages - 1 && totalPages >= 2;
+    const websiteDisplay = backCoverWebsiteUrl?.trim() || "Add your website in brand profile";
+    if (onBackPage) {
+      return sortedPageElements.map((el) =>
+        el.id === "back-url" ? { ...el, content: websiteDisplay } : el
+      );
+    }
+    return sortedPageElements;
+  }, [sortedPageElements, currentPageIndex, totalPages, backCoverWebsiteUrl]);
 
   useEffect(() => {
     setPageBackgrounds((prev) => {
@@ -1229,7 +1341,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
           return [
             { id: "back-thanks", type: "text", content: "Thank you", position: { x: CANVAS_WIDTH / 2 - 200, y: 350 }, size: { width: 400, height: 36 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 22, textAlign: "center" } },
             { id: "back-msg", type: "text", content: "Thank you for using this resource!", position: { x: CANVAS_WIDTH / 2 - 200, y: 420 }, size: { width: 400, height: 28 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 16, textAlign: "center" } },
-            { id: "back-url", type: "text", content: "Visit contentflywheel.com", position: { x: CANVAS_WIDTH / 2 - 200, y: 500 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 14, textAlign: "center" } },
+            { id: "back-url", type: "text", content: "Add your website in brand profile", position: { x: CANVAS_WIDTH / 2 - 200, y: 500 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 14, textAlign: "center" } },
             { id: "back-brand", type: "text", content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 620 }, size: { width: 300, height: 20 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 12, textAlign: "center" } },
           ];
         }
@@ -1331,58 +1443,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
     applySnapshot(toRestore);
     recordingRef.current = false;
   }, [redoStack, snapshot, applySnapshot]);
-
-  const saveToServer = useCallback(
-    async (payload: {
-      content?: { sections: Section[] };
-      designSettings?: Record<string, unknown>;
-      placedElements?: PlacedElement[];
-      placedElementsByPage?: PlacedElement[][];
-      marketingAssets?: Record<string, unknown>;
-    }) => {
-      if (!productId) return;
-      if (payload.designSettings) {
-        const ds = payload.designSettings as { pages?: PageBackground[]; placedElementsByPage?: PlacedElement[][] };
-        const pages = ds.pages ?? [];
-        const byPage = ds.placedElementsByPage ?? [];
-        const coverPage = pages[0];
-        const backPage = pages.length > 0 ? pages[pages.length - 1] : undefined;
-        const coverEls = byPage[0] ?? [];
-        const backEls = byPage.length > 0 ? (byPage[byPage.length - 1] ?? []) : [];
-        console.log("[ProductEditor] Save — cover page (index 0):", {
-          backgroundImage: coverPage?.backgroundImage ?? null,
-          overlaySettings: coverPage?.overlaySettings ?? null,
-          placedElementsCount: coverEls.length,
-        });
-        console.log("[ProductEditor] Save — back cover page (index " + (pages.length - 1) + "):", {
-          backgroundImage: backPage?.backgroundImage ?? null,
-          overlaySettings: backPage?.overlaySettings ?? null,
-          placedElementsCount: backEls.length,
-        });
-      }
-      setSaving(true);
-      try {
-        const res = await fetch(`/api/products/${productId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (res.ok) {
-          setLastSaved(new Date());
-          setCoverThumbnailCaptureTrigger((v) => v + 1);
-          if (currentPageIndex !== 0) {
-            savedPageIndexRef.current = currentPageIndex;
-            setCurrentPageIndex(0);
-          }
-        }
-      } catch {
-        // ignore
-      } finally {
-        setSaving(false);
-      }
-    },
-    [productId, currentPageIndex]
-  );
 
   const handleTemplateSelect = useCallback(
     (templateId: string) => {
@@ -2032,6 +2092,19 @@ export default function ProductEditor({ productId }: { productId: string }) {
     [recordUndoDebounced]
   );
 
+  const deselectText = useCallback(() => {
+    contentAreaRef.current?.querySelectorAll("[data-selected]").forEach((el) => {
+      (el as HTMLElement).style.outline = "";
+      (el as HTMLElement).style.outlineOffset = "";
+      (el as HTMLElement).removeAttribute("data-selected");
+    });
+    if (selectedTextRef.current) {
+      clearSelectionOutline(selectedTextRef.current);
+      selectedTextRef.current = null;
+    }
+    setSelectedTextMeta(null);
+  }, []);
+
   const handleSelectElement = useCallback(
     (id: string) => {
       deselectText();
@@ -2125,10 +2198,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
         return next;
       });
       if (pageOfElement >= 0 && pageOfElement !== currentPageIndex) {
-        setCurrentPageIndex(pageOfElement);
+        const totalP = Math.max(2, sections.length + 2);
+        const isOnBackCover = currentPageIndex === totalP - 1;
+        if (!(isOnBackCover && pageOfElement === 0)) {
+          setCurrentPageIndex(pageOfElement);
+        }
       }
     },
-    [selectedElement, recordUndoDebounced, placedElementsByPage, currentPageIndex]
+    [selectedElement, recordUndoDebounced, placedElementsByPage, currentPageIndex, sections.length]
   );
 
   const applyTextColorToCurrentPage = useCallback(
@@ -2346,6 +2423,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         instagramUrl?: string;
         youtubeUrl?: string;
         facebookUrl?: string;
+        websiteUrl?: string;
       };
     }) => {
       const title = product?.title ?? "";
@@ -2492,6 +2570,12 @@ export default function ProductEditor({ productId }: { productId: string }) {
             }
           : product?.designSettings?.backCoverSocialLinks;
 
+      const backIdx = nextPlaced.length - 1;
+      if (backIdx >= 0) {
+        const links = (backCoverSocials ?? {}) as Record<string, string>;
+        nextPlaced[backIdx] = ensureBackPageSocialElements(nextPlaced[backIdx] ?? [], links);
+      }
+
       setProduct((p) =>
         p
           ? {
@@ -2547,6 +2631,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       instagramUrl?: string;
       youtubeUrl?: string;
       facebookUrl?: string;
+      websiteUrl?: string;
       preferAiColors: boolean;
     };
     setBrandProfile({
@@ -2871,19 +2956,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
     },
     [selectedTextMeta, updateTextStyle]
   );
-
-  const deselectText = useCallback(() => {
-    contentAreaRef.current?.querySelectorAll("[data-selected]").forEach((el) => {
-      (el as HTMLElement).style.outline = "";
-      (el as HTMLElement).style.outlineOffset = "";
-      (el as HTMLElement).removeAttribute("data-selected");
-    });
-    if (selectedTextRef.current) {
-      clearSelectionOutline(selectedTextRef.current);
-      selectedTextRef.current = null;
-    }
-    setSelectedTextMeta(null);
-  }, []);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -3335,23 +3407,69 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 <Label className="text-xs">Facebook URL</Label>
                 <Input placeholder="https://facebook.com/..." value={brandSetupForm.facebookUrl} onChange={(e) => setBrandSetupForm((f) => ({ ...f, facebookUrl: e.target.value }))} className="mt-1" />
               </div>
+              <div className="col-span-2">
+                <Label className="text-xs">Website/Store URL</Label>
+                <Input placeholder="https://yoursite.com" value={brandSetupForm.websiteUrl} onChange={(e) => setBrandSetupForm((f) => ({ ...f, websiteUrl: e.target.value }))} className="mt-1" />
+              </div>
             </div>
             <div>
               <Label className="text-xs">Primary brand colour</Label>
-              <div className="flex gap-2 mt-1 items-center">
-                <div className="[&_.react-colorful]:h-8 [&_.react-colorful]:w-full [&_.react-colorful]:max-w-[120px] [&_.react-colorful]:rounded">
-                  <HexColorPicker color={brandSetupForm.primaryColor} onChange={(c) => setBrandSetupForm((f) => ({ ...f, primaryColor: c }))} />
-                </div>
-                <Input type="text" value={brandSetupForm.primaryColor} onChange={(e) => setBrandSetupForm((f) => ({ ...f, primaryColor: e.target.value }))} className="w-24 font-mono text-sm" />
+              <div className="flex gap-2 mt-1.5 items-center">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="h-9 w-9 shrink-0 rounded-md border border-input bg-background shadow-sm hover:ring-2 hover:ring-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                      style={{ backgroundColor: brandSetupForm.primaryColor }}
+                      aria-label="Pick primary colour"
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-3" align="start">
+                    <div className="[&_.react-colorful]:h-32 [&_.react-colorful]:w-44 [&_.react-colorful]:rounded-md">
+                      <HexColorPicker
+                        color={brandSetupForm.primaryColor}
+                        onChange={(c) => setBrandSetupForm((f) => ({ ...f, primaryColor: c }))}
+                      />
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <Input
+                  type="text"
+                  value={brandSetupForm.primaryColor}
+                  onChange={(e) => setBrandSetupForm((f) => ({ ...f, primaryColor: e.target.value }))}
+                  className="h-9 w-24 font-mono text-sm"
+                  placeholder="#1a1a1a"
+                />
               </div>
             </div>
             <div>
               <Label className="text-xs">Secondary brand colour</Label>
-              <div className="flex gap-2 mt-1 items-center">
-                <div className="[&_.react-colorful]:h-8 [&_.react-colorful]:w-full [&_.react-colorful]:max-w-[120px] [&_.react-colorful]:rounded">
-                  <HexColorPicker color={brandSetupForm.secondaryColor} onChange={(c) => setBrandSetupForm((f) => ({ ...f, secondaryColor: c }))} />
-                </div>
-                <Input type="text" value={brandSetupForm.secondaryColor} onChange={(e) => setBrandSetupForm((f) => ({ ...f, secondaryColor: e.target.value }))} className="w-24 font-mono text-sm" />
+              <div className="flex gap-2 mt-1.5 items-center">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="h-9 w-9 shrink-0 rounded-md border border-input bg-background shadow-sm hover:ring-2 hover:ring-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                      style={{ backgroundColor: brandSetupForm.secondaryColor }}
+                      aria-label="Pick secondary colour"
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-3" align="start">
+                    <div className="[&_.react-colorful]:h-32 [&_.react-colorful]:w-44 [&_.react-colorful]:rounded-md">
+                      <HexColorPicker
+                        color={brandSetupForm.secondaryColor}
+                        onChange={(c) => setBrandSetupForm((f) => ({ ...f, secondaryColor: c }))}
+                      />
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <Input
+                  type="text"
+                  value={brandSetupForm.secondaryColor}
+                  onChange={(e) => setBrandSetupForm((f) => ({ ...f, secondaryColor: e.target.value }))}
+                  className="h-9 w-24 font-mono text-sm"
+                  placeholder="#475569"
+                />
               </div>
             </div>
             <div>
@@ -3383,6 +3501,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       instagramUrl: brandSetupForm.instagramUrl || undefined,
                       youtubeUrl: brandSetupForm.youtubeUrl || undefined,
                       facebookUrl: brandSetupForm.facebookUrl || undefined,
+                      websiteUrl: brandSetupForm.websiteUrl || undefined,
                       primaryColor: brandSetupForm.primaryColor,
                       secondaryColor: brandSetupForm.secondaryColor,
                       preferAiColors: false,
@@ -3390,7 +3509,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     }),
                   });
                   if (!res.ok) throw new Error("Failed to save");
-                  const saved = (await res.json()) as { primaryColor: string; secondaryColor: string; tiktokUrl?: string; instagramUrl?: string; youtubeUrl?: string; facebookUrl?: string };
+                  const saved = (await res.json()) as { primaryColor: string; secondaryColor: string; tiktokUrl?: string; instagramUrl?: string; youtubeUrl?: string; facebookUrl?: string; websiteUrl?: string };
                   setBrandProfile({
                     ...saved,
                     primaryColor: saved.primaryColor ?? "#1a1a1a",
@@ -3454,6 +3573,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       instagramUrl: brandProfile.instagramUrl,
                       youtubeUrl: brandProfile.youtubeUrl,
                       facebookUrl: brandProfile.facebookUrl,
+                      websiteUrl: brandProfile.websiteUrl,
                     },
                   });
                 } else {
@@ -3805,7 +3925,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     role="presentation"
                   >
                     <div className="w-full h-full relative">
-                      {sortedPageElements.map((element) => (
+                      {displayPageElements.map((element) => (
                         <CanvasPlacedElement
                           key={element.id}
                           element={element}

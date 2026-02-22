@@ -46,12 +46,50 @@ type PlacedElement = {
   linkUrl?: string;
 };
 
-async function fetchOnePexelsPhoto(keyword: string): Promise<string | null> {
+/** Format-specific safe Pexels keywords (no architecture, buildings, or stripes). */
+const FORMAT_PEXELS_SAFE: Record<string, string> = {
+  ebook: "morning light bokeh",
+  workbook: "soft gradient pastel",
+  planner: "clean desk minimal",
+  journal: "open notebook flat lay",
+  checklist: "soft pastel paper",
+  course: "soft abstract blur",
+  notion: "minimal workspace soft",
+  spreadsheet: "soft blue gradient",
+};
+
+/** Sanitize Pexels keyword: only clean soft/minimal terms; never architecture, buildings, or patterns. */
+function sanitizePexelsKeyword(keyword: string, format?: string): string {
+  const k = keyword.trim().toLowerCase();
+  const safeDefault =
+    format && FORMAT_PEXELS_SAFE[format.toLowerCase()]
+      ? FORMAT_PEXELS_SAFE[format.toLowerCase()]
+      : "soft abstract minimal";
+  if (!k) return safeDefault;
+  const bad =
+    /\b(stripe|striped|pattern|texture|geometric|busy|wood|fabric|noise|grid|lines|architecture|building|buildings|office|brick|concrete)\b/i.test(
+      k
+    );
+  if (bad) return safeDefault;
+  if (
+    /\b(soft|minimal|blur|abstract|blurred|gradient|pastel|neutral|bokeh|notebook|desk|flat lay)\b/i.test(
+      k
+    )
+  )
+    return k;
+  return `${k} soft minimal`;
+}
+
+async function fetchOnePexelsPhoto(
+  keyword: string,
+  format?: string
+): Promise<string | null> {
   const apiKey =
     process.env.PEXELS_API_KEY || process.env.NEXT_PUBLIC_PEXELS_API_KEY;
   if (!apiKey) return null;
+  const query = sanitizePexelsKeyword(keyword, format);
   const url = new URL("https://api.pexels.com/v1/search");
-  url.searchParams.set("query", keyword);
+  url.searchParams.set("query", query);
   url.searchParams.set("per_page", "1");
   url.searchParams.set("page", "1");
   url.searchParams.set("orientation", "square");
@@ -70,6 +108,16 @@ async function fetchOnePexelsPhoto(keyword: string): Promise<string | null> {
     first?.src?.medium ??
     null
   );
+}
+
+/** Return true if hex color is dark (needs light text). */
+function isColorDark(hex: string): boolean {
+  const h = hex.replace(/^#/, "");
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance < 0.5;
 }
 
 export async function POST(
@@ -116,37 +164,50 @@ export async function POST(
     let brandSecondary: string | undefined;
     let backCoverSocialLinks: Record<string, string> | undefined;
 
-    if (useBrandColors) {
-      const [profile] = await db
-        .select()
-        .from(brandProfilesTable)
-        .where(eq(brandProfilesTable.userId, userId));
-      if (profile) {
-        brandPrimary = profile.primaryColor ?? "#1a1a1a";
-        brandSecondary = profile.secondaryColor ?? "#475569";
-        backCoverSocialLinks = {};
-        if (profile.tiktokUrl) backCoverSocialLinks.tiktok = profile.tiktokUrl;
-        if (profile.instagramUrl) backCoverSocialLinks.instagram = profile.instagramUrl;
-        if (profile.youtubeUrl) backCoverSocialLinks.youtube = profile.youtubeUrl;
-        if (profile.facebookUrl) backCoverSocialLinks.facebook = profile.facebookUrl;
-      }
+    const [brandProfile] = await db
+      .select()
+      .from(brandProfilesTable)
+      .where(eq(brandProfilesTable.userId, userId));
+
+    if (useBrandColors && brandProfile) {
+      brandPrimary = brandProfile.primaryColor ?? "#1a1a1a";
+      brandSecondary = brandProfile.secondaryColor ?? "#475569";
+      backCoverSocialLinks = {};
+      if (brandProfile.tiktokUrl) backCoverSocialLinks.tiktok = brandProfile.tiktokUrl;
+      if (brandProfile.instagramUrl) backCoverSocialLinks.instagram = brandProfile.instagramUrl;
+      if (brandProfile.youtubeUrl) backCoverSocialLinks.youtube = brandProfile.youtubeUrl;
+      if (brandProfile.facebookUrl) backCoverSocialLinks.facebook = brandProfile.facebookUrl;
     }
 
+    const backCoverWebsiteText =
+      brandProfile?.websiteUrl?.trim() || "Add your website in brand profile";
+
+    const productFormat = (product.format ?? "ebook").toLowerCase().trim();
     const design = await getAutoDesignSuggestion({
       title,
       niche,
+      format: productFormat,
       ...(brandPrimary && brandSecondary ? { brandPrimary, brandSecondary } : {}),
     });
 
-    const bgImageUrl = await fetchOnePexelsPhoto(design.pexelsKeyword);
+    const bgImageUrl = await fetchOnePexelsPhoto(
+      design.pexelsKeyword,
+      productFormat
+    );
     const primary = design.primary.startsWith("#") ? design.primary : `#${design.primary}`;
     const secondary = design.secondary.startsWith("#") ? design.secondary : `#${design.secondary}`;
     const accent = design.accent.startsWith("#") ? design.accent : `#${design.accent}`;
     const headingFont = `${design.headingFont}, serif`;
     const bodyFont = `${design.bodyFont}, system-ui, sans-serif`;
     const overlayColor = design.overlayColor?.startsWith("#") ? design.overlayColor : `#${design.overlayColor ?? "000000"}`;
-    const overlayOpacity = typeof design.overlayOpacity === "number" ? Math.max(0, Math.min(1, design.overlayOpacity)) : 0.75;
+    const overlayOpacityRaw = typeof design.overlayOpacity === "number" ? Math.max(0, Math.min(1, design.overlayOpacity)) : 0.5;
+    const overlayOpacity = Math.min(0.6, overlayOpacityRaw);
     const contentPageBg = design.contentPageBackgroundColor?.startsWith("#") ? design.contentPageBackgroundColor : `#${design.contentPageBackgroundColor ?? "ffffff"}`;
+
+    const overlayIsDark = isColorDark(overlayColor);
+    const coverTitleColor = overlayIsDark ? "#ffffff" : primary;
+    const coverBodyColor = overlayIsDark ? "#f1f5f9" : secondary;
+    const coverAccentColor = overlayIsDark ? "#fcd34d" : accent;
 
     const totalPages = Math.max(2, sections.length + 2);
     const overlayForCoverBack = { color: overlayColor, opacity: overlayOpacity };
@@ -173,7 +234,7 @@ export async function POST(
         size: { width: 400, height: 80 },
         rotation: 0,
         zIndex: 1,
-        textSettings: { fontSize: 32, fontFamily: headingFont, color: primary, textAlign: "center", fontWeight: "700" },
+        textSettings: { fontSize: 32, fontFamily: headingFont, color: coverTitleColor, textAlign: "center", fontWeight: "700" },
       },
       {
         id: "cover-footer",
@@ -183,7 +244,7 @@ export async function POST(
         size: { width: 300, height: 24 },
         rotation: 0,
         zIndex: 2,
-        textSettings: { fontSize: 14, fontFamily: bodyFont, color: secondary, textAlign: "center", fontWeight: "400" },
+        textSettings: { fontSize: 14, fontFamily: bodyFont, color: coverBodyColor, textAlign: "center", fontWeight: "400" },
       },
     ];
     if (subtitle) {
@@ -195,16 +256,16 @@ export async function POST(
         size: { width: 400, height: 40 },
         rotation: 0,
         zIndex: 1,
-        textSettings: { fontSize: 18, fontFamily: bodyFont, color: secondary, textAlign: "center", fontWeight: "400" },
+        textSettings: { fontSize: 18, fontFamily: bodyFont, color: coverBodyColor, textAlign: "center", fontWeight: "400" },
       });
     }
 
     const socialStartX = CANVAS_WIDTH / 2 - (SOCIAL_PLATFORMS.length * (SOCIAL_SIZE + SOCIAL_GAP)) / 2;
     const backElements: PlacedElement[] = [
-      { id: "back-thanks", type: "text", content: "Thank you", position: { x: CANVAS_WIDTH / 2 - 200, y: 350 }, size: { width: 400, height: 36 }, rotation: 0, zIndex: 1, textSettings: { fontSize: 22, fontFamily: headingFont, color: primary, textAlign: "center", fontWeight: "700" } },
-      { id: "back-msg", type: "text", content: "Thank you for using this resource!", position: { x: CANVAS_WIDTH / 2 - 200, y: 420 }, size: { width: 400, height: 28 }, rotation: 0, zIndex: 1, textSettings: { fontSize: 16, fontFamily: bodyFont, color: secondary, textAlign: "center", fontWeight: "400" } },
-      { id: "back-url", type: "text", content: "Visit contentflywheel.com", position: { x: CANVAS_WIDTH / 2 - 200, y: 500 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { fontSize: 14, fontFamily: bodyFont, color: accent, textAlign: "center", fontWeight: "400" } },
-      { id: "back-brand", type: "text", content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 620 }, size: { width: 300, height: 20 }, rotation: 0, zIndex: 1, textSettings: { fontSize: 12, fontFamily: bodyFont, color: secondary, textAlign: "center", fontWeight: "400" } },
+      { id: "back-thanks", type: "text", content: "Thank you", position: { x: CANVAS_WIDTH / 2 - 200, y: 350 }, size: { width: 400, height: 36 }, rotation: 0, zIndex: 1, textSettings: { fontSize: 22, fontFamily: headingFont, color: coverTitleColor, textAlign: "center", fontWeight: "700" } },
+      { id: "back-msg", type: "text", content: "Thank you for using this resource!", position: { x: CANVAS_WIDTH / 2 - 200, y: 420 }, size: { width: 400, height: 28 }, rotation: 0, zIndex: 1, textSettings: { fontSize: 16, fontFamily: bodyFont, color: coverBodyColor, textAlign: "center", fontWeight: "400" } },
+      { id: "back-url", type: "text", content: backCoverWebsiteText, position: { x: CANVAS_WIDTH / 2 - 200, y: 500 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { fontSize: 14, fontFamily: bodyFont, color: coverAccentColor, textAlign: "center", fontWeight: "400" } },
+      { id: "back-brand", type: "text", content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 620 }, size: { width: 300, height: 20 }, rotation: 0, zIndex: 1, textSettings: { fontSize: 12, fontFamily: bodyFont, color: coverBodyColor, textAlign: "center", fontWeight: "400" } },
     ];
     if (backCoverSocialLinks && Object.keys(backCoverSocialLinks).length > 0) {
       SOCIAL_PLATFORMS.forEach((platform, idx) => {

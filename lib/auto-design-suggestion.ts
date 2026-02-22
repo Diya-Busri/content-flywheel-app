@@ -31,6 +31,8 @@ function normalizeHex(color: string): string {
 export type AutoDesignInput = {
   title: string;
   niche: string;
+  /** Product format so each type gets a unique design: ebook, workbook, planner, journal, checklist, course, notion, spreadsheet, etc. */
+  format?: string;
   brandPrimary?: string;
   brandSecondary?: string;
 };
@@ -38,33 +40,58 @@ export type AutoDesignInput = {
 export async function getAutoDesignSuggestion(
   input: AutoDesignInput
 ): Promise<AutoDesignSuggestion> {
-  const { title, niche, brandPrimary, brandSecondary } = input;
+  const { title, niche, format, brandPrimary, brandSecondary } = input;
   const useBrandColors = Boolean(
     brandPrimary?.trim() && brandSecondary?.trim()
   );
+  const productFormat = (format ?? "ebook").toLowerCase().trim();
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
 
-  const prompt = `You are a digital product design expert. Given a product title and topic/niche, suggest a cohesive design for a digital product (ebook/guide).
+  const formatPexelsExamples: Record<string, string> = {
+    ebook: "morning light bokeh",
+    workbook: "soft gradient pastel",
+    planner: "clean desk minimal",
+    journal: "open notebook flat lay",
+    checklist: "soft pastel paper",
+    course: "soft abstract blur",
+    notion: "minimal workspace soft",
+    spreadsheet: "soft blue gradient",
+  };
+  const suggestedKeyword =
+    formatPexelsExamples[productFormat] ?? "soft abstract minimal";
+
+  const prompt = `You are a digital product design expert. Suggest a UNIQUE design for THIS product type. Each format (Ebook, Workbook, Planner, Journal, etc.) must look different.
 
 Product title: ${title || "Untitled"}
 Topic/niche: ${niche || "General"}
+Product format: ${productFormat}
+
+Choose a distinct style and colour palette that fits this format. Ebook = elegant/readable; Workbook = inviting/activity feel; Planner = clean/organised; Journal = calm/reflective. Use different fonts and colours per format.
 
 Return ONLY a valid JSON object (no markdown, no code fence) with exactly these keys:
-- "primary": string, hex color for main text and headings (e.g. "#1a1a1a" or "#0f172a")
-- "secondary": string, hex color for body text (e.g. "#475569" or "#64748b")
-- "accent": string, hex color for subheadings and highlights (e.g. "#f97316" or "#0ea5e9")
-- "headingFont": string, one CSS-safe font name for titles/headings (e.g. "Playfair Display", "Montserrat", "Georgia", "Inter")
-- "bodyFont": string, one CSS-safe font name for body text (e.g. "Inter", "Open Sans", "Lato", "Source Sans 3")
-- "pexelsKeyword": string, a single English search term for a cover/back background stock photo that fits the topic (e.g. "minimal office", "nature landscape", "abstract gradient", "coffee workspace")
-- "overlayColor": string, hex color for the overlay on cover/back so title text is readable (e.g. "#000000" for dark overlay, "#ffffff" for light)
-- "overlayOpacity": number, 0 to 1. Use 0.6-0.85 so the background image shows through but text stays readable
-- "contentPageBackgroundColor": string, hex for content pages (e.g. "#ffffff", "#f8fafc", "#fefce8"). Keep neutral and readable
 
-Keep colors readable and professional. Fonts must be common or Google Fonts names.`;
+- "primary": string, hex for main text/headings. Contrast with overlay: dark overlay → light text (#ffffff, #f8fafc); light overlay → dark text (#1a1a1a).
+- "secondary": string, hex for body text. Same contrast rule.
+- "accent": string, hex for subheadings/highlights.
+- "headingFont": string, one CSS-safe font (e.g. Playfair Display, Montserrat, Georgia, Inter). Vary by format.
+- "bodyFont": string, one CSS-safe font (e.g. Inter, Open Sans, Lato). Vary by format.
+- "pexelsKeyword": string, ONE search term for a CLEAN, SOFT cover photo. Use ONLY terms like these (no architecture, no buildings, no stripes):
+  - Personal development / general: "morning light bokeh", "soft bokeh light"
+  - Journal: "open notebook flat lay", "journal flat lay soft"
+  - Planner: "clean desk minimal", "minimal desk pastel"
+  - Workbook: "soft gradient pastel", "pastel gradient soft"
+  - Ebook / other: "soft abstract minimal", "blurred nature soft", "soft gradient"
+  NEVER use: architecture, building, office, stripes, geometric pattern, wood, fabric, brick, concrete, or any term that could return busy or striped images.
+- "overlayColor": string, SOLID hex only (#000000 or #1a1a2e for dark; #ffffff or #f8fafc for light). No patterns.
+- "overlayOpacity": number, 0.35 to 0.6. Prefer 0.45-0.55.
+- "contentPageBackgroundColor": string, hex for content pages (#ffffff, #f8fafc, etc.).
+
+For this format ("${productFormat}") a good pexelsKeyword example is: "${suggestedKeyword}". You may use that or a similar soft/minimal term. Never use architecture or buildings.`;
+
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -103,10 +130,20 @@ Keep colors readable and professional. Fonts must be common or Google Fonts name
 
   const parsed = JSON.parse(content) as Record<string, unknown>;
   const overlayOpacityRaw = parsed.overlayOpacity;
-  const overlayOpacity =
+  const overlayOpacityUnclamped =
     typeof overlayOpacityRaw === "number" && overlayOpacityRaw >= 0 && overlayOpacityRaw <= 1
       ? overlayOpacityRaw
-      : 0.75;
+      : 0.5;
+  const overlayOpacity = Math.min(0.6, overlayOpacityUnclamped);
+
+  const rawKeyword = String(parsed.pexelsKeyword ?? suggestedKeyword).trim().toLowerCase();
+  const badKeyword =
+    rawKeyword === "" ||
+    /\b(stripe|striped|pattern|texture|geometric|busy|wood|fabric|noise|architecture|building|buildings|office|brick|concrete|grid|lines)\b/.test(
+      rawKeyword
+    );
+  const pexelsKeyword = badKeyword ? suggestedKeyword : rawKeyword;
+
   return {
     primary: useBrandColors
       ? normalizeHex(brandPrimary!)
@@ -119,7 +156,7 @@ Keep colors readable and professional. Fonts must be common or Google Fonts name
       : normalizeHex(String(parsed.accent ?? "#f97316")),
     headingFont: String(parsed.headingFont ?? "Inter").trim(),
     bodyFont: String(parsed.bodyFont ?? "Inter").trim(),
-    pexelsKeyword: String(parsed.pexelsKeyword ?? "minimal abstract").trim(),
+    pexelsKeyword: pexelsKeyword || "soft abstract minimal",
     overlayColor: normalizeHex(String(parsed.overlayColor ?? "#000000")),
     overlayOpacity,
     contentPageBackgroundColor: normalizeHex(
