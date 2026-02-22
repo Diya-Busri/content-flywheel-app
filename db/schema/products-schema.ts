@@ -6,6 +6,8 @@ export type MarketingAssets = {
   hashtags?: string[];
   seoKeywords?: string[];
   thumbnailUrl?: string | null;
+  /** Cover page thumbnail for library cards (generated on save). */
+  coverThumbnailUrl?: string | null;
   updatedAt?: string;
 };
 

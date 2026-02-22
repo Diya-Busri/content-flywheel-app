@@ -34,23 +34,33 @@ async function getVideoStats(userId: string) {
   let productsCount = 0;
   const recent: RecentVideoItem[] = [];
 
+  // Products count: table "products", column "user_id" (Supabase). Count non-deleted for current user.
+  const productWhere = and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt));
+  try {
+    const productsCountRow = await db
+      .select({ count: count() })
+      .from(productsTable)
+      .where(productWhere);
+    const raw = productsCountRow[0]?.count;
+    productsCount = typeof raw === "bigint" ? Number(raw) : Number(raw ?? 0);
+  } catch (err) {
+    console.error("[dashboard] products count:", err);
+  }
+
   try {
     const videoWhere = and(eq(videosTable.userId, userId), isNull(videosTable.deletedAt));
-    const productWhere = and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt));
-    const [libraryVideos, ugcJobs, tiktokVideos, libCountRow, ugcCountRow, tiktokCountRow, productsCountRow] = await Promise.all([
+    const [libraryVideos, ugcJobs, tiktokVideos, libCountRow, ugcCountRow, tiktokCountRow] = await Promise.all([
       db.select({ id: videosTable.id, title: videosTable.title, createdAt: videosTable.createdAt }).from(videosTable).where(videoWhere).orderBy(desc(videosTable.createdAt)).limit(5),
       db.select({ id: videoJobsTable.id, hookPreview: videoJobsTable.hookPreview, createdAt: videoJobsTable.createdAt }).from(videoJobsTable).where(eq(videoJobsTable.userId, userId)).orderBy(desc(videoJobsTable.createdAt)).limit(5),
       db.select({ id: tiktokShopVideosTable.id, productLink: tiktokShopVideosTable.productLink, createdAt: tiktokShopVideosTable.createdAt }).from(tiktokShopVideosTable).where(eq(tiktokShopVideosTable.userId, userId)).orderBy(desc(tiktokShopVideosTable.createdAt)).limit(5),
       db.select({ count: count() }).from(videosTable).where(videoWhere),
       db.select({ count: count() }).from(videoJobsTable).where(eq(videoJobsTable.userId, userId)),
       db.select({ count: count() }).from(tiktokShopVideosTable).where(eq(tiktokShopVideosTable.userId, userId)),
-      db.select({ count: count() }).from(productsTable).where(productWhere),
     ]);
 
     libraryCount = Number(libCountRow[0]?.count ?? 0);
     ugcCount = Number(ugcCountRow[0]?.count ?? 0);
     tiktokCount = Number(tiktokCountRow[0]?.count ?? 0);
-    productsCount = Number(productsCountRow[0]?.count ?? 0);
 
     const withSource: RecentVideoItem[] = [
       ...libraryVideos.map((v) => ({ id: v.id, title: v.title || "Untitled video", createdAt: v.createdAt!, href: "/dashboard/library", source: "library" as const })),

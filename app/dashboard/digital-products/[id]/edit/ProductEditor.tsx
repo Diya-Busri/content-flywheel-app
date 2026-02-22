@@ -911,6 +911,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const selectedTextRef = useRef<HTMLElement | null>(null);
   const contentAreaRef = useRef<HTMLDivElement | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const [coverThumbnailCaptureTrigger, setCoverThumbnailCaptureTrigger] = useState(0);
+  const savedPageIndexRef = useRef<number | null>(null);
   const [selectedTextMeta, setSelectedTextMeta] = useState<SelectedTextMeta | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([]);
@@ -1367,6 +1369,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
         });
         if (res.ok) {
           setLastSaved(new Date());
+          setCoverThumbnailCaptureTrigger((v) => v + 1);
+          if (currentPageIndex !== 0) {
+            savedPageIndexRef.current = currentPageIndex;
+            setCurrentPageIndex(0);
+          }
         }
       } catch {
         // ignore
@@ -1374,7 +1381,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         setSaving(false);
       }
     },
-    [productId]
+    [productId, currentPageIndex]
   );
 
   const handleTemplateSelect = useCallback(
@@ -1427,10 +1434,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
   }, [sections, template, product, placedElementsByPage, graphicsAccentColor, layoutSettings, pageBackgrounds, saveToServer]);
 
   useEffect(() => {
-    if (currentPageIndex !== 0 || !productId || !canvasContainerRef.current) return;
+    if (currentPageIndex !== 0 || !productId || coverThumbnailCaptureTrigger === 0) return;
+    const restorePage = savedPageIndexRef.current;
     const t = setTimeout(async () => {
       const el = canvasContainerRef.current;
-      if (!el) return;
+      if (!el) {
+        if (restorePage != null) setCurrentPageIndex(restorePage);
+        savedPageIndexRef.current = null;
+        return;
+      }
       try {
         const canvas = await html2canvas(el, {
           useCORS: true,
@@ -1463,10 +1475,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
         }
       } catch {
         // ignore
+      } finally {
+        if (restorePage != null) setCurrentPageIndex(restorePage);
+        savedPageIndexRef.current = null;
       }
-    }, 6000);
+    }, 700);
     return () => clearTimeout(t);
-  }, [currentPageIndex, productId, placedElementsByPage, pageBackgrounds]);
+  }, [currentPageIndex, productId, coverThumbnailCaptureTrigger, placedElementsByPage, pageBackgrounds]);
 
   const openEdit = (section: Section) => {
     setEditingSectionId(section.id);
