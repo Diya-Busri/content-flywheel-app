@@ -64,6 +64,8 @@ type LibraryItem = {
   platform?: string;
   format?: string;
   bundleId?: string;
+  /** When 'ai' or 'brand', product was auto-designed; show "AI Designed" badge. */
+  designSource?: "ai" | "brand" | null;
 };
 
 function formatDate(iso: string): string {
@@ -379,11 +381,18 @@ export default function LibraryFlow() {
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
                               <CardTitle className="text-base truncate text-gray-900 dark:text-white">{item.title}</CardTitle>
-                              {item.type === "product" && item.format && (
-                                <Badge variant="secondary" className="mt-1.5 text-xs font-normal bg-orange-500/10 text-orange-600 dark:text-orange-400 border-0">
-                                  {formatLabel(item.format)}
-                                </Badge>
-                              )}
+                              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                {item.type === "product" && item.format && (
+                                  <Badge variant="secondary" className="text-xs font-normal bg-orange-500/10 text-orange-600 dark:text-orange-400 border-0">
+                                    {formatLabel(item.format)}
+                                  </Badge>
+                                )}
+                                {item.type === "product" && (item.designSource === "ai" || item.designSource === "brand") && (
+                                  <Badge variant="secondary" className="text-xs font-normal bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-0">
+                                    AI Designed
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -465,11 +474,18 @@ export default function LibraryFlow() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <CardTitle className="text-base truncate text-gray-900 dark:text-white">{item.title}</CardTitle>
-                        {item.type === "product" && item.format && (
-                          <Badge variant="secondary" className="mt-1.5 text-xs font-normal bg-orange-500/10 text-orange-600 dark:text-orange-400 border-0">
-                            {formatLabel(item.format)}
-                          </Badge>
-                        )}
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {item.type === "product" && item.format && (
+                            <Badge variant="secondary" className="text-xs font-normal bg-orange-500/10 text-orange-600 dark:text-orange-400 border-0">
+                              {formatLabel(item.format)}
+                            </Badge>
+                          )}
+                          {item.type === "product" && (item.designSource === "ai" || item.designSource === "brand") && (
+                            <Badge variant="secondary" className="text-xs font-normal bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-0">
+                              AI Designed
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

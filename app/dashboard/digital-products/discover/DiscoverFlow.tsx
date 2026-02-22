@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -296,6 +296,30 @@ export default function DiscoverFlow() {
   const [bundleComplete, setBundleComplete] = useState(false);
   const [bundleError, setBundleError] = useState<string | null>(null);
   const [bundleDialogDismissed, setBundleDialogDismissed] = useState(false);
+  // Design choice: shown in modal before starting bundle; 'manual' = skip auto-design
+  const [showDesignChoiceModal, setShowDesignChoiceModal] = useState(false);
+  const [bundleDesignChoice, setBundleDesignChoice] = useState<"ai" | "brand" | "manual" | null>(null);
+  const [bundleBrandProfile, setBundleBrandProfile] = useState<{
+    primaryColor: string;
+    secondaryColor: string;
+    tiktokUrl?: string;
+    instagramUrl?: string;
+    youtubeUrl?: string;
+    facebookUrl?: string;
+  } | null>(null);
+  const [bundleBrandForm, setBundleBrandForm] = useState({
+    primaryColor: "#1a1a1a",
+    secondaryColor: "#475569",
+    tiktokUrl: "",
+    instagramUrl: "",
+    youtubeUrl: "",
+    facebookUrl: "",
+  });
+  const [bundleBrandFormSaving, setBundleBrandFormSaving] = useState(false);
+  const [applyingDesign, setApplyingDesign] = useState(false);
+  const [designApplied, setDesignApplied] = useState(false);
+  const appliedDesignRunRef = useRef(false);
+  const designChoiceModalBrandFetchedRef = useRef(false);
 
   // Step 1: must select goal (experienced/beginner) + interests min 3 chars OR "I'm not sure"
   const canProceedStep1 = !!goal && (interests.trim().length >= 3 || dontKnowYet);
@@ -1149,7 +1173,78 @@ export default function DiscoverFlow() {
     setBundleItems([]);
     setBundleComplete(false);
     setBundleError(null);
+    setBundleDesignChoice(null);
+    setBundleBrandProfile(null);
+    setApplyingDesign(false);
+    setDesignApplied(false);
+    appliedDesignRunRef.current = false;
   };
+
+  // When design choice modal opens, fetch brand profile once
+  useEffect(() => {
+    if (!showDesignChoiceModal || designChoiceModalBrandFetchedRef.current) return;
+    designChoiceModalBrandFetchedRef.current = true;
+    let cancelled = false;
+    fetch("/api/brand-profile")
+      .then((res) => {
+        if (cancelled) return;
+        if (res.status === 404) {
+          setBundleBrandProfile(null);
+          return;
+        }
+        if (!res.ok) return;
+        return res.json();
+      })
+      .then((data) => {
+        if (cancelled || !data) return;
+        setBundleBrandProfile({
+          primaryColor: data.primaryColor ?? "#1a1a1a",
+          secondaryColor: data.secondaryColor ?? "#475569",
+          tiktokUrl: data.tiktokUrl,
+          instagramUrl: data.instagramUrl,
+          youtubeUrl: data.youtubeUrl,
+          facebookUrl: data.facebookUrl,
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [showDesignChoiceModal]);
+
+  // When bundle is complete: for 'manual' skip apply-design; for 'ai'/'brand' apply design (once)
+  useEffect(() => {
+    if (!bundleComplete || bundleItems.length === 0 || designApplied || appliedDesignRunRef.current) return;
+    const choice = bundleDesignChoice ?? "manual";
+    if (choice === "manual") {
+      appliedDesignRunRef.current = true;
+      setDesignApplied(true);
+      return;
+    }
+    const doneIds = bundleItems.filter((i) => i.status === "done").map((i) => i.productId);
+    if (doneIds.length === 0) return;
+    appliedDesignRunRef.current = true;
+    const useBrand = choice === "brand";
+    setApplyingDesign(true);
+    Promise.all(
+      doneIds.map((id) =>
+        fetch(`/api/products/${id}/apply-design`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ useBrandColors: useBrand }),
+        })
+      )
+    )
+      .then(() => {
+        setDesignApplied(true);
+        toast({ title: "Design applied", description: "All products are styled and ready in My Library." });
+      })
+      .catch(() => {
+        toast({ title: "Design could not be applied", description: "You can still open My Library and use Auto-Design on each product.", variant: "destructive" });
+        setDesignApplied(true);
+      })
+      .finally(() => setApplyingDesign(false));
+  }, [bundleComplete, bundleItems, bundleDesignChoice, designApplied, toast]);
 
   const handleCreateProduct = async (alsoGenerateVideos = false) => {
     if (!productFormat) {
@@ -2422,7 +2517,12 @@ export default function DiscoverFlow() {
                 type="button"
                 variant="outline"
                 className="w-full sm:w-auto border-orange-500/50 text-orange-500 hover:bg-orange-500/10 hover:border-orange-500 gap-2"
-                onClick={startFullBundle}
+                onClick={() => {
+                  if (bundleGenerating) return;
+                  designChoiceModalBrandFetchedRef.current = false;
+                  setBundleDesignChoice(null);
+                  setShowDesignChoiceModal(true);
+                }}
                 disabled={bundleGenerating}
               >
                 {bundleGenerating ? (
@@ -2482,93 +2582,7 @@ export default function DiscoverFlow() {
               <p className="text-xs text-amber-500/90 mt-2">Select a format to continue</p>
             )}
 
-            {/* Full bundle progress dialog */}
-            <Dialog open={((bundleGenerating || bundleItems.length > 0) && !bundleDialogDismissed)} onOpenChange={(open) => !open && closeBundleDialog()}>
-              <DialogContent className="sm:max-w-md bg-[#1A1A1A] border-[#2A2A2A]">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 text-white">
-                    <Layers className="w-5 h-5 text-orange-500" />
-                    Generate Full Bundle
-                  </DialogTitle>
-                  <DialogDescription className="text-[#A0A0A0]">
-                    {bundleItems.length === 0
-                      ? "Starting all 8 formats…"
-                      : bundleComplete
-                        ? bundleItems.some((i) => i.status === "failed")
-                          ? "Partially complete. Retry failed formats below or view the rest in My Library."
-                          : "All products are in My Library."
-                        : "Generating each format. This may take several minutes."}
-                  </DialogDescription>
-                </DialogHeader>
-                {bundleError && (
-                  <div className="flex items-center gap-2 rounded-md bg-red-500/10 text-red-400 px-3 py-2 text-sm">
-                    <XCircle className="w-4 h-4 shrink-0" />
-                    {bundleError}
-                  </div>
-                )}
-                {bundleItems.length > 0 && (
-                  <ul className="space-y-2 max-h-[280px] overflow-y-auto">
-                    {bundleItems.map((item) => (
-                      <li key={item.productId} className="flex items-center justify-between gap-3 rounded-md border border-[#2A2A2A] px-3 py-2 text-sm">
-                        <span className="font-medium text-white">{item.label}</span>
-                        {item.status === "generating" && (
-                          <span className="flex items-center gap-1.5 text-amber-400">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Generating…
-                          </span>
-                        )}
-                        {item.status === "done" && (
-                          <span className="flex items-center gap-1.5 text-green-400">
-                            <CheckCircle2 className="w-4 h-4" />
-                            Done
-                          </span>
-                        )}
-                        {item.status === "failed" && (
-                          <span className="flex items-center gap-1.5 text-red-400">
-                            <XCircle className="w-4 h-4 shrink-0" />
-                            Failed
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-7 border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] hover:text-white shrink-0"
-                              onClick={() => handleRetryBundleItem(item)}
-                            >
-                              <RefreshCw className="w-3.5 h-3.5 mr-1" />
-                              Retry
-                            </Button>
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {bundleItems.some((i) => i.status === "done") && (
-                  <div className="rounded-md border border-[#2A2A2A] bg-[#1A1A1A]/50 px-4 py-3 text-sm">
-                    <p className="text-[#E0E0E0] mb-3">
-                      Ready to view? Head to My Library to start editing completed products — the rest will appear there automatically once generated.
-                    </p>
-                    <Button asChild size="sm" className="bg-orange-500 hover:bg-orange-600">
-                      <Link href="/dashboard/library" onClick={closeBundleDialog}>
-                        Open My Library
-                      </Link>
-                    </Button>
-                  </div>
-                )}
-                {bundleComplete && (
-                  <DialogFooter>
-                    <Button asChild className="bg-orange-500 hover:bg-orange-600">
-                      <Link href="/dashboard/library" onClick={closeBundleDialog}>
-                        View in My Library
-                      </Link>
-                    </Button>
-                    <Button variant="outline" onClick={closeBundleDialog} className="border-[#2A2A2A] text-[#A0A0A0]">
-                      Close
-                    </Button>
-                  </DialogFooter>
-                )}
-              </DialogContent>
-            </Dialog>
+            {/* Bundle progress + design setup dialog is rendered once at the end of the page */}
           </>
         )}
 
@@ -2913,7 +2927,103 @@ export default function DiscoverFlow() {
         )}
       </div>
 
-      {/* Full bundle progress dialog (from Step 6) */}
+      {/* Design choice modal — shown when user clicks "Generate all 8" (before starting bundle) */}
+      <Dialog open={showDesignChoiceModal} onOpenChange={(open) => { if (!open) setShowDesignChoiceModal(false); }}>
+        <DialogContent className="sm:max-w-md bg-[#1A1A1A] border-[#2A2A2A] text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Choose how to design your products</DialogTitle>
+            <DialogDescription className="text-[#A0A0A0]">
+              We&apos;ll generate 8 products. Pick how they should look — you can always edit anything in the editor.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-[#2A2A2A] cursor-pointer hover:bg-[#2A2A2A]/50">
+              <input type="radio" name="designChoice" checked={bundleDesignChoice === "ai"} onChange={() => setBundleDesignChoice("ai")} className="mt-0.5 text-orange-500" />
+              <div>
+                <span className="text-sm font-medium text-white">Auto-design for me</span>
+                <p className="text-xs text-[#A0A0A0] mt-0.5">AI picks colours, fonts, and background images based on your niche.</p>
+              </div>
+            </label>
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-[#2A2A2A] cursor-pointer hover:bg-[#2A2A2A]/50">
+              <input type="radio" name="designChoice" checked={bundleDesignChoice === "brand"} onChange={() => setBundleDesignChoice("brand")} className="mt-0.5 text-orange-500" />
+              <div>
+                <span className="text-sm font-medium text-white">Use my brand colours</span>
+                <p className="text-xs text-[#A0A0A0] mt-0.5">Uses your saved brand profile. {bundleBrandProfile === null && bundleDesignChoice === "brand" ? "Set up below first." : ""}</p>
+              </div>
+            </label>
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-[#2A2A2A] cursor-pointer hover:bg-[#2A2A2A]/50">
+              <input type="radio" name="designChoice" checked={bundleDesignChoice === "manual"} onChange={() => setBundleDesignChoice("manual")} className="mt-0.5 text-orange-500" />
+              <div>
+                <span className="text-sm font-medium text-white">I&apos;ll design manually</span>
+                <p className="text-xs text-[#A0A0A0] mt-0.5">Blank templates ready to edit in the library.</p>
+              </div>
+            </label>
+          </div>
+          {bundleDesignChoice === "brand" && bundleBrandProfile === null && (
+            <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]/80 p-4 space-y-3">
+              <p className="text-sm font-medium text-white">Set up your brand first</p>
+              <Label className="text-xs text-[#E0E0E0]">Primary colour</Label>
+              <Input type="text" value={bundleBrandForm.primaryColor} onChange={(e) => setBundleBrandForm((f) => ({ ...f, primaryColor: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="#1a1a1a" />
+              <Label className="text-xs text-[#E0E0E0]">Secondary colour</Label>
+              <Input type="text" value={bundleBrandForm.secondaryColor} onChange={(e) => setBundleBrandForm((f) => ({ ...f, secondaryColor: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="#475569" />
+              <Input type="url" value={bundleBrandForm.tiktokUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, tiktokUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="TikTok URL (optional)" />
+              <Input type="url" value={bundleBrandForm.instagramUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, instagramUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="Instagram URL (optional)" />
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]" onClick={() => setShowDesignChoiceModal(false)}>Cancel</Button>
+            {bundleDesignChoice === "brand" && bundleBrandProfile === null ? (
+              <Button
+                className="bg-orange-500 hover:bg-orange-600"
+                disabled={bundleBrandFormSaving || !bundleBrandForm.primaryColor.trim() || !bundleBrandForm.secondaryColor.trim()}
+                onClick={async () => {
+                  setBundleBrandFormSaving(true);
+                  try {
+                    const res = await fetch("/api/brand-profile", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        primaryColor: bundleBrandForm.primaryColor.trim() || "#1a1a1a",
+                        secondaryColor: bundleBrandForm.secondaryColor.trim() || "#475569",
+                        tiktokUrl: bundleBrandForm.tiktokUrl.trim() || undefined,
+                        instagramUrl: bundleBrandForm.instagramUrl.trim() || undefined,
+                        youtubeUrl: bundleBrandForm.youtubeUrl.trim() || undefined,
+                        facebookUrl: bundleBrandForm.facebookUrl.trim() || undefined,
+                      }),
+                    });
+                    if (!res.ok) throw new Error("Failed to save");
+                    const data = await res.json();
+                    setBundleBrandProfile({ primaryColor: data.primaryColor ?? "#1a1a1a", secondaryColor: data.secondaryColor ?? "#475569", tiktokUrl: data.tiktokUrl, instagramUrl: data.instagramUrl, youtubeUrl: data.youtubeUrl, facebookUrl: data.facebookUrl });
+                    setShowDesignChoiceModal(false);
+                    toast({ title: "Brand saved", description: "Starting generation with your brand colours." });
+                    startFullBundle();
+                  } catch {
+                    toast({ title: "Could not save brand", variant: "destructive" });
+                  } finally {
+                    setBundleBrandFormSaving(false);
+                  }
+                }}
+              >
+                {bundleBrandFormSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save & start generating"}
+              </Button>
+            ) : (
+              <Button
+                className="bg-orange-500 hover:bg-orange-600"
+                disabled={!bundleDesignChoice}
+                onClick={() => {
+                  if (!bundleDesignChoice) return;
+                  setShowDesignChoiceModal(false);
+                  startFullBundle();
+                }}
+              >
+                Continue
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Full bundle progress dialog */}
       <Dialog open={((bundleGenerating || bundleItems.length > 0) && !bundleDialogDismissed)} onOpenChange={(open) => !open && closeBundleDialog()}>
         <DialogContent className="sm:max-w-md bg-[#1A1A1A] border-[#2A2A2A] text-white">
           <DialogHeader>
@@ -2921,29 +3031,37 @@ export default function DiscoverFlow() {
               <Layers className="w-5 h-5 text-orange-500" />
               Generate Full Bundle
             </DialogTitle>
-            <DialogDescription className="text-[#A0A0A0]">
+                <DialogDescription className="text-[#A0A0A0]">
               {bundleItems.length === 0
                 ? "Starting all 8 formats for your topic…"
                 : bundleComplete
                   ? bundleItems.some((i) => i.status === "failed")
                     ? "Partially complete. Retry failed formats below or view the rest in My Library."
-                    : "All products are ready. They appear in My Library."
+                    : designApplied
+                      ? "All products are ready in My Library."
+                      : applyingDesign
+                        ? "Applying your design…"
+                        : bundleDesignChoice === "manual"
+                          ? "All products are ready in My Library."
+                          : "All products are ready. Applying your design…"
                   : "Generating each format. This may take several minutes."}
+              {bundleDesignChoice && (
+                <span className="block mt-1.5 text-xs">
+                  Design: {bundleDesignChoice === "ai" ? "Auto" : bundleDesignChoice === "brand" ? "Brand colours" : "Manual (blank templates)"}
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           {bundleError && (
-            <div className="flex items-center gap-2 rounded-md bg-red-500/10 text-red-400 px-3 py-2 text-sm">
+            <div className="flex items-center gap-2 rounded-md bg-red-500/10 text-red-400 px-3 py-2 text-sm mt-2">
               <XCircle className="w-4 h-4 shrink-0" />
               {bundleError}
             </div>
           )}
           {bundleItems.length > 0 && (
-            <ul className="space-y-2 max-h-[280px] overflow-y-auto">
+            <ul className="space-y-2 max-h-[280px] overflow-y-auto mt-3">
               {bundleItems.map((item) => (
-                <li
-                  key={item.productId}
-                  className="flex items-center justify-between gap-3 rounded-md border border-[#2A2A2A] px-3 py-2 text-sm"
-                >
+                <li key={item.productId} className="flex items-center justify-between gap-3 rounded-md border border-[#2A2A2A] px-3 py-2 text-sm">
                   <span className="font-medium text-white">{item.label}</span>
                   {item.status === "generating" && (
                     <span className="flex items-center gap-1.5 text-amber-400">
@@ -2961,13 +3079,7 @@ export default function DiscoverFlow() {
                     <span className="flex items-center gap-1.5 text-red-400">
                       <XCircle className="w-4 h-4 shrink-0" />
                       Failed
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] hover:text-white shrink-0"
-                        onClick={() => handleRetryBundleItem(item)}
-                      >
+                      <Button type="button" variant="outline" size="sm" className="h-7 border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] hover:text-white shrink-0" onClick={() => handleRetryBundleItem(item)}>
                         <RefreshCw className="w-3.5 h-3.5 mr-1" />
                         Retry
                       </Button>
@@ -2977,28 +3089,26 @@ export default function DiscoverFlow() {
               ))}
             </ul>
           )}
-          {bundleItems.some((i) => i.status === "done") && (
-            <div className="rounded-md border border-[#2A2A2A] bg-[#1A1A1A]/50 px-4 py-3 text-sm">
-              <p className="text-[#E0E0E0] mb-3">
-                Ready to view? Head to My Library to start editing completed products — the rest will appear there automatically once generated.
-              </p>
-              <Button asChild size="sm" className="bg-orange-500 hover:bg-orange-600">
-                <Link href="/dashboard/library" onClick={closeBundleDialog}>
-                  Open My Library
-                </Link>
-              </Button>
+          {applyingDesign && (
+            <div className="flex items-center gap-2 text-amber-400 text-sm mt-3">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Applying your design to all products…
             </div>
           )}
-          {bundleComplete && (
-            <DialogFooter>
+          {bundleComplete && designApplied && (
+            <DialogFooter className="mt-4 sm:mt-6">
               <Button asChild className="bg-orange-500 hover:bg-orange-600">
-                <Link href="/dashboard/library" onClick={closeBundleDialog}>
-                  View in My Library
-                </Link>
+                <Link href="/dashboard/library" onClick={closeBundleDialog}>View in My Library</Link>
               </Button>
-              <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]" onClick={closeBundleDialog}>
-                Close
+              <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]" onClick={closeBundleDialog}>Close</Button>
+            </DialogFooter>
+          )}
+          {bundleComplete && !designApplied && !applyingDesign && (
+            <DialogFooter className="mt-4 sm:mt-6">
+              <Button asChild className="bg-orange-500 hover:bg-orange-600">
+                <Link href="/dashboard/library" onClick={closeBundleDialog}>View in My Library</Link>
               </Button>
+              <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]" onClick={closeBundleDialog}>Close</Button>
             </DialogFooter>
           )}
         </DialogContent>

@@ -7,3 +7,4 @@ export * from "./face-profiles-schema";
 export * from "./video-jobs-schema";
 export * from "./ugc-campaigns-schema";
 export * from "./niche-cache-schema";
+export * from "./brand-profiles-schema";

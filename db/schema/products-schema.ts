@@ -29,6 +29,8 @@ export const productsTable = pgTable("products", {
   generationStatus: text("generation_status"),
   /** When set, this product belongs to a bundle (same bundleId = same bundle). */
   bundleId: uuid("bundle_id"),
+  /** When 'ai' or 'brand', product was auto-designed; show "AI Designed" badge in library. Null = manual/blank. */
+  designSource: text("design_source").$type<"ai" | "brand" | null>(),
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

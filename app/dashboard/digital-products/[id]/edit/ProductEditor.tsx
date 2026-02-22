@@ -301,12 +301,42 @@ const ICON_NAME_TO_LUCIDE: Record<string, React.ComponentType<{ className?: stri
 );
 
 const SOCIAL_PLATFORMS = ["tiktok", "instagram", "youtube", "facebook"] as const;
-const SOCIAL_ICON_MAP: Record<string, string> = {
-  tiktok: "simple-icons:tiktok",
-  instagram: "simple-icons:instagram",
-  youtube: "simple-icons:youtube",
-  facebook: "simple-icons:facebook",
-};
+
+function SocialIconSvg({ platform, className, style }: { platform: string; className?: string; style?: React.CSSProperties }) {
+  const props = { className: className ?? "w-full h-full", style: style ?? {}, viewBox: "0 0 24 24" as const, fill: "currentColor" };
+  switch (platform) {
+    case "tiktok":
+      return (
+        <svg {...props} xmlns="http://www.w3.org/2000/svg">
+          <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+        </svg>
+      );
+    case "instagram":
+      return (
+        <svg {...props} xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+        </svg>
+      );
+    case "youtube":
+      return (
+        <svg {...props} xmlns="http://www.w3.org/2000/svg">
+          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+        </svg>
+      );
+    case "facebook":
+      return (
+        <svg {...props} xmlns="http://www.w3.org/2000/svg">
+          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...props} xmlns="http://www.w3.org/2000/svg">
+          <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
+        </svg>
+      );
+  }
+}
 
 const ICON_CATEGORIES: Record<string, string[]> = {
   Business: [
@@ -717,11 +747,11 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
               onClick={(e) => e.stopPropagation()}
               style={{ color: graphicsAccentColor }}
             >
-              <Icon icon={SOCIAL_ICON_MAP[element.content] || "simple-icons:link"} className="w-full h-full" />
+              <SocialIconSvg platform={element.content} style={{ color: graphicsAccentColor }} />
             </a>
           ) : (
             <span className="w-full h-full flex items-center justify-center" style={{ color: graphicsAccentColor }}>
-              <Icon icon={SOCIAL_ICON_MAP[element.content] || "simple-icons:link"} className="w-full h-full" />
+              <SocialIconSvg platform={element.content} style={{ color: graphicsAccentColor }} />
             </span>
           )
         ) : element.type === "text" ? (
@@ -835,8 +865,35 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [photoTotalPages, setPhotoTotalPages] = useState(0);
   const [photoCurrentQuery, setPhotoCurrentQuery] = useState("");
   const [previewPhoto, setPreviewPhoto] = useState<{ id: string; url?: string; fullUrl?: string; thumb?: string } | null>(null);
+  const photoSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const photoSearchCacheRef = useRef<
+    Map<string, { photos: { id: string; url?: string; fullUrl?: string; thumb?: string }[]; totalPages: number }>
+  >(new Map());
   const [addImageModalOpen, setAddImageModalOpen] = useState(false);
   const [addImageTab, setAddImageTab] = useState<"stock" | "ai" | "upload">("stock");
+  const [autoDesignLoading, setAutoDesignLoading] = useState(false);
+  const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
+  const [showAutoDesignChoiceDialog, setShowAutoDesignChoiceDialog] = useState(false);
+  const [brandProfile, setBrandProfile] = useState<{
+    tiktokUrl?: string;
+    instagramUrl?: string;
+    youtubeUrl?: string;
+    facebookUrl?: string;
+    primaryColor: string;
+    secondaryColor: string;
+    logoUrl?: string;
+    preferAiColors: boolean;
+  } | null>(null);
+  const [brandSetupForm, setBrandSetupForm] = useState({
+    tiktokUrl: "",
+    instagramUrl: "",
+    youtubeUrl: "",
+    facebookUrl: "",
+    primaryColor: "#1a1a1a",
+    secondaryColor: "#475569",
+    logoBase64: "",
+  });
+  const [autoDesignChoice, setAutoDesignChoice] = useState<"brand" | "ai">("brand");
   const [unsplashQuery, setUnsplashQuery] = useState("");
   const [unsplashPhotos, setUnsplashPhotos] = useState<{ id: string; url?: string; fullUrl?: string; thumb?: string }[]>([]);
   const [unsplashLoading, setUnsplashLoading] = useState(false);
@@ -853,6 +910,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [imageSettings, setImageSettings] = useState<ImageSettings>(DEFAULT_IMAGE_SETTINGS);
   const selectedTextRef = useRef<HTMLElement | null>(null);
   const contentAreaRef = useRef<HTMLDivElement | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const [selectedTextMeta, setSelectedTextMeta] = useState<SelectedTextMeta | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([]);
@@ -1023,6 +1081,55 @@ export default function ProductEditor({ productId }: { productId: string }) {
   useEffect(() => {
     fetchProduct();
   }, [fetchProduct]);
+
+  const brandSocialsAppliedForProductRef = useRef<string | null>(null);
+  useEffect(() => {
+    const pid = product?.id;
+    if (!pid || !product?.designSettings) return;
+    if (brandSocialsAppliedForProductRef.current === pid) return;
+    const current = product.designSettings.backCoverSocialLinks ?? {};
+    const hasAny = !!(current.tiktok || current.instagram || current.youtube || current.facebook);
+    if (hasAny) return;
+    fetch("/api/brand-profile")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((profile: { tiktokUrl?: string; instagramUrl?: string; youtubeUrl?: string; facebookUrl?: string } | null) => {
+        if (!profile) return;
+        const tiktok = profile.tiktokUrl?.trim();
+        const instagram = profile.instagramUrl?.trim();
+        const youtube = profile.youtubeUrl?.trim();
+        const facebook = profile.facebookUrl?.trim();
+        if (!tiktok && !instagram && !youtube && !facebook) return;
+        brandSocialsAppliedForProductRef.current = pid;
+        setProduct((p) =>
+          p
+            ? {
+                ...p,
+                designSettings: {
+                  ...p.designSettings,
+                  backCoverSocialLinks: {
+                    ...(tiktok ? { tiktok } : {}),
+                    ...(instagram ? { instagram } : {}),
+                    ...(youtube ? { youtube } : {}),
+                    ...(facebook ? { facebook } : {}),
+                  },
+                },
+              }
+            : null
+        );
+        saveToServer({
+          designSettings: {
+            ...product.designSettings,
+            backCoverSocialLinks: {
+              ...(tiktok ? { tiktok } : {}),
+              ...(instagram ? { instagram } : {}),
+              ...(youtube ? { youtube } : {}),
+              ...(facebook ? { facebook } : {}),
+            },
+          },
+        });
+      })
+      .catch(() => {});
+  }, [product?.id, product?.designSettings, saveToServer]);
 
   useEffect(() => {
     if (searchParams.get("created") === "1") setShowCreatedBanner(true);
@@ -1318,6 +1425,48 @@ export default function ProductEditor({ productId }: { productId: string }) {
       if (autoSaveTimerRef.current) clearInterval(autoSaveTimerRef.current);
     };
   }, [sections, template, product, placedElementsByPage, graphicsAccentColor, layoutSettings, pageBackgrounds, saveToServer]);
+
+  useEffect(() => {
+    if (currentPageIndex !== 0 || !productId || !canvasContainerRef.current) return;
+    const t = setTimeout(async () => {
+      const el = canvasContainerRef.current;
+      if (!el) return;
+      try {
+        const canvas = await html2canvas(el, {
+          useCORS: true,
+          allowTaint: true,
+          scale: 0.5,
+          backgroundColor: "#ffffff",
+          logging: false,
+        });
+        const dataUrl = canvas.toDataURL("image/png");
+        const res = await fetch(`/api/products/${productId}/cover-thumbnail`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: dataUrl }),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { url?: string };
+          if (data.url) {
+            setProduct((p) =>
+              p
+                ? {
+                    ...p,
+                    marketingAssets: {
+                      ...p.marketingAssets,
+                      coverThumbnailUrl: data.url,
+                    },
+                  }
+                : null
+            );
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [currentPageIndex, productId, placedElementsByPage, pageBackgrounds]);
 
   const openEdit = (section: Section) => {
     setEditingSectionId(section.id);
@@ -1643,6 +1792,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const searchPhotos = useCallback(
     async (query?: string, page = 1, append = false) => {
       const q = (query ?? photoSearch).trim() || "nature";
+      const cacheKey = `${q.toLowerCase()}:${page}`;
+      const cached = photoSearchCacheRef.current.get(cacheKey);
+      if (cached) {
+        setPhotoCurrentQuery(q);
+        setPhotoPage(page);
+        setPhotoTotalPages(cached.totalPages);
+        setPhotos((prev) => (append && page > 1 ? [...prev, ...cached.photos] : cached.photos));
+        return;
+      }
       const isNewSearch = !append || page === 1;
       if (isNewSearch) setIsLoadingPhotos(true);
       else setIsLoadingMorePhotos(true);
@@ -1657,9 +1815,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
           totalPages?: number;
         };
         const newPhotos = data.photos ?? [];
+        const totalPages = data.totalPages ?? 0;
+        photoSearchCacheRef.current.set(cacheKey, { photos: newPhotos, totalPages });
         setPhotoCurrentQuery(q);
         setPhotoPage(page);
-        setPhotoTotalPages(data.totalPages ?? 0);
+        setPhotoTotalPages(totalPages);
         setPhotos((prev) => (append && page > 1 ? [...prev, ...newPhotos] : newPhotos));
       } catch {
         if (isNewSearch) setPhotos([]);
@@ -1676,6 +1836,28 @@ export default function ProductEditor({ productId }: { productId: string }) {
     if (photoTotalPages <= photoPage || isLoadingMorePhotos) return;
     searchPhotos(photoCurrentQuery || undefined, photoPage + 1, true);
   }, [photoPage, photoTotalPages, photoCurrentQuery, isLoadingMorePhotos, searchPhotos]);
+
+  const handlePhotoSearchInputChange = useCallback(
+    (value: string) => {
+      setPhotoSearch(value);
+      if (photoSearchDebounceRef.current) {
+        clearTimeout(photoSearchDebounceRef.current);
+        photoSearchDebounceRef.current = null;
+      }
+      photoSearchDebounceRef.current = setTimeout(() => {
+        photoSearchDebounceRef.current = null;
+        const q = value.trim() || "nature";
+        searchPhotos(q, 1, false);
+      }, 1000);
+    },
+    [searchPhotos]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (photoSearchDebounceRef.current) clearTimeout(photoSearchDebounceRef.current);
+    };
+  }, []);
 
   const searchUnsplash = useCallback(
     async (query?: string, page = 1) => {
@@ -1771,13 +1953,35 @@ export default function ProductEditor({ productId }: { productId: string }) {
     [imageSettings, selectedElement, recordUndoDebounced, setCurrentPageElements]
   );
 
-  const selectedTextElement = useMemo(
-    () =>
-      selectedElement
-        ? (placedElementsByPage.flat().find((el) => el.id === selectedElement && el.type === "text") ?? null)
-        : null,
-    [selectedElement, placedElementsByPage]
-  );
+  const selectedTextElement = useMemo(() => {
+    if (!selectedElement) return null;
+    let foundPageIndex = -1;
+    const el = placedElementsByPage.flat().find((e) => e.id === selectedElement && e.type === "text") ?? null;
+    if (el) {
+      for (let i = 0; i < placedElementsByPage.length; i++) {
+        if (placedElementsByPage[i].some((e) => e.id === selectedElement && e.type === "text")) {
+          foundPageIndex = i;
+          break;
+        }
+      }
+      const totalPages = placedElementsByPage.length;
+      const isCover = foundPageIndex === 0;
+      const isBack = totalPages > 0 && foundPageIndex === totalPages - 1;
+      const isContent = !isCover && !isBack;
+      console.log("[ProductEditor] selectedTextElement — data structure", {
+        currentPageIndex,
+        totalPages,
+        foundPageIndex,
+        pageType: isCover ? "COVER" : isBack ? "BACK" : "CONTENT",
+        elementId: el.id,
+        elementKeys: Object.keys(el),
+        textSettingsKeys: el.textSettings ? Object.keys(el.textSettings) : null,
+        textSettings: el.textSettings ? { ...el.textSettings } : null,
+        fullElement: JSON.stringify({ id: el.id, type: el.type, content: el.content?.slice(0, 30), textSettings: el.textSettings }),
+      });
+    }
+    return el;
+  }, [selectedElement, placedElementsByPage, currentPageIndex]);
 
   useEffect(() => {
     if (editingTextBoxId) {
@@ -1849,23 +2053,62 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const updateTextBoxSetting = useCallback(
     (key: keyof TextBoxSettings, value: string | number | boolean) => {
-      if (!selectedElement) return;
+      console.log("[ProductEditor] updateTextBoxSetting called", {
+        selectedElementId: selectedElement ?? null,
+        key,
+        value,
+        isColorUpdate: key === "color",
+      });
+      if (!selectedElement) {
+        console.log("[ProductEditor] updateTextBoxSetting — no selectedElement, returning");
+        return;
+      }
+      const pageOfElement = placedElementsByPage.findIndex((pageArr) =>
+        pageArr.some((el) => el.id === selectedElement && el.type === "text")
+      );
+      const elementBefore = placedElementsByPage.flat().find((el) => el.id === selectedElement && el.type === "text");
+      console.log("[ProductEditor] updateTextBoxSetting — where formatting is applied", {
+        selectedElement,
+        key,
+        value,
+        currentPageIndex,
+        pageOfElement,
+        elementLivesOnPage: pageOfElement,
+        elementBefore: elementBefore
+          ? { id: elementBefore.id, textSettings: elementBefore.textSettings ? { ...elementBefore.textSettings } : null }
+          : null,
+        placedElementsByPageLength: placedElementsByPage.length,
+        placedElementsByPagePageLengths: placedElementsByPage.map((arr) => arr.length),
+      });
       recordUndoDebounced();
       const normalizedValue = key === "color" && typeof value === "string"
         ? (value.startsWith("#") ? value : `#${value}`).toLowerCase()
         : value;
-      setPlacedElementsByPage((prev) =>
-        prev.map((pageArr) =>
+      if (key === "color") {
+        console.log("Updating element:", selectedElement, "colour:", normalizedValue);
+      }
+      setPlacedElementsByPage((prev) => {
+        let updatedCount = 0;
+        const next = prev.map((pageArr, pageIdx) =>
           pageArr.map((el) => {
             if (el.id !== selectedElement || el.type !== "text") return el;
-            const next = { ...el.textSettings, [key]: normalizedValue } as TextBoxSettings;
-            return { ...el, textSettings: { ...DEFAULT_TEXT_BOX, ...next } };
+            updatedCount++;
+            const nextSettings = { ...el.textSettings, [key]: normalizedValue } as TextBoxSettings;
+            const updated = { ...el, textSettings: { ...DEFAULT_TEXT_BOX, ...nextSettings } };
+            console.log("[ProductEditor] updateTextBoxSetting — inside updater", {
+              pageIdx,
+              updatedCount,
+              key,
+              newTextSettings: updated.textSettings,
+            });
+            return updated;
           })
-        )
-      );
-      const pageOfElement = placedElementsByPage.findIndex((pageArr) =>
-        pageArr.some((el) => el.id === selectedElement && el.type === "text")
-      );
+        );
+        if (updatedCount === 0) {
+          console.warn("[ProductEditor] updateTextBoxSetting — updater ran but no element was updated (updatedCount=0)");
+        }
+        return next;
+      });
       if (pageOfElement >= 0 && pageOfElement !== currentPageIndex) {
         setCurrentPageIndex(pageOfElement);
       }
@@ -2078,6 +2321,229 @@ export default function ProductEditor({ productId }: { productId: string }) {
     toast({ title: "Background applied to front cover" });
   }, [pageBackgrounds, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo, currentPageIndex]);
 
+  const runAutoDesign = useCallback(
+    async (options?: {
+      useBrandColors?: boolean;
+      brand?: {
+        primaryColor: string;
+        secondaryColor: string;
+        tiktokUrl?: string;
+        instagramUrl?: string;
+        youtubeUrl?: string;
+        facebookUrl?: string;
+      };
+    }) => {
+      const title = product?.title ?? "";
+      const niche = product?.niche ?? "";
+      const useBrand = Boolean(options?.useBrandColors && options?.brand);
+      setAutoDesignLoading(true);
+      try {
+        const designRes = await fetch("/api/auto-design", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            niche,
+            ...(useBrand && options?.brand
+              ? {
+                  brandPrimary: options.brand.primaryColor,
+                  brandSecondary: options.brand.secondaryColor,
+                }
+              : {}),
+          }),
+        });
+      if (!designRes.ok) {
+        const err = (await designRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? "Design suggestion failed");
+      }
+      const design = (await designRes.json()) as {
+        primary: string;
+        secondary: string;
+        accent: string;
+        headingFont: string;
+        bodyFont: string;
+        pexelsKeyword: string;
+      };
+      const pexelsRes = await fetch(
+        `/api/stock-photos?query=${encodeURIComponent(design.pexelsKeyword)}&per_page=1&page=1`
+      );
+      let bgImageUrl: string | null = null;
+      if (pexelsRes.ok) {
+        const pexelsData = (await pexelsRes.json()) as { photos?: { fullUrl?: string; url?: string }[] };
+        const first = pexelsData.photos?.[0];
+        bgImageUrl = first?.fullUrl ?? first?.url ?? null;
+      }
+      recordUndo();
+      const primary = design.primary.startsWith("#") ? design.primary : `#${design.primary}`;
+      const secondary = design.secondary.startsWith("#") ? design.secondary : `#${design.secondary}`;
+      const accent = design.accent.startsWith("#") ? design.accent : `#${design.accent}`;
+      const headingFont = `${design.headingFont}, serif`;
+      const bodyFont = `${design.bodyFont}, system-ui, sans-serif`;
+      const overlayForCoverBack: OverlaySettings = {
+        color: primary,
+        opacity: 0.75,
+      };
+
+      const nextPlaced = placedElementsByPage.map((pageArr) =>
+        pageArr.map((el) => {
+          if (el.type !== "text") return el;
+          const ts = { ...DEFAULT_TEXT_BOX, ...el.textSettings };
+          if (el.id === "cover-title") {
+            return {
+              ...el,
+              textSettings: {
+                ...ts,
+                color: primary,
+                fontWeight: "700",
+                fontSize: 32,
+                textAlign: "center",
+                fontFamily: headingFont,
+              },
+            };
+          }
+          if (el.id === "cover-subtitle") {
+            return {
+              ...el,
+              textSettings: {
+                ...ts,
+                color: secondary,
+                fontSize: 16,
+                textAlign: "center",
+                fontFamily: bodyFont,
+              },
+            };
+          }
+          return {
+            ...el,
+            textSettings: { ...ts, color: primary, fontFamily: bodyFont },
+          };
+        })
+      );
+      setPlacedElementsByPage(nextPlaced);
+
+      setGraphicsAccentColor(accent);
+      setCustomColor(accent);
+
+      const nextPages = [...pageBackgrounds];
+      while (nextPages.length < totalPages) nextPages.push({});
+      const coverBackBg: PageBackground = {
+        backgroundImage: bgImageUrl ?? undefined,
+        backgroundSettings: DEFAULT_IMAGE_SETTINGS,
+        overlaySettings: overlayForCoverBack,
+      };
+      nextPages[0] = { ...nextPages[0], ...coverBackBg };
+      nextPages[nextPages.length - 1] = { ...(nextPages[nextPages.length - 1] ?? {}), ...coverBackBg };
+      setPageBackgrounds(nextPages);
+      if (currentPageIndex === 0) {
+        setBackgroundImage(bgImageUrl);
+        setBackgroundSettings(DEFAULT_IMAGE_SETTINGS);
+        setOverlaySettings(overlayForCoverBack);
+      }
+
+      const prevStyles = product?.designSettings?.textStyles ?? {};
+      const nextTextStyles: Record<string, { title?: TextStyles; body?: TextStyles; blocks?: TextStyles[] }> = {};
+      nextTextStyles["__product_title"] = {
+        ...prevStyles["__product_title"],
+        title: {
+          color: primary,
+          fontFamily: headingFont,
+          fontSize: "24px",
+          fontWeight: "700",
+          textAlign: "left",
+        },
+      };
+      sections.forEach((sec) => {
+        nextTextStyles[sec.id] = {
+          title: {
+            color: primary,
+            fontFamily: headingFont,
+          },
+          body: {
+            color: secondary,
+            fontFamily: bodyFont,
+          },
+          blocks: prevStyles[sec.id]?.blocks,
+        };
+      });
+
+      const backCoverSocials =
+        useBrand && options?.brand
+          ? {
+              ...product?.designSettings?.backCoverSocialLinks,
+              ...(options.brand.tiktokUrl ? { tiktok: options.brand.tiktokUrl } : {}),
+              ...(options.brand.instagramUrl ? { instagram: options.brand.instagramUrl } : {}),
+              ...(options.brand.youtubeUrl ? { youtube: options.brand.youtubeUrl } : {}),
+              ...(options.brand.facebookUrl ? { facebook: options.brand.facebookUrl } : {}),
+            }
+          : product?.designSettings?.backCoverSocialLinks;
+
+      setProduct((p) =>
+        p
+          ? {
+              ...p,
+              designSettings: {
+                ...p.designSettings,
+                colors: { ...p.designSettings?.colors, graphics: accent },
+                textStyles: nextTextStyles,
+                ...(backCoverSocials ? { backCoverSocialLinks: backCoverSocials } : {}),
+              },
+            }
+          : null
+      );
+      saveToServer({
+        designSettings: {
+          ...product?.designSettings,
+          colors: { ...product?.designSettings?.colors, graphics: accent },
+          textStyles: nextTextStyles,
+          pages: nextPages,
+          placedElementsByPage: nextPlaced,
+          ...(backCoverSocials ? { backCoverSocialLinks: backCoverSocials } : {}),
+        },
+      });
+      toast({ title: "Auto-design applied" });
+    } catch (err) {
+      toast({
+        title: "Auto-design failed",
+        description: err instanceof Error ? err.message : "Try again",
+        variant: "destructive",
+      });
+    } finally {
+      setAutoDesignLoading(false);
+    }
+    },
+    [product, sections, totalPages, pageBackgrounds, placedElementsByPage, currentPageIndex, recordUndo, saveToServer, toast]
+  );
+
+  const handleAutoDesignClick = useCallback(async () => {
+    const res = await fetch("/api/brand-profile");
+    if (res.status === 404) {
+      setBrandProfile(null);
+      setShowBrandSetupDialog(true);
+      return;
+    }
+    if (!res.ok) {
+      toast({ title: "Could not load brand profile", variant: "destructive" });
+      return;
+    }
+    const data = (await res.json()) as {
+      primaryColor: string;
+      secondaryColor: string;
+      tiktokUrl?: string;
+      instagramUrl?: string;
+      youtubeUrl?: string;
+      facebookUrl?: string;
+      preferAiColors: boolean;
+    };
+    setBrandProfile({
+      ...data,
+      primaryColor: data.primaryColor ?? "#1a1a1a",
+      secondaryColor: data.secondaryColor ?? "#475569",
+      preferAiColors: data.preferAiColors ?? false,
+    });
+    setAutoDesignChoice(data.preferAiColors ? "ai" : "brand");
+    setShowAutoDesignChoiceDialog(true);
+  }, [toast]);
+
   const backCoverSocialLinks = product?.designSettings?.backCoverSocialLinks ?? {};
 
   const updateBackCoverSocialLink = useCallback(
@@ -2233,8 +2699,19 @@ export default function ProductEditor({ productId }: { productId: string }) {
       let type: TextElementType;
       let blockIndex: number | undefined;
       const dataTextType = blockEl.getAttribute("data-text-type");
+      const dataBlockIndex = blockEl.getAttribute("data-block-index");
       if (dataTextType) {
         type = dataTextType as TextElementType;
+        if (dataBlockIndex !== null && dataBlockIndex !== "") {
+          const idx = parseInt(dataBlockIndex, 10);
+          if (!Number.isNaN(idx) && idx >= 0) blockIndex = idx;
+        }
+        if (blockIndex === undefined && blockEl.closest(".preview-content")) {
+          const preview = blockEl.closest(".preview-content");
+          const blocks = preview ? preview.querySelectorAll("h1, h2, h3, h4, p, li") : [];
+          blockIndex = Array.prototype.indexOf.call(blocks, blockEl);
+          if (blockIndex < 0) blockIndex = undefined;
+        }
       } else if (blockEl.closest(".preview-content")) {
         type = getBlockType(blockEl);
         const preview = blockEl.closest(".preview-content");
@@ -2273,14 +2750,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
         if (!p) return null;
         const prevSection = p.designSettings?.textStyles?.[sectionId] ?? { title: {} as TextStyles, body: {} as TextStyles };
         const nextSection = { ...prevSection };
+        // Only update the single block at blockIndex; never apply to whole section when a block is selected
         if (blockIndex !== undefined && (type === "heading" || type === "subheading" || type === "body")) {
           const blocks = Array.isArray(prevSection.blocks) ? [...prevSection.blocks] : [];
           while (blocks.length <= blockIndex) blocks.push({} as TextStyles);
           blocks[blockIndex] = styles;
           nextSection.blocks = blocks;
-        } else if (sectionId === "__product_title" && type === "heading") {
+        } else if (blockIndex === undefined && sectionId === "__product_title" && type === "heading") {
           nextSection.title = styles;
-        } else {
+        } else if (blockIndex === undefined) {
           nextSection[type === "title" ? "title" : "body"] = styles;
         }
         const next = {
@@ -2808,6 +3286,172 @@ export default function ProductEditor({ productId }: { productId: string }) {
           `,
         }}
       />
+      {autoDesignLoading && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className={`flex flex-col items-center gap-4 rounded-xl px-8 py-6 ${isDark ? "bg-[#1A1A1A] border border-[#2A2A2A]" : "bg-white border border-gray-200"} shadow-xl`}>
+            <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+            <p className="text-sm font-medium text-gray-900 dark:text-white">Designing your product...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Brand profile first-time setup */}
+      <Dialog open={showBrandSetupDialog} onOpenChange={setShowBrandSetupDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Set up your brand profile</DialogTitle>
+            <DialogDescription>Used for Auto-Design and back cover social links. Save once, use everywhere.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">TikTok URL</Label>
+                <Input placeholder="https://tiktok.com/@" value={brandSetupForm.tiktokUrl} onChange={(e) => setBrandSetupForm((f) => ({ ...f, tiktokUrl: e.target.value }))} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs">Instagram URL</Label>
+                <Input placeholder="https://instagram.com/..." value={brandSetupForm.instagramUrl} onChange={(e) => setBrandSetupForm((f) => ({ ...f, instagramUrl: e.target.value }))} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs">YouTube URL</Label>
+                <Input placeholder="https://youtube.com/..." value={brandSetupForm.youtubeUrl} onChange={(e) => setBrandSetupForm((f) => ({ ...f, youtubeUrl: e.target.value }))} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs">Facebook URL</Label>
+                <Input placeholder="https://facebook.com/..." value={brandSetupForm.facebookUrl} onChange={(e) => setBrandSetupForm((f) => ({ ...f, facebookUrl: e.target.value }))} className="mt-1" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Primary brand colour</Label>
+              <div className="flex gap-2 mt-1 items-center">
+                <div className="[&_.react-colorful]:h-8 [&_.react-colorful]:w-full [&_.react-colorful]:max-w-[120px] [&_.react-colorful]:rounded">
+                  <HexColorPicker color={brandSetupForm.primaryColor} onChange={(c) => setBrandSetupForm((f) => ({ ...f, primaryColor: c }))} />
+                </div>
+                <Input type="text" value={brandSetupForm.primaryColor} onChange={(e) => setBrandSetupForm((f) => ({ ...f, primaryColor: e.target.value }))} className="w-24 font-mono text-sm" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Secondary brand colour</Label>
+              <div className="flex gap-2 mt-1 items-center">
+                <div className="[&_.react-colorful]:h-8 [&_.react-colorful]:w-full [&_.react-colorful]:max-w-[120px] [&_.react-colorful]:rounded">
+                  <HexColorPicker color={brandSetupForm.secondaryColor} onChange={(c) => setBrandSetupForm((f) => ({ ...f, secondaryColor: c }))} />
+                </div>
+                <Input type="text" value={brandSetupForm.secondaryColor} onChange={(e) => setBrandSetupForm((f) => ({ ...f, secondaryColor: e.target.value }))} className="w-24 font-mono text-sm" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Logo (optional)</Label>
+              <Input
+                type="file"
+                accept="image/*"
+                className="mt-1"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => setBrandSetupForm((f) => ({ ...f, logoBase64: String(reader.result ?? "") }));
+                  reader.readAsDataURL(file);
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBrandSetupDialog(false)}>Cancel</Button>
+            <Button
+              onClick={async () => {
+                try {
+                  const res = await fetch("/api/brand-profile", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      tiktokUrl: brandSetupForm.tiktokUrl || undefined,
+                      instagramUrl: brandSetupForm.instagramUrl || undefined,
+                      youtubeUrl: brandSetupForm.youtubeUrl || undefined,
+                      facebookUrl: brandSetupForm.facebookUrl || undefined,
+                      primaryColor: brandSetupForm.primaryColor,
+                      secondaryColor: brandSetupForm.secondaryColor,
+                      preferAiColors: false,
+                      ...(brandSetupForm.logoBase64 ? { logoBase64: brandSetupForm.logoBase64 } : {}),
+                    }),
+                  });
+                  if (!res.ok) throw new Error("Failed to save");
+                  const saved = (await res.json()) as { primaryColor: string; secondaryColor: string; tiktokUrl?: string; instagramUrl?: string; youtubeUrl?: string; facebookUrl?: string };
+                  setBrandProfile({
+                    ...saved,
+                    primaryColor: saved.primaryColor ?? "#1a1a1a",
+                    secondaryColor: saved.secondaryColor ?? "#475569",
+                    preferAiColors: false,
+                  });
+                  setShowBrandSetupDialog(false);
+                  await runAutoDesign({
+                    useBrandColors: true,
+                    brand: {
+                      primaryColor: saved.primaryColor ?? brandSetupForm.primaryColor,
+                      secondaryColor: saved.secondaryColor ?? brandSetupForm.secondaryColor,
+                      tiktokUrl: saved.tiktokUrl,
+                      instagramUrl: saved.instagramUrl,
+                      youtubeUrl: saved.youtubeUrl,
+                      facebookUrl: saved.facebookUrl,
+                    },
+                  });
+                  await fetch("/api/brand-profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferAiColors: false }) });
+                } catch (err) {
+                  toast({ title: "Could not save brand profile", variant: "destructive", description: err instanceof Error ? err.message : undefined });
+                }
+              }}
+            >
+              Save & run Auto-Design
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Auto-Design choice: use brand vs AI */}
+      <Dialog open={showAutoDesignChoiceDialog} onOpenChange={setShowAutoDesignChoiceDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Auto-Design</DialogTitle>
+            <DialogDescription>Use your brand colours or let AI choose the best colours for this product.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 dark:hover:bg-[#2A2A2A]">
+              <input type="radio" name="autoDesignChoice" checked={autoDesignChoice === "brand"} onChange={() => setAutoDesignChoice("brand")} className="text-orange-500" />
+              <span className="text-sm font-medium">Use my brand colours</span>
+            </label>
+            <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 dark:hover:bg-[#2A2A2A]">
+              <input type="radio" name="autoDesignChoice" checked={autoDesignChoice === "ai"} onChange={() => setAutoDesignChoice("ai")} className="text-orange-500" />
+              <span className="text-sm font-medium">Let AI decide</span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAutoDesignChoiceDialog(false)}>Cancel</Button>
+            <Button
+              onClick={async () => {
+                setShowAutoDesignChoiceDialog(false);
+                await fetch("/api/brand-profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferAiColors: autoDesignChoice === "ai" }) });
+                if (autoDesignChoice === "brand" && brandProfile) {
+                  await runAutoDesign({
+                    useBrandColors: true,
+                    brand: {
+                      primaryColor: brandProfile.primaryColor,
+                      secondaryColor: brandProfile.secondaryColor,
+                      tiktokUrl: brandProfile.tiktokUrl,
+                      instagramUrl: brandProfile.instagramUrl,
+                      youtubeUrl: brandProfile.youtubeUrl,
+                      facebookUrl: brandProfile.facebookUrl,
+                    },
+                  });
+                } else {
+                  await runAutoDesign();
+                }
+              }}
+            >
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Header - minimal Canva-style toolbar */}
       <header className={`shrink-0 sticky top-0 z-40 border-b backdrop-blur-sm shadow-sm ${isDark ? "border-[#2A2A2A] bg-[#0F0F0F]/95" : "border-gray-200 bg-white/95"}`}>
         <div className="max-w-[1800px] mx-auto flex items-center justify-between gap-6 px-4 md:px-6 h-14">
@@ -2831,13 +3475,32 @@ export default function ProductEditor({ productId }: { productId: string }) {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white hover:bg-[#2A2A2A]" onClick={() => setShowFullPreview(true)}>
-                    <Eye className="w-4 h-4" />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={isDark ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white" : "border-gray-200 text-gray-700 hover:bg-gray-100"}
+                    onClick={handleAutoDesignClick}
+                    disabled={autoDesignLoading}
+                  >
+                    {autoDesignLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4" />
+                    )}
+                    <span className="hidden sm:inline ml-1.5">Auto-Design</span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Preview</TooltipContent>
+                <TooltipContent>Apply AI-suggested colours, fonts, and cover background</TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white hover:bg-[#2A2A2A]" onClick={() => setShowFullPreview(true)}>
+                  <Eye className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Preview</TooltipContent>
+            </Tooltip>
             <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-2" onClick={() => setShowFullPreview(true)}>
               <Eye className="w-4 h-4" /> Export {exportLabel}
             </Button>
@@ -2943,6 +3606,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </div>
               {/* Outer card (max 928px) — always document-like (white/light) regardless of app theme */}
               <div
+                ref={canvasContainerRef}
                 className="relative w-full max-w-[928px] mx-auto my-8 rounded-lg shadow-lg overflow-hidden bg-white border border-gray-200"
                 style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)" }}
               >
@@ -3110,12 +3774,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       </>
                     )}
                   </div>
-                  {/* Placed elements layer (Canva-style) - above content; current page only; memoized per element. On cover/back we need pointer-events so text boxes are clickable; on content pages leave pointer-events-none so section text can be selected. */}
+                  {/* Placed elements layer: pointer-events auto on all pages so text boxes are selectable and the panel (same state) can update colour; click on empty space deselects. */}
                   <div
                     className="absolute inset-0 z-20"
-                    style={{ pointerEvents: isOnCoverPage || isOnBackPage ? "auto" : "none" }}
+                    style={{ pointerEvents: "auto" }}
                     onClick={(e) => {
-                      if (!(isOnCoverPage || isOnBackPage)) return;
                       const target = (e.target as HTMLElement).closest("[data-placed-element]");
                       if (!target) {
                         setSelectedElement(null);
@@ -3158,6 +3821,24 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
         {/* Right sidebar - fixed width, independently scrollable */}
         <aside className={`w-[380px] shrink-0 border-l flex flex-col overflow-y-auto ${isDark ? "border-[#2A2A2A] bg-[#1A1A1A]" : "border-gray-200 bg-white"}`}>
+            {isOnBackPage && (
+              <div className={`p-4 border-b ${isDark ? "border-[#2A2A2A] bg-[#252525]" : "border-gray-200 bg-gray-50"}`}>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Social Links</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Add URLs to show clickable social icons on the back cover. Icons are draggable and resizable on the canvas.</p>
+                {(["tiktok", "instagram", "youtube", "facebook"] as const).map((platform) => (
+                  <div key={platform} className="mb-2">
+                    <label className="text-xs text-gray-600 dark:text-gray-400 font-medium block mb-1 capitalize">{platform}</label>
+                    <input
+                      type="url"
+                      value={backCoverSocialLinks[platform] ?? ""}
+                      onChange={(e) => updateBackCoverSocialLink(platform, e.target.value)}
+                      placeholder={`https://${platform}.com/...`}
+                      className={`w-full p-2 rounded-lg text-sm border ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-gray-500" : "bg-white border-gray-200 text-gray-900"}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
             {selectedTextMeta && (
               <div className="p-4 border-b border-gray-200 bg-gray-50 space-y-4 max-h-[50vh] overflow-y-auto">
                 <div className="flex justify-between items-center">
@@ -3676,7 +4357,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       <div className="[&_.react-colorful]:h-20 [&_.react-colorful]:w-full [&_.react-colorful]:rounded">
                         <HexColorPicker
                           color={selectedTextElement.textSettings?.color ?? DEFAULT_TEXT_BOX.color}
-                          onChange={(c) => updateTextBoxSetting("color", c)}
+                          onChange={(c) => {
+                            console.log("[ProductEditor] Text colour picker onChange fired → calling updateTextBoxSetting('color', …)");
+                            updateTextBoxSetting("color", c);
+                          }}
                         />
                       </div>
                       <input
@@ -4207,11 +4891,19 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   <h3 className="text-sm font-semibold text-gray-900 mb-2">Stock photos</h3>
                   <input
                     type="text"
-                    placeholder="Search free photos..."
+                    placeholder="Search free photos (results after 1s)..."
                     className="w-full p-2.5 mb-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400"
                     value={photoSearch}
-                    onChange={(e) => setPhotoSearch(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && searchPhotos()}
+                    onChange={(e) => handlePhotoSearchInputChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        if (photoSearchDebounceRef.current) {
+                          clearTimeout(photoSearchDebounceRef.current);
+                          photoSearchDebounceRef.current = null;
+                        }
+                        searchPhotos();
+                      }
+                    }}
                   />
                   <div className="flex gap-2 mb-2 flex-wrap">
                     {["Business", "Love", "Nature", "Technology", "People", "Abstract", "Scenery"].map((cat) => (
@@ -4227,7 +4919,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         {cat}
                       </button>
                     ))}
-                    <button type="button" onClick={() => searchPhotos()} className="px-2 py-1 bg-orange-500 hover:bg-orange-600 rounded text-xs text-white">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (photoSearchDebounceRef.current) {
+                          clearTimeout(photoSearchDebounceRef.current);
+                          photoSearchDebounceRef.current = null;
+                        }
+                        searchPhotos();
+                      }}
+                      className="px-2 py-1 bg-orange-500 hover:bg-orange-600 rounded text-xs text-white"
+                    >
                       Search
                     </button>
                   </div>
@@ -5081,11 +5783,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           ) : element.type === "social" ? (
                             element.linkUrl ? (
                               <a href={element.linkUrl} target="_blank" rel="noopener noreferrer" className="w-full h-full flex items-center justify-center" style={{ color: iconColor }}>
-                                <Icon icon={SOCIAL_ICON_MAP[element.content] || "simple-icons:link"} className="w-full h-full" />
+                                <SocialIconSvg platform={element.content} style={{ color: iconColor }} />
                               </a>
                             ) : (
                               <span className="w-full h-full flex items-center justify-center" style={{ color: iconColor }}>
-                                <Icon icon={SOCIAL_ICON_MAP[element.content] || "simple-icons:link"} className="w-full h-full" />
+                                <SocialIconSvg platform={element.content} style={{ color: iconColor }} />
                               </span>
                             )
                           ) : element.type === "text" ? (

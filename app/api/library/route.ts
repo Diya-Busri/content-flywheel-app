@@ -19,6 +19,8 @@ type LibraryItem = {
   bundleId?: string | null;
   platform?: string;
   deletedAt?: string;
+  /** When 'ai' or 'brand', product was auto-designed; show "AI Designed" badge. */
+  designSource?: "ai" | "brand" | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -30,7 +32,7 @@ export async function GET(request: NextRequest) {
     const typeFilter = searchParams.get("type") || "all";
     const showDeleted = searchParams.get("deleted") === "true";
 
-    let products: { id: string; title: string; status: string; format: string; bundleId: string | null; createdAt: Date | null; deletedAt: Date | null }[] = [];
+    let products: { id: string; title: string; status: string; format: string; bundleId: string | null; createdAt: Date | null; deletedAt: Date | null; marketingAssets: { coverThumbnailUrl?: string | null; thumbnailUrl?: string | null } | null }[] = [];
     let scripts: { id: string; title: string; status: string; createdAt: Date | null; videoId: string | null; productId: string | null; platform: string; deletedAt: Date | null }[] = [];
     let videos: { id: string; title: string; thumbnailUrl: string | null; status: string; createdAt: Date | null; productId: string | null; scriptId: string | null; deletedAt: Date | null }[] = [];
 
@@ -52,8 +54,10 @@ export async function GET(request: NextRequest) {
           status: productsTable.status,
           format: productsTable.format,
           bundleId: productsTable.bundleId,
+          designSource: productsTable.designSource,
           createdAt: productsTable.createdAt,
           deletedAt: productsTable.deletedAt,
+          marketingAssets: productsTable.marketingAssets,
         })
         .from(productsTable)
         .where(productWhere)
@@ -82,16 +86,23 @@ export async function GET(request: NextRequest) {
       console.error("Library videos fetch error:", err);
     }
 
-    const productItems: LibraryItem[] = products.map((p) => ({
-      id: p.id,
-      type: "product" as const,
-      title: p.title,
-      status: (p as { status?: string }).status ?? "draft",
-      createdAt: (p.createdAt as Date)?.toISOString?.() ?? String(p.createdAt),
-      format: p.format,
-      bundleId: p.bundleId ?? undefined,
-      ...(showDeleted && p.deletedAt && { deletedAt: (p.deletedAt as Date)?.toISOString?.() ?? String(p.deletedAt) }),
-    }));
+    const productItems: LibraryItem[] = products.map((p) => {
+      const ma = p.marketingAssets as { coverThumbnailUrl?: string | null; thumbnailUrl?: string | null } | null;
+      const thumbnail = ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? undefined;
+      const row = p as { designSource?: "ai" | "brand" | null };
+      return {
+        id: p.id,
+        type: "product" as const,
+        title: p.title,
+        thumbnail,
+        status: (p as { status?: string }).status ?? "draft",
+        createdAt: (p.createdAt as Date)?.toISOString?.() ?? String(p.createdAt),
+        format: p.format,
+        bundleId: p.bundleId ?? undefined,
+        designSource: row.designSource ?? undefined,
+        ...(showDeleted && p.deletedAt && { deletedAt: (p.deletedAt as Date)?.toISOString?.() ?? String(p.deletedAt) }),
+      };
+    });
 
     const scriptItems: LibraryItem[] = scripts.map((s) => ({
       id: s.id,
