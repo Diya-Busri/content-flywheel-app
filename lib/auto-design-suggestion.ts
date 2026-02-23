@@ -6,68 +6,38 @@
 export const BANNED_PEXELS_KEYWORDS = [
   "door",
   "building",
-  "architecture",
+  "corridor",
   "hallway",
-  "room",
+  "architecture",
   "interior",
-  "window",
+  "room",
   "wall",
-  "house",
+  "entrance",
 ] as const;
 
-/** Safe cover keywords by niche — ONLY these are used for cover background searches. */
-const SAFE_COVER_KEYWORDS = {
-  personalDevelopment: "golden bokeh light",
-  wellnessHealth: "soft green nature blur",
-  relationships: "soft pink bokeh",
-  business: "clean white desk blur",
-  journalPlanner: "soft pastel abstract",
-} as const;
-
-const DEFAULT_SAFE_KEYWORD = SAFE_COVER_KEYWORDS.personalDevelopment;
-
-/** Safe aesthetic keywords for "Random/Surprise me" — unrelated to product niche. */
-const RANDOM_COVER_KEYWORDS = [
-  "golden bokeh light",
-  "soft green nature blur",
-  "soft pink bokeh",
-  "clean white desk blur",
-  "soft pastel abstract",
-  "warm gradient blur",
-  "minimal soft light",
-  "abstract blue gradient",
-  "soft lavender blur",
-  "neutral texture soft",
+/** Safe cover keywords for ALL products — only these are used for cover background searches. */
+const SAFE_COVER_KEYWORDS_ALL = [
+  "bokeh light blur",
+  "soft abstract background",
+  "pastel gradient",
+  "minimal nature blur",
 ] as const;
+
+const DEFAULT_SAFE_KEYWORD = SAFE_COVER_KEYWORDS_ALL[0];
 
 /**
  * Return a random safe Pexels keyword for cover backgrounds (used when preference is "random").
  */
 export function getRandomCoverKeyword(): string {
-  return RANDOM_COVER_KEYWORDS[Math.floor(Math.random() * RANDOM_COVER_KEYWORDS.length)];
+  return SAFE_COVER_KEYWORDS_ALL[Math.floor(Math.random() * SAFE_COVER_KEYWORDS_ALL.length)];
 }
 
 /**
- * Return the ONLY allowed Pexels keyword for cover backgrounds, based on niche and format.
- * Ensures no architecture/building/interior photos can be returned.
+ * Return one of the only allowed Pexels keywords for cover backgrounds.
+ * All products use the same safe set to avoid architecture/building/interior photos.
  */
-export function getSafeCoverKeyword(niche: string, format?: string): string {
-  const n = (niche ?? "").toLowerCase().trim();
-  const f = (format ?? "").toLowerCase().trim();
-
-  if (f === "journal" || f === "planner" || /\b(journal|planner|diary|notebook)\b/.test(n)) {
-    return SAFE_COVER_KEYWORDS.journalPlanner;
-  }
-  if (/\b(wellness|health|fitness|yoga|meditation|mindfulness)\b/.test(n)) {
-    return SAFE_COVER_KEYWORDS.wellnessHealth;
-  }
-  if (/\b(relationship|relationships|love|dating|marriage|family)\b/.test(n)) {
-    return SAFE_COVER_KEYWORDS.relationships;
-  }
-  if (/\b(business|entrepreneur|productivity|career|marketing)\b/.test(n)) {
-    return SAFE_COVER_KEYWORDS.business;
-  }
-  return DEFAULT_SAFE_KEYWORD;
+export function getSafeCoverKeyword(_niche: string, _format?: string): string {
+  return SAFE_COVER_KEYWORDS_ALL[Math.floor(Math.random() * SAFE_COVER_KEYWORDS_ALL.length)];
 }
 
 /** If query contains any banned keyword, return default safe query; otherwise return query as-is. */

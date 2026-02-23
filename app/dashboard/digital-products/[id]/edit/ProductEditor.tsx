@@ -105,11 +105,29 @@ function formatLastSaved(date: Date): string {
   return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
-function rgbToHex(rgb: string): string {
-  const m = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
-  if (!m) return rgb.startsWith("#") ? rgb : "#333333";
+/** Normalize any CSS color to 6-char lowercase hex so picker and canvas stay in sync. */
+function normalizeTextColorToHex(cssColor: string): string {
+  const s = (cssColor ?? "").trim();
   const hex = (x: number) => ("0" + Math.min(255, Math.max(0, x)).toString(16)).slice(-2);
-  return "#" + hex(parseInt(m[1], 10)) + hex(parseInt(m[2], 10)) + hex(parseInt(m[3], 10));
+  if (s.startsWith("#")) {
+    const hexOnly = s.slice(1).replace(/[^0-9A-Fa-f]/g, "");
+    if (hexOnly.length === 6) return "#" + hexOnly.toLowerCase();
+    if (hexOnly.length === 3) {
+      const r = parseInt(hexOnly[0]! + hexOnly[0], 16);
+      const g = parseInt(hexOnly[1]! + hexOnly[1], 16);
+      const b = parseInt(hexOnly[2]! + hexOnly[2], 16);
+      return "#" + hex(r) + hex(g) + hex(b);
+    }
+    return "#333333";
+  }
+  const rgbMatch = s.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (rgbMatch)
+    return "#" + hex(parseInt(rgbMatch[1], 10)) + hex(parseInt(rgbMatch[2], 10)) + hex(parseInt(rgbMatch[3], 10));
+  return "#333333";
+}
+
+function rgbToHex(rgb: string): string {
+  return normalizeTextColorToHex(rgb);
 }
 
 function overlayColorToHex(color: string): string {
@@ -174,6 +192,10 @@ export type PageBackground = {
   backgroundImage?: string | null;
   backgroundSettings?: ImageSettings;
   overlaySettings?: OverlaySettings;
+  /** Solid background colour for the full page (e.g. content pages). Hex. */
+  backgroundColor?: string | null;
+  /** Text colour for all content on this page (product title, section title, body). Hex. */
+  pageTextColor?: string | null;
 };
 
 type Product = {
@@ -929,7 +951,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [, setSaveIndicatorTick] = useState(0);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [sectionToDeleteId, setSectionToDeleteId] = useState<string | null>(null);
+  const [regeneratingSectionId, setRegeneratingSectionId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
+  const [applyAllPagesTextColor, setApplyAllPagesTextColor] = useState("#1a1a1a");
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showGenerateAIDialog, setShowGenerateAIDialog] = useState(false);
   const [generateAICustomType, setGenerateAICustomType] = useState("");
@@ -1016,8 +1040,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [imageSettings, setImageSettings] = useState<ImageSettings>(DEFAULT_IMAGE_SETTINGS);
   const selectedTextRef = useRef<HTMLElement | null>(null);
+  const lastSelectedTextMetaRef = useRef<SelectedTextMeta | null>(null);
   const pendingContentCursorRef = useRef<{ sectionId: string; type: string; blockIndex?: number; offset: number } | null>(null);
   const contentAreaRef = useRef<HTMLDivElement | null>(null);
+  const previewContentRef = useRef<HTMLDivElement | null>(null);
+  const lastPreviewHtmlRef = useRef<{ sectionId: string; html: string } | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const [coverThumbnailCaptureTrigger, setCoverThumbnailCaptureTrigger] = useState(0);
   const savedPageIndexRef = useRef<number | null>(null);
@@ -1167,6 +1194,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
           backgroundImage: p?.backgroundImage ?? null,
           backgroundSettings: p?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...p.backgroundSettings } : undefined,
           overlaySettings: p?.overlaySettings ? { ...DEFAULT_OVERLAY, ...p.overlaySettings } : undefined,
+          backgroundColor: p?.backgroundColor ?? undefined,
+          pageTextColor: p?.pageTextColor ?? undefined,
         }));
       } else if (Array.isArray(ds?.pages) && ds.pages.length >= sectionsCount) {
         // Legacy: only content pages saved — wrap with empty cover and back
@@ -1174,6 +1203,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
           backgroundImage: p?.backgroundImage ?? null,
           backgroundSettings: p?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...p.backgroundSettings } : undefined,
           overlaySettings: p?.overlaySettings ? { ...DEFAULT_OVERLAY, ...p.overlaySettings } : undefined,
+          backgroundColor: p?.backgroundColor ?? undefined,
+          pageTextColor: p?.pageTextColor ?? undefined,
         }));
         pages = [{}, ...contentPages, {}];
       } else {
@@ -1344,15 +1375,45 @@ export default function ProductEditor({ productId }: { productId: string }) {
   }, [sections.length, totalPages]);
 
   useEffect(() => {
-    const root = contentAreaRef.current;
-    if (!root) return;
+    const textStyles = product?.designSettings?.textStyles;
     const timer = setTimeout(() => {
+      requestAnimationFrame(() => {
+        const root = contentAreaRef.current;
+        if (!root) return;
+        // Apply product title (h2) styles so canvas updates when textStyles change
+      const productTitleEl = root.querySelector('h2[data-section-id="__product_title"]') as HTMLElement | null;
+      if (productTitleEl && textStyles?.__product_title?.title) {
+        const t = textStyles.__product_title.title;
+        if (t.color) productTitleEl.style.color = t.color;
+        if (t.fontSize) productTitleEl.style.fontSize = t.fontSize;
+        if (t.fontFamily) productTitleEl.style.fontFamily = t.fontFamily;
+        if (t.fontWeight) productTitleEl.style.fontWeight = t.fontWeight;
+        if (t.textAlign) productTitleEl.style.textAlign = t.textAlign;
+        if (t.lineHeight) productTitleEl.style.lineHeight = t.lineHeight;
+        if (t.textDecoration) productTitleEl.style.textDecoration = t.textDecoration;
+        if (t.textTransform) productTitleEl.style.textTransform = t.textTransform;
+        if (t.backgroundColor) productTitleEl.style.backgroundColor = t.backgroundColor;
+      }
       root.querySelectorAll("section[data-section-id]").forEach((sectionEl) => {
         const sectionId = sectionEl.getAttribute("data-section-id") ?? "";
+        // Apply section title (h3) styles from textStyles
+        const sectionTitleEl = sectionEl.querySelector("h3[data-text-type='title']") as HTMLElement | null;
+        if (sectionTitleEl && textStyles?.[sectionId]?.title) {
+          const t = textStyles[sectionId].title!;
+          if (t.color) sectionTitleEl.style.color = t.color;
+          if (t.fontSize) sectionTitleEl.style.fontSize = t.fontSize;
+          if (t.fontFamily) sectionTitleEl.style.fontFamily = t.fontFamily;
+          if (t.fontWeight) sectionTitleEl.style.fontWeight = t.fontWeight;
+          if (t.textAlign) sectionTitleEl.style.textAlign = t.textAlign;
+          if (t.lineHeight) sectionTitleEl.style.lineHeight = t.lineHeight;
+          if (t.textDecoration) sectionTitleEl.style.textDecoration = t.textDecoration;
+          if (t.textTransform) sectionTitleEl.style.textTransform = t.textTransform;
+          if (t.backgroundColor) sectionTitleEl.style.backgroundColor = t.backgroundColor;
+        }
         const preview = sectionEl.querySelector(".preview-content");
         if (!preview) return;
         const blocks = preview.querySelectorAll(SELECTION_BLOCK_SELECTOR);
-        const blockStyles = product?.designSettings?.textStyles?.[sectionId]?.blocks ?? [];
+        const blockStyles = textStyles?.[sectionId]?.blocks ?? [];
         blocks.forEach((el, i) => {
           const textType = getBlockType(el as HTMLElement);
           (el as HTMLElement).setAttribute("data-section-id", sectionId);
@@ -1374,9 +1435,20 @@ export default function ProductEditor({ productId }: { productId: string }) {
           }
         });
       });
+    });
     }, 0);
     return () => clearTimeout(timer);
   }, [sections, product?.designSettings?.textStyles, currentPageIndex]);
+
+  const currentContentSection = currentPageIndex >= 1 && currentPageIndex < totalPages - 1 ? sections[currentPageIndex - 1] : null;
+  useEffect(() => {
+    if (!currentContentSection || !previewContentRef.current) return;
+    const html = (currentContentSection.contentHtml ?? cleanMarkdownToHtml(currentContentSection.content ?? "")) || "";
+    const last = lastPreviewHtmlRef.current;
+    if (last?.sectionId === currentContentSection.id && last?.html === html) return;
+    lastPreviewHtmlRef.current = { sectionId: currentContentSection.id, html };
+    previewContentRef.current.innerHTML = html;
+  }, [currentContentSection?.id, currentContentSection?.contentHtml, currentContentSection?.content]);
 
   useEffect(() => {
     setPlacedElementsByPage((prev) => {
@@ -1495,6 +1567,39 @@ export default function ProductEditor({ productId }: { productId: string }) {
       setRedoStack([]);
     }, 400);
   }, [snapshot]);
+
+  /** Apply the same text colour to every content page (not cover/back) in one go. */
+  const applyTextColorToAllContentPages = useCallback(
+    (color: string) => {
+      recordUndo();
+      setPageBackgrounds((prev) => {
+        const next = [...prev];
+        const need = Math.max(2, sections.length + 2);
+        while (next.length < need) next.push({});
+        for (let i = 1; i < need - 1; i++) {
+          next[i] = { ...next[i], pageTextColor: color };
+        }
+        return next;
+      });
+      recordUndoDebounced();
+      toast({ title: "Text colour applied to all content pages" });
+    },
+    [sections.length, recordUndo, recordUndoDebounced, toast]
+  );
+
+  /** Clear page text colour from every content page. */
+  const clearTextColorFromAllContentPages = useCallback(() => {
+    recordUndo();
+    setPageBackgrounds((prev) => {
+      const next = prev.map((p) => {
+        const { pageTextColor: _, ...rest } = p as PageBackground & { pageTextColor?: string };
+        return rest;
+      });
+      return next;
+    });
+    recordUndoDebounced();
+    toast({ title: "Text colour cleared from all content pages" });
+  }, [recordUndo, recordUndoDebounced, toast]);
 
   const applySnapshot = useCallback(
     (snap: EditorSnapshot) => {
@@ -1721,6 +1826,45 @@ export default function ProductEditor({ productId }: { productId: string }) {
       });
     } finally {
       setIsRegenerating(false);
+    }
+  }
+
+  async function handleRegenerateSectionFromTOC(sectionId: string) {
+    if (!productId) return;
+    setRegeneratingSectionId(sectionId);
+    try {
+      const res = await fetch(`/api/products/${productId}/regenerate-section`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sectionId }),
+      });
+      const data = (await res.json()) as { newContent?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Request failed");
+      if (data.newContent != null) {
+        recordUndo();
+        setSections((prev) =>
+          prev.map((s) =>
+            s.id === sectionId
+              ? { ...s, content: data.newContent!, contentHtml: data.newContent! }
+              : s
+          )
+        );
+        if (editingSectionId === sectionId) setEditingContent(data.newContent);
+        // Don't set lastPreviewHtmlRef here — let the effect sync the preview div so the new content actually shows
+        if (previewContentRef.current && currentPageIndex >= 1 && currentPageIndex < totalPages - 1 && sections[currentPageIndex - 1]?.id === sectionId) {
+          previewContentRef.current.innerHTML = data.newContent;
+          lastPreviewHtmlRef.current = { sectionId, html: data.newContent };
+        }
+        toast({ title: "Section regenerated!" });
+      }
+    } catch (err) {
+      toast({
+        title: "Regenerate failed",
+        description: err instanceof Error ? err.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setRegeneratingSectionId(null);
     }
   }
 
@@ -2239,6 +2383,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       clearSelectionOutline(selectedTextRef.current);
       selectedTextRef.current = null;
     }
+    lastSelectedTextMetaRef.current = null;
     setSelectedTextMeta(null);
   }, []);
 
@@ -2828,6 +2973,36 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const backCoverSocialLinks = product?.designSettings?.backCoverSocialLinks ?? {};
 
+  const updateBackCoverWebsiteUrlFromInput = useCallback(
+    (value: string) => {
+      const trimmed = value.trim() || "";
+      setBackCoverWebsiteUrl(trimmed || null);
+      setPlacedElementsByPage((prev) => {
+        const lastIdx = prev.length - 1;
+        if (lastIdx < 0) return prev;
+        return prev.map((pageArr, i) =>
+          i !== lastIdx
+            ? pageArr
+            : pageArr.map((el) =>
+                el.id === "back-url" && el.type === "text"
+                  ? { ...el, content: trimmed || "Add your website in brand profile" }
+                  : el
+              )
+        );
+      });
+    },
+    []
+  );
+
+  const saveBackCoverWebsiteUrlToBrandProfile = useCallback((url: string) => {
+    const trimmed = url.trim() || "";
+    fetch("/api/brand-profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ websiteUrl: trimmed || null }),
+    }).catch(() => {});
+  }, []);
+
   const updateBackCoverSocialLink = useCallback(
     (platform: "tiktok" | "instagram" | "youtube" | "facebook", url: string) => {
       recordUndo();
@@ -3017,7 +3192,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
       const comp = window.getComputedStyle(blockEl);
       const styles: TextStyles = {
-        color: comp.color,
+        color: normalizeTextColorToHex(comp.color),
         fontSize: comp.fontSize,
         fontFamily: comp.fontFamily,
         fontWeight: comp.fontWeight,
@@ -3025,15 +3200,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
         lineHeight: comp.lineHeight,
         textDecoration: comp.textDecoration,
         textTransform: comp.textTransform,
-        backgroundColor: comp.backgroundColor,
+        backgroundColor: comp.backgroundColor === "rgba(0, 0, 0, 0)" || comp.backgroundColor === "transparent" ? "transparent" : normalizeTextColorToHex(comp.backgroundColor),
       };
-      setSelectedTextMeta({
+      const meta: SelectedTextMeta = {
         sectionId,
         type,
         blockIndex,
         content: type === "title" || type === "heading" ? blockEl.textContent ?? "" : blockEl.innerHTML,
         styles,
-      });
+      };
+      setSelectedTextMeta(meta);
+      lastSelectedTextMetaRef.current = meta;
     },
     []
   );
@@ -3058,9 +3235,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
         const next = {
           ...p,
           designSettings: {
-            ...p.designSettings,
+            ...(p.designSettings ?? {}),
             textStyles: {
-              ...p.designSettings?.textStyles,
+              ...(p.designSettings?.textStyles ?? {}),
               [sectionId]: nextSection,
             },
           },
@@ -3072,15 +3249,67 @@ export default function ProductEditor({ productId }: { productId: string }) {
     [saveToServer]
   );
 
+  const applyTextStylesToCanvasElement = useCallback(
+    (sectionId: string, type: TextElementType, blockIndex: number | undefined, styles: TextStyles) => {
+      const root = contentAreaRef.current;
+      if (!root) return;
+      let el: HTMLElement | null = null;
+      if (sectionId === "__product_title" && type === "heading") {
+        el = root.querySelector('h2[data-section-id="__product_title"]') as HTMLElement | null;
+      } else if (type === "title" && blockIndex === undefined) {
+        const sectionEl = root.querySelector(`section[data-section-id="${sectionId}"]`);
+        el = sectionEl?.querySelector("h3[data-text-type='title']") as HTMLElement | null ?? null;
+      } else if (blockIndex !== undefined) {
+        const sectionEl = root.querySelector(`section[data-section-id="${sectionId}"]`);
+        const preview = sectionEl?.querySelector(".preview-content");
+        const blocks = preview?.querySelectorAll(SELECTION_BLOCK_SELECTOR);
+        el = blocks?.[blockIndex] as HTMLElement | null ?? null;
+      }
+      if (!el) return;
+      const style = el.style as unknown as Record<string, string>;
+      if (styles.color) style.color = styles.color;
+      if (styles.fontSize) style.fontSize = styles.fontSize;
+      if (styles.fontFamily) style.fontFamily = styles.fontFamily;
+      if (styles.fontWeight) style.fontWeight = styles.fontWeight;
+      if (styles.textAlign) style.textAlign = styles.textAlign;
+      if (styles.lineHeight) style.lineHeight = styles.lineHeight;
+      if (styles.textDecoration) style.textDecoration = styles.textDecoration;
+      if (styles.textTransform) style.textTransform = styles.textTransform;
+      if (styles.backgroundColor) style.backgroundColor = styles.backgroundColor;
+    },
+    []
+  );
+
   const updateTextStyle = useCallback(
     (property: string, value: string) => {
-      if (!selectedTextRef.current || !selectedTextMeta) return;
-      const el = selectedTextRef.current;
-      (el.style as unknown as Record<string, string>)[property] = value;
-      setSelectedTextMeta((prev) => (prev ? { ...prev, styles: { ...prev.styles, [property]: value } } : null));
-      persistTextStyles(selectedTextMeta.sectionId, selectedTextMeta.type, { ...selectedTextMeta.styles, [property]: value }, selectedTextMeta.blockIndex);
+      const meta = selectedTextMeta ?? lastSelectedTextMetaRef.current;
+      if (!meta) return;
+      const normalized =
+        property === "color"
+          ? normalizeTextColorToHex(value)
+          : property === "backgroundColor" && value !== "transparent" && !value.startsWith("rgba(0, 0, 0, 0)")
+            ? normalizeTextColorToHex(value)
+            : property === "backgroundColor"
+              ? value
+              : value;
+      const mergedStyles = { ...meta.styles, [property]: normalized };
+      if (selectedTextRef.current) {
+        (selectedTextRef.current.style as unknown as Record<string, string>)[property] = normalized;
+      }
+      setSelectedTextMeta((prev) => (prev ? { ...prev, styles: mergedStyles } : null));
+      if (lastSelectedTextMetaRef.current) {
+        lastSelectedTextMetaRef.current = { ...lastSelectedTextMetaRef.current, styles: mergedStyles };
+      }
+      persistTextStyles(meta.sectionId, meta.type, mergedStyles, meta.blockIndex);
+      applyTextStylesToCanvasElement(meta.sectionId, meta.type, meta.blockIndex, mergedStyles);
+      requestAnimationFrame(() => {
+        applyTextStylesToCanvasElement(meta.sectionId, meta.type, meta.blockIndex, mergedStyles);
+      });
+      setTimeout(() => {
+        applyTextStylesToCanvasElement(meta.sectionId, meta.type, meta.blockIndex, mergedStyles);
+      }, 150);
     },
-    [selectedTextMeta, persistTextStyles]
+    [selectedTextMeta, persistTextStyles, applyTextStylesToCanvasElement]
   );
 
   const updateTextContent = useCallback(
@@ -3521,6 +3750,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const dsBg = (product?.designSettings as { backgroundImage?: string } | undefined)?.backgroundImage;
   const canvasBgUrl = (typeof backgroundImage === "string" ? backgroundImage.trim() : "") || (typeof dsBg === "string" ? dsBg.trim() : "") || null;
+  const currentPageBackgroundColor = pageBackgrounds[currentPageIndex]?.backgroundColor ?? null;
+  const currentPageTextColor = pageBackgrounds[currentPageIndex]?.pageTextColor ?? null;
 
   const templatePreset = TEMPLATE_PRESETS[(template as TemplateId) || "modern"] ?? TEMPLATE_PRESETS.modern;
   const previewLayoutStyle: React.CSSProperties = {
@@ -4134,7 +4365,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     margin: 0,
                     boxSizing: "border-box",
                     fontFamily: "var(--font-sans), sans-serif",
-                    backgroundColor: canvasBgUrl ? "transparent" : "#ffffff",
+                    backgroundColor: canvasBgUrl ? "transparent" : (currentPageBackgroundColor ?? "#ffffff"),
                   }}
                   onClick={() => {
                     setSelectedElement(null);
@@ -4184,7 +4415,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           className="text-2xl font-bold border-b pb-2 cursor-text select-text outline-none focus:outline-none"
                           style={{
                             ...(product.designSettings?.textStyles?.["__product_title"]?.title ?? {}),
-                            color: product.designSettings?.textStyles?.["__product_title"]?.title?.color ?? templatePreset.titleColor,
+                            color: currentPageTextColor ?? product.designSettings?.textStyles?.["__product_title"]?.title?.color ?? templatePreset.titleColor,
                           }}
                           onBlur={(e) => {
                             const text = e.currentTarget.textContent ?? "";
@@ -4206,7 +4437,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                 contentEditable
                                 suppressContentEditableWarning
                                 className="text-lg font-semibold cursor-text select-text outline-none focus:outline-none"
-                                style={{ ...titleStyles, color: titleStyles?.color ?? templatePreset.headingColor }}
+                                style={{ ...titleStyles, color: currentPageTextColor ?? titleStyles?.color ?? templatePreset.headingColor }}
                                 onBlur={(e) => {
                                   const text = e.currentTarget.textContent ?? "";
                                   const nextSections = sections.map((s) => (s.id === section.id ? { ...s, title: text } : s));
@@ -4230,18 +4461,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                 data-section-id={section.id}
                                 data-text-type="body"
                                 className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2 cursor-text [&_.preview-content]:outline-none [&_.preview-content]:focus:outline-none"
-                                style={{ ...bodyStyles, color: bodyStyles?.color ?? templatePreset.bodyColor }}
+                                style={{ ...bodyStyles, color: currentPageTextColor ?? bodyStyles?.color ?? templatePreset.bodyColor }}
                               >
                                 <div
+                                  ref={previewContentRef}
                                   className="preview-content min-h-[1.5em] empty:before:content-[attr(data-placeholder)] empty:before:text-[#999]"
                                   contentEditable
                                   suppressContentEditableWarning
-                                  dangerouslySetInnerHTML={{
-                                    __html: section.contentHtml ?? cleanMarkdownToHtml(section.content ?? "") || "",
-                                  }}
                                   onBlur={(e) => {
                                     const html = e.currentTarget.innerHTML.trim();
                                     persistBodyHtml(section.id, html || "");
+                                    lastPreviewHtmlRef.current = { sectionId: section.id, html: html || "" };
                                   }}
                                   data-placeholder="Click to add content..."
                                 />
@@ -4317,6 +4547,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     />
                   </div>
                 ))}
+                <div className="mb-0">
+                  <label className="text-xs text-gray-600 dark:text-gray-400 font-medium block mb-1">Website URL</label>
+                  <input
+                    type="url"
+                    value={backCoverWebsiteUrl ?? ""}
+                    onChange={(e) => updateBackCoverWebsiteUrlFromInput(e.target.value)}
+                    onBlur={(e) => saveBackCoverWebsiteUrlToBrandProfile(e.target.value)}
+                    placeholder="https://yoursite.com"
+                    className={`w-full p-2 rounded-lg text-sm border ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-gray-500" : "bg-white border-gray-200 text-gray-900"}`}
+                  />
+                </div>
               </div>
             )}
             {selectedTextMeta && (
@@ -4360,15 +4601,23 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         key={color}
                         type="button"
                         onClick={() => updateTextStyle("color", color)}
-                        className={`w-7 h-7 rounded border-2 shrink-0 ${rgbToHex(selectedTextMeta.styles.color ?? "") === color ? "border-orange-500" : "border-gray-200"}`}
+                        className={`w-7 h-7 rounded border-2 shrink-0 ${normalizeTextColorToHex(selectedTextMeta.styles.color ?? "") === color ? "border-orange-500" : "border-gray-200"}`}
                         style={{ backgroundColor: color }}
                       />
                     ))}
                   </div>
-                  <div className="[&_.react-colorful]:h-20 [&_.react-colorful]:w-full [&_.react-colorful]:rounded">
-                    <HexColorPicker
-                      color={rgbToHex(selectedTextMeta.styles.color ?? "#333")}
-                      onChange={(c) => updateTextStyle("color", c)}
+                  <div
+                    className="relative h-20 w-full overflow-hidden rounded-lg border border-gray-200"
+                    style={{
+                      background: `linear-gradient(to top, #000 0%, transparent 50%), linear-gradient(to right, #fff 0%, ${normalizeTextColorToHex(selectedTextMeta.styles.color ?? "#333333")} 100%)`,
+                    }}
+                  >
+                    <input
+                      type="color"
+                      value={normalizeTextColorToHex(selectedTextMeta.styles.color ?? "#333333")}
+                      onChange={(e) => updateTextStyle("color", e.target.value)}
+                      className="absolute inset-0 h-full w-full cursor-pointer border-0 bg-transparent opacity-0"
+                      title="Pick text color"
                     />
                   </div>
                 </div>
@@ -4572,6 +4821,98 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </TabsList>
               <div className="flex-1 overflow-y-auto">
               <TabsContent value="content" className="mt-0 p-4 space-y-3">
+                {currentPageIndex > 0 && currentPageIndex < totalPages - 1 && (
+                  <div className="pb-3 border-b border-gray-200 space-y-4">
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold text-gray-900">Full page colour</h3>
+                      <p className="text-xs text-gray-500">Background colour for this content page.</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={currentPageBackgroundColor ?? "#ffffff"}
+                          onChange={(e) => {
+                            recordUndo();
+                            persistCurrentPageBackground({ backgroundColor: e.target.value });
+                            recordUndoDebounced();
+                          }}
+                          className="h-9 w-14 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
+                          aria-label="Full page colour"
+                        />
+                        <input
+                          type="text"
+                          value={currentPageBackgroundColor ?? "#ffffff"}
+                          onChange={(e) => {
+                            const raw = e.target.value.trim();
+                            const hex = raw.startsWith("#") ? raw : raw ? `#${raw}` : "";
+                            if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return;
+                            recordUndo();
+                            persistCurrentPageBackground({ backgroundColor: hex });
+                            recordUndoDebounced();
+                          }}
+                          className="flex-1 min-w-0 p-2 rounded-lg border border-gray-200 text-sm font-mono text-gray-900"
+                          placeholder="#ffffff"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 border-gray-200 text-gray-600 hover:bg-gray-50"
+                          onClick={() => {
+                            recordUndo();
+                            persistCurrentPageBackground({ backgroundColor: null });
+                            recordUndoDebounced();
+                          }}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold text-gray-900">Text colour</h3>
+                      <p className="text-xs text-gray-500">Colour for all text on this page (title, heading, body).</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={currentPageTextColor ?? "#1a1a1a"}
+                          onChange={(e) => {
+                            recordUndo();
+                            persistCurrentPageBackground({ pageTextColor: e.target.value });
+                            recordUndoDebounced();
+                          }}
+                          className="h-9 w-14 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
+                          aria-label="Page text colour"
+                        />
+                        <input
+                          type="text"
+                          value={currentPageTextColor ?? "#1a1a1a"}
+                          onChange={(e) => {
+                            const raw = e.target.value.trim();
+                            const hex = raw.startsWith("#") ? raw : raw ? `#${raw}` : "";
+                            if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return;
+                            recordUndo();
+                            persistCurrentPageBackground({ pageTextColor: hex });
+                            recordUndoDebounced();
+                          }}
+                          className="flex-1 min-w-0 p-2 rounded-lg border border-gray-200 text-sm font-mono text-gray-900"
+                          placeholder="#1a1a1a"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 border-gray-200 text-gray-600 hover:bg-gray-50"
+                          onClick={() => {
+                            recordUndo();
+                            persistCurrentPageBackground({ pageTextColor: null });
+                            recordUndoDebounced();
+                          }}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Table of Contents</h3>
                 {sections.map((section, i) => (
                   <div key={section.id} className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white p-3 hover:border-gray-300">
@@ -4579,6 +4920,21 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       {i + 1}. {section.title}
                     </span>
                     <div className="flex items-center gap-0.5 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-gray-500 hover:text-orange-500 hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => handleRegenerateSectionFromTOC(section.id)}
+                        disabled={regeneratingSectionId !== null}
+                        aria-label="Regenerate section content"
+                        title="Regenerate section content"
+                      >
+                        {regeneratingSectionId === section.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        )}
+                      </Button>
                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-500 hover:text-orange-500 hover:bg-orange-50" onClick={() => openEdit(section)} aria-label="Edit section">
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
@@ -4617,6 +4973,53 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   ))}
                 </div>
                 <p className="text-xs text-gray-500 mt-3">Preview updates as you edit.</p>
+
+                {sections.length > 0 && (
+                  <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-900">Text colour for all content pages</h3>
+                    <p className="text-xs text-gray-500">Set the same text colour on every content page in one go. Saves time if you want everything the same.</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={applyAllPagesTextColor}
+                        onChange={(e) => setApplyAllPagesTextColor(e.target.value)}
+                        className="h-9 w-14 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
+                        aria-label="Colour for all pages"
+                      />
+                      <input
+                        type="text"
+                        value={applyAllPagesTextColor}
+                        onChange={(e) => {
+                          const raw = e.target.value.trim();
+                          const hex = raw.startsWith("#") ? raw : raw ? `#${raw}` : "";
+                          if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return;
+                          setApplyAllPagesTextColor(hex);
+                        }}
+                        className="flex-1 min-w-0 p-2 rounded-lg border border-gray-200 text-sm font-mono text-gray-900"
+                        placeholder="#1a1a1a"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => applyTextColorToAllContentPages(applyAllPagesTextColor)}
+                        className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                      >
+                        Apply to all content pages
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={clearTextColorFromAllContentPages}
+                        className="shrink-0 border-gray-200 text-gray-600"
+                      >
+                        Clear from all
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {(isOnCoverPage || isOnBackPage) && backgroundImage && (
                   <div className="mt-6 pt-6 border-t border-gray-200">
@@ -5317,19 +5720,31 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900 mb-2">Custom color</h3>
                   <div className="[&_.react-colorful]:h-24 [&_.react-colorful]:w-full [&_.react-colorful]:rounded">
-                    <HexColorPicker color={customColor} onChange={setCustomColor} />
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    <input
-                      type="text"
-                      value={customColor}
-                      onChange={(e) => setCustomColor(e.target.value)}
-                      className="flex-1 p-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 font-mono"
+                    <HexColorPicker
+                      color={customColor}
+                      onChange={(c) => {
+                        setCustomColor(c);
+                        handleApplyColor(c);
+                      }}
                     />
-                    <Button type="button" size="sm" onClick={() => handleApplyColor(customColor)} className="bg-orange-500 hover:bg-orange-600 shrink-0">
-                      Apply
-                    </Button>
                   </div>
+                  <input
+                    type="text"
+                    value={customColor}
+                    onChange={(e) => setCustomColor(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const v = (e.target as HTMLInputElement).value.trim();
+                        const hex = v.startsWith("#") ? v : `#${v}`;
+                        if (/^#[0-9A-Fa-f]{6}$/.test(hex) || /^#[0-9A-Fa-f]{3}$/.test(hex)) {
+                          setCustomColor(hex);
+                          handleApplyColor(hex);
+                        }
+                      }
+                    }}
+                    className="w-full mt-2 p-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 font-mono"
+                  />
                 </div>
 
                 {/* Add Text */}
@@ -6348,14 +6763,21 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     const overlay = pageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...pageBg.overlaySettings } : DEFAULT_OVERLAY;
                     const titleStyles = product.designSettings?.textStyles?.[section.id]?.title;
                     const bodyStyles = product.designSettings?.textStyles?.[section.id]?.body;
+                    const pageTextColor = pageBg?.pageTextColor ?? null;
                     return (
                       <div
                         key={section.id}
                         id={`preview-page-${pageIdx}`}
                         data-pdf-page
                         data-page
-                        className="preview-page product-page relative shrink-0 rounded-lg overflow-hidden border border-gray-200 bg-white shadow-lg"
-                        style={{ width: CANVAS_WIDTH, minHeight: CANVAS_HEIGHT, pageBreakAfter: "always", pageBreakInside: "avoid" }}
+                        className="preview-page product-page relative shrink-0 rounded-lg overflow-hidden border border-gray-200 shadow-lg"
+                        style={{
+                          width: CANVAS_WIDTH,
+                          minHeight: CANVAS_HEIGHT,
+                          pageBreakAfter: "always",
+                          pageBreakInside: "avoid",
+                          backgroundColor: bgUrl ? undefined : (pageBg?.backgroundColor ?? "#ffffff"),
+                        }}
                       >
                         {bgUrl ? (
                           <>
@@ -6381,15 +6803,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           className={`relative z-10 product-editor-preview-layout ${product.format === "workbook" ? "format-workbook" : ""}`}
                           style={{ ...previewLayoutStyle, ...(bgUrl ? { backgroundColor: "transparent" } : {}), minHeight: "100%" }}
                         >
-                          <h2 className="text-2xl font-bold border-b pb-2" style={{ color: templatePreset.titleColor }}>{product.title}</h2>
+                          <h2 className="text-2xl font-bold border-b pb-2" style={{ color: pageTextColor ?? templatePreset.titleColor }}>{product.title}</h2>
                           <section>
-                            <h3 className="text-lg font-semibold" style={{ ...titleStyles, color: titleStyles?.color ?? templatePreset.headingColor }}>{section.title}</h3>
+                            <h3 className="text-lg font-semibold" style={{ ...titleStyles, color: pageTextColor ?? titleStyles?.color ?? templatePreset.headingColor }}>{section.title}</h3>
                             {section.imageUrl?.trim() ? (
                               <div className="my-4 flex justify-center">
                                 <img src={section.imageUrl} alt="" className="max-w-full max-h-80 object-contain rounded-lg shadow-md" />
                               </div>
                             ) : null}
-                            <div className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2" style={{ ...bodyStyles, color: bodyStyles?.color ?? templatePreset.bodyColor }}>
+                            <div className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2" style={{ ...bodyStyles, color: pageTextColor ?? bodyStyles?.color ?? templatePreset.bodyColor }}>
                               {section.content || section.contentHtml ? (
                                 <div className="preview-content" dangerouslySetInnerHTML={{ __html: section.contentHtml ?? cleanMarkdownToHtml(section.content ?? "") }} />
                               ) : (
