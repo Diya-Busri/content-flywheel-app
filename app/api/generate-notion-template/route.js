@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -71,29 +71,44 @@ function extractUrls(text) {
  * Returns .md file (Notion-compatible markdown).
  */
 export async function POST(request) {
+  console.log("[generate-notion-template] POST received");
   try {
     const { userId } = await auth();
     if (!userId) {
+      console.warn("[generate-notion-template] Unauthorized: no userId");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json().catch(() => ({}));
+    const body = await request.json().catch((parseErr) => {
+      console.error("[generate-notion-template] JSON parse failed:", parseErr?.message ?? parseErr);
+      return {};
+    });
     const productId = typeof body.productId === "string" ? body.productId.trim() : "";
     if (!productId) {
       return NextResponse.json({ error: "productId is required" }, { status: 400 });
     }
 
+    console.log("[generate-notion-template] Request received", { productId, userId: userId.slice(0, 8) + "…" });
+
     const [product] = await db
       .select()
       .from(productsTable)
-      .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId)));
+      .where(
+        and(
+          eq(productsTable.id, productId),
+          eq(productsTable.userId, userId),
+          isNull(productsTable.deletedAt)
+        )
+      );
 
     if (!product) {
+      console.warn("[generate-notion-template] Product not found or deleted:", { productId, userId });
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
     const title = product?.title ?? "Product";
-    const description = product?.description ?? product?.subtitle ?? product?.tagline ?? "";
+    const marketingAssets = product?.marketingAssets && typeof product.marketingAssets === "object" ? product.marketingAssets : null;
+    const description = marketingAssets?.productDescription ?? product?.description ?? product?.subtitle ?? product?.tagline ?? "";
     const sections = product?.content?.sections ?? [];
     const secs = sections.length ? sections : [{ id: "1", title: title, content: "" }];
 
@@ -147,6 +162,8 @@ export async function POST(request) {
     const safeName = title.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "") || "notion-template";
     const fileName = `${safeName}.md`;
 
+    console.log("[generate-notion-template] Export success", { productId, fileName, sectionsCount: secs.length });
+
     return new NextResponse(markdown, {
       headers: {
         "Content-Type": "text/markdown; charset=utf-8",
@@ -154,9 +171,12 @@ export async function POST(request) {
       },
     });
   } catch (err) {
-    console.error("Generate Notion template failed:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[generate-notion-template] Export failed:", message);
+    if (stack) console.error("[generate-notion-template] Stack:", stack);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Notion template generation failed" },
+      { error: message },
       { status: 500 }
     );
   }

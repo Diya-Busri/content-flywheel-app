@@ -62,6 +62,7 @@ import { ThumbnailMockup, THUMBNAIL_TEMPLATES, type ThumbnailTemplateId } from "
 import { cleanMarkdownToHtml } from "@/lib/clean-markdown";
 import html2canvas from "html2canvas";
 import { captureCanvasPagesToPdf } from "@/lib/pdf-client-export";
+import { getProxiedBackgroundImageUrl, getBackgroundUrlToSave } from "@/lib/proxy-image-url";
 import { useToast } from "@/components/ui/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -75,6 +76,11 @@ import {
 } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
+import { EditorToolbar } from "./EditorToolbar";
+import { CoverPageEditor } from "./CoverPageEditor";
+import { BackCoverEditor } from "./BackCoverEditor";
+import { ContentPageEditor } from "./ContentPageEditor";
+import { EditorRightPanel } from "./EditorRightPanel";
 
 type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string };
 
@@ -813,7 +819,8 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
     [element.id, element.content, onStartEditTextBox]
   );
   const ts = element.textSettings;
-  const textColor = ts?.color ?? DEFAULT_TEXT_BOX.color;
+  const isWebsiteLink = element.id === "back-url" && element.type === "text";
+  const textColor = isWebsiteLink ? "#2563eb" : (ts?.color ?? DEFAULT_TEXT_BOX.color);
   const textStyle = element.type === "text" ? {
     fontSize: ts?.fontSize ?? DEFAULT_TEXT_BOX.fontSize,
     fontFamily: ts?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily,
@@ -821,7 +828,7 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
     textAlign: (ts?.textAlign ?? DEFAULT_TEXT_BOX.textAlign) as React.CSSProperties["textAlign"],
     fontWeight: ts?.fontWeight ?? DEFAULT_TEXT_BOX.fontWeight,
     fontStyle: (ts?.fontStyle ?? DEFAULT_TEXT_BOX.fontStyle) as React.CSSProperties["fontStyle"],
-    textDecoration: (ts?.textDecoration ?? DEFAULT_TEXT_BOX.textDecoration) as React.CSSProperties["textDecoration"],
+    textDecoration: (isWebsiteLink ? "underline" : (ts?.textDecoration ?? DEFAULT_TEXT_BOX.textDecoration)) as React.CSSProperties["textDecoration"],
     wordBreak: "break-word" as const,
     textShadow: (ts?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? `${ts?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX}px ${ts?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY}px ${ts?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur}px ${ts?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor}` : "none",
     WebKitTextStroke: (ts?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${ts?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${ts?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none",
@@ -895,9 +902,14 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
           ) : (
             <div
               key={`text-display-${element.id}-${textColor}`}
-              className="w-full h-full overflow-auto p-1 flex items-center cursor-text select-text"
+              className={`w-full h-full overflow-auto p-1 flex items-center select-text ${isWebsiteLink ? "cursor-pointer hover:opacity-90" : "cursor-text"}`}
               style={{ ...textStyleNoBackground, color: textColor, backgroundColor: "transparent" }}
               onDoubleClick={handleDoubleClickText}
+              onClick={isWebsiteLink ? (e) => {
+                e.stopPropagation();
+                const url = (element.content || "").trim();
+                if (/^https?:\/\//i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
+              } : undefined}
             >
               {element.content || "Double-click to edit"}
             </div>
@@ -2529,11 +2541,12 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const setBackgroundFromUrl = useCallback(
     (imageUrl: string) => {
       recordUndo();
-      const url = typeof imageUrl === "string" ? imageUrl.trim() : "";
-      if (!url) {
+      const rawUrl = typeof imageUrl === "string" ? imageUrl.trim() : "";
+      if (!rawUrl) {
         toast({ title: "No image URL to set as background", variant: "destructive" });
         return;
       }
+      const url = getBackgroundUrlToSave(rawUrl) ?? rawUrl;
       const newBgSettings = { ...DEFAULT_IMAGE_SETTINGS };
       const defaultOverlay = DEFAULT_OVERLAY;
       setBackgroundImage(url);
@@ -2561,11 +2574,12 @@ export default function ProductEditor({ productId }: { productId: string }) {
     const el = selectedImageElement;
     if (!el) return;
     recordUndo();
-    const imageUrl = typeof el.content === "string" ? el.content.trim() : "";
-    if (!imageUrl) {
+    const rawImageUrl = typeof el.content === "string" ? el.content.trim() : "";
+    if (!rawImageUrl) {
       toast({ title: "No image URL to set as background", variant: "destructive" });
       return;
     }
+    const imageUrl = getBackgroundUrlToSave(rawImageUrl) ?? rawImageUrl;
     const newBgSettings = { ...DEFAULT_IMAGE_SETTINGS, ...el.imageSettings };
     const defaultOverlay = DEFAULT_OVERLAY;
     setBackgroundImage(imageUrl);
@@ -2750,7 +2764,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
       if (pexelsRes.ok) {
         const pexelsData = (await pexelsRes.json()) as { photos?: { fullUrl?: string; url?: string }[] };
         const first = pexelsData.photos?.[0];
-        bgImageUrl = first?.fullUrl ?? first?.url ?? null;
+        const raw = first?.fullUrl ?? first?.url ?? null;
+        bgImageUrl = raw ? (getBackgroundUrlToSave(raw) ?? raw) : null;
       }
       recordUndo();
       const primary = design.primary.startsWith("#") ? design.primary : `#${design.primary}`;
@@ -3475,14 +3490,28 @@ export default function ProductEditor({ productId }: { productId: string }) {
       const currentFormat = (product?.format ?? "").toLowerCase().trim();
 
       if (currentFormat === "notion" || currentFormat === "notion template") {
-        const res = await fetch("/api/generate-notion-template", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ productId }),
-        });
+        const apiUrl = typeof window !== "undefined" ? `${window.location.origin}/api/generate-notion-template` : "/api/generate-notion-template";
+        let res: Response;
+        try {
+          res = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId }),
+          });
+        } catch (fetchErr) {
+          console.error("[Notion export] Fetch failed:", fetchErr);
+          const msg = fetchErr instanceof Error ? fetchErr.message : "Request failed";
+          throw new Error(
+            msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network")
+              ? "Could not reach the server. Check your connection and that the app is running, then try again."
+              : msg
+          );
+        }
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(typeof err?.error === "string" ? err.error : `Export failed (${res.status})`);
+          const errBody = await res.json().catch(() => ({}));
+          const serverMessage = typeof errBody?.error === "string" ? errBody.error : `Export failed (${res.status})`;
+          console.error("[Notion export] API error:", res.status, serverMessage, errBody);
+          throw new Error(serverMessage);
         }
         const text = await res.text();
         const fileName = `${safeName}.md`;
@@ -3502,8 +3531,29 @@ export default function ProductEditor({ productId }: { productId: string }) {
       if (!container) {
         throw new Error("Preview not ready. Try again in a moment.");
       }
+      // Resolve back-cover website link rect for clickable PDF link (before container may move)
+      const linkOverlays: Array<{ pageIndex: number; url: string; left: number; top: number; width: number; height: number }> = [];
+      const previewPages = container.querySelectorAll<HTMLElement>(".preview-page");
+      const backPageEl = includeBackPage && previewPages.length > 0 ? previewPages[previewPages.length - 1]! : null;
+      const websiteLinkEl = backPageEl?.querySelector<HTMLElement>("[data-website-link]");
+      if (backPageEl && websiteLinkEl) {
+        let url = websiteLinkEl.getAttribute("data-website-link")?.trim();
+        if (url) {
+          if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+          const pageRect = backPageEl.getBoundingClientRect();
+          const linkRect = websiteLinkEl.getBoundingClientRect();
+          linkOverlays.push({
+            pageIndex: previewPages.length - 1,
+            url,
+            left: linkRect.left - pageRect.left,
+            top: linkRect.top - pageRect.top,
+            width: linkRect.width,
+            height: linkRect.height,
+          });
+        }
+      }
       await new Promise((r) => setTimeout(r, 150));
-      const blob = await captureCanvasPagesToPdf(container);
+      const blob = await captureCanvasPagesToPdf(container, undefined, linkOverlays.length > 0 ? linkOverlays : undefined);
       const fileName = currentFormat === "spreadsheet" ? `${safeName}-tutorial.pdf` : `${safeName}.pdf`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -3516,9 +3566,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
         description: `Saved as ${fileName}`,
       });
     } catch (err) {
+      const rawMessage = err instanceof Error ? err.message : "Export failed.";
+      const message =
+        rawMessage === "Failed to fetch" || rawMessage.toLowerCase().includes("failed to fetch")
+          ? "Could not reach the server. Check your connection and that the app is running, then try again."
+          : rawMessage;
+      console.error("[Export failed]", { error: err, rawMessage, message });
       toast({
         title: "Export failed",
-        description: err instanceof Error ? err.message : "Export failed.",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -3749,7 +3805,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
   }
 
   const dsBg = (product?.designSettings as { backgroundImage?: string } | undefined)?.backgroundImage;
-  const canvasBgUrl = (typeof backgroundImage === "string" ? backgroundImage.trim() : "") || (typeof dsBg === "string" ? dsBg.trim() : "") || null;
+  const rawCanvasBg = (typeof backgroundImage === "string" ? backgroundImage.trim() : "") || (typeof dsBg === "string" ? dsBg.trim() : "") || null;
+  const canvasBgUrl = getProxiedBackgroundImageUrl(rawCanvasBg) || null;
   const currentPageBackgroundColor = pageBackgrounds[currentPageIndex]?.backgroundColor ?? null;
   const currentPageTextColor = pageBackgrounds[currentPageIndex]?.pageTextColor ?? null;
 
@@ -4124,96 +4181,22 @@ export default function ProductEditor({ productId }: { productId: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* Header - minimal Canva-style toolbar */}
-      <header className={`shrink-0 sticky top-0 z-40 border-b backdrop-blur-sm shadow-sm ${isDark ? "border-[#2A2A2A] bg-[#0F0F0F]/95" : "border-gray-200 bg-white/95"}`}>
-        <div className="max-w-[1800px] mx-auto flex items-center justify-between gap-6 px-4 md:px-6 h-14">
-          <div className="flex items-center gap-6 min-w-0">
-            <Link href="/dashboard/digital-products" className={`text-sm shrink-0 flex items-center gap-1 ${isDark ? "text-gray-400 hover:text-orange-500" : "text-gray-500 hover:text-orange-500"}`}>
-              <ChevronLeft className="w-4 h-4" /> Back
-            </Link>
-            <div className={`h-5 w-px hidden sm:block ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
-            <h1 className={`text-base font-semibold truncate ${isDark ? "text-white" : "text-gray-900"}`}>{product.title}</h1>
-            {saving ? (
-              <span className={`flex items-center gap-1.5 text-xs shrink-0 ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
-              </span>
-            ) : lastSaved ? (
-              <span className="flex items-center gap-1.5 text-xs text-emerald-600 shrink-0" title={lastSaved.toLocaleString()}>
-                <Check className="w-3.5 h-3.5" /> Saved ✓ · {formatLastSaved(lastSaved)}
-              </span>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className={isDark ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white" : "border-gray-200 text-gray-700 hover:bg-gray-100"}
-                    onClick={handleAutoDesignClick}
-                    disabled={autoDesignLoading || regenerateDesignLoading}
-                  >
-                    {autoDesignLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="w-4 h-4" />
-                    )}
-                    <span className="hidden sm:inline ml-1.5">Auto-Design</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Apply AI-suggested colours, fonts, and cover background</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className={isDark ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white" : "border-gray-200 text-gray-700 hover:bg-gray-100"}
-                    onClick={handleRegenerateDesign}
-                    disabled={regenerateDesignLoading}
-                  >
-                    {regenerateDesignLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-4 h-4" />
-                    )}
-                    <span className="hidden sm:inline ml-1.5">Regenerate Design</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Apply a new AI-generated design (colours, fonts, cover image)</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white hover:bg-[#2A2A2A]" onClick={() => setShowFullPreview(true)}>
-                  <Eye className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Preview</TooltipContent>
-            </Tooltip>
-            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-2" onClick={() => setShowFullPreview(true)}>
-              <Eye className="w-4 h-4" /> Export {exportLabel}
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {showCreatedBanner && (
-        <div className={`flex items-center justify-between gap-4 px-4 py-3 border-b ${isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-50 border-orange-200"}`}>
-          <p className={`text-sm font-medium ${isDark ? "text-orange-200" : "text-orange-900"}`}>
-            🎬 Your product is ready! Now get a Video Creation Guide to promote it
-          </p>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5" onClick={handleGenerateVideos}>
-              <Video className="w-3.5 h-3.5" /> Create Video Guide →
-            </Button>
-            <Button size="sm" variant="ghost" className={isDark ? "text-orange-200 hover:bg-orange-500/20" : "text-orange-800 hover:bg-orange-100"} onClick={() => setShowCreatedBanner(false)} aria-label="Dismiss">
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      )}
+      <EditorToolbar
+        productTitle={product.title}
+        saving={saving}
+        lastSaved={lastSaved}
+        formatLastSaved={formatLastSaved}
+        isDark={isDark}
+        onAutoDesignClick={handleAutoDesignClick}
+        onRegenerateDesign={handleRegenerateDesign}
+        onPreview={() => setShowFullPreview(true)}
+        autoDesignLoading={autoDesignLoading}
+        regenerateDesignLoading={regenerateDesignLoading}
+        exportLabel={exportLabel}
+        showCreatedBanner={showCreatedBanner}
+        onGenerateVideos={handleGenerateVideos}
+        onDismissCreatedBanner={() => setShowCreatedBanner(false)}
+      />
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Center content area - scrollable */}
@@ -4529,36 +4512,23 @@ export default function ProductEditor({ productId }: { productId: string }) {
           </div>
         </div>
 
-        {/* Right sidebar - fixed width, independently scrollable */}
-        <aside className={`w-[380px] shrink-0 border-l flex flex-col overflow-y-auto ${isDark ? "border-[#2A2A2A] bg-[#1A1A1A]" : "border-gray-200 bg-white"}`}>
+        <EditorRightPanel isDark={isDark}>
             {isOnBackPage && (
-              <div className={`p-4 border-b ${isDark ? "border-[#2A2A2A] bg-[#252525]" : "border-gray-200 bg-gray-50"}`}>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Social Links</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Add URLs to show clickable social icons on the back cover. Icons are draggable and resizable on the canvas.</p>
-                {(["tiktok", "instagram", "youtube", "facebook"] as const).map((platform) => (
-                  <div key={platform} className="mb-2">
-                    <label className="text-xs text-gray-600 dark:text-gray-400 font-medium block mb-1 capitalize">{platform}</label>
-                    <input
-                      type="url"
-                      value={backCoverSocialLinks[platform] ?? ""}
-                      onChange={(e) => updateBackCoverSocialLink(platform, e.target.value)}
-                      placeholder={`https://${platform}.com/...`}
-                      className={`w-full p-2 rounded-lg text-sm border ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-gray-500" : "bg-white border-gray-200 text-gray-900"}`}
-                    />
-                  </div>
-                ))}
-                <div className="mb-0">
-                  <label className="text-xs text-gray-600 dark:text-gray-400 font-medium block mb-1">Website URL</label>
-                  <input
-                    type="url"
-                    value={backCoverWebsiteUrl ?? ""}
-                    onChange={(e) => updateBackCoverWebsiteUrlFromInput(e.target.value)}
-                    onBlur={(e) => saveBackCoverWebsiteUrlToBrandProfile(e.target.value)}
-                    placeholder="https://yoursite.com"
-                    className={`w-full p-2 rounded-lg text-sm border ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-gray-500" : "bg-white border-gray-200 text-gray-900"}`}
-                  />
-                </div>
-              </div>
+              <BackCoverEditor
+                backCoverSocialLinks={backCoverSocialLinks}
+                updateBackCoverSocialLink={updateBackCoverSocialLink}
+                backCoverWebsiteUrl={backCoverWebsiteUrl ?? ""}
+                onWebsiteUrlChange={(v) => updateBackCoverWebsiteUrlFromInput(v)}
+                onWebsiteUrlBlur={(v) => saveBackCoverWebsiteUrlToBrandProfile(v)}
+                overlaySettings={overlaySettings}
+                overlayColorToHex={overlayColorToHex}
+                updateOverlay={updateOverlay}
+                hasBackgroundImage={!!backgroundImage}
+                onCopyBackgroundToFrontCover={applyBackBackgroundToCover}
+                isDark={isDark}
+                showSocialBlock
+                showOverlayAndCopy={false}
+              />
             )}
             {selectedTextMeta && (
               <div className="p-4 border-b border-gray-200 bg-gray-50 space-y-4 max-h-[50vh] overflow-y-auto">
@@ -4821,139 +4791,21 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </TabsList>
               <div className="flex-1 overflow-y-auto">
               <TabsContent value="content" className="mt-0 p-4 space-y-3">
-                {currentPageIndex > 0 && currentPageIndex < totalPages - 1 && (
-                  <div className="pb-3 border-b border-gray-200 space-y-4">
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-semibold text-gray-900">Full page colour</h3>
-                      <p className="text-xs text-gray-500">Background colour for this content page.</p>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={currentPageBackgroundColor ?? "#ffffff"}
-                          onChange={(e) => {
-                            recordUndo();
-                            persistCurrentPageBackground({ backgroundColor: e.target.value });
-                            recordUndoDebounced();
-                          }}
-                          className="h-9 w-14 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
-                          aria-label="Full page colour"
-                        />
-                        <input
-                          type="text"
-                          value={currentPageBackgroundColor ?? "#ffffff"}
-                          onChange={(e) => {
-                            const raw = e.target.value.trim();
-                            const hex = raw.startsWith("#") ? raw : raw ? `#${raw}` : "";
-                            if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return;
-                            recordUndo();
-                            persistCurrentPageBackground({ backgroundColor: hex });
-                            recordUndoDebounced();
-                          }}
-                          className="flex-1 min-w-0 p-2 rounded-lg border border-gray-200 text-sm font-mono text-gray-900"
-                          placeholder="#ffffff"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="shrink-0 border-gray-200 text-gray-600 hover:bg-gray-50"
-                          onClick={() => {
-                            recordUndo();
-                            persistCurrentPageBackground({ backgroundColor: null });
-                            recordUndoDebounced();
-                          }}
-                        >
-                          Clear
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-semibold text-gray-900">Text colour</h3>
-                      <p className="text-xs text-gray-500">Colour for all text on this page (title, heading, body).</p>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={currentPageTextColor ?? "#1a1a1a"}
-                          onChange={(e) => {
-                            recordUndo();
-                            persistCurrentPageBackground({ pageTextColor: e.target.value });
-                            recordUndoDebounced();
-                          }}
-                          className="h-9 w-14 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
-                          aria-label="Page text colour"
-                        />
-                        <input
-                          type="text"
-                          value={currentPageTextColor ?? "#1a1a1a"}
-                          onChange={(e) => {
-                            const raw = e.target.value.trim();
-                            const hex = raw.startsWith("#") ? raw : raw ? `#${raw}` : "";
-                            if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return;
-                            recordUndo();
-                            persistCurrentPageBackground({ pageTextColor: hex });
-                            recordUndoDebounced();
-                          }}
-                          className="flex-1 min-w-0 p-2 rounded-lg border border-gray-200 text-sm font-mono text-gray-900"
-                          placeholder="#1a1a1a"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="shrink-0 border-gray-200 text-gray-600 hover:bg-gray-50"
-                          onClick={() => {
-                            recordUndo();
-                            persistCurrentPageBackground({ pageTextColor: null });
-                            recordUndoDebounced();
-                          }}
-                        >
-                          Clear
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">Table of Contents</h3>
-                {sections.map((section, i) => (
-                  <div key={section.id} className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white p-3 hover:border-gray-300">
-                    <span className="text-sm text-gray-700 truncate min-w-0 flex-1">
-                      {i + 1}. {section.title}
-                    </span>
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 text-gray-500 hover:text-orange-500 hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        onClick={() => handleRegenerateSectionFromTOC(section.id)}
-                        disabled={regeneratingSectionId !== null}
-                        aria-label="Regenerate section content"
-                        title="Regenerate section content"
-                      >
-                        {regeneratingSectionId === section.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-3.5 h-3.5" />
-                        )}
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-500 hover:text-orange-500 hover:bg-orange-50" onClick={() => openEdit(section)} aria-label="Edit section">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 text-gray-500 hover:text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        onClick={() => setSectionToDeleteId(section.id)}
-                        disabled={sections.length <= 1}
-                        aria-label="Delete section"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" size="sm" className="w-full mt-2 border-gray-200 text-gray-600 hover:bg-gray-50 gap-1.5" onClick={addSection}>
-                  <Plus className="w-3.5 h-3.5" /> Add New Section
-                </Button>
+                <ContentPageEditor
+                  isOnContentPage={currentPageIndex > 0 && currentPageIndex < totalPages - 1}
+                  currentPageBackgroundColor={currentPageBackgroundColor ?? null}
+                  currentPageTextColor={currentPageTextColor ?? null}
+                  persistCurrentPageBackground={persistCurrentPageBackground}
+                  recordUndo={recordUndo}
+                  recordUndoDebounced={recordUndoDebounced}
+                  sections={sections}
+                  onOpenEdit={openEdit}
+                  onSetSectionToDeleteId={setSectionToDeleteId}
+                  onAddSection={addSection}
+                  onRegenerateSectionFromTOC={handleRegenerateSectionFromTOC}
+                  regeneratingSectionId={regeneratingSectionId}
+                  isDark={isDark}
+                />
               </TabsContent>
               <TabsContent value="design" className="mt-0 p-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Template</h3>
@@ -5021,61 +4873,36 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </div>
                 )}
 
-                {(isOnCoverPage || isOnBackPage) && backgroundImage && (
-                  <div className="mt-6 pt-6 border-t border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-1">{isOnCoverPage ? "Cover" : "Back cover"} background overlay</h3>
-                    <p className="text-xs text-gray-500 mb-3">A semi-transparent layer between the background image and text so the cover stays readable.</p>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs text-gray-600 font-medium block mb-1.5">Overlay colour</label>
-                        <div className="[&_.react-colorful]:h-20 [&_.react-colorful]:w-full [&_.react-colorful]:rounded-lg">
-                          <HexColorPicker
-                            color={overlayColorToHex(overlaySettings.color)}
-                            onChange={(c) => updateOverlay("color", c)}
-                          />
-                        </div>
-                        <input
-                          type="text"
-                          value={overlayColorToHex(overlaySettings.color)}
-                          onChange={(e) => updateOverlay("color", e.target.value || "#ffffff")}
-                          className="w-full mt-2 p-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-600 font-medium block mb-1">Overlay opacity: {Math.round((overlaySettings.opacity ?? 0.9) * 100)}%</label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={overlaySettings.opacity ?? 0.9}
-                          onChange={(e) => updateOverlay("opacity", parseFloat(e.target.value))}
-                          className="w-full h-2 bg-gray-200 rounded-lg accent-orange-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
+                {isOnCoverPage && (
+                  <CoverPageEditor
+                    overlaySettings={overlaySettings}
+                    overlayColorToHex={overlayColorToHex}
+                    updateOverlay={updateOverlay}
+                    hasBackgroundImage={!!backgroundImage}
+                    onCopyBackgroundToBackCover={applyCoverBackgroundToBackCover}
+                    isDark={isDark}
+                  />
+                )}
+                {isOnBackPage && (
+                  <BackCoverEditor
+                    backCoverSocialLinks={backCoverSocialLinks}
+                    updateBackCoverSocialLink={updateBackCoverSocialLink}
+                    backCoverWebsiteUrl={backCoverWebsiteUrl ?? ""}
+                    onWebsiteUrlChange={(v) => updateBackCoverWebsiteUrlFromInput(v)}
+                    onWebsiteUrlBlur={(v) => saveBackCoverWebsiteUrlToBrandProfile(v)}
+                    overlaySettings={overlaySettings}
+                    overlayColorToHex={overlayColorToHex}
+                    updateOverlay={updateOverlay}
+                    hasBackgroundImage={!!backgroundImage}
+                    onCopyBackgroundToFrontCover={applyBackBackgroundToCover}
+                    isDark={isDark}
+                    showSocialBlock={false}
+                    showOverlayAndCopy
+                  />
                 )}
               </TabsContent>
               <TabsContent value="graphics" className="mt-0 p-4 space-y-6 overflow-y-auto">
-                {isOnBackPage && (
-                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
-                    <h3 className="text-sm font-semibold text-gray-900">Social Links</h3>
-                    <p className="text-xs text-gray-500">Add URLs to show clickable social icons on the back cover. Drag icons on the canvas to reposition.</p>
-                    {(["tiktok", "instagram", "youtube", "facebook"] as const).map((platform) => (
-                      <div key={platform}>
-                        <label className="text-xs text-gray-600 font-medium block mb-1 capitalize">{platform}</label>
-                        <input
-                          type="url"
-                          value={backCoverSocialLinks[platform] ?? ""}
-                          onChange={(e) => updateBackCoverSocialLink(platform, e.target.value)}
-                          placeholder={`https://${platform}.com/...`}
-                          className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {/* Social links for back cover are shown at top of right panel when on back page (BackCoverEditor) */}
                 <p className="text-xs text-gray-500 mb-3">Click to add to canvas. Drag to move and resize. Icons and graphics are on the current page only.</p>
                 <Button
                   type="button"
@@ -6442,7 +6269,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </TabsContent>
               </div>
             </Tabs>
-        </aside>
+        </EditorRightPanel>
       </div>
 
       {/* Delete Section Confirmation */}
@@ -6674,7 +6501,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       return (
                         <div key={element.id} className="absolute flex items-center justify-center" style={{ left: element.position.x, top: element.position.y, width: element.size.width, height: element.size.height, zIndex: Math.max(1, element.zIndex) }}>
                           {element.type === "icon" && isIconify ? <Icon icon={element.content} className="w-full h-full" style={{ color: iconColor }} /> : element.type === "icon" && LucideIcon ? <LucideIcon className="w-full h-full" style={{ color: iconColor }} /> : element.type === "image" ? (
-                            <img src={element.content} alt="" className="w-full h-full object-cover" style={{ opacity: element.imageSettings?.opacity ?? 1, filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)` }} />
+                            <img src={element.content} alt="" crossOrigin="anonymous" className="w-full h-full object-cover" style={{ opacity: element.imageSettings?.opacity ?? 1, filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)` }} />
                           ) : element.type === "social" ? (
                             element.linkUrl ? (
                               <a href={element.linkUrl} target="_blank" rel="noopener noreferrer" className="w-full h-full flex items-center justify-center" style={{ color: iconColor }}>
@@ -6686,7 +6513,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                               </span>
                             )
                           ) : element.type === "text" ? (
-                            <div className="w-full h-full overflow-auto p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color, textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word", textShadow: (element.textSettings?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? `${element.textSettings?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX}px ${element.textSettings?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY}px ${element.textSettings?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur}px ${element.textSettings?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor}` : "none", WebKitTextStroke: (element.textSettings?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${element.textSettings?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${element.textSettings?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none" }}>{element.content || ""}</div>
+                            (element.id === "back-url" && /^https?:\/\//i.test((element.content || "").trim()) ? (
+                              <div className="w-full h-full overflow-auto p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: "#2563eb", textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word", textDecoration: "underline" }} data-website-link={(element.content || "").trim()}>{element.content || ""}</div>
+                            ) : (
+                              <div className="w-full h-full overflow-auto p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color, textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word", textShadow: (element.textSettings?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? `${element.textSettings?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX}px ${element.textSettings?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY}px ${element.textSettings?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur}px ${element.textSettings?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor}` : "none", WebKitTextStroke: (element.textSettings?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${element.textSettings?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${element.textSettings?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none" }}>{element.content || ""}</div>
+                            ))
                           ) : <span className="text-[#999] text-xs">?</span>}
                         </div>
                       );
@@ -6696,7 +6527,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   return pages.map((page, pageIdx) => {
                     if (page.type === "cover") {
                       const coverPageBg = pageBackgrounds[0];
-                      const coverBgUrl = coverPageBg?.backgroundImage ?? null;
+                      const coverBgUrl = getProxiedBackgroundImageUrl(coverPageBg?.backgroundImage ?? null) ?? null;
                       const coverBgSettings = coverPageBg?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...coverPageBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS;
                       const coverOverlay = coverPageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...coverPageBg.overlaySettings } : DEFAULT_OVERLAY;
                       return (
@@ -6712,7 +6543,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           {coverBgUrl ? (
                             <>
                               <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden>
-                                <img src={coverBgUrl} alt="" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: (coverBgSettings.fit ?? "cover") as React.CSSProperties["objectFit"], objectPosition: coverBgSettings.position ?? "center center", opacity: coverBgSettings.opacity ?? 1, filter: (coverBgSettings.blur ?? 0) > 0 ? `blur(${coverBgSettings.blur}px) brightness(${coverBgSettings.brightness ?? 100}%) contrast(${coverBgSettings.contrast ?? 100}%) saturate(${coverBgSettings.saturation ?? 100}%)` : `brightness(${coverBgSettings.brightness ?? 100}%) contrast(${coverBgSettings.contrast ?? 100}%) saturate(${coverBgSettings.saturation ?? 100}%)` }} />
+                                <img src={coverBgUrl} alt="" crossOrigin="anonymous" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: (coverBgSettings.fit ?? "cover") as React.CSSProperties["objectFit"], objectPosition: coverBgSettings.position ?? "center center", opacity: coverBgSettings.opacity ?? 1, filter: (coverBgSettings.blur ?? 0) > 0 ? `blur(${coverBgSettings.blur}px) brightness(${coverBgSettings.brightness ?? 100}%) contrast(${coverBgSettings.contrast ?? 100}%) saturate(${coverBgSettings.saturation ?? 100}%)` : `brightness(${coverBgSettings.brightness ?? 100}%) contrast(${coverBgSettings.contrast ?? 100}%) saturate(${coverBgSettings.saturation ?? 100}%)` }} />
                               </div>
                               <div className="absolute inset-0 z-[1] pointer-events-none" style={{ backgroundColor: coverOverlay.color, opacity: coverOverlay.opacity ?? 0.9 }} aria-hidden />
                             </>
@@ -6727,7 +6558,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     if (page.type === "back") {
                       const backIdx = totalPages - 1;
                       const backPageBg = pageBackgrounds[backIdx];
-                      const backBgUrl = backPageBg?.backgroundImage ?? null;
+                      const backBgUrl = getProxiedBackgroundImageUrl(backPageBg?.backgroundImage ?? null) ?? null;
                       const backBgSettings = backPageBg?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...backPageBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS;
                       const backOverlay = backPageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...backPageBg.overlaySettings } : DEFAULT_OVERLAY;
                       return (
@@ -6743,7 +6574,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           {backBgUrl ? (
                             <>
                               <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden>
-                                <img src={backBgUrl} alt="" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: (backBgSettings.fit ?? "cover") as React.CSSProperties["objectFit"], objectPosition: backBgSettings.position ?? "center center", opacity: backBgSettings.opacity ?? 1 }} />
+                                <img src={backBgUrl} alt="" crossOrigin="anonymous" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: (backBgSettings.fit ?? "cover") as React.CSSProperties["objectFit"], objectPosition: backBgSettings.position ?? "center center", opacity: backBgSettings.opacity ?? 1 }} />
                               </div>
                               <div className="absolute inset-0 z-[1] pointer-events-none" style={{ backgroundColor: backOverlay.color, opacity: backOverlay.opacity ?? 0.9 }} aria-hidden />
                             </>
@@ -6758,7 +6589,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     const contentIdx = page.contentIndex!;
                     const section = sections[contentIdx] ?? { id: `page-${contentIdx}`, title: "", content: "", contentHtml: "" };
                     const pageBg = pageBackgrounds[contentIdx + 1];
-                    const bgUrl = pageBg?.backgroundImage ?? null;
+                    const bgUrl = getProxiedBackgroundImageUrl(pageBg?.backgroundImage ?? null) ?? null;
                     const bgSettings = pageBg?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...pageBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS;
                     const overlay = pageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...pageBg.overlaySettings } : DEFAULT_OVERLAY;
                     const titleStyles = product.designSettings?.textStyles?.[section.id]?.title;
@@ -6785,6 +6616,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                               <img
                                 src={bgUrl}
                                 alt=""
+                                crossOrigin="anonymous"
                                 style={{
                                   position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
                                   objectFit: (bgSettings.fit ?? "cover") as React.CSSProperties["objectFit"],
@@ -6808,7 +6640,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             <h3 className="text-lg font-semibold" style={{ ...titleStyles, color: pageTextColor ?? titleStyles?.color ?? templatePreset.headingColor }}>{section.title}</h3>
                             {section.imageUrl?.trim() ? (
                               <div className="my-4 flex justify-center">
-                                <img src={section.imageUrl} alt="" className="max-w-full max-h-80 object-contain rounded-lg shadow-md" />
+                                <img src={section.imageUrl} alt="" crossOrigin="anonymous" className="max-w-full max-h-80 object-contain rounded-lg shadow-md" />
                               </div>
                             ) : null}
                             <div className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2" style={{ ...bodyStyles, color: pageTextColor ?? bodyStyles?.color ?? templatePreset.bodyColor }}>

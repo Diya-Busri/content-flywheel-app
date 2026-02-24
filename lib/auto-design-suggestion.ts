@@ -2,15 +2,20 @@
  * Server-side auto-design suggestion (OpenAI). Used by /api/auto-design and /api/products/[id]/apply-design.
  */
 
-/** Banned Pexels keywords that return architecture/buildings/interiors — never use for cover. */
+/** Banned Pexels keywords — never use for cover. Only abstract, bokeh, gradient, or nature landscape. */
 export const BANNED_PEXELS_KEYWORDS = [
-  "door",
+  "bird",
+  "animal",
+  "cat",
+  "dog",
+  "wildlife",
+  "architecture",
   "building",
+  "door",
   "corridor",
   "hallway",
-  "architecture",
-  "interior",
   "room",
+  "interior",
   "wall",
   "entrance",
 ] as const;

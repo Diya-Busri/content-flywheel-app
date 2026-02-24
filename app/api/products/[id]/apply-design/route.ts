@@ -189,11 +189,16 @@ export async function POST(
     const pageSeed = typeof body.pageSeed === "number" ? body.pageSeed : Date.now();
     const pexelsQuery =
       coverBackgroundPreference === "random" ? getRandomCoverKeyword() : undefined;
-    const bgImageUrl = await fetchOnePexelsPhoto(niche, productFormat, {
+    const rawBgImageUrl = await fetchOnePexelsPhoto(niche, productFormat, {
       excludeUrls: usedCoverImageUrls,
       pageSeed,
       queryOverride: pexelsQuery,
     });
+    // Store proxy URL so editor and PDF export avoid CORS with html2canvas
+    const bgImageUrl =
+      rawBgImageUrl != null
+        ? `/api/proxy-image?url=${encodeURIComponent(rawBgImageUrl)}`
+        : undefined;
     const primary = design.primary.startsWith("#") ? design.primary : `#${design.primary}`;
     const secondary = design.secondary.startsWith("#") ? design.secondary : `#${design.secondary}`;
     const accent = design.accent.startsWith("#") ? design.accent : `#${design.accent}`;
@@ -319,8 +324,8 @@ export async function POST(
 
     const existingColors = (existingDesign.colors ?? {}) as Record<string, string>;
     const nextUsedCoverImageUrls =
-      bgImageUrl && typeof bgImageUrl === "string"
-        ? [...usedCoverImageUrls.filter((u) => u !== bgImageUrl), bgImageUrl].slice(-USED_IMAGES_CAP)
+      rawBgImageUrl && typeof rawBgImageUrl === "string"
+        ? [...usedCoverImageUrls.filter((u) => u !== rawBgImageUrl), rawBgImageUrl].slice(-USED_IMAGES_CAP)
         : usedCoverImageUrls;
     const designFingerprint = `${primary}|${secondary}|${headingFont}|${bodyFont}`;
     const nextUsedDesignFingerprints =
