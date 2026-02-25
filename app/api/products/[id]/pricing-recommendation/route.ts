@@ -4,6 +4,8 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
 
+export const dynamic = "force-dynamic";
+
 type Section = { id: string; title: string; content?: string };
 
 /**

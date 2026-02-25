@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/download-image?url=<image-url>
  * Fetches the image server-side and returns it as a downloadable blob with

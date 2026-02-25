@@ -4,6 +4,8 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
 
+export const dynamic = "force-dynamic";
+
 const PLATFORM_PROMPTS: Record<string, (title: string, niche: string, format: string) => string> = {
   beacons: (title, niche, format) =>
     `Write a short high-converting Beacons store description for: ${title}, niche: ${niche}, format: ${format}. 2 punchy sentences, 3 benefit bullet points, 1 CTA. Under 150 words.`,
