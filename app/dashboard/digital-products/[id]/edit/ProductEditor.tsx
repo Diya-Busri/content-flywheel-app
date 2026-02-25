@@ -75,6 +75,13 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 import { EditorToolbar } from "./EditorToolbar";
 import { CoverPageEditor } from "./CoverPageEditor";
@@ -974,6 +981,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [pdfExporting, setPdfExporting] = useState(false);
   const [marketingGenerating, setMarketingGenerating] = useState(false);
   const [marketingRegenerating, setMarketingRegenerating] = useState(false);
+  const [pricingRecommendationLoading, setPricingRecommendationLoading] = useState(false);
+  const [platformCopyPlatform, setPlatformCopyPlatform] = useState<string>("beacons");
+  const [platformCopyLoading, setPlatformCopyLoading] = useState(false);
+  const [platformCopyResult, setPlatformCopyResult] = useState<string | null>(null);
+  const [pricingRecommendation, setPricingRecommendation] = useState<{
+    priceRange: string;
+    strategy: string;
+    reasoning: string;
+  } | null>(null);
   const [thumbnailTemplate, setThumbnailTemplate] = useState<ThumbnailTemplateId>("modern-gradient");
   const [thumbnailOrientation, setThumbnailOrientation] = useState<"horizontal" | "vertical">("horizontal");
   const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
@@ -3489,43 +3505,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
       const safeName = title.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "") || "product";
       const currentFormat = (product?.format ?? "").toLowerCase().trim();
 
-      if (currentFormat === "notion" || currentFormat === "notion template") {
-        const apiUrl = typeof window !== "undefined" ? `${window.location.origin}/api/generate-notion-template` : "/api/generate-notion-template";
-        let res: Response;
-        try {
-          res = await fetch(apiUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ productId }),
-          });
-        } catch (fetchErr) {
-          console.error("[Notion export] Fetch failed:", fetchErr);
-          const msg = fetchErr instanceof Error ? fetchErr.message : "Request failed";
-          throw new Error(
-            msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network")
-              ? "Could not reach the server. Check your connection and that the app is running, then try again."
-              : msg
-          );
-        }
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => ({}));
-          const serverMessage = typeof errBody?.error === "string" ? errBody.error : `Export failed (${res.status})`;
-          console.error("[Notion export] API error:", res.status, serverMessage, errBody);
-          throw new Error(serverMessage);
-        }
-        const text = await res.text();
-        const fileName = `${safeName}.md`;
-        const blob = new Blob([text], { type: "text/markdown; charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast({ title: "Notion template downloaded", description: `Saved as ${fileName}` });
-        return;
-      }
-
       // PDF export: client-side html2canvas + jsPDF (capture editor canvas as-is, no server)
       const container = previewPagesContainerRef.current;
       if (!container) {
@@ -3665,11 +3644,21 @@ export default function ProductEditor({ productId }: { productId: string }) {
     try {
       const res = await fetch(`/api/products/${productId}/marketing-assets`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof data?.error === "string" ? data.error : "Failed to generate");
+      if (!res.ok) {
+        const msg = typeof data?.details === "string" ? data.details : typeof data?.error === "string" ? data.error : "Failed to generate";
+        console.error("[marketing-assets] API error:", res.status, data);
+        throw new Error(msg);
+      }
       setProduct((p) => (p ? { ...p, marketingAssets: data } : null));
       toast({ title: "Marketing assets generated", description: "Edit any field and save. Use Copy to paste into Etsy, Gumroad, etc." });
     } catch (e) {
-      toast({ title: "Generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+      const message = e instanceof Error ? e.message : "Something went wrong";
+      if (message === "Failed to fetch") {
+        console.error("[marketing-assets] Network error (request may have timed out or server unreachable):", e);
+        toast({ title: "Generation failed", description: "Network error. Check the console and server logs for details.", variant: "destructive" });
+      } else {
+        toast({ title: "Generation failed", description: message, variant: "destructive" });
+      }
     } finally {
       setMarketingGenerating(false);
     }
@@ -3685,15 +3674,85 @@ export default function ProductEditor({ productId }: { productId: string }) {
         body: JSON.stringify({ regenerateDescription: true }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof data?.error === "string" ? data.error : "Failed to regenerate");
+      if (!res.ok) {
+        const msg = typeof data?.details === "string" ? data.details : typeof data?.error === "string" ? data.error : "Failed to regenerate";
+        console.error("[marketing-assets] API error:", res.status, data);
+        throw new Error(msg);
+      }
       setProduct((p) => (p ? { ...p, marketingAssets: { ...p.marketingAssets, ...data } } : null));
       toast({ title: "Description regenerated" });
     } catch (e) {
-      toast({ title: "Regenerate failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+      const message = e instanceof Error ? e.message : "Something went wrong";
+      if (message === "Failed to fetch") {
+        console.error("[marketing-assets] Network error:", e);
+        toast({ title: "Regenerate failed", description: "Network error. Check the console and server logs.", variant: "destructive" });
+      } else {
+        toast({ title: "Regenerate failed", description: message, variant: "destructive" });
+      }
     } finally {
       setMarketingRegenerating(false);
     }
   }, [productId, toast]);
+
+  const handleGetPricingRecommendation = useCallback(async () => {
+    if (!productId) return;
+    setPricingRecommendationLoading(true);
+    setPricingRecommendation(null);
+    try {
+      const res = await fetch(`/api/products/${productId}/pricing-recommendation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data?.error === "string" ? data.error : "Failed to get recommendation");
+      }
+      if (data.priceRange != null && data.strategy != null && data.reasoning != null) {
+        setPricingRecommendation({
+          priceRange: String(data.priceRange),
+          strategy: String(data.strategy),
+          reasoning: String(data.reasoning),
+        });
+      }
+    } catch (e) {
+      toast({
+        title: "Pricing recommendation failed",
+        description: e instanceof Error ? e.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setPricingRecommendationLoading(false);
+    }
+  }, [productId, toast]);
+
+  const handleGeneratePlatformCopy = useCallback(async () => {
+    if (!productId) return;
+    setPlatformCopyLoading(true);
+    setPlatformCopyResult(null);
+    try {
+      const res = await fetch(`/api/products/${productId}/platform-copy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform: platformCopyPlatform }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data?.error === "string" ? data.error : "Failed to generate copy");
+      }
+      if (typeof data?.copy === "string") {
+        setPlatformCopyResult(data.copy);
+      }
+    } catch (e) {
+      toast({
+        title: "Platform copy failed",
+        description: e instanceof Error ? e.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setPlatformCopyLoading(false);
+    }
+  }, [productId, platformCopyPlatform, toast]);
 
   const saveMarketingEdits = useCallback(
     (updates: Partial<typeof marketingAssets>) => {
@@ -3725,7 +3784,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
     if (thumbUrl && (thumbUrl.startsWith("http://") || thumbUrl.startsWith("https://"))) {
       try {
-        const res = await fetch(thumbUrl, { mode: "cors" });
+        const res = await fetch(`/api/download-image?url=${encodeURIComponent(thumbUrl)}`);
         if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -4432,13 +4491,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                 {section.title}
                               </h3>
                               {section.imageUrl?.trim() ? (
-                                <div className="my-4 flex justify-center">
-                                  <img
-                                    src={section.imageUrl}
-                                    alt=""
-                                    className="max-w-full max-h-80 object-contain rounded-lg shadow-md"
-                                  />
-                                </div>
+                                <img
+                                  src={section.imageUrl}
+                                  alt=""
+                                  style={{
+                                    width: "100%",
+                                    maxHeight: "300px",
+                                    objectFit: "cover",
+                                    borderRadius: "8px",
+                                    marginBottom: "16px",
+                                  }}
+                                />
                               ) : null}
                               <div
                                 data-section-id={section.id}
@@ -6225,6 +6288,97 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       />
                     </div>
                     <div className="space-y-2">
+                      <Label className="text-xs font-medium text-gray-700">Platform Copy</Label>
+                      <div className="flex gap-2">
+                        <Select value={platformCopyPlatform} onValueChange={setPlatformCopyPlatform}>
+                          <SelectTrigger className="flex-1 h-9 text-sm border-gray-200">
+                            <SelectValue placeholder="Select platform" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="beacons">Beacons</SelectItem>
+                            <SelectItem value="gumroad">Gumroad</SelectItem>
+                            <SelectItem value="etsy">Etsy</SelectItem>
+                            <SelectItem value="stan-store">Stan Store</SelectItem>
+                            <SelectItem value="payhip">Payhip</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-gray-200 gap-1.5 shrink-0"
+                          type="button"
+                          onClick={handleGeneratePlatformCopy}
+                          disabled={platformCopyLoading}
+                        >
+                          {platformCopyLoading ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : null}
+                          {platformCopyLoading ? "Generating…" : "Generate Platform Copy"}
+                        </Button>
+                      </div>
+                      {platformCopyResult ? (
+                        <Card className="border-gray-200 bg-gray-50/80">
+                          <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
+                            <CardTitle className="text-sm font-semibold text-gray-900 sr-only">
+                              Platform copy
+                            </CardTitle>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 shrink-0"
+                              onClick={() => copyToClipboard(platformCopyResult, "Platform copy")}
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </Button>
+                          </CardHeader>
+                          <CardContent className="px-4 pb-3 pt-0">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{platformCopyResult}</p>
+                          </CardContent>
+                        </Card>
+                      ) : null}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full border-gray-200 gap-2"
+                      type="button"
+                      onClick={handleGetPricingRecommendation}
+                      disabled={pricingRecommendationLoading}
+                    >
+                      {pricingRecommendationLoading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : null}
+                      {pricingRecommendationLoading ? "Getting recommendation…" : "Get Pricing Recommendation"}
+                    </Button>
+                    {pricingRecommendation ? (
+                      <Card className="border-gray-200 bg-gray-50/80">
+                        <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
+                          <CardTitle className="text-base font-bold text-gray-900">
+                            {pricingRecommendation.priceRange}
+                          </CardTitle>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 shrink-0"
+                            onClick={() =>
+                              copyToClipboard(
+                                `Recommended price: ${pricingRecommendation.priceRange}\nStrategy: ${pricingRecommendation.strategy}\n${pricingRecommendation.reasoning}`,
+                                "Pricing recommendation"
+                              )
+                            }
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </Button>
+                        </CardHeader>
+                        <CardContent className="px-4 pb-3 pt-0 space-y-1">
+                          <p className="text-xs font-medium text-gray-600">{pricingRecommendation.strategy}</p>
+                          <p className="text-sm text-gray-700">{pricingRecommendation.reasoning}</p>
+                        </CardContent>
+                      </Card>
+                    ) : null}
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Label className="text-xs font-medium text-gray-700">Hashtags / tags</Label>
                         <Button
@@ -6639,9 +6793,18 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           <section>
                             <h3 className="text-lg font-semibold" style={{ ...titleStyles, color: pageTextColor ?? titleStyles?.color ?? templatePreset.headingColor }}>{section.title}</h3>
                             {section.imageUrl?.trim() ? (
-                              <div className="my-4 flex justify-center">
-                                <img src={section.imageUrl} alt="" crossOrigin="anonymous" className="max-w-full max-h-80 object-contain rounded-lg shadow-md" />
-                              </div>
+                              <img
+                                src={section.imageUrl}
+                                alt=""
+                                crossOrigin="anonymous"
+                                style={{
+                                  width: "100%",
+                                  maxHeight: "300px",
+                                  objectFit: "cover",
+                                  borderRadius: "8px",
+                                  marginBottom: "16px",
+                                }}
+                              />
                             ) : null}
                             <div className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2" style={{ ...bodyStyles, color: pageTextColor ?? bodyStyles?.color ?? templatePreset.bodyColor }}>
                               {section.content || section.contentHtml ? (

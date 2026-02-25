@@ -11,12 +11,14 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id: productId } = await params;
+  console.log("[marketing-assets] POST request for productId:", productId ?? "(missing)");
   try {
     const { userId } = await auth();
     if (!userId) {
+      console.warn("[marketing-assets] Unauthorized: no userId");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const { id: productId } = await params;
     if (!productId) {
       return NextResponse.json({ error: "Product ID required" }, { status: 400 });
     }
@@ -100,10 +102,13 @@ Rules:
     });
 
     if (!response.ok) {
-      const err = await response.text();
-      console.error("OpenAI marketing-assets error:", err);
+      const errText = await response.text();
+      console.error("[marketing-assets] OpenAI API error:", response.status, errText);
       return NextResponse.json(
-        { error: "Failed to generate marketing assets" },
+        {
+          error: "Failed to generate marketing assets",
+          details: `OpenAI returned ${response.status}: ${errText.slice(0, 200)}`,
+        },
         { status: 502 }
       );
     }
@@ -153,11 +158,13 @@ Rules:
 
     return NextResponse.json(assets);
   } catch (err) {
-    console.error("Marketing assets generation failed:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[marketing-assets] Generation failed:", message, stack ?? err);
     return NextResponse.json(
       {
         error: "Failed to generate marketing assets",
-        details: err instanceof Error ? err.message : "Unknown error",
+        details: message,
       },
       { status: 500 }
     );

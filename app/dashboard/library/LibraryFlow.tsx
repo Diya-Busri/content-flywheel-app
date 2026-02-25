@@ -35,6 +35,10 @@ import {
   Loader2,
   RotateCcw,
   Trash,
+  BookOpen,
+  Calendar,
+  ClipboardList,
+  LayoutTemplate,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -116,6 +120,48 @@ function formatLabel(format: string | undefined): string {
   return FORMAT_LABELS[format] ?? format.charAt(0).toUpperCase() + format.slice(1);
 }
 
+/** Icon for product format (used in thumbnail placeholder). */
+function formatIcon(format: string | undefined) {
+  const f = (format ?? "").toLowerCase();
+  if (f === "planner" || f === "journal") return <Calendar className="w-10 h-10 text-orange-500/90" />;
+  if (f === "ebook" || f === "guide") return <BookOpen className="w-10 h-10 text-orange-500/90" />;
+  if (f === "workbook" || f === "checklist") return <ClipboardList className="w-10 h-10 text-orange-500/90" />;
+  if (f === "notion" || f === "template") return <LayoutTemplate className="w-10 h-10 text-orange-500/90" />;
+  return <Package className="w-10 h-10 text-orange-500/90" />;
+}
+
+/** Styled placeholder when thumbnail is missing or failed to load. */
+function ThumbnailPlaceholder({
+  item,
+  className = "",
+}: {
+  item: LibraryItem;
+  className?: string;
+}) {
+  const label =
+    item.type === "product" && item.format
+      ? formatLabel(item.format)
+      : item.type === "video"
+        ? "Video"
+        : item.type === "script"
+          ? "Script"
+          : "Item";
+  const icon =
+    item.type === "product" ? formatIcon(item.format) : typeIcon(item.type);
+
+  return (
+    <div
+      className={`flex flex-col items-center justify-center gap-2 w-full h-full min-h-[140px] bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/30 text-orange-800 dark:text-orange-200 ${className}`}
+      aria-hidden
+    >
+      {icon}
+      <span className="text-sm font-semibold tracking-tight px-2 text-center">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 /** Group bundle products by bundleId; returns array of { bundleId, bundleName, items }. */
 function groupByBundle(items: LibraryItem[]): { bundleId: string; bundleName: string; items: LibraryItem[] }[] {
   const byId = new Map<string, LibraryItem[]>();
@@ -140,7 +186,16 @@ export default function LibraryFlow() {
   const [search, setSearch] = useState("");
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
+  /** Item ids whose thumbnail failed to load (404, CORS, etc.) — show placeholder instead. */
+  const [thumbnailErrors, setThumbnailErrors] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  const showThumbnail = (item: LibraryItem) =>
+    Boolean(item.thumbnail && !thumbnailErrors.has(item.id));
+
+  const markThumbnailError = (itemId: string) => {
+    setThumbnailErrors((prev) => new Set(prev).add(itemId));
+  };
 
   const fetchItems = async () => {
     setLoading(true);
@@ -370,11 +425,16 @@ export default function LibraryFlow() {
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {bundleItems.map((item) => (
                       <Card key={item.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                        <div className="aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center">
-                          {item.thumbnail ? (
-                            <img src={item.thumbnail} alt="" className="w-full h-full object-cover" />
+                        <div className="aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
+                          {showThumbnail(item) ? (
+                            <img
+                              src={item.thumbnail}
+                              alt=""
+                              className="w-full h-full object-cover"
+                              onError={() => markThumbnailError(item.id)}
+                            />
                           ) : (
-                            typeIcon(item.type)
+                            <ThumbnailPlaceholder item={item} />
                           )}
                         </div>
                         <CardHeader className="pb-2 pt-3">
@@ -459,15 +519,16 @@ export default function LibraryFlow() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((item) => (
                 <Card key={`${item.type}-${item.id}`} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                  <div className="aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center">
-                    {item.thumbnail ? (
+                  <div className="aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
+                    {showThumbnail(item) ? (
                       <img
                         src={item.thumbnail}
                         alt=""
                         className="w-full h-full object-cover"
+                        onError={() => markThumbnailError(item.id)}
                       />
                     ) : (
-                      typeIcon(item.type)
+                      <ThumbnailPlaceholder item={item} />
                     )}
                   </div>
                   <CardHeader className="pb-2 pt-3">

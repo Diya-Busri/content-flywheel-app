@@ -167,16 +167,34 @@ export async function captureCanvasPagesToPdf(
     onProgress?.(i + 1, pages.length);
     const pageEl = pages[i]!;
 
+    await Promise.all(
+      Array.from(pageEl.querySelectorAll('img')).map(img =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise(resolve => {
+              img.onload = resolve
+              img.onerror = resolve
+            })
+      )
+    )
+    await new Promise(resolve => setTimeout(resolve, 500))
+
     // Screenshot this page div in full — no width/height so the entire element is captured
     const canvas = await html2canvas(pageEl, {
-      scale: CAPTURE_SCALE,
       useCORS: true,
       allowTaint: true,
-      backgroundColor: "#ffffff",
+      scale: 2,
       logging: false,
+      backgroundColor: null,
       imageTimeout: 15000,
-      scrollX: 0,
-      scrollY: 0,
+      onclone: (clonedDoc) => {
+        const covers = clonedDoc.querySelectorAll('[class*="cover"]')
+        covers.forEach(el => {
+          el.style.transform = 'none'
+          el.style.opacity = '1'
+          el.style.visibility = 'visible'
+        })
+      }
     });
 
     const wPx = canvas.width / CAPTURE_SCALE;

@@ -140,12 +140,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const imageContext = { productName, niche: nicheName, format };
     const sectionsWithContent: SectionRow[] = [];
 
-    /** Build a DALL-E prompt from section title and topic when the LLM did not return imagePrompt. */
-    function sectionImagePrompt(section: { id: string; title: string }, promptFromLlm: string | undefined): string {
-      if (typeof promptFromLlm === "string" && promptFromLlm.trim()) return promptFromLlm.trim();
-      return `Professional illustration for "${section.title}". Product: ${productName}. Audience: ${nicheName}. Clean, modern, high-quality, suitable for digital product. No text in image.`;
-    }
-
     for (let start = 0; start < outline.length; start += BATCH_SIZE) {
       const batch = outline.slice(start, start + BATCH_SIZE);
       const batchIndices = batch.map((_, j) => start + j);
@@ -181,8 +175,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
 
       const imageUrls = await Promise.all(
-        batch.map((section, j) => {
-          const prompt = sectionImagePrompt(section, bodiesAndPrompts[j].imagePrompt);
+        batch.map((section) => {
+          const prompt = `Professional illustration of ${section.title}, clean minimalist style, suitable for a digital product`;
           return generateProductImage(prompt, imageContext).catch((err) => {
             console.warn("[products/process] Image gen failed for", section.id, err);
             return undefined;
@@ -191,13 +185,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       );
 
       for (let j = 0; j < batch.length; j++) {
+        const imageUrl = imageUrls[j] ?? undefined;
+        const sectionTitle = batch[j].title;
+        console.log("[content-pages]", {
+          formatType: format,
+          pageSectionTitle: sectionTitle,
+          imageUrlExists: imageUrl != null,
+        });
         sectionsWithContent.push({
           id: batch[j].id,
           title: batch[j].title,
           content: bodiesAndPrompts[j].bodyHtml,
           contentHtml: bodiesAndPrompts[j].bodyHtml,
           order: batchIndices[j] + 1,
-          imageUrl: imageUrls[j] ?? undefined,
+          imageUrl,
         });
       }
 
