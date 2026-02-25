@@ -3,6 +3,8 @@ import { getProfileByUserId } from "@/db/queries/profiles-queries";
 import { NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
 
+export const dynamic = "force-dynamic";
+
 // This API is now only used for occasional status checks
 // The main cancellation flow happens through page revalidation
 export async function GET() {
@@ -25,4 +27,4 @@ export async function GET() {
     console.error("Error fetching user status:", error);
     return NextResponse.json({ error: "Failed to fetch status" }, { status: 500 });
   }
-} 
+}

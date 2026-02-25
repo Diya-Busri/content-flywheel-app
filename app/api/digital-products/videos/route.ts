@@ -7,6 +7,8 @@ import { db } from "@/db/db";
 import { videosTable } from "@/db/schema/library-schema";
 import { eq, desc, and, isNull } from "drizzle-orm";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth();

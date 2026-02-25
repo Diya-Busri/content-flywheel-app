@@ -6,6 +6,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 
+export const dynamic = "force-dynamic";
+
 export type ElevenLabsVoiceItem = { voice_id: string; name: string };
 
 export async function GET() {

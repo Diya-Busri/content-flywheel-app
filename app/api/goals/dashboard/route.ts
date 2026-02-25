@@ -4,6 +4,8 @@ import { db } from "@/db/db";
 import { goalsTable, dailyTasksTable } from "@/db/schema/goals-schema";
 import { eq, inArray, desc, asc } from "drizzle-orm";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const { userId } = await auth();

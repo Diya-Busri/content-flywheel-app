@@ -4,6 +4,8 @@ import { db } from "@/db/db";
 import { videoJobsTable } from "@/db/schema/video-jobs-schema";
 import { eq, desc, and } from "drizzle-orm";
 
+export const dynamic = "force-dynamic";
+
 /** GET: List video jobs for the current user. Optional ?batchId= filter. */
 export async function GET(request: Request) {
   try {

@@ -5,6 +5,8 @@ import { productsTable } from "@/db/schema/products-schema";
 import { scriptsTable, videosTable } from "@/db/schema/library-schema";
 import { eq, desc, and, isNull, isNotNull } from "drizzle-orm";
 
+export const dynamic = "force-dynamic";
+
 type LibraryItem = {
   id: string;
   type: "product" | "video" | "script";
