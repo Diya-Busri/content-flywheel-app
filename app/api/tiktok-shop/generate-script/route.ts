@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { cleanProductTitle } from "@/lib/product-title";
 import type { VideoStyle, HookStyle, ScriptTone } from "@/lib/tiktok-shop/types";
 import { extractProductDetails } from "@/lib/tiktok-shop/extract-product";
 import { generateVideoScript } from "@/lib/tiktok-shop/generate-script";
@@ -74,10 +75,11 @@ export async function POST(request: Request) {
         }
       }
       const product = await extractProductDetails(productLink!.trim(), resolvedImageUrl, descTrimmed);
-      name = product.name;
+      name = cleanProductTitle(product.name) || product.name;
       description = product.description;
     } else {
-      name = productName!.trim();
+      const raw = productName!.trim();
+      name = cleanProductTitle(raw) || raw;
       description = productDescription!.trim();
     }
 

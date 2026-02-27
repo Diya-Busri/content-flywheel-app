@@ -44,6 +44,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { VIDEO_LENGTH_OPTIONS, DEFAULT_VIDEO_LENGTH_SEC } from "@/lib/video-length-options";
+import { cleanProductTitle, replaceProductTitleInText } from "@/lib/product-title";
 
 const LENGTH_OPTIONS = [15, 30, 60, 90] as const;
 type LengthOption = (typeof LENGTH_OPTIONS)[number];
@@ -54,6 +55,17 @@ const CHAR_LIMITS: Record<LengthOption, { hook: number; body: number; cta: numbe
   60: { hook: 150, body: 600, cta: 150 },
   90: { hook: 200, body: 900, cta: 200 },
 };
+
+/** Section time ranges (seconds) for a given video length. Single source of truth for labels. */
+function getSectionRanges(totalSec: number): { hook: string; body: string; cta: string } {
+  const hookEnd = Math.round(totalSec * 0.1) || 1;
+  const bodyEnd = Math.round(totalSec * 0.85);
+  return {
+    hook: `0-${hookEnd} seconds`,
+    body: `${hookEnd}-${bodyEnd} seconds`,
+    cta: `${bodyEnd}-${totalSec} seconds`,
+  };
+}
 
 type SectionType = "hook" | "body" | "cta";
 
@@ -279,6 +291,8 @@ export default function ScriptsFlow() {
           };
           const title = product.marketingAssets?.productTitle ?? product.title;
           const description = product.marketingAssets?.productDescription ?? "";
+          const cleanedName = title ? String(title).split("|")[0].split("-")[0].trim() : null;
+          if (cleanedName) setProductName(cleanedName);
           const formData: ProductFormData = {
             productName: title,
             productDescription: description,
@@ -387,7 +401,7 @@ export default function ScriptsFlow() {
   const selectAll = () => setScripts((prev) => prev.map((s) => ({ ...s, isSelected: true })));
   const deselectAll = () => setScripts((prev) => prev.map((s) => ({ ...s, isSelected: false })));
 
-  const handleRegenerateScripts = async () => {
+  const runRegenerateWithDuration = async (targetSec: number) => {
     if (!productIdFromUrl || scripts.length === 0) return;
     setRegeneratingScripts(true);
     try {
@@ -396,7 +410,7 @@ export default function ScriptsFlow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           productId: productIdFromUrl,
-          targetDurationSec: scriptVideoLengthSec,
+          targetDurationSec: targetSec,
         }),
       });
       const genData = (await genRes.json().catch(() => ({}))) as {
@@ -414,12 +428,13 @@ export default function ScriptsFlow() {
           compliance: { tiktok: "Approved", instagram: "Approved", youtube: "Approved" } as const,
           isSelected: selectAllForVideoGuide,
         };
+        const newLength = (targetSec as LengthOption) || (genData.scripts[0]?.length as LengthOption);
         setScripts(
           genData.scripts.map((s, i) => ({
             ...defaults,
             id: s.id,
             title: s.title,
-            length: s.length as LengthOption,
+            length: (s.length as LengthOption) || newLength,
             hook: s.hook,
             body: s.body,
             cta: s.cta,
@@ -427,17 +442,28 @@ export default function ScriptsFlow() {
             isStarred: i === 1,
           }))
         );
+        setScriptVideoLengthSec(newLength);
       }
     } finally {
       setRegeneratingScripts(false);
     }
   };
 
+  const handleRegenerateScripts = () => runRegenerateWithDuration(scriptVideoLengthSec);
+
+  const handleTopLengthChange = (newSec: number) => {
+    setScriptVideoLengthSec(newSec);
+    setScripts((prev) => prev.map((s) => ({ ...s, length: newSec as LengthOption })));
+    if (scripts.length > 0 && productIdFromUrl) {
+      runRegenerateWithDuration(newSec);
+    }
+  };
+
   const openEdit = (scriptId: string, section: SectionType) => {
     const script = scripts.find((s) => s.id === scriptId);
     if (!script) return;
-    const value = section === "hook" ? script.hook : section === "body" ? script.body : script.cta;
-    setEditValue(value);
+    const raw = section === "hook" ? script.hook : section === "body" ? script.body : script.cta;
+    setEditValue(replaceProductTitleInText(raw, productName ?? undefined));
     setEditModal({ scriptId, section });
   };
 
@@ -481,7 +507,7 @@ export default function ScriptsFlow() {
       </div>
       {productName && (
         <p className="text-sm text-gray-700 dark:text-gray-400 mb-6">
-          Based on: <span className="font-medium text-gray-900 dark:text-white">{productName}</span>
+          Based on: <span className="font-medium text-gray-900 dark:text-white">{cleanProductTitle(productName) || productName}</span>
         </p>
       )}
 
@@ -498,8 +524,8 @@ export default function ScriptsFlow() {
         <>
           {productIdFromUrl && (
             <div className="mb-6">
-              <Label className="text-gray-900 dark:text-white block mb-2">Video length</Label>
-              <p className="text-xs text-gray-700 dark:text-gray-400 mb-3">Choose target duration before generating. Word count and video guide scenes will match.</p>
+              <Label className="text-gray-900 dark:text-white block mb-2">Video length (controls all scripts)</Label>
+              <p className="text-xs text-gray-700 dark:text-gray-400 mb-3">One length for every script. Changing it updates all cards and regenerates scripts to the new word count.</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {VIDEO_LENGTH_OPTIONS.map((opt) => {
                   const selected = scriptVideoLengthSec === opt.seconds;
@@ -507,7 +533,8 @@ export default function ScriptsFlow() {
                     <button
                       key={opt.seconds}
                       type="button"
-                      onClick={() => setScriptVideoLengthSec(opt.seconds)}
+                      disabled={regeneratingScripts}
+                      onClick={() => handleTopLengthChange(opt.seconds)}
                       className={`rounded-lg border-2 p-3 text-left transition-all ${
                         selected
                           ? "border-orange-500 bg-orange-500/10 text-gray-900 dark:bg-orange-900/40 dark:text-white"
@@ -540,10 +567,13 @@ export default function ScriptsFlow() {
               <ScriptCard
                 key={script.id}
                 script={script}
+                productName={productName ?? undefined}
                 onUpdate={(updates) => updateScript(script.id, updates)}
                 onToggleSelect={() => toggleSelect(script.id)}
                 onOpenEdit={openEdit}
-                charLimits={CHAR_LIMITS[script.length]}
+                charLimits={CHAR_LIMITS[scriptVideoLengthSec]}
+                globalLengthSec={scriptVideoLengthSec}
+                isRegenerating={regeneratingScripts}
               />
             ))}
           </div>
@@ -591,6 +621,7 @@ export default function ScriptsFlow() {
               <AccordionContent className="space-y-6 pt-2">
                 <div>
                   <Label>Video length</Label>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 mb-2">Same as the control above. Changing here updates all scripts and triggers regeneration.</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
                     {VIDEO_LENGTH_OPTIONS.map((opt) => {
                       const selected = scriptVideoLengthSec === opt.seconds;
@@ -598,7 +629,8 @@ export default function ScriptsFlow() {
                         <button
                           key={opt.seconds}
                           type="button"
-                          onClick={() => setScriptVideoLengthSec(opt.seconds)}
+                          disabled={regeneratingScripts}
+                          onClick={() => handleTopLengthChange(opt.seconds)}
                           className={`rounded-lg border-2 p-3 text-left transition-all ${
                             selected
                               ? "border-orange-500 bg-orange-500/10 text-gray-900 dark:bg-orange-900/40 dark:text-white"
@@ -714,51 +746,41 @@ export default function ScriptsFlow() {
 
 function ScriptCard({
   script,
+  productName,
   onUpdate,
   onToggleSelect,
   onOpenEdit,
   charLimits,
+  globalLengthSec,
+  isRegenerating,
 }: {
   script: ScriptData;
+  productName?: string;
   onUpdate: (u: Partial<ScriptData>) => void;
   onToggleSelect: () => void;
   onOpenEdit: (scriptId: string, section: SectionType) => void;
   charLimits: { hook: number; body: number; cta: number };
+  globalLengthSec: number;
+  isRegenerating?: boolean;
 }) {
-  const [lengthUpdating, setLengthUpdating] = useState(false);
-
+  const sectionRanges = getSectionRanges(globalLengthSec);
   return (
-    <Card className={`border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A] overflow-hidden transition-all ${script.isSelected ? "ring-2 ring-orange-500" : ""}`}>
+    <Card className={`relative border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A] overflow-hidden transition-all ${script.isSelected ? "ring-2 ring-orange-500" : ""}`}>
+      {isRegenerating && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-50/90 dark:bg-[#1A1A1A]/90 rounded-lg">
+          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        </div>
+      )}
       <CardHeader className="pb-3 flex flex-row items-start justify-between gap-2">
         <div>
           <CardTitle className="text-base text-gray-900 dark:text-white">{script.title}</CardTitle>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{globalLengthSec}s · same for all scripts</p>
         </div>
         <button type="button" onClick={() => onUpdate({ isStarred: !script.isStarred })} className="p-1">
           <Star className={`w-5 h-5 ${script.isStarred ? "fill-orange-500 text-orange-500" : "text-gray-600 dark:text-gray-400"}`} />
         </button>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
-        <div>
-          <Label className="text-xs text-gray-700 dark:text-gray-400">VIDEO LENGTH</Label>
-          <div className="flex gap-2 mt-2 flex-wrap">
-            {LENGTH_OPTIONS.map((len) => (
-              <Button
-                key={len}
-                variant={script.length === len ? "default" : "outline"}
-                size="sm"
-                className={`rounded-full ${script.length === len ? "bg-orange-500 hover:bg-orange-600" : "border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]"}`}
-                onClick={() => {
-                  setLengthUpdating(true);
-                  onUpdate({ length: len });
-                  setTimeout(() => setLengthUpdating(false), 1500);
-                }}
-              >
-                {len}s
-              </Button>
-            ))}
-          </div>
-          {lengthUpdating && <p className="text-xs text-orange-500 mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Updating for {script.length}s...</p>}
-        </div>
         <div>
           <Label className="text-xs text-gray-700 dark:text-gray-400">PLATFORM</Label>
           <div className="flex gap-3 mt-1">
@@ -776,9 +798,9 @@ function ScriptCard({
             </label>
           </div>
         </div>
-        <SectionBlock label="HOOK (0-3 seconds)" text={script.hook} limit={charLimits.hook} onEdit={() => onOpenEdit(script.id, "hook")} />
-        <SectionBlock label="BODY (3-25 seconds)" text={script.body} limit={charLimits.body} onEdit={() => onOpenEdit(script.id, "body")} />
-        <SectionBlock label="CTA (25-30 seconds)" text={script.cta} limit={charLimits.cta} onEdit={() => onOpenEdit(script.id, "cta")} />
+        <SectionBlock label={`HOOK (${sectionRanges.hook})`} text={replaceProductTitleInText(script.hook, productName ?? undefined)} limit={charLimits.hook} onEdit={() => onOpenEdit(script.id, "hook")} />
+        <SectionBlock label={`BODY (${sectionRanges.body})`} text={replaceProductTitleInText(script.body, productName ?? undefined)} limit={charLimits.body} onEdit={() => onOpenEdit(script.id, "body")} />
+        <SectionBlock label={`CTA (${sectionRanges.cta})`} text={replaceProductTitleInText(script.cta, productName ?? undefined)} limit={charLimits.cta} onEdit={() => onOpenEdit(script.id, "cta")} />
         <div className="pt-2 border-t border-gray-200 dark:border-[#2A2A2A] space-y-1">
           <p className="text-xs font-medium text-gray-700 dark:text-gray-400">Estimated Performance</p>
           <p className="text-xs text-gray-700 dark:text-[#E0E0E0]">Hook strength: ⭐⭐⭐⭐⭐ ({script.hookStrength})</p>

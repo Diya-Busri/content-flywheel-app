@@ -149,4 +149,30 @@
     image-rendering: -webkit-optimize-contrast;
     image-rendering: high-quality;
   }
+
+  /* Customize Videos page: voice dropdown must stay readable (portal renders in body, theme can override) */
+  [data-voice-dropdown-content] {
+    background-color: #2a2a2a !important;
+    color: #ffffff !important;
+    border: 1px solid #444 !important;
+  }
+  [data-voice-dropdown-content] [data-radix-select-viewport] {
+    background-color: #2a2a2a !important;
+  }
+  [data-voice-dropdown-content] [data-radix-select-item] {
+    color: #ffffff !important;
+    background-color: transparent !important;
+  }
+  [data-voice-dropdown-content] [data-radix-select-item]:hover,
+  [data-voice-dropdown-content] [data-radix-select-item][data-highlighted] {
+    background-color: #FF6B35 !important;
+    color: #ffffff !important;
+  }
+  [data-voice-dropdown-content] [data-radix-select-item][data-state="checked"] {
+    background-color: #FF6B35 !important;
+    color: #ffffff !important;
+  }
+  [data-voice-dropdown-content] button {
+    color: #ffffff !important;
+  }
 }

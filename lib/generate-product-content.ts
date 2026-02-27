@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { cleanProductTitle } from "./product-title";
 import { withRetry429 } from "./openai-with-retry";
 
 export type GenerateContentSection = { id: string; title: string; body: string; imagePrompt?: string };
@@ -247,8 +248,10 @@ Return a JSON object with key "sections": array of {"id","title","body","imagePr
 
 export async function generateProductContent(params: GenerateProductContentParams): Promise<GenerateContentSection[]> {
   if (!openai) throw new Error("OPENAI_API_KEY is not configured");
-  const { format = "ebook" } = params;
-  const { prompt, useGpt4, maxTokens } = buildPrompt(params);
+  const productName = cleanProductTitle(params.productName) || params.productName || "Your product";
+  const paramsWithCleanTitle = { ...params, productName };
+  const { format = "ebook" } = paramsWithCleanTitle;
+  const { prompt, useGpt4, maxTokens } = buildPrompt(paramsWithCleanTitle);
 
   // gpt-4o when useGpt4: full product section content in one shot (quality); gpt-4o-mini: cost-saving fallback
   const completion = await openai.chat.completions.create({

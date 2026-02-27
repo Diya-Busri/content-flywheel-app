@@ -8,6 +8,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { cleanProductTitle } from "@/lib/product-title";
 
 const SCRIPT_ANGLES = [
   "Story Angle",
@@ -33,19 +34,19 @@ export type RegeneratedScript = {
 function angleInstructions(angle: string): string {
   switch (angle) {
     case "Story Angle":
-      return 'Use a transformation or result as the hook (e.g. "Meet Sarah who transformed her life..."); body has a mini story or relatable scenario; CTA. Title the script "Story Angle".';
+      return "Transformation or relatable scenario; human and specific — never 'Meet [name]'. Pain point or curiosity hook; agitate then solution; one clear CTA.";
     case "Problem/Solution Angle":
-      return 'Hook on the problem (e.g. "Tired of living paycheck to paycheck? Here\'s the fix..."); body on how the product solves it; strong CTA. Title the script "Problem/Solution Angle".';
+      return "Specific pain point hook (not generic 'Are you struggling'); agitate the problem then introduce the solution naturally; urgent but natural CTA.";
     case "Before/After Angle":
-      return 'Hook on the "before" state; body contrasts with "after" results; CTA with urgency. Title the script "Before/After Angle".';
+      return "Hook on the 'before' state; body contrasts with 'after' results; CTA urgent but natural.";
     case "Social Proof Angle":
     case "Social Proof/Results Angle":
-      return 'Hook with results or numbers (e.g. "1000+ people have already used this to..."); body with social proof and outcomes; CTA. Title the script "Social Proof/Results Angle".';
+      return "Results or numbers in hook; body with social proof and outcomes; one clear CTA.";
     case "Curiosity/Mystery Angle":
     case "Curiosity/Controversy Angle":
-      return 'Hook with curiosity gap or mild controversy (e.g. "Nobody talks about this passive income method..."); body reveals value without giving everything away; CTA. Title the script "Curiosity/Controversy Angle".';
+      return "Curiosity gap or bold claim in hook; body reveals value naturally; CTA urgent but not desperate.";
     default:
-      return `Use the angle: ${angle}. Title the script "${angle}".`;
+      return `Follow the rules: pain/curiosity hook, agitate then solution, product name once only. Title: "${angle}".`;
   }
 }
 
@@ -82,7 +83,8 @@ export async function POST(request: NextRequest) {
       productTitle?: string;
       productDescription?: string;
     };
-    const title = (marketing.productTitle ?? product.title ?? "").trim() || "Your product";
+    const rawTitle = (marketing.productTitle ?? product.title ?? "").trim();
+    const title = cleanProductTitle(rawTitle) || rawTitle || "Your product";
     const description = (marketing.productDescription ?? "").trim() || "";
     const niche = (product.niche ?? "").trim() || "general audience";
 
@@ -94,26 +96,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const prompt = `You are an expert at writing short-form video scripts for digital products (TikTok, Reels, Shorts). Generate exactly ONE script for this product using the requested angle.
+    const systemPrompt = `You are an expert short-form video scriptwriter for TikTok and Instagram Reels.
+Write scripts that feel human, conversational and emotionally engaging.
+
+Rules:
+- Hook MUST open with a pain point, bold claim, or curiosity gap — never with the product name
+- Never start with "Meet [name]" or "Are you struggling" — be more specific and real
+- The product name should only appear ONCE in the entire script, naturally
+- Write like a real person talking, not an ad
+- Use short punchy sentences. Max 15 words per sentence.
+- Body should agitate the problem before presenting the solution
+- CTA should feel urgent but not desperate
+
+Pain point hooks that work:
+- "I wasted 3 years trying to figure this out..."
+- "Nobody talks about why journaling actually fails..."
+- "The reason you keep starting over has nothing to do with motivation..."
+
+Structure:
+HOOK (0-3s): One sentence. Pain point or curiosity gap only.
+BODY (3-25s): Agitate the problem (2 sentences), then introduce the solution naturally (2-3 sentences), then social proof or outcome (1-2 sentences)
+CTA (25-30s): One clear action. Urgent but natural.
+
+Return only valid JSON with title, hook, body, cta (strings). No markdown, no code fences.`;
+
+    const userPrompt = `Generate exactly ONE script for this product. Angle: ${angle}. ${angleInstructions(angle)}
 
 PRODUCT:
 - Name: "${title}"
 - Description: ${description || "(none provided)"}
 - Niche/audience: ${niche}
 
-ANGLE: ${angle}
-${angleInstructions(angle)}
-
-PAIN AND BENEFITS (no tags): Do not use [PAIN], [/PAIN], [BENEFIT], or [/BENEFIT] anywhere. From the product name, description, and niche, identify the audience's real pain points and the product's real benefits, and write them directly into the script as natural, compelling sentences. Example: instead of "I was [PAIN]stressed[/PAIN]", write "I was stressed about money every single month."
-
-RULES:
-- Hook: 1–2 sentences, under ~100 chars, punchy and scroll-stopping.
-- Body: 2–4 short paragraphs, under ~300 chars total, benefit-focused.
-- CTA: one clear action, under ~100 chars (e.g. "Link in bio", "Comment X for the guide").
-- Write for 30-second videos. Be specific to this product and niche.
-- No placeholders like [product name] — use the actual product name.
-
-Return ONLY valid JSON (no markdown, no code fence):
+Return ONLY valid JSON:
 {
   "title": "${angle}",
   "hook": "...",
@@ -130,12 +144,8 @@ Return ONLY valid JSON (no markdown, no code fence):
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [
-          {
-            role: "system",
-            content:
-              "You generate one short-form video script for digital products. Return only valid JSON with title, hook, body, cta (strings). Do not use any tags like [PAIN], [/PAIN], [BENEFIT], [/BENEFIT]. Write pain points and benefits as normal sentences drawn from the product data.",
-          },
-          { role: "user", content: prompt },
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
         ],
         temperature: 0.7,
         max_tokens: 800,

@@ -18,6 +18,7 @@ import {
 import { ArrowLeft, Check, Play, Loader2, User, Image, Package, Sparkles, AlertCircle, FileText, Plus, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { VIDEO_GUIDE_PLATFORMS } from "@/lib/video-guide-platforms";
+import { cleanProductTitle } from "@/lib/product-title";
 
 type VoiceItem = { voice_id: string; name: string };
 
@@ -81,10 +82,13 @@ export default function VideosFlow() {
 
   useEffect(() => {
     try {
+      let productNameSet = false;
       const rawProduct = sessionStorage.getItem("digitalProductForm");
       if (rawProduct) {
         const data = JSON.parse(rawProduct);
-        setProductName(data.productName || "Your product");
+        const cleaned = cleanProductTitle(data.productName) || "Your product";
+        setProductName(cleaned);
+        productNameSet = !!data.productName;
       }
       const rawScripts = sessionStorage.getItem("selectedScriptsForVideos");
       if (rawScripts) {
@@ -93,8 +97,9 @@ export default function VideosFlow() {
       }
       const rawContext = sessionStorage.getItem("productContextForVideos");
       if (rawContext) {
-        const ctx = JSON.parse(rawContext) as { productId?: string };
+        const ctx = JSON.parse(rawContext) as { productId?: string; productName?: string };
         if (ctx.productId) setProductId(ctx.productId);
+        if (!productNameSet && ctx.productName) setProductName(cleanProductTitle(ctx.productName) || "Your product");
       }
     } catch {
       setSelectedScripts([]);
@@ -252,7 +257,7 @@ export default function VideosFlow() {
         </div>
         <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">Customize Your Videos</h1>
         <p className="text-[#A0A0A0] mb-8">
-          Based on: <span className="font-medium text-white">{productName || "Your product"}</span>
+          Based on: <span className="font-medium text-white">{cleanProductTitle(productName) || "Your product"}</span>
         </p>
 
         {count === 0 ? (
@@ -310,12 +315,28 @@ export default function VideosFlow() {
                       onValueChange={setSelectedVoiceId}
                       disabled={voicesLoading}
                     >
-                      <SelectTrigger className="w-full max-w-[280px] bg-[#0F0F0F] border-[#2A2A2A] text-white">
+                      <SelectTrigger
+                        className="w-full max-w-[280px] border border-[#444] text-white placeholder:text-[#A0A0A0] [&>svg]:text-white"
+                        style={{ backgroundColor: "#1a1a1a" }}
+                      >
                         <SelectValue placeholder={voicesLoading ? "Loading voices…" : "Select a voice"} />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#1A1A1A] border-[#2A2A2A]">
+                      <SelectContent
+                        position="popper"
+                        data-voice-dropdown-content
+                        className="border border-[#444] shadow-xl [&_button]:text-white [&_svg]:text-white [&_[data-radix-select-viewport]]:bg-[#2a2a2a]"
+                        style={{
+                          backgroundColor: "#2a2a2a",
+                          color: "#ffffff",
+                          border: "1px solid #444",
+                        }}
+                      >
                         {voices.map((v) => (
-                          <SelectItem key={v.voice_id} value={v.voice_id}>
+                          <SelectItem
+                            key={v.voice_id}
+                            value={v.voice_id}
+                            className="cursor-pointer rounded-sm py-2 pl-8 pr-2 text-white bg-transparent focus:bg-[#FF6B35] focus:text-white data-[highlighted]:bg-[#FF6B35] data-[highlighted]:text-white data-[state=checked]:bg-[#FF6B35] data-[state=checked]:text-white focus:outline-none"
+                          >
                             {v.name}
                           </SelectItem>
                         ))}

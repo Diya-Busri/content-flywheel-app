@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { cleanProductTitle } from "@/lib/product-title";
 import { extractProductDetails } from "@/lib/tiktok-shop/extract-product";
 import { generateProductBreakdown } from "@/lib/tiktok-shop/product-breakdown";
 import { uploadProductImageToBlob } from "@/lib/tiktok-shop/upload-product-image-blob";
@@ -68,8 +69,11 @@ export async function POST(request: Request) {
         resolvedImageUrl,
         description ?? undefined
       );
-      name = name ?? product.name;
+      const rawName = name ?? product.name;
+      name = cleanProductTitle(rawName) || rawName;
       description = description ?? product.description;
+    } else if (name) {
+      name = cleanProductTitle(name) || name;
     }
 
     const breakdown = await generateProductBreakdown({

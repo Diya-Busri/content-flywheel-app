@@ -6,6 +6,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { cleanProductTitle } from "@/lib/product-title";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 const PLATFORM_LABELS: Record<string, string> = {

@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Loader2, FileText } from "lucide-react";
@@ -23,6 +23,32 @@ export default function VideoGuidePage() {
   const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const libraryScriptId = searchParams.get("libraryScriptId");
+
+  const handleScriptRegenerated = useCallback((script: { hook: string; body: string; cta: string }) => {
+    setGuide((prev) => (prev ? { ...prev, script } : null));
+  }, []);
+
+  const hasTriggeredRegenerate = useRef(false);
+  useEffect(() => {
+    const doRegenerate = searchParams.get("regenerate") === "1" && libraryScriptId && guide && !hasTriggeredRegenerate.current;
+    if (!doRegenerate) return;
+    hasTriggeredRegenerate.current = true;
+    fetch("/api/video-guide/regenerate-full-script", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ libraryScriptId }),
+    })
+      .then((res) => res.json().catch(() => ({})))
+      .then((data: { script?: { hook: string; body: string; cta: string }; error?: string }) => {
+        if (data.script) {
+          setGuide((prev) => (prev ? { ...prev, script: data.script! } : null));
+          const url = new URL(window.location.href);
+          url.searchParams.delete("regenerate");
+          window.history.replaceState({}, "", url.pathname + (url.search || ""));
+        }
+      })
+      .catch(() => {});
+  }, [libraryScriptId, guide, searchParams]);
 
   useEffect(() => {
     // 1) Load from library if libraryScriptId is in URL (saved video guide from My Library)
@@ -103,5 +129,15 @@ export default function VideoGuidePage() {
     );
   }
 
-  return <VideoCreationGuide guide={guide} scriptTitle={scriptTitle || undefined} preferredVoiceId={preferredVoiceId} scripts={scriptsForGuide} productId={productIdForGuide} />;
+  return (
+    <VideoCreationGuide
+      guide={guide}
+      scriptTitle={scriptTitle || undefined}
+      preferredVoiceId={preferredVoiceId}
+      scripts={scriptsForGuide}
+      productId={productIdForGuide}
+      libraryScriptId={libraryScriptId ?? undefined}
+      onScriptRegenerated={handleScriptRegenerated}
+    />
+  );
 }

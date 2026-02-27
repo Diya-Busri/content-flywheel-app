@@ -11,6 +11,7 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { scriptsTable } from "@/db/schema/library-schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { cleanProductTitle } from "@/lib/product-title";
 import { getVideoLengthOptionOrDefault } from "@/lib/video-length-options";
 
 const EDITING_STEPS: Record<string, string[]> = {
@@ -304,7 +305,7 @@ export async function POST(request: NextRequest) {
 
     const selectedPlatforms = Array.isArray(platformsReq) && platformsReq.length > 0 ? platformsReq : ["tiktok"];
 
-    let productNameRes = productName || "Your product";
+    let productNameRes = cleanProductTitle(productName) || productName || "Your product";
     let productDesc = productDescription || "";
     let stockImages: string[] = Array.isArray(stockImageUrls) ? stockImageUrls : [];
 
@@ -320,8 +321,11 @@ export async function POST(request: NextRequest) {
           )
         );
       if (product) {
-        productNameRes = product.name || productNameRes;
-        productDesc = (product.description as string) || productDesc;
+        const marketing = (product.marketingAssets ?? {}) as { productTitle?: string };
+        const rawTitle = (marketing.productTitle ?? product.title ?? "").trim();
+        productNameRes = cleanProductTitle(rawTitle) || rawTitle || productNameRes;
+        const maDesc = (product.marketingAssets as { productDescription?: string } | null)?.productDescription;
+        if (typeof maDesc === "string" && maDesc.trim()) productDesc = maDesc;
         const ma = product.marketingAssets as { thumbnailUrl?: string; galleryUrls?: string[] } | null;
         if (ma?.thumbnailUrl) stockImages = [ma.thumbnailUrl];
         if (Array.isArray(ma?.galleryUrls)) stockImages = [...stockImages, ...ma.galleryUrls];

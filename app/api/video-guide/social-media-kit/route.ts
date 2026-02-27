@@ -6,6 +6,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { cleanProductTitle } from "@/lib/product-title";
 
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
 const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/quicktime"]; // .mov
@@ -77,7 +78,8 @@ export async function POST(request: NextRequest) {
     const scriptHook = (formData.get("scriptHook") as string) ?? "";
     const scriptBody = (formData.get("scriptBody") as string) ?? "";
     const scriptCta = (formData.get("scriptCta") as string) ?? "";
-    const productName = (formData.get("productName") as string) ?? "Your product";
+    const rawProductName = (formData.get("productName") as string) ?? "Your product";
+    const productName = cleanProductTitle(rawProductName) || rawProductName || "Your product";
     const productDescription = (formData.get("productDescription") as string) ?? "";
 
     const apiKey = process.env.OPENAI_API_KEY?.trim();

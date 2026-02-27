@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/components/ui/use-toast";
 import {
   ArrowLeft,
@@ -37,7 +38,10 @@ import {
   RefreshCw,
   Video,
   ExternalLink,
+  Trash2,
+  Pause,
 } from "lucide-react";
+import { cleanProductTitle, replaceProductTitleInText } from "@/lib/product-title";
 
 /** Social Media Kit shape (matches API response). */
 export type SocialMediaKit = {
@@ -69,30 +73,43 @@ export type SocialMediaKit = {
 
 const SOCIAL_KIT_STORAGE_KEY = "videoCreationGuideSocialKit";
 
-type PromptPlatform = "midjourney" | "chatgpt" | "grok";
+type PromptPlatform = "midjourney" | "grok" | "chatgpt" | "kling" | "runway" | "pika";
 
-function formatPromptForPlatform(
-  rawPrompt: string,
-  platform: PromptPlatform,
-  characterRefUrl: string | null
+/**
+ * Returns the prompt formatted for the selected AI tool. Used by Copy AI Prompt so the
+ * dropdown selection actually changes what gets copied.
+ */
+function getFormattedPrompt(
+  basePrompt: string,
+  tool: PromptPlatform,
+  sceneDuration: number,
+  camera: string
 ): string {
-  const hasRef = !!characterRefUrl?.trim();
-  switch (platform) {
+  const base = basePrompt.trim();
+  const durationSec = Math.max(1, Math.round(sceneDuration));
+  const cameraVal = camera.trim() || "medium shot";
+
+  switch (tool) {
     case "midjourney":
-      const mjSuffix = hasRef
-        ? ` --cref ${characterRefUrl!.trim()} --cw 100 --ar 9:16`
-        : " --ar 9:16";
-      return rawPrompt.trim() + mjSuffix;
-    case "chatgpt":
-      return hasRef
-        ? `Using the same character from my reference image: ${rawPrompt.trim()}`
-        : rawPrompt.trim();
+      return `${base} --ar 9:16 --v 6 --style raw --q 2`;
+
     case "grok":
-      return hasRef
-        ? `Keep the exact same character as the reference: ${rawPrompt.trim()}`
-        : rawPrompt.trim();
+      return `${base}\n\nAspect ratio: 9:16\nStyle: photorealistic\nQuality: ultra detailed`;
+
+    case "chatgpt":
+      return `Generate a photorealistic vertical image (9:16 aspect ratio): ${base}`;
+
+    case "kling":
+      return `${base}\n\nFormat: vertical 9:16\nDuration: ${durationSec} seconds\nMotion: subtle slow push in\nCamera: ${cameraVal}`;
+
+    case "runway":
+      return `${base}\nMotion amount: low\nCamera movement: ${cameraVal} slow\nDuration: ${durationSec} seconds\nAspect ratio: 9:16`;
+
+    case "pika":
+      return `${base} | camera: ${cameraVal} | motion: 1 | aspect ratio: 9:16 | duration: ${durationSec}s`;
+
     default:
-      return rawPrompt.trim();
+      return base;
   }
 }
 
@@ -112,6 +129,47 @@ function AudioWithSpeed({ src, speed, className, ...props }: { src: string; spee
     [speed]
   );
   return <audio ref={ref} src={src} className={className} {...props} />;
+}
+
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/** Parse scene timing string to start/end seconds. Supports "0-2s", "2-5s" and "0:00-0:02" style. */
+function parseSceneTiming(t: string): { startSec: number; endSec: number } {
+  const s = String(t).trim();
+  const simple = s.match(/^(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)\s*s?$/i);
+  if (simple) return { startSec: parseFloat(simple[1]), endSec: parseFloat(simple[2]) };
+  const colon = s.match(/^(\d+):(\d{2}(?:\.\d+)?)\s*[-–]\s*(\d+):(\d{2}(?:\.\d+)?)\s*$/);
+  if (colon) {
+    const startSec = parseInt(colon[1], 10) * 60 + parseFloat(colon[2]);
+    const endSec = parseInt(colon[3], 10) * 60 + parseFloat(colon[4]);
+    return { startSec, endSec };
+  }
+  return { startSec: 0, endSec: 0 };
+}
+
+/** Returns duration in seconds when the audio at src has loaded metadata. */
+function useAudioDuration(src: string | null): number | null {
+  const [duration, setDuration] = useState<number | null>(null);
+  useEffect(() => {
+    if (!src) {
+      setDuration(null);
+      return;
+    }
+    const audio = new Audio(src);
+    const onLoaded = () => setDuration(audio.duration);
+    audio.addEventListener("loadedmetadata", onLoaded);
+    if (audio.readyState >= 1) onLoaded();
+    return () => {
+      audio.removeEventListener("loadedmetadata", onLoaded);
+      audio.src = "";
+    };
+  }, [src]);
+  return duration;
 }
 
 type TextOverlayObj = { exactText?: string; fontStyle?: string; size?: string; position?: string; color?: string; animation?: string; timingNote?: string };
@@ -137,6 +195,10 @@ export type VideoGuideData = {
   musicRecs?: { mood?: string; sources?: string[]; volume?: string };
   exportSettings?: { resolution?: string; fps?: number; format?: string; fileSize?: string };
   platformTips?: string[];
+  /** Single full-script voiceover URL (saved to Supabase). */
+  timelineVoiceoverUrl?: string;
+  /** Per-scene voiceover URLs (saved to Supabase), ordered by scene index. */
+  timelineSceneVoiceoverUrls?: string[];
 };
 
 export type ScriptForGuide = { id: string; title: string; length: number; hook: string; body: string; cta: string };
@@ -150,13 +212,18 @@ type Props = {
   scripts?: ScriptForGuide[];
   /** Product ID for Regenerate Script API. */
   productId?: string;
+  /** Library script id when guide was loaded from My Library; passed to timeline so captions can auto-populate. */
+  libraryScriptId?: string;
+  /** Called after full script is regenerated so parent can update guide.script and refresh. */
+  onScriptRegenerated?: (script: { hook: string; body: string; cta: string }) => void;
 };
 
-export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceId, scripts: scriptsProp, productId }: Props) {
+export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceId, scripts: scriptsProp, productId, libraryScriptId, onScriptRegenerated }: Props) {
   const { toast } = useToast();
   const [scripts, setScripts] = useState<ScriptForGuide[]>(() => (Array.isArray(scriptsProp) && scriptsProp.length > 0 ? scriptsProp : []));
   const [currentScriptIndex, setCurrentScriptIndex] = useState(0);
   const [regeneratingScript, setRegeneratingScript] = useState(false);
+  const [regeneratingFullScript, setRegeneratingFullScript] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [voiceId, setVoiceId] = useState<string>(() =>
     preferredVoiceId && preferredVoiceId.trim()
@@ -177,22 +244,38 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const effectiveScript = scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length
     ? { hook: scripts[currentScriptIndex].hook, body: scripts[currentScriptIndex].body, cta: scripts[currentScriptIndex].cta }
     : guide.script;
+  const rawProductTitle = guide.productName;
+  const displayScript = {
+    hook: replaceProductTitleInText(effectiveScript.hook, rawProductTitle),
+    body: replaceProductTitleInText(effectiveScript.body, rawProductTitle),
+    cta: replaceProductTitleInText(effectiveScript.cta, rawProductTitle),
+  };
   const effectiveScriptTitle = scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length
     ? scripts[currentScriptIndex].title
     : scriptTitle;
   const [stability, setStability] = useState(0.5);
   const [similarity, setSimilarity] = useState(0.75);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [voiceoverMode, setVoiceoverMode] = useState<"full" | "scene">("full");
-  const [fullVoiceoverUrl, setFullVoiceoverUrl] = useState<string | null>(null);
-  const [perSceneUrls, setPerSceneUrls] = useState<(string | null)[]>([]);
+  const [fullVoiceoverUrl, setFullVoiceoverUrl] = useState<string | null>(() => guide.timelineVoiceoverUrl?.trim() || null);
+  const [perSceneUrls, setPerSceneUrls] = useState<(string | null)[]>(() => {
+    const urls = guide.timelineSceneVoiceoverUrls;
+    if (!Array.isArray(urls) || urls.length === 0) return [];
+    return urls.map((u) => (typeof u === "string" && u.trim() ? u.trim() : null));
+  });
+  const [fullVoiceoverDuration, setFullVoiceoverDuration] = useState<number | null>(null);
+  const [perSceneDurations, setPerSceneDurations] = useState<number[]>([]);
   const [generatingFull, setGeneratingFull] = useState(false);
   const [generatingPerScene, setGeneratingPerScene] = useState(false);
   const [generatingSceneIndex, setGeneratingSceneIndex] = useState<number | null>(null);
+  /** URL of the audio currently playing for inline preview (full or scene). */
+  const [playingPreviewUrl, setPlayingPreviewUrl] = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
   const [characterRefPreviewUrl, setCharacterRefPreviewUrl] = useState<string | null>(null);
   const [characterRefPublicUrl, setCharacterRefPublicUrl] = useState<string | null>(null);
   const [copyFormatByScene, setCopyFormatByScene] = useState<Record<number, PromptPlatform>>({});
+  /** Per-scene: "still" = Still Image, "video" = Video Clip (adds motion instructions). */
+  const [mediaTypeByScene, setMediaTypeByScene] = useState<Record<number, "still" | "video">>({});
   const [activeTab, setActiveTab] = useState("scenes");
   const [socialKitProofFile, setSocialKitProofFile] = useState<File | null>(null);
   const [socialKit, setSocialKit] = useState<SocialMediaKit | null>(() => {
@@ -212,6 +295,61 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     if (typeof window === "undefined") return;
     setDefaultVoiceId(voiceId);
   }, [voiceId]);
+
+  useEffect(() => {
+    if (!fullVoiceoverUrl) {
+      setFullVoiceoverDuration(null);
+      return;
+    }
+    const audio = new Audio(fullVoiceoverUrl);
+    const onLoaded = () => setFullVoiceoverDuration(audio.duration);
+    audio.addEventListener("loadedmetadata", onLoaded);
+    audio.load();
+    return () => {
+      audio.removeEventListener("loadedmetadata", onLoaded);
+      audio.src = "";
+    };
+  }, [fullVoiceoverUrl]);
+
+  useEffect(() => {
+    if (perSceneUrls.length === 0) {
+      setPerSceneDurations([]);
+      return;
+    }
+    const durations: number[] = [];
+    let cancelled = false;
+    perSceneUrls.forEach((url, i) => {
+      if (!url) {
+        durations[i] = 0;
+        return;
+      }
+      const audio = new Audio(url);
+      audio.addEventListener("loadedmetadata", () => {
+        if (!cancelled) {
+          setPerSceneDurations((prev) => {
+            const next = [...prev];
+            next[i] = audio.duration;
+            return next;
+          });
+        }
+      });
+      audio.load();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [perSceneUrls.length, perSceneUrls.join(",")]);
+
+  // Sync voiceover state from guide when loaded from server (e.g. page reload) so saved voiceovers show
+  useEffect(() => {
+    const url = guide.timelineVoiceoverUrl?.trim() || null;
+    setFullVoiceoverUrl((prev) => (url ? (prev !== url ? url : prev) : (prev && !guide.timelineVoiceoverUrl?.trim() ? null : prev)));
+    const urls = guide.timelineSceneVoiceoverUrls;
+    if (Array.isArray(urls)) {
+      const next = urls.map((u) => (typeof u === "string" && u.trim() ? u.trim() : null));
+      setPerSceneUrls((prev) => (prev.length !== next.length || prev.some((u, i) => u !== next[i]) ? next : prev));
+    }
+  }, [guide.timelineVoiceoverUrl, guide.timelineSceneVoiceoverUrls]);
 
   const script = effectiveScript;
   const scenes = guide.scenes ?? guide.scenePrompts.map((s, i) => ({
@@ -249,13 +387,16 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   }, [scenes, getSceneFullPrompt, copyToClipboard]);
 
   const copyAllPromptsMidjourney = useCallback(() => {
-    const refUrl = characterRefPublicUrl?.trim() || null;
     const lines = scenes.map((s, i) => {
       const raw = getSceneFullPrompt(s);
-      return formatPromptForPlatform(raw, "midjourney", refUrl);
+      const t = parseSceneTiming(s.timing ?? "0-0");
+      const sceneDuration = Math.max(0, t.endSec - t.startSec) || 3;
+      const vd = (s as { visualDirection?: { cameraAngle?: string } }).visualDirection;
+      const camera = vd?.cameraAngle?.trim() || "medium shot";
+      return getFormattedPrompt(raw, "midjourney", sceneDuration, camera);
     });
     copyToClipboard(lines.join("\n\n---\n\n"), "All prompts (Midjourney)");
-  }, [scenes, getSceneFullPrompt, characterRefPublicUrl, copyToClipboard]);
+  }, [scenes, getSceneFullPrompt, copyToClipboard]);
 
   const handleCharacterRefFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -271,6 +412,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const getCopyFormat = (sceneIndex: number): PromptPlatform =>
     copyFormatByScene[sceneIndex] ?? "midjourney";
 
+  const getMediaType = (sceneIndex: number): "still" | "video" =>
+    mediaTypeByScene[sceneIndex] ?? "still";
+
   const handleSocialKitUploadProof = useCallback(async () => {
     if (!socialKitProofFile) {
       toast({ title: "Select a file", description: "Upload a screenshot or video preview.", variant: "destructive" });
@@ -285,9 +429,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     try {
       const form = new FormData();
       form.append("file", socialKitProofFile);
-      form.append("scriptHook", script.hook);
-      form.append("scriptBody", script.body);
-      form.append("scriptCta", script.cta);
+      form.append("scriptHook", displayScript.hook);
+      form.append("scriptBody", displayScript.body);
+      form.append("scriptCta", displayScript.cta);
       form.append("productName", guide.productName ?? "Your product");
       form.append("productDescription", (guide as { productDescription?: string }).productDescription ?? "");
       const res = await fetch("/api/video-guide/social-media-kit", { method: "POST", body: form });
@@ -339,28 +483,102 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   }, []);
 
   const copyFullScript = useCallback(() => {
-    const text = `Hook:\n${script.hook}\n\nBody:\n${script.body}\n\nCTA:\n${script.cta}`;
+    const text = `Hook:\n${displayScript.hook}\n\nBody:\n${displayScript.body}\n\nCTA:\n${displayScript.cta}`;
     copyToClipboard(text, "Full script");
-  }, [script, copyToClipboard]);
+  }, [displayScript, copyToClipboard]);
 
-  const fullScriptText = `${script.hook}\n\n${script.body}\n\n${script.cta}`;
+  const handleRegenerateFullScript = useCallback(
+    async (lengthAdjustment?: "shorter" | "longer") => {
+      if (!libraryScriptId) return;
+      setRegeneratingFullScript(true);
+      try {
+        const res = await fetch("/api/video-guide/regenerate-full-script", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ libraryScriptId, ...(lengthAdjustment && { lengthAdjustment }) }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to regenerate script");
+        const script = (data as { script?: { hook: string; body: string; cta: string } }).script;
+        if (script) {
+          onScriptRegenerated?.(script);
+          if (scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length) {
+            setScripts((prev) =>
+              prev.map((s, i) => (i === currentScriptIndex ? { ...s, hook: script.hook, body: script.body, cta: script.cta } : s))
+            );
+          }
+          const msg = lengthAdjustment === "shorter" ? "Script shortened." : lengthAdjustment === "longer" ? "Script expanded." : "Hook, body and CTA updated.";
+          toast({ title: "Script regenerated", description: msg });
+        }
+      } catch (e) {
+        toast({ title: "Regenerate failed", description: e instanceof Error ? e.message : "Try again", variant: "destructive" });
+      } finally {
+        setRegeneratingFullScript(false);
+      }
+    },
+    [libraryScriptId, onScriptRegenerated, scripts.length, currentScriptIndex, toast]
+  );
 
-  /** Full script text split by scene for voiceover. Uses full hook/body/cta (no truncation). */
+  const fullScriptText = `${displayScript.hook}\n\n${displayScript.body}\n\n${displayScript.cta}`;
+  const scriptStats = useMemo(() => {
+    const text = fullScriptText.trim();
+    const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+    const characters = text.length;
+    const estimatedSeconds = Math.round(words / 2.5);
+    return { words, characters, estimatedSeconds };
+  }, [fullScriptText]);
+
+  /**
+   * Split full script across ALL scenes proportionally by scene duration (word count ∝ time).
+   * wordsPerSecond = totalWords / totalDuration; each scene gets wordsPerSecond × sceneDuration words.
+   * Returns exactly scenes.length chunks so there are exactly 5 voiceover clips for 5 scenes.
+   */
   const getSceneTexts = useCallback((): string[] => {
     const n = scenes.length;
     if (n === 0) return [];
-    if (n === 1) return [fullScriptText];
-    if (n === 2) return [script.hook, script.cta];
-    const parts: string[] = [script.hook];
-    const numBodyScenes = n - 2;
-    const bodyParas = script.body.split(/\n\n+/).filter(Boolean);
-    const chunkSize = Math.max(1, Math.ceil((bodyParas.length || 1) / numBodyScenes));
-    for (let i = 0; i < numBodyScenes; i++) {
-      parts.push(bodyParas.slice(i * chunkSize, (i + 1) * chunkSize).join("\n\n") || script.body);
+    const fullText = fullScriptText.trim();
+    const words = fullText ? fullText.split(/\s+/).filter(Boolean) : [];
+    if (words.length === 0) return Array(n).fill("");
+
+    const timings = scenes.map((s) => parseSceneTiming(s.timing ?? "0-0"));
+    const totalDuration = timings.reduce((sum, t) => sum + Math.max(0, t.endSec - t.startSec), 0);
+
+    if (totalDuration <= 0) {
+      const equalCount = Math.max(1, Math.floor(words.length / n));
+      const chunks: string[] = [];
+      let offset = 0;
+      for (let i = 0; i < n; i++) {
+        const isLast = i === n - 1;
+        const count = isLast ? words.length - offset : Math.min(equalCount, words.length - offset);
+        chunks.push(words.slice(offset, offset + count).join(" ").trim());
+        offset += count;
+      }
+      return chunks;
     }
-    parts.push(script.cta);
-    return parts;
-  }, [scenes, script, fullScriptText]);
+
+    const wordsPerSecond = words.length / totalDuration;
+    const chunks: string[] = [];
+    let wordOffset = 0;
+
+    for (let i = 0; i < n; i++) {
+      const { startSec, endSec } = timings[i];
+      const sceneDuration = Math.max(0, endSec - startSec);
+      const wordCount = Math.max(0, Math.round(wordsPerSecond * sceneDuration));
+      const isLast = i === n - 1;
+      const take = isLast ? Math.max(wordCount, words.length - wordOffset) : wordCount;
+      const chunk = words.slice(wordOffset, wordOffset + take).join(" ").trim();
+      wordOffset += take;
+      chunks.push(chunk);
+    }
+
+    if (wordOffset < words.length && chunks.length > 0) {
+      const lastChunk = chunks[chunks.length - 1];
+      const remainder = words.slice(wordOffset).join(" ").trim();
+      chunks[chunks.length - 1] = lastChunk ? `${lastChunk} ${remainder}`.trim() : remainder;
+    }
+
+    return chunks;
+  }, [scenes, fullScriptText]);
 
   const generateVoiceover = useCallback(
     async (text: string, options?: { voiceIdOverride?: string }): Promise<Blob> => {
@@ -407,9 +625,28 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     setFullVoiceoverUrl(null);
     try {
       const blob = await generateVoiceover(fullScriptText);
-      const url = URL.createObjectURL(blob);
-      setFullVoiceoverUrl(url);
-      toast({ title: "Voiceover ready", description: "Full script audio generated." });
+      let finalUrl: string;
+      if (libraryScriptId) {
+        const form = new FormData();
+        form.set("file", new File([blob], "voiceover.mp3", { type: "audio/mpeg" }));
+        form.set("libraryScriptId", libraryScriptId);
+        const upRes = await fetch("/api/video-timeline/upload-voiceover", { method: "POST", body: form });
+        if (!upRes.ok) {
+          const err = await upRes.json().catch(() => ({}));
+          throw new Error((err as { error?: string }).error || "Upload failed");
+        }
+        const { url } = (await upRes.json()) as { url: string };
+        finalUrl = url;
+        await fetch(`/api/library/scripts/${libraryScriptId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timelineVoiceoverUrl: finalUrl }),
+        });
+      } else {
+        finalUrl = URL.createObjectURL(blob);
+      }
+      setFullVoiceoverUrl(finalUrl);
+      toast({ title: "Voiceover ready", description: "Full script audio generated and saved." });
     } catch (e) {
       toast({
         title: "Voiceover failed",
@@ -419,7 +656,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     } finally {
       setGeneratingFull(false);
     }
-  }, [fullScriptText, generateVoiceover, toast, fullVoiceoverUrl]);
+  }, [fullScriptText, generateVoiceover, toast, fullVoiceoverUrl, libraryScriptId]);
 
   const handleGeneratePerSceneVoiceover = useCallback(async () => {
     const texts = getSceneTexts();
@@ -429,7 +666,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     }
     setGeneratingPerScene(true);
     setPerSceneUrls((prev) => {
-      prev.forEach((u) => u && URL.revokeObjectURL(u));
+      prev.forEach((u) => u && typeof u === "string" && u.startsWith("blob:") && URL.revokeObjectURL(u));
       return texts.map(() => null);
     });
     try {
@@ -438,14 +675,36 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         setGeneratingSceneIndex(i);
         try {
           const blob = await generateVoiceover(texts[i]);
-          urls.push(URL.createObjectURL(blob));
+          if (libraryScriptId) {
+            const form = new FormData();
+            form.set("file", new File([blob], `voiceover-scene-${i + 1}.mp3`, { type: "audio/mpeg" }));
+            form.set("libraryScriptId", libraryScriptId);
+            form.set("sceneIndex", String(i));
+            const upRes = await fetch("/api/video-timeline/upload-voiceover", { method: "POST", body: form });
+            if (!upRes.ok) {
+              const err = await upRes.json().catch(() => ({}));
+              throw new Error((err as { error?: string }).error || "Upload failed");
+            }
+            const { url } = (await upRes.json()) as { url: string };
+            urls.push(url);
+          } else {
+            urls.push(URL.createObjectURL(blob));
+          }
         } catch {
           urls.push(null);
         }
       }
       setPerSceneUrls(urls);
+      if (libraryScriptId && urls.some(Boolean)) {
+        const toSave = urls.map((u) => u ?? "");
+        await fetch(`/api/library/scripts/${libraryScriptId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timelineSceneVoiceoverUrls: toSave }),
+        });
+      }
       const ok = urls.filter(Boolean).length;
-      toast({ title: "Scene voiceovers ready", description: `${ok} of ${texts.length} clips generated.` });
+      toast({ title: "Scene voiceovers ready", description: `${ok} of ${texts.length} clips generated and saved.` });
     } catch (e) {
       toast({
         title: "Voiceover failed",
@@ -456,7 +715,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       setGeneratingPerScene(false);
       setGeneratingSceneIndex(null);
     }
-  }, [getSceneTexts, generateVoiceover, toast]);
+  }, [getSceneTexts, generateVoiceover, toast, libraryScriptId]);
 
   const handleGenerateSingleSceneVoiceover = useCallback(
     async (index: number) => {
@@ -468,12 +727,36 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       setGeneratingSceneIndex(index);
       try {
         const blob = await generateVoiceover(texts[index]);
-        const url = URL.createObjectURL(blob);
+        let finalUrl: string;
+        if (libraryScriptId) {
+          const form = new FormData();
+          form.set("file", new File([blob], `voiceover-scene-${index + 1}.mp3`, { type: "audio/mpeg" }));
+          form.set("libraryScriptId", libraryScriptId);
+          form.set("sceneIndex", String(index));
+          const upRes = await fetch("/api/video-timeline/upload-voiceover", { method: "POST", body: form });
+          if (!upRes.ok) {
+            const err = await upRes.json().catch(() => ({}));
+            throw new Error((err as { error?: string }).error || "Upload failed");
+          }
+          const { url } = (await upRes.json()) as { url: string };
+          finalUrl = url;
+        } else {
+          finalUrl = URL.createObjectURL(blob);
+        }
         setPerSceneUrls((prev) => {
           const next = [...prev];
           while (next.length <= index) next.push(null);
-          if (next[index]) URL.revokeObjectURL(next[index]);
-          next[index] = url;
+          const old = next[index];
+          if (old && typeof old === "string" && old.startsWith("blob:")) URL.revokeObjectURL(old);
+          next[index] = finalUrl;
+          if (libraryScriptId) {
+            const urlsForPatch = next.map((u) => u ?? "");
+            fetch(`/api/library/scripts/${libraryScriptId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ timelineSceneVoiceoverUrls: urlsForPatch }),
+            }).catch(() => {});
+          }
           return next;
         });
         toast({ title: "Voiceover ready", description: `Scene ${index + 1} audio generated.` });
@@ -487,30 +770,74 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         setGeneratingSceneIndex(null);
       }
     },
-    [getSceneTexts, generateVoiceover, toast]
+    [getSceneTexts, generateVoiceover, toast, libraryScriptId]
   );
 
-  const handleRegenerateVoiceover = useCallback(() => {
-    if (fullVoiceoverUrl) URL.revokeObjectURL(fullVoiceoverUrl);
-    setFullVoiceoverUrl(null);
-    perSceneUrls.forEach((u) => u && URL.revokeObjectURL(u));
-    setPerSceneUrls([]);
-    if (voiceoverMode === "full") {
-      handleGenerateFullVoiceover();
-    } else {
-      handleGeneratePerSceneVoiceover();
+  const handlePlayPreview = useCallback((url: string) => {
+    const el = previewAudioRef.current;
+    if (playingPreviewUrl === url && el) {
+      el.pause();
+      el.currentTime = 0;
+      setPlayingPreviewUrl(null);
+      return;
     }
-  }, [voiceoverMode, fullVoiceoverUrl, perSceneUrls, handleGenerateFullVoiceover, handleGeneratePerSceneVoiceover]);
+    if (!el) return;
+    el.src = url;
+    setPlayingPreviewUrl(url);
+    el.play().catch(() => setPlayingPreviewUrl(null));
+  }, [playingPreviewUrl]);
+
+  useEffect(() => {
+    const el = previewAudioRef.current;
+    if (!el) return;
+    const onEnded = () => setPlayingPreviewUrl(null);
+    el.addEventListener("ended", onEnded);
+    return () => el.removeEventListener("ended", onEnded);
+  }, []);
+
+  const handleDeleteFullVoiceover = useCallback(async () => {
+    if (libraryScriptId) {
+      await fetch(`/api/library/scripts/${libraryScriptId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timelineVoiceoverUrl: "" }),
+      }).catch(() => {});
+    }
+    if (fullVoiceoverUrl?.startsWith("blob:")) URL.revokeObjectURL(fullVoiceoverUrl);
+    setFullVoiceoverUrl(null);
+    if (playingPreviewUrl === fullVoiceoverUrl) setPlayingPreviewUrl(null);
+    toast({ title: "Voiceover removed" });
+  }, [libraryScriptId, fullVoiceoverUrl, playingPreviewUrl, toast]);
+
+  const handleDeleteSceneVoiceover = useCallback(
+    async (index: number) => {
+      const url = perSceneUrls[index];
+      if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+      const next = perSceneUrls.map((u, i) => (i === index ? null : u));
+      setPerSceneUrls(next);
+      if (playingPreviewUrl === url) setPlayingPreviewUrl(null);
+      if (libraryScriptId) {
+        const toSave = next.map((u) => u ?? "");
+        await fetch(`/api/library/scripts/${libraryScriptId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timelineSceneVoiceoverUrls: toSave }),
+        }).catch(() => {});
+      }
+      toast({ title: "Scene voiceover removed" });
+    },
+    [libraryScriptId, perSceneUrls, playingPreviewUrl, toast]
+  );
 
   const downloadGuide = useCallback(() => {
     const lines: string[] = [];
     lines.push("VIDEO CREATION GUIDE");
-    if (guide.productName) lines.push(`Product: ${guide.productName}`);
+    if (guide.productName) lines.push(`Product: ${cleanProductTitle(guide.productName) || guide.productName}`);
     lines.push("");
     lines.push("SCRIPT");
-    lines.push(`Hook: ${script.hook}`);
-    lines.push(`Body: ${script.body}`);
-    lines.push(`CTA: ${script.cta}`);
+    lines.push(`Hook: ${displayScript.hook}`);
+    lines.push(`Body: ${displayScript.body}`);
+    lines.push(`CTA: ${displayScript.cta}`);
     lines.push("");
     lines.push("SCENE BREAKDOWN");
     scenes.forEach((s, i) => {
@@ -560,7 +887,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `video-guide-${(effectiveScriptTitle ?? guide.productName ?? "guide").replace(/\s+/g, "-")}.txt`;
+    a.download = `video-guide-${(effectiveScriptTitle ?? cleanProductTitle(guide.productName) ?? guide.productName ?? "guide").replace(/\s+/g, "-")}.txt`;
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: "Downloaded", description: "Full guide saved" });
@@ -676,7 +1003,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               {guide.productName && (
                 <>
                   {" "}
-                  <span className="text-gray-900 dark:text-white font-medium">{guide.productName}</span>
+                  <span className="text-gray-900 dark:text-white font-medium">{cleanProductTitle(guide.productName) || guide.productName}</span>
                 </>
               )}
             </p>
@@ -711,7 +1038,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           </div>
         </div>
 
-        <Card className="mb-8 border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+        <Card className="mb-8 border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A] overflow-visible">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center justify-between gap-2 flex-wrap">
               <span className="flex items-center gap-2">
@@ -719,6 +1046,44 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 Full Script
               </span>
               <div className="flex flex-wrap items-center gap-2">
+                {libraryScriptId && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                      onClick={() => handleRegenerateFullScript()}
+                      disabled={regeneratingFullScript}
+                    >
+                      {regeneratingFullScript ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                      ) : (
+                        <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                      )}
+                      Regenerate Full Script
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                      onClick={() => handleRegenerateFullScript("shorter")}
+                      disabled={regeneratingFullScript}
+                      title="Cut script by ~30%; keep hook and CTA intact"
+                    >
+                      Shorter
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                      onClick={() => handleRegenerateFullScript("longer")}
+                      disabled={regeneratingFullScript}
+                      title="Expand body by ~30%; more pain agitation or social proof"
+                    >
+                      Longer
+                    </Button>
+                  </>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -737,6 +1102,20 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   variant="outline"
                   size="sm"
                   className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                  onClick={handleGeneratePerSceneVoiceover}
+                  disabled={generatingPerScene || getSceneTexts().length === 0}
+                >
+                  {generatingPerScene ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <Mic className="w-3.5 h-3.5 mr-1.5" />
+                  )}
+                  Generate Scene Voiceovers
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
                   onClick={copyFullScript}
                 >
                   <Copy className="w-3.5 h-3.5 mr-1.5" />
@@ -745,28 +1124,122 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               </div>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm text-gray-600 dark:text-[#B0B0B0] whitespace-pre-line">
-            <div>
+          <CardContent className="space-y-4 text-sm text-gray-600 dark:text-[#B0B0B0] whitespace-pre-line overflow-visible">
+            <div className="min-w-0">
               <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Hook</p>
-              <p className="text-gray-900 dark:text-white">{script.hook}</p>
+              <p className="text-gray-900 dark:text-white break-words">{displayScript.hook}</p>
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Body</p>
-              <p className="text-gray-900 dark:text-white">{script.body}</p>
+              <p className="text-gray-900 dark:text-white break-words">{displayScript.body}</p>
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">CTA</p>
-              <p className="text-gray-900 dark:text-white">{script.cta}</p>
+              <p className="text-gray-900 dark:text-white break-words">{displayScript.cta}</p>
             </div>
+            <div className="pt-2 border-t border-gray-200 dark:border-[#2A2A2A] text-xs text-gray-500 dark:text-[#A0A0A0]">
+              {scriptStats.words > 0 ? `~${scriptStats.estimatedSeconds} ${scriptStats.estimatedSeconds === 1 ? "second" : "seconds"} at normal pace` : "—"} · {scriptStats.characters} characters · {scriptStats.words} words
+            </div>
+
+            {/* Inline preview audio (hidden) for Play button */}
+            <audio ref={previewAudioRef} className="sr-only" preload="metadata" />
+
+            {/* Full Voiceover — visible immediately after generation or when loaded from Supabase */}
             {fullVoiceoverUrl && (
-              <div className="pt-2 border-t border-gray-200 dark:border-[#2A2A2A]">
-                <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Generated voiceover</p>
+              <div className="pt-4 border-t border-gray-200 dark:border-[#2A2A2A]">
+                <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <Mic className="w-3.5 h-3.5" />
+                  Full Voiceover
+                </p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <AudioWithSpeed src={fullVoiceoverUrl} speed={playbackSpeed} controls className="max-w-full h-9 flex-1 min-w-0" />
-                  <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0" asChild>
-                    <a href={fullVoiceoverUrl} download="voiceover-full.mp3">Download</a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1.5"
+                    onClick={() => handlePlayPreview(fullVoiceoverUrl)}
+                  >
+                    {playingPreviewUrl === fullVoiceoverUrl ? (
+                      <Pause className="w-3.5 h-3.5" />
+                    ) : (
+                      <Play className="w-3.5 h-3.5" />
+                    )}
+                    {playingPreviewUrl === fullVoiceoverUrl ? "Stop" : "Play"}
+                  </Button>
+                  <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1.5" asChild>
+                    <a href={fullVoiceoverUrl} download="voiceover-full.mp3">
+                      <Download className="w-3.5 h-3.5" />
+                      Download
+                    </a>
+                  </Button>
+                  {fullVoiceoverDuration != null && !Number.isNaN(fullVoiceoverDuration) && (
+                    <span className="text-sm text-gray-600 dark:text-[#A0A0A0] shrink-0">
+                      {formatDuration(fullVoiceoverDuration)}
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-500 dark:text-[#6A6A6A] shrink-0">Generated just now</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={handleDeleteFullVoiceover}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {/* Scene Voiceovers — list with Play, Download, duration, Delete per scene */}
+            {perSceneUrls.some(Boolean) && (
+              <div className="pt-4 border-t border-gray-200 dark:border-[#2A2A2A]">
+                <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <Mic className="w-3.5 h-3.5" />
+                  Scene Voiceovers
+                </p>
+                <ul className="space-y-2">
+                  {perSceneUrls.map((url, i) => {
+                    if (!url) return null;
+                    const duration = perSceneDurations[i];
+                    return (
+                      <li
+                        key={i}
+                        className="flex flex-wrap items-center gap-2 py-2 px-3 rounded-lg bg-gray-100 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#2A2A2A]"
+                      >
+                        <span className="text-sm font-medium text-gray-900 dark:text-white min-w-[120px]">
+                          Scene {i + 1} Voiceover
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1"
+                          onClick={() => handlePlayPreview(url)}
+                        >
+                          {playingPreviewUrl === url ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                          {playingPreviewUrl === url ? "Stop" : "Play"}
+                        </Button>
+                        <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1" asChild>
+                          <a href={url} download={`voiceover-scene-${i + 1}.mp3`}>
+                            <Download className="w-3.5 h-3.5" />
+                            Download
+                          </a>
+                        </Button>
+                        {duration != null && !Number.isNaN(duration) && (
+                          <span className="text-sm text-gray-600 dark:text-[#A0A0A0] shrink-0">{formatDuration(duration)}</span>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1 text-destructive hover:text-destructive hover:bg-destructive/10 ml-auto"
+                          onClick={() => handleDeleteSceneVoiceover(i)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Delete
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             )}
           </CardContent>
@@ -898,37 +1371,73 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                       <span>Scene {i + 1} · {scene.timing}</span>
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
                         <Select
+                          key={`ai-tool-scene-${i}`}
                           value={getCopyFormat(i)}
-                          onValueChange={(v) => setCopyFormatByScene((prev) => ({ ...prev, [i]: v as PromptPlatform }))}
+                          onValueChange={(v) => {
+                            const tool = (v as PromptPlatform) || "midjourney";
+                            setCopyFormatByScene((prev) => ({ ...prev, [i]: tool }));
+                          }}
                         >
-                          <SelectTrigger className="w-[120px] h-8 border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] bg-gray-100 dark:bg-[#0F0F0F] text-xs">
-                            <SelectValue />
+                          <SelectTrigger className="w-[130px] h-8 border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] bg-gray-100 dark:bg-[#0F0F0F] text-xs">
+                            <SelectValue placeholder="Tool" />
                           </SelectTrigger>
                           <SelectContent className="bg-gray-50 dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2A2A2A]">
                             <SelectItem value="midjourney" className="text-sm">Midjourney</SelectItem>
-                            <SelectItem value="chatgpt" className="text-sm">ChatGPT</SelectItem>
                             <SelectItem value="grok" className="text-sm">Grok</SelectItem>
+                            <SelectItem value="chatgpt" className="text-sm">ChatGPT</SelectItem>
+                            <SelectItem value="kling" className="text-sm">Kling AI</SelectItem>
+                            <SelectItem value="runway" className="text-sm">Runway ML</SelectItem>
+                            <SelectItem value="pika" className="text-sm">Pika</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A]"
-                          onClick={() => {
-                            const platform = getCopyFormat(i);
-                            const refUrl = characterRefPublicUrl?.trim() || null;
-                            const formatted = formatPromptForPlatform(fullPrompt, platform, refUrl);
-                            copyToClipboard(formatted, "AI prompt");
-                            setCopiedIndex(i);
-                            setTimeout(() => setCopiedIndex(null), 2000);
+                        <ToggleGroup
+                          type="single"
+                          value={getMediaType(i)}
+                          onValueChange={(v) => {
+                            if (v) setMediaTypeByScene((prev) => ({ ...prev, [i]: v as "still" | "video" }));
                           }}
+                          className="inline-flex rounded-md border border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] p-0.5"
                         >
-                          {copiedIndex === i ? "Copied" : "Copy AI Prompt"}
-                        </Button>
+                          <ToggleGroupItem value="still" className="h-7 px-2 text-xs data-[state=on]:bg-white dark:data-[state=on]:bg-[#2A2A2A] rounded" aria-label="Still image">
+                            Still Image
+                          </ToggleGroupItem>
+                          <ToggleGroupItem value="video" className="h-7 px-2 text-xs data-[state=on]:bg-white dark:data-[state=on]:bg-[#2A2A2A] rounded" aria-label="Video clip">
+                            Video Clip
+                          </ToggleGroupItem>
+                        </ToggleGroup>
                       </div>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4 text-sm text-gray-600 dark:text-[#B0B0B0]">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        style={{ cursor: "pointer", zIndex: 10, position: "relative" }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const tool = copyFormatByScene[i] || "midjourney";
+                          const base = fullPrompt || "";
+                          const duration = (() => {
+                            const parts = (scene.timing || "0-0").match(/[\d.]+/g) || ["0", "0"];
+                            return Math.max(0, parseFloat(parts[1]) - parseFloat(parts[0]));
+                          })();
+                          const camera = (scene as { cameraAngle?: string }).cameraAngle || vd?.cameraAngle || "medium shot";
+                          let prompt = base;
+                          if (tool === "midjourney") prompt = `${base} --ar 9:16 --v 6 --style raw`;
+                          else if (tool === "grok") prompt = `${base}\n\nAspect ratio: 9:16\nStyle: photorealistic`;
+                          else if (tool === "chatgpt") prompt = `Generate a photorealistic vertical image (9:16 aspect ratio): ${base}`;
+                          else if (tool === "kling") prompt = `${base}\n\nFormat: vertical 9:16\nDuration: ${duration}s\nMotion: subtle slow push in\nCamera: ${camera}`;
+                          else if (tool === "runway") prompt = `${base}\nMotion amount: low\nCamera: ${camera} slow\nDuration: ${duration}s\nAspect ratio: 9:16`;
+                          else if (tool === "pika") prompt = `${base} | camera: ${camera} | motion: 1 | aspect ratio: 9:16 | duration: ${duration}s`;
+                          navigator.clipboard.writeText(prompt).then(() => {
+                            alert("Copied for " + tool);
+                          }).catch(() => alert("Copy failed"));
+                        }}
+                      >
+                        Copy AI Prompt
+                      </button>
+                    </div>
                     <div>
                       <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Visual / AI image prompt</p>
                       <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{fullPrompt}</p>
@@ -1296,38 +1805,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   </div>
                 </div>
 
-                {/* Full Script / Scene by Scene tabs */}
-                <div>
-                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Voiceover</p>
-                  <div className="flex rounded-lg border border-gray-200 dark:border-[#2A2A2A] p-1 bg-gray-100 dark:bg-[#0F0F0F] w-full max-w-md">
-                    <button
-                      type="button"
-                      className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                        voiceoverMode === "full"
-                          ? "bg-orange-500 text-white"
-                          : "text-gray-600 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white"
-                      }`}
-                      onClick={() => setVoiceoverMode("full")}
-                    >
-                      Full Script
-                    </button>
-                    <button
-                      type="button"
-                      className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                        voiceoverMode === "scene"
-                          ? "bg-orange-500 text-white"
-                          : "text-gray-600 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white"
-                      }`}
-                      onClick={() => setVoiceoverMode("scene")}
-                    >
-                      Scene by Scene
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-1">
-                    {voiceoverMode === "full" ? "One audio file for Hook + Body + CTA." : "Generate audio per scene with individual play/download."}
-                  </p>
-                </div>
-
                 {/* Speed / Stability / Clarity */}
                 <div className="space-y-4">
                   <p className="text-orange-500 font-medium text-xs uppercase tracking-wide">Speed &amp; style</p>
@@ -1366,108 +1843,103 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   </div>
                 </div>
 
-                {/* Generate: Full Script = one button; Scene by Scene = list with per-scene buttons */}
-                {voiceoverMode === "full" ? (
-                  <>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
-                        onClick={handleGenerateFullVoiceover}
-                        disabled={generatingFull || !fullScriptText.trim()}
-                      >
-                        {generatingFull ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
-                        Generate Voiceover
-                      </Button>
-                      {fullVoiceoverUrl && (
-                        <Button
-                          variant="outline"
-                          className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
-                          onClick={handleRegenerateVoiceover}
-                          disabled={generatingFull}
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                          Regenerate
-                        </Button>
+                {/* Two buttons side by side: Generate Voiceover | Generate Scene Voiceovers */}
+                <div>
+                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Generate</p>
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                      onClick={handleGenerateFullVoiceover}
+                      disabled={generatingFull || !fullScriptText.trim()}
+                    >
+                      {generatingFull ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
+                      Generate Voiceover
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
+                      onClick={handleGeneratePerSceneVoiceover}
+                      disabled={generatingPerScene || getSceneTexts().length === 0}
+                    >
+                      {generatingPerScene ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
+                      Generate Scene Voiceovers
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-1.5">
+                    Full script = one audio file (Hook + Body + CTA). Scene voiceovers = one file per scene for the Video Timeline.
+                  </p>
+                </div>
+
+                {/* Success: Full voiceover — play, duration, Regenerate */}
+                {fullVoiceoverUrl && (
+                  <div>
+                    <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Full script audio</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <AudioWithSpeed src={fullVoiceoverUrl} speed={playbackSpeed} controls className="max-w-full h-9 flex-1 min-w-0" />
+                      {fullVoiceoverDuration != null && !Number.isNaN(fullVoiceoverDuration) && (
+                        <span className="text-sm text-gray-600 dark:text-[#A0A0A0] shrink-0">
+                          {formatDuration(fullVoiceoverDuration)}
+                        </span>
                       )}
-                    </div>
-                    {fullVoiceoverUrl && (
-                      <div>
-                        <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Full script audio</p>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <AudioWithSpeed src={fullVoiceoverUrl} speed={playbackSpeed} controls className="max-w-full h-9" />
-                          <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]" asChild>
-                            <a href={fullVoiceoverUrl} download="voiceover-full.mp3">Download</a>
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <div className="flex flex-wrap gap-2 mb-3">
+                      <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0" asChild>
+                        <a href={fullVoiceoverUrl} download="voiceover-full.mp3">Download</a>
+                      </Button>
                       <Button
                         variant="outline"
-                        className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
-                        onClick={handleGeneratePerSceneVoiceover}
-                        disabled={generatingPerScene || getSceneTexts().length === 0}
+                        size="sm"
+                        className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1.5"
+                        onClick={handleGenerateFullVoiceover}
+                        disabled={generatingFull}
                       >
-                        {generatingPerScene ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
-                        Generate all scenes
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        Regenerate
                       </Button>
-                      {perSceneUrls.some(Boolean) && (
-                        <Button
-                          variant="outline"
-                          className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
-                          onClick={() => {
-                            perSceneUrls.forEach((u) => u && URL.revokeObjectURL(u));
-                            setPerSceneUrls([]);
-                          }}
-                          disabled={generatingPerScene || generatingSceneIndex !== null}
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                          Clear all
-                        </Button>
-                      )}
                     </div>
-                    <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Scenes from script breakdown</p>
+                  </div>
+                )}
+
+                {/* Success: Scene voiceovers — Scene 1 Voiceover, Scene 2 Voiceover, … with play, duration, Regenerate each */}
+                {perSceneUrls.some(Boolean) && (
+                  <div>
+                    <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2">Scene voiceovers</p>
                     <div className="space-y-3">
-                      {scenes.map((scene, i) => {
-                        const texts = getSceneTexts();
-                        const sceneText = texts[i]?.trim() ?? "";
-                        const url = perSceneUrls[i] ?? null;
+                      {perSceneUrls.map((url, i) => {
+                        if (!url) return null;
+                        const duration = perSceneDurations[i];
                         const loading = generatingSceneIndex === i;
                         return (
-                          <div key={i} className="rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] p-3 space-y-2">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div key={i} className="rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                               <span className="text-sm font-medium text-gray-700 dark:text-[#E0E0E0]">
-                                Scene {i + 1} {scene.timing ? `(${scene.timing})` : ""}
+                                Scene {i + 1} Voiceover
                               </span>
+                              {duration != null && !Number.isNaN(duration) && (
+                                <span className="text-xs text-gray-500 dark:text-[#A0A0A0]">
+                                  {formatDuration(duration)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <AudioWithSpeed src={url} speed={playbackSpeed} controls className="flex-1 min-w-0 max-w-md h-9" />
+                              <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0" asChild>
+                                <a href={url} download={`voiceover-scene-${i + 1}.mp3`}>Download</a>
+                              </Button>
                               <Button
-                                className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+                                variant="outline"
                                 size="sm"
+                                className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1"
                                 onClick={() => handleGenerateSingleSceneVoiceover(i)}
-                                disabled={loading || !sceneText || generatingPerScene}
+                                disabled={loading || generatingPerScene}
                               >
-                                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mic className="w-3.5 h-3.5" />}
-                                Generate Voiceover
+                                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                Regenerate
                               </Button>
                             </div>
-                            {sceneText && (
-                              <p className="text-xs text-gray-500 dark:text-[#A0A0A0] line-clamp-2">{sceneText}</p>
-                            )}
-                            {url && (
-                              <div className="flex flex-wrap items-center gap-2 pt-1">
-                                <AudioWithSpeed src={url} speed={playbackSpeed} controls className="flex-1 min-w-0 max-w-md h-9" />
-                                <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0" asChild>
-                                  <a href={url} download={`voiceover-scene-${i + 1}.mp3`}>Download</a>
-                                </Button>
-                              </div>
-                            )}
                           </div>
                         );
                       })}
                     </div>
-                  </>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -1489,7 +1961,13 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               asChild
               className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
             >
-              <Link href="/dashboard/video-timeline?importVoiceover=1">
+              <Link
+                href={
+                  libraryScriptId
+                    ? `/dashboard/video-timeline?importVoiceover=1&libraryScriptId=${encodeURIComponent(libraryScriptId)}`
+                    : "/dashboard/video-timeline?importVoiceover=1"
+                }
+              >
                 <Video className="w-4 h-4" />
                 Create here
               </Link>

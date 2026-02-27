@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { cleanProductTitle } from "@/lib/product-title";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,8 @@ export async function POST(
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
-    const title = (product.title ?? "").trim() || "Digital Product";
+    const rawTitle = (product.title ?? "").trim();
+    const title = cleanProductTitle(rawTitle) || rawTitle || "Digital Product";
     const niche = (product.niche ?? "").trim() || "general";
     const format = (product.format ?? "").trim() || "PDF";
 

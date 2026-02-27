@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { cleanProductTitle } from "@/lib/product-title";
 
 type ExistingSectionContext = { title: string; contentPreview: string };
 
@@ -42,7 +43,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const topic = [productTitle, niche].filter(Boolean).join(" — ") || "general audience";
+    const cleanedTitle = cleanProductTitle(productTitle) || productTitle;
+    const topic = [cleanedTitle, niche].filter(Boolean).join(" — ") || "general audience";
     const typeLabel = customType?.trim() || contentType || "content";
     const sectionsContext =
       Array.isArray(existingSections) && existingSections.length > 0

@@ -4,6 +4,7 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import type { MarketingAssets } from "@/db/schema/products-schema";
+import { cleanProductTitle } from "@/lib/product-title";
 
 type Section = { id: string; title: string; content?: string };
 
@@ -41,7 +42,8 @@ export async function POST(
     const regenerateDescription = body.regenerateDescription === true;
     const existing = (product.marketingAssets ?? {}) as MarketingAssets;
 
-    const title = (product.title ?? "").trim() || "Digital Product";
+    const rawTitle = (product.title ?? "").trim();
+    const title = cleanProductTitle(rawTitle) || rawTitle || "Digital Product";
     const niche = (product.niche ?? "").trim() || "general";
     const format = (product.format ?? "").trim() || "PDF";
     const sections = (product.content as { sections?: Section[] })?.sections ?? [];

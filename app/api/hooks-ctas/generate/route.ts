@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cleanProductTitle } from "@/lib/product-title";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const productTitle = typeof body.productTitle === "string" ? body.productTitle.trim() : "";
+    const rawTitle = typeof body.productTitle === "string" ? body.productTitle.trim() : "";
+    const productTitle = cleanProductTitle(rawTitle) || rawTitle;
     const productType = typeof body.productType === "string" ? body.productType : "";
     const productIncluded = typeof body.productIncluded === "string" ? body.productIncluded : "";
     const productWhy = typeof body.productWhy === "string" ? body.productWhy : "";

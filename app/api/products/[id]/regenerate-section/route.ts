@@ -7,6 +7,7 @@ import {
   generateSingleSectionBody,
   type GenerateProductContentParams,
 } from "@/lib/generate-product-content";
+import { cleanProductTitle } from "@/lib/product-title";
 
 /**
  * POST: Regenerate content for a single section using full product context (format, niche, etc.).
@@ -69,7 +70,7 @@ export async function POST(
     }
 
     const section = sections[sectionIndex];
-    const productName = product.title ?? "";
+    const productName = cleanProductTitle(product.title ?? "") || (product.title ?? "");
     const niche = product.niche ?? "";
     const format = (product.format ?? "ebook").toString();
 
