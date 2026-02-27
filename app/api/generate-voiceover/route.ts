@@ -10,22 +10,28 @@ import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("[generate-voiceover] Scene voiceover request received");
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const body = await request.json().catch(() => ({}));
+    console.log("[generate-voiceover] Body:", JSON.stringify(body).substring(0, 200));
+
     const apiKey = getElevenLabsApiKey();
+    console.log("[generate-voiceover] ElevenLabs key exists:", !!process.env.ELEVENLABS_API_KEY);
+    console.log("[generate-voiceover] Key loaded (first 10 chars):", apiKey ? `${apiKey.substring(0, 10)}...` : "MISSING");
     if (!apiKey) {
       return NextResponse.json(
         { error: "ELEVENLABS_API_KEY is not configured. Add it to .env.local (local) or Vercel env vars, then restart or redeploy." },
         { status: 503 }
       );
     }
-
-    const body = await request.json().catch(() => ({}));
     const text = typeof body.text === "string" ? body.text.trim() : "";
     const voiceId = typeof body.voiceId === "string" ? body.voiceId.trim() : "";
     const stability = typeof body.stability === "number" ? Math.max(0, Math.min(1, body.stability)) : 0.5;
     const similarity = typeof body.similarity === "number" ? Math.max(0, Math.min(1, body.similarity)) : 0.75;
+
+    console.log("[generate-voiceover] Request:", { textLength: text.length, textPreview: text.slice(0, 80), hasVoiceId: !!voiceId });
 
     if (!text) {
       return NextResponse.json({ error: "text is required" }, { status: 400 });
@@ -52,6 +58,7 @@ export async function POST(request: NextRequest) {
       }),
     });
 
+    console.log("[generate-voiceover] ElevenLabs response:", res.status);
     if (!res.ok) {
       const errText = await res.text();
       console.error("[generate-voiceover] ElevenLabs error:", res.status, errText);

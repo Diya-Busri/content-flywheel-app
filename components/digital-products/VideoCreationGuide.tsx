@@ -660,6 +660,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
   const handleGeneratePerSceneVoiceover = useCallback(async () => {
     const texts = getSceneTexts();
+    console.log("[Scene voiceovers] Scenes array:", scenes.map((s, i) => ({ i, timing: s.timing, scene: s.scene?.slice(0, 40) })));
+    console.log("[Scene voiceovers] Text chunks to send:", texts.map((t, i) => ({ i, length: t?.length ?? 0, preview: (t ?? "").slice(0, 60) })));
     if (texts.length === 0 || texts.every((t) => !t?.trim())) {
       toast({ title: "No scene text", variant: "destructive" });
       return;
@@ -673,14 +675,17 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       const urls: (string | null)[] = [];
       for (let i = 0; i < texts.length; i++) {
         setGeneratingSceneIndex(i);
+        const textChunk = texts[i];
+        console.log("Generating voiceover for scene:", i, "text:", textChunk?.slice(0, 100) ?? "(empty)", "length:", textChunk?.length ?? 0);
         try {
-          const blob = await generateVoiceover(texts[i]);
+          const blob = await generateVoiceover(textChunk);
           if (libraryScriptId) {
             const form = new FormData();
             form.set("file", new File([blob], `voiceover-scene-${i + 1}.mp3`, { type: "audio/mpeg" }));
             form.set("libraryScriptId", libraryScriptId);
             form.set("sceneIndex", String(i));
             const upRes = await fetch("/api/video-timeline/upload-voiceover", { method: "POST", body: form });
+            console.log("Upload response for scene", i, ":", upRes.status);
             if (!upRes.ok) {
               const err = await upRes.json().catch(() => ({}));
               throw new Error((err as { error?: string }).error || "Upload failed");
@@ -690,7 +695,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           } else {
             urls.push(URL.createObjectURL(blob));
           }
-        } catch {
+        } catch (err) {
+          console.error("Scene voiceover failed for scene", i, err);
           urls.push(null);
         }
       }
@@ -715,7 +721,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       setGeneratingPerScene(false);
       setGeneratingSceneIndex(null);
     }
-  }, [getSceneTexts, generateVoiceover, toast, libraryScriptId]);
+  }, [scenes, getSceneTexts, generateVoiceover, toast, libraryScriptId]);
 
   const handleGenerateSingleSceneVoiceover = useCallback(
     async (index: number) => {
@@ -1201,13 +1207,14 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   {perSceneUrls.map((url, i) => {
                     if (!url) return null;
                     const duration = perSceneDurations[i];
+                    const timingLabel = scenes[i]?.timing ? `Scene ${i + 1} (${scenes[i].timing})` : `Scene ${i + 1} Voiceover`;
                     return (
                       <li
                         key={i}
                         className="flex flex-wrap items-center gap-2 py-2 px-3 rounded-lg bg-gray-100 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#2A2A2A]"
                       >
                         <span className="text-sm font-medium text-gray-900 dark:text-white min-w-[120px]">
-                          Scene {i + 1} Voiceover
+                          {timingLabel}
                         </span>
                         <Button
                           variant="outline"
@@ -1405,39 +1412,35 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                             Video Clip
                           </ToggleGroupItem>
                         </ToggleGroup>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const tool = copyFormatByScene[i] || "midjourney";
+                            const base = fullPrompt || "";
+                            const duration = (() => {
+                              const parts = (scene.timing || "0-0").match(/[\d.]+/g) || ["0", "0"];
+                              return Math.max(0, parseFloat(parts[1]) - parseFloat(parts[0]));
+                            })();
+                            const camera = (scene as { cameraAngle?: string }).cameraAngle || "medium shot";
+                            let prompt = base;
+                            if (tool === "midjourney") prompt = `${base} --ar 9:16 --v 6 --style raw`;
+                            else if (tool === "grok") prompt = `${base}\n\nAspect ratio: 9:16\nStyle: photorealistic`;
+                            else if (tool === "chatgpt") prompt = `Generate a photorealistic vertical image (9:16 aspect ratio): ${base}`;
+                            else if (tool === "kling") prompt = `${base}\n\nFormat: vertical 9:16\nDuration: ${duration}s\nMotion: subtle slow push in\nCamera: ${camera}`;
+                            else if (tool === "runway") prompt = `${base}\nMotion amount: low\nCamera: ${camera} slow\nDuration: ${duration}s\nAspect ratio: 9:16`;
+                            else if (tool === "pika") prompt = `${base} | camera: ${camera} | motion: 1 | aspect ratio: 9:16 | duration: ${duration}s`;
+                            navigator.clipboard.writeText(prompt)
+                              .then(() => toast({ title: "Copied", description: "AI prompt copied for " + tool }))
+                              .catch(() => toast({ title: "Copy failed", variant: "destructive" }));
+                          }}
+                          className="h-7 px-2 text-xs rounded border border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] bg-gray-100 dark:bg-[#0F0F0F] hover:bg-white hover:text-gray-900 dark:hover:bg-[#2A2A2A] dark:hover:text-white cursor-pointer"
+                        >
+                          Copy AI Prompt
+                        </button>
                       </div>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4 text-sm text-gray-600 dark:text-[#B0B0B0]">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button
-                        type="button"
-                        style={{ cursor: "pointer", zIndex: 10, position: "relative" }}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const tool = copyFormatByScene[i] || "midjourney";
-                          const base = fullPrompt || "";
-                          const duration = (() => {
-                            const parts = (scene.timing || "0-0").match(/[\d.]+/g) || ["0", "0"];
-                            return Math.max(0, parseFloat(parts[1]) - parseFloat(parts[0]));
-                          })();
-                          const camera = (scene as { cameraAngle?: string }).cameraAngle || vd?.cameraAngle || "medium shot";
-                          let prompt = base;
-                          if (tool === "midjourney") prompt = `${base} --ar 9:16 --v 6 --style raw`;
-                          else if (tool === "grok") prompt = `${base}\n\nAspect ratio: 9:16\nStyle: photorealistic`;
-                          else if (tool === "chatgpt") prompt = `Generate a photorealistic vertical image (9:16 aspect ratio): ${base}`;
-                          else if (tool === "kling") prompt = `${base}\n\nFormat: vertical 9:16\nDuration: ${duration}s\nMotion: subtle slow push in\nCamera: ${camera}`;
-                          else if (tool === "runway") prompt = `${base}\nMotion amount: low\nCamera: ${camera} slow\nDuration: ${duration}s\nAspect ratio: 9:16`;
-                          else if (tool === "pika") prompt = `${base} | camera: ${camera} | motion: 1 | aspect ratio: 9:16 | duration: ${duration}s`;
-                          navigator.clipboard.writeText(prompt).then(() => {
-                            alert("Copied for " + tool);
-                          }).catch(() => alert("Copy failed"));
-                        }}
-                      >
-                        Copy AI Prompt
-                      </button>
-                    </div>
                     <div>
                       <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Visual / AI image prompt</p>
                       <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{fullPrompt}</p>
@@ -1907,11 +1910,12 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                         if (!url) return null;
                         const duration = perSceneDurations[i];
                         const loading = generatingSceneIndex === i;
+                        const timingLabel = scenes[i]?.timing ? `Scene ${i + 1} (${scenes[i].timing})` : `Scene ${i + 1}`;
                         return (
                           <div key={i} className="rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] p-3">
                             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                               <span className="text-sm font-medium text-gray-700 dark:text-[#E0E0E0]">
-                                Scene {i + 1} Voiceover
+                                {timingLabel}
                               </span>
                               {duration != null && !Number.isNaN(duration) && (
                                 <span className="text-xs text-gray-500 dark:text-[#A0A0A0]">
@@ -1933,6 +1937,15 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                               >
                                 {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                                 Regenerate
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteSceneVoiceover(i)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Delete
                               </Button>
                             </div>
                           </div>

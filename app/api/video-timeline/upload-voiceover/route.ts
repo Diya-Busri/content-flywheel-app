@@ -1,8 +1,13 @@
 /**
  * POST: Upload voiceover audio for a timeline (e.g. after generating from guide).
+ * Uses Supabase Storage with the service_role key (not anon). Bucket: timeline-media.
+ *
  * FormData: file (required, audio), libraryScriptId (required), sceneIndex (optional, number).
  * If sceneIndex is provided, uploads as voiceover-scene-{n}.mp3; otherwise voiceover.mp3.
  * Returns: { url: string }.
+ *
+ * Env: NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY.
+ * Create a public bucket named "timeline-media" in Supabase Dashboard → Storage if it doesn't exist.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
@@ -10,8 +15,27 @@ import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 const BUCKET = "timeline-media";
 
+function storageErrorMessage(err: unknown): string {
+  if (err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string") {
+    return (err as { message: string }).message;
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+function isBucketMissingError(err: unknown): boolean {
+  const msg = storageErrorMessage(err).toLowerCase();
+  return /bucket|not found|no such|404|does not exist/.test(msg);
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
+      process.env.SUPABASE_URL?.trim() ||
+      "";
+    console.log("[upload-voiceover] Supabase URL:", supabaseUrl || "(not set)");
+
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -22,6 +46,7 @@ export async function POST(request: NextRequest) {
     const libraryScriptId = formData.get("libraryScriptId") as string | null;
     const sceneIndexRaw = formData.get("sceneIndex");
     const sceneIndex = sceneIndexRaw != null && sceneIndexRaw !== "" ? Number(sceneIndexRaw) : undefined;
+    console.log("[upload-voiceover] Uploading:", { sceneIndex, libraryScriptId: !!libraryScriptId, fileSize: file?.size });
     if (!file || typeof file.arrayBuffer !== "function") {
       return NextResponse.json({ error: "file required" }, { status: 400 });
     }
@@ -38,7 +63,18 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
     if (!supabase) {
-      return NextResponse.json({ error: "Storage not configured" }, { status: 503 });
+      const hasUrl = !!(
+        process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
+        process.env.SUPABASE_URL?.trim()
+      );
+      const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+      const message = !hasUrl
+        ? "Supabase URL missing. Set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) in .env.local to your project URL (https://xxxx.supabase.co)."
+        : !hasServiceKey
+          ? "Supabase service role key missing. Set SUPABASE_SERVICE_ROLE_KEY in .env.local (Dashboard → Settings → API → service_role). Do not use the anon key for uploads."
+          : "Storage not configured.";
+      console.error("[upload-voiceover]", message);
+      return NextResponse.json({ error: message }, { status: 503 });
     }
 
     const fileName = typeof sceneIndex === "number" && Number.isInteger(sceneIndex) && sceneIndex >= 0
@@ -53,31 +89,38 @@ export async function POST(request: NextRequest) {
       });
 
     if (error) {
-      const msg = String(error.message || error).toLowerCase();
-      if (msg.includes("bucket") || msg.includes("not found")) {
-        await supabase.storage.createBucket(BUCKET, { public: true });
+      const errMsg = storageErrorMessage(error);
+      console.error("[upload-voiceover] Storage error:", { message: errMsg, error });
+      if (isBucketMissingError(error)) {
+        const { error: createErr } = await supabase.storage.createBucket(BUCKET, { public: true });
+        if (createErr) {
+          console.error("[upload-voiceover] createBucket failed:", createErr);
+          return NextResponse.json(
+            { error: `Bucket missing and create failed: ${storageErrorMessage(createErr)}` },
+            { status: 500 }
+          );
+        }
         const retry = await supabase.storage.from(BUCKET).upload(path, buffer, {
           contentType: file.type || "audio/mpeg",
           upsert: true,
         });
         if (retry.error) {
-          console.error("Voiceover upload retry error:", retry.error);
-          return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+          const retryMsg = storageErrorMessage(retry.error);
+          console.error("[upload-voiceover] Retry upload error:", retry.error);
+          return NextResponse.json({ error: retryMsg }, { status: 500 });
         }
         const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(retry.data.path);
         return NextResponse.json({ url: urlData.publicUrl });
       }
-      console.error("Voiceover upload error:", error);
-      return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+      return NextResponse.json({ error: errMsg }, { status: 500 });
     }
 
     const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
+    console.log("[upload-voiceover] Success:", { sceneIndex, path: data.path });
     return NextResponse.json({ url: urlData.publicUrl });
   } catch (err) {
-    console.error("Upload voiceover error:", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Upload failed" },
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[upload-voiceover] Exception:", err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
