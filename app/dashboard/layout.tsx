@@ -52,8 +52,11 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const isAdmin = adminEmail && userEmail.trim().toLowerCase() === adminEmail;
 
-  // Paywall: do not redirect authenticated users to pricing; let them stay on dashboard.
-  // They can use upgrade CTAs (sidebar, PaymentStatusAlert, settings) to go to /pricing when ready.
+  // Paywall: redirect to pricing if not admin and user does not have an active subscription.
+  // After paying with Stripe, they can access the dashboard.
+  if (!isAdmin && !hasActiveSubscription(profile)) {
+    redirect("/pricing");
+  }
 
   return (
     <DashboardLayoutClient profile={profile} userEmail={userEmail}>
