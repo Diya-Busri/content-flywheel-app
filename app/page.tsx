@@ -34,11 +34,13 @@ export default function HomePage() {
               {/* Left - Text content */}
               <div className="space-y-5 pt-24 sm:pt-32">
                 <h1 className="text-5xl lg:text-6xl font-bold leading-tight text-slate-900 dark:text-white">
-                  Turn Your Digital Products Into
+                  Build, Package & Market
                   <br />
                   <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
-                    A Content Flywheel
+                    Digital Products
                   </span>
+                  <br />
+                  in Minutes
                 </h1>
                 <p className="text-sm sm:text-base lg:text-lg text-slate-600 dark:text-gray-400 leading-relaxed max-w-xl">
                   Generate ebooks, planners, workbooks, AI voiceovers, video scripts, and multi-platform marketing content — all from one platform.
