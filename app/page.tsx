@@ -60,8 +60,8 @@ export default function HomePage() {
                   </Link>
                 </div>
                 <div className="pt-6 space-y-3">
-                  <p className="text-sm text-slate-500 dark:text-gray-500">
-                    No editing skills required. First 3 videos free.
+                  <p className="text-sm text-slate-600 dark:text-gray-400">
+                    Everything you need in one platform
                   </p>
                   <div className="flex flex-wrap gap-6 text-sm text-slate-600 dark:text-gray-400">
                     <span className="flex items-center gap-2">
