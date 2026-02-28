@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import DiscoverCreateFlow from "./DiscoverCreateFlow";
 
 export const metadata: Metadata = {
-  title: "Create Your Product | Discovery | Content Flywheel",
+  title: "Create product | Discovery | Content Flywheel",
   description: "Choose format and generate your digital product",
 };
 

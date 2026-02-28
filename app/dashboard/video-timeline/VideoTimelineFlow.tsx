@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   DndContext,
   closestCenter,
@@ -41,7 +41,7 @@ import {
   Music,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -62,6 +62,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { getDefaultVoiceId } from "@/lib/elevenlabs-voices";
 import { cn } from "@/lib/utils";
 import { replaceProductTitleInText } from "@/lib/product-title";
+import { TimelineProvider, TimelineCanvas } from "@/components/timeline";
+import type { TimelineItemType } from "@/components/timeline";
 
 // --- Types ---
 
@@ -94,6 +96,69 @@ export type DesignOptions = {
 
 export type TransitionType = "cut" | "fade-in" | "fade-out";
 export type AspectRatioId = "9:16" | "1:1" | "16:9";
+
+const formatOptions: { label: string; value: AspectRatioId }[] = [
+  { label: "9:16 Vertical (TikTok, Reels, Shorts)", value: "9:16" },
+  { label: "1:1 Square", value: "1:1" },
+  { label: "16:9 Landscape", value: "16:9" },
+];
+
+const aspectMap: Record<AspectRatioId, string> = {
+  "9:16": "9 / 16",
+  "16:9": "16 / 9",
+  "1:1": "1 / 1",
+};
+
+// --- Script selector (always rendered at top when no script selected) ---
+
+function ScriptSelector({
+  recentScripts,
+  selectedScriptId,
+  onSelect,
+  loading,
+}: {
+  recentScripts: VideoGuideListItem[];
+  selectedScriptId: string | null;
+  onSelect: (id: string | null) => void;
+  loading: boolean;
+}) {
+  return (
+    <Card className="border-gray-200 dark:border-[#2A2A2A]">
+      <CardHeader>
+        <CardTitle className="text-base">Select Script</CardTitle>
+        <CardDescription className="text-muted-foreground">
+          Choose a video guide script to load its scenes, voiceover, and captions into the timeline.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 max-w-md">
+          <Label htmlFor="script-select" className="text-sm font-medium shrink-0">
+            Script
+          </Label>
+          <Select
+            value={selectedScriptId ?? "__none__"}
+            onValueChange={(id) => {
+              if (id && id !== "__none__") onSelect(id);
+              else onSelect(null);
+            }}
+          >
+            <SelectTrigger id="script-select" className="w-full sm:max-w-xs">
+              <SelectValue placeholder={loading ? "Loading…" : "Select Script"} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">{loading ? "Loading…" : "Select Script"}</SelectItem>
+              {recentScripts.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.title || item.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 // --- Helpers ---
 
@@ -183,36 +248,13 @@ function buildCaptionsFromGuide(guide: {
 
 const RATIO_OPTIONS: {
   value: AspectRatioId;
-  label: string;
-  aspectClass: string;
   width: number;
   height: number;
   safeZone: { top: number; right: number; bottom: number; left: number };
 }[] = [
-  {
-    value: "9:16",
-    label: "9:16 Vertical (TikTok, Reels, Shorts)",
-    aspectClass: "aspect-[9/16]",
-    width: 1080,
-    height: 1920,
-    safeZone: { top: 0.1, right: 0.05, bottom: 0.2, left: 0.05 },
-  },
-  {
-    value: "1:1",
-    label: "1:1 Square",
-    aspectClass: "aspect-square",
-    width: 1080,
-    height: 1080,
-    safeZone: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 },
-  },
-  {
-    value: "16:9",
-    label: "16:9 Landscape",
-    aspectClass: "aspect-video",
-    width: 1920,
-    height: 1080,
-    safeZone: { top: 0.05, right: 0.05, bottom: 0.1, left: 0.05 },
-  },
+  { value: "9:16", width: 1080, height: 1920, safeZone: { top: 0.1, right: 0.05, bottom: 0.2, left: 0.05 } },
+  { value: "1:1", width: 1080, height: 1080, safeZone: { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 } },
+  { value: "16:9", width: 1920, height: 1080, safeZone: { top: 0.05, right: 0.05, bottom: 0.1, left: 0.05 } },
 ];
 
 const VIDEO_ACCEPT = "video/*";
@@ -244,13 +286,20 @@ const TRANSITION_OPTIONS: { value: TransitionType; label: string }[] = [
 
 // --- Main component ---
 
-export default function VideoTimelineFlow() {
+type VideoTimelineFlowProps = {
+  /** Script ID from URL (?scriptId=... or ?libraryScriptId=...). When null, user can pick from dropdown. */
+  initialScriptId?: string | null;
+};
+
+export default function VideoTimelineFlow({ initialScriptId = null }: VideoTimelineFlowProps) {
   const { toast } = useToast();
+  const router = useRouter();
   const searchParams = useSearchParams();
   /** Scene slots from Video Guide. Each can have an uploaded video or image; no placeholders. */
   const [sceneSlots, setSceneSlots] = useState<SceneSlot[]>([]);
   /** Single voiceover URL (from import or loaded from guide). */
   const [voiceoverUrl, setVoiceoverUrl] = useState<string | null>(null);
+  const [voiceoverDuration, setVoiceoverDuration] = useState<number | null>(null);
   const [playingSceneIndex, setPlayingSceneIndex] = useState<number | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [playbackProgress, setPlaybackProgress] = useState(0);
@@ -261,13 +310,8 @@ export default function VideoTimelineFlow() {
   const playbackTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrubberRef = useRef<HTMLDivElement>(null);
 
-  const [aspectRatio, setAspectRatio] = useState<AspectRatioId>("9:16");
-  const ratioConfig = RATIO_OPTIONS.find((r) => r.value === aspectRatio) ?? RATIO_OPTIONS[0];
-  const previewSize = useMemo(() => {
-    if (aspectRatio === "9:16") return { width: 270, height: 480 };
-    if (aspectRatio === "1:1") return { width: 360, height: 360 };
-    return { width: 480, height: 270 };
-  }, [aspectRatio]);
+  const [videoFormat, setVideoFormat] = useState<"9:16" | "16:9" | "1:1">("9:16");
+  const ratioConfig = RATIO_OPTIONS.find((r) => r.value === videoFormat) ?? RATIO_OPTIONS[0];
   const [voiceoverPreviewPlaying, setVoiceoverPreviewPlaying] = useState(false);
   const voiceoverPreviewRef = useRef<HTMLAudioElement | null>(null);
   const [importPopupOpen, setImportPopupOpen] = useState(false);
@@ -276,19 +320,62 @@ export default function VideoTimelineFlow() {
   const [importingGuideId, setImportingGuideId] = useState<string | null>(null);
   const [captions, setCaptions] = useState<CaptionItem[]>([]);
   const [design, setDesign] = useState<DesignOptions>(DEFAULT_DESIGN);
-  const hasPopulatedCaptionsRef = useRef(false);
+  const hasPopulatedFromSelectionRef = useRef<string | null>(null);
   const [masterMuted, setMasterMuted] = useState(false);
   const [mutedSlotIds, setMutedSlotIds] = useState<string[]>([]);
-  /** Guide id from URL (when opened from library) or from last Import from Video Guide. */
+  /** Guide id from last Import from Video Guide popup (when user picks a guide there). */
   const [linkedGuideId, setLinkedGuideId] = useState<string | null>(null);
-  const urlGuideId = searchParams.get("guideId") ?? searchParams.get("libraryScriptId") ?? null;
-  const effectiveScriptId = urlGuideId ?? linkedGuideId;
+  /** Current script: from URL (initialScriptId) or dropdown selection. Drives load and persist. */
+  const [selectedScriptId, setSelectedScriptId] = useState<string | null>(() => initialScriptId ?? null);
+  /** Recent video-guide scripts for the "Select Script" dropdown. */
+  const [recentScripts, setRecentScripts] = useState<VideoGuideListItem[]>([]);
+  const [scriptsLoading, setScriptsLoading] = useState(true);
+  /** When scriptId is set but fetch failed or script not found. */
+  const [scriptLoadError, setScriptLoadError] = useState<string | null>(null);
+  const effectiveScriptId = selectedScriptId ?? linkedGuideId;
 
   const totalAudioSec = useMemo(
     () => (sceneSlots.length > 0 ? Math.max(...sceneSlots.map((s) => s.endSec)) : 0),
     [sceneSlots]
   );
   const slotsWithMedia = useMemo(() => sceneSlots.filter((s) => s.mediaUrl), [sceneSlots]);
+
+  const timelineInitialDuration = useMemo(() => {
+    if (voiceoverUrl && voiceoverDuration != null && voiceoverDuration > 0) return voiceoverDuration;
+    return 15;
+  }, [voiceoverUrl, voiceoverDuration]);
+
+  const timelineInitialItems = useMemo((): TimelineItemType[] => {
+    const items: TimelineItemType[] = [];
+    sceneSlots.forEach((slot) => {
+      items.push({
+        id: slot.id,
+        start: slot.startSec,
+        end: slot.endSec,
+        trackType: "scene",
+      });
+    });
+    // Voiceover clip: start=0, duration=audioDuration, track=voiceover, type=audio, src=url (width = duration * pixelsPerSecond)
+    if (voiceoverUrl && voiceoverDuration != null && voiceoverDuration > 0) {
+      items.push({
+        id: "voiceover-1",
+        start: 0,
+        end: voiceoverDuration,
+        trackType: "voiceover",
+        type: "audio",
+        src: voiceoverUrl,
+      });
+    }
+    captions.forEach((cap) => {
+      items.push({
+        id: cap.id,
+        start: cap.startTime,
+        end: cap.endTime,
+        trackType: "caption",
+      });
+    });
+    return items;
+  }, [sceneSlots, voiceoverUrl, voiceoverDuration, captions]);
 
   const addCaption = useCallback(() => {
     const lastEnd = captions.length > 0 ? Math.max(...captions.map((c) => c.endTime)) : 0;
@@ -319,19 +406,56 @@ export default function VideoTimelineFlow() {
 
   useEffect(() => {
     const param = searchParams.get("ratio");
-    if (param === "9:16" || param === "1:1" || param === "16:9") setAspectRatio(param);
+    if (param === "9:16" || param === "1:1" || param === "16:9") setVideoFormat(param);
   }, [searchParams]);
 
-  // Load timeline (scene slots, voiceover, captions, mute) when a Video Guide is linked via URL
+  // Sync selected script from URL when it changes (e.g. navigation)
   useEffect(() => {
-    const guideId = searchParams.get("guideId") ?? searchParams.get("libraryScriptId");
-    if (!guideId || hasPopulatedCaptionsRef.current) return;
-    hasPopulatedCaptionsRef.current = true;
-    setLinkedGuideId((prev) => prev ?? guideId);
+    setSelectedScriptId((prev) => initialScriptId ?? prev);
+  }, [initialScriptId]);
+
+  // Fetch recent video-guide scripts for the dropdown (order by created_at DESC, limit 10)
+  useEffect(() => {
+    setScriptsLoading(true);
+    fetch("/api/library?type=scripts")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((items: VideoGuideListItem[]) => {
+        const videoGuides = (items ?? []).filter((i) => i.type === "script" && i.platform === "video-guide");
+        setRecentScripts(videoGuides.slice(0, 10));
+      })
+      .catch((err) => {
+        console.error("[VideoTimeline] Failed to fetch recent scripts:", err);
+        setRecentScripts([]);
+      })
+      .finally(() => setScriptsLoading(false));
+  }, []);
+
+  // Load timeline (scenes, voiceover, captions, mute) when a script is selected (from URL or dropdown)
+  useEffect(() => {
+    if (!selectedScriptId) {
+      setScriptLoadError(null);
+      return;
+    }
+    setScriptLoadError(null);
+    let cancelled = false;
+    const guideId = selectedScriptId;
     fetch(`/api/library/scripts/${guideId}`)
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => {
+        if (cancelled) return null;
+        if (!res.ok) {
+          console.error("[VideoTimeline] Script fetch failed:", { scriptId: guideId, status: res.status, statusText: res.statusText });
+          setScriptLoadError("Script not found or failed to load.");
+          return null;
+        }
+        return res.json();
+      })
       .then((row) => {
-        if (!row?.content) return;
+        if (cancelled || row == null) return;
+        if (!row?.content) {
+          console.error("[VideoTimeline] Script has no content:", { scriptId: guideId });
+          setScriptLoadError("Script not found or failed to load.");
+          return;
+        }
         let guide: {
           productName?: string;
           script?: { hook?: string; body?: string; cta?: string };
@@ -339,17 +463,24 @@ export default function VideoTimelineFlow() {
           timelineMutedClipIds?: string[];
           timelineSceneSlots?: SceneSlot[];
           timelineVoiceoverUrl?: string;
+          timelineVoiceoverDuration?: number;
         };
         try {
           guide = typeof row.content === "string" ? JSON.parse(row.content) : row.content;
-        } catch {
+        } catch (err) {
+          console.error("[VideoTimeline] Script content parse error:", { scriptId: guideId, err });
+          setScriptLoadError("Script not found or failed to load.");
           return;
         }
+        hasPopulatedFromSelectionRef.current = guideId;
         const next = buildCaptionsFromGuide(guide);
         if (next.length > 0) setCaptions((prev) => (prev.length === 0 ? next : prev));
         if (Array.isArray(guide.timelineMutedClipIds)) setMutedSlotIds(guide.timelineMutedClipIds);
         if (typeof guide.timelineVoiceoverUrl === "string" && guide.timelineVoiceoverUrl.trim()) {
           setVoiceoverUrl(guide.timelineVoiceoverUrl.trim());
+        }
+        if (typeof guide.timelineVoiceoverDuration === "number" && guide.timelineVoiceoverDuration > 0) {
+          setVoiceoverDuration(guide.timelineVoiceoverDuration);
         }
         const scenes = guide?.scenes?.filter((s) => s?.timing) ?? [];
         if (Array.isArray(guide.timelineSceneSlots) && guide.timelineSceneSlots.length > 0) {
@@ -366,10 +497,17 @@ export default function VideoTimelineFlow() {
           );
         }
       })
-      .catch(() => {
-        hasPopulatedCaptionsRef.current = false;
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("[VideoTimeline] Script load error:", { scriptId: guideId, err });
+          setScriptLoadError("Script not found or failed to load.");
+          hasPopulatedFromSelectionRef.current = null;
+        }
       });
-  }, [searchParams]);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedScriptId]);
 
   const toggleMasterMute = useCallback(() => {
     setMasterMuted((prev) => !prev);
@@ -477,6 +615,7 @@ export default function VideoTimelineFlow() {
 
   const removeVoiceover = useCallback(() => {
     setVoiceoverUrl(null);
+    setVoiceoverDuration(null);
     if (effectiveScriptId) {
       fetch(`/api/library/scripts/${effectiveScriptId}`, {
         method: "PATCH",
@@ -489,6 +628,44 @@ export default function VideoTimelineFlow() {
     }
     toast({ title: "Voiceover removed" });
   }, [effectiveScriptId, playingSceneIndex, stopSequence, toast]);
+
+  const handleImportVoiceover = useCallback(async () => {
+    if (!effectiveScriptId) {
+      toast({ title: "Select a script first", description: "Use the dropdown above to choose a script.", variant: "destructive" });
+      return;
+    }
+    try {
+      const res = await fetch(`/api/library/scripts/${effectiveScriptId}`);
+      if (!res.ok) {
+        toast({ title: "No voiceover found", description: "Generate one in Video Creation Guide.", variant: "destructive" });
+        return;
+      }
+      const row = await res.json();
+      const content = row?.content;
+      if (!content) {
+        toast({ title: "No voiceover found", description: "Generate one in Video Creation Guide.", variant: "destructive" });
+        return;
+      }
+      let guide: { timelineVoiceoverUrl?: string; timelineVoiceoverDuration?: number };
+      try {
+        guide = typeof content === "string" ? JSON.parse(content) : content;
+      } catch {
+        toast({ title: "No voiceover found", description: "Generate one in Video Creation Guide.", variant: "destructive" });
+        return;
+      }
+      const url = typeof guide.timelineVoiceoverUrl === "string" && guide.timelineVoiceoverUrl.trim() ? guide.timelineVoiceoverUrl.trim() : null;
+      const duration = typeof guide.timelineVoiceoverDuration === "number" && guide.timelineVoiceoverDuration > 0 ? guide.timelineVoiceoverDuration : null;
+      if (!url || duration == null) {
+        toast({ title: "No voiceover found", description: "Generate one in Video Creation Guide.", variant: "destructive" });
+        return;
+      }
+      setVoiceoverUrl(url);
+      setVoiceoverDuration(duration);
+      toast({ title: "Voiceover imported", description: "Loaded into timeline." });
+    } catch {
+      toast({ title: "No voiceover found", description: "Generate one in Video Creation Guide.", variant: "destructive" });
+    }
+  }, [effectiveScriptId, toast]);
 
   const previewVoiceover = useCallback(() => {
     const el = voiceoverPreviewRef.current;
@@ -554,6 +731,8 @@ export default function VideoTimelineFlow() {
         }));
         setSceneSlots(slots);
         setLinkedGuideId(item.id);
+        setSelectedScriptId(item.id);
+        router.replace(`/dashboard/video-timeline?scriptId=${encodeURIComponent(item.id)}`);
 
         const voiceRes = await fetch("/api/generate-voiceover", {
           method: "POST",
@@ -566,6 +745,7 @@ export default function VideoTimelineFlow() {
         const voiceFile = new File([blob], "Voiceover.mp3", { type: "audio/mpeg" });
 
         let finalVoiceUrl: string;
+        let uploadSucceeded = false;
         try {
           const form = new FormData();
           form.set("file", voiceFile);
@@ -574,21 +754,34 @@ export default function VideoTimelineFlow() {
           if (upRes.ok) {
             const data = (await upRes.json()) as { url: string };
             finalVoiceUrl = data.url;
-            await fetch(`/api/library/scripts/${item.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ timelineVoiceoverUrl: finalVoiceUrl, timelineSceneSlots: slots }),
-            });
+            uploadSucceeded = true;
           } else {
             finalVoiceUrl = URL.createObjectURL(blob);
           }
         } catch {
           finalVoiceUrl = URL.createObjectURL(blob);
         }
+        const durationSec = await new Promise<number>((resolve, reject) => {
+          const audio = new Audio(finalVoiceUrl);
+          audio.onloadedmetadata = () => resolve(audio.duration);
+          audio.onerror = () => reject(new Error("Failed to load audio"));
+        });
+        if (durationSec > 0) setVoiceoverDuration(durationSec);
+        if (uploadSucceeded) {
+          await fetch(`/api/library/scripts/${item.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              timelineVoiceoverUrl: finalVoiceUrl,
+              timelineVoiceoverDuration: durationSec > 0 ? durationSec : undefined,
+              timelineSceneSlots: slots,
+            }),
+          });
+        }
         setVoiceoverUrl(finalVoiceUrl);
         setImportPopupOpen(false);
         if (Array.isArray(guide.platforms) && guide.platforms.some((p) => String(p).toLowerCase().includes("tiktok") || String(p).toLowerCase().includes("instagram"))) {
-          setAspectRatio("9:16");
+          setVideoFormat("9:16");
         }
         const guideCaptions = buildCaptionsFromGuide(guide);
         if (guideCaptions.length > 0) setCaptions(guideCaptions);
@@ -599,7 +792,7 @@ export default function VideoTimelineFlow() {
         setImportingGuideId(null);
       }
     },
-    [toast]
+    [toast, router]
   );
 
   // --- Playback: voiceover is master; scenes switch by audio time; show video, image, or background ---
@@ -811,85 +1004,107 @@ export default function VideoTimelineFlow() {
     if (audio) audio.muted = masterMuted;
   }, [masterMuted, mutedSlotIds, playingSceneIndex, sceneSlots]);
 
+  const handleScriptSelect = useCallback(
+    (id: string | null) => {
+      setSelectedScriptId(id);
+      if (id) router.replace(`/dashboard/video-timeline?scriptId=${encodeURIComponent(id)}`);
+      else router.replace("/dashboard/video-timeline");
+    },
+    [router]
+  );
+
   return (
-    <div className="p-6 flex flex-col lg:flex-row gap-6 max-w-[1400px] mx-auto">
-      <div className="flex-1 min-w-0 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Video Timeline</h1>
-          <p className="text-sm text-muted-foreground mt-1">Preview, timeline, and captions. Design panel on the right.</p>
-        </div>
+    <div className="p-6 max-w-[1400px] mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Video Timeline</h1>
+        <p className="text-sm text-muted-foreground mt-1">Preview, timeline, and captions. Design panel on the right.</p>
+      </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Layout className="w-4 h-4" />
-              Video format
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">Export dimensions: {ratioConfig.width}×{ratioConfig.height}.</p>
-          </CardHeader>
-          <CardContent>
-            <Select value={aspectRatio} onValueChange={(v) => setAspectRatio(v as AspectRatioId)}>
-              <SelectTrigger className="w-full max-w-md">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {RATIO_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
+      <ScriptSelector
+        recentScripts={recentScripts}
+        selectedScriptId={selectedScriptId}
+        onSelect={handleScriptSelect}
+        loading={scriptsLoading}
+      />
 
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle className="text-base">Preview</CardTitle>
-            <p className="text-sm text-muted-foreground">Voiceover is the master clock. Scenes show your uploaded video or image; empty scenes show background only.</p>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="flex flex-col items-center w-full">
-              {/* Canvas: 9:16 portrait 270×480, aspect-ratio 9/16, centred; no text inside */}
-              <div
-                className="rounded-t-lg overflow-hidden shrink-0 mx-auto"
-                style={{
-                  backgroundColor: design.backgroundColor,
-                  width: 270,
-                  height: 480,
-                  aspectRatio: "9 / 16",
-                }}
+      {scriptLoadError && (
+        <p className="text-sm text-destructive font-medium" role="alert">
+          {scriptLoadError}
+        </p>
+      )}
+
+      {effectiveScriptId && (
+      <>
+      <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-12 lg:col-span-8 space-y-6 min-w-0">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Layout className="w-4 h-4" />
+                Video format
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Export dimensions: {ratioConfig.width}×{ratioConfig.height}.</p>
+            </CardHeader>
+            <CardContent>
+              <Select
+                value={videoFormat}
+                onValueChange={(value) => setVideoFormat(value as "9:16" | "16:9" | "1:1")}
               >
-                <div className="relative w-full h-full flex items-center justify-center">
-                  <video ref={videoRef} className="absolute inset-0 w-full h-full object-contain" style={{ display: "none" }} muted={false} playsInline />
-                  <img ref={imageRef} alt="" className="absolute inset-0 w-full h-full object-contain" style={{ display: "none" }} />
-                  <audio ref={audioRef} className="absolute w-0 h-0 opacity-0 pointer-events-none" style={{ position: "absolute", left: -9999 }} preload="auto" />
-                  <div
-                    className="absolute pointer-events-none border-2 border-dashed border-white/30 rounded z-10"
-                    style={{
-                      top: `${ratioConfig.safeZone.top * 100}%`,
-                      right: `${ratioConfig.safeZone.right * 100}%`,
-                      bottom: `${ratioConfig.safeZone.bottom * 100}%`,
-                      left: `${ratioConfig.safeZone.left * 100}%`,
-                    }}
-                    aria-hidden
-                  />
-                  {activeCaption && playingSceneIndex !== null && !isPaused && (
-                    <div
-                      className="absolute bottom-[12%] left-[5%] right-[5%] z-20 text-center px-4 py-2 rounded"
-                      style={{
-                        fontFamily: design.font,
-                        fontSize: `${design.fontSize}px`,
-                        color: design.textColor,
-                        backgroundColor: "rgba(0,0,0,0.6)",
-                      }}
-                    >
-                      {activeCaption.text}
-                    </div>
-                  )}
-                </div>
-              </div>
+                <SelectTrigger className="w-full max-w-md">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {formatOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
 
-              {/* Player bar: same width as canvas (270px), flush below, no gap */}
-              <div className="bg-[#0a0a0a] rounded-b-lg border border-t-0 border-[#2A2A2A] shrink-0 mx-auto" style={{ width: 270 }}>
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <CardTitle className="text-base">Preview</CardTitle>
+              <p className="text-sm text-muted-foreground">Voiceover is the master clock. Scenes show your uploaded video or image; empty scenes show background only.</p>
+            </CardHeader>
+            <CardContent className="p-6 min-w-0">
+              <div className="flex flex-col items-center w-full min-w-0">
+                <div
+                  className="w-full max-w-md mx-auto bg-black rounded-xl overflow-hidden relative"
+                  style={{ aspectRatio: aspectMap[videoFormat] }}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <video ref={videoRef} className="w-full h-full object-cover" style={{ display: "none" }} muted={false} playsInline />
+                    <img ref={imageRef} alt="" className="absolute inset-0 w-full object-cover" style={{ display: "none" }} />
+                    <audio ref={audioRef} className="absolute w-0 opacity-0 pointer-events-none" style={{ position: "absolute", left: -9999 }} preload="auto" aria-hidden />
+                    <div
+                      className="absolute pointer-events-none border-2 border-dashed border-white/30 rounded z-10"
+                      style={{
+                        top: `${ratioConfig.safeZone.top * 100}%`,
+                        right: `${ratioConfig.safeZone.right * 100}%`,
+                        bottom: `${ratioConfig.safeZone.bottom * 100}%`,
+                        left: `${ratioConfig.safeZone.left * 100}%`,
+                      }}
+                      aria-hidden
+                    />
+                    {activeCaption && playingSceneIndex !== null && !isPaused && (
+                      <div
+                        className="absolute bottom-[12%] left-[5%] right-[5%] z-20 text-center px-4 py-2 rounded"
+                        style={{
+                          fontFamily: design.font,
+                          fontSize: `${design.fontSize}px`,
+                          color: design.textColor,
+                          backgroundColor: "rgba(0,0,0,0.6)",
+                        }}
+                      >
+                        {activeCaption.text}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              {/* Player bar: same width as preview, flush below */}
+              <div className="w-full max-w-md mx-auto bg-[#0a0a0a] rounded-b-lg border border-t-0 border-[#2A2A2A]">
                 {sceneSlots.length > 0 && totalAudioSec > 0 && (
                   <div className="flex items-center gap-3 py-2 px-3">
                     <span className="text-xs font-mono text-white/80 tabular-nums w-10 text-right">{formatTime(playbackTimeSec)}</span>
@@ -959,148 +1174,15 @@ export default function VideoTimelineFlow() {
             )}
           </CardContent>
         </Card>
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><Plus className="w-4 h-4" /> Timeline track</CardTitle>
-            <p className="text-sm text-muted-foreground">One slot per scene. Upload video or image per scene (saved to Supabase). Empty scenes show background during playback.</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button type="button" variant="outline" size="sm" onClick={() => setImportPopupOpen(true)}>
-              <FileVideo className="w-4 h-4 mr-1" /> Import from Video Guide
-            </Button>
-            {sceneSlots.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center rounded-lg border border-dashed">No scene slots yet. Import from Video Guide to create scene slots and generate voiceover.</p>
-            ) : (
-              <ul className="space-y-2">
-                {sceneSlots.map((slot, i) => (
-                  <li key={slot.id} className="flex items-center gap-3 rounded-lg border bg-card p-3">
-                    <Film className="w-5 h-5 flex-shrink-0 text-muted-foreground" />
-                    <span className="w-24 flex-shrink-0 text-sm font-medium">Scene {slot.sceneIndex}</span>
-                    <span className="text-xs text-muted-foreground flex-shrink-0">{slot.startSec.toFixed(1)}s – {slot.endSec.toFixed(1)}s</span>
-                    {slot.mediaUrl ? (
-                      <>
-                        <div className="flex-1 min-w-0 flex items-center gap-2">
-                          <div className="w-16 h-9 rounded overflow-hidden bg-muted flex-shrink-0">
-                            {slot.mediaType === "video" ? (
-                              <video src={slot.mediaUrl} className="w-full h-full object-cover" muted preLoad="metadata" />
-                            ) : (
-                              <img src={slot.mediaUrl} alt="" className="w-full h-full object-cover" />
-                            )}
-                          </div>
-                          <span className="text-xs text-muted-foreground capitalize">{slot.mediaType ?? "media"}</span>
-                        </div>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" onClick={() => toggleSlotMute(slot.id)} title={mutedSlotIds.includes(slot.id) ? "Unmute" : "Mute clip"}>
-                          {mutedSlotIds.includes(slot.id) ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-destructive" onClick={() => clearSceneMedia(slot.id)} aria-label="Remove media">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </>
-                    ) : (
-                      <label className="flex-1 flex items-center cursor-pointer">
-                        <input
-                          type="file"
-                          accept={VIDEO_ACCEPT + "," + "image/*"}
-                          className="sr-only"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) uploadSceneMedia(i, file);
-                            e.target.value = "";
-                          }}
-                        />
-                        <Button type="button" variant="outline" size="sm" asChild><span><Upload className="w-4 h-4 mr-1 inline" /> Upload</span></Button>
-                      </label>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><Mic className="w-4 h-4" /> Voiceover track</CardTitle>
-            <p className="text-sm text-muted-foreground">Master clock for playback. Import from Video Guide to fetch or generate voiceover.</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {voiceoverUrl ? (
-              <>
-                <audio ref={voiceoverPreviewRef} className="sr-only" preload="metadata" onEnded={() => setVoiceoverPreviewPlaying(false)} />
-                <div className="flex items-center gap-3 rounded-lg border bg-card p-3">
-                  <Music className="w-5 h-5 flex-shrink-0 text-muted-foreground" />
-                  <span className="text-sm font-medium truncate flex-1 min-w-0">voiceover.mp3</span>
-                  <span className="text-xs font-mono text-muted-foreground tabular-nums flex-shrink-0">{formatTime(totalAudioSec)}</span>
-                  <div className="flex-1 min-w-0 h-6 flex items-center px-2 rounded bg-muted/50">
-                    <div className="h-1.5 flex-1 rounded-full bg-white/20 overflow-hidden">
-                      <div className="h-full bg-[#FF6B35]/80 rounded-full transition-[width] duration-150" style={{ width: `${totalAudioSec > 0 ? (playbackTimeSec / totalAudioSec) * 100 : 0}%` }} />
-                    </div>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={previewVoiceover} className="flex-shrink-0">
-                    <Play className="w-4 h-4 mr-1" />
-                    {voiceoverPreviewPlaying ? "Stop" : "Preview"}
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-destructive" onClick={removeVoiceover} aria-label="Remove voiceover">
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setImportPopupOpen(true)}>
-                  <FileVideo className="w-4 h-4 mr-1" /> Import from Video Guide
-                </Button>
-                {effectiveScriptId && (
-                  <Button type="button" variant="outline" size="sm" asChild>
-                    <a href={`/dashboard/digital-products/video-guide?libraryScriptId=${effectiveScriptId}`}>Generate Voiceover</a>
-                  </Button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><Type className="w-4 h-4" /> Captions track</CardTitle>
-            <p className="text-sm text-muted-foreground">Auto-filled from linked Video Guide. Editable start/end and text.</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button type="button" variant="outline" size="sm" onClick={addCaption}><Plus className="w-4 h-4 mr-1" /> Add caption</Button>
-            {captions.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-6 text-center rounded-lg border border-dashed">No captions. Link a Video Guide (URL) or add manually.</p>
-            ) : (
-              <ul className="space-y-3">
-                {captions.map((cap) => (
-                  <li key={cap.id} className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3 text-card-foreground">
-                    <Input placeholder="Caption text" value={cap.text} onChange={(e) => updateCaption(cap.id, { text: e.target.value })} className="flex-1 min-w-[120px]" />
-                    <div className="flex items-center gap-1">
-                      <Label className="text-xs whitespace-nowrap">Start</Label>
-                      <Input type="number" min={0} step={0.5} value={cap.startTime} onChange={(e) => updateCaption(cap.id, { startTime: Number(e.target.value) || 0 })} className="w-16" />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Label className="text-xs whitespace-nowrap">End</Label>
-                      <Input type="number" min={0} step={0.5} value={cap.endTime} onChange={(e) => updateCaption(cap.id, { endTime: Number(e.target.value) || 0 })} className="w-16" />
-                    </div>
-                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeCaption(cap.id)} aria-label="Remove caption">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <aside className="w-full lg:w-72 flex-shrink-0 space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Design</CardTitle>
-            <p className="text-sm text-muted-foreground">Caption font, size, colors. Background for preview.</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="col-span-12 lg:col-span-4 space-y-4 min-w-0">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Design</CardTitle>
+              <p className="text-sm text-muted-foreground">Caption font, size, colors. Background for preview.</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label className="text-xs">Text overlay font</Label>
               <Select value={design.font} onValueChange={(v) => setDesign((d) => ({ ...d, font: v }))}>
@@ -1129,12 +1211,28 @@ export default function VideoTimelineFlow() {
                 <Input value={design.backgroundColor} onChange={(e) => setDesign((d) => ({ ...d, backgroundColor: e.target.value }))} className="flex-1 font-mono text-sm" />
               </div>
             </div>
-            {aspectRatio === "9:16" && (captions.length > 0 || sceneSlots.length > 0) && (
+            {videoFormat === "9:16" && (captions.length > 0 || sceneSlots.length > 0) && (
               <p className="text-xs text-amber-600 dark:text-amber-400 pt-1 border-t mt-1">Keep text within the safe zone for 9:16.</p>
             )}
           </CardContent>
         </Card>
-      </aside>
+        </div>
+      </div>
+
+      <div className="mt-6 w-full min-w-0">
+        {!voiceoverUrl && (
+          <Button type="button" variant="outline" onClick={handleImportVoiceover} disabled={!effectiveScriptId} className="mb-3">
+            Import Voiceover from Video Creation Guide
+          </Button>
+        )}
+        <TimelineProvider key={`timeline-${effectiveScriptId ?? "none"}-${voiceoverUrl ? "vo" : "novo"}-${voiceoverDuration ?? 0}`} initialDuration={timelineInitialDuration}>
+          <TimelineCanvas
+            key={`canvas-${effectiveScriptId ?? "n"}-${voiceoverUrl ?? "x"}-${voiceoverDuration ?? 0}`}
+            className="w-full"
+            initialItems={timelineInitialItems}
+          />
+        </TimelineProvider>
+      </div>
 
       <Dialog open={importPopupOpen} onOpenChange={setImportPopupOpen}>
         <DialogContent className="max-w-md">
@@ -1165,6 +1263,8 @@ export default function VideoTimelineFlow() {
           </div>
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </div>
   );
 }

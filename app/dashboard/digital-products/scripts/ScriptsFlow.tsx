@@ -113,7 +113,7 @@ function isPound5SavingChallenge(product: ProductFormData | null): boolean {
 }
 
 function generateMockScripts(product: ProductFormData | null): ScriptData[] {
-  const name = product?.productName?.trim() || "Your product";
+  const name = product?.productName?.trim() || "Product";
   const desc = product?.productDescription?.trim() || "";
 
   if (isPound5SavingChallenge(product)) {

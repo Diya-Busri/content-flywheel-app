@@ -104,6 +104,7 @@ function buildCreativeBriefPrompt(
     : "Include 5 scenes.";
   return `Product: "${productName}"
 ${productDesc ? `Description: ${productDesc}` : ""}
+IMPORTANT: Use the exact product name "${productName}" everywhere in the brief (scene text, overlays, prompts). Never use a placeholder; always use the product name above.
 
 Script:
 - Hook: "${hook || ""}"
@@ -202,6 +203,7 @@ function buildPlatformContentPrompt(
   const platformList = platforms.map((p) => PLATFORM_LABELS[p] || p).join(", ");
   return `Product: "${productName}"
 ${productDesc ? `Description: ${productDesc}` : ""}
+IMPORTANT: Use the exact product name "${productName}" in all platform content. Never use a placeholder; use this name only.
 
 Script:
 - Hook: "${hook || ""}"
@@ -305,7 +307,8 @@ export async function POST(request: NextRequest) {
 
     const selectedPlatforms = Array.isArray(platformsReq) && platformsReq.length > 0 ? platformsReq : ["tiktok"];
 
-    let productNameRes = cleanProductTitle(productName) || productName || "Your product";
+    const rawProductName = typeof productName === "string" ? productName.trim() : "";
+    let productNameRes = cleanProductTitle(rawProductName) || rawProductName || "the product";
     let productDesc = productDescription || "";
     let stockImages: string[] = Array.isArray(stockImageUrls) ? stockImageUrls : [];
 
@@ -591,20 +594,25 @@ export async function POST(request: NextRequest) {
     };
 
     // Save video guide to library so it appears in My Library alongside products and scripts
+    let savedScriptId: string | null = null;
     try {
-      await db.insert(scriptsTable).values({
-        userId,
-        title: `Video Guide: ${productNameRes || "Untitled"}`.trim(),
-        content: JSON.stringify(guide),
-        platform: "video-guide",
-        productId: productId || null,
-      });
+      const [inserted] = await db
+        .insert(scriptsTable)
+        .values({
+          userId,
+          title: `Video Guide: ${productNameRes || "Untitled"}`.trim(),
+          content: JSON.stringify(guide),
+          platform: "video-guide",
+          productId: productId || null,
+        })
+        .returning({ id: scriptsTable.id });
+      if (inserted?.id) savedScriptId = inserted.id;
     } catch (saveErr) {
       console.warn("[video-guide] Failed to save guide to library:", saveErr);
       // Do not fail the request; guide is still returned and user can view it
     }
 
-    return NextResponse.json(guide);
+    return NextResponse.json({ ...guide, ...(savedScriptId && { libraryScriptId: savedScriptId }) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to generate guide";
     console.error("[video-guide]", err);

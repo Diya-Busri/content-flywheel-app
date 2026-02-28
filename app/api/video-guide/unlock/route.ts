@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     const screenshotUrl = urlData.publicUrl;
 
     const selectedPlatforms = Array.isArray(platforms) && platforms.length > 0 ? platforms : ["tiktok"];
-    const product = productName || "Your product";
+    const product = productName?.trim() || "Product";
     const hook = script?.hook ?? "";
     const bodyText = script?.body ?? "";
     const cta = script?.cta ?? "";

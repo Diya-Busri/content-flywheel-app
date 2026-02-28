@@ -4115,7 +4115,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   <Check className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <p className="text-center text-lg font-medium">Design applied!</p>
-                <p className="text-center text-sm text-muted-foreground">Your product has been styled with new colours, fonts, and a cover image. Try Regenerate for a different look.</p>
+                <p className="text-center text-sm text-muted-foreground">{(product?.title ?? "Product")} has been styled with new colours, fonts, and a cover image. Try Regenerate for a different look.</p>
               </div>
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button

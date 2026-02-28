@@ -14,6 +14,7 @@ import { scriptsTable } from "@/db/schema/library-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { cleanProductTitle } from "@/lib/product-title";
+import { mapScriptToSceneOverlays } from "@/lib/video-guide-scene-overlays";
 
 const SYSTEM_PROMPT = `You are an expert short-form video scriptwriter for TikTok and Instagram Reels.
 Write scripts that feel human, conversational and emotionally engaging.
@@ -38,7 +39,7 @@ BODY (3-25s): Agitate the problem (why people fail at this), then naturally intr
 CTA (25-30s): One clear action. Link in bio. Urgent but human.
 
 Rules:
-- Product name appears ONCE only, naturally in the script. Use the exact product name given in the user message — never use a placeholder like "Your product" or "Your Product".
+- Product name appears ONCE only, naturally in the script. Use the exact product name given in the user message (the PRODUCT block). Never use a placeholder.
 - Max 15 words per sentence.
 - No corporate language.
 - Write like a real TikTok creator talking to camera.
@@ -150,8 +151,8 @@ export async function POST(request: NextRequest) {
       "";
     // Cleaned product name: everything before first | and before first - (per Step 3). Never use placeholder when we have any title.
     let productName =
-      rawTitle.split("|")[0].split("-")[0].trim() || rawTitle.trim() || fromRowTitle.split("|")[0].split("-")[0].trim() || fromRowTitle || "Your product";
-    if (productName === "Your product" && fromRowTitle) {
+      rawTitle.split("|")[0].split("-")[0].trim() || rawTitle.trim() || fromRowTitle.split("|")[0].split("-")[0].trim() || fromRowTitle || "the product";
+    if (productName === "the product" && fromRowTitle) {
       productName = fromRowTitle.split("|")[0].split("-")[0].trim() || fromRowTitle;
     }
 
@@ -262,6 +263,23 @@ ${productBlock}`;
 
     const newScript = { hook, body: bodyText, cta };
     const updatedContent = { ...content, script: newScript };
+
+    const contentScenes = Array.isArray(content.scenes) ? (content.scenes as Array<{ timing?: string; textOverlay?: unknown; [key: string]: unknown }>) : [];
+    if (contentScenes.length > 0) {
+      const chunks = mapScriptToSceneOverlays(newScript, contentScenes.length);
+      const updatedScenes = contentScenes.map((scene, i) => {
+        const chunk = chunks[i] ?? "";
+        const existing = scene.textOverlay;
+        const existingObj =
+          typeof existing === "object" && existing && !Array.isArray(existing) && "exactText" in (existing as object)
+            ? (existing as { exactText?: string; fontStyle?: string; size?: string; position?: string; color?: string; animation?: string; timingNote?: string })
+            : Array.isArray(existing) && existing[0] && typeof existing[0] === "object"
+              ? (existing[0] as { exactText?: string; fontStyle?: string; size?: string; position?: string; color?: string; animation?: string; timingNote?: string })
+              : {};
+        return { ...scene, textOverlay: { ...existingObj, exactText: chunk } };
+      });
+      updatedContent.scenes = updatedScenes;
+    }
 
     await db
       .update(scriptsTable)

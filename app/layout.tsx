@@ -28,6 +28,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <ClerkProvider
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
+      afterSignInUrl="/dashboard"
+      afterSignUpUrl="/dashboard"
       fallbackRedirectUrl="/dashboard"
     >
       <html lang="en" suppressHydrationWarning>

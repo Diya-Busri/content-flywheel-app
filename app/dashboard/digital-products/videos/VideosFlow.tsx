@@ -86,7 +86,7 @@ export default function VideosFlow() {
       const rawProduct = sessionStorage.getItem("digitalProductForm");
       if (rawProduct) {
         const data = JSON.parse(rawProduct);
-        const cleaned = cleanProductTitle(data.productName) || "Your product";
+        const cleaned = cleanProductTitle(data.productName) || data.productName?.trim() || "Product";
         setProductName(cleaned);
         productNameSet = !!data.productName;
       }
@@ -99,7 +99,7 @@ export default function VideosFlow() {
       if (rawContext) {
         const ctx = JSON.parse(rawContext) as { productId?: string; productName?: string };
         if (ctx.productId) setProductId(ctx.productId);
-        if (!productNameSet && ctx.productName) setProductName(cleanProductTitle(ctx.productName) || "Your product");
+        if (!productNameSet && ctx.productName) setProductName(cleanProductTitle(ctx.productName) || ctx.productName.trim() || "Product");
       }
     } catch {
       setSelectedScripts([]);
@@ -217,6 +217,7 @@ export default function VideosFlow() {
           hook: script.hook,
           body: script.body,
           cta: script.cta,
+          productName: (productName || "").trim() || undefined,
           productId: productId || undefined,
           platforms: selectedPlatformIds.length > 0 ? selectedPlatformIds : ["tiktok"],
           ...(logoDataUrl && { logoDataUrl }),
@@ -257,7 +258,7 @@ export default function VideosFlow() {
         </div>
         <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">Customize Your Videos</h1>
         <p className="text-[#A0A0A0] mb-8">
-          Based on: <span className="font-medium text-white">{cleanProductTitle(productName) || "Your product"}</span>
+          Based on: <span className="font-medium text-white">{cleanProductTitle(productName) || productName || "Product"}</span>
         </p>
 
         {count === 0 ? (

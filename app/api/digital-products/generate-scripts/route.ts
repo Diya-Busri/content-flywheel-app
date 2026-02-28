@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       productDescription?: string;
     };
     const rawTitle = (marketing.productTitle ?? product.title ?? "").trim();
-    const title = cleanProductTitle(rawTitle) || rawTitle || "Your product";
+    const title = cleanProductTitle(rawTitle) || rawTitle || "Product";
     const description = (marketing.productDescription ?? "").trim() || "";
     const niche = (product.niche ?? "").trim() || "general audience";
 

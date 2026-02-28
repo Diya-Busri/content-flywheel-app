@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
     const scriptHook = (formData.get("scriptHook") as string) ?? "";
     const scriptBody = (formData.get("scriptBody") as string) ?? "";
     const scriptCta = (formData.get("scriptCta") as string) ?? "";
-    const rawProductName = (formData.get("productName") as string) ?? "Your product";
-    const productName = cleanProductTitle(rawProductName) || rawProductName || "Your product";
+    const rawProductName = (formData.get("productName") as string) ?? "";
+    const productName = cleanProductTitle(rawProductName) || rawProductName.trim() || "Product";
     const productDescription = (formData.get("productDescription") as string) ?? "";
 
     const apiKey = process.env.OPENAI_API_KEY?.trim();

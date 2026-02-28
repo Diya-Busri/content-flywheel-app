@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,6 +16,8 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+import { mapScriptToSceneOverlays } from "@/lib/video-guide-scene-overlays";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -41,6 +44,7 @@ import {
   Trash2,
   Pause,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { cleanProductTitle, replaceProductTitleInText } from "@/lib/product-title";
 
 /** Social Media Kit shape (matches API response). */
@@ -152,6 +156,21 @@ function parseSceneTiming(t: string): { startSec: number; endSec: number } {
   return { startSec: 0, endSec: 0 };
 }
 
+/**
+ * Maps full script text + scenes to one overlay exactText per scene (scene 1 = hook, 2..n-1 = body sentences, last = CTA).
+ * Exported for backward compatibility; prefer mapScriptToSceneOverlays from @/lib/video-guide-scene-overlays when you have hook/body/cta.
+ */
+export function getSceneChunksForScript(
+  fullScriptText: string,
+  scenes: Array<{ timing?: string }>
+): string[] {
+  const parts = fullScriptText.trim().split(/\n\n+/);
+  const hook = parts[0]?.trim() ?? "";
+  const cta = parts.length > 1 ? (parts[parts.length - 1]?.trim() ?? "") : "";
+  const body = parts.length > 2 ? parts.slice(1, -1).join("\n\n").trim() : (parts.length === 2 ? parts[1]?.trim() ?? "" : "");
+  return mapScriptToSceneOverlays({ hook, body, cta }, scenes.length);
+}
+
 /** Returns duration in seconds when the audio at src has loaded metadata. */
 function useAudioDuration(src: string | null): number | null {
   const [duration, setDuration] = useState<number | null>(null);
@@ -197,6 +216,8 @@ export type VideoGuideData = {
   platformTips?: string[];
   /** Single full-script voiceover URL (saved to Supabase). */
   timelineVoiceoverUrl?: string;
+  /** Duration in seconds of the full-script voiceover (saved with URL for timeline). */
+  timelineVoiceoverDuration?: number;
   /** Per-scene voiceover URLs (saved to Supabase), ordered by scene index. */
   timelineSceneVoiceoverUrls?: string[];
 };
@@ -214,12 +235,15 @@ type Props = {
   productId?: string;
   /** Library script id when guide was loaded from My Library; passed to timeline so captions can auto-populate. */
   libraryScriptId?: string;
-  /** Called after full script is regenerated so parent can update guide.script and refresh. */
-  onScriptRegenerated?: (script: { hook: string; body: string; cta: string }) => void;
+  /** Called when user provides product name (e.g. from the "What is your product called?" prompt). Parent should update guide.productName and persist if libraryScriptId. */
+  onProductNameChange?: (productName: string) => void;
+  /** Called after full script is regenerated so parent can update guide.script and optionally guide.scenes (with textOverlay re-mapped). */
+  onScriptRegenerated?: (script: { hook: string; body: string; cta: string }, updatedScenes?: Array<{ scene: string; timing: string; textOverlay?: TextOverlayObj | TextOverlayObj[]; [key: string]: unknown }>) => void;
 };
 
-export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceId, scripts: scriptsProp, productId, libraryScriptId, onScriptRegenerated }: Props) {
+export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceId, scripts: scriptsProp, productId, libraryScriptId, onProductNameChange, onScriptRegenerated }: Props) {
   const { toast } = useToast();
+  const router = useRouter();
   const [scripts, setScripts] = useState<ScriptForGuide[]>(() => (Array.isArray(scriptsProp) && scriptsProp.length > 0 ? scriptsProp : []));
   const [currentScriptIndex, setCurrentScriptIndex] = useState(0);
   const [regeneratingScript, setRegeneratingScript] = useState(false);
@@ -244,7 +268,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const effectiveScript = scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length
     ? { hook: scripts[currentScriptIndex].hook, body: scripts[currentScriptIndex].body, cta: scripts[currentScriptIndex].cta }
     : guide.script;
-  const rawProductTitle = guide.productName;
+  const rawProductTitle = effectiveProductName || undefined;
   const displayScript = {
     hook: replaceProductTitleInText(effectiveScript.hook, rawProductTitle),
     body: replaceProductTitleInText(effectiveScript.body, rawProductTitle),
@@ -262,7 +286,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     if (!Array.isArray(urls) || urls.length === 0) return [];
     return urls.map((u) => (typeof u === "string" && u.trim() ? u.trim() : null));
   });
-  const [fullVoiceoverDuration, setFullVoiceoverDuration] = useState<number | null>(null);
+  const [fullVoiceoverDuration, setFullVoiceoverDuration] = useState<number | null>(
+    () => (typeof guide.timelineVoiceoverDuration === "number" && guide.timelineVoiceoverDuration > 0 ? guide.timelineVoiceoverDuration : null)
+  );
   const [perSceneDurations, setPerSceneDurations] = useState<number[]>([]);
   const [generatingFull, setGeneratingFull] = useState(false);
   const [generatingPerScene, setGeneratingPerScene] = useState(false);
@@ -270,6 +296,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   /** URL of the audio currently playing for inline preview (full or scene). */
   const [playingPreviewUrl, setPlayingPreviewUrl] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
   const [characterRefPreviewUrl, setCharacterRefPreviewUrl] = useState<string | null>(null);
   const [characterRefPublicUrl, setCharacterRefPublicUrl] = useState<string | null>(null);
@@ -290,6 +317,12 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     return null;
   });
   const [socialKitLoading, setSocialKitLoading] = useState(false);
+  /** User-entered product name when guide has none (shown in "What is your product called?" block). */
+  const [userProductName, setUserProductName] = useState("");
+  const [productNameInput, setProductNameInput] = useState("");
+
+  const effectiveProductName = (guide.productName?.trim() || "") || (userProductName?.trim() || "");
+  const hasProductName = effectiveProductName.length > 0;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -344,12 +377,14 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   useEffect(() => {
     const url = guide.timelineVoiceoverUrl?.trim() || null;
     setFullVoiceoverUrl((prev) => (url ? (prev !== url ? url : prev) : (prev && !guide.timelineVoiceoverUrl?.trim() ? null : prev)));
+    const dur = typeof guide.timelineVoiceoverDuration === "number" && guide.timelineVoiceoverDuration > 0 ? guide.timelineVoiceoverDuration : null;
+    setFullVoiceoverDuration((prev) => (dur !== null ? dur : prev));
     const urls = guide.timelineSceneVoiceoverUrls;
     if (Array.isArray(urls)) {
       const next = urls.map((u) => (typeof u === "string" && u.trim() ? u.trim() : null));
       setPerSceneUrls((prev) => (prev.length !== next.length || prev.some((u, i) => u !== next[i]) ? next : prev));
     }
-  }, [guide.timelineVoiceoverUrl, guide.timelineSceneVoiceoverUrls]);
+  }, [guide.timelineVoiceoverUrl, guide.timelineVoiceoverDuration, guide.timelineSceneVoiceoverUrls]);
 
   const script = effectiveScript;
   const scenes = guide.scenes ?? guide.scenePrompts.map((s, i) => ({
@@ -432,7 +467,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       form.append("scriptHook", displayScript.hook);
       form.append("scriptBody", displayScript.body);
       form.append("scriptCta", displayScript.cta);
-      form.append("productName", guide.productName ?? "Your product");
+      form.append("productName", (effectiveProductName && cleanProductTitle(effectiveProductName)) || effectiveProductName || "Product");
       form.append("productDescription", (guide as { productDescription?: string }).productDescription ?? "");
       const res = await fetch("/api/video-guide/social-media-kit", { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
@@ -455,7 +490,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     } finally {
       setSocialKitLoading(false);
     }
-  }, [socialKitProofFile, script, guide, toast]);
+  }, [socialKitProofFile, script, guide, effectiveProductName, toast]);
 
   const socialKitToText = useCallback((kit: SocialMediaKit): string => {
     const lines: string[] = [];
@@ -480,7 +515,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     lines.push("\nEngagement prompts: " + (kit.general.engagementPrompts?.join("\n• ") || "—"));
     lines.push("\nPin comment suggestions: " + (kit.general.pinCommentSuggestions?.join("\n• ") || "—"));
     return lines.join("\n");
-  }, []);
+  }, [effectiveProductName]);
 
   const copyFullScript = useCallback(() => {
     const text = `Hook:\n${displayScript.hook}\n\nBody:\n${displayScript.body}\n\nCTA:\n${displayScript.cta}`;
@@ -501,7 +536,20 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to regenerate script");
         const script = (data as { script?: { hook: string; body: string; cta: string } }).script;
         if (script) {
-          onScriptRegenerated?.(script);
+          const scenesForMapping = guide.scenes ?? guide.scenePrompts.map((s) => ({ scene: s.scene, timing: s.timing }));
+          const chunks = mapScriptToSceneOverlays(script, scenesForMapping.length);
+          const updatedScenes = scenesForMapping.map((scene, i) => {
+            const chunk = chunks[i] ?? "";
+            const raw = (scene as { textOverlay?: unknown }).textOverlay;
+            const existing: TextOverlayObj =
+              typeof raw === "object" && raw && !Array.isArray(raw) && "exactText" in (raw as object)
+                ? (raw as TextOverlayObj)
+                : Array.isArray(raw) && raw[0] && typeof raw[0] === "object" && raw[0] && "exactText" in (raw[0] as object)
+                  ? (raw[0] as TextOverlayObj)
+                  : {};
+            return { ...scene, textOverlay: { ...existing, exactText: chunk } };
+          });
+          onScriptRegenerated?.(script, updatedScenes);
           if (scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length) {
             setScripts((prev) =>
               prev.map((s, i) => (i === currentScriptIndex ? { ...s, hook: script.hook, body: script.body, cta: script.cta } : s))
@@ -516,7 +564,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         setRegeneratingFullScript(false);
       }
     },
-    [libraryScriptId, onScriptRegenerated, scripts.length, currentScriptIndex, toast]
+    [libraryScriptId, onScriptRegenerated, scripts.length, currentScriptIndex, toast, guide.scenes, guide.scenePrompts]
   );
 
   const fullScriptText = `${displayScript.hook}\n\n${displayScript.body}\n\n${displayScript.cta}`;
@@ -637,15 +685,26 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         }
         const { url } = (await upRes.json()) as { url: string };
         finalUrl = url;
-        await fetch(`/api/library/scripts/${libraryScriptId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ timelineVoiceoverUrl: finalUrl }),
-        });
       } else {
         finalUrl = URL.createObjectURL(blob);
       }
+      const durationSec = await new Promise<number>((resolve, reject) => {
+        const audio = new Audio(finalUrl);
+        audio.onloadedmetadata = () => resolve(audio.duration);
+        audio.onerror = () => reject(new Error("Failed to load audio"));
+      });
+      if (libraryScriptId) {
+        await fetch(`/api/library/scripts/${libraryScriptId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            timelineVoiceoverUrl: finalUrl,
+            timelineVoiceoverDuration: durationSec,
+          }),
+        });
+      }
       setFullVoiceoverUrl(finalUrl);
+      setFullVoiceoverDuration(durationSec);
       toast({ title: "Voiceover ready", description: "Full script audio generated and saved." });
     } catch (e) {
       toast({
@@ -657,6 +716,51 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       setGeneratingFull(false);
     }
   }, [fullScriptText, generateVoiceover, toast, fullVoiceoverUrl, libraryScriptId]);
+
+  const generateOneSceneVoiceover = useCallback(
+    async (i: number, textChunk: string | undefined, urls: (string | null)[]): Promise<boolean> => {
+      if (!textChunk?.trim()) {
+        console.warn("[Scene voiceover] Scene", i, "has no text, skipping");
+        return false;
+      }
+      let blob: Blob;
+      try {
+        blob = await generateVoiceover(textChunk);
+      } catch (err) {
+        console.error("[Scene voiceover] TTS failed for scene", i + 1, err);
+        if (err instanceof Error) console.error("[Scene voiceover] TTS error message:", err.message);
+        urls[i] = null;
+        return false;
+      }
+      if (!libraryScriptId) {
+        urls[i] = URL.createObjectURL(blob);
+        return true;
+      }
+      try {
+        const form = new FormData();
+        form.set("file", new File([blob], `voiceover-scene-${i + 1}.mp3`, { type: "audio/mpeg" }));
+        form.set("libraryScriptId", libraryScriptId);
+        form.set("sceneIndex", String(i));
+        const upRes = await fetch("/api/video-timeline/upload-voiceover", { method: "POST", body: form });
+        if (!upRes.ok) {
+          const errBody = await upRes.json().catch(() => ({}));
+          const errMsg = (errBody as { error?: string }).error || upRes.statusText || "Upload failed";
+          console.error("[Scene voiceover] Supabase/upload failed for scene", i + 1, { status: upRes.status, error: errMsg, body: errBody });
+          urls[i] = null;
+          return false;
+        }
+        const { url } = (await upRes.json()) as { url: string };
+        urls[i] = url;
+        return true;
+      } catch (err) {
+        console.error("[Scene voiceover] Upload error for scene", i + 1, err);
+        if (err instanceof Error) console.error("[Scene voiceover] Upload error message:", err.message);
+        urls[i] = null;
+        return false;
+      }
+    },
+    [generateVoiceover, libraryScriptId]
+  );
 
   const handleGeneratePerSceneVoiceover = useCallback(async () => {
     const texts = getSceneTexts();
@@ -672,46 +776,61 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       return texts.map(() => null);
     });
     try {
-      const urls: (string | null)[] = [];
+      const urls: (string | null)[] = texts.map(() => null);
       for (let i = 0; i < texts.length; i++) {
         setGeneratingSceneIndex(i);
-        const textChunk = texts[i];
-        console.log("Generating voiceover for scene:", i, "text:", textChunk?.slice(0, 100) ?? "(empty)", "length:", textChunk?.length ?? 0);
-        try {
-          const blob = await generateVoiceover(textChunk);
-          if (libraryScriptId) {
-            const form = new FormData();
-            form.set("file", new File([blob], `voiceover-scene-${i + 1}.mp3`, { type: "audio/mpeg" }));
-            form.set("libraryScriptId", libraryScriptId);
-            form.set("sceneIndex", String(i));
-            const upRes = await fetch("/api/video-timeline/upload-voiceover", { method: "POST", body: form });
-            console.log("Upload response for scene", i, ":", upRes.status);
-            if (!upRes.ok) {
-              const err = await upRes.json().catch(() => ({}));
-              throw new Error((err as { error?: string }).error || "Upload failed");
-            }
-            const { url } = (await upRes.json()) as { url: string };
-            urls.push(url);
-          } else {
-            urls.push(URL.createObjectURL(blob));
-          }
-        } catch (err) {
-          console.error("Scene voiceover failed for scene", i, err);
-          urls.push(null);
+        await generateOneSceneVoiceover(i, texts[i] ?? undefined, urls);
+      }
+      const failedIndices = urls.map((u, i) => (u == null ? i : -1)).filter((i) => i >= 0);
+      if (failedIndices.length > 0) {
+        console.log("[Scene voiceover] Retrying failed scenes:", failedIndices.map((i) => i + 1));
+        for (const i of failedIndices) {
+          setGeneratingSceneIndex(i);
+          await generateOneSceneVoiceover(i, texts[i] ?? undefined, urls);
         }
       }
-      setPerSceneUrls(urls);
+      setPerSceneUrls([...urls]);
       if (libraryScriptId && urls.some(Boolean)) {
         const toSave = urls.map((u) => u ?? "");
-        await fetch(`/api/library/scripts/${libraryScriptId}`, {
+        const patchRes = await fetch(`/api/library/scripts/${libraryScriptId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ timelineSceneVoiceoverUrls: toSave }),
         });
+        if (!patchRes.ok) {
+          const errBody = await patchRes.json().catch(() => ({}));
+          console.error("[Scene voiceover] Supabase PATCH failed:", { status: patchRes.status, body: errBody });
+        }
       }
       const ok = urls.filter(Boolean).length;
-      toast({ title: "Scene voiceovers ready", description: `${ok} of ${texts.length} clips generated and saved.` });
+      if (libraryScriptId) {
+        if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
+        redirectTimeoutRef.current = setTimeout(() => {
+          redirectTimeoutRef.current = null;
+          router.push(`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`);
+        }, 1500);
+        toast({
+          title: "Scene voiceovers",
+          description: "Redirecting to Timeline in 1.5s.",
+          action: (
+            <ToastAction
+              altText="Cancel redirect"
+              onClick={() => {
+                if (redirectTimeoutRef.current) {
+                  clearTimeout(redirectTimeoutRef.current);
+                  redirectTimeoutRef.current = null;
+                }
+              }}
+            >
+              Cancel
+            </ToastAction>
+          ),
+        });
+      } else {
+        toast({ title: "Scene voiceovers", description: `Generated ${ok} of ${texts.length} successfully.` });
+      }
     } catch (e) {
+      console.error("[Scene voiceover] Unexpected error:", e);
       toast({
         title: "Voiceover failed",
         description: e instanceof Error ? e.message : "Something went wrong",
@@ -721,7 +840,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       setGeneratingPerScene(false);
       setGeneratingSceneIndex(null);
     }
-  }, [scenes, getSceneTexts, generateVoiceover, toast, libraryScriptId]);
+  }, [scenes, getSceneTexts, generateOneSceneVoiceover, toast, libraryScriptId, router]);
 
   const handleGenerateSingleSceneVoiceover = useCallback(
     async (index: number) => {
@@ -806,11 +925,12 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       await fetch(`/api/library/scripts/${libraryScriptId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timelineVoiceoverUrl: "" }),
+        body: JSON.stringify({ timelineVoiceoverUrl: "", timelineVoiceoverDuration: 0 }),
       }).catch(() => {});
     }
     if (fullVoiceoverUrl?.startsWith("blob:")) URL.revokeObjectURL(fullVoiceoverUrl);
     setFullVoiceoverUrl(null);
+    setFullVoiceoverDuration(null);
     if (playingPreviewUrl === fullVoiceoverUrl) setPlayingPreviewUrl(null);
     toast({ title: "Voiceover removed" });
   }, [libraryScriptId, fullVoiceoverUrl, playingPreviewUrl, toast]);
@@ -838,7 +958,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const downloadGuide = useCallback(() => {
     const lines: string[] = [];
     lines.push("VIDEO CREATION GUIDE");
-    if (guide.productName) lines.push(`Product: ${cleanProductTitle(guide.productName) || guide.productName}`);
+    if (effectiveProductName) lines.push(`Product: ${cleanProductTitle(effectiveProductName) || effectiveProductName}`);
     lines.push("");
     lines.push("SCRIPT");
     lines.push(`Hook: ${displayScript.hook}`);
@@ -893,12 +1013,12 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `video-guide-${(effectiveScriptTitle ?? cleanProductTitle(guide.productName) ?? guide.productName ?? "guide").replace(/\s+/g, "-")}.txt`;
+    a.download = `video-guide-${(effectiveScriptTitle ?? cleanProductTitle(effectiveProductName) ?? effectiveProductName ?? "guide").replace(/\s+/g, "-")}.txt`;
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: "Downloaded", description: "Full guide saved" });
   }, [
-    guide.productName,
+    effectiveProductName,
     script,
     scenes,
     getSceneFullPrompt,
@@ -957,6 +1077,49 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           Back to Results
         </Link>
 
+        {!hasProductName && (
+          <div className="mb-6 p-4 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-[#1A1810]">
+            <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">What is your product called?</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                type="text"
+                placeholder="e.g. My App, Fitness Pro"
+                value={productNameInput}
+                onChange={(e) => setProductNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const v = productNameInput.trim();
+                    if (v) {
+                      setUserProductName(v);
+                      onProductNameChange?.(v);
+                      setProductNameInput("");
+                    }
+                  }
+                }}
+                className="max-w-xs border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F]"
+              />
+              <Button
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+                onClick={() => {
+                  const v = productNameInput.trim();
+                  if (v) {
+                    setUserProductName(v);
+                    onProductNameChange?.(v);
+                    setProductNameInput("");
+                  }
+                }}
+                disabled={!productNameInput.trim()}
+              >
+                Continue
+              </Button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-2">
+              Enter a name to personalize scripts and voiceovers before generating.
+            </p>
+          </div>
+        )}
+
         {scripts.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-4 mb-6 p-3 rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
             <div className="flex items-center gap-2">
@@ -992,7 +1155,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 size="sm"
                 className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-1.5"
                 onClick={handleRegenerateScript}
-                disabled={regeneratingScript}
+                disabled={regeneratingScript || !hasProductName}
               >
                 {regeneratingScript ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                 Regenerate Script
@@ -1006,10 +1169,12 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">Video Creation Guide</h1>
             <p className="text-gray-600 dark:text-[#A0A0A0]">
               {guide.overview ?? "Multi-platform video marketing guide."}
-              {guide.productName && (
+              {(scriptTitle?.trim() || (effectiveProductName && cleanProductTitle(effectiveProductName) && cleanProductTitle(effectiveProductName) !== "Product")) && (
                 <>
                   {" "}
-                  <span className="text-gray-900 dark:text-white font-medium">{cleanProductTitle(guide.productName) || guide.productName}</span>
+                  <span className="text-gray-900 dark:text-white font-medium">
+                    {cleanProductTitle(scriptTitle ?? effectiveProductName) || scriptTitle || effectiveProductName}
+                  </span>
                 </>
               )}
             </p>
@@ -1052,28 +1217,28 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 Full Script
               </span>
               <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                  onClick={() => handleRegenerateFullScript()}
+                  disabled={regeneratingFullScript || !hasProductName}
+                >
+                  {regeneratingFullScript ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                  )}
+                  Regenerate Full Script
+                </Button>
                 {libraryScriptId && (
                   <>
                     <Button
                       variant="outline"
                       size="sm"
                       className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
-                      onClick={() => handleRegenerateFullScript()}
-                      disabled={regeneratingFullScript}
-                    >
-                      {regeneratingFullScript ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                      ) : (
-                        <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                      )}
-                      Regenerate Full Script
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
                       onClick={() => handleRegenerateFullScript("shorter")}
-                      disabled={regeneratingFullScript}
+                      disabled={regeneratingFullScript || !hasProductName}
                       title="Cut script by ~30%; keep hook and CTA intact"
                     >
                       Shorter
@@ -1083,7 +1248,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                       size="sm"
                       className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
                       onClick={() => handleRegenerateFullScript("longer")}
-                      disabled={regeneratingFullScript}
+                      disabled={regeneratingFullScript || !hasProductName}
                       title="Expand body by ~30%; more pain agitation or social proof"
                     >
                       Longer
@@ -1095,7 +1260,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   size="sm"
                   className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
                   onClick={handleGenerateFullVoiceover}
-                  disabled={generatingFull || !fullScriptText.trim()}
+                  disabled={generatingFull || !fullScriptText.trim() || !hasProductName}
                 >
                   {generatingFull ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
@@ -1109,7 +1274,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   size="sm"
                   className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
                   onClick={handleGeneratePerSceneVoiceover}
-                  disabled={generatingPerScene || getSceneTexts().length === 0}
+                  disabled={generatingPerScene || getSceneTexts().length === 0 || !hasProductName}
                 >
                   {generatingPerScene ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
@@ -1346,9 +1511,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             {/* Pro tip */}
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 flex gap-3">
               <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-              <div className="text-sm text-amber-200/90 space-y-2">
-                <p className="font-medium text-amber-100">Pro tip: Generate your main character first, then use that image as a reference for all scenes.</p>
-                <ul className="list-disc list-inside space-y-0.5 text-amber-200/80">
+              <div className="text-sm text-gray-900 dark:text-white space-y-2">
+                <p className="font-medium text-gray-900 dark:text-white">Pro tip: Generate your main character first, then use that image as a reference for all scenes.</p>
+                <ul className="list-disc list-inside space-y-0.5 text-gray-700 dark:text-gray-200">
                   <li><strong>Midjourney:</strong> Use --cref flag (best consistency)</li>
                   <li><strong>ChatGPT:</strong> Upload reference image in each prompt</li>
                   <li><strong>Grok:</strong> Upload reference and ask to maintain character</li>
@@ -1853,7 +2018,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     <Button
                       className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
                       onClick={handleGenerateFullVoiceover}
-                      disabled={generatingFull || !fullScriptText.trim()}
+                      disabled={generatingFull || !fullScriptText.trim() || !hasProductName}
                     >
                       {generatingFull ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
                       Generate Voiceover
@@ -1862,10 +2027,23 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                       variant="outline"
                       className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
                       onClick={handleGeneratePerSceneVoiceover}
-                      disabled={generatingPerScene || getSceneTexts().length === 0}
+                      disabled={generatingPerScene || getSceneTexts().length === 0 || !hasProductName}
                     >
                       {generatingPerScene ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
                       Generate Scene Voiceovers
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
+                      onClick={() => {
+                        if (libraryScriptId) {
+                          router.push(`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`);
+                        }
+                      }}
+                      disabled={!libraryScriptId}
+                    >
+                      <Film className="w-4 h-4" />
+                      Open in Timeline
                     </Button>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-1.5">
@@ -1892,7 +2070,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                         size="sm"
                         className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1.5"
                         onClick={handleGenerateFullVoiceover}
-                        disabled={generatingFull}
+                        disabled={generatingFull || !hasProductName}
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                         Regenerate
@@ -1952,6 +2130,19 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                         );
                       })}
                     </div>
+                    {libraryScriptId && (
+                      <div className="mt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-[#2A2A2A] gap-2"
+                          onClick={() => router.push(`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`)}
+                        >
+                          <Film className="w-4 h-4" />
+                          Open in Timeline
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -1970,6 +2161,14 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
+            {libraryScriptId && (
+              <Button asChild variant="outline" className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-[#2A2A2A] gap-2">
+                <Link href={`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`}>
+                  <Film className="w-4 h-4" />
+                  Open in Timeline
+                </Link>
+              </Button>
+            )}
             <Button
               asChild
               className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
@@ -1977,7 +2176,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               <Link
                 href={
                   libraryScriptId
-                    ? `/dashboard/video-timeline?importVoiceover=1&libraryScriptId=${encodeURIComponent(libraryScriptId)}`
+                    ? `/dashboard/video-timeline?importVoiceover=1&scriptId=${encodeURIComponent(libraryScriptId)}`
                     : "/dashboard/video-timeline?importVoiceover=1"
                 }
               >

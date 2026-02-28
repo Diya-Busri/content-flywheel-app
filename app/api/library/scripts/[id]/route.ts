@@ -4,7 +4,7 @@ import { db } from "@/db/db";
 import { scriptsTable } from "@/db/schema/library-schema";
 import { eq, and, isNull } from "drizzle-orm";
 
-/** PATCH: Update video-guide timeline state or script. Body: { timelineMutedClipIds?, timelineSceneSlots?, timelineVoiceoverUrl?, timelineSceneVoiceoverUrls?, script? }. At least one key required. */
+/** PATCH: Update video-guide timeline state or script. Body: { timelineMutedClipIds?, timelineSceneSlots?, timelineVoiceoverUrl?, timelineVoiceoverDuration?, timelineSceneVoiceoverUrls?, script?, productName? }. At least one key required. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -24,6 +24,10 @@ export async function PATCH(
       typeof body.timelineVoiceoverUrl === "string" && body.timelineVoiceoverUrl.trim()
         ? body.timelineVoiceoverUrl.trim()
         : undefined;
+    const timelineVoiceoverDuration =
+      typeof body.timelineVoiceoverDuration === "number"
+        ? body.timelineVoiceoverDuration
+        : undefined;
     const timelineSceneVoiceoverUrls = Array.isArray(body.timelineSceneVoiceoverUrls)
       ? (body.timelineSceneVoiceoverUrls as string[]).filter((x) => typeof x === "string")
       : undefined;
@@ -42,11 +46,12 @@ export async function PATCH(
       timelineMutedClipIds === undefined &&
       timelineSceneSlots === undefined &&
       timelineVoiceoverUrl === undefined &&
+      timelineVoiceoverDuration === undefined &&
       timelineSceneVoiceoverUrls === undefined &&
       !hasScript
     ) {
       return NextResponse.json(
-        { error: "At least one of timelineMutedClipIds, timelineSceneSlots, timelineVoiceoverUrl, timelineSceneVoiceoverUrls, script required" },
+        { error: "At least one of timelineMutedClipIds, timelineSceneSlots, timelineVoiceoverUrl, timelineVoiceoverDuration, timelineSceneVoiceoverUrls, script required" },
         { status: 400 }
       );
     }
@@ -70,7 +75,9 @@ export async function PATCH(
     if (timelineMutedClipIds !== undefined) content.timelineMutedClipIds = timelineMutedClipIds;
     if (timelineSceneSlots !== undefined) content.timelineSceneSlots = timelineSceneSlots;
     if (timelineVoiceoverUrl !== undefined) content.timelineVoiceoverUrl = timelineVoiceoverUrl;
+    if (timelineVoiceoverDuration !== undefined) content.timelineVoiceoverDuration = timelineVoiceoverDuration;
     if (timelineSceneVoiceoverUrls !== undefined) content.timelineSceneVoiceoverUrls = timelineSceneVoiceoverUrls;
+    if (productName !== undefined) content.productName = productName;
     if (hasScript) {
       const existing = (content.script && typeof content.script === "object" ? content.script : {}) as Record<string, unknown>;
       content.script = { ...existing, ...script };

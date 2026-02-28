@@ -11,6 +11,7 @@ import { Loader2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import VideoCreationGuide from "@/components/digital-products/VideoCreationGuide";
 import type { VideoGuideData } from "@/components/digital-products/VideoCreationGuide";
+import { mapScriptToSceneOverlays } from "@/lib/video-guide-scene-overlays";
 
 const STORAGE_KEY = "videoCreationGuide";
 
@@ -20,13 +21,42 @@ export default function VideoGuidePage() {
   const [preferredVoiceId, setPreferredVoiceId] = useState<string | undefined>(undefined);
   const [scriptsForGuide, setScriptsForGuide] = useState<Array<{ id: string; title: string; length: number; hook: string; body: string; cta: string }> | undefined>(undefined);
   const [productIdForGuide, setProductIdForGuide] = useState<string | undefined>(undefined);
+  const [libraryScriptIdFromStorage, setLibraryScriptIdFromStorage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
-  const libraryScriptId = searchParams.get("libraryScriptId");
+  const libraryScriptIdFromUrl = searchParams.get("libraryScriptId");
+  const libraryScriptId = libraryScriptIdFromUrl ?? libraryScriptIdFromStorage;
 
-  const handleScriptRegenerated = useCallback((script: { hook: string; body: string; cta: string }) => {
-    setGuide((prev) => (prev ? { ...prev, script } : null));
-  }, []);
+  const handleProductNameChange = useCallback(
+    (productName: string) => {
+      setGuide((prev) => (prev ? { ...prev, productName: productName.trim() || undefined } : null));
+      if (libraryScriptId && productName.trim()) {
+        fetch(`/api/library/scripts/${libraryScriptId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productName: productName.trim() }),
+        }).catch(() => {});
+      }
+    },
+    [libraryScriptId]
+  );
+
+  const handleScriptRegenerated = useCallback(
+    (script: { hook: string; body: string; cta: string }, updatedScenes?: VideoGuideData["scenes"]) => {
+      setGuide((prev) => {
+        if (!prev) return null;
+        if (updatedScenes != null) return { ...prev, script, scenes: updatedScenes };
+        const scenesForMapping = prev.scenes ?? prev.scenePrompts.map((s) => ({ scene: s.scene, timing: s.timing }));
+        const chunks = mapScriptToSceneOverlays(script, scenesForMapping.length);
+        const nextScenes = scenesForMapping.map((scene, i) => ({
+          ...scene,
+          textOverlay: { exactText: chunks[i] ?? "" },
+        }));
+        return { ...prev, script, scenes: nextScenes };
+      });
+    },
+    []
+  );
 
   const hasTriggeredRegenerate = useRef(false);
   useEffect(() => {
@@ -40,8 +70,14 @@ export default function VideoGuidePage() {
     })
       .then((res) => res.json().catch(() => ({})))
       .then((data: { script?: { hook: string; body: string; cta: string }; error?: string }) => {
-        if (data.script) {
-          setGuide((prev) => (prev ? { ...prev, script: data.script! } : null));
+        if (data.script && guide) {
+          const scenesForMapping = guide.scenes ?? guide.scenePrompts.map((s) => ({ scene: s.scene, timing: s.timing }));
+          const chunks = mapScriptToSceneOverlays(data.script, scenesForMapping.length);
+          const updatedScenes = scenesForMapping.map((scene, i) => ({
+            ...scene,
+            textOverlay: { exactText: chunks[i] ?? "" },
+          }));
+          setGuide((prev) => (prev ? { ...prev, script: data.script!, scenes: updatedScenes } : null));
           const url = new URL(window.location.href);
           url.searchParams.delete("regenerate");
           window.history.replaceState({}, "", url.pathname + (url.search || ""));
@@ -86,6 +122,7 @@ export default function VideoGuidePage() {
           if (typeof data.preferredVoiceId === "string" && data.preferredVoiceId) setPreferredVoiceId(data.preferredVoiceId);
           if (Array.isArray(data.scriptsForGuide) && data.scriptsForGuide.length > 0) setScriptsForGuide(data.scriptsForGuide);
           if (typeof data.productIdForGuide === "string" && data.productIdForGuide) setProductIdForGuide(data.productIdForGuide);
+          if (typeof data.libraryScriptId === "string" && data.libraryScriptId) setLibraryScriptIdFromStorage(data.libraryScriptId);
           return;
         }
       }
@@ -137,6 +174,7 @@ export default function VideoGuidePage() {
       scripts={scriptsForGuide}
       productId={productIdForGuide}
       libraryScriptId={libraryScriptId ?? undefined}
+      onProductNameChange={handleProductNameChange}
       onScriptRegenerated={handleScriptRegenerated}
     />
   );

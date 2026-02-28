@@ -6,7 +6,7 @@ export function SignInWithRedirect() {
   let redirectUrl = "/dashboard";
   if (typeof window !== "undefined") {
     const r = new URLSearchParams(window.location.search).get("redirect_url");
-    if (r && r.startsWith("/")) redirectUrl = r;
+    if (r && r.startsWith("/") && r !== "/pricing") redirectUrl = r;
   }
 
   return (

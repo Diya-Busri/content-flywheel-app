@@ -176,7 +176,7 @@ export function EditorToolbar({
               isDark ? "text-orange-200" : "text-orange-900"
             }`}
           >
-            🎬 Your product is ready! Now get a Video Creation Guide to promote it
+            🎬 {productTitle} is ready! Now get a Video Creation Guide to promote it
           </p>
           <div className="flex items-center gap-2 shrink-0">
             <Button

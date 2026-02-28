@@ -248,7 +248,7 @@ Return a JSON object with key "sections": array of {"id","title","body","imagePr
 
 export async function generateProductContent(params: GenerateProductContentParams): Promise<GenerateContentSection[]> {
   if (!openai) throw new Error("OPENAI_API_KEY is not configured");
-  const productName = cleanProductTitle(params.productName) || params.productName || "Your product";
+  const productName = cleanProductTitle(params.productName) || params.productName || "Product";
   const paramsWithCleanTitle = { ...params, productName };
   const { format = "ebook" } = paramsWithCleanTitle;
   const { prompt, useGpt4, maxTokens } = buildPrompt(paramsWithCleanTitle);

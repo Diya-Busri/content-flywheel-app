@@ -576,14 +576,14 @@ export default function DiscoverCreateFlow() {
         if (data.productFormat && ["ebook", "workbook", "spreadsheet", "notion", "course", "checklist"].includes(data.productFormat)) {
           setFormat(data.productFormat);
           // Coming from Discover flow (Step 6 done there): go straight to Step 7 and generate
-          const fromDiscover = data.productName?.trim() && data.productName !== "Your Product";
+          const fromDiscover = data.productName?.trim() && data.productName !== "Product";
           if (fromDiscover) setStep(7);
         }
       } else {
-        setDiscoveryData({ productName: "Your Product", niche: "Your Niche" });
+        setDiscoveryData({ productName: "Product", niche: "Your Niche" });
       }
     } catch {
-      setDiscoveryData({ productName: "Your Product", niche: "Your Niche" });
+      setDiscoveryData({ productName: "Product", niche: "Your Niche" });
     }
   }, []);
 
@@ -597,7 +597,7 @@ export default function DiscoverCreateFlow() {
   useEffect(() => {
     if (step !== 7 || !format || generationStartedRef.current) return;
     const data = discoveryData;
-    const productName = data?.productName?.trim() || "Your Product";
+    const productName = data?.productName?.trim() || "Product";
     generationStartedRef.current = true;
     setGenerateError(null);
     setLoadingProgress(0);
@@ -657,7 +657,7 @@ export default function DiscoverCreateFlow() {
     };
   }, [step, format, discoveryData?.productName, discoveryData?.productDescription, discoveryData?.productIncluded, discoveryData?.productWhy, discoveryData?.niche, discoveryData?.hooks, discoveryData?.ctas]);
 
-  const productTitle = discoveryData?.productName ?? "Your Product";
+  const productTitle = discoveryData?.productName?.trim() || "Product";
   const nicheName = discoveryData?.niche ?? "Your Niche";
 
   const handleGenerateProduct = () => {
@@ -705,7 +705,7 @@ export default function DiscoverCreateFlow() {
             <Progress value={100} className="h-2 bg-[#2A2A2A]" />
             <p className="text-xs text-[#A0A0A0] mt-2">Step 6 of 6</p>
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Let&apos;s Create Your Product</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Let&apos;s create {productTitle}</h1>
           <p className="text-[#A0A0A0] mb-10">Choose the format and we&apos;ll generate it for you</p>
 
           <Label className="text-white text-base block mb-4">What type of product do you want to create?</Label>
@@ -869,7 +869,7 @@ export default function DiscoverCreateFlow() {
       <div className="max-w-6xl mx-auto p-6 md:p-10">
         <div className="flex items-center gap-2 mb-2">
           <Check className="w-6 h-6 text-green-500" />
-          <h1 className="text-2xl font-bold text-white">Your product is ready!</h1>
+          <h1 className="text-2xl font-bold text-white">{productTitle} is ready!</h1>
         </div>
         <p className="text-[#A0A0A0] mb-8">Step 8 of 9 — Edit, design & export your product</p>
 
@@ -1356,7 +1356,7 @@ export default function DiscoverCreateFlow() {
                   )}
                 </TabsContent>
                 <TabsContent value="export" className="mt-4 space-y-4">
-                  <p className="text-sm font-medium text-white">Download Your Product</p>
+                  <p className="text-sm font-medium text-white">Download {productTitle}</p>
                   <div className="space-y-2 mb-4">
                     <Label className="text-xs text-[#A0A0A0]">Quality</Label>
                     <div className="flex gap-3">

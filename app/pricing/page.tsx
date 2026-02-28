@@ -65,8 +65,8 @@ export default function PricingPage() {
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
 
       if (res.status === 401) {
-        const redirectUrl = typeof window !== "undefined" ? encodeURIComponent(window.location.pathname) : "%2Fpricing";
-        window.location.href = `/sign-in?redirect_url=${redirectUrl}`;
+        // Send to sign-in; after sign-in redirect to dashboard (not back to pricing)
+        window.location.href = "/sign-in";
         return;
       }
 

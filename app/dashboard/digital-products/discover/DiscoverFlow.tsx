@@ -1484,7 +1484,7 @@ export default function DiscoverFlow() {
               <h2 className="text-xl font-semibold text-white mb-1">
                 Generating your {productFormat ? FORMAT_LABELS[productFormat] ?? "Product" : "Product"}...
               </h2>
-              <p className="text-orange-500 font-medium mb-2">{selectedProduct?.name ?? "Your Product"}</p>
+              <p className="text-orange-500 font-medium mb-2">{selectedProduct?.name ?? "Product"}</p>
               {generateProgress && generateProgress.total > 0 && (
                 <p className="text-[#A0A0A0] text-sm mb-6">
                   Generating chapter {Math.min(generateProgress.completed + 1, generateProgress.total)} of {generateProgress.total}...
@@ -2505,7 +2505,7 @@ export default function DiscoverFlow() {
         {step === 6 && (
           <>
             <h2 className="text-lg font-medium text-orange-500 mb-1">Step 6 of 7</h2>
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Choose Your Product Format</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Choose product format</h1>
             <p className="text-[#A0A0A0] mb-8">How should we package your content? We&apos;ll generate a format-specific product.</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -2602,7 +2602,7 @@ export default function DiscoverFlow() {
         {step === 7 && (
           <>
             <h2 className="text-lg font-medium text-orange-500 mb-1">Step 7 of 7</h2>
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Customize Your Product</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Customize product</h1>
             <p className="text-[#A0A0A0] mb-6">Adjust these options to tailor the generated content. You can leave defaults as-is.</p>
 
             {/* Basic options */}

@@ -1,11 +1,10 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useSearchParams } from "next/navigation";
 import VideoTimelineFlow from "./VideoTimelineFlow";
 
-export const metadata: Metadata = {
-  title: "Video Timeline | Content Flywheel",
-  description: "Arrange video and audio clips in order and preview the sequence",
-};
-
 export default function VideoTimelinePage() {
-  return <VideoTimelineFlow />;
+  const searchParams = useSearchParams();
+  const initialScriptId = searchParams.get("scriptId") ?? searchParams.get("libraryScriptId");
+  return <VideoTimelineFlow initialScriptId={initialScriptId} />;
 }
