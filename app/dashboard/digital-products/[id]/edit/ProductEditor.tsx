@@ -3864,7 +3864,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
   }
 
   const dsBg = (product?.designSettings as { backgroundImage?: string } | undefined)?.backgroundImage;
-  const rawCanvasBg = (typeof backgroundImage === "string" ? backgroundImage.trim() : "") || (typeof dsBg === "string" ? dsBg.trim() : "") || null;
+  // Use pageBackgrounds for current page when available so canvas updates after auto-design (which sets pageBackgrounds, not only local state)
+  const currentPageBgFromPages = pageBackgrounds[currentPageIndex]?.backgroundImage;
+  const rawCanvasBg =
+    (typeof currentPageBgFromPages === "string" ? currentPageBgFromPages.trim() : "") ||
+    (typeof backgroundImage === "string" ? backgroundImage.trim() : "") ||
+    (typeof dsBg === "string" ? dsBg.trim() : "") ||
+    null;
   const canvasBgUrl = getProxiedBackgroundImageUrl(rawCanvasBg) || null;
   const currentPageBackgroundColor = pageBackgrounds[currentPageIndex]?.backgroundColor ?? null;
   const currentPageTextColor = pageBackgrounds[currentPageIndex]?.pageTextColor ?? null;
