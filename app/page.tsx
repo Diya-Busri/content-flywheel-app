@@ -34,16 +34,14 @@ export default function HomePage() {
               {/* Left - Text content */}
               <div className="space-y-5 pt-24 sm:pt-32">
                 <h1 className="text-5xl lg:text-6xl font-bold leading-tight text-slate-900 dark:text-white">
-                  Turn Products Into
+                  Turn Your Digital Products Into
                   <br />
                   <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
-                    Sales-Driving Videos
+                    A Content Flywheel
                   </span>
-                  <br />
-                  in Minutes
                 </h1>
                 <p className="text-sm sm:text-base lg:text-lg text-slate-600 dark:text-gray-400 leading-relaxed max-w-xl">
-                  AI-powered video creation for digital products, TikTok Shop, and affiliate marketing. Upload your product, get conversion-focused videos for TikTok, Instagram, and YouTube.
+                  Generate ebooks, planners, workbooks, AI voiceovers, video scripts, and multi-platform marketing content — all from one platform.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
                   <Link
