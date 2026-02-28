@@ -63,18 +63,20 @@ async function replaceImgSrcsWithDataUrls(container: HTMLElement): Promise<void>
   for (const img of Array.from(imgs)) {
     const src = (img.getAttribute("src") ?? img.src ?? "").trim();
     if (!src || src.startsWith("data:")) continue;
-    // Proxy URL with format=raw returns binary; without format returns data URL. Strip format=raw for this fetch.
-    const fetchUrl = src.includes("/api/proxy-image")
-      ? src.replace(/[?&]format=raw&?|[?&]format=raw$/i, "").replace(/\?&/, "?").replace(/\?$/, "") || src
-      : src;
     promises.push(
-      fetch(fetchUrl)
-        .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`Proxy ${r.status}`))))
+      fetch(src)
+        .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`Fetch ${r.status}`))))
+        .then((blob) => {
+          return new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(blob);
+          });
+        })
         .then((dataUrl) => {
-          if (dataUrl.startsWith("data:")) {
-            img.src = dataUrl;
-            img.setAttribute("src", dataUrl);
-          }
+          img.src = dataUrl;
+          img.setAttribute("src", dataUrl);
         })
         .catch(() => {})
     );

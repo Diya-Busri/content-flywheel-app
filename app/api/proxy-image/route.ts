@@ -1,9 +1,7 @@
 /**
- * GET /api/proxy-image?url=<encoded-image-url>[&format=raw]
- * Fetches the image server-side and returns:
- * - Default: body is a base64 data URL string (text/plain) for PDF export / html2canvas.
- * - format=raw: body is the image bytes (for <img src="..."> in the editor).
- * Only allows https URLs from Pexels/Unsplash.
+ * GET /api/proxy-image?url=<encoded-image-url>
+ * Fetches the image and returns the image bytes with the correct Content-Type.
+ * No base64 encoding. Only allows https URLs from Pexels/Unsplash.
  */
 import { NextRequest, NextResponse } from "next/server";
 
@@ -29,28 +27,31 @@ function sanitizeContentType(ct: string | null): string {
 export async function GET(request: NextRequest) {
   const urlParam = request.nextUrl.searchParams.get("url");
   if (!urlParam || typeof urlParam !== "string") {
+    console.error("[proxy-image] Missing url parameter", { search: request.nextUrl.search });
     return NextResponse.json({ error: "Missing url parameter" }, { status: 400 });
   }
 
   let targetUrl: URL;
   try {
     targetUrl = new URL(urlParam);
-  } catch {
+  } catch (e) {
+    console.error("[proxy-image] Invalid url", { urlParam: urlParam.slice(0, 200), error: e });
     return NextResponse.json({ error: "Invalid url" }, { status: 400 });
   }
 
   if (targetUrl.protocol !== "https:") {
+    console.error("[proxy-image] Non-https URL rejected", { target: targetUrl.toString() });
     return NextResponse.json({ error: "Only https URLs are allowed" }, { status: 400 });
   }
 
   if (!isAllowedOrigin(targetUrl)) {
+    console.error("[proxy-image] Origin not allowed", { host: targetUrl.hostname, target: targetUrl.toString() });
     return NextResponse.json({ error: "URL origin not allowed" }, { status: 403 });
   }
 
-  const formatRaw = request.nextUrl.searchParams.get("format") === "raw";
-
   try {
-    const res = await fetch(targetUrl.toString(), {
+    const imageUrl = targetUrl.toString();
+    const response = await fetch(imageUrl, {
       headers: {
         "User-Agent": "ContentFlywheel/1.0 (image proxy)",
         Accept: "image/*",
@@ -58,45 +59,45 @@ export async function GET(request: NextRequest) {
       next: { revalidate: 86400 },
     });
 
-    if (!res.ok) {
-      console.warn("[proxy-image] Upstream error:", res.status, targetUrl.toString());
-      return NextResponse.json({ error: "Failed to fetch image" }, { status: res.status });
-    }
-
-    const contentType = sanitizeContentType(res.headers.get("content-type"));
-    const buffer = await res.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    let base64 = "";
-    if (typeof Buffer !== "undefined") {
-      base64 = Buffer.from(bytes).toString("base64");
-    } else {
-      const bin = Array.from(bytes)
-        .map((b) => String.fromCharCode(b))
-        .join("");
-      base64 = btoa(bin);
-    }
-
-    const dataUrl = `data:${contentType};base64,${base64}`;
-
-    if (formatRaw) {
-      return new NextResponse(buffer, {
-        status: 200,
-        headers: {
-          "Content-Type": contentType,
-          "Cache-Control": "public, max-age=86400, s-maxage=86400",
-        },
+    if (!response.ok) {
+      const bodyPreview = await response.text().then((t) => t.slice(0, 300)).catch(() => "");
+      console.error("[proxy-image] Upstream error", {
+        status: response.status,
+        statusText: response.statusText,
+        url: imageUrl,
+        contentType: response.headers.get("content-type"),
+        bodyPreview: bodyPreview.slice(0, 200),
       });
+      return NextResponse.json({ error: "Failed to fetch image", status: response.status }, { status: 502 });
     }
 
-    return new NextResponse(dataUrl, {
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength === 0) {
+      console.error("[proxy-image] Empty response body", { url: imageUrl });
+      return NextResponse.json({ error: "Empty image response" }, { status: 502 });
+    }
+
+    const contentType = sanitizeContentType(response.headers.get("content-type"));
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[proxy-image] OK", { url: imageUrl.slice(0, 80), contentType, byteLength: buffer.byteLength });
+    }
+
+    return new NextResponse(buffer, {
       status: 200,
       headers: {
-        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Type": contentType,
         "Cache-Control": "public, max-age=86400, s-maxage=86400",
       },
     });
   } catch (err) {
-    console.error("[proxy-image] Fetch error:", err);
-    return NextResponse.json({ error: "Proxy failed" }, { status: 502 });
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[proxy-image] Fetch error", {
+      url: targetUrl.toString(),
+      message,
+      stack: stack?.slice(0, 500),
+    });
+    return NextResponse.json({ error: "Proxy failed", detail: message }, { status: 502 });
   }
 }

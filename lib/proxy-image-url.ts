@@ -1,8 +1,37 @@
 /**
  * Use proxy URL for external background images so editor canvas and PDF export (html2canvas)
  * don't hit CORS. Data URLs and same-origin URLs are returned as-is.
+ *
+ * Set NEXT_PUBLIC_USE_DIRECT_IMAGE_URLS=1 to bypass the proxy and use Pexels/Unsplash URLs
+ * directly (for testing if the proxy is the cause of broken images).
  */
 const PROXY_PATH = "/api/proxy-image";
+
+const DIRECT_ORIGINS = [
+  "images.pexels.com",
+  "www.pexels.com",
+  "pexels.com",
+  "images.unsplash.com",
+  "unsplash.com",
+];
+
+function isDirectAllowedOrigin(url: string): boolean {
+  if (!url.startsWith("https://")) return false;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return DIRECT_ORIGINS.some((o) => host === o || host.endsWith("." + o));
+  } catch {
+    return false;
+  }
+}
+
+/** When true, use Pexels/Unsplash URL directly instead of proxy (for testing). */
+function useDirectImageUrls(): boolean {
+  const v = typeof process !== "undefined" ? process.env.NEXT_PUBLIC_USE_DIRECT_IMAGE_URLS : undefined;
+  if (v == null || typeof v !== "string") return false;
+  const s = v.trim().toLowerCase();
+  return s === "1" || s === "true" || s === "yes";
+}
 
 export function getProxiedBackgroundImageUrl(url: string | null | undefined): string | null {
   const u =
@@ -12,16 +41,24 @@ export function getProxiedBackgroundImageUrl(url: string | null | undefined): st
   if (!u) return null;
   if (
     u.startsWith("data:") ||
-    u.startsWith("/api/proxy-image") ||
     (u.startsWith("/") && !u.startsWith("//"))
   ) {
     return u;
   }
+  // Bypass proxy for testing: use Pexels/Unsplash URL directly
   if (u.startsWith("http://") || u.startsWith("https://")) {
+    if (useDirectImageUrls() && isDirectAllowedOrigin(u)) return u;
     return `${PROXY_PATH}?url=${encodeURIComponent(u)}&format=raw`;
   }
-  // Already proxied URL (no format): add format=raw so <img> gets binary and displays
+  // Already proxied URL: when testing direct URLs, extract target and return it if allowed
   if (u.startsWith(PROXY_PATH)) {
+    try {
+      const parsed = new URL(u, "https://dummy");
+      const target = parsed.searchParams.get("url");
+      if (useDirectImageUrls() && target && isDirectAllowedOrigin(target)) return target;
+    } catch {
+      // ignore
+    }
     const sep = u.includes("?") ? "&" : "?";
     return u.includes("format=") ? u : `${u}${sep}format=raw`;
   }
