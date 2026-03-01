@@ -4364,29 +4364,29 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   <>
                     <div
                       data-canvas-background
+                      data-cover-bg-url={canvasBgUrl}
                       className="absolute inset-0 overflow-hidden"
-                      style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}
-                      aria-hidden
-                    >
-                      <img
-                        data-canvas-background-img
-                        src={canvasBgUrl}
-                        alt=""
-                        fetchPriority="high"
-                        decoding="async"
-                        className="block w-full h-full object-cover"
-                        style={{
-                          pointerEvents: "none",
-                          objectPosition: backgroundSettings.position ?? "center center",
-                          opacity: backgroundSettings.opacity ?? 1,
-                          filter: (backgroundSettings.blur ?? 0) > 0
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        zIndex: 0,
+                        pointerEvents: "none",
+                        backgroundImage: `url(${canvasBgUrl})`,
+                        backgroundSize: "cover",
+                        backgroundPosition: backgroundSettings.position ?? "center center",
+                        opacity: backgroundSettings.opacity ?? 1,
+                        filter:
+                          (backgroundSettings.blur ?? 0) > 0
                             ? `blur(${backgroundSettings.blur}px) brightness(${backgroundSettings.brightness ?? 100}%) contrast(${backgroundSettings.contrast ?? 100}%) saturate(${backgroundSettings.saturation ?? 100}%)`
                             : `brightness(${backgroundSettings.brightness ?? 100}%) contrast(${backgroundSettings.contrast ?? 100}%) saturate(${backgroundSettings.saturation ?? 100}%)`,
-                        }}
-                        draggable={false}
-                        aria-hidden
-                      />
-                    </div>
+                      }}
+                      aria-hidden
+                      ref={(el) => {
+                        if (el && typeof window !== "undefined" && canvasBgUrl) {
+                          console.log("[ProductEditor] Cover/canvas background URL:", canvasBgUrl);
+                        }
+                      }}
+                    />
                     <div
                       className="absolute inset-0"
                       style={{
@@ -6688,6 +6688,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     if (page.type === "cover") {
                       const coverPageBg = pageBackgrounds[0];
                       const coverBgUrl = getProxiedBackgroundImageUrl(coverPageBg?.backgroundImage ?? null) ?? null;
+                      if (typeof window !== "undefined" && coverBgUrl && process.env.NODE_ENV !== "production") {
+                        console.log("[ProductEditor] Multi-page strip cover background URL:", coverBgUrl.slice(0, 120));
+                      }
                       const coverBgSettings = coverPageBg?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...coverPageBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS;
                       const coverOverlay = coverPageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...coverPageBg.overlaySettings } : DEFAULT_OVERLAY;
                       return (
@@ -6697,14 +6700,23 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           data-pdf-page
                           data-page
                           data-page-type="cover"
+                          data-cover-bg-url={coverBgUrl ?? undefined}
                           className="preview-page product-page relative shrink-0 rounded-lg overflow-hidden border border-gray-200 bg-white shadow-lg"
                           style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, minHeight: CANVAS_HEIGHT, pageBreakAfter: "always", pageBreakInside: "avoid" }}
                         >
                           {coverBgUrl ? (
                             <>
-                              <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden>
-                                <img src={coverBgUrl} alt="" crossOrigin="anonymous" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: (coverBgSettings.fit ?? "cover") as React.CSSProperties["objectFit"], objectPosition: coverBgSettings.position ?? "center center", opacity: coverBgSettings.opacity ?? 1, filter: (coverBgSettings.blur ?? 0) > 0 ? `blur(${coverBgSettings.blur}px) brightness(${coverBgSettings.brightness ?? 100}%) contrast(${coverBgSettings.contrast ?? 100}%) saturate(${coverBgSettings.saturation ?? 100}%)` : `brightness(${coverBgSettings.brightness ?? 100}%) contrast(${coverBgSettings.contrast ?? 100}%) saturate(${coverBgSettings.saturation ?? 100}%)` }} />
-                              </div>
+                              <div
+                                className="absolute inset-0 z-0 overflow-hidden pointer-events-none"
+                                aria-hidden
+                                style={{
+                                  backgroundImage: `url(${coverBgUrl})`,
+                                  backgroundSize: (coverBgSettings.fit ?? "cover") as React.CSSProperties["backgroundSize"],
+                                  backgroundPosition: coverBgSettings.position ?? "center center",
+                                  opacity: coverBgSettings.opacity ?? 1,
+                                  filter: (coverBgSettings.blur ?? 0) > 0 ? `blur(${coverBgSettings.blur}px) brightness(${coverBgSettings.brightness ?? 100}%) contrast(${coverBgSettings.contrast ?? 100}%) saturate(${coverBgSettings.saturation ?? 100}%)` : `brightness(${coverBgSettings.brightness ?? 100}%) contrast(${coverBgSettings.contrast ?? 100}%) saturate(${coverBgSettings.saturation ?? 100}%)`,
+                                }}
+                              />
                               <div className="absolute inset-0 z-[1] pointer-events-none" style={{ backgroundColor: coverOverlay.color, opacity: coverOverlay.opacity ?? 0.9 }} aria-hidden />
                             </>
                           ) : (
@@ -6733,9 +6745,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         >
                           {backBgUrl ? (
                             <>
-                              <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden>
-                                <img src={backBgUrl} alt="" crossOrigin="anonymous" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: (backBgSettings.fit ?? "cover") as React.CSSProperties["objectFit"], objectPosition: backBgSettings.position ?? "center center", opacity: backBgSettings.opacity ?? 1 }} />
-                              </div>
+                              <div
+                                className="absolute inset-0 z-0 overflow-hidden pointer-events-none"
+                                aria-hidden
+                                style={{
+                                  backgroundImage: `url(${backBgUrl})`,
+                                  backgroundSize: (backBgSettings.fit ?? "cover") as React.CSSProperties["backgroundSize"],
+                                  backgroundPosition: backBgSettings.position ?? "center center",
+                                  opacity: backBgSettings.opacity ?? 1,
+                                }}
+                              />
                               <div className="absolute inset-0 z-[1] pointer-events-none" style={{ backgroundColor: backOverlay.color, opacity: backOverlay.opacity ?? 0.9 }} aria-hidden />
                             </>
                           ) : (
