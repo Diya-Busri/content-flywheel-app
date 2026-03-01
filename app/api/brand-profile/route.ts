@@ -39,6 +39,9 @@ export async function GET() {
     }
 
     return NextResponse.json({
+      brandName: row.brandName ?? undefined,
+      nicheIndustry: row.nicheIndustry ?? undefined,
+      brandVoice: row.brandVoice ?? undefined,
       tiktokUrl: row.tiktokUrl ?? undefined,
       instagramUrl: row.instagramUrl ?? undefined,
       youtubeUrl: row.youtubeUrl ?? undefined,
@@ -103,10 +106,17 @@ export async function POST(request: NextRequest) {
     const primaryColor = normalizeHex(body.primaryColor as string);
     const secondaryColor = normalizeHex(body.secondaryColor as string);
 
+    const brandName = (body.brandName as string)?.trim() || null;
+    const nicheIndustry = (body.nicheIndustry as string)?.trim() || null;
+    const brandVoice = (body.brandVoice as string)?.trim() || null;
+
     await db
       .insert(brandProfilesTable)
       .values({
         userId,
+        brandName,
+        nicheIndustry,
+        brandVoice,
         tiktokUrl: (body.tiktokUrl as string)?.trim() || null,
         instagramUrl: (body.instagramUrl as string)?.trim() || null,
         youtubeUrl: (body.youtubeUrl as string)?.trim() || null,
@@ -121,6 +131,9 @@ export async function POST(request: NextRequest) {
       .onConflictDoUpdate({
         target: brandProfilesTable.userId,
         set: {
+          brandName,
+          nicheIndustry,
+          brandVoice,
           tiktokUrl: (body.tiktokUrl as string)?.trim() || null,
           instagramUrl: (body.instagramUrl as string)?.trim() || null,
           youtubeUrl: (body.youtubeUrl as string)?.trim() || null,
@@ -141,6 +154,9 @@ export async function POST(request: NextRequest) {
       .where(eq(brandProfilesTable.userId, userId));
 
     return NextResponse.json({
+      brandName: row?.brandName ?? undefined,
+      nicheIndustry: row?.nicheIndustry ?? undefined,
+      brandVoice: row?.brandVoice ?? undefined,
       tiktokUrl: row?.tiktokUrl ?? undefined,
       instagramUrl: row?.instagramUrl ?? undefined,
       youtubeUrl: row?.youtubeUrl ?? undefined,
@@ -170,6 +186,9 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (body.brandName !== undefined) updates.brandName = (body.brandName as string)?.trim() || null;
+    if (body.nicheIndustry !== undefined) updates.nicheIndustry = (body.nicheIndustry as string)?.trim() || null;
+    if (body.brandVoice !== undefined) updates.brandVoice = (body.brandVoice as string)?.trim() || null;
     if (body.preferAiColors !== undefined) updates.preferAiColors = Boolean(body.preferAiColors);
     if (body.primaryColor !== undefined) updates.primaryColor = normalizeHex(body.primaryColor as string);
     if (body.secondaryColor !== undefined) updates.secondaryColor = normalizeHex(body.secondaryColor as string);
@@ -196,6 +215,9 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({
+      brandName: row.brandName ?? undefined,
+      nicheIndustry: row.nicheIndustry ?? undefined,
+      brandVoice: row.brandVoice ?? undefined,
       tiktokUrl: row.tiktokUrl ?? undefined,
       instagramUrl: row.instagramUrl ?? undefined,
       youtubeUrl: row.youtubeUrl ?? undefined,

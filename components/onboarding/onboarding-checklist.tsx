@@ -7,8 +7,8 @@ import type { OnboardingSteps } from "@/app/api/onboarding/route";
 
 const ITEMS: { key: keyof OnboardingSteps; label: string; href: string }[] = [
   { key: "createAccount", label: "Create your account", href: "/dashboard" },
-  { key: "brandProfile", label: "Set up brand profile", href: "/dashboard/settings" },
-  { key: "firstProduct", label: "Create first digital product", href: "/dashboard/digital-products/create" },
+  { key: "brandProfile", label: "Set up brand profile", href: "/dashboard/settings#brand-profile" },
+  { key: "firstProduct", label: "Create first digital product", href: "/dashboard/digital-products" },
   { key: "exploreDashboard", label: "Explore the dashboard", href: "/dashboard" },
   { key: "watchDemo", label: "Watch the demo video", href: "/dashboard" },
 ];

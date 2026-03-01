@@ -5,6 +5,9 @@ import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
  */
 export const brandProfilesTable = pgTable("brand_profiles", {
   userId: text("user_id").primaryKey().notNull(),
+  brandName: text("brand_name"),
+  nicheIndustry: text("niche_industry"),
+  brandVoice: text("brand_voice"),
   tiktokUrl: text("tiktok_url"),
   instagramUrl: text("instagram_url"),
   youtubeUrl: text("youtube_url"),

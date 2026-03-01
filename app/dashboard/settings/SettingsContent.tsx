@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Card,
@@ -50,6 +50,35 @@ export default function SettingsContent({
   const [displayName, setDisplayName] = useState(settings?.displayName ?? "");
   const [profileSaving, setProfileSaving] = useState(false);
 
+  const [brandName, setBrandName] = useState("");
+  const [nicheIndustry, setNicheIndustry] = useState("");
+  const [brandVoice, setBrandVoice] = useState("");
+  const [primaryColor, setPrimaryColor] = useState("#1a1a1a");
+  const [secondaryColor, setSecondaryColor] = useState("#475569");
+  const [brandProfileSaving, setBrandProfileSaving] = useState(false);
+  const [brandProfileLoaded, setBrandProfileLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/brand-profile")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setBrandName(data.brandName ?? "");
+        setNicheIndustry(data.nicheIndustry ?? "");
+        setBrandVoice(data.brandVoice ?? "");
+        setPrimaryColor(data.primaryColor ?? "#1a1a1a");
+        setSecondaryColor(data.secondaryColor ?? "#475569");
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setBrandProfileLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [dangerLoading, setDangerLoading] = useState<"delete" | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
@@ -75,6 +104,43 @@ export default function SettingsContent({
       toast({ title: "Saved", description: "Profile updated." });
     } else {
       toast({ title: "Error", description: res.error, variant: "destructive" });
+    }
+  };
+
+  const handleSaveBrandProfile = async () => {
+    setBrandProfileSaving(true);
+    try {
+      const body = {
+        brandName: brandName.trim() || null,
+        nicheIndustry: nicheIndustry.trim() || null,
+        brandVoice: brandVoice.trim() || null,
+        primaryColor: primaryColor || "#1a1a1a",
+        secondaryColor: secondaryColor || "#475569",
+      };
+      const res = await fetch("/api/brand-profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.status === 404) {
+        const createRes = await fetch("/api/brand-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!createRes.ok) throw new Error("Failed to create brand profile");
+      } else if (!res.ok) {
+        throw new Error("Failed to save");
+      }
+      toast({ title: "Saved", description: "Brand profile updated." });
+    } catch (e) {
+      toast({
+        title: "Error",
+        description: e instanceof Error ? e.message : "Could not save brand profile",
+        variant: "destructive",
+      });
+    } finally {
+      setBrandProfileSaving(false);
     }
   };
 
@@ -146,7 +212,101 @@ export default function SettingsContent({
         </CardContent>
       </Card>
 
-      {/* 2. PLAN & BILLING */}
+      {/* 2. BRAND PROFILE */}
+      <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]" id="brand-profile">
+        <CardHeader>
+          <CardTitle className="text-lg text-gray-900 dark:text-white">
+            Brand Profile
+          </CardTitle>
+          <CardDescription className="text-gray-600 dark:text-gray-400">
+            Used across digital products and auto-design. Optional but helps keep your content on-brand.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="brand-name" className="text-gray-700 dark:text-gray-300">Brand name</Label>
+              <Input
+                id="brand-name"
+                value={brandName}
+                onChange={(e) => setBrandName(e.target.value)}
+                placeholder="e.g. Acme Co"
+                className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F] text-gray-900 dark:text-white focus-visible:ring-orange-500"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="niche-industry" className="text-gray-700 dark:text-gray-300">Niche / industry</Label>
+              <Input
+                id="niche-industry"
+                value={nicheIndustry}
+                onChange={(e) => setNicheIndustry(e.target.value)}
+                placeholder="e.g. Fitness, Coaching"
+                className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F] text-gray-900 dark:text-white focus-visible:ring-orange-500"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="brand-voice" className="text-gray-700 dark:text-gray-300">Brand voice</Label>
+            <Input
+              id="brand-voice"
+              value={brandVoice}
+              onChange={(e) => setBrandVoice(e.target.value)}
+              placeholder="e.g. Friendly, professional, motivational"
+              className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F] text-gray-900 dark:text-white focus-visible:ring-orange-500"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="primary-color" className="text-gray-700 dark:text-gray-300">Primary colour</Label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="color"
+                  id="primary-color"
+                  value={primaryColor}
+                  onChange={(e) => setPrimaryColor(e.target.value)}
+                  className="h-10 w-14 rounded border border-[#E5E7EB] dark:border-[#2A2A2A] cursor-pointer bg-transparent"
+                />
+                <Input
+                  value={primaryColor}
+                  onChange={(e) => setPrimaryColor(e.target.value)}
+                  placeholder="#1a1a1a"
+                  className="flex-1 border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F] text-gray-900 dark:text-white focus-visible:ring-orange-500 font-mono text-sm"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="secondary-color" className="text-gray-700 dark:text-gray-300">Secondary colour</Label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="color"
+                  id="secondary-color"
+                  value={secondaryColor}
+                  onChange={(e) => setSecondaryColor(e.target.value)}
+                  className="h-10 w-14 rounded border border-[#E5E7EB] dark:border-[#2A2A2A] cursor-pointer bg-transparent"
+                />
+                <Input
+                  value={secondaryColor}
+                  onChange={(e) => setSecondaryColor(e.target.value)}
+                  placeholder="#475569"
+                  className="flex-1 border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F] text-gray-900 dark:text-white focus-visible:ring-orange-500 font-mono text-sm"
+                />
+              </div>
+            </div>
+          </div>
+          <Button
+            onClick={handleSaveBrandProfile}
+            disabled={brandProfileSaving || !brandProfileLoaded}
+            className="bg-orange-500 hover:bg-orange-600 text-white"
+          >
+            {brandProfileSaving ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            ) : null}
+            Save brand profile
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* 3. PLAN & BILLING */}
       <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
         <CardHeader>
           <CardTitle className="text-lg text-gray-900 dark:text-white">
