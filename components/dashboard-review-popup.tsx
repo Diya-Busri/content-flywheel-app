@@ -49,6 +49,7 @@ export function DashboardReviewPopup({
     rating: 5;
     reviewText: string;
     isPublic: boolean;
+    reviewerName?: string;
   }) => {
     const res = await fetch("/api/reviews", {
       method: "POST",
@@ -57,6 +58,7 @@ export function DashboardReviewPopup({
         rating: data.rating,
         reviewText: data.reviewText,
         isPublic: data.isPublic,
+        reviewerName: data.reviewerName,
       }),
     });
     if (!res.ok) {

@@ -13,7 +13,7 @@ export type ReviewPopupProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Call when user submits a 5-star review (parent should save to reviews table and then not show popup again) */
-  onSubmitReview?: (data: { rating: 5; reviewText: string; isPublic: boolean }) => Promise<void> | void;
+  onSubmitReview?: (data: { rating: 5; reviewText: string; isPublic: boolean; reviewerName?: string }) => Promise<void> | void;
   /** Call when user submits 1–4 star feedback (parent should save privately and then not show popup again) */
   onSubmitFeedback?: (data: { rating: number; feedbackText?: string }) => Promise<void> | void;
   /** Call when user clicks "Maybe Later" (parent can show again after more usage) */
@@ -31,6 +31,7 @@ export function ReviewPopup({
 }: ReviewPopupProps) {
   const [rating, setRating] = useState<number | null>(null);
   const [reviewText, setReviewText] = useState("");
+  const [reviewerName, setReviewerName] = useState("");
   const [feedbackText, setFeedbackText] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,7 +59,12 @@ export function ReviewPopup({
     if (rating !== 5 || reviewText.trim().length < MIN_REVIEW_CHARS) return;
     setIsSubmitting(true);
     try {
-      await onSubmitReview?.({ rating: 5, reviewText: reviewText.trim(), isPublic });
+      await onSubmitReview?.({
+        rating: 5,
+        reviewText: reviewText.trim(),
+        isPublic,
+        reviewerName: reviewerName.trim() || undefined,
+      });
       setSuccess("review");
       setTimeout(handleClose, 1500);
     } finally {
@@ -167,6 +173,20 @@ export function ReviewPopup({
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       {reviewText.length} / 500 (min {MIN_REVIEW_CHARS} characters)
                     </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="reviewer-name" className="text-slate-700 dark:text-slate-300">
+                      Your name or display name (optional)
+                    </Label>
+                    <input
+                      id="reviewer-name"
+                      type="text"
+                      value={reviewerName}
+                      onChange={(e) => setReviewerName(e.target.value)}
+                      placeholder="e.g. Sarah M."
+                      maxLength={200}
+                      className="mt-2 flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-900 dark:ring-offset-slate-900 dark:placeholder:text-slate-400"
+                    />
                   </div>
                   <div className="flex items-center gap-2">
                     <Checkbox

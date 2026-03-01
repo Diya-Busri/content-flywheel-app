@@ -18,14 +18,14 @@ export const metadata: Metadata = {
     "Turn products into sales-driving videos for TikTok, Instagram, and YouTube. AI-powered video creation focused on conversion, not vanity metrics.",
 };
 
-async function getApprovedPublicReviews(): Promise<{ text: string; name: string; rating?: number }[]> {
+/** Fetches reviews server-side for the landing page. Only is_public = true. */
+async function getPublicReviews(): Promise<{ text: string; name: string; rating?: number }[]> {
   const supabase = getSupabaseAdmin();
   if (!supabase) return [];
   const { data, error } = await supabase
     .from("reviews")
-    .select("review_text, rating")
+    .select("review_text, rating, reviewer_name")
     .eq("is_public", true)
-    .eq("is_approved", true)
     .order("created_at", { ascending: false })
     .limit(20);
   if (error || !data?.length) return [];
@@ -33,13 +33,13 @@ async function getApprovedPublicReviews(): Promise<{ text: string; name: string;
     .filter((r) => r.review_text?.trim())
     .map((r) => ({
       text: r.review_text!.trim(),
-      name: "Verified User",
+      name: r.reviewer_name?.trim() || "Verified User",
       rating: r.rating ?? 5,
     }));
 }
 
 export default async function HomePage() {
-  const reviews = await getApprovedPublicReviews();
+  const reviews = await getPublicReviews();
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 overflow-x-hidden">
       <LandingNavbar />

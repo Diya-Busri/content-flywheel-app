@@ -19,10 +19,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { rating, reviewText, isPublic } = body as {
+    const { rating, reviewText, isPublic, reviewerName } = body as {
       rating?: number;
       reviewText?: string;
       isPublic?: boolean;
+      reviewerName?: string;
     };
 
     if (rating == null || typeof rating !== "number") {
@@ -40,6 +41,8 @@ export async function POST(request: Request) {
 
     const review_text = typeof reviewText === "string" ? reviewText.trim() : "";
     const is_public = rating === 5 && !!isPublic;
+    const reviewer_name =
+      typeof reviewerName === "string" ? reviewerName.trim().slice(0, 200) || null : null;
 
     const supabaseAdmin = getSupabaseAdmin();
     if (!supabaseAdmin) {
@@ -59,6 +62,7 @@ export async function POST(request: Request) {
       clerk_user_id: userId,
       is_public: is_public,
       is_approved: false,
+      reviewer_name: reviewer_name,
     });
 
     if (error) {
