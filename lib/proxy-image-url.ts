@@ -25,8 +25,8 @@ function isDirectAllowedOrigin(url: string): boolean {
   }
 }
 
-/** When true, use Pexels/Unsplash URL directly instead of proxy (for testing). */
-function useDirectImageUrls(): boolean {
+/** When true, use Pexels/Unsplash URL directly instead of proxy (for testing). Not a React hook. */
+function isDirectImageUrlsEnabled(): boolean {
   const v = typeof process !== "undefined" ? process.env.NEXT_PUBLIC_USE_DIRECT_IMAGE_URLS : undefined;
   if (v == null || typeof v !== "string") return false;
   const s = v.trim().toLowerCase();
@@ -47,7 +47,7 @@ export function getProxiedBackgroundImageUrl(url: string | null | undefined): st
   }
   // Bypass proxy for testing: use Pexels/Unsplash URL directly
   if (u.startsWith("http://") || u.startsWith("https://")) {
-    if (useDirectImageUrls() && isDirectAllowedOrigin(u)) return u;
+    if (isDirectImageUrlsEnabled() && isDirectAllowedOrigin(u)) return u;
     return `${PROXY_PATH}?url=${encodeURIComponent(u)}&format=raw`;
   }
   // Already proxied URL: when testing direct URLs, extract target and return it if allowed
@@ -55,7 +55,7 @@ export function getProxiedBackgroundImageUrl(url: string | null | undefined): st
     try {
       const parsed = new URL(u, "https://dummy");
       const target = parsed.searchParams.get("url");
-      if (useDirectImageUrls() && target && isDirectAllowedOrigin(target)) return target;
+      if (isDirectImageUrlsEnabled() && target && isDirectAllowedOrigin(target)) return target;
     } catch {
       // ignore
     }
