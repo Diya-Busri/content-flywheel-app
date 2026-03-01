@@ -6,7 +6,6 @@ import { X, ArrowRight, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const TOTAL_STEPS = 4;
-const DEMO_PLACEHOLDER_URL = "https://www.youtube.com/embed/dQw4w9WgXcQ"; // placeholder – replace with real demo
 
 type OnboardingModalProps = {
   show: boolean;
@@ -86,19 +85,16 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
           </div>
         )}
 
-        {/* Step 2: Watch demo */}
+        {/* Step 2: Coming soon placeholder */}
         {step === 2 && (
           <div className="max-w-2xl w-full space-y-6">
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white text-center">
-              Watch a quick demo
-            </h2>
-            <div className="aspect-video rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800">
-              <iframe
-                title="Demo"
-                src={DEMO_PLACEHOLDER_URL}
-                className="w-full h-full"
-                allowFullScreen
-              />
+            <div className="aspect-video rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 flex flex-col items-center justify-center gap-2 px-4">
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white text-center">
+                Coming Soon
+              </h2>
+              <p className="text-slate-600 dark:text-slate-400 text-center">
+                We&apos;re working on something great.
+              </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button

@@ -3,6 +3,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "@/components/utilities/providers";
 import LayoutWrapper from "@/components/layout-wrapper";
 import { ClerkProvider } from "@clerk/nextjs";
+import { CoachOpenProvider } from "@/components/coach/CoachOpenContext";
+import { ChatCoachWidget } from "@/components/coach/ChatCoachWidget";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -40,11 +42,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             enableSystem
             storageKey="content-flywheel-theme"
           >
-            <LayoutWrapper>
-              <PaymentStatusAlert />
-              {children}
-            </LayoutWrapper>
-            <Toaster />
+            <CoachOpenProvider>
+              <LayoutWrapper>
+                <PaymentStatusAlert />
+                {children}
+              </LayoutWrapper>
+              <ChatCoachWidget />
+              <Toaster />
+            </CoachOpenProvider>
           </Providers>
         </body>
       </html>

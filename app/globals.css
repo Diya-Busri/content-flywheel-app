@@ -175,4 +175,15 @@
   [data-voice-dropdown-content] button {
     color: #ffffff !important;
   }
+
+  @keyframes voice-wave {
+    0%, 100% {
+      transform: scaleY(0.4);
+      opacity: 0.6;
+    }
+    50% {
+      transform: scaleY(1);
+      opacity: 1;
+    }
+  }
 }

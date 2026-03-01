@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, FlaskConical, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, FlaskConical, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -33,6 +33,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [coachOpen, setCoachOpen] = useState(false);
   const { theme, toggleTheme } = useDashboardTheme();
 
   useEffect(() => {
@@ -56,8 +57,9 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
 
   const isActive = (path: string) => pathname === path;
 
-  const navItems = [
+  const navItems: { href: string; icon: React.ReactNode; label: string; emoji: string; subItem?: boolean }[] = [
     { href: "/dashboard", icon: <Home size={18} />, label: "Home", emoji: "🏠" },
+    { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", emoji: "🤖" },
     { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦" },
     { href: "/dashboard/digital-products/selling-guide", icon: <Package size={18} />, label: "Selling Guide", emoji: "🛒", subItem: true },
     { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️" },
