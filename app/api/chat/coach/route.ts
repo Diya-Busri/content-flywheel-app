@@ -70,11 +70,10 @@ export async function POST(req: Request) {
   try {
     const { userId } = await auth();
     const body = await req.json().catch(() => ({}));
-    const { messages, pageContext, productId, voiceCallMode } = body as {
+    const { messages, pageContext, productId } = body as {
       messages?: IncomingMessage[];
       pageContext?: string;
       productId?: string;
-      voiceCallMode?: boolean;
     };
 
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -92,8 +91,7 @@ export async function POST(req: Request) {
     const hasAnyImages = messages.some(
       (m) => m.role === "user" && Array.isArray(m.imageUrls) && m.imageUrls.length > 0
     );
-    const model = voiceCallMode ? OPENAI_MODEL_DEFAULT : hasAnyImages ? OPENAI_MODEL_VISION : OPENAI_MODEL_DEFAULT;
-    const maxTokens = voiceCallMode ? 150 : 1024;
+    const model = hasAnyImages ? OPENAI_MODEL_VISION : OPENAI_MODEL_DEFAULT;
 
     const pageNote =
       typeof pageContext === "string" && pageContext.trim()
@@ -121,10 +119,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const voiceCallNote = voiceCallMode
-      ? "Keep responses under 3 sentences. Be concise, we are on a voice call."
-      : "";
-    const systemParts = [SYSTEM_PROMPT, pageNote, productContext, voiceCallNote].filter(Boolean);
+    const systemParts = [SYSTEM_PROMPT, pageNote, productContext].filter(Boolean);
     const openai = new OpenAI({ apiKey });
     const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
@@ -138,7 +133,7 @@ export async function POST(req: Request) {
       model,
       messages: openaiMessages,
       stream: true,
-      max_tokens: maxTokens,
+      max_tokens: 1024,
     });
 
     const encoder = new TextEncoder();

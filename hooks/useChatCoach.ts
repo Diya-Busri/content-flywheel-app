@@ -47,20 +47,14 @@ export type UseChatCoachOptions = {
   onMessagesChange?: (messages: CoachMessage[]) => void;
   /** Called once when streaming finishes with the final assistant text (for e.g. TTS auto-play). */
   onAssistantComplete?: (text: string) => void;
-  /** Called for each complete sentence as the assistant streams (for chunked TTS in voice call). */
-  onAssistantStreamChunk?: (sentence: string) => void;
   /** When set, coach API injects this product's details into the system prompt. */
   productId?: string | null;
-  /** When true, API uses gpt-4o-mini, max_tokens 150, and concise voice-call prompt. */
-  voiceCallMode?: boolean;
 };
 
 export function useChatCoach(pageContext: string, options: UseChatCoachOptions = {}) {
-  const { persist = false, initialMessages, onMessagesChange, onAssistantComplete, onAssistantStreamChunk, productId, voiceCallMode } = options;
+  const { persist = false, initialMessages, onMessagesChange, onAssistantComplete, productId } = options;
   const onMessagesChangeRef = useRef(onMessagesChange);
   onMessagesChangeRef.current = onMessagesChange;
-  const onAssistantStreamChunkRef = useRef(onAssistantStreamChunk);
-  onAssistantStreamChunkRef.current = onAssistantStreamChunk;
 
   const [messages, setMessagesState] = useState<CoachMessage[]>(() => {
     if (initialMessages != null) return initialMessages;
@@ -171,12 +165,7 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
         const res = await fetch("/api/chat/coach", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: body,
-            pageContext,
-            productId: productId ?? undefined,
-            voiceCallMode: voiceCallMode ?? false,
-          }),
+          body: JSON.stringify({ messages: body, pageContext, productId: productId ?? undefined }),
         });
 
         if (!res.ok) {
@@ -198,17 +187,6 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
 
         let accumulated = "";
         let buffer = "";
-        let lastEmittedIndex = 0;
-        const emitSentences = (text: string) => {
-          const rest = text.slice(lastEmittedIndex);
-          const sentenceRegex = /([^.?!]*[.?!]\s*)/g;
-          let m: RegExpExecArray | null;
-          while ((m = sentenceRegex.exec(rest)) !== null) {
-            const sentence = m[1].trim();
-            if (sentence) onAssistantStreamChunkRef.current?.(sentence);
-            lastEmittedIndex += m[1].length;
-          }
-        };
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -229,15 +207,12 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
                   if (last?.role === "assistant") next[next.length - 1] = { ...last, content: accumulated };
                   return next;
                 });
-                emitSentences(accumulated);
               }
             } catch {
               // skip
             }
           }
         }
-        const remainder = accumulated.slice(lastEmittedIndex).trim();
-        if (remainder) onAssistantStreamChunkRef.current?.(remainder);
 
         if (!accumulated) {
           setMessages((prev) => {
@@ -262,7 +237,7 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
         setIsLoading(false);
       }
     },
-    [messages, isLoading, productId, voiceCallMode]
+    [messages, isLoading, productId]
   );
 
   return { messages, sendMessage, generateImage, clearChat, isLoading };

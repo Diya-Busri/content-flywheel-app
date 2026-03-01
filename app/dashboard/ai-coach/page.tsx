@@ -398,22 +398,16 @@ function ChatPanel({
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
 
   const [isVoiceCall, setIsVoiceCall] = useState(false);
-  const [callStatus, setCallStatus] = useState<"listening" | "processing" | "speaking">("listening");
-  const isVoiceCallRef = useRef(false);
-  const callRecognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const callTranscriptRef = useRef("");
-  isVoiceCallRef.current = isVoiceCall;
+  const [callStatus, setCallStatus] = useState<"connecting" | "listening" | "speaking">("connecting");
 
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<{ name: string; text: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const voiceCallTtsQueueRef = useRef<string[]>([]);
-  const voiceCallPreFetchedUrlRef = useRef<string | null>(null);
-  const voiceCallPlayingRef = useRef(false);
-  const voiceCallCurrentUrlRef = useRef<string | null>(null);
-  const voiceCallQueueOnEndedRef = useRef<() => void>(() => {});
+  const realtimeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const realtimePcRef = useRef<RTCPeerConnection | null>(null);
+  const realtimeStreamRef = useRef<MediaStream | null>(null);
 
   const [products, setProducts] = useState<{ id: string; title: string; format: string }[]>([]);
   useEffect(() => {
@@ -476,120 +470,8 @@ function ChatPanel({
     [setMessageAudioUrls]
   );
 
-  const onVoiceCallPlaybackDone = useCallback(() => {
-    setCallStatus("listening");
-    startCallRecognitionRef.current?.();
-  }, []);
-
-  const processVoiceCallQueueRef = useRef<() => void>(() => {});
-  const processVoiceCallQueue = useCallback(() => {
-    if (voiceCallPlayingRef.current) return;
-    const queue = voiceCallTtsQueueRef.current;
-    if (queue.length === 0) {
-      onVoiceCallPlaybackDone();
-      return;
-    }
-    setCallStatus("speaking");
-    voiceCallQueueOnEndedRef.current = () => {
-      voiceCallPlayingRef.current = false;
-      if (voiceCallCurrentUrlRef.current) {
-        URL.revokeObjectURL(voiceCallCurrentUrlRef.current);
-        voiceCallCurrentUrlRef.current = null;
-      }
-      queue.shift();
-      processVoiceCallQueueRef.current?.();
-    };
-    const first = queue[0];
-    const el = audioRef.current;
-    if (!el) {
-      queue.shift();
-      processVoiceCallQueueRef.current?.();
-      return;
-    }
-    const playUrl = (url: string) => {
-      el.pause();
-      el.currentTime = 0;
-      el.src = url;
-      voiceCallCurrentUrlRef.current = url;
-      voiceCallPlayingRef.current = true;
-      setPlayingIndex(lastMessageIndexRef.current);
-      el.play().catch(() => {
-        voiceCallPlayingRef.current = false;
-        queue.shift();
-        processVoiceCallQueueRef.current?.();
-      });
-    };
-    const preFetchForIndex = (index: number) => {
-      const text = queue[index];
-      if (!text?.trim()) return;
-      fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: stripMarkdown(text).trim() }),
-      })
-        .then((r) => (r.ok ? r.blob() : null))
-        .then((blob) => {
-          if (blob && isVoiceCallRef.current && voiceCallPreFetchedUrlRef.current === null)
-            voiceCallPreFetchedUrlRef.current = URL.createObjectURL(blob);
-        })
-        .catch(() => {});
-    };
-    if (voiceCallPreFetchedUrlRef.current) {
-      const url = voiceCallPreFetchedUrlRef.current;
-      voiceCallPreFetchedUrlRef.current = null;
-      playUrl(url);
-      preFetchForIndex(1);
-    } else {
-      const plain = stripMarkdown(first).trim();
-      if (!plain) {
-        queue.shift();
-        processVoiceCallQueueRef.current?.();
-        return;
-      }
-      fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: plain }),
-      })
-        .then((r) => (r.ok ? r.blob() : null))
-        .then((blob) => {
-          if (!blob) {
-            queue.shift();
-            processVoiceCallQueueRef.current?.();
-            return;
-          }
-          const url = URL.createObjectURL(blob);
-          playUrl(url);
-          preFetchForIndex(1);
-        })
-        .catch(() => {
-          queue.shift();
-          processVoiceCallQueueRef.current?.();
-        });
-    }
-  }, [onVoiceCallPlaybackDone]);
-  processVoiceCallQueueRef.current = processVoiceCallQueue;
-
-  const onAssistantStreamChunkRef = useRef<(sentence: string) => void>(() => {});
-  onAssistantStreamChunkRef.current = (sentence: string) => {
-    if (!isVoiceCallRef.current) return;
-    const t = stripMarkdown(sentence).trim();
-    if (!t) return;
-    voiceCallTtsQueueRef.current.push(t);
-    processVoiceCallQueue();
-  };
-
   const onAssistantCompleteRef = useRef<(text: string) => void>(() => {});
   onAssistantCompleteRef.current = (text: string) => {
-    if (isVoiceCallRef.current) {
-      if (!text?.trim()) {
-        setCallStatus("listening");
-        startCallRecognitionRef.current?.();
-        return;
-      }
-      // Chunked TTS is handled by stream chunks; do not play full text here.
-      return;
-    }
     if (!mutedRef.current) playTTS(text, lastMessageIndexRef.current);
   };
 
@@ -597,9 +479,7 @@ function ChatPanel({
     initialMessages,
     onMessagesChange,
     onAssistantComplete: (text) => onAssistantCompleteRef.current(text),
-    onAssistantStreamChunk: (sentence) => onAssistantStreamChunkRef.current(sentence),
     productId: productId ?? undefined,
-    voiceCallMode: isVoiceCall,
   });
 
   useEffect(() => {
@@ -661,91 +541,100 @@ function ChatPanel({
     }
   }, [SpeechRecognitionClass, isRecording, isLoading, toast, sendMessage]);
 
-  const startCallRecognition = useCallback(() => {
-    const Klass = getSpeechRecognitionClass();
-    if (!Klass || !isVoiceCallRef.current) return;
-    if (callRecognitionRef.current) {
-      try {
-        callRecognitionRef.current.abort();
-      } catch {
-        // ignore
-      }
-      callRecognitionRef.current = null;
-    }
-    callTranscriptRef.current = "";
-    const rec = new Klass();
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.onresult = (e: { results: SpeechRecognitionResultList }) => {
-      let t = "";
-      for (let i = 0; i < e.results.length; i++) {
-        const r = e.results.item ? e.results.item(i) : e.results[i];
-        if (r.isFinal && r.length > 0) {
-          const alt = r.item ? r.item(0) : r[0];
-          t += (alt?.transcript ?? "").trim() + " ";
-        }
-      }
-      if (t) callTranscriptRef.current = t.trim();
-    };
-    rec.onend = () => {
-      setCallStatus("processing");
-      const transcript = callTranscriptRef.current.trim();
-      if (transcript) {
-        sendMessage(transcript);
-      }
-      callRecognitionRef.current = null;
-    };
-    rec.onerror = () => {
-      callRecognitionRef.current = null;
-    };
-    try {
-      rec.start();
-      callRecognitionRef.current = rec;
-    } catch {
-      callRecognitionRef.current = null;
-    }
-  }, [sendMessage]);
-
-  const startCallRecognitionRef = useRef(startCallRecognition);
-  startCallRecognitionRef.current = startCallRecognition;
-
   const endCall = useCallback(() => {
-    if (callRecognitionRef.current) {
-      try {
-        callRecognitionRef.current.abort();
-      } catch {
-        // ignore
-      }
-      callRecognitionRef.current = null;
+    const pc = realtimePcRef.current;
+    if (pc) {
+      pc.close();
+      realtimePcRef.current = null;
+    }
+    const stream = realtimeStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+      realtimeStreamRef.current = null;
+    }
+    if (realtimeAudioRef.current) {
+      realtimeAudioRef.current.srcObject = null;
     }
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       audioRef.current.removeAttribute("src");
     }
-    voiceCallTtsQueueRef.current = [];
-    voiceCallPlayingRef.current = false;
-    if (voiceCallPreFetchedUrlRef.current) {
-      URL.revokeObjectURL(voiceCallPreFetchedUrlRef.current);
-      voiceCallPreFetchedUrlRef.current = null;
-    }
-    if (voiceCallCurrentUrlRef.current) {
-      URL.revokeObjectURL(voiceCallCurrentUrlRef.current);
-      voiceCallCurrentUrlRef.current = null;
-    }
     setPlayingIndex(null);
     setIsVoiceCall(false);
   }, []);
 
-  const handleStartVoiceCall = useCallback(() => {
-    if (!getSpeechRecognitionClass()) {
+  const handleStartVoiceCall = useCallback(async () => {
+    if (typeof RTCPeerConnection === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       toast({ title: "Voice call not supported in this browser — try Chrome." });
       return;
     }
     setIsVoiceCall(true);
-    setCallStatus("listening");
-    setTimeout(() => startCallRecognition(), 0);
-  }, [toast, startCallRecognition]);
+    setCallStatus("connecting");
+    try {
+      const sessionRes = await fetch("/api/realtime-session", { method: "POST" });
+      if (!sessionRes.ok) {
+        const err = await sessionRes.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || "Failed to start session");
+      }
+      const sessionData = (await sessionRes.json()) as { client_secret?: { value: string } };
+      const token = sessionData.client_secret?.value;
+      if (!token) throw new Error("No session token");
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      realtimeStreamRef.current = stream;
+
+      const pc = new RTCPeerConnection();
+      realtimePcRef.current = pc;
+
+      if (!realtimeAudioRef.current) {
+        const el = document.createElement("audio");
+        el.autoplay = true;
+        el.setAttribute("playsinline", "true");
+        realtimeAudioRef.current = el;
+      }
+      const audioEl = realtimeAudioRef.current;
+      pc.ontrack = (e) => {
+        if (e.streams?.[0] && audioEl) audioEl.srcObject = e.streams[0];
+      };
+
+      pc.addTrack(stream.getTracks()[0]);
+
+      const dc = pc.createDataChannel("oai-events");
+      dc.addEventListener("message", (e) => {
+        try {
+          const ev = JSON.parse(e.data as string) as { type?: string };
+          if (ev.type === "response.audio.delta" || ev.type === "response.audio_transcript.delta") setCallStatus("speaking");
+          else if (ev.type === "response.done") setCallStatus("listening");
+        } catch {
+          // ignore
+        }
+      });
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const sdpRes = await fetch("https://api.openai.com/v1/realtime/calls", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/sdp",
+        },
+        body: offer.sdp,
+      });
+      if (!sdpRes.ok) {
+        const errText = await sdpRes.text();
+        throw new Error(errText || "Realtime connection failed");
+      }
+      const answerSdp = await sdpRes.text();
+      await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+      setCallStatus("listening");
+    } catch (err) {
+      console.error("[Realtime voice call]", err);
+      toast({ title: err instanceof Error ? err.message : "Voice call failed" });
+      endCall();
+    }
+  }, [toast, endCall]);
 
   useEffect(() => {
     if (messages.length) scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -966,10 +855,7 @@ function ChatPanel({
         className="hidden"
         playsInline
         aria-hidden
-        onEnded={() => {
-          setPlayingIndex(null);
-          if (isVoiceCallRef.current) voiceCallQueueOnEndedRef.current?.();
-        }}
+        onEnded={() => setPlayingIndex(null)}
       />
       <div className="shrink-0 border-b border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-6 py-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
@@ -1092,8 +978,8 @@ function ChatPanel({
                 <span className="relative inline-flex h-24 w-24 rounded-full bg-orange-500 dark:bg-orange-500" />
               </div>
               <p className="text-lg font-medium text-slate-700 dark:text-slate-300">
+                {callStatus === "connecting" && "Connecting…"}
                 {callStatus === "listening" && "Listening…"}
-                {callStatus === "processing" && "Thinking…"}
                 {callStatus === "speaking" && "Speaking…"}
               </p>
             </div>
