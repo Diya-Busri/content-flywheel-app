@@ -60,19 +60,25 @@ export function OnboardingProvider({
   }, [loading, markDashboardSeen, hasProduct, onboardingCompleted, steps]);
 
   const handleModalComplete = useCallback(() => {
-    setSteps((prev) => ({ ...prev, modalDismissed: true }));
-    fetch("/api/onboarding", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        steps: {
-          ...steps,
-          modalDismissed: true,
-          createAccount: true,
-          exploreDashboard: true,
-        },
-      }),
-    }).then(() => fetchOnboarding()).catch(() => {});
+    try {
+      setSteps((prev) => ({ ...(prev ?? {}), modalDismissed: true }));
+      fetch("/api/onboarding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          steps: {
+            ...steps,
+            modalDismissed: true,
+            createAccount: true,
+            exploreDashboard: true,
+          },
+        }),
+      })
+        .then(() => fetchOnboarding())
+        .catch((err) => console.error("[OnboardingProvider] PATCH onboarding:", err));
+    } catch (err) {
+      console.error("[OnboardingProvider] handleModalComplete:", err);
+    }
   }, [steps, fetchOnboarding]);
 
   const showModal = !loading && !onboardingCompleted && steps?.modalDismissed !== true;

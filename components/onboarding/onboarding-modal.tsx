@@ -27,16 +27,32 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
   const progressPct = (step / TOTAL_STEPS) * 100;
 
   const handleSkip = () => {
-    onComplete();
+    try {
+      onComplete();
+    } catch (err) {
+      console.error("[OnboardingModal] handleSkip:", err);
+    }
   };
 
   const handleNext = () => {
-    onStepComplete?.(step);
-    if (step >= TOTAL_STEPS) {
-      onComplete();
-      return;
+    try {
+      onStepComplete?.(step);
+      if (step >= TOTAL_STEPS) {
+        onComplete();
+        return;
+      }
+      setStep((s) => s + 1);
+    } catch (err) {
+      console.error("[OnboardingModal] handleNext:", err);
     }
-    setStep((s) => s + 1);
+  };
+
+  const handleComplete = () => {
+    try {
+      onComplete();
+    } catch (err) {
+      console.error("[OnboardingModal] handleComplete:", err);
+    }
   };
 
   return (
@@ -118,7 +134,7 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
           </div>
         )}
 
-        {/* Step 4: First product */}
+        {/* Step 4: First product — use router for CTA to avoid Link + modal unmount issues */}
         {step === 4 && (
           <div className="max-w-lg text-center space-y-6">
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
@@ -129,7 +145,9 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
             </p>
             <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold">
-                <Link href="/dashboard/digital-products/create">Create product</Link>
+                <Link href="/dashboard/digital-products/create" onClick={handleComplete}>
+                  Create product
+                </Link>
               </Button>
               <Button variant="ghost" onClick={handleComplete}>
                 I&apos;ll do this later
