@@ -13,6 +13,7 @@ import { eq, desc, isNull, and, count } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Package, ShoppingBag, CheckSquare, Video, Play, ExternalLink } from "lucide-react";
+import { SyncOnboardingSteps } from "@/components/onboarding/sync-onboarding-steps";
 
 export const metadata: Metadata = {
   title: "Dashboard | Content Flywheel",
@@ -82,6 +83,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="p-6 md:p-10">
+      <SyncOnboardingSteps digitalProductsCount={videoStats.digitalProductsCount} />
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
         Welcome back
       </h1>
