@@ -8,31 +8,39 @@ const PLACEHOLDER_REVIEWS = [
   {
     text: "Generated 50 TikTok videos in one afternoon. My conversion rate doubled!",
     name: "Sarah M.",
+    rating: 5,
   },
   {
     text: "The compliance checker saved my account. No more worrying about bans.",
     name: "Mike T.",
+    rating: 5,
   },
   {
     text: "Best $49 I've spent. ROI in the first week.",
     name: "Jessica L.",
+    rating: 5,
   },
 ] as const;
+
+export type ReviewItem = { text: string; name: string; rating?: number };
 
 function ReviewCard({
   text,
   name,
+  rating = 5,
 }: {
   text: string;
   name: string;
+  rating?: number;
 }) {
+  const stars = Math.min(5, Math.max(1, rating ?? 5));
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800/80">
       <div className="flex gap-0.5">
         {[1, 2, 3, 4, 5].map((i) => (
           <Star
             key={i}
-            className="h-5 w-5 fill-amber-400 text-amber-400"
+            className={`h-5 w-5 ${i <= stars ? "fill-amber-400 text-amber-400" : "fill-slate-200 text-slate-200 dark:fill-slate-600 dark:text-slate-600"}`}
             strokeWidth={1.5}
           />
         ))}
@@ -50,7 +58,9 @@ function ReviewCard({
   );
 }
 
-export function ReviewsCarousel() {
+export function ReviewsCarousel({ reviews: reviewsProp }: { reviews?: ReviewItem[] }) {
+  const reviews = reviewsProp?.length ? reviewsProp : [...PLACEHOLDER_REVIEWS];
+
   const [emblaRef, emblaApi] = useEmblaCarousel({
     loop: true,
     align: "start",
@@ -75,14 +85,14 @@ export function ReviewsCarousel() {
     <div className="relative overflow-hidden">
       <div className="overflow-hidden" ref={emblaRef}>
         <div className="flex touch-pan-x gap-4">
-          {PLACEHOLDER_REVIEWS.map((review, i) => (
+          {reviews.map((review, i) => (
             <div
               key={i}
               className="min-w-0 flex-[0_0_100%] sm:flex-[0_0_calc(50%-0.5rem)] lg:flex-[0_0_calc(33.333%-0.667rem)]"
               style={{ scrollSnapAlign: "start" }}
             >
               <div className="h-full scroll-snap-align-start">
-                <ReviewCard text={review.text} name={review.name} />
+                <ReviewCard text={review.text} name={review.name} rating={review.rating} />
               </div>
             </div>
           ))}

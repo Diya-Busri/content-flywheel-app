@@ -10,6 +10,7 @@ import {
 import { ReviewsCarousel } from "@/components/marketing/reviews-carousel";
 import { LandingNavbar } from "@/components/marketing/landing-navbar";
 import { ChatWidget } from "@/components/chat-widget";
+import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "Content Flywheel - AI Video Generation for Social Media",
@@ -17,7 +18,28 @@ export const metadata: Metadata = {
     "Turn products into sales-driving videos for TikTok, Instagram, and YouTube. AI-powered video creation focused on conversion, not vanity metrics.",
 };
 
-export default function HomePage() {
+async function getApprovedPublicReviews(): Promise<{ text: string; name: string; rating?: number }[]> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("reviews")
+    .select("review_text, rating")
+    .eq("is_public", true)
+    .eq("is_approved", true)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error || !data?.length) return [];
+  return data
+    .filter((r) => r.review_text?.trim())
+    .map((r) => ({
+      text: r.review_text!.trim(),
+      name: "Verified User",
+      rating: r.rating ?? 5,
+    }));
+}
+
+export default async function HomePage() {
+  const reviews = await getApprovedPublicReviews();
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 overflow-x-hidden">
       <LandingNavbar />
@@ -220,7 +242,7 @@ export default function HomePage() {
             </p>
             </div>
             <div className="mt-14">
-              <ReviewsCarousel />
+              <ReviewsCarousel reviews={reviews} />
             </div>
           </div>
         </section>
