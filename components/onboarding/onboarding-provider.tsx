@@ -1,9 +1,25 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import confetti from "canvas-confetti";
 import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import type { OnboardingSteps } from "@/app/api/onboarding/route";
+
+const BRAND_ORANGE = "#F59E0B";
+
+function fireOnboardingConfetti() {
+  try {
+    const colors = [BRAND_ORANGE, "#FBBF24", "#FCD34D", "#FDE68A", "#FEF3C7", "#FFFFFF"];
+    const opts = { origin: { y: 0.6 }, zIndex: 9999, colors };
+    confetti({ ...opts, particleCount: 120, spread: 100 });
+    confetti({ ...opts, particleCount: 80, angle: 55, spread: 75 });
+    confetti({ ...opts, particleCount: 80, angle: 125, spread: 75 });
+    confetti({ ...opts, particleCount: 60, angle: 90, spread: 60, startVelocity: 35 });
+  } catch {
+    // ignore
+  }
+}
 
 type OnboardingProviderProps = {
   children: React.ReactNode;
@@ -61,6 +77,7 @@ export function OnboardingProvider({
 
   const handleModalComplete = useCallback(() => {
     try {
+      fireOnboardingConfetti();
       setSteps((prev) => ({ ...(prev ?? {}), modalDismissed: true }));
       fetch("/api/onboarding", {
         method: "PATCH",
