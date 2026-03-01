@@ -117,7 +117,7 @@ export function OnboardingProvider({
       {children}
       {!loading && !onboardingCompleted && (
         <div className="fixed bottom-6 right-6 z-40 w-80 max-w-[calc(100vw-3rem)]">
-          <OnboardingChecklist steps={steps} />
+          <OnboardingChecklist steps={steps} onStepsChange={fetchOnboarding} />
         </div>
       )}
     </>
