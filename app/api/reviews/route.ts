@@ -1,12 +1,12 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { client } from "@/db/db";
+import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 /**
  * POST /api/reviews — save a user review.
- * Requires: reviews table (e.g. db/migrations/0001_reviews.sql run in production).
- * If using Supabase with RLS, the reviews table policy uses auth.uid(); a direct
- * postgres connection from Next.js may not set auth.uid(), causing insert to fail.
+ * Uses Supabase service role client (bypasses RLS). Stores Clerk user ID in clerk_user_id.
+ * Requires: reviews table with clerk_user_id column (db/migrations/0042_reviews_clerk_user_id.sql).
+ * Env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (set in Vercel).
  */
 export async function POST(request: Request) {
   try {
@@ -38,31 +38,52 @@ export async function POST(request: Request) {
       );
     }
 
-    const text = typeof reviewText === "string" ? reviewText.trim() : "";
-    const allowPublic = rating === 5 && !!isPublic;
+    const review_text = typeof reviewText === "string" ? reviewText.trim() : "";
+    const is_public = rating === 5 && !!isPublic;
 
-    await client`
-      INSERT INTO reviews (user_id, rating, review_text, is_public, is_approved)
-      VALUES (${userId}, ${rating}, ${text}, ${allowPublic}, false)
-    `;
+    const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      console.error("[POST /api/reviews] Supabase admin client missing. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel.");
+      return NextResponse.json(
+        {
+          error: "Server configuration error",
+          details: { message: "Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel environment variables." },
+        },
+        { status: 503 }
+      );
+    }
+
+    const { error } = await supabaseAdmin.from("reviews").insert({
+      rating,
+      review_text: review_text || null,
+      clerk_user_id: userId,
+      is_public: is_public,
+      is_approved: false,
+    });
+
+    if (error) {
+      console.error("[POST /api/reviews] Review insert error:", error);
+      return NextResponse.json(
+        { error: error.message, details: error },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const code = err && typeof err === "object" && "code" in err ? String((err as { code: unknown }).code) : undefined;
-    const detail = err && typeof err === "object" && "detail" in err ? String((err as { detail: unknown }).detail) : undefined;
-    console.error("[POST /api/reviews] Full error:", {
-      message,
-      code,
-      detail,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    const errorPayload = {
-      error: "Failed to save review",
-      message,
-      ...(code && { code }),
-      ...(detail && { detail }),
-    };
-    return NextResponse.json(errorPayload, { status: 500 });
+    console.error("[POST /api/reviews] Review insert error:", err);
+    const details =
+      err && typeof err === "object"
+        ? Object.fromEntries(
+            Object.entries(err as Record<string, unknown>).filter(
+              ([k, v]) => typeof v !== "function" && v !== undefined
+            )
+          )
+        : { raw: String(err) };
+    return NextResponse.json(
+      { error: message, details },
+      { status: 500 }
+    );
   }
 }
