@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, Circle, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, Circle, ChevronDown, ChevronUp, Play } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,8 +10,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { OnboardingSteps } from "@/app/api/onboarding/route";
-
-const DEMO_VIDEO_URL = "https://www.youtube.com/embed/dQw4w9WgXcQ";
 
 type ChecklistItem = {
   key: keyof OnboardingSteps;
@@ -118,20 +116,22 @@ export function OnboardingChecklist({ steps, onStepsChange }: OnboardingChecklis
       </div>
 
       <Dialog open={demoModalOpen} onOpenChange={(open) => !open && handleCloseDemoModal()}>
-        <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+        <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden border-slate-200 dark:border-slate-700 bg-slate-900">
           <DialogHeader className="p-4 pb-0">
-            <DialogTitle className="text-lg text-slate-900 dark:text-white">
+            <DialogTitle className="text-lg text-white">
               Demo video
             </DialogTitle>
           </DialogHeader>
-          <div className="aspect-video w-full bg-slate-200 dark:bg-slate-800">
-            <iframe
-              title="Demo video"
-              src={DEMO_VIDEO_URL}
-              className="h-full w-full"
-              allowFullScreen
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            />
+          <div className="aspect-video w-full flex flex-col items-center justify-center gap-4 bg-slate-900 px-6 py-12 border-t border-slate-700/50">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-700/80 ring-2 ring-orange-500/40">
+              <Play className="h-10 w-10 text-slate-500 fill-slate-500" strokeWidth={1.5} />
+            </div>
+            <p className="text-xl font-semibold text-white">
+              Demo video coming soon
+            </p>
+            <p className="text-sm text-slate-400 text-center max-w-sm">
+              We&apos;re putting together a walkthrough for you. Check back soon!
+            </p>
           </div>
         </DialogContent>
       </Dialog>
