@@ -5,6 +5,8 @@
  * FormData: file (optional), libraryScriptId (optional), scriptHook, scriptBody, scriptCta, productName, productDescription
  * Returns: { kit } (Social Media Kit from OpenAI)
  */
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { eq, and, isNull } from "drizzle-orm";

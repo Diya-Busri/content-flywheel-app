@@ -7,6 +7,8 @@
  * - customUserPrompt: if set, use this as the user prompt (with product context appended); otherwise use default angle prompt.
  * Uses cleaned product title (before first | and -). Updates the library script content and returns the new script.
  */
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
