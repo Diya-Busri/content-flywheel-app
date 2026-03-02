@@ -3,6 +3,8 @@
  * Returns the script (guide) row and linked product so you can see what product name is stored.
  * Run in browser or curl while logged in. Do not use in production.
  */
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
