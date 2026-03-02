@@ -220,6 +220,11 @@ export type VideoGuideData = {
   timelineVoiceoverDuration?: number;
   /** Per-scene voiceover URLs (saved to Supabase), ordered by scene index. */
   timelineSceneVoiceoverUrls?: string[];
+  /** Set when user has used Video Timeline (saved scene slots). Enables Social Media Kit without proof upload. */
+  timelineSceneSlots?: unknown[];
+  storytellingFramework?: string;
+  frameworkRationale?: string;
+  engagementTriggers?: string[];
 };
 
 export type ScriptForGuide = { id: string; title: string; length: number; hook: string; body: string; cta: string };
@@ -239,15 +244,28 @@ type Props = {
   onProductNameChange?: (productName: string) => void;
   /** Called after full script is regenerated so parent can update guide.script and optionally guide.scenes (with textOverlay re-mapped). */
   onScriptRegenerated?: (script: { hook: string; body: string; cta: string }, updatedScenes?: Array<{ scene: string; timing: string; textOverlay?: TextOverlayObj | TextOverlayObj[]; [key: string]: unknown }>) => void;
+  /** Called when user manually edits the script (hook/body/cta). Parent should update guide and persist to library if libraryScriptId. */
+  onScriptEdited?: (script: { hook: string; body: string; cta: string }) => void;
+  /** Called after scene voiceover URLs are saved to the library so parent can keep guide in sync (avoids losing them on refetch/refresh). */
+  onSceneVoiceoverUrlsSaved?: (urls: string[]) => void;
+  /** Called after scenes (visual + text overlay prompts) are regenerated. Parent should update guide and persist to library if libraryScriptId. */
+  onScenesRegenerated?: (payload: {
+    scenes: VideoGuideData["scenes"];
+    scenePrompts: VideoGuideData["scenePrompts"];
+    storytellingFramework?: string;
+    frameworkRationale?: string;
+    engagementTriggers?: string[];
+  }) => void;
 };
 
-export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceId, scripts: scriptsProp, productId, libraryScriptId, onProductNameChange, onScriptRegenerated }: Props) {
+export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceId, scripts: scriptsProp, productId, libraryScriptId, onProductNameChange, onScriptRegenerated, onScriptEdited, onSceneVoiceoverUrlsSaved, onScenesRegenerated }: Props) {
   const { toast } = useToast();
   const router = useRouter();
   const [scripts, setScripts] = useState<ScriptForGuide[]>(() => (Array.isArray(scriptsProp) && scriptsProp.length > 0 ? scriptsProp : []));
   const [currentScriptIndex, setCurrentScriptIndex] = useState(0);
   const [regeneratingScript, setRegeneratingScript] = useState(false);
   const [regeneratingFullScript, setRegeneratingFullScript] = useState(false);
+  const [regeneratingScenes, setRegeneratingScenes] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [voiceId, setVoiceId] = useState<string>(() =>
     preferredVoiceId && preferredVoiceId.trim()
@@ -268,12 +286,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const effectiveScript = scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length
     ? { hook: scripts[currentScriptIndex].hook, body: scripts[currentScriptIndex].body, cta: scripts[currentScriptIndex].cta }
     : guide.script;
-  const rawProductTitle = effectiveProductName || undefined;
-  const displayScript = {
-    hook: replaceProductTitleInText(effectiveScript.hook, rawProductTitle),
-    body: replaceProductTitleInText(effectiveScript.body, rawProductTitle),
-    cta: replaceProductTitleInText(effectiveScript.cta, rawProductTitle),
-  };
   const effectiveScriptTitle = scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length
     ? scripts[currentScriptIndex].title
     : scriptTitle;
@@ -320,14 +332,53 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   /** User-entered product name when guide has none (shown in "What is your product called?" block). */
   const [userProductName, setUserProductName] = useState("");
   const [productNameInput, setProductNameInput] = useState("");
+  /** User's products for the "Select a product" dropdown. */
+  const [userProducts, setUserProducts] = useState<Array<{ id: string; title: string }>>([]);
+  /** Local edits to script (hook/body/cta) before blur/save. */
+  const [editedScript, setEditedScript] = useState<{ hook: string; body: string; cta: string } | null>(null);
 
   const effectiveProductName = (guide.productName?.trim() || "") || (userProductName?.trim() || "");
-  const hasProductName = effectiveProductName.length > 0;
+  const PLACEHOLDER_NAMES = ["your product", "the product", "untitled", "product", ""];
+  const isPlaceholderName = PLACEHOLDER_NAMES.includes(effectiveProductName.toLowerCase().trim());
+  const hasProductName = effectiveProductName.length > 0 && !isPlaceholderName;
+  const rawProductTitle = effectiveProductName || undefined;
+  const replacePlaceholderInScript = (t: string) => {
+    const s = String(t ?? "");
+    const replacement = hasProductName ? (cleanProductTitle(effectiveProductName) || effectiveProductName) : "[Your product name]";
+    return s.replace(/\bYour product\b/gi, replacement);
+  };
+  const displayScript = {
+    hook: replacePlaceholderInScript(effectiveScript.hook),
+    body: replacePlaceholderInScript(effectiveScript.body),
+    cta: replacePlaceholderInScript(effectiveScript.cta),
+  };
+  const currentScriptForDisplay = editedScript ?? displayScript;
+
+  const handleScriptBlur = useCallback(() => {
+    if (!editedScript) return;
+    onScriptEdited?.(editedScript);
+    if (scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length) {
+      setScripts((prev) => prev.map((s, i) => (i === currentScriptIndex ? { ...s, hook: editedScript.hook, body: editedScript.body, cta: editedScript.cta } : s)));
+    }
+    setEditedScript(null);
+  }, [editedScript, onScriptEdited, scripts.length, currentScriptIndex]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     setDefaultVoiceId(voiceId);
   }, [voiceId]);
+
+  useEffect(() => {
+    if (!hasProductName) {
+      fetch("/api/library?type=products", { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((items: Array<{ type?: string; id: string; title: string }>) => {
+          const products = (items ?? []).filter((i) => i.type === "product").map((p) => ({ id: p.id, title: p.title || "Untitled" }));
+          setUserProducts(products);
+        })
+        .catch(() => setUserProducts([]));
+    }
+  }, [hasProductName]);
 
   useEffect(() => {
     if (!fullVoiceoverUrl) {
@@ -492,6 +543,40 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     }
   }, [socialKitProofFile, script, guide, effectiveProductName, toast]);
 
+  const hasTimelineUsage = Array.isArray(guide.timelineSceneSlots) && guide.timelineSceneSlots.length > 0;
+  const handleSocialKitGenerateWithoutProof = useCallback(async () => {
+    if (!libraryScriptId) return;
+    setSocialKitLoading(true);
+    try {
+      const form = new FormData();
+      form.append("libraryScriptId", libraryScriptId);
+      form.append("scriptHook", displayScript.hook);
+      form.append("scriptBody", displayScript.body);
+      form.append("scriptCta", displayScript.cta);
+      form.append("productName", (effectiveProductName && cleanProductTitle(effectiveProductName)) || effectiveProductName || "Product");
+      form.append("productDescription", (guide as { productDescription?: string }).productDescription ?? "");
+      const res = await fetch("/api/video-guide/social-media-kit", { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || "Failed to generate kit");
+      }
+      const kit = (data as { kit?: SocialMediaKit }).kit;
+      if (kit) {
+        setSocialKit(kit);
+        sessionStorage.setItem(SOCIAL_KIT_STORAGE_KEY, JSON.stringify(kit));
+        toast({ title: "Social Media Kit ready", description: "Your kit has been generated." });
+      }
+    } catch (e) {
+      toast({
+        title: "Failed to generate kit",
+        description: e instanceof Error ? e.message : "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setSocialKitLoading(false);
+    }
+  }, [libraryScriptId, displayScript, effectiveProductName, guide, toast]);
+
   const socialKitToText = useCallback((kit: SocialMediaKit): string => {
     const lines: string[] = [];
     lines.push("=== TIKTOK ===");
@@ -567,7 +652,46 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     [libraryScriptId, onScriptRegenerated, scripts.length, currentScriptIndex, toast, guide.scenes, guide.scenePrompts]
   );
 
-  const fullScriptText = `${displayScript.hook}\n\n${displayScript.body}\n\n${displayScript.cta}`;
+  const handleRegenerateScenes = useCallback(async () => {
+    if (!onScenesRegenerated) return;
+    const script = displayScript;
+    setRegeneratingScenes(true);
+    try {
+      const res = await fetch("/api/video-guide/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hook: script.hook,
+          body: script.body,
+          cta: script.cta,
+          productName: guide.productName?.trim() || undefined,
+          productId: productId || undefined,
+          regenerateScenesOnly: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to regenerate scenes");
+      const payload = data as {
+        scenes?: VideoGuideData["scenes"];
+        scenePrompts?: VideoGuideData["scenePrompts"];
+        storytellingFramework?: string;
+        frameworkRationale?: string;
+        engagementTriggers?: string[];
+      };
+      if (payload.scenes && payload.scenePrompts) {
+        onScenesRegenerated(payload);
+        toast({ title: "Scenes regenerated", description: "Visual and text overlay prompts have been updated." });
+      } else {
+        throw new Error("Invalid response");
+      }
+    } catch (e) {
+      toast({ title: "Regenerate failed", description: e instanceof Error ? e.message : "Try again", variant: "destructive" });
+    } finally {
+      setRegeneratingScenes(false);
+    }
+  }, [displayScript, guide.productName, productId, onScenesRegenerated, toast]);
+
+  const fullScriptText = `${currentScriptForDisplay.hook}\n\n${currentScriptForDisplay.body}\n\n${currentScriptForDisplay.cta}`;
   const scriptStats = useMemo(() => {
     const text = fullScriptText.trim();
     const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
@@ -792,37 +916,41 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       setPerSceneUrls([...urls]);
       if (libraryScriptId && urls.some(Boolean)) {
         const toSave = urls.map((u) => u ?? "");
-        const patchRes = await fetch(`/api/library/scripts/${libraryScriptId}`, {
+        let patchRes = await fetch(`/api/library/scripts/${libraryScriptId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ timelineSceneVoiceoverUrls: toSave }),
         });
         if (!patchRes.ok) {
           const errBody = await patchRes.json().catch(() => ({}));
-          console.error("[Scene voiceover] Supabase PATCH failed:", { status: patchRes.status, body: errBody });
+          console.error("[Scene voiceover] PATCH failed, retrying once:", { status: patchRes.status, body: errBody });
+          patchRes = await fetch(`/api/library/scripts/${libraryScriptId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ timelineSceneVoiceoverUrls: toSave }),
+          });
+        }
+        if (patchRes.ok) {
+          onSceneVoiceoverUrlsSaved?.(toSave.filter(Boolean));
+        } else {
+          const errBody = await patchRes.json().catch(() => ({}));
+          console.error("[Scene voiceover] PATCH failed after retry:", patchRes.status, errBody);
+          toast({ title: "Voiceovers saved locally", description: "Refresh may lose them. Try saving again or go to Timeline and back.", variant: "destructive" });
         }
       }
       const ok = urls.filter(Boolean).length;
       if (libraryScriptId) {
-        if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
-        redirectTimeoutRef.current = setTimeout(() => {
-          redirectTimeoutRef.current = null;
-          router.push(`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`);
-        }, 1500);
         toast({
           title: "Scene voiceovers",
-          description: "Redirecting to Timeline in 1.5s.",
+          description: "Would you like to create a video? Go to Timeline to add scenes and export.",
           action: (
             <ToastAction
-              altText="Cancel redirect"
+              altText="Go to Timeline"
               onClick={() => {
-                if (redirectTimeoutRef.current) {
-                  clearTimeout(redirectTimeoutRef.current);
-                  redirectTimeoutRef.current = null;
-                }
+                router.push(`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`);
               }}
             >
-              Cancel
+              Go to Timeline
             </ToastAction>
           ),
         });
@@ -840,7 +968,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       setGeneratingPerScene(false);
       setGeneratingSceneIndex(null);
     }
-  }, [scenes, getSceneTexts, generateOneSceneVoiceover, toast, libraryScriptId, router]);
+  }, [scenes, getSceneTexts, generateOneSceneVoiceover, toast, libraryScriptId, router, onSceneVoiceoverUrlsSaved]);
 
   const handleGenerateSingleSceneVoiceover = useCallback(
     async (index: number) => {
@@ -944,15 +1072,16 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       if (playingPreviewUrl === url) setPlayingPreviewUrl(null);
       if (libraryScriptId) {
         const toSave = next.map((u) => u ?? "");
-        await fetch(`/api/library/scripts/${libraryScriptId}`, {
+        const res = await fetch(`/api/library/scripts/${libraryScriptId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ timelineSceneVoiceoverUrls: toSave }),
-        }).catch(() => {});
+        });
+        if (res.ok) onSceneVoiceoverUrlsSaved?.(toSave.filter(Boolean));
       }
       toast({ title: "Scene voiceover removed" });
     },
-    [libraryScriptId, perSceneUrls, playingPreviewUrl, toast]
+    [libraryScriptId, perSceneUrls, playingPreviewUrl, toast, onSceneVoiceoverUrlsSaved]
   );
 
   const downloadGuide = useCallback(() => {
@@ -1079,43 +1208,74 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
         {!hasProductName && (
           <div className="mb-6 p-4 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-[#1A1810]">
-            <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">What is your product called?</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                type="text"
-                placeholder="e.g. My App, Fitness Pro"
-                value={productNameInput}
-                onChange={(e) => setProductNameInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    const v = productNameInput.trim();
-                    if (v) {
-                      setUserProductName(v);
-                      onProductNameChange?.(v);
-                      setProductNameInput("");
-                    }
-                  }
-                }}
-                className="max-w-xs border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F]"
-              />
-              <Button
-                className="bg-orange-500 hover:bg-orange-600 text-white"
-                onClick={() => {
-                  const v = productNameInput.trim();
-                  if (v) {
-                    setUserProductName(v);
-                    onProductNameChange?.(v);
-                    setProductNameInput("");
-                  }
-                }}
-                disabled={!productNameInput.trim()}
-              >
-                Continue
-              </Button>
+            <p className="text-sm font-medium text-gray-900 dark:text-white mb-3">Set your product name so scripts and voiceovers use it instead of &quot;Your product&quot;</p>
+            <div className="flex flex-nowrap items-end gap-4">
+              {userProducts.length > 0 && (
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <label className="text-xs text-gray-500 dark:text-[#A0A0A0]">Select one of your products</label>
+                  <Select
+                    onValueChange={(value) => {
+                      const p = userProducts.find((x) => x.id === value);
+                      if (p?.title) {
+                        setUserProductName(p.title);
+                        onProductNameChange?.(p.title);
+                        setProductNameInput("");
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-[220px] border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F]">
+                      <SelectValue placeholder="Choose a product..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {userProducts.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                <label className="text-xs text-gray-500 dark:text-[#A0A0A0]">{userProducts.length > 0 ? "Or type a name" : "Type your product name"}</label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    placeholder="e.g. My App, Fitness Pro"
+                    value={productNameInput}
+                    onChange={(e) => setProductNameInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const v = productNameInput.trim();
+                        if (v) {
+                          setUserProductName(v);
+                          onProductNameChange?.(v);
+                          setProductNameInput("");
+                        }
+                      }
+                    }}
+                    className="flex-1 min-w-[140px] border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F]"
+                  />
+                  <Button
+                    className="bg-orange-500 hover:bg-orange-600 text-white shrink-0"
+                    onClick={() => {
+                      const v = productNameInput.trim();
+                      if (v) {
+                        setUserProductName(v);
+                        onProductNameChange?.(v);
+                        setProductNameInput("");
+                      }
+                    }}
+                    disabled={!productNameInput.trim()}
+                  >
+                    Continue
+                  </Button>
+                </div>
+              </div>
             </div>
             <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-2">
-              Enter a name to personalize scripts and voiceovers before generating.
+              Pick a product from your library or type a name. Scripts and voiceovers will use this instead of a placeholder.
             </p>
           </div>
         )}
@@ -1169,7 +1329,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">Video Creation Guide</h1>
             <p className="text-gray-600 dark:text-[#A0A0A0]">
               {guide.overview ?? "Multi-platform video marketing guide."}
-              {(scriptTitle?.trim() || (effectiveProductName && cleanProductTitle(effectiveProductName) && cleanProductTitle(effectiveProductName) !== "Product")) && (
+              {hasProductName && (scriptTitle?.trim() || effectiveProductName) && (
                 <>
                   {" "}
                   <span className="text-gray-900 dark:text-white font-medium">
@@ -1215,6 +1375,11 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               <span className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-orange-500" />
                 Full Script
+                {!hasProductName && (
+                  <span className="text-xs font-normal text-amber-600 dark:text-amber-400" title="Regenerate and voiceover need a product name to personalize the script.">
+                    — Set product name above to enable buttons
+                  </span>
+                )}
               </span>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
@@ -1223,6 +1388,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
                   onClick={() => handleRegenerateFullScript()}
                   disabled={regeneratingFullScript || !hasProductName}
+                  title={!hasProductName ? "Set your product name above to enable" : undefined}
                 >
                   {regeneratingFullScript ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
@@ -1261,6 +1427,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
                   onClick={handleGenerateFullVoiceover}
                   disabled={generatingFull || !fullScriptText.trim() || !hasProductName}
+                  title={!hasProductName ? "Set your product name above to enable" : !fullScriptText.trim() ? "Add script content first" : undefined}
                 >
                   {generatingFull ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
@@ -1275,6 +1442,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
                   onClick={handleGeneratePerSceneVoiceover}
                   disabled={generatingPerScene || getSceneTexts().length === 0 || !hasProductName}
+                  title={!hasProductName ? "Set your product name above to enable" : getSceneTexts().length === 0 ? "Scene breakdown required" : undefined}
                 >
                   {generatingPerScene ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
@@ -1298,15 +1466,33 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           <CardContent className="space-y-4 text-sm text-gray-600 dark:text-[#B0B0B0] whitespace-pre-line overflow-visible">
             <div className="min-w-0">
               <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Hook</p>
-              <p className="text-gray-900 dark:text-white break-words">{displayScript.hook}</p>
+              <textarea
+                value={currentScriptForDisplay.hook}
+                onChange={(e) => setEditedScript((prev) => ({ ...(prev ?? displayScript), hook: e.target.value }))}
+                onBlur={handleScriptBlur}
+                className="w-full min-h-[4rem] px-3 py-2 rounded-md border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white break-words resize-y text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                placeholder="Hook (0–3s)..."
+              />
             </div>
             <div className="min-w-0">
               <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Body</p>
-              <p className="text-gray-900 dark:text-white break-words">{displayScript.body}</p>
+              <textarea
+                value={currentScriptForDisplay.body}
+                onChange={(e) => setEditedScript((prev) => ({ ...(prev ?? displayScript), body: e.target.value }))}
+                onBlur={handleScriptBlur}
+                className="w-full min-h-[8rem] px-3 py-2 rounded-md border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white break-words resize-y text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                placeholder="Body..."
+              />
             </div>
             <div className="min-w-0">
               <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">CTA</p>
-              <p className="text-gray-900 dark:text-white break-words">{displayScript.cta}</p>
+              <textarea
+                value={currentScriptForDisplay.cta}
+                onChange={(e) => setEditedScript((prev) => ({ ...(prev ?? displayScript), cta: e.target.value }))}
+                onBlur={handleScriptBlur}
+                className="w-full min-h-[3rem] px-3 py-2 rounded-md border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white break-words resize-y text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                placeholder="Call to action..."
+              />
             </div>
             <div className="pt-2 border-t border-gray-200 dark:border-[#2A2A2A] text-xs text-gray-500 dark:text-[#A0A0A0]">
               {scriptStats.words > 0 ? `~${scriptStats.estimatedSeconds} ${scriptStats.estimatedSeconds === 1 ? "second" : "seconds"} at normal pace` : "—"} · {scriptStats.characters} characters · {scriptStats.words} words
@@ -1520,6 +1706,25 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 </ul>
               </div>
             </div>
+
+            {onScenesRegenerated && (
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                  onClick={handleRegenerateScenes}
+                  disabled={regeneratingScenes || !displayScript.hook?.trim()}
+                >
+                  {regeneratingScenes ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                  )}
+                  Regenerate Scenes
+                </Button>
+              </div>
+            )}
 
             {scenes.map((scene, i) => {
               const fullPrompt = getSceneFullPrompt(scene);
@@ -1745,64 +1950,92 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
           <TabsContent value="social-kit" className="mt-6 space-y-4" id="social-media-kit-section">
             {!socialKit ? (
-              <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
-                <CardContent className="pt-6 pb-6">
-                  <div className="flex flex-col items-center text-center max-w-md mx-auto">
-                    <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mb-4">
-                      <Lock className="w-8 h-8 text-amber-500" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Upload proof to unlock</h3>
-                    <p className="text-gray-600 dark:text-[#A0A0A0] text-sm mb-2">
-                      Upload a screenshot or video preview to unlock your Social Media Kit
-                    </p>
-                    <p className="text-gray-500 dark:text-[#6A6A6A] text-xs mb-6">
-                      We want to make sure you&apos;ve created your video before optimizing your social media presence.
-                    </p>
-                    <label className="w-full block">
-                      <input
-                        type="file"
-                        accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,image/png,image/jpeg,image/webp,video/mp4,video/quicktime"
-                        className="sr-only"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          setSocialKitProofFile(f ?? null);
-                        }}
-                      />
-                      <div
-                        className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors bg-gray-100 dark:bg-[#0F0F0F] ${
-                          socialKitProofFile ? "border-orange-500/50" : "border-gray-200 dark:border-[#2A2A2A] hover:border-orange-500/50"
-                        }`}
-                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          const f = e.dataTransfer.files?.[0];
-                          if (f && (/\.(png|jpe?g|webp|mp4|mov)$/i.test(f.name) || f.type.startsWith("image/") || f.type.startsWith("video/"))) {
-                            setSocialKitProofFile(f);
-                          }
-                        }}
-                      >
-                        <Upload className="w-10 h-10 mx-auto text-gray-500 dark:text-[#A0A0A0] mb-2" />
-                        <p className="text-sm text-gray-600 dark:text-[#A0A0A0]">
-                          {socialKitProofFile ? socialKitProofFile.name : "Drag and drop or click to upload"}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-[#6A6A6A] mt-1">PNG, JPG, MP4 or MOV</p>
+              hasTimelineUsage && libraryScriptId ? (
+                <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+                  <CardContent className="pt-6 pb-6">
+                    <div className="flex flex-col items-center text-center max-w-md mx-auto">
+                      <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-4">
+                        <Video className="w-8 h-8 text-green-500" />
                       </div>
-                    </label>
-                    <Button
-                      className="mt-4 bg-orange-500 hover:bg-orange-600 text-white gap-2"
-                      onClick={handleSocialKitUploadProof}
-                      disabled={!socialKitProofFile || socialKitLoading}
-                    >
-                      {socialKitLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Upload className="w-4 h-4" />
-                      )}
-                      {socialKitLoading ? "Generating your Social Media Kit..." : "Upload Proof"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">You&apos;ve used the Video Timeline</h3>
+                      <p className="text-gray-600 dark:text-[#A0A0A0] text-sm mb-6">
+                        Generate your Social Media Kit with titles, hashtags, and captions—no proof upload needed.
+                      </p>
+                      <Button
+                        className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                        onClick={handleSocialKitGenerateWithoutProof}
+                        disabled={socialKitLoading}
+                      >
+                        {socialKitLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Share2 className="w-4 h-4" />
+                        )}
+                        {socialKitLoading ? "Generating your Social Media Kit..." : "Generate Social Media Kit"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+                  <CardContent className="pt-6 pb-6">
+                    <div className="flex flex-col items-center text-center max-w-md mx-auto">
+                      <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mb-4">
+                        <Lock className="w-8 h-8 text-amber-500" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Upload proof to unlock</h3>
+                      <p className="text-gray-600 dark:text-[#A0A0A0] text-sm mb-2">
+                        Upload a screenshot or video preview to unlock your Social Media Kit
+                      </p>
+                      <p className="text-gray-500 dark:text-[#6A6A6A] text-xs mb-6">
+                        We want to make sure you&apos;ve created your video before optimizing your social media presence. Or use the <strong>Video Timeline</strong> first to get access without proof.
+                      </p>
+                      <label className="w-full block">
+                        <input
+                          type="file"
+                          accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,image/png,image/jpeg,image/webp,video/mp4,video/quicktime"
+                          className="sr-only"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            setSocialKitProofFile(f ?? null);
+                          }}
+                        />
+                        <div
+                          className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors bg-gray-100 dark:bg-[#0F0F0F] ${
+                            socialKitProofFile ? "border-orange-500/50" : "border-gray-200 dark:border-[#2A2A2A] hover:border-orange-500/50"
+                          }`}
+                          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const f = e.dataTransfer.files?.[0];
+                            if (f && (/\.(png|jpe?g|webp|mp4|mov)$/i.test(f.name) || f.type.startsWith("image/") || f.type.startsWith("video/"))) {
+                              setSocialKitProofFile(f);
+                            }
+                          }}
+                        >
+                          <Upload className="w-10 h-10 mx-auto text-gray-500 dark:text-[#A0A0A0] mb-2" />
+                          <p className="text-sm text-gray-600 dark:text-[#A0A0A0]">
+                            {socialKitProofFile ? socialKitProofFile.name : "Drag and drop or click to upload"}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-[#6A6A6A] mt-1">PNG, JPG, MP4 or MOV</p>
+                        </div>
+                      </label>
+                      <Button
+                        className="mt-4 bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                        onClick={handleSocialKitUploadProof}
+                        disabled={!socialKitProofFile || socialKitLoading}
+                      >
+                        {socialKitLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Upload className="w-4 h-4" />
+                        )}
+                        {socialKitLoading ? "Generating your Social Media Kit..." : "Upload Proof"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
             ) : (
               <div className="space-y-6">
                 <div className="flex flex-wrap gap-2">

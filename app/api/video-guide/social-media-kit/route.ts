@@ -1,11 +1,15 @@
 /**
  * POST /api/video-guide/social-media-kit
- * Requires proof that user selected a file (image or video). We only validate file type - no upload/storage.
- * FormData: file (required), scriptHook, scriptBody, scriptCta, productName, productDescription
+ * Unlock via (1) proof: file (image or video) + script/product params, or (2) timeline: libraryScriptId only
+ * (when the script has timelineSceneSlots we treat that as proof they used the timeline).
+ * FormData: file (optional), libraryScriptId (optional), scriptHook, scriptBody, scriptCta, productName, productDescription
  * Returns: { kit } (Social Media Kit from OpenAI)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { eq, and, isNull } from "drizzle-orm";
+import { db } from "@/db/db";
+import { scriptsTable } from "@/db/schema/library-schema";
 import { cleanProductTitle } from "@/lib/product-title";
 
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
@@ -51,36 +55,82 @@ export async function POST(request: NextRequest) {
     }
 
     const file = formData.get("file") as File | null;
-    if (!file || !(file instanceof File) || file.size === 0) {
-      return NextResponse.json(
-        { error: "Upload proof required. Upload a screenshot or video preview to unlock your Social Media Kit." },
-        { status: 400 }
-      );
-    }
+    const libraryScriptId = (formData.get("libraryScriptId") as string)?.trim() || null;
+    const hasFile = file && file instanceof File && file.size > 0;
 
-    const type = file.type.toLowerCase();
-    const isImage = ALLOWED_IMAGE_TYPES.some((t) => type.includes(t));
-    const isVideo = ALLOWED_VIDEO_TYPES.some((t) => type.includes(t));
-    if (!isImage && !isVideo) {
-      return NextResponse.json(
-        { error: "Invalid file type. Use .png, .jpg, .webp, .mp4, or .mov" },
-        { status: 400 }
-      );
-    }
-    if (file.size > MAX_FILE_BYTES) {
-      return NextResponse.json(
-        { error: `File too large. Max ${MAX_FILE_SIZE_MB}MB.` },
-        { status: 400 }
-      );
-    }
-    // Proof gate: we only verify a valid file was selected. No upload/storage.
+    let scriptHook = (formData.get("scriptHook") as string) ?? "";
+    let scriptBody = (formData.get("scriptBody") as string) ?? "";
+    let scriptCta = (formData.get("scriptCta") as string) ?? "";
+    let rawProductName = (formData.get("productName") as string) ?? "";
+    let productName = cleanProductTitle(rawProductName) || rawProductName.trim() || "Product";
+    let productDescription = (formData.get("productDescription") as string) ?? "";
 
-    const scriptHook = (formData.get("scriptHook") as string) ?? "";
-    const scriptBody = (formData.get("scriptBody") as string) ?? "";
-    const scriptCta = (formData.get("scriptCta") as string) ?? "";
-    const rawProductName = (formData.get("productName") as string) ?? "";
-    const productName = cleanProductTitle(rawProductName) || rawProductName.trim() || "Product";
-    const productDescription = (formData.get("productDescription") as string) ?? "";
+    // Path 1: Unlock via timeline usage (no file) — load script and require timelineSceneSlots
+    if (!hasFile && libraryScriptId) {
+      const [row] = await db
+        .select()
+        .from(scriptsTable)
+        .where(
+          and(
+            eq(scriptsTable.id, libraryScriptId),
+            eq(scriptsTable.userId, userId),
+            isNull(scriptsTable.deletedAt)
+          )
+        )
+        .limit(1);
+      if (!row || row.platform !== "video-guide") {
+        return NextResponse.json(
+          { error: "Script not found or not a video guide." },
+          { status: 404 }
+        );
+      }
+      let content: { script?: { hook?: string; body?: string; cta?: string }; productName?: string; productDescription?: string; timelineSceneSlots?: unknown[] };
+      try {
+        content = typeof row.content === "string" ? JSON.parse(row.content) : (row.content as typeof content) ?? {};
+      } catch {
+        return NextResponse.json({ error: "Invalid script content" }, { status: 400 });
+      }
+      const slots = content.timelineSceneSlots;
+      if (!Array.isArray(slots) || slots.length === 0) {
+        return NextResponse.json(
+          { error: "Use the Video Timeline first to build your video, then you can generate your Social Media Kit here without uploading proof." },
+          { status: 400 }
+        );
+      }
+      const script = content.script;
+      scriptHook = typeof script?.hook === "string" ? script.hook : scriptHook;
+      scriptBody = typeof script?.body === "string" ? script.body : scriptBody;
+      scriptCta = typeof script?.cta === "string" ? script.cta : scriptCta;
+      if (typeof content.productName === "string" && content.productName.trim()) {
+        rawProductName = content.productName.trim();
+        productName = cleanProductTitle(rawProductName) || rawProductName || "Product";
+      }
+      if (typeof content.productDescription === "string" && content.productDescription.trim()) {
+        productDescription = content.productDescription.trim();
+      }
+    } else if (!hasFile) {
+      return NextResponse.json(
+        { error: "Upload proof required, or open this guide from My Library after using the Video Timeline." },
+        { status: 400 }
+      );
+    } else {
+      // Path 2: Unlock via file proof
+      const type = (file as File).type.toLowerCase();
+      const isImage = ALLOWED_IMAGE_TYPES.some((t) => type.includes(t));
+      const isVideo = ALLOWED_VIDEO_TYPES.some((t) => type.includes(t));
+      if (!isImage && !isVideo) {
+        return NextResponse.json(
+          { error: "Invalid file type. Use .png, .jpg, .webp, .mp4, or .mov" },
+          { status: 400 }
+        );
+      }
+      if ((file as File).size > MAX_FILE_BYTES) {
+        return NextResponse.json(
+          { error: `File too large. Max ${MAX_FILE_SIZE_MB}MB.` },
+          { status: 400 }
+        );
+      }
+    }
 
     const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) {

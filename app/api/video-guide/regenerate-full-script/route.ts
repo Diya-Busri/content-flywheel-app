@@ -22,10 +22,11 @@ Write scripts that feel human, conversational and emotionally engaging.
 Rules:
 - Hook MUST open with a pain point, bold claim, or curiosity gap — never with the product name
 - Never start with "Meet [name]" or "Are you struggling" — be more specific and real
-- The product name should only appear ONCE in the entire script, naturally
+- The script MUST actually talk about the product: what it is (e.g. a journal, a planner, a guide) and what it does. Not generic filler.
+- Use the product name naturally (once or twice). Never use "your product" or "the product" — use the exact name from the PRODUCT block.
 - Write like a real person talking, not an ad
 - Use short punchy sentences. Max 15 words per sentence.
-- Body should agitate the problem before presenting the solution
+- Body should agitate the problem, then introduce the product BY NAME and explain what it is and how it helps (use the description if provided).
 - CTA should feel urgent but not desperate
 
 Pain point hooks that work:
@@ -35,11 +36,11 @@ Pain point hooks that work:
 
 Structure:
 HOOK (0-3s): Start with a specific pain point about the product's topic. NOT the product name. Make it feel real and relatable.
-BODY (3-25s): Agitate the problem (why people fail at this), then naturally introduce the product as the solution. Keep it conversational. Short sentences.
+BODY (3-25s): Agitate the problem, then name the product and say what it is and how it helps (e.g. "X is a daily planner that keeps you on track" or "I use X — it's a journal that..."). Use the description to be specific. Short sentences.
 CTA (25-30s): One clear action. Link in bio. Urgent but human.
 
 Rules:
-- Product name appears ONCE only, naturally in the script. Use the exact product name given in the user message (the PRODUCT block). Never use a placeholder.
+- The script must be ABOUT the product: mention its name and what it actually is/does. Never write a generic script that could apply to anything.
 - Max 15 words per sentence.
 - No corporate language.
 - Write like a real TikTok creator talking to camera.
@@ -155,6 +156,15 @@ export async function POST(request: NextRequest) {
     if (productName === "the product" && fromRowTitle) {
       productName = fromRowTitle.split("|")[0].split("-")[0].trim() || fromRowTitle;
     }
+    const description = (content.overview as string) ?? (content.productDescription as string) ?? "";
+    const niche = (content.niche as string)?.trim() || "general audience";
+    const PLACEHOLDER_NAMES = ["your product", "the product", "untitled", "product", ""];
+    const isPlaceholderName = PLACEHOLDER_NAMES.includes(productName.toLowerCase().trim());
+    if (isPlaceholderName && description.trim()) {
+      productName = "this product";
+    } else if (isPlaceholderName) {
+      productName = "the product";
+    }
 
     // Step 1 — Log actual product title from DB for debugging (e.g. guideId b778c2c3-a8b7-41bf-9f9c-ae687ed86c53)
     console.log("[regenerate-full-script] Product name resolution:", {
@@ -168,8 +178,6 @@ export async function POST(request: NextRequest) {
       rawTitle: rawTitle || "(empty)",
       productName,
     });
-    const description = (content.overview as string) ?? (content.productDescription as string) ?? "";
-    const niche = (content.niche as string)?.trim() || "general audience";
 
     const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) {
@@ -177,13 +185,11 @@ export async function POST(request: NextRequest) {
     }
 
     const productBlock = `PRODUCT:
-- The product is called ${productName}.
-- Description: ${description ? `"${String(description).slice(0, 1500)}"` : "(none provided)"}
+- Name: ${productName}.
+- What it is / description: ${description ? `"${String(description).slice(0, 1500)}"` : "(none provided — still name the product and say what kind of thing it is, e.g. a planner, a guide)"}
 - Niche/audience: ${niche}
 
-IMPORTANT: The product is called "${productName}".
-Use "${productName}" by name in the script.
-NEVER write "your product" or "the product" — always use the actual name.
+IMPORTANT: The script must TALK ABOUT this product. In the BODY, name "${productName}" and say what it is and how it helps (use the description above). Never write a generic script that could be for any product. Never use "your product" or "the product" as the name — use "${productName}".
 
 Return ONLY valid JSON (no markdown, no code fences):
 {
@@ -213,11 +219,11 @@ Return ONLY valid JSON (no markdown, no code fences):
 
 HOOK: Start with a specific pain point about ${niche} or the product topic. NOT the product name. Make it feel real and relatable.
 
-BODY: Agitate the problem (why people fail at this), then naturally introduce ${productName} as the solution. Example: "${productName} helps you stay on track". Only refer to it as ${productName} — never say "your product" or "the product". Keep it conversational. Short sentences.
+BODY: Agitate the problem, then name ${productName} and say what it actually is and how it helps (e.g. "It's a daily planner that...", "This journal helps you..."). Use the product description above so the script is clearly about THIS product, not generic. Refer to it as ${productName} — never "your product" or "the product". Keep it conversational. Short sentences.
 
 CTA: One clear action. Link in bio. Urgent but human.
 
-Rules: The product is called ${productName}. Use that exact name once in the script. Max 15 words per sentence. No corporate language. Write like a real TikTok creator talking to camera.
+Rules: Name ${productName} in the script and describe what it is/does. Max 15 words per sentence. No corporate language. Write like a real TikTok creator talking to camera.
 
 ${productBlock}`;
 

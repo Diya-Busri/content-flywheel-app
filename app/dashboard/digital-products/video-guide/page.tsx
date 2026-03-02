@@ -58,6 +58,60 @@ export default function VideoGuidePage() {
     []
   );
 
+  const handleSceneVoiceoverUrlsSaved = useCallback((urls: string[]) => {
+    setGuide((prev) => (prev ? { ...prev, timelineSceneVoiceoverUrls: urls } : null));
+  }, []);
+
+  const handleScriptEdited = useCallback(
+    (script: { hook: string; body: string; cta: string }) => {
+      setGuide((prev) => (prev ? { ...prev, script } : null));
+      if (libraryScriptId) {
+        fetch(`/api/library/scripts/${libraryScriptId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ script }),
+        }).catch(() => {});
+      }
+    },
+    [libraryScriptId]
+  );
+
+  const handleScenesRegenerated = useCallback(
+    (payload: {
+      scenes: VideoGuideData["scenes"];
+      scenePrompts: VideoGuideData["scenePrompts"];
+      storytellingFramework?: string;
+      frameworkRationale?: string;
+      engagementTriggers?: string[];
+    }) => {
+      setGuide((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          scenes: payload.scenes ?? prev.scenes,
+          scenePrompts: payload.scenePrompts ?? prev.scenePrompts,
+          ...(payload.storytellingFramework !== undefined && { storytellingFramework: payload.storytellingFramework }),
+          ...(payload.frameworkRationale !== undefined && { frameworkRationale: payload.frameworkRationale }),
+          ...(payload.engagementTriggers !== undefined && { engagementTriggers: payload.engagementTriggers }),
+        };
+      });
+      if (libraryScriptId) {
+        fetch(`/api/library/scripts/${libraryScriptId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            scenes: payload.scenes,
+            scenePrompts: payload.scenePrompts,
+            ...(payload.storytellingFramework !== undefined && { storytellingFramework: payload.storytellingFramework }),
+            ...(payload.frameworkRationale !== undefined && { frameworkRationale: payload.frameworkRationale }),
+            ...(payload.engagementTriggers !== undefined && { engagementTriggers: payload.engagementTriggers }),
+          }),
+        }).catch(() => {});
+      }
+    },
+    [libraryScriptId]
+  );
+
   const hasTriggeredRegenerate = useRef(false);
   useEffect(() => {
     const doRegenerate = searchParams.get("regenerate") === "1" && libraryScriptId && guide && !hasTriggeredRegenerate.current;
@@ -86,28 +140,32 @@ export default function VideoGuidePage() {
       .catch(() => {});
   }, [libraryScriptId, guide, searchParams]);
 
+  const fetchGuideFromLibrary = useCallback((scriptId: string) => {
+    fetch(`/api/library/scripts/${scriptId}`, { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load guide");
+        return res.json();
+      })
+      .then((script: { content?: string; title?: string; platform?: string }) => {
+        if (script.platform !== "video-guide" || !script.content) {
+          setError("This library item is not a video guide.");
+          return;
+        }
+        const data = JSON.parse(script.content) as VideoGuideData;
+        if (data && data.script && Array.isArray(data.scenePrompts)) {
+          setGuide(data);
+          setScriptTitle(script.title?.replace(/^Video Guide:\s*/i, "") || "");
+        } else {
+          setError("Invalid guide data.");
+        }
+      })
+      .catch(() => setError("Could not load guide from library."));
+  }, []);
+
   useEffect(() => {
     // 1) Load from library if libraryScriptId is in URL (saved video guide from My Library)
     if (libraryScriptId) {
-      fetch(`/api/library/scripts/${libraryScriptId}`)
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to load guide");
-          return res.json();
-        })
-        .then((script: { content?: string; title?: string; platform?: string }) => {
-          if (script.platform !== "video-guide" || !script.content) {
-            setError("This library item is not a video guide.");
-            return;
-          }
-          const data = JSON.parse(script.content) as VideoGuideData;
-          if (data && data.script && Array.isArray(data.scenePrompts)) {
-            setGuide(data);
-            setScriptTitle(script.title?.replace(/^Video Guide:\s*/i, "") || "");
-          } else {
-            setError("Invalid guide data.");
-          }
-        })
-        .catch(() => setError("Could not load guide from library."));
+      fetchGuideFromLibrary(libraryScriptId);
       return;
     }
 
@@ -130,7 +188,17 @@ export default function VideoGuidePage() {
     } catch {
       setError("Invalid guide data.");
     }
-  }, [libraryScriptId]);
+  }, [libraryScriptId, fetchGuideFromLibrary]);
+
+  // Refetch when user returns to this tab so saved voiceovers (and other edits) always show
+  useEffect(() => {
+    if (!libraryScriptId) return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") fetchGuideFromLibrary(libraryScriptId);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [libraryScriptId, fetchGuideFromLibrary]);
 
   if (error) {
     return (
@@ -176,6 +244,9 @@ export default function VideoGuidePage() {
       libraryScriptId={libraryScriptId ?? undefined}
       onProductNameChange={handleProductNameChange}
       onScriptRegenerated={handleScriptRegenerated}
+      onScriptEdited={handleScriptEdited}
+      onSceneVoiceoverUrlsSaved={handleSceneVoiceoverUrlsSaved}
+      onScenesRegenerated={handleScenesRegenerated}
     />
   );
 }

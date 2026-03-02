@@ -4,7 +4,7 @@ import { db } from "@/db/db";
 import { scriptsTable } from "@/db/schema/library-schema";
 import { eq, and, isNull } from "drizzle-orm";
 
-/** PATCH: Update video-guide timeline state or script. Body: { timelineMutedClipIds?, timelineSceneSlots?, timelineVoiceoverUrl?, timelineVoiceoverDuration?, timelineSceneVoiceoverUrls?, script?, productName? }. At least one key required. */
+/** PATCH: Update video-guide timeline state or script. Body: { timelineMutedClipIds?, timelineSceneSlots?, timelineVoiceoverUrl?, timelineVoiceoverDuration?, timelineSceneVoiceoverUrls?, script?, productName?, scenes?, scenePrompts?, storytellingFramework?, frameworkRationale?, engagementTriggers? }. At least one key required. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -31,6 +31,8 @@ export async function PATCH(
     const timelineSceneVoiceoverUrls = Array.isArray(body.timelineSceneVoiceoverUrls)
       ? (body.timelineSceneVoiceoverUrls as string[]).filter((x) => typeof x === "string")
       : undefined;
+    const productName =
+      typeof body.productName === "string" ? (body.productName as string).trim() || undefined : undefined;
     const scriptBody = body.script;
     const script =
       scriptBody && typeof scriptBody === "object" && !Array.isArray(scriptBody)
@@ -41,6 +43,12 @@ export async function PATCH(
           }
         : undefined;
     const hasScript = script && (script.hook !== undefined || script.body !== undefined || script.cta !== undefined);
+    const scenes = Array.isArray(body.scenes) ? body.scenes : undefined;
+    const scenePrompts = Array.isArray(body.scenePrompts) ? body.scenePrompts : undefined;
+    const storytellingFramework = typeof body.storytellingFramework === "string" ? body.storytellingFramework : undefined;
+    const frameworkRationale = typeof body.frameworkRationale === "string" ? body.frameworkRationale : undefined;
+    const engagementTriggers = Array.isArray(body.engagementTriggers) ? body.engagementTriggers : undefined;
+    const hasScenesUpdate = scenes !== undefined || scenePrompts !== undefined || storytellingFramework !== undefined || frameworkRationale !== undefined || engagementTriggers !== undefined;
 
     if (
       timelineMutedClipIds === undefined &&
@@ -48,10 +56,11 @@ export async function PATCH(
       timelineVoiceoverUrl === undefined &&
       timelineVoiceoverDuration === undefined &&
       timelineSceneVoiceoverUrls === undefined &&
-      !hasScript
+      !hasScript &&
+      !hasScenesUpdate
     ) {
       return NextResponse.json(
-        { error: "At least one of timelineMutedClipIds, timelineSceneSlots, timelineVoiceoverUrl, timelineVoiceoverDuration, timelineSceneVoiceoverUrls, script required" },
+        { error: "At least one of timelineMutedClipIds, timelineSceneSlots, timelineVoiceoverUrl, timelineVoiceoverDuration, timelineSceneVoiceoverUrls, script, scenes/scenePrompts required" },
         { status: 400 }
       );
     }
@@ -82,6 +91,11 @@ export async function PATCH(
       const existing = (content.script && typeof content.script === "object" ? content.script : {}) as Record<string, unknown>;
       content.script = { ...existing, ...script };
     }
+    if (scenes !== undefined) content.scenes = scenes;
+    if (scenePrompts !== undefined) content.scenePrompts = scenePrompts;
+    if (storytellingFramework !== undefined) content.storytellingFramework = storytellingFramework;
+    if (frameworkRationale !== undefined) content.frameworkRationale = frameworkRationale;
+    if (engagementTriggers !== undefined) content.engagementTriggers = engagementTriggers;
 
     const [updated] = await db
       .update(scriptsTable)

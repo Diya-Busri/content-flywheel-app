@@ -81,12 +81,20 @@ For EACH scene, specify:
 - TRANSITION: Type, effects, pacing
 - AUDIO: Music volume, beat drops, SFX, mood
 
+SALES CONVERSION — every scene must help sell the product:
+- Scene 1 (Hook): Stop the scroll and make the viewer feel "that's me" — the pain or desire must be specific so they stay.
+- Scene 2 (Agitate): Deepen the problem or desire so they think "I need a solution."
+- Scene 3 (Introduce product): Show the product as the answer. Visual must show the product or the moment of change; text must name a clear benefit or "how it helps."
+- Scene 4 (Proof / benefits): Show results, transformation, or a second benefit. Give a reason to believe (e.g. "organized," "focused," "done in half the time") so they want it.
+- Scene 5 (CTA): One clear next step to buy (e.g. "link in bio," "get it now," "try free"). Create urgency or FOMO.
+Every TEXT OVERLAY should either state a benefit, remove an objection, or tell them what to do next. Every VISUAL should support that — e.g. show the product in use, the before/after, or the outcome they get.
+
 ENGAGEMENT RULES:
 - First frame = thumbnail. Most important frame.
 - Text readable in 0.5 seconds.
 - Never put important text in top 15% or bottom 20% (UI overlaps).
 - Use open loops — start thought in one scene, finish in next.
-- CTA: FOMO/curiosity, not just "buy this".
+- CTA: FOMO/curiosity + clear action (link in bio, get it, try it).
 
 Output MUST be valid JSON. Be specific. A finance workbook gets different visuals than a fitness planner. A journal gets softer visuals than a checklist pack.`;
 
@@ -111,7 +119,11 @@ Script:
 - Body: "${(body || "").slice(0, 400)}"
 - CTA: "${cta || ""}"
 
-Generate a TikTok creative brief. Choose the best storytelling framework (Pain Point, Story, or Value Bomb) for this product.
+Generate a TikTok creative brief designed to SELL this product. Choose the best storytelling framework (Pain Point, Story, or Value Bomb) for this product.
+
+SALES INTENT — each scene must support the sale:
+- TEXT OVERLAY (exactText): Every line must do one of: (1) state a specific benefit of the product, (2) answer "why should I get this?", (3) show the transformation or result, or (4) be a clear CTA (e.g. "Link in bio," "Get it now"). Avoid vague filler; use copy that would convince someone to buy.
+- VISUAL (aiPrompt): Scenes 3–4 must show the product or the outcome (e.g. person using the product, before/after, organized result). The visual should make the viewer want the product or feel the benefit. Use the product name "${productName}" in the prompt where the product appears on screen.
 
 CRITICAL — AI IMAGE PROMPTS (visualDirection.aiPrompt) — WORD COUNT ENFORCED:
 Each scene's aiPrompt MUST be 50-80 words minimum. Count the words. Shorter prompts are invalid.
@@ -287,6 +299,7 @@ export async function POST(request: NextRequest) {
       durationSeconds: durationSecondsReq,
       targetDurationSec: targetDurationSecReq,
       logoDataUrl,
+      regenerateScenesOnly,
     } = body as {
       hook?: string;
       body?: string;
@@ -299,6 +312,7 @@ export async function POST(request: NextRequest) {
       durationSeconds?: number;
       targetDurationSec?: number;
       logoDataUrl?: string;
+      regenerateScenesOnly?: boolean;
     };
     const durationSeconds =
       (typeof durationSecondsReq === "number" && [15, 30, 60, 90].includes(durationSecondsReq) ? durationSecondsReq : null) ??
@@ -403,6 +417,30 @@ export async function POST(request: NextRequest) {
           // fallback below
         }
       }
+    }
+
+    // When only regenerating scenes, return new scenes/scenePrompts and skip platform content + library save
+    if (regenerateScenesOnly) {
+      if (!creativeBrief?.scenes?.length) {
+        return NextResponse.json(
+          { error: "Failed to generate scenes. Please try again." },
+          { status: 422 }
+        );
+      }
+      const scenePromptsOut: { scene: string; timing: string; prompt: string }[] = [];
+      for (const s of creativeBrief.scenes) {
+        const prompt =
+          s.visualDirection?.aiPrompt ||
+          `Generate a TikTok marketing scene, vertical 9:16, for ${productNameRes}`;
+        scenePromptsOut.push({ scene: s.scene, timing: s.timing, prompt });
+      }
+      return NextResponse.json({
+        scenes: creativeBrief.scenes,
+        scenePrompts: scenePromptsOut,
+        storytellingFramework: creativeBrief.storytellingFramework ?? undefined,
+        frameworkRationale: creativeBrief.frameworkRationale ?? undefined,
+        engagementTriggers: creativeBrief.engagementTriggers ?? undefined,
+      });
     }
 
     // Second AI call: platform-specific content, content calendar, repurposing guide
