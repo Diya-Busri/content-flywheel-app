@@ -187,3 +187,10 @@
     }
   }
 }
+
+/* Intercom chat launcher: position bottom-left to avoid overlapping content */
+#intercom-container,
+.intercom-launcher {
+  left: 20px !important;
+  right: auto !important;
+}
