@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import Stripe from "stripe";
 import { updateProfile, updateProfileByStripeCustomerId } from "@/db/queries/profiles-queries";
 
+export const dynamic = "force-dynamic";
 const relevantEvents = new Set([
   "checkout.session.completed", 
   "customer.subscription.updated", 
