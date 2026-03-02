@@ -98,11 +98,8 @@ export async function GET(
     if (!baseUrl) baseUrl = "http://localhost:3000";
     baseUrl = baseUrl.replace(/\/$/, "");
 
-    const puppeteer = (await import("puppeteer")).default;
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
-    });
+    const { launchPuppeteerBrowser } = require("@/lib/puppeteer-launch");
+    browser = await launchPuppeteerBrowser();
     const page = await browser.newPage();
     await page.setViewport({ width: THUMB_WIDTH, height: THUMB_HEIGHT, deviceScaleFactor: 1 });
     await page.setContent(fullHtml, {

@@ -141,12 +141,8 @@ export async function POST(request) {
         ? sections
         : [{ id: "1", title: title || "Workbook", content: "", contentHtml: "" }];
 
-    const puppeteer = (await import("puppeteer")).default;
-    browser = await puppeteer.launch({
-      headless: true,
-      timeout: 60000,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
-    });
+    const { launchPuppeteerBrowser } = require("@/lib/puppeteer-launch");
+    browser = await launchPuppeteerBrowser();
 
     const page = await browser.newPage();
     page.setDefaultTimeout(60000);

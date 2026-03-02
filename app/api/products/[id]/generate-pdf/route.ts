@@ -44,13 +44,8 @@ export async function POST(
 
     const pageCount = Math.max(1, sections.length || 1);
 
-    // eslint-disable-next-line -- puppeteer is optional at build time
-    const puppeteer = require("puppeteer");
-    const browser = await puppeteer.launch({
-      headless: true,
-      timeout: 60000,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
-    });
+    const { launchPuppeteerBrowser } = require("@/lib/puppeteer-launch");
+    const browser = await launchPuppeteerBrowser();
 
     try {
       const page = await browser.newPage();

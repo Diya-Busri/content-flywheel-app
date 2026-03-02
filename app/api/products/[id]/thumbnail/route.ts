@@ -79,11 +79,8 @@ export async function GET(
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-    const puppeteer = (await import("puppeteer")).default;
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-    });
+    const { launchPuppeteerBrowser } = require("@/lib/puppeteer-launch");
+    browser = await launchPuppeteerBrowser();
     const page = await browser.newPage();
     await page.setViewport({ width: THUMB_WIDTH, height: THUMB_HEIGHT });
     await page.setContent(html, {
