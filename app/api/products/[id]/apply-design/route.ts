@@ -150,8 +150,20 @@ export async function POST(
     let brandSecondary: string | undefined;
     let backCoverSocialLinks: Record<string, string> | undefined;
 
+    // Select only columns we use (and that exist in base migration). Avoids "column brand_name does not exist"
+    // if migration 0047_brand_profiles_name_niche_voice has not been run.
     const [brandProfile] = await db
-      .select()
+      .select({
+        userId: brandProfilesTable.userId,
+        primaryColor: brandProfilesTable.primaryColor,
+        secondaryColor: brandProfilesTable.secondaryColor,
+        tiktokUrl: brandProfilesTable.tiktokUrl,
+        instagramUrl: brandProfilesTable.instagramUrl,
+        youtubeUrl: brandProfilesTable.youtubeUrl,
+        facebookUrl: brandProfilesTable.facebookUrl,
+        websiteUrl: brandProfilesTable.websiteUrl,
+        coverBackgroundPreference: brandProfilesTable.coverBackgroundPreference,
+      })
       .from(brandProfilesTable)
       .where(eq(brandProfilesTable.userId, userId));
 
