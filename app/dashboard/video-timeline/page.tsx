@@ -4,6 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Menu, PanelLeftClose } from "lucide-react";
 import { useSidebar } from "@/components/sidebar-context";
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  horizontalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const PIXELS_PER_SECOND = 80;
 const TRACK_HEIGHT = 44;
@@ -59,6 +73,57 @@ function buildSceneBlocks(fullTexts: string[], duration: number): SceneBlock[] {
     endTime: (i + 1) * segment,
     colorClass: SCENE_COLOR_CLASSES[i % SCENE_COLOR_CLASSES.length],
   }));
+}
+
+function SortableSceneBlock({
+  scene,
+  index,
+  widthPx,
+  isSelected,
+  onSelect,
+}: {
+  scene: SceneBlock;
+  index: number;
+  widthPx: number;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: scene.id,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    width: widthPx,
+    minWidth: Math.max(4, widthPx),
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      role="button"
+      tabIndex={0}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          onSelect();
+        }
+      }}
+      className={`flex-shrink-0 flex-grow-0 rounded px-1 py-1 overflow-hidden text-xs text-foreground cursor-grab active:cursor-grabbing select-none flex items-center ${scene.colorClass} ${
+        isSelected ? "ring-2 ring-white ring-offset-1 ring-offset-card" : ""
+      } ${isDragging ? "opacity-90 z-50 shadow-lg cursor-grabbing" : ""}`}
+      title={scene.text}
+      {...attributes}
+      {...listeners}
+    >
+      <span className="truncate block">{scene.text}</span>
+    </div>
+  );
 }
 
 type LibraryScript = { id: string; title: string; type: "script" };
@@ -322,6 +387,30 @@ export default function VideoTimelinePage() {
       ? scenes[selectedSceneIndex].endTime - scenes[selectedSceneIndex].startTime
       : null;
 
+  const sceneSortableIds = useMemo(() => scenes.map((s) => s.id), [scenes]);
+  const sceneSegmentWidthPx =
+    scenes.length > 0 && totalWidth > 0 ? Math.max(4, totalWidth / scenes.length) : 0;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { delay: 150, tolerance: 5 },
+    })
+  );
+
+  const handleSceneDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      const oldIndex = scenes.findIndex((s) => s.id === active.id);
+      const newIndex = scenes.findIndex((s) => s.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
+      setSceneFullTexts((prev) => arrayMove(prev, oldIndex, newIndex));
+      setSceneMedia((prev) => arrayMove(prev, oldIndex, newIndex));
+      setSelectedSceneIndex(newIndex);
+    },
+    [scenes]
+  );
+
   // Caption visible at currentTime for preview overlay (block body avoids < parsed as JSX)
   const currentCaption = captions.find((c) => {
     const t = currentTime;
@@ -454,35 +543,27 @@ export default function VideoTimelinePage() {
 
               {/* Tracks content */}
               <div style={{ width: totalWidth }}>
-                <div className="relative border-b border-border" style={{ height: TRACK_HEIGHT }}>
-                  {scenes.map((scene, i) => (
-                    <div
-                      key={scene.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedSceneIndex(i);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setSelectedSceneIndex(i);
-                        }
-                      }}
-                      className={`absolute top-1 h-[calc(100%-8px)] rounded px-1 overflow-hidden text-xs text-foreground cursor-pointer select-none ${scene.colorClass} ${
-                        selectedSceneIndex === i ? "ring-2 ring-white ring-offset-1 ring-offset-card" : ""
-                      }`}
-                      style={{
-                        left: timeToX(scene.startTime),
-                        width: Math.max(4, timeToX(scene.endTime) - timeToX(scene.startTime)),
-                      }}
-                      title={scene.text}
+                <div
+                  className="relative border-b border-border flex flex-row items-stretch"
+                  style={{ height: TRACK_HEIGHT, width: totalWidth }}
+                >
+                  <DndContext sensors={sensors} onDragEnd={handleSceneDragEnd}>
+                    <SortableContext
+                      items={sceneSortableIds}
+                      strategy={horizontalListSortingStrategy}
                     >
-                      <span className="truncate block">{scene.text}</span>
-                    </div>
-                  ))}
+                      {scenes.map((scene, i) => (
+                        <SortableSceneBlock
+                          key={scene.id}
+                          scene={scene}
+                          index={i}
+                          widthPx={sceneSegmentWidthPx}
+                          isSelected={selectedSceneIndex === i}
+                          onSelect={() => setSelectedSceneIndex(i)}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 </div>
                 <div className="relative border-b border-border" style={{ height: TRACK_HEIGHT }}>
                   {duration > 0 && (
