@@ -14,7 +14,7 @@ interface LayoutWrapperProps {
 export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   return (
     <>
-      <main>
+      <main className="min-w-0 overflow-x-hidden">
         {children}
       </main>
     </>

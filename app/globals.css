@@ -89,6 +89,28 @@
 }
 
 @layer utilities {
+  /* Video timeline: custom scrollbar that blends with dark UI */
+  .timeline-horizontal-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) hsl(var(--muted));
+  }
+  .timeline-horizontal-scroll::-webkit-scrollbar {
+    height: 8px;
+  }
+  .timeline-horizontal-scroll::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+  .timeline-horizontal-scroll::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 4px;
+  }
+  .timeline-horizontal-scroll::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--foreground) / 0.2);
+  }
+  .timeline-horizontal-scroll::-webkit-scrollbar-button {
+    display: none;
+  }
+
   .animate-carousel {
     display: flex;
     animation: carousel 90s linear infinite;

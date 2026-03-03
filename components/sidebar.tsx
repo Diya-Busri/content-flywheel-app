@@ -14,6 +14,7 @@ import { motion } from "framer-motion";
 import { SelectProfile } from "@/db/schema/profiles-schema";
 import { useState, useEffect } from "react";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
+import { useSidebar } from "@/components/sidebar-context";
 
 interface SidebarProps {
   profile: SelectProfile | null;
@@ -21,39 +22,17 @@ interface SidebarProps {
   onOpenReview?: () => void;
 }
 
-const SIDEBAR_COLLAPSED_KEY = "content_flywheel_sidebar_collapsed";
-
-function getInitialCollapsed(): boolean {
-  if (typeof window === "undefined") return false;
-  const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-  return stored === "true";
-}
-
 export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarProps) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [coachOpen, setCoachOpen] = useState(false);
+  const sidebar = useSidebar();
+  const isCollapsed = sidebar?.isCollapsed ?? false;
+  const toggleCollapsed = sidebar?.toggleCollapsed ?? (() => {});
   const { theme, toggleTheme } = useDashboardTheme();
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
-    setIsCollapsed(getInitialCollapsed());
-  }, [mounted]);
-
-  const toggleCollapsed = () => {
-    const next = !isCollapsed;
-    setIsCollapsed(next);
-    try {
-      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
-    } catch {
-      // ignore
-    }
-  };
 
   const isActive = (path: string) => pathname === path;
 
