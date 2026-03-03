@@ -37,7 +37,7 @@ function truncateSceneText(s: string, maxLen: number): string {
   return t.length <= maxLen ? t : t.slice(0, maxLen).trim() + "…";
 }
 
-function getSceneLabels(content: ScriptContent): string[] {
+function getSceneFullTexts(content: ScriptContent): string[] {
   const raw = content.scenes ?? content.scenePrompts;
   if (!Array.isArray(raw) || raw.length === 0) return [];
   return raw.map((item, i) => {
@@ -45,16 +45,16 @@ function getSceneLabels(content: ScriptContent): string[] {
       (typeof (item as { scene?: string }).scene === "string" && (item as { scene: string }).scene.trim()) ||
       (typeof (item as { prompt?: string }).prompt === "string" && (item as { prompt: string }).prompt.trim()) ||
       `Scene ${i + 1}`;
-    return truncateSceneText(text, 25);
+    return text;
   });
 }
 
-function buildSceneBlocks(labels: string[], duration: number): SceneBlock[] {
-  if (labels.length === 0 || !(duration > 0)) return [];
-  const segment = duration / labels.length;
-  return labels.map((text, i) => ({
+function buildSceneBlocks(fullTexts: string[], duration: number): SceneBlock[] {
+  if (fullTexts.length === 0 || !(duration > 0)) return [];
+  const segment = duration / fullTexts.length;
+  return fullTexts.map((fullText, i) => ({
     id: `scene-${i}`,
-    text: labels[i],
+    text: truncateSceneText(fullText, 25),
     startTime: i * segment,
     endTime: (i + 1) * segment,
     colorClass: SCENE_COLOR_CLASSES[i % SCENE_COLOR_CLASSES.length],
@@ -107,10 +107,20 @@ export default function VideoTimelinePage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [captions, setCaptions] = useState<CaptionBlock[]>([]);
-  const [sceneLabels, setSceneLabels] = useState<string[]>([]);
+  const [sceneFullTexts, setSceneFullTexts] = useState<string[]>([]);
+  const [sceneMedia, setSceneMedia] = useState<({ url: string; type: "image" | "video" } | null)[]>([]);
+  const [selectedSceneIndex, setSelectedSceneIndex] = useState<number | null>(null);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
-  const scenes = useMemo(() => buildSceneBlocks(sceneLabels, duration), [sceneLabels, duration]);
+  const sceneMediaInputRef = useRef<HTMLInputElement>(null);
+  const scenes = useMemo(() => buildSceneBlocks(sceneFullTexts, duration), [sceneFullTexts, duration]);
   const sidebar = useSidebar();
+
+  // Clear selection if it becomes invalid (e.g. after script change)
+  useEffect(() => {
+    if (selectedSceneIndex !== null && (selectedSceneIndex < 0 || selectedSceneIndex >= sceneFullTexts.length)) {
+      setSelectedSceneIndex(null);
+    }
+  }, [selectedSceneIndex, sceneFullTexts.length]);
 
   // Prevent outer browser scrollbar on this page only; restore on unmount
   useEffect(() => {
@@ -154,7 +164,9 @@ export default function VideoTimelinePage() {
       setVoiceoverUrl(null);
       setDuration(0);
       setCaptions([]);
-      setSceneLabels([]);
+      setSceneFullTexts([]);
+      setSceneMedia([]);
+      setSelectedSceneIndex(null);
       return;
     }
     let cancelled = false;
@@ -175,7 +187,10 @@ export default function VideoTimelinePage() {
         const dur = typeof content.timelineVoiceoverDuration === "number" ? content.timelineVoiceoverDuration : 0;
         setDuration(dur);
         setCaptions(getCaptions(content));
-        setSceneLabels(getSceneLabels(content));
+        const fullTexts = getSceneFullTexts(content);
+        setSceneFullTexts(fullTexts);
+        setSceneMedia(fullTexts.map(() => null));
+        setSelectedSceneIndex(null);
       })
       .catch(() => {
         if (!cancelled) {
@@ -183,7 +198,8 @@ export default function VideoTimelinePage() {
           setVoiceoverUrl(null);
           setDuration(0);
           setCaptions([]);
-          setSceneLabels([]);
+          setSceneFullTexts([]);
+          setSceneMedia([]);
         }
       });
     return () => {
@@ -284,6 +300,28 @@ export default function VideoTimelinePage() {
 
   const playheadX = timeToX(currentTime);
 
+  // Scene media: file input and drag-drop
+  const handleSceneMediaFile = useCallback(
+    (file: File, sceneIndex: number) => {
+      const type = file.type.startsWith("video/") ? "video" : "image";
+      const url = URL.createObjectURL(file);
+      setSceneMedia((prev) => {
+        const next = [...prev];
+        while (next.length <= sceneIndex) next.push(null);
+        const old = next[sceneIndex];
+        if (old) URL.revokeObjectURL(old.url);
+        next[sceneIndex] = { url, type };
+        return next;
+      });
+    },
+    []
+  );
+
+  const selectedSceneDuration =
+    selectedSceneIndex !== null && scenes[selectedSceneIndex]
+      ? scenes[selectedSceneIndex].endTime - scenes[selectedSceneIndex].startTime
+      : null;
+
   // Caption visible at currentTime for preview overlay (block body avoids < parsed as JSX)
   const currentCaption = captions.find((c) => {
     const t = currentTime;
@@ -380,8 +418,9 @@ export default function VideoTimelinePage() {
           </span>
         </div>
 
-        {/* Timeline: only this area scrolls horizontally */}
-        <div className="min-h-0 min-w-0 shrink-0 overflow-hidden rounded-lg border border-border bg-card">
+        {/* Timeline + scene edit panel */}
+        <div className="flex min-h-0 min-w-0 flex-1 gap-0 overflow-hidden">
+        <div className="min-h-0 min-w-0 shrink-0 flex-1 overflow-hidden rounded-lg border border-border bg-card">
           <div className="timeline-horizontal-scroll flex min-h-[140px] min-w-0 overflow-x-auto overflow-y-hidden">
             <div className="shrink-0 w-24 border-r border-border bg-muted flex flex-col text-xs text-muted-foreground">
               <div className="shrink-0 border-b border-border" style={{ height: RULER_HEIGHT }} />
@@ -416,10 +455,25 @@ export default function VideoTimelinePage() {
               {/* Tracks content */}
               <div style={{ width: totalWidth }}>
                 <div className="relative border-b border-border" style={{ height: TRACK_HEIGHT }}>
-                  {scenes.map((scene) => (
+                  {scenes.map((scene, i) => (
                     <div
                       key={scene.id}
-                      className={`absolute top-1 h-[calc(100%-8px)] rounded px-1 overflow-hidden text-xs text-foreground ${scene.colorClass}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedSceneIndex(i);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedSceneIndex(i);
+                        }
+                      }}
+                      className={`absolute top-1 h-[calc(100%-8px)] rounded px-1 overflow-hidden text-xs text-foreground cursor-pointer select-none ${scene.colorClass} ${
+                        selectedSceneIndex === i ? "ring-2 ring-white ring-offset-1 ring-offset-card" : ""
+                      }`}
                       style={{
                         left: timeToX(scene.startTime),
                         width: Math.max(4, timeToX(scene.endTime) - timeToX(scene.startTime)),
@@ -476,6 +530,136 @@ export default function VideoTimelinePage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Scene edit panel */}
+        <div className="min-w-[320px] w-[320px] shrink-0 flex flex-col border-l border-border bg-card overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col p-5">
+            {selectedSceneIndex === null ? (
+              <p className="text-sm text-muted-foreground">Click a scene to edit it.</p>
+            ) : (
+              <>
+                <h2 className="text-xl font-semibold text-foreground mb-5 break-words">
+                  {scenes[selectedSceneIndex]?.text ?? "—"}
+                </h2>
+
+                {/* Background media */}
+                <div className="mb-5">
+                  <span className="text-xs font-medium text-muted-foreground block mb-2">Background media</span>
+                  <input
+                    ref={sceneMediaInputRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file && selectedSceneIndex !== null) handleSceneMediaFile(file, selectedSceneIndex);
+                      e.target.value = "";
+                    }}
+                  />
+                  {sceneMedia[selectedSceneIndex] ? (
+                    <div className="relative rounded-lg border border-border overflow-hidden bg-muted/30 aspect-video">
+                      {sceneMedia[selectedSceneIndex]!.type === "image" ? (
+                        <img
+                          src={sceneMedia[selectedSceneIndex]!.url}
+                          alt="Scene background"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <video
+                          src={sceneMedia[selectedSceneIndex]!.url}
+                          className="w-full h-full object-contain"
+                          muted
+                          playsInline
+                          preload="metadata"
+                        />
+                      )}
+                      <button
+                        type="button"
+                        className="absolute bottom-2 right-2 rounded bg-background/90 px-2 py-1 text-xs text-foreground border border-border hover:bg-background"
+                        onClick={() => {
+                          const entry = sceneMedia[selectedSceneIndex!];
+                          if (entry) URL.revokeObjectURL(entry.url);
+                          setSceneMedia((prev) => {
+                            const next = [...prev];
+                            if (selectedSceneIndex !== null && selectedSceneIndex < next.length)
+                              next[selectedSceneIndex] = null;
+                            return next;
+                          });
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      className="rounded-lg border-2 border-dashed border-border bg-muted/20 aspect-video flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-muted/30 transition-colors min-h-[140px]"
+                      onClick={() => sceneMediaInputRef.current?.click()}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.currentTarget.classList.add("border-primary/50", "bg-muted/40");
+                      }}
+                      onDragLeave={(e) => {
+                        e.currentTarget.classList.remove("border-primary/50", "bg-muted/40");
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.currentTarget.classList.remove("border-primary/50", "bg-muted/40");
+                        const file = e.dataTransfer.files?.[0];
+                        if (file && selectedSceneIndex !== null && (file.type.startsWith("image/") || file.type.startsWith("video/"))) {
+                          handleSceneMediaFile(file, selectedSceneIndex);
+                        }
+                      }}
+                    >
+                      <span className="text-sm text-muted-foreground">Drop image or video here</span>
+                      <button
+                        type="button"
+                        className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sceneMediaInputRef.current?.click();
+                        }}
+                      >
+                        Browse
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Scene text */}
+                <div className="mb-5">
+                  <label className="text-xs font-medium text-muted-foreground block mb-2">Scene text</label>
+                  <textarea
+                    className="w-full min-h-[140px] rounded-lg border border-input bg-background px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 leading-relaxed resize-y"
+                    value={sceneFullTexts[selectedSceneIndex] ?? ""}
+                    onChange={(e) => {
+                      const i = selectedSceneIndex;
+                      if (i === null) return;
+                      setSceneFullTexts((prev) => {
+                        const next = [...prev];
+                        if (i >= 0 && i < next.length) next[i] = e.target.value;
+                        return next;
+                      });
+                    }}
+                    placeholder="Enter scene text..."
+                  />
+                </div>
+
+                {/* Duration */}
+                {selectedSceneDuration !== null && (
+                  <div className="mt-auto pt-3 border-t border-border">
+                    <span className="text-xs font-medium text-muted-foreground block mb-1">Duration</span>
+                    <p className="text-sm text-foreground tabular-nums">
+                      {selectedSceneDuration.toFixed(1)}s
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
         </div>
       </main>
     </div>
