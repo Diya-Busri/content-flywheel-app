@@ -177,6 +177,11 @@ export default function VideoTimelinePage() {
   const [selectedSceneIndex, setSelectedSceneIndex] = useState<number | null>(null);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   const sceneMediaInputRef = useRef<HTMLInputElement>(null);
+
+  const [captionAnimation, setCaptionAnimation] = useState<"none" | "fadeIn" | "slideUp" | "pop">("fadeIn");
+  const [captionPosition, setCaptionPosition] = useState<"bottom" | "middle" | "top">("bottom");
+  const [captionFontSize, setCaptionFontSize] = useState<"small" | "medium" | "large">("medium");
+  const [captionTextColor, setCaptionTextColor] = useState("#ffffff");
   const scenes = useMemo(() => buildSceneBlocks(sceneFullTexts, duration), [sceneFullTexts, duration]);
   const sidebar = useSidebar();
 
@@ -470,10 +475,40 @@ export default function VideoTimelinePage() {
               {voiceoverUrl ? "Voiceover plays here" : "Select a script with voiceover"}
             </div>
             {currentCaption?.text && (
-              <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-background/90 to-transparent flex items-end justify-center min-h-[20%]">
-                <p className="text-foreground text-center text-sm leading-relaxed max-w-full">
-                  {currentCaption.text}
-                </p>
+              <div
+                className={`absolute inset-x-0 p-3 flex justify-center min-h-[20%] ${
+                  captionPosition === "bottom"
+                    ? "bottom-0 bg-gradient-to-t from-background/90 to-transparent items-end"
+                    : captionPosition === "top"
+                      ? "top-0 bg-gradient-to-b from-background/90 to-transparent items-start"
+                      : "top-1/2 -translate-y-1/2 items-center bg-background/80"
+                }`}
+              >
+                <div
+                  key={currentCaption.id}
+                  className={`max-w-full ${
+                    captionAnimation === "fadeIn"
+                      ? "caption-animate-fade-in"
+                      : captionAnimation === "slideUp"
+                        ? "caption-animate-slide-up"
+                        : captionAnimation === "pop"
+                          ? "caption-animate-pop"
+                          : ""
+                  }`}
+                >
+                  <p
+                    className={`text-center leading-relaxed max-w-full ${
+                      captionFontSize === "small"
+                        ? "text-xs"
+                        : captionFontSize === "large"
+                          ? "text-lg"
+                          : "text-sm"
+                    }`}
+                    style={{ color: captionTextColor }}
+                  >
+                    {currentCaption.text}
+                  </p>
+                </div>
               </div>
             )}
             {voiceoverUrl && (
@@ -739,6 +774,67 @@ export default function VideoTimelinePage() {
                 )}
               </>
             )}
+
+            {/* Caption Style - always visible */}
+            <div className="mt-5 pt-5 border-t border-border space-y-4">
+              <h3 className="text-sm font-semibold text-foreground">Caption Style</h3>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Animation</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                  value={captionAnimation}
+                  onChange={(e) =>
+                    setCaptionAnimation(e.target.value as "none" | "fadeIn" | "slideUp" | "pop")
+                  }
+                >
+                  <option value="none">None</option>
+                  <option value="fadeIn">Fade In</option>
+                  <option value="slideUp">Slide Up</option>
+                  <option value="pop">Pop (scale in)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Position</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                  value={captionPosition}
+                  onChange={(e) =>
+                    setCaptionPosition(e.target.value as "bottom" | "middle" | "top")
+                  }
+                >
+                  <option value="bottom">Bottom</option>
+                  <option value="middle">Middle</option>
+                  <option value="top">Top</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Font size</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                  value={captionFontSize}
+                  onChange={(e) =>
+                    setCaptionFontSize(e.target.value as "small" | "medium" | "large")
+                  }
+                >
+                  <option value="small">Small</option>
+                  <option value="medium">Medium</option>
+                  <option value="large">Large</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Text colour</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    className="h-9 w-14 cursor-pointer rounded border border-input bg-background p-1"
+                    value={captionTextColor}
+                    onChange={(e) => setCaptionTextColor(e.target.value)}
+                    title="Caption text colour"
+                  />
+                  <span className="text-xs text-muted-foreground tabular-nums">{captionTextColor}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         </div>

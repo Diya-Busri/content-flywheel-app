@@ -111,6 +111,45 @@
     display: none;
   }
 
+  /* Video timeline: caption overlay animations */
+  .caption-animate-fade-in {
+    animation: caption-fade-in 0.35s ease-out forwards;
+  }
+  .caption-animate-slide-up {
+    animation: caption-slide-up 0.35s ease-out forwards;
+  }
+  .caption-animate-pop {
+    animation: caption-pop 0.3s ease-out forwards;
+  }
+  @keyframes caption-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes caption-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes caption-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.85);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
   .animate-carousel {
     display: flex;
     animation: carousel 90s linear infinite;
