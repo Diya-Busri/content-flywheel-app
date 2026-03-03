@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Menu, PanelLeftClose } from "lucide-react";
 import { useSidebar } from "@/components/sidebar-context";
@@ -12,12 +12,54 @@ const PLAYHEAD_COLOR = "#ef4444";
 
 type CaptionBlock = { id: string; text: string; startTime: number; endTime: number };
 
+type SceneBlock = { id: string; text: string; startTime: number; endTime: number; colorClass: string };
+
 type ScriptContent = {
   timelineVoiceoverUrl?: string;
   timelineVoiceoverDuration?: number;
   captions?: Array<{ id?: string; text?: string; startTime?: number; endTime?: number }>;
+  scenes?: Array<{ scene?: string; prompt?: string; timing?: string; [key: string]: unknown }>;
+  scenePrompts?: Array<{ scene?: string; prompt?: string; timing?: string; [key: string]: unknown }>;
   [key: string]: unknown;
 };
+
+const SCENE_COLOR_CLASSES = [
+  "bg-blue-600/80",
+  "bg-purple-600/80",
+  "bg-green-600/80",
+  "bg-orange-600/80",
+  "bg-pink-600/80",
+];
+
+function truncateSceneText(s: string, maxLen: number): string {
+  const t = typeof s === "string" ? s.trim() : "";
+  if (!t) return "—";
+  return t.length <= maxLen ? t : t.slice(0, maxLen).trim() + "…";
+}
+
+function getSceneLabels(content: ScriptContent): string[] {
+  const raw = content.scenes ?? content.scenePrompts;
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  return raw.map((item, i) => {
+    const text =
+      (typeof (item as { scene?: string }).scene === "string" && (item as { scene: string }).scene.trim()) ||
+      (typeof (item as { prompt?: string }).prompt === "string" && (item as { prompt: string }).prompt.trim()) ||
+      `Scene ${i + 1}`;
+    return truncateSceneText(text, 25);
+  });
+}
+
+function buildSceneBlocks(labels: string[], duration: number): SceneBlock[] {
+  if (labels.length === 0 || !(duration > 0)) return [];
+  const segment = duration / labels.length;
+  return labels.map((text, i) => ({
+    id: `scene-${i}`,
+    text: labels[i],
+    startTime: i * segment,
+    endTime: (i + 1) * segment,
+    colorClass: SCENE_COLOR_CLASSES[i % SCENE_COLOR_CLASSES.length],
+  }));
+}
 
 type LibraryScript = { id: string; title: string; type: "script" };
 type LibraryResponse = { id: string; title: string; type: string }[];
@@ -65,7 +107,9 @@ export default function VideoTimelinePage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [captions, setCaptions] = useState<CaptionBlock[]>([]);
+  const [sceneLabels, setSceneLabels] = useState<string[]>([]);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
+  const scenes = useMemo(() => buildSceneBlocks(sceneLabels, duration), [sceneLabels, duration]);
   const sidebar = useSidebar();
 
   // Prevent outer browser scrollbar on this page only; restore on unmount
@@ -103,13 +147,14 @@ export default function VideoTimelinePage() {
     };
   }, []);
 
-  // When scriptId is set (incl. initial), load script and set voiceover + captions
+  // When scriptId is set (incl. initial), load script and set voiceover, captions, and scenes
   useEffect(() => {
     if (!scriptId) {
       setScriptName("");
       setVoiceoverUrl(null);
       setDuration(0);
       setCaptions([]);
+      setSceneLabels([]);
       return;
     }
     let cancelled = false;
@@ -130,6 +175,7 @@ export default function VideoTimelinePage() {
         const dur = typeof content.timelineVoiceoverDuration === "number" ? content.timelineVoiceoverDuration : 0;
         setDuration(dur);
         setCaptions(getCaptions(content));
+        setSceneLabels(getSceneLabels(content));
       })
       .catch(() => {
         if (!cancelled) {
@@ -137,6 +183,7 @@ export default function VideoTimelinePage() {
           setVoiceoverUrl(null);
           setDuration(0);
           setCaptions([]);
+          setSceneLabels([]);
         }
       });
     return () => {
@@ -368,7 +415,21 @@ export default function VideoTimelinePage() {
 
               {/* Tracks content */}
               <div style={{ width: totalWidth }}>
-                <div className="relative border-b border-border" style={{ height: TRACK_HEIGHT }} />
+                <div className="relative border-b border-border" style={{ height: TRACK_HEIGHT }}>
+                  {scenes.map((scene) => (
+                    <div
+                      key={scene.id}
+                      className={`absolute top-1 h-[calc(100%-8px)] rounded px-1 overflow-hidden text-xs text-foreground ${scene.colorClass}`}
+                      style={{
+                        left: timeToX(scene.startTime),
+                        width: Math.max(4, timeToX(scene.endTime) - timeToX(scene.startTime)),
+                      }}
+                      title={scene.text}
+                    >
+                      <span className="truncate block">{scene.text}</span>
+                    </div>
+                  ))}
+                </div>
                 <div className="relative border-b border-border" style={{ height: TRACK_HEIGHT }}>
                   {duration > 0 && (
                     <div
