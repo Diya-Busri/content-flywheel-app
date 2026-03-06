@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 export const dynamic = "force-dynamic";
 

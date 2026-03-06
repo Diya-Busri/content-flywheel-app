@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { brandProfilesTable } from "@/db/schema/brand-profiles-schema";

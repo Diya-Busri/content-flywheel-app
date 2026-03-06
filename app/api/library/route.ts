@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { validateSearchParams } from "@/lib/api-validate";
 import { productsTable } from "@/db/schema/products-schema";
 import { scriptsTable, videosTable } from "@/db/schema/library-schema";
 import { eq, desc, and, isNull, isNotNull } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
+
+const LibrarySearchSchema = z.object({
+  type: z.enum(["all", "product", "video", "script"]).optional().default("all"),
+  deleted: z.enum(["true", "false"]).optional(),
+});
 
 type LibraryItem = {
   id: string;
@@ -23,20 +31,28 @@ type LibraryItem = {
   deletedAt?: string;
   /** When 'ai' or 'brand', product was auto-designed; show "AI Designed" badge. */
   designSource?: "ai" | "brand" | null;
+  /** Video: timeline project metadata (scenes, template, etc.). */
+  metadata?: Record<string, unknown>;
+  /** Video: platforms array, e.g. ['video-timeline']. */
+  platforms?: string[];
 };
 
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const rl = await checkApiRateLimit(userId);
+    if (rl) return rl;
 
     const { searchParams } = new URL(request.url);
-    const typeFilter = searchParams.get("type") || "all";
-    const showDeleted = searchParams.get("deleted") === "true";
+    const [params, paramsErr] = validateSearchParams(searchParams, LibrarySearchSchema);
+    if (paramsErr) return paramsErr;
+    const typeFilter = params.type ?? "all";
+    const showDeleted = params.deleted === "true";
 
     let products: { id: string; title: string; status: string; format: string; bundleId: string | null; createdAt: Date | null; deletedAt: Date | null; marketingAssets: { coverThumbnailUrl?: string | null; thumbnailUrl?: string | null } | null }[] = [];
     let scripts: { id: string; title: string; status: string; createdAt: Date | null; videoId: string | null; productId: string | null; platform: string; deletedAt: Date | null }[] = [];
-    let videos: { id: string; title: string; thumbnailUrl: string | null; status: string; createdAt: Date | null; productId: string | null; scriptId: string | null; deletedAt: Date | null }[] = [];
+    let videos: { id: string; title: string; thumbnailUrl: string | null; status: string; createdAt: Date | null; productId: string | null; scriptId: string | null; deletedAt: Date | null; metadata: Record<string, unknown> | null; platforms: string[] }[] = [];
 
     const productWhere = showDeleted
       ? and(eq(productsTable.userId, userId), isNotNull(productsTable.deletedAt))
@@ -127,6 +143,8 @@ export async function GET(request: NextRequest) {
       createdAt: (v.createdAt as Date)?.toISOString?.() ?? String(v.createdAt),
       productId: v.productId ?? undefined,
       scriptId: v.scriptId ?? undefined,
+      metadata: v.metadata ?? undefined,
+      platforms: Array.isArray(v.platforms) ? v.platforms : [],
       ...(showDeleted && v.deletedAt && { deletedAt: (v.deletedAt as Date)?.toISOString?.() ?? String(v.deletedAt) }),
     }));
 
@@ -136,6 +154,10 @@ export async function GET(request: NextRequest) {
 
     if (typeFilter === "bundles") {
       items = items.filter((i) => i.type === "product" && i.bundleId != null);
+    } else if (typeFilter === "timeline") {
+      items = items.filter(
+        (i) => i.type === "video" && Array.isArray(i.platforms) && i.platforms.includes("video-timeline")
+      );
     } else if (typeFilter !== "all") {
       // Tab "scripts" sends type=scripts; LibraryItem uses type "script". Tab "products" sends type=products; we use "product".
       const matchType =

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { cleanProductTitle } from "@/lib/product-title";
 import type { VideoStyle, HookStyle, ScriptTone } from "@/lib/tiktok-shop/types";
 import { extractProductDetails } from "@/lib/tiktok-shop/extract-product";
@@ -17,6 +18,10 @@ export async function POST(request: Request) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const rl = await checkApiRateLimit(userId);
+
+    if (rl) return rl;
 
     const body = await request.json().catch(() => ({}));
     const {

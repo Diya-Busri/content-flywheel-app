@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { getTemporaryAudio } from "@/lib/tiktok-shop/temporary-audio-store";
 
 export async function GET(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db, client } from "@/db/db";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { goalsTable } from "@/db/schema/goals-schema";
 import { TASK_CATEGORIES } from "@/lib/goals/categories";
 import { generateTasks } from "@/lib/goals/generate-tasks";
@@ -31,6 +32,8 @@ export async function GET() {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const rl = await checkApiRateLimit(userId);
+    if (rl) return rl;
 
     const goals = await db
       .select()
@@ -63,6 +66,8 @@ export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const rl = await checkApiRateLimit(userId);
+    if (rl) return rl;
 
     const body = await request.json().catch(() => ({}));
     const { title, description, totalDays, dailyTimeCommitment, tasks } = body as {

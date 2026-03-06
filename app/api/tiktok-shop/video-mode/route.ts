@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 /**
  * GET: Video rendering removed in favor of Video Creation Guides.

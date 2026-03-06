@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, FlaskConical, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Lock } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -34,22 +34,65 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
     setMounted(true);
   }, []);
 
-  const isActive = (path: string) => pathname === path;
+  const isActive = (path: string, activeWhenStartsWith?: boolean) =>
+    activeWhenStartsWith ? pathname.startsWith(path) : pathname === path;
 
-  const navItems: { href: string; icon: React.ReactNode; label: string; emoji: string; subItem?: boolean }[] = [
+  type NavItem = { href: string; icon: React.ReactNode; label: string; emoji: string; subItem?: boolean; badge?: string; activeWhenStartsWith?: boolean };
+
+  const activeNavItems: NavItem[] = [
     { href: "/dashboard", icon: <Home size={18} />, label: "Home", emoji: "🏠" },
     { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", emoji: "🤖" },
     { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦" },
     { href: "/dashboard/digital-products/selling-guide", icon: <Package size={18} />, label: "Selling Guide", emoji: "🛒", subItem: true },
     { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️" },
-    // Hidden from sidebar – re-enable by uncommenting:
-    // { href: "/dashboard/ugc-lab", icon: <FlaskConical size={18} />, label: "UGC Lab", emoji: "🔬" },
     { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅" },
     { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯" },
     { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚" },
     { href: "/dashboard/video-timeline", icon: <Film size={18} />, label: "Video Timeline", emoji: "🎬" },
-    { href: "/dashboard/settings", icon: <Settings size={18} />, label: "Settings", emoji: "⚙️" },
+    { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true },
   ];
+
+  // Teaser at bottom: Campaign Mode only (Coming Soon). Content Studio, Video Analytics, Content Calendar, Brand Builder are hidden from nav but pages remain.
+  const comingSoonNavItems: NavItem[] = [
+    { href: "/dashboard/campaign-mode", icon: <Lock size={18} />, label: "Campaign Mode", emoji: "🔒", badge: "Coming Soon" },
+  ];
+
+  const settingsItem: NavItem = { href: "/dashboard/settings", icon: <Settings size={18} />, label: "Settings", emoji: "⚙️" };
+
+  const renderNavItem = (item: NavItem) => {
+    const isSub = "subItem" in item && item.subItem;
+    const active = isActive(item.href, item.activeWhenStartsWith);
+    return (
+      <Link key={item.href} href={item.href} className="block">
+        <motion.div
+          className={`flex items-center py-2 px-3 rounded-lg cursor-pointer transition-all ${isSub ? "pl-4 md:pl-5" : ""} ${
+            active
+              ? "bg-orange-500 text-white shadow-sm"
+              : "text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+          }`}
+          whileHover={{
+            scale: 1.03,
+            x: 4,
+            transition: { duration: 0.2 }
+          }}
+          whileTap={{ scale: 0.98 }}
+          transition={{ duration: 0.2 }}
+        >
+          <div className="flex items-center justify-center">
+            {item.icon}
+          </div>
+          <span className="ml-3 text-sm font-medium hidden md:block flex-1 min-w-0 truncate">
+            {item.emoji} {item.label}
+          </span>
+          {item.badge && (
+            <span className={`hidden md:inline-flex shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${active ? "bg-white/20 text-white" : "bg-orange-500 text-white"}`}>
+              {item.badge}
+            </span>
+          )}
+        </motion.div>
+      </Link>
+    );
+  };
 
   return (
     <>
@@ -58,7 +101,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
         <motion.button
           type="button"
           onClick={toggleCollapsed}
-          className="fixed left-0 top-1/2 -translate-y-1/2 z-30 flex items-center justify-center w-8 h-12 rounded-r-md bg-white dark:bg-[#1A1A1A] border border-l-0 border-[#E5E7EB] dark:border-white/10 shadow-sm text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-700 dark:hover:text-white transition-colors"
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-30 flex items-center justify-center w-8 h-12 rounded-r-md bg-white dark:bg-card border border-l-0 border-[#E5E7EB] dark:border-white/10 shadow-sm text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-700 dark:hover:text-white transition-colors"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           aria-label="Expand sidebar"
@@ -68,7 +111,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
       )}
 
       <div
-        className={`sidebar no-print h-screen flex-shrink-0 bg-white dark:bg-[#1A1A1A] backdrop-blur-xl border-r border-[#E5E7EB] dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20 transition-[width] duration-200 ease-in-out ${
+        className={`sidebar no-print h-screen flex-shrink-0 bg-white dark:bg-card backdrop-blur-xl border-r border-[#E5E7EB] dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20 transition-[width] duration-200 ease-in-out ${
           isCollapsed ? "w-0 min-w-0 border-r-0" : "w-[60px] md:w-[220px]"
         }`}
         style={mounted && isCollapsed ? { width: 0, minWidth: 0 } : undefined}
@@ -109,39 +152,18 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
         {/* Navigation Items */}
         <nav className="flex-1 px-3 relative z-10 overflow-y-auto">
           <div className="space-y-1.5">
-            {navItems.map((item) => {
-              const isSub = "subItem" in item && item.subItem;
-              return (
-                <Link key={item.href} href={item.href} className="block">
-                  <motion.div
-                    className={`flex items-center py-2 px-3 rounded-lg cursor-pointer transition-all ${isSub ? "pl-4 md:pl-5" : ""} ${
-                      isActive(item.href)
-                        ? "bg-orange-500 text-white shadow-sm"
-                        : "text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
-                    }`}
-                    whileHover={{
-                      scale: 1.03,
-                      x: 4,
-                      transition: { duration: 0.2 }
-                    }}
-                    whileTap={{ scale: 0.98 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <div className="flex items-center justify-center">
-                      {item.icon}
-                    </div>
-                    <span className="ml-3 text-sm font-medium hidden md:block">
-                      {item.emoji} {item.label}
-                    </span>
-                  </motion.div>
-                </Link>
-              );
-            })}
+            {activeNavItems.map(renderNavItem)}
+            <div className="pt-3 mt-3 border-t border-[#E5E7EB] dark:border-white/10">
+              {comingSoonNavItems.map(renderNavItem)}
+            </div>
           </div>
         </nav>
 
-        {/* Bottom Section - Leave a Review, Theme toggle, Billing, Account */}
+        {/* Bottom Section - Settings, Leave a review, Dark mode, Billing, Account */}
         <div className="mt-auto pt-4 relative z-10">
+          <div className="px-3 mb-3">
+            {renderNavItem(settingsItem)}
+          </div>
           {onOpenReview && (
             <div className="px-3 mb-3">
               <motion.button
@@ -156,7 +178,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
               </motion.button>
             </div>
           )}
-          {/* Theme toggle */}
+          {/* Dark mode */}
           <div className="px-3 mb-3">
             <motion.button
               type="button"
@@ -172,7 +194,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
               </span>
             </motion.button>
           </div>
-          {/* Billing: link to Settings where user can open Stripe Customer Portal */}
+          {/* Billing */}
           <div className="px-3 mb-4">
             <div className="h-px bg-gradient-to-r from-transparent via-black/10 dark:via-white/10 to-transparent mb-4" />
             <Link href="/dashboard/settings">

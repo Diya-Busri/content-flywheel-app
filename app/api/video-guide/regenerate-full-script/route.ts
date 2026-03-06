@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { db } from "@/db/db";
 import { scriptsTable } from "@/db/schema/library-schema";
 import { productsTable } from "@/db/schema/products-schema";
@@ -54,6 +56,12 @@ export async function POST(request: NextRequest) {
     console.log("[regenerate-full-script] POST called");
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const apiRl = await checkApiRateLimit(userId);
+
+    if (apiRl) return apiRl;
+
+    const rl = checkAiRateLimit(userId);
+    if (rl) return rl;
 
     const body = await request.json().catch(() => ({}));
     let libraryScriptId = typeof body.libraryScriptId === "string" ? body.libraryScriptId.trim() : "";
@@ -107,7 +115,8 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
-    if (row.platform !== "video-guide") {
+    const isVideoGuide = row.platform === "video-guide" || row.platform === "content-studio";
+    if (!isVideoGuide) {
       return NextResponse.json({ error: "Not a video guide" }, { status: 400 });
     }
     libraryScriptId = row.id;

@@ -57,6 +57,9 @@ export function getVideoLengthOption(seconds: number) {
 
 /** Returns option for the given seconds, or default (30s). For API use; includes durationSec, wordsMin, wordsMax, scenesMin, scenesMax. */
 export function getVideoLengthOptionOrDefault(seconds: number | undefined) {
+  if (seconds != null && seconds >= 120) {
+    return getLongFormSceneRange(seconds);
+  }
   const opt = getVideoLengthOption(
     seconds != null && [15, 30, 60, 90].includes(seconds) ? seconds : DEFAULT_VIDEO_LENGTH_SEC
   );
@@ -67,5 +70,31 @@ export function getVideoLengthOptionOrDefault(seconds: number | undefined) {
     wordsMax: opt.wordsMax,
     scenesMin: opt.scenesMin,
     scenesMax: opt.scenesMax,
+  };
+}
+
+/**
+ * Long-form video (2+ min): scene count scales with duration.
+ * Roughly 1 scene per 60–90 seconds, min 8, max 50.
+ */
+export function getLongFormSceneRange(durationSec: number): {
+  durationSec: number;
+  scenesMin: number;
+  scenesMax: number;
+  wordsMin: number;
+  wordsMax: number;
+  seconds: number;
+} {
+  const sec = Math.max(120, Math.min(7200, Math.round(durationSec)));
+  const scenesMin = Math.min(50, Math.max(8, Math.floor(sec / 90)));
+  const scenesMax = Math.min(50, Math.max(12, Math.ceil(sec / 60)));
+  const wordsTotal = Math.round((sec / 60) * 150);
+  return {
+    durationSec: sec,
+    seconds: sec,
+    scenesMin,
+    scenesMax,
+    wordsMin: Math.floor(wordsTotal * 0.9),
+    wordsMax: Math.ceil(wordsTotal * 1.1),
   };
 }

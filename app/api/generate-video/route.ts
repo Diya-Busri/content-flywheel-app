@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 /** Deprecated: Use Video Creation Guide. */
 export async function POST() {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkApiRateLimit, getClientIp } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { videoJobsTable } from "@/db/schema/video-jobs-schema";
 import { faceProfilesTable } from "@/db/schema/face-profiles-schema";
@@ -29,6 +30,8 @@ const isFaceSwapProvider = (provider: string | null | undefined) => {
  * UGC Lab uses FaceSwap only. Do not mark completed until video_url exists.
  */
 export async function POST(request: Request) {
+  const rl = await checkApiRateLimit(getClientIp(request));
+  if (rl) return rl;
   const body = await request.json().catch(() => ({}));
   const jobId = body.jobId as string | undefined;
   const userId = body.userId as string | undefined;

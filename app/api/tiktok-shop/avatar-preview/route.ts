@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 const MESSAGE =
   "Preview rendering has been removed. Use Step 4: Video Creation Guides instead.";

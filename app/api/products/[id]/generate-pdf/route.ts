@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { PDFDocument } from "pdf-lib";
 import { buildSinglePageHtml, type PdfProductPayload, type PdfSection } from "@/lib/pdf-product-html";
 

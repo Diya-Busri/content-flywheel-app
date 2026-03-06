@@ -27,6 +27,15 @@ export default function VideoGuidePage() {
   const libraryScriptIdFromUrl = searchParams.get("libraryScriptId");
   const libraryScriptId = libraryScriptIdFromUrl ?? libraryScriptIdFromStorage;
 
+  // YouTube / Content Studio context (from ?source=content-studio&channelId=...&scriptId=...&channelName=...)
+  const isYouTubeMode = searchParams.get("source") === "content-studio";
+  const channelId = searchParams.get("channelId") ?? undefined;
+  const scriptIdFromUrl = searchParams.get("scriptId") ?? undefined;
+  const channelNameFromUrl = searchParams.get("channelName") ?? undefined;
+  const backUrl = isYouTubeMode
+    ? `/dashboard/content-studio/create/scripts${channelId ? `?channelId=${encodeURIComponent(channelId)}` : ""}`
+    : `/dashboard/digital-products/scripts${productIdForGuide ? `?productId=${productIdForGuide}` : ""}`;
+
   const handleProductNameChange = useCallback(
     (productName: string) => {
       setGuide((prev) => (prev ? { ...prev, productName: productName.trim() || undefined } : null));
@@ -147,7 +156,8 @@ export default function VideoGuidePage() {
         return res.json();
       })
       .then((script: { content?: string; title?: string; platform?: string }) => {
-        if (script.platform !== "video-guide" || !script.content) {
+        const isVideoGuide = script.platform === "video-guide" || script.platform === "content-studio";
+        if (!isVideoGuide || !script.content) {
           setError("This library item is not a video guide.");
           return;
         }
@@ -242,6 +252,9 @@ export default function VideoGuidePage() {
       scripts={scriptsForGuide}
       productId={productIdForGuide}
       libraryScriptId={libraryScriptId ?? undefined}
+      isYouTubeMode={isYouTubeMode}
+      backUrl={backUrl}
+      channelName={channelNameFromUrl}
       onProductNameChange={handleProductNameChange}
       onScriptRegenerated={handleScriptRegenerated}
       onScriptEdited={handleScriptEdited}

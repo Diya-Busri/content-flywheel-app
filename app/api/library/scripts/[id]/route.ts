@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { scriptsTable } from "@/db/schema/library-schema";
 import { eq, and, isNull } from "drizzle-orm";
@@ -73,7 +74,8 @@ export async function PATCH(
       .where(and(eq(scriptsTable.id, id), eq(scriptsTable.userId, userId), isNull(scriptsTable.deletedAt)))
       .limit(1);
     if (!row) return NextResponse.json({ error: "Script not found" }, { status: 404 });
-    if (row.platform !== "video-guide") {
+    const isVideoGuide = row.platform === "video-guide" || row.platform === "content-studio";
+    if (!isVideoGuide) {
       return NextResponse.json({ error: "Timeline state only applies to video guides" }, { status: 400 });
     }
 

@@ -3,19 +3,38 @@ import postgres from "postgres";
 import { profilesTable } from "./schema/profiles-schema";
 import { pendingProfilesTable } from "./schema/pending-profiles-schema";
 import { productsTable } from "./schema/products-schema";
-import { scriptsTable, videosTable, tiktokShopVideosTable, renderJobsTable } from "./schema/library-schema";
+import { scriptsTable, videosTable, tiktokShopVideosTable, renderJobsTable, myLibraryTable, savedScriptsTable } from "./schema/library-schema";
 import { faceProfilesTable } from "./schema/face-profiles-schema";
 import { videoJobsTable } from "./schema/video-jobs-schema";
 import { ugcCampaignsTable, ugcCampaignProductsTable } from "./schema/ugc-campaigns-schema";
 import { nicheCacheTable } from "./schema/niche-cache-schema";
 import { userSettingsTable } from "./schema/user-settings-schema";
 import { brandProfilesTable } from "./schema/brand-profiles-schema";
+import { connectedAccountsTable } from "./schema/connected-accounts-schema";
+import { seoHashtagGroupsTable } from "./schema/seo-hashtag-groups-schema";
 import {
   goalsTable,
   dailyTasksTable,
   goalReminderSettingsTable,
   goalWeeklyReviewsTable,
 } from "./schema/goals-schema";
+import { workflowProgressTable } from "./schema/workflow-progress-schema";
+import { contentStudioWizardProgressTable } from "./schema/content-studio-wizard-schema";
+import { contentStudioVideosTable } from "./schema/content-studio-videos-schema";
+import { userContentSettingsTable } from "./schema/user-content-settings-schema";
+import { brandVoiceTable } from "./schema/brand-voice-schema";
+import { savedTemplatesTable } from "./schema/saved-templates-schema";
+import { productHistoryTable } from "./schema/product-history-schema";
+import { templatePacksTable } from "./schema/template-packs-schema";
+import { brandCalendarTable } from "./schema/brand-calendar-schema";
+import { dropScriptsTable } from "./schema/drop-scripts-schema";
+import { launchChecklistTable } from "./schema/launch-checklist-schema";
+import { brandWorkspacesTable } from "./schema/brand-workspaces-schema";
+import { brandCampaignsTable } from "./schema/brand-campaigns-schema";
+import { scheduledPostsTable } from "./schema/scheduled-posts-schema";
+import { templateStudioSetupTable } from "./schema/template-studio-setup-schema";
+import { coachSettingsTable, coachChatsTable } from "./schema/coach-settings-schema";
+import { chatSummariesTable } from "./schema/chat-summaries-schema";
 
 // Define the schema properly
 const schema = {
@@ -37,6 +56,28 @@ const schema = {
   nicheCache: nicheCacheTable,
   userSettings: userSettingsTable,
   brandProfiles: brandProfilesTable,
+  connectedAccounts: connectedAccountsTable,
+  seoHashtagGroups: seoHashtagGroupsTable,
+  workflowProgress: workflowProgressTable,
+  contentStudioWizardProgress: contentStudioWizardProgressTable,
+  contentStudioVideos: contentStudioVideosTable,
+  userContentSettings: userContentSettingsTable,
+  brandVoice: brandVoiceTable,
+  savedTemplates: savedTemplatesTable,
+  productHistory: productHistoryTable,
+  templatePacks: templatePacksTable,
+  brandCalendar: brandCalendarTable,
+  dropScripts: dropScriptsTable,
+  launchChecklist: launchChecklistTable,
+  brandWorkspaces: brandWorkspacesTable,
+  brandCampaigns: brandCampaignsTable,
+  scheduledPosts: scheduledPostsTable,
+  templateStudioSetup: templateStudioSetupTable,
+  coachSettings: coachSettingsTable,
+  chatSummaries: chatSummariesTable,
+  coachChats: coachChatsTable,
+  myLibrary: myLibraryTable,
+  savedScripts: savedScriptsTable,
 };
 
 // Add connection options with improved timeout and retry settings for Vercel environment

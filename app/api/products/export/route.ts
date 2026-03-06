@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { generateProduct, isValidProductType } from "@/lib/generators";
 import type { ProductType, ProductDetails, PageBackground, ExportDesignSettings, PlacedElementExport } from "@/lib/generators/types";
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import Stripe from "stripe";
 
 /** Production domain for Stripe success/cancel redirects. Never use Vercel preview URLs. */

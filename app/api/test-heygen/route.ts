@@ -4,6 +4,7 @@
  * Returns avatar list if HEYGEN_API_KEY is valid.
  */
 import { NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 export async function GET() {
   const hasKey = Boolean(process.env.HEYGEN_API_KEY?.trim());

@@ -78,6 +78,7 @@ import {
 import { DraggableElement } from "./DraggableElement";
 import type { DraggableElementData } from "./DraggableElement";
 import { RichTextEditor, sectionBodyToHtml } from "@/components/RichTextEditor";
+import { sanitizeHtml } from "@/lib/sanitize-html";
 
 const PRODUCT_FORMATS = [
   { id: "ebook", label: "Ebook/Guide", icon: BookOpen, desc: "PDF with chapters, formatted text, and images", perfect: "Perfect for guides, tutorials, how-tos" },
@@ -905,7 +906,7 @@ export default function DiscoverCreateFlow() {
                         </h3>
                         <div className="leading-relaxed" style={{ fontSize: `${bodySize}px`, lineHeight }}>
                           {sectionBodyToHtml(section.body) ? (
-                            <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: section.body }} />
+                            <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.body) }} />
                           ) : (
                             <span className="whitespace-pre-line">{section.body}</span>
                           )}

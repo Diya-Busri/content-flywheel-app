@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { goalsTable, dailyTasksTable } from "@/db/schema/goals-schema";
 import { eq, inArray, desc, asc } from "drizzle-orm";

@@ -139,36 +139,7 @@ export function CoachChatPanel({ onClose, className }: CoachChatPanelProps) {
   );
 }
 
+/** Floating AI Coach button — disabled: do not render. Use "AI Coach" in the sidebar instead. */
 export function ChatCoachWidget() {
-  const pathname = usePathname();
-  const { open: isCoachOpen, setOpen: setCoachOpen } = useCoachOpen();
-
-  // Hide floating coach on the dedicated AI Coach page
-  if (pathname === "/dashboard/ai-coach") return null;
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setCoachOpen(!isCoachOpen)}
-        aria-label="Open AI Coach"
-        className={cn(
-          "fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all",
-          "bg-orange-500 text-white hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 focus:ring-offset-background",
-          "dark:bg-orange-500 dark:hover:bg-orange-600 dark:focus:ring-orange-400"
-        )}
-      >
-        <MessageCircle size={24} />
-      </button>
-
-      <Sheet open={isCoachOpen} onOpenChange={(open) => setCoachOpen(open)}>
-        <SheetContent
-          side="right"
-          className="w-[400px] max-w-[calc(100vw-2rem)] flex flex-col p-0 gap-0 border-l border-[#E5E7EB] dark:border-white/10"
-        >
-          <CoachChatPanel />
-        </SheetContent>
-      </Sheet>
-    </>
-  );
+  return null;
 }

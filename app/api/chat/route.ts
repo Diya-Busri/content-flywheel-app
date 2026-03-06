@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import OpenAI from "openai";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -54,6 +56,12 @@ export async function POST(req: Request) {
     }
 
     const { userId } = await auth();
+    const apiRl = await checkApiRateLimit(userId);
+
+    if (apiRl) return apiRl;
+
+    const rl = checkAiRateLimit(userId ?? null);
+    if (rl) return rl;
     const lastUserMessage = messages.filter((m) => m.role === "user").pop();
     const userContent = lastUserMessage?.content?.trim() ?? "";
 

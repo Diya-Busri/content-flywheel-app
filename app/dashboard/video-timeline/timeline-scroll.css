@@ -1,0 +1,17 @@
+/* Timeline page: always-visible, prominent horizontal scrollbar (WebKit) */
+.timeline-scroll::-webkit-scrollbar {
+  height: 16px;
+  display: block;
+}
+.timeline-scroll::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 8px;
+}
+.timeline-scroll::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 8px;
+  border: 2px solid #e5e7eb;
+}
+.timeline-scroll::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

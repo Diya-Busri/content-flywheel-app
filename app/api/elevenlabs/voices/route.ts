@@ -5,6 +5,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,12 @@ export async function GET() {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const apiRl = await checkApiRateLimit(userId);
+
+    if (apiRl) return apiRl;
+
+    const rl = checkAiRateLimit(userId);
+    if (rl) return rl;
 
     const apiKey = getElevenLabsApiKey();
     console.log("[elevenlabs/voices] ELEVENLABS_API_KEY present:", !!apiKey, "length:", apiKey?.length ?? 0, "first 10 chars:", apiKey ? `${apiKey.slice(0, 10)}...` : "n/a");

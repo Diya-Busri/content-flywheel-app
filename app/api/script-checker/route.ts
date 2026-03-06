@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 
 export type ScriptViolationSeverity = "critical" | "warning" | "suggestion";
 
@@ -50,6 +52,12 @@ export async function POST(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const apiRl = await checkApiRateLimit(userId);
+
+    if (apiRl) return apiRl;
+
+    const rl = checkAiRateLimit(userId);
+    if (rl) return rl;
 
     const body = await request.json().catch(() => ({}));
     const { script, platforms } = body as { script?: string; platforms?: string[] };

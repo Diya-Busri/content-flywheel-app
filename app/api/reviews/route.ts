@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 

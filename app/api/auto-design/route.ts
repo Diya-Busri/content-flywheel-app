@@ -6,6 +6,7 @@
  * - Pexels search keyword for background image
  */
 import { NextRequest, NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { getAutoDesignSuggestion } from "@/lib/auto-design-suggestion";
 
 export type AutoDesignResult = Awaited<ReturnType<typeof getAutoDesignSuggestion>>;

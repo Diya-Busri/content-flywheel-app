@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { scriptsTable } from "@/db/schema/library-schema";
 import { productsTable } from "@/db/schema/products-schema";
@@ -16,6 +17,10 @@ export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const rl = await checkApiRateLimit(userId);
+
+    if (rl) return rl;
 
     const guideId = request.nextUrl.searchParams.get("guideId")?.trim();
     if (!guideId) {

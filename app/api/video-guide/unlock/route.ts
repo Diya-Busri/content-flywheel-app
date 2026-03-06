@@ -6,6 +6,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { cleanProductTitle } from "@/lib/product-title";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
@@ -27,6 +29,12 @@ export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const apiRl = await checkApiRateLimit(userId);
+
+    if (apiRl) return apiRl;
+
+    const rl = checkAiRateLimit(userId);
+    if (rl) return rl;
 
     const body = await request.json().catch(() => ({}));
     const {

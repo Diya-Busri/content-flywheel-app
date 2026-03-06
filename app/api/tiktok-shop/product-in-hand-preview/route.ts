@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 /**
  * POST: Deprecated. Use Video Creation Guide flow instead.
@@ -8,6 +9,10 @@ import { auth } from "@clerk/nextjs/server";
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const rl = await checkApiRateLimit(userId);
+
+  if (rl) return rl;
 
   return NextResponse.json(
     {

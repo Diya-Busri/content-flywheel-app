@@ -1,9 +1,12 @@
 "use client";
 
+import "./timeline-scroll.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { getVideoPrefill, clearVideoPrefill } from "@/lib/video-prefill";
 import { Menu, PanelLeftClose } from "lucide-react";
 import { useSidebar } from "@/components/sidebar-context";
+import type { FFmpeg } from "@ffmpeg/ffmpeg";
 import {
   DndContext,
   PointerSensor,
@@ -19,23 +22,187 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-const PIXELS_PER_SECOND = 80;
-const TRACK_HEIGHT = 44;
+const PIXELS_PER_SECOND = 200;
+const TRACK_HEIGHT = 48;
 const RULER_HEIGHT = 28;
+const SCENE_BLOCK_MIN_WIDTH = 100;
 const PLAYHEAD_COLOR = "#ef4444";
 
 type CaptionBlock = { id: string; text: string; startTime: number; endTime: number };
 
 type SceneBlock = { id: string; text: string; startTime: number; endTime: number; colorClass: string };
 
+/** Element position/size: x,y in 0–100 (percent of container). */
+type ElementPosition = { x: number; y: number };
+type ElementSize = { w: number; h: number };
+
+type BackgroundElement = { id: string; type: "background"; media: { url: string; type: "image" | "video" } | null };
+type TextElement = { id: string; type: "text"; content: string; position: ElementPosition; fontSize: number; color: string };
+type ImageElement = { id: string; type: "image"; media: { url: string }; position: ElementPosition; size: ElementSize };
+type GraphicElement = { id: string; type: "graphic"; shape: string; color: string; size?: number };
+type StickerElement = { id: string; type: "sticker"; media?: { url: string }; position: ElementPosition; size?: number };
+
+type SceneElement = BackgroundElement | TextElement | ImageElement | GraphicElement | StickerElement;
+
+const ELEMENT_TYPES = {
+  BACKGROUND: "background",
+  TEXT: "text",
+  IMAGE: "image",
+  GRAPHIC: "graphic",
+  STICKER: "sticker",
+} as const;
+
+type Scene = {
+  id: string;
+  title: string;
+  duration: number;
+  color: string;
+  elements: SceneElement[];
+};
+
+function isBackgroundEl(el: SceneElement): el is BackgroundElement {
+  return el.type === "background";
+}
+function isTextEl(el: SceneElement): el is TextElement {
+  return el.type === "text";
+}
+function isImageEl(el: SceneElement): el is ImageElement {
+  return el.type === "image";
+}
+function isGraphicEl(el: SceneElement): el is GraphicElement {
+  return el.type === "graphic";
+}
+function isStickerEl(el: SceneElement): el is StickerElement {
+  return el.type === "sticker";
+}
+
+type SceneAsset =
+  | { startTime: number; duration: number; type: "image"; file: string; captionText?: string; captionStartTime?: number; captionEndTime?: number }
+  | { startTime: number; duration: number; type: "video"; file: string; captionText?: string; captionStartTime?: number; captionEndTime?: number }
+  | { startTime: number; duration: number; type: "color"; color: string; captionText?: string; captionStartTime?: number; captionEndTime?: number };
+
+const DEFAULT_SCENE_COLOR = "#1a1a1a";
+
+const SCENE_COLOR_HEX = ["#2563eb", "#9333ea", "#16a34a", "#ea580c", "#db2777"];
+const SCENE_COLORS = ["#3b82f6", "#a855f7", "#22c55e", "#f97316", "#ec4899"];
+
+const VIDEO_TEMPLATES = [
+  {
+    id: "tiktok-short",
+    name: "TikTok Short",
+    description: "Quick, punchy vertical videos",
+    durationRange: [5, 60] as [number, number],
+    sceneRange: [1, 10] as [number, number],
+    defaultDuration: 15,
+    defaultSceneCount: 3,
+    aspectRatio: "9:16",
+    icon: "📱",
+  },
+  {
+    id: "instagram-reel",
+    name: "Instagram Reel",
+    description: "Vertical reels with dynamic scenes",
+    durationRange: [15, 60] as [number, number],
+    sceneRange: [3, 10] as [number, number],
+    defaultDuration: 30,
+    defaultSceneCount: 5,
+    aspectRatio: "9:16",
+    icon: "📸",
+  },
+  {
+    id: "youtube-short",
+    name: "YouTube Short",
+    description: "Short vertical video with 6-8 scenes",
+    durationRange: [30, 90] as [number, number],
+    sceneRange: [5, 15] as [number, number],
+    defaultDuration: 60,
+    defaultSceneCount: 7,
+    aspectRatio: "9:16",
+    icon: "▶️",
+  },
+  {
+    id: "youtube-longform",
+    name: "YouTube Video",
+    description: "In-depth horizontal content",
+    durationRange: [60, 600] as [number, number],
+    sceneRange: [5, 30] as [number, number],
+    defaultDuration: 120,
+    defaultSceneCount: 10,
+    aspectRatio: "16:9",
+    icon: "🎬",
+  },
+  {
+    id: "custom",
+    name: "Custom",
+    description: "Build from scratch",
+    durationRange: [5, 600] as [number, number],
+    sceneRange: [1, 30] as [number, number],
+    defaultDuration: 30,
+    defaultSceneCount: 5,
+    aspectRatio: "9:16",
+    icon: "⚙️",
+  },
+] as const;
+
+type VideoTemplate = (typeof VIDEO_TEMPLATES)[number];
+
+function getActiveScene(
+  currentTime: number,
+  scenes: SceneBlock[]
+): { scene: SceneBlock; index: number } | null {
+  if (scenes.length === 0) return null;
+  if (currentTime < scenes[0].startTime) return null;
+  if (currentTime >= scenes[scenes.length - 1].endTime) return null;
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    if (currentTime >= scene.startTime && currentTime < scene.endTime) {
+      return { scene, index: i };
+    }
+  }
+  return null;
+}
+
+function getScenePreviewColor(index: number): string {
+  return SCENE_COLORS[index % SCENE_COLORS.length] ?? DEFAULT_SCENE_COLOR;
+}
+
+function getActiveCaption(
+  currentTime: number,
+  captions: CaptionBlock[]
+): CaptionBlock | null {
+  for (let i = 0; i < captions.length; i++) {
+    const c = captions[i];
+    if (currentTime >= c.startTime && currentTime <= c.endTime) {
+      return c;
+    }
+  }
+  return null;
+}
+
 type ScriptContent = {
+  /** Primary: full timeline voiceover URL (set by Video Creation Guide when user generates voiceover). */
   timelineVoiceoverUrl?: string;
   timelineVoiceoverDuration?: number;
+  /** Alternate names some scripts might use (fallbacks for compatibility). */
+  voiceoverUrl?: string;
+  timelineSceneVoiceoverUrls?: string[];
+  sceneVoiceovers?: string[];
   captions?: Array<{ id?: string; text?: string; startTime?: number; endTime?: number }>;
   scenes?: Array<{ scene?: string; prompt?: string; timing?: string; [key: string]: unknown }>;
   scenePrompts?: Array<{ scene?: string; prompt?: string; timing?: string; [key: string]: unknown }>;
   [key: string]: unknown;
 };
+
+/** Resolve voiceover URL from script content. Timeline expects content.timelineVoiceoverUrl; fallbacks for other stored shapes. */
+function getVoiceoverUrl(content: ScriptContent): string | null {
+  const u = content.timelineVoiceoverUrl;
+  if (typeof u === "string" && u.trim()) return u.trim();
+  const v = content.voiceoverUrl;
+  if (typeof v === "string" && v.trim()) return v.trim();
+  const arr = content.timelineSceneVoiceoverUrls ?? content.sceneVoiceovers;
+  if (Array.isArray(arr) && arr.length > 0 && typeof arr[0] === "string" && arr[0].trim()) return arr[0].trim();
+  return null;
+}
 
 const SCENE_COLOR_CLASSES = [
   "bg-blue-600/80",
@@ -44,6 +211,38 @@ const SCENE_COLOR_CLASSES = [
   "bg-orange-600/80",
   "bg-pink-600/80",
 ];
+
+const TEMPLATES = {
+  "short-form-tiktok": {
+    name: "TikTok Short (15s)",
+    duration: 15,
+    sceneCount: 3,
+    defaultSceneDuration: 5,
+    aspectRatio: "9:16",
+    durationRange: [5, 60] as [number, number],
+    sceneRange: [1, 10] as [number, number],
+  },
+  "short-form-instagram": {
+    name: "Instagram Reel (30s)",
+    duration: 30,
+    sceneCount: 5,
+    defaultSceneDuration: 6,
+    aspectRatio: "9:16",
+    durationRange: [15, 60] as [number, number],
+    sceneRange: [2, 10] as [number, number],
+  },
+  "longform-youtube": {
+    name: "YouTube Video (60s+)",
+    duration: 90,
+    sceneCount: 8,
+    defaultSceneDuration: 11.25,
+    aspectRatio: "16:9",
+    durationRange: [30, 120] as [number, number],
+    sceneRange: [3, 15] as [number, number],
+  },
+} as const;
+
+const DEFAULT_NEW_SCENE_DURATION = 5;
 
 function truncateSceneText(s: string, maxLen: number): string {
   const t = typeof s === "string" ? s.trim() : "";
@@ -75,6 +274,332 @@ function buildSceneBlocks(fullTexts: string[], duration: number): SceneBlock[] {
   }));
 }
 
+function getSceneBackgroundMedia(scene: Scene): { url: string; type: "image" | "video" } | null {
+  const first = scene.elements[0];
+  return first && isBackgroundEl(first) ? first.media : null;
+}
+
+function buildSceneBlocksFromScenes(sceneList: Scene[]): SceneBlock[] {
+  if (sceneList.length === 0) return [];
+  let startTime = 0;
+  return sceneList.map((scene) => {
+    const endTime = startTime + scene.duration;
+    const block: SceneBlock = {
+      id: scene.id,
+      text: truncateSceneText(scene.title, 25),
+      startTime,
+      endTime,
+      colorClass: SCENE_COLOR_CLASSES[sceneList.indexOf(scene) % SCENE_COLOR_CLASSES.length],
+    };
+    startTime = endTime;
+    return block;
+  });
+}
+
+function createScene(id: string, title: string, duration: number, color: string): Scene {
+  return {
+    id,
+    title,
+    duration,
+    color,
+    elements: [{ id: `${id}-bg`, type: ELEMENT_TYPES.BACKGROUND, media: null }],
+  };
+}
+
+function createSceneWithBackground(
+  id: string,
+  title: string,
+  duration: number,
+  color: string,
+  imageUrl: string | null
+): Scene {
+  return {
+    id,
+    title,
+    duration,
+    color,
+    elements: [
+      {
+        id: `${id}-bg`,
+        type: ELEMENT_TYPES.BACKGROUND,
+        media: imageUrl ? { url: imageUrl, type: "image" as const } : null,
+      },
+    ],
+  };
+}
+
+function collectSceneAssets(
+  sceneBlocks: SceneBlock[],
+  sceneList: Scene[],
+  captions: CaptionBlock[]
+): SceneAsset[] {
+  return sceneBlocks.map((scene, i) => {
+    const startTime = scene.startTime;
+    const endTime = scene.endTime;
+    const duration = Math.max(0, endTime - startTime);
+    const media = sceneList[i] ? getSceneBackgroundMedia(sceneList[i]) : null;
+
+    const overlappingCaption = captions.find(
+      (c) => c.startTime < endTime && c.endTime > startTime
+    );
+    const captionStartTime = overlappingCaption
+      ? Math.max(overlappingCaption.startTime, startTime)
+      : undefined;
+    const captionEndTime = overlappingCaption
+      ? Math.min(overlappingCaption.endTime, endTime)
+      : undefined;
+    const captionText = overlappingCaption?.text;
+
+    if (media && media.url) {
+      return {
+        startTime,
+        duration,
+        type: media.type,
+        file: media.url,
+        ...(captionText !== undefined && { captionText, captionStartTime, captionEndTime }),
+      };
+    }
+    return {
+      startTime,
+      duration,
+      type: "color",
+      color: DEFAULT_SCENE_COLOR,
+      ...(captionText !== undefined && { captionText, captionStartTime, captionEndTime }),
+    };
+  });
+}
+
+function validateSceneAssets(assets: SceneAsset[]): { valid: boolean; error?: string } {
+  if (assets.length === 0) {
+    return { valid: false, error: "No scenes to export" };
+  }
+  for (let i = 0; i < assets.length; i++) {
+    const a = assets[i];
+    if (a.duration <= 0) {
+      return { valid: false, error: `Scene ${i + 1} has invalid duration` };
+    }
+    if (a.type === "image" || a.type === "video") {
+      if (!a.file || typeof a.file !== "string") {
+        return { valid: false, error: `Scene ${i + 1} is missing media file` };
+      }
+    }
+    if (a.type === "color" && !a.color) {
+      return { valid: false, error: `Scene ${i + 1} color fallback is missing` };
+    }
+  }
+  return { valid: true };
+}
+
+const EXPORT_WIDTH = 1080;
+const EXPORT_HEIGHT = 1920;
+
+function hexToFfmpeg(hex: string): string {
+  const s = hex.replace(/^#/, "");
+  if (s.length === 6) return `0x${s}`;
+  if (s.length === 8) return `0x${s.slice(6)}${s.slice(0, 6)}`;
+  return "0xffffff";
+}
+
+function escapeDrawtext(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/'/g, "'\\''").replace(/:/g, "\\:");
+}
+
+type ExportCaptionStyle = {
+  position: "bottom" | "middle" | "top";
+  fontSize: "small" | "medium" | "large";
+  textColor: string;
+  animation: "none" | "fadeIn" | "slideUp" | "pop";
+};
+
+function buildExportFilterComplex(
+  assets: SceneAsset[],
+  hasMusic: boolean,
+  captionStyle: ExportCaptionStyle
+): { filter: string; videoLabel: string } {
+  const firstSceneInputIndex = hasMusic ? 2 : 1;
+  let fileIndex = 0;
+  const segmentLabels: string[] = [];
+  const parts: string[] = [];
+
+  for (let i = 0; i < assets.length; i++) {
+    const a = assets[i];
+    const dur = a.duration;
+    if (a.type === "color") {
+      const hex = hexToFfmpeg(a.color);
+      parts.push(
+        `color=c=${hex}:s=${EXPORT_WIDTH}x${EXPORT_HEIGHT}:d=${dur},format=yuv420p[v${i}]`
+      );
+    } else {
+      const idx = firstSceneInputIndex + fileIndex;
+      fileIndex += 1;
+      parts.push(
+        `[${idx}:v]scale=${EXPORT_WIDTH}:${EXPORT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${EXPORT_WIDTH}:${EXPORT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,setsar=1,trim=duration=${dur},setpts=PTS-STARTPTS,format=yuv420p[v${i}]`
+      );
+    }
+    segmentLabels.push(`[v${i}]`);
+  }
+
+  const concatLabel = segmentLabels.join("");
+  parts.push(`${concatLabel}concat=n=${assets.length}:v=1:a=0[vout]`);
+
+  const fontSizeMap = { small: 28, medium: 36, large: 48 };
+  const yMap = {
+    bottom: "h-th-80",
+    middle: "(h-th)/2",
+    top: "80",
+  };
+  const fs = fontSizeMap[captionStyle.fontSize];
+  const baseY = yMap[captionStyle.position];
+  const fontcolor = hexToFfmpeg(captionStyle.textColor);
+  const anim = captionStyle.animation;
+
+  let videoLabel = "vout";
+  const captionParts: string[] = [];
+  for (let i = 0; i < assets.length; i++) {
+    const a = assets[i];
+    if (a.captionText == null || a.captionText.trim() === "" || a.captionStartTime == null || a.captionEndTime == null) continue;
+    const start = a.captionStartTime;
+    const end = a.captionEndTime;
+    const text = escapeDrawtext(a.captionText.trim());
+    const nextLabel = `vc${i}`;
+    const enable = `between(t\\,${start}\\,${end})`;
+    let yExpr = baseY;
+    let alphaExpr = "1";
+    if (anim === "fadeIn" || anim === "pop") {
+      const fadeDur = 0.4;
+      alphaExpr = `if(lt(t\\,${start + fadeDur})\\,(t-${start})/${fadeDur}\\,1)`;
+    }
+    if (anim === "slideUp" || anim === "pop") {
+      const slideDur = 0.35;
+      const offset = 60;
+      if (baseY === "h-th-80") yExpr = `if(lt(t\\,${start + slideDur})\\,h-th-80+${offset}*(1-(t-${start})/${slideDur})\\,h-th-80)`;
+      else if (baseY === "(h-th)/2") yExpr = `if(lt(t\\,${start + slideDur})\\,(h-th)/2+${offset}*(1-(t-${start})/${slideDur})\\,(h-th)/2)`;
+      else yExpr = `if(lt(t\\,${start + slideDur})\\,80+${offset}*(1-(t-${start})/${slideDur})\\,80)`;
+    }
+    const alphaOpt = alphaExpr !== "1" ? `:alpha='${alphaExpr}'` : "";
+    captionParts.push(
+      `[${videoLabel}]drawtext=text='${text}':fontsize=${fs}:fontcolor=${fontcolor}:x=(w-tw)/2:y=${yExpr}:enable='${enable}'${alphaOpt}[${nextLabel}]`
+    );
+    videoLabel = nextLabel;
+  }
+
+  if (captionParts.length > 0) {
+    parts.push(captionParts.join(";"));
+  }
+
+  return { filter: parts.join(";"), videoLabel };
+}
+
+async function exportVideo(params: {
+  ffmpeg: FFmpeg;
+  fetchFile: (url: string) => Promise<Uint8Array>;
+  voiceoverUrl: string;
+  musicUrl: string | null;
+  musicVolume: number;
+  assets: SceneAsset[];
+  captionStyle: ExportCaptionStyle;
+  totalDuration: number;
+  onProgress: (p: number) => void;
+}): Promise<Uint8Array> {
+  const { ffmpeg, fetchFile, voiceoverUrl, musicUrl, musicVolume, assets, captionStyle, totalDuration, onProgress } = params;
+
+  const progressHandler = ({ message }: { message: string }) => {
+    const m = message.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
+    if (m) {
+      const h = parseInt(m[1], 10);
+      const min = parseInt(m[2], 10);
+      const sec = parseFloat(`${m[3]}.${m[4]}`);
+      const t = h * 3600 + min * 60 + sec;
+      const p = totalDuration > 0 ? Math.min(99, (t / totalDuration) * 100) : 0;
+      onProgress(p);
+    }
+  };
+  ffmpeg.on("log", progressHandler);
+
+  try {
+    console.log("[exportVideo] Starting export...");
+
+    console.log("[exportVideo] Writing voiceover to ffmpeg FS...");
+    const voiceoverData = await fetchFile(voiceoverUrl);
+    await ffmpeg.writeFile("voiceover.mp3", voiceoverData);
+    console.log("[exportVideo] Voiceover written, size:", voiceoverData.byteLength, "bytes");
+
+    if (musicUrl) {
+      console.log("[exportVideo] Writing music to ffmpeg FS...");
+      const musicData = await fetchFile(musicUrl);
+      await ffmpeg.writeFile("music.mp3", musicData);
+      console.log("[exportVideo] Music written, size:", musicData.byteLength, "bytes");
+    }
+
+    console.log("[exportVideo] Building scene inputs...");
+    let fileIndex = 0;
+    for (let i = 0; i < assets.length; i++) {
+      const a = assets[i];
+      console.log("[exportVideo] Scene", i, ": type=" + a.type + ", duration=" + a.duration + (a.type === "color" ? ", color=" + (a as { color: string }).color : ""));
+      if (a.type === "image") {
+        const name = `scene_${fileIndex}.png`;
+        await ffmpeg.writeFile(name, await fetchFile(a.file));
+        fileIndex += 1;
+      } else if (a.type === "video") {
+        const name = `scene_${fileIndex}.mp4`;
+        await ffmpeg.writeFile(name, await fetchFile(a.file));
+        fileIndex += 1;
+      }
+    }
+    console.log("[exportVideo] Scene files written:", fileIndex, "file(s). Color-only scenes use filter, no file.");
+
+    const hasMusic = !!musicUrl;
+    console.log("[exportVideo] Building filter_complex (concat + captions, caption animation:", captionStyle.animation + ")...");
+    const { filter: videoFilter, videoLabel } = buildExportFilterComplex(assets, hasMusic, captionStyle);
+    const musicGain = Math.max(0, Math.min(1, musicVolume / 100));
+    const fullFilter = hasMusic
+      ? `${videoFilter};[0:a]volume=1[va];[1:a]volume=${musicGain}[ma];[va][ma]amix=inputs=2:duration=first[aout]`
+      : videoFilter;
+    console.log("[exportVideo] Audio: voiceover +", hasMusic ? "music at " + Math.round(musicGain * 100) + "%" : "no music");
+
+    const args: string[] = ["-y", "-i", "voiceover.mp3"];
+    if (hasMusic) args.push("-i", "music.mp3");
+    fileIndex = 0;
+    for (let i = 0; i < assets.length; i++) {
+      const a = assets[i];
+      if (a.type === "image") {
+        args.push("-loop", "1", "-i", `scene_${fileIndex}.png`);
+        fileIndex += 1;
+      } else if (a.type === "video") {
+        args.push("-i", `scene_${fileIndex}.mp4`);
+        fileIndex += 1;
+      }
+    }
+    args.push("-filter_complex", fullFilter, "-map", `[${videoLabel}]`);
+    if (hasMusic) args.push("-map", "[aout]");
+    else args.push("-map", "0:a");
+    args.push(
+      "-c:v", "libx264",
+      "-c:a", "aac",
+      "-shortest",
+      "-s", "540x960",
+      "-r", "15",
+      "-preset", "ultrafast",
+      "-crf", "28",
+      "output.mp4"
+    );
+    // TODO: remove -s/-r/-preset/-crf for final exports (full res, 30fps, default preset/crf)
+
+    console.log("[exportVideo] Executing ffmpeg command:", JSON.stringify(args));
+    await ffmpeg.exec(args);
+    console.log("[exportVideo] Export complete, reading output...");
+    onProgress(100);
+    const data = await ffmpeg.readFile("output.mp4") as Uint8Array;
+    console.log("[exportVideo] Output file size:", data.byteLength, "bytes");
+    return data;
+  } catch (error) {
+    console.error("[exportVideo] Export error:", error);
+    throw error;
+  } finally {
+    ffmpeg.off("log", progressHandler);
+  }
+}
+
 function SortableSceneBlock({
   scene,
   index,
@@ -95,7 +620,7 @@ function SortableSceneBlock({
     transform: CSS.Transform.toString(transform),
     transition,
     width: widthPx,
-    minWidth: Math.max(4, widthPx),
+    minWidth: Math.max(SCENE_BLOCK_MIN_WIDTH, widthPx),
   };
   return (
     <div
@@ -114,14 +639,15 @@ function SortableSceneBlock({
           onSelect();
         }
       }}
-      className={`flex-shrink-0 flex-grow-0 rounded px-1 py-1 overflow-hidden text-xs text-foreground cursor-grab active:cursor-grabbing select-none flex items-center ${scene.colorClass} ${
+      className={`flex-shrink-0 flex-grow-0 rounded px-2 py-1.5 overflow-hidden text-xs text-white cursor-grab active:cursor-grabbing select-none flex flex-col items-center justify-center gap-0.5 min-h-[2rem] ${scene.colorClass} ${
         isSelected ? "ring-2 ring-white ring-offset-1 ring-offset-card" : ""
       } ${isDragging ? "opacity-90 z-50 shadow-lg cursor-grabbing" : ""}`}
       title={scene.text}
       {...attributes}
       {...listeners}
     >
-      <span className="truncate block">{scene.text}</span>
+      <span className="font-semibold truncate w-full text-center">Scene {index + 1}</span>
+      <span className="truncate w-full text-center text-white/90 text-[10px] leading-tight">{scene.text}</span>
     </div>
   );
 }
@@ -160,37 +686,143 @@ function getCaptions(content: ScriptContent): CaptionBlock[] {
 
 export default function VideoTimelinePage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialScriptId = searchParams.get("scriptId") ?? searchParams.get("libraryScriptId") ?? undefined;
 
   const audioRef = useRef<HTMLAudioElement>(null);
+  const musicRef = useRef<HTMLAudioElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const musicInputRef = useRef<HTMLInputElement>(null);
+  const [isBrowser, setIsBrowser] = useState(false);
+  const ffmpegRef = useRef<FFmpeg | null>(null);
+  const fetchFileRef = useRef<((url: string) => Promise<Uint8Array>) | null>(null);
+  const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [scriptId, setScriptId] = useState<string | undefined>(initialScriptId);
   const [scriptName, setScriptName] = useState("");
   const [scripts, setScripts] = useState<LibraryScript[]>([]);
+  const [savedScripts, setSavedScripts] = useState<{ id: string; title: string }[]>([]);
   const [voiceoverUrl, setVoiceoverUrl] = useState<string | null>(null);
-  const [duration, setDuration] = useState(0);
+  const [voiceoverFileName, setVoiceoverFileName] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [captions, setCaptions] = useState<CaptionBlock[]>([]);
-  const [sceneFullTexts, setSceneFullTexts] = useState<string[]>([]);
-  const [sceneMedia, setSceneMedia] = useState<({ url: string; type: "image" | "video" } | null)[]>([]);
+  const [scenes, setScenes] = useState<Scene[]>([]);
+  const [voiceoverDuration, setVoiceoverDuration] = useState(0);
   const [selectedSceneIndex, setSelectedSceneIndex] = useState<number | null>(null);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   const sceneMediaInputRef = useRef<HTMLInputElement>(null);
+  const voiceoverInputRef = useRef<HTMLInputElement>(null);
 
   const [captionAnimation, setCaptionAnimation] = useState<"none" | "fadeIn" | "slideUp" | "pop">("fadeIn");
   const [captionPosition, setCaptionPosition] = useState<"bottom" | "middle" | "top">("bottom");
   const [captionFontSize, setCaptionFontSize] = useState<"small" | "medium" | "large">("medium");
   const [captionTextColor, setCaptionTextColor] = useState("#ffffff");
-  const scenes = useMemo(() => buildSceneBlocks(sceneFullTexts, duration), [sceneFullTexts, duration]);
+
+  const [musicUrl, setMusicUrl] = useState<string | null>(null);
+  const [musicVolume, setMusicVolume] = useState(70);
+
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [activeScene, setActiveScene] = useState<{ scene: SceneBlock; index: number } | null>(null);
+  const [activeCaption, setActiveCaption] = useState<CaptionBlock | null>(null);
+  const [selectedCaptionId, setSelectedCaptionId] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<VideoTemplate | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<string>("9:16");
+  const [showCustomize, setShowCustomize] = useState(false);
+  const [pendingTemplate, setPendingTemplate] = useState<VideoTemplate | null>(null);
+  const [customDuration, setCustomDuration] = useState(30);
+  const [customSceneCount, setCustomSceneCount] = useState(5);
+  /** When set, show duration/scene modal for "Start from a template" grid (TEMPLATES). */
+  const [pendingTemplatesKey, setPendingTemplatesKey] = useState<keyof typeof TEMPLATES | null>(null);
+
+  /** Smart linking: prefill from planning pages (thumbnail, title, description, hashtags, scheduled date). */
+  const [prefillThumbnailUrl, setPrefillThumbnailUrl] = useState<string | null>(null);
+  const [prefillDescription, setPrefillDescription] = useState<string | null>(null);
+  const [prefillHashtags, setPrefillHashtags] = useState<string | null>(null);
+  const [prefillScheduledAt, setPrefillScheduledAt] = useState<string | null>(null);
+  /** Local value for scene duration input so user can type e.g. 3.5, 7, 10; committed on blur. */
+  const [editingDurationInput, setEditingDurationInput] = useState<string>("");
+
+  const duration = useMemo(() => scenes.reduce((acc, s) => acc + s.duration, 0), [scenes]);
+  const sceneBlocks = useMemo(() => buildSceneBlocksFromScenes(scenes), [scenes]);
+  const selectedCaption = useMemo(
+    () => captions.find((c) => c.id === selectedCaptionId) ?? null,
+    [captions, selectedCaptionId]
+  );
+
   const sidebar = useSidebar();
+  const sceneVideoRef = useRef<HTMLVideoElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const imageUploadTargetRef = useRef<{ sceneIndex: number; elementIndex: number } | null>(null);
+  const sceneElementFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setIsBrowser(typeof window !== "undefined");
+  }, []);
+
+  const loadFFmpegLibrary = useCallback(async () => {
+    const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+    const { fetchFile } = await import("@ffmpeg/util");
+    ffmpegRef.current = new FFmpeg();
+    fetchFileRef.current = fetchFile;
+  }, []);
+
+  const loadFFmpeg = useCallback(async () => {
+    const ffmpeg = ffmpegRef.current;
+    if (!ffmpeg) return;
+    ffmpeg.on("log", ({ message }) => {
+      console.log("[ffmpeg]", message);
+    });
+    await ffmpeg.load();
+    setFfmpegLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isBrowser) return;
+    (async () => {
+      await loadFFmpegLibrary();
+      await loadFFmpeg();
+    })();
+  }, [isBrowser, loadFFmpegLibrary, loadFFmpeg]);
+
+  // Keep music volume in sync
+  useEffect(() => {
+    const el = musicRef.current;
+    if (el) el.volume = Math.max(0, Math.min(1, musicVolume / 100));
+  }, [musicVolume, musicUrl]);
+
+  // Update active scene when playhead or scene blocks change
+  useEffect(() => {
+    setActiveScene(getActiveScene(currentTime, sceneBlocks));
+  }, [currentTime, sceneBlocks]);
+
+  // Update active caption when playhead or captions change
+  useEffect(() => {
+    setActiveCaption(getActiveCaption(currentTime, captions));
+  }, [currentTime, captions]);
+
+
+  // Sync scene video position and play state with timeline
+  useEffect(() => {
+    const video = sceneVideoRef.current;
+    if (!video || !activeScene) return;
+    const scene = scenes[activeScene.index];
+    const media = scene ? getSceneBackgroundMedia(scene) : null;
+    if (media?.type !== "video") return;
+    const sceneStart = activeScene.scene.startTime;
+    const sceneDuration = activeScene.scene.endTime - sceneStart;
+    const localTime = Math.max(0, Math.min(currentTime - sceneStart, sceneDuration));
+    if (Math.abs(video.currentTime - localTime) > 0.3) video.currentTime = localTime;
+    if (isPlaying && video.paused) video.play().catch(() => {});
+    if (!isPlaying && !video.paused) video.pause();
+  }, [currentTime, activeScene, scenes, isPlaying]);
 
   // Clear selection if it becomes invalid (e.g. after script change)
   useEffect(() => {
-    if (selectedSceneIndex !== null && (selectedSceneIndex < 0 || selectedSceneIndex >= sceneFullTexts.length)) {
+    if (selectedSceneIndex !== null && (selectedSceneIndex < 0 || selectedSceneIndex >= scenes.length)) {
       setSelectedSceneIndex(null);
     }
-  }, [selectedSceneIndex, sceneFullTexts.length]);
+  }, [selectedSceneIndex, scenes.length]);
 
   // Prevent outer browser scrollbar on this page only; restore on unmount
   useEffect(() => {
@@ -211,15 +843,22 @@ export default function VideoTimelinePage() {
     };
   }, []);
 
-  // List scripts for dropdown
+  // List scripts for dropdown (library + saved from Coach)
   useEffect(() => {
     let cancelled = false;
     fetch("/api/library?type=scripts")
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : []))
       .then((data: LibraryResponse) => {
         if (cancelled) return;
         const list = (Array.isArray(data) ? data : []).filter((i) => i.type === "script") as LibraryScript[];
         setScripts(list);
+      })
+      .catch(() => {});
+    fetch("/api/saved-scripts")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: { id: string; title: string }[]) => {
+        if (cancelled) return;
+        setSavedScripts(Array.isArray(data) ? data : []);
       })
       .catch(() => {});
     return () => {
@@ -227,51 +866,101 @@ export default function VideoTimelinePage() {
     };
   }, []);
 
-  // When scriptId is set (incl. initial), load script and set voiceover, captions, and scenes
+  // When scriptId is set, load script: try saved_scripts first, then library/scripts.
   useEffect(() => {
     if (!scriptId) {
       setScriptName("");
       setVoiceoverUrl(null);
-      setDuration(0);
+      setVoiceoverFileName(null);
+      setVoiceoverDuration(0);
       setCaptions([]);
-      setSceneFullTexts([]);
-      setSceneMedia([]);
+      setScenes([]);
       setSelectedSceneIndex(null);
       return;
     }
     let cancelled = false;
-    fetch(`/api/library/scripts/${scriptId}`)
-      .then((r) => {
-        if (!r.ok) throw new Error("Script not found");
-        return r.json();
-      })
-      .then((row: { title?: string; content?: unknown }) => {
-        if (cancelled) return;
-        setScriptName(typeof row.title === "string" ? row.title : "");
-        const content = parseContent(row.content);
-        const url =
-          typeof content.timelineVoiceoverUrl === "string" && content.timelineVoiceoverUrl.trim()
-            ? content.timelineVoiceoverUrl.trim()
-            : null;
-        setVoiceoverUrl(url);
-        const dur = typeof content.timelineVoiceoverDuration === "number" ? content.timelineVoiceoverDuration : 0;
-        setDuration(dur);
-        setCaptions(getCaptions(content));
-        const fullTexts = getSceneFullTexts(content);
-        setSceneFullTexts(fullTexts);
-        setSceneMedia(fullTexts.map(() => null));
-        setSelectedSceneIndex(null);
-      })
-      .catch(() => {
+
+    const loadSavedScript = () =>
+      fetch(`/api/saved-scripts/${scriptId}`)
+        .then((r) => {
+          if (!r.ok) throw new Error("Not found");
+          return r.json();
+        })
+        .then((row: { title?: string; scenes_json?: Array<{ scene_number: number; duration: number; script_text: string; image_url?: string | null; caption?: string | null }>; voiceover_url?: string | null }) => {
+          if (cancelled) return;
+          setScriptName(typeof row.title === "string" ? row.title : "");
+          const scenesJson = Array.isArray(row.scenes_json) ? row.scenes_json : [];
+          const voiceUrl = typeof row.voiceover_url === "string" && row.voiceover_url.trim() ? row.voiceover_url.trim() : null;
+          setVoiceoverUrl(voiceUrl);
+          setVoiceoverFileName(null);
+          let totalDur = 0;
+          const sceneList = scenesJson.map((s, i) => {
+            const dur = typeof s.duration === "number" && s.duration > 0 ? s.duration : 5;
+            totalDur += dur;
+            const title = typeof s.script_text === "string" ? s.script_text.slice(0, 80) : `Scene ${i + 1}`;
+            const imageUrl = typeof s.image_url === "string" && s.image_url.trim() ? s.image_url.trim() : null;
+            return createSceneWithBackground(
+              `scene_${i + 1}`,
+              title,
+              dur,
+              SCENE_COLORS[i % SCENE_COLORS.length],
+              imageUrl
+            );
+          });
+          setVoiceoverDuration(totalDur);
+          setScenes(sceneList);
+          let start = 0;
+          const caps: CaptionBlock[] = scenesJson.map((s, i) => {
+            const dur = typeof s.duration === "number" && s.duration > 0 ? s.duration : 5;
+            const text = (typeof s.caption === "string" ? s.caption : s.script_text) ?? "";
+            const block: CaptionBlock = { id: `cap-${i}`, text: text.slice(0, 200), startTime: start, endTime: start + dur };
+            start += dur;
+            return block;
+          });
+          setCaptions(caps);
+          setSelectedSceneIndex(null);
+        });
+
+    const loadLibraryScript = () =>
+      fetch(`/api/library/scripts/${scriptId}`)
+        .then((r) => {
+          if (!r.ok) throw new Error(`Script not found (${r.status})`);
+          return r.json();
+        })
+        .then((row: { title?: string; content?: unknown }) => {
+          if (cancelled) return;
+          setScriptName(typeof row.title === "string" ? row.title : "");
+          const content = parseContent(row.content);
+          const url = getVoiceoverUrl(content);
+          setVoiceoverUrl(url);
+          setVoiceoverFileName(null);
+          const dur = typeof content.timelineVoiceoverDuration === "number" ? content.timelineVoiceoverDuration : 0;
+          setVoiceoverDuration(dur);
+          setCaptions(getCaptions(content));
+          const fullTexts = getSceneFullTexts(content);
+          const perSceneDuration = fullTexts.length > 0 && dur > 0 ? dur / fullTexts.length : 5;
+          setScenes(
+            fullTexts.map((title, i) =>
+              createScene(`scene_${i + 1}`, title, perSceneDuration, SCENE_COLORS[i % SCENE_COLORS.length])
+            )
+          );
+          setSelectedSceneIndex(null);
+        });
+
+    loadSavedScript()
+      .catch(() => loadLibraryScript())
+      .catch((err) => {
+        if (process.env.NODE_ENV === "development") console.error("[video-timeline] Script load error:", scriptId, err);
         if (!cancelled) {
           setScriptName("");
           setVoiceoverUrl(null);
-          setDuration(0);
+          setVoiceoverFileName(null);
+          setVoiceoverDuration(0);
           setCaptions([]);
-          setSceneFullTexts([]);
-          setSceneMedia([]);
+          setScenes([]);
         }
       });
+
     return () => {
       cancelled = true;
     };
@@ -283,47 +972,161 @@ export default function VideoTimelinePage() {
     if (id) setScriptId(id);
   }, [searchParams]);
 
+  // Smart linking: apply prefill from planning pages (Script Generator, Thumbnails, Copy Writer, SEO, Calendar, Campaign Mode)
+  useEffect(() => {
+    const prefill = getVideoPrefill();
+    if (!prefill) return;
+    if (prefill.scriptId) setScriptId(prefill.scriptId);
+    if (prefill.title?.trim()) setScriptName(prefill.title.trim());
+    if (prefill.thumbnailUrl?.trim()) setPrefillThumbnailUrl(prefill.thumbnailUrl.trim());
+    if (prefill.description !== undefined) setPrefillDescription(prefill.description || null);
+    if (prefill.hashtags !== undefined) setPrefillHashtags(prefill.hashtags || null);
+    if (prefill.scheduledAt !== undefined) setPrefillScheduledAt(prefill.scheduledAt || null);
+    if (prefill.source === "campaign-mode" && prefill.timelineScenes?.length) {
+      const campaignScenes: Scene[] = prefill.timelineScenes.map((s, i) =>
+        createScene(
+          `campaign-scene-${i}`,
+          (s.visual ?? `Scene ${(s.scene_number ?? i) + 1}`).slice(0, 80),
+          typeof s.duration_seconds === "number" ? s.duration_seconds : 5,
+          SCENE_COLOR_HEX[i % SCENE_COLOR_HEX.length]
+        )
+      );
+      setScenes(campaignScenes);
+      setSelectedTemplate(VIDEO_TEMPLATES[4]);
+    }
+    if (prefill.voiceoverText?.trim()) {
+      try {
+        navigator.clipboard.writeText(prefill.voiceoverText.trim());
+      } catch {
+        // ignore
+      }
+    }
+    clearVideoPrefill();
+  }, []);
+
+  // When projectId is in URL, show timeline (not template picker) while loading
+  const projectIdFromUrl = searchParams.get("projectId");
+  useEffect(() => {
+    if (projectIdFromUrl && !selectedTemplate) setSelectedTemplate(VIDEO_TEMPLATES[4]);
+  }, [projectIdFromUrl, selectedTemplate]);
+
+  // Load saved project and restore full timeline state (template, scenes, captions, media, style, etc.)
+  const loadProject = useCallback(async (projectId: string) => {
+    try {
+      const res = await fetch(`/api/video-timeline/videos/${encodeURIComponent(projectId)}`);
+      if (!res.ok) throw new Error("Failed to load project");
+      const data = (await res.json()) as {
+        metadata?: Record<string, unknown>;
+        title?: string;
+        scriptId?: string | null;
+      };
+      const meta = data.metadata ?? {};
+      // Scenes
+      const scenesList = Array.isArray(meta.scenes) ? meta.scenes : [];
+      if (scenesList.length > 0) setScenes(scenesList as Scene[]);
+      // Captions
+      const caps = Array.isArray(meta.captions) ? meta.captions : [];
+      if (caps.length > 0) {
+        setCaptions(
+          caps.map((c: { id?: string; text?: string; startTime?: number; endTime?: number }, i: number) => ({
+            id: typeof c.id === "string" ? c.id : `cap-${i}`,
+            text: typeof c.text === "string" ? c.text : "",
+            startTime: typeof c.startTime === "number" ? c.startTime : 0,
+            endTime: typeof c.endTime === "number" ? c.endTime : 0,
+          }))
+        );
+      }
+      if (typeof meta.voiceoverUrl === "string") setVoiceoverUrl(meta.voiceoverUrl);
+      if (typeof meta.musicUrl === "string") setMusicUrl(meta.musicUrl);
+      if (typeof meta.musicVolume === "number") setMusicVolume(meta.musicVolume);
+      if (typeof meta.totalDuration === "number") setVoiceoverDuration(meta.totalDuration);
+      const style = meta.captionStyle && typeof meta.captionStyle === "object" ? (meta.captionStyle as Record<string, unknown>) : {};
+      if (style.position === "top" || style.position === "middle" || style.position === "bottom") setCaptionPosition(style.position as "top" | "middle" | "bottom");
+      if (style.fontSize === "small" || style.fontSize === "medium" || style.fontSize === "large") setCaptionFontSize(style.fontSize as "small" | "medium" | "large");
+      if (typeof style.textColor === "string") setCaptionTextColor(style.textColor);
+      if (style.animation === "none" || style.animation === "fadeIn" || style.animation === "slideUp" || style.animation === "pop") setCaptionAnimation(style.animation as "none" | "fadeIn" | "slideUp" | "pop");
+      if (typeof meta.aspectRatio === "string") setAspectRatio(meta.aspectRatio);
+      const t = meta.template;
+      if (t != null && typeof t === "object" && "id" in t) {
+        const full = VIDEO_TEMPLATES.find((tm) => tm.id === (t as { id: string }).id);
+        setSelectedTemplate(full ?? (t as VideoTemplate));
+      }
+      if (data.scriptId != null) setScriptId(data.scriptId ?? undefined);
+      if (typeof data.title === "string" && data.title.trim()) setScriptName(data.title.trim());
+      alert("✅ Project loaded!");
+    } catch (err) {
+      console.error("Load project failed:", err);
+      alert(err instanceof Error ? err.message : "Failed to load project");
+    }
+  }, []);
+
+  // On timeline page mount (and when projectId in URL changes), load the saved project
+  useEffect(() => {
+    if (projectIdFromUrl) loadProject(projectIdFromUrl);
+  }, [projectIdFromUrl, loadProject]);
+
   // Audio events: time update, duration, play/pause
   const onTimeUpdate = useCallback(() => {
     const el = audioRef.current;
-    if (el && !isDraggingPlayhead) setCurrentTime(el.currentTime);
-  }, [isDraggingPlayhead]);
+    if (!el || isDraggingPlayhead) return;
+    const newTime = el.currentTime;
+    setCurrentTime(newTime);
+    const caption = getActiveCaption(newTime, captions);
+    setActiveCaption(caption);
+  }, [isDraggingPlayhead, captions]);
 
   const onDurationChange = useCallback(() => {
     const el = audioRef.current;
-    if (el && Number.isFinite(el.duration)) setDuration(el.duration);
+    if (el && Number.isFinite(el.duration)) setVoiceoverDuration(el.duration);
   }, []);
 
   const onPlay = useCallback(() => setIsPlaying(true), []);
   const onPause = useCallback(() => setIsPlaying(false), []);
 
   const play = useCallback(() => {
-    audioRef.current?.play();
+    const voice = audioRef.current;
+    const music = musicRef.current;
+    if (voice && music) music.currentTime = voice.currentTime;
+    voice?.play();
+    music?.play();
+    sceneVideoRef.current?.play();
   }, []);
 
   const pause = useCallback(() => {
     audioRef.current?.pause();
+    musicRef.current?.pause();
+    sceneVideoRef.current?.pause();
   }, []);
 
   const seekTo = useCallback((t: number) => {
     const el = audioRef.current;
-    if (!el) return;
-    const clamped = Math.max(0, Math.min(t, el.duration || duration));
-    el.currentTime = clamped;
+    const maxT = el?.duration ? el.duration : voiceoverDuration > 0 ? voiceoverDuration : duration;
+    const clamped = Math.max(0, Math.min(t, maxT));
+    if (el) {
+      el.currentTime = clamped;
+    }
     setCurrentTime(clamped);
-  }, [duration]);
+    const caption = getActiveCaption(clamped, captions);
+    setActiveCaption(caption);
+    const music = musicRef.current;
+    if (music) music.currentTime = clamped;
+  }, [duration, voiceoverDuration, captions]);
 
-  // Timeline width and time <-> pixel
-  const totalWidth = Math.max(0, Math.ceil(duration) * PIXELS_PER_SECOND);
-  const timeToX = (t: number) => (t / (duration || 1)) * totalWidth;
-  const xToTime = (x: number) => (x / totalWidth) * (duration || 0);
+  // Timeline width based on voiceover duration (200px per second, min 2000px); fallback to scene total when no voiceover
+  const totalSceneDuration = duration;
+  const effectiveDuration = voiceoverDuration > 0 ? voiceoverDuration : totalSceneDuration;
+  const timelineWidth =
+    effectiveDuration > 0 ? Math.max(2000, effectiveDuration * PIXELS_PER_SECOND) : 2000;
+  const timeToX = (t: number) => (effectiveDuration > 0 ? (t / effectiveDuration) * timelineWidth : 0);
+  const xToTime = (x: number) => (timelineWidth > 0 ? (x / timelineWidth) * effectiveDuration : 0);
 
   // Playhead drag
   const handlePlayheadPointerDown = useCallback((e: React.PointerEvent) => {
+    if (isExporting) return;
     e.preventDefault();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     setIsDraggingPlayhead(true);
-  }, []);
+  }, [isExporting]);
 
   useEffect(() => {
     if (!isDraggingPlayhead) return;
@@ -344,20 +1147,25 @@ export default function VideoTimelinePage() {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [isDraggingPlayhead, seekTo, totalWidth, duration]);
+  }, [isDraggingPlayhead, seekTo, timelineWidth, effectiveDuration]);
 
-  // Sync currentTime from audio when not dragging
+  // Sync currentTime and activeCaption from audio when not dragging
   useEffect(() => {
     if (isDraggingPlayhead) return;
     const el = audioRef.current;
     if (!el) return;
-    const iv = setInterval(() => setCurrentTime(el.currentTime), 100);
+    const iv = setInterval(() => {
+      const newTime = el.currentTime;
+      setCurrentTime(newTime);
+      setActiveCaption(getActiveCaption(newTime, captions));
+    }, 100);
     return () => clearInterval(iv);
-  }, [isDraggingPlayhead]);
+  }, [isDraggingPlayhead, captions]);
 
   // Timeline click to seek
   const handleTimelineClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      if (isExporting) return;
       if ((e.target as HTMLElement).closest("[data-playhead]")) return;
       const tl = timelineRef.current;
       if (!tl) return;
@@ -365,7 +1173,7 @@ export default function VideoTimelinePage() {
       const x = e.clientX - rect.left;
       seekTo(xToTime(x));
     },
-    [seekTo]
+    [seekTo, isExporting]
   );
 
   const playheadX = timeToX(currentTime);
@@ -375,12 +1183,18 @@ export default function VideoTimelinePage() {
     (file: File, sceneIndex: number) => {
       const type = file.type.startsWith("video/") ? "video" : "image";
       const url = URL.createObjectURL(file);
-      setSceneMedia((prev) => {
+      setScenes((prev) => {
         const next = [...prev];
-        while (next.length <= sceneIndex) next.push(null);
-        const old = next[sceneIndex];
-        if (old) URL.revokeObjectURL(old.url);
-        next[sceneIndex] = { url, type };
+        if (sceneIndex < 0 || sceneIndex >= next.length) return prev;
+        const scene = next[sceneIndex];
+        const first = scene.elements[0];
+        if (!first || !isBackgroundEl(first)) return prev;
+        const oldUrl = first.media?.url;
+        if (oldUrl) URL.revokeObjectURL(oldUrl);
+        next[sceneIndex] = {
+          ...scene,
+          elements: [{ ...first, media: { url, type } }, ...scene.elements.slice(1)],
+        };
         return next;
       });
     },
@@ -389,12 +1203,386 @@ export default function VideoTimelinePage() {
 
   const selectedSceneDuration =
     selectedSceneIndex !== null && scenes[selectedSceneIndex]
-      ? scenes[selectedSceneIndex].endTime - scenes[selectedSceneIndex].startTime
+      ? scenes[selectedSceneIndex].duration
       : null;
 
-  const sceneSortableIds = useMemo(() => scenes.map((s) => s.id), [scenes]);
+  // Keep duration input in sync when user selects a different scene
+  useEffect(() => {
+    if (selectedSceneDuration !== null) {
+      setEditingDurationInput(String(selectedSceneDuration));
+    } else {
+      setEditingDurationInput("");
+    }
+  }, [selectedSceneIndex, selectedSceneDuration]);
+
+  const addElementToScene = useCallback(
+    (sceneIndex: number, kind: "text" | "image" | "graphic" | "sticker") => {
+      const id = `el-${sceneIndex}-${Date.now()}`;
+      const defaults: Record<typeof kind, SceneElement> = {
+        text: { id, type: ELEMENT_TYPES.TEXT, content: "Hello", position: { x: 50, y: 20 }, fontSize: 24, color: "#ffffff" },
+        image: { id, type: ELEMENT_TYPES.IMAGE, media: { url: "" }, position: { x: 10, y: 50 }, size: { w: 100, h: 100 } },
+        graphic: { id, type: ELEMENT_TYPES.GRAPHIC, shape: "circle", color: "#ff0000", size: 80 },
+        sticker: { id, type: ELEMENT_TYPES.STICKER, position: { x: 50, y: 50 }, size: 100 },
+      };
+      setScenes((prev) => {
+        const next = [...prev];
+        if (sceneIndex < 0 || sceneIndex >= next.length) return prev;
+        next[sceneIndex] = {
+          ...next[sceneIndex],
+          elements: [...next[sceneIndex].elements, defaults[kind]],
+        };
+        return next;
+      });
+    },
+    []
+  );
+
+  const updateSceneElement = useCallback(
+    (sceneIndex: number, elementIndex: number, updates: Partial<SceneElement>) => {
+      setScenes((prev) =>
+        prev.map((scene, si) => {
+          if (si !== sceneIndex) return scene;
+          return {
+            ...scene,
+            elements: scene.elements.map((el, ei) =>
+              ei === elementIndex ? { ...el, ...updates } : el
+            ),
+          };
+        })
+      );
+    },
+    []
+  );
+
+  const moveSceneElement = useCallback(
+    (sceneIndex: number, fromIndex: number, direction: "front" | "back") => {
+      setScenes((prev) => {
+        const scene = prev[sceneIndex];
+        if (!scene || fromIndex < 0 || fromIndex >= scene.elements.length) return prev;
+        const minIndex = 1;
+        const toIndex = direction === "front" ? scene.elements.length - 1 : minIndex;
+        if (toIndex === fromIndex) return prev;
+        const next = [...prev];
+        const newElements = [...scene.elements];
+        const [removed] = newElements.splice(fromIndex, 1);
+        newElements.splice(toIndex, 0, removed);
+        next[sceneIndex] = { ...scene, elements: newElements };
+        return next;
+      });
+    },
+    []
+  );
+
+  const removeSceneElement = useCallback((sceneIndex: number, elementIndex: number) => {
+    const scene = scenes[sceneIndex];
+    const first = scene?.elements[0];
+    if (first && isBackgroundEl(first) && elementIndex === 0) return;
+    setScenes((prev) => {
+      const next = [...prev];
+      if (sceneIndex < 0 || sceneIndex >= next.length) return prev;
+      next[sceneIndex] = {
+        ...next[sceneIndex],
+        elements: next[sceneIndex].elements.filter((_, i) => i !== elementIndex),
+      };
+      return next;
+    });
+  }, [scenes]);
+
+  const selectedScene = selectedSceneIndex !== null ? scenes[selectedSceneIndex] ?? null : null;
+
+  const addElement = useCallback(
+    (type: "text" | "image" | "graphic" | "sticker") => {
+      if (!selectedScene) return;
+      const id = `element_${Date.now()}`;
+      const defaults: Record<typeof type, SceneElement> = {
+        text: { id, type: "text", content: "New Text", fontSize: 24, color: "#ffffff", position: { x: 50, y: 50 } },
+        image: { id, type: "image", media: { url: "" }, position: { x: 50, y: 50 }, size: { w: 100, h: 100 } },
+        graphic: { id, type: "graphic", shape: "rectangle", color: "#3b82f6", size: 100 },
+        sticker: { id, type: "sticker", position: { x: 50, y: 50 }, size: 100 },
+      };
+      const newElement = defaults[type];
+      setScenes((prev) =>
+        prev.map((scene) =>
+          scene.id === selectedScene.id
+            ? { ...scene, elements: [...scene.elements, newElement] }
+            : scene
+        )
+      );
+    },
+    [selectedScene]
+  );
+
+  const removeElement = useCallback(
+    (elementIndex: number) => {
+      if (!selectedScene) return;
+      setScenes((prev) =>
+        prev.map((scene) =>
+          scene.id === selectedScene.id
+            ? { ...scene, elements: scene.elements.filter((_, i) => i !== elementIndex) }
+            : scene
+        )
+      );
+    },
+    [selectedScene]
+  );
+
+  const updateElement = useCallback(
+    (elementIndex: number, updates: Partial<SceneElement>) => {
+      if (!selectedScene) return;
+      setScenes((prev) =>
+        prev.map((scene) =>
+          scene.id === selectedScene.id
+            ? {
+                ...scene,
+                elements: scene.elements.map((el, i) =>
+                  i === elementIndex ? { ...el, ...updates } : el
+                ),
+              }
+            : scene
+        )
+      );
+    },
+    [selectedScene]
+  );
+
+  const handleImageUpload = useCallback(
+    (elementIndex: number, file: File | undefined) => {
+      if (!selectedScene || !file) return;
+      const el = selectedScene.elements[elementIndex];
+      if (isImageEl(el)) {
+        const prev = el.media?.url;
+        if (prev) URL.revokeObjectURL(prev);
+        updateElement(elementIndex, { media: { url: URL.createObjectURL(file) } });
+      } else if (isStickerEl(el)) {
+        const prev = el.media?.url;
+        if (prev) URL.revokeObjectURL(prev);
+        updateElement(elementIndex, { media: { url: URL.createObjectURL(file) } });
+      }
+    },
+    [selectedScene, updateElement]
+  );
+
+  // Build payload for the videos table: title + content (stored in metadata by the API).
+  const saveProjectPayload = useMemo(
+    () => ({
+      title: scriptName?.trim() || "Untitled Video",
+      content: {
+        scriptId: scriptId ?? undefined,
+        template: selectedTemplate
+          ? {
+              id: selectedTemplate.id,
+              name: selectedTemplate.name,
+              aspectRatio: selectedTemplate.aspectRatio,
+            }
+          : null,
+        scenes,
+        captions,
+        musicUrl: musicUrl ?? null,
+        musicVolume,
+        voiceoverUrl: voiceoverUrl ?? null,
+        captionStyle: {
+          position: captionPosition,
+          fontSize: captionFontSize,
+          textColor: captionTextColor,
+          animation: captionAnimation,
+        },
+        aspectRatio,
+        totalDuration: voiceoverDuration > 0 ? voiceoverDuration : duration,
+      },
+    }),
+    [
+      scriptName,
+      scriptId,
+      selectedTemplate,
+      scenes,
+      captions,
+      musicUrl,
+      musicVolume,
+      voiceoverUrl,
+      captionPosition,
+      captionFontSize,
+      captionTextColor,
+      captionAnimation,
+      aspectRatio,
+      voiceoverDuration,
+      duration,
+    ]
+  );
+
+  /** Save timeline project to the existing videos table (via API; content stored in metadata). */
+  const handleSaveToLibrary = useCallback(async (opts?: { silent?: boolean }) => {
+    try {
+      const videoProject = {
+        title: saveProjectPayload.title,
+        content: saveProjectPayload.content,
+        ...(prefillThumbnailUrl && { thumbnailUrl: prefillThumbnailUrl }),
+        ...(prefillDescription != null && { description: prefillDescription }),
+        ...(prefillHashtags != null && { hashtags: prefillHashtags }),
+        ...(prefillScheduledAt != null && { scheduledAt: prefillScheduledAt }),
+      };
+      const res = await fetch("/api/video-timeline/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(videoProject),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Save failed");
+      if (!opts?.silent) alert("✅ Saved to My Library!");
+      return data as { id: string; title?: string; createdAt?: string };
+    } catch (err) {
+      console.error("Save failed:", err);
+      if (!opts?.silent) alert("Failed to save: " + (err instanceof Error ? err.message : String(err)));
+      throw err;
+    }
+  }, [saveProjectPayload, prefillThumbnailUrl, prefillDescription, prefillHashtags, prefillScheduledAt]);
+
+  /** Save (if needed) and go to Content Calendar to schedule this video. */
+  const handleSchedule = useCallback(async () => {
+    const projectIdFromUrl = searchParams.get("projectId");
+    try {
+      const id =
+        projectIdFromUrl ??
+        (await handleSaveToLibrary({ silent: true }))?.id;
+      if (id) router.push(`/dashboard/content-calendar?schedule=${encodeURIComponent(id)}`);
+      else alert("Save the video first, then click Schedule.");
+    } catch {
+      alert("Save failed. Try saving to library first, then Schedule.");
+    }
+  }, [searchParams, handleSaveToLibrary, router]);
+
+  const handleExportVideo = useCallback(async () => {
+    const assets = collectSceneAssets(sceneBlocks, scenes, captions);
+    const { valid, error } = validateSceneAssets(assets);
+    if (!valid) {
+      alert(error ?? "Export validation failed");
+      return;
+    }
+    if (!voiceoverUrl) {
+      alert("No voiceover to export");
+      return;
+    }
+    let savedVideoId: string | null = null;
+    try {
+      const saveResult = await handleSaveToLibrary({ silent: true });
+      savedVideoId = saveResult?.id ?? null;
+    } catch {
+      alert("Save failed. Export aborted.");
+      return;
+    }
+    setIsExporting(true);
+    setExportProgress(0);
+    try {
+      const ffmpeg = ffmpegRef.current;
+      const fetchFile = fetchFileRef.current;
+      if (!ffmpeg || !fetchFile) {
+        alert("Export not ready");
+        setIsExporting(false);
+        setExportProgress(0);
+        return;
+      }
+      const data = await exportVideo({
+        ffmpeg,
+        fetchFile,
+        voiceoverUrl,
+        musicUrl,
+        musicVolume,
+        assets,
+        captionStyle: {
+          position: captionPosition,
+          fontSize: captionFontSize,
+          textColor: captionTextColor,
+          animation: captionAnimation === "pop" ? "pop" : captionAnimation === "fadeIn" ? "fadeIn" : captionAnimation === "slideUp" ? "slideUp" : "none",
+        },
+        totalDuration: duration,
+        onProgress: setExportProgress,
+      });
+      const blob = new Blob(
+        [data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)],
+        { type: "video/mp4" }
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "content-flywheel-video.mp4";
+      a.click();
+      URL.revokeObjectURL(url);
+      if (savedVideoId) {
+        try {
+          await fetch(`/api/video-timeline/videos/${savedVideoId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              status: "completed",
+              metadata: { exportedAt: new Date().toISOString() },
+            }),
+          });
+        } catch (e) {
+          console.warn("Failed to update video status after export:", e);
+        }
+      }
+      try {
+        await ffmpeg.deleteFile("voiceover.mp3");
+      } catch {
+        /* ignore */
+      }
+      if (musicUrl) {
+        try {
+          await ffmpeg.deleteFile("music.mp3");
+        } catch {
+          /* ignore */
+        }
+      }
+      let fileIndex = 0;
+      for (let i = 0; i < assets.length; i++) {
+        const asset = assets[i];
+        if (asset.type === "image") {
+          try {
+            await ffmpeg.deleteFile(`scene_${fileIndex}.png`);
+          } catch {
+            /* ignore */
+          }
+          fileIndex += 1;
+        } else if (asset.type === "video") {
+          try {
+            await ffmpeg.deleteFile(`scene_${fileIndex}.mp4`);
+          } catch {
+            /* ignore */
+          }
+          fileIndex += 1;
+        }
+      }
+      try {
+        await ffmpeg.deleteFile("output.mp4");
+      } catch {
+        /* ignore */
+      }
+    } catch (err) {
+      console.error("Export failed", err);
+      alert(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setIsExporting(false);
+      setExportProgress(0);
+    }
+  }, [
+    sceneBlocks,
+    scenes,
+    captions,
+    voiceoverUrl,
+    musicUrl,
+    musicVolume,
+    captionPosition,
+    captionFontSize,
+    captionTextColor,
+    captionAnimation,
+    duration,
+    handleSaveToLibrary,
+  ]);
+
+  const sceneSortableIds = useMemo(() => sceneBlocks.map((s) => s.id), [sceneBlocks]);
   const sceneSegmentWidthPx =
-    scenes.length > 0 && totalWidth > 0 ? Math.max(4, totalWidth / scenes.length) : 0;
+    sceneBlocks.length > 0 && timelineWidth > 0
+      ? Math.max(SCENE_BLOCK_MIN_WIDTH, timelineWidth / sceneBlocks.length)
+      : SCENE_BLOCK_MIN_WIDTH;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -406,28 +1594,276 @@ export default function VideoTimelinePage() {
     (event: DragEndEvent) => {
       const { active, over } = event;
       if (!over || active.id === over.id) return;
-      const oldIndex = scenes.findIndex((s) => s.id === active.id);
-      const newIndex = scenes.findIndex((s) => s.id === over.id);
+      const oldIndex = sceneBlocks.findIndex((s) => s.id === active.id);
+      const newIndex = sceneBlocks.findIndex((s) => s.id === over.id);
       if (oldIndex === -1 || newIndex === -1) return;
-      setSceneFullTexts((prev) => arrayMove(prev, oldIndex, newIndex));
-      setSceneMedia((prev) => arrayMove(prev, oldIndex, newIndex));
+      setScenes((prev) => arrayMove(prev, oldIndex, newIndex));
       setSelectedSceneIndex(newIndex);
     },
-    [scenes]
+    [sceneBlocks]
   );
 
-  // Caption visible at currentTime for preview overlay (block body avoids < parsed as JSX)
-  const currentCaption = captions.find((c) => {
-    const t = currentTime;
-    return t >= c.startTime && t < c.endTime;
-  });
+  const applyTemplate = useCallback((key: keyof typeof TEMPLATES) => {
+    const t = TEMPLATES[key];
+    const newScenes = Array.from({ length: t.sceneCount }, (_, i) =>
+      createScene(`scene_${i + 1}`, `Scene ${i + 1}`, t.defaultSceneDuration, SCENE_COLORS[i % SCENE_COLORS.length])
+    );
+    setScenes(newScenes);
+    setSelectedSceneIndex(null);
+  }, []);
+
+  /** Apply TEMPLATES key with custom duration/scene count (from "Start from a template" modal). */
+  const applyTemplateWithCustom = useCallback(
+    (key: keyof typeof TEMPLATES, totalDuration: number, sceneCount: number) => {
+      const t = TEMPLATES[key];
+      const sceneDuration = totalDuration / sceneCount;
+      const newScenes = Array.from({ length: sceneCount }, (_, i) =>
+        createScene(`scene_${i + 1}`, `Scene ${i + 1}`, sceneDuration, SCENE_COLORS[i % SCENE_COLORS.length])
+      );
+      setScenes(newScenes);
+      setSelectedSceneIndex(null);
+      setAspectRatio(t.aspectRatio);
+      setPendingTemplatesKey(null);
+    },
+    []
+  );
+
+  /** Add a new scene at the end of the timeline (default 5s). */
+  const addScene = useCallback(() => {
+    const newScene = createScene(
+      `scene_${Date.now()}`,
+      `Scene ${scenes.length + 1}`,
+      DEFAULT_NEW_SCENE_DURATION,
+      SCENE_COLORS[scenes.length % SCENE_COLORS.length]
+    );
+    setScenes((prev) => [...prev, newScene]);
+    setSelectedSceneIndex(scenes.length);
+  }, [scenes.length]);
+
+  /** Insert a new scene after the current playhead position (used from timeline). */
+  const handleAddScene = useCallback(() => {
+    const insertIndex = sceneBlocks.findIndex(
+      (s) => currentTime >= s.startTime && currentTime < s.endTime
+    );
+    const at = insertIndex === -1 ? scenes.length : insertIndex + 1;
+    const newScene = createScene(
+      `scene_${Date.now()}`,
+      `Scene ${scenes.length + 1}`,
+      DEFAULT_NEW_SCENE_DURATION,
+      SCENE_COLORS[at % SCENE_COLORS.length]
+    );
+    setScenes((prev) => {
+      const next = [...prev];
+      next.splice(at, 0, newScene);
+      return next;
+    });
+    setSelectedSceneIndex(at);
+  }, [sceneBlocks, currentTime, scenes.length]);
+
+  const deleteScene = useCallback((index: number) => {
+    setScenes((prev) => prev.filter((_, i) => i !== index));
+    setSelectedSceneIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === index) return null;
+      if (prev > index) return prev - 1;
+      return prev;
+    });
+  }, []);
+
+  /** Update a scene's duration (min 0.5s). Reorder via drag; click scene to edit duration in panel. */
+  const updateSceneDuration = useCallback((sceneIndex: number, newDuration: number) => {
+    const sec = Math.max(0.5, Number.isFinite(newDuration) ? newDuration : 0.5);
+    setScenes((prev) => {
+      if (sceneIndex < 0 || sceneIndex >= prev.length) return prev;
+      const next = [...prev];
+      next[sceneIndex] = { ...next[sceneIndex], duration: sec };
+      return next;
+    });
+  }, []);
+
+  const handleAddCaption = useCallback(() => {
+    const startTime = currentTime;
+    const duration = 2;
+    const newCaption: CaptionBlock = {
+      id: `cap-${Date.now()}`,
+      text: "Enter caption text",
+      startTime,
+      endTime: startTime + duration,
+    };
+    setCaptions((prev) => [...prev, newCaption]);
+    setSelectedCaptionId(newCaption.id);
+    setSelectedSceneIndex(null);
+  }, [currentTime]);
+
+  const updateCaption = useCallback((id: string, updates: Partial<Pick<CaptionBlock, "text" | "startTime" | "endTime">>) => {
+    setCaptions((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...updates } : c))
+    );
+  }, []);
+
+  const deleteCaption = useCallback((id: string) => {
+    setCaptions((prev) => prev.filter((c) => c.id !== id));
+    if (selectedCaptionId === id) setSelectedCaptionId(null);
+  }, [selectedCaptionId]);
+
+  const handleVoiceoverUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const prevUrl = voiceoverUrl;
+    if (prevUrl && voiceoverFileName) URL.revokeObjectURL(prevUrl);
+    setVoiceoverUrl(URL.createObjectURL(file));
+    setVoiceoverFileName(file.name);
+    setCaptions([]);
+    e.target.value = "";
+  }, [voiceoverUrl, voiceoverFileName]);
+
+  const removeVoiceover = useCallback(() => {
+    if (voiceoverUrl && voiceoverFileName) URL.revokeObjectURL(voiceoverUrl);
+    setVoiceoverUrl(null);
+    setVoiceoverFileName(null);
+    setVoiceoverDuration(0);
+  }, [voiceoverUrl, voiceoverFileName]);
+
+  /** Apply template from customize modal (VideoTemplate + custom duration/scene count). */
+  const applyCustomTemplate = useCallback((template: VideoTemplate, totalDuration: number, sceneCount: number) => {
+    setSelectedTemplate(template);
+    const sceneDuration = totalDuration / sceneCount;
+    const generatedScenes = Array.from({ length: sceneCount }, (_, i) =>
+      createScene(`scene_${i + 1}`, `Scene ${i + 1}`, sceneDuration, SCENE_COLORS[i % SCENE_COLORS.length])
+    );
+    setScenes(generatedScenes);
+    setSelectedSceneIndex(null);
+    setAspectRatio(template.aspectRatio);
+    setShowCustomize(false);
+    setPendingTemplate(null);
+  }, []);
+
+  const handleTemplateSelect = useCallback((template: VideoTemplate) => {
+    if (template.id === "custom") {
+      setSelectedTemplate(template);
+      setAspectRatio(template.aspectRatio);
+      return;
+    }
+    setPendingTemplate(template);
+    setCustomDuration(template.defaultDuration ?? 30);
+    setCustomSceneCount(template.defaultSceneCount ?? 5);
+    setShowCustomize(true);
+  }, []);
+
+  if (!isBrowser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!selectedTemplate) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-muted/30">
+        <div className="max-w-4xl w-full p-8">
+          <h2 className="text-2xl font-bold text-foreground mb-2">Choose Your Video Format</h2>
+          <p className="text-muted-foreground mb-6">Select a template to get started, or build custom</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {VIDEO_TEMPLATES.map((template) => (
+              <button
+                key={template.id}
+                type="button"
+                onClick={() => handleTemplateSelect(template)}
+                className="p-6 bg-card rounded-lg border-2 border-border hover:border-primary transition-colors text-left"
+              >
+                <div className="text-4xl mb-2">{template.icon}</div>
+                <h3 className="font-bold text-lg text-foreground">{template.name}</h3>
+                <p className="text-sm text-muted-foreground">{template.description}</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {template.durationRange[0]}-{template.durationRange[1]}s • {template.sceneRange[0]}-{template.sceneRange[1]} scenes
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Customization modal: duration + scene count before creating timeline */}
+        {showCustomize && pendingTemplate && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-card border border-border rounded-lg p-6 max-w-md w-full shadow-lg text-foreground">
+              <h3 className="text-xl font-bold mb-4">Customize Your Video</h3>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">Total Video Duration (seconds)</label>
+                <input
+                  type="number"
+                  min={pendingTemplate.durationRange[0]}
+                  max={pendingTemplate.durationRange[1]}
+                  value={customDuration}
+                  onChange={(e) => {
+                    const [lo, hi] = pendingTemplate.durationRange;
+                    const v = parseInt(e.target.value, 10);
+                    setCustomDuration(Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : lo);
+                  }}
+                  className="w-full px-3 py-2 border border-input rounded bg-background text-foreground"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Range: {pendingTemplate.durationRange[0]}-{pendingTemplate.durationRange[1]}s • Default: {pendingTemplate.defaultDuration}s for {pendingTemplate.name}
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">Number of Scenes</label>
+                <input
+                  type="number"
+                  min={pendingTemplate.sceneRange[0]}
+                  max={pendingTemplate.sceneRange[1]}
+                  value={customSceneCount}
+                  onChange={(e) => {
+                    const [lo, hi] = pendingTemplate.sceneRange;
+                    const v = parseInt(e.target.value, 10);
+                    setCustomSceneCount(Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : lo);
+                  }}
+                  className="w-full px-3 py-2 border border-input rounded bg-background text-foreground"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Range: {pendingTemplate.sceneRange[0]}-{pendingTemplate.sceneRange[1]} scenes • Default: {pendingTemplate.defaultSceneCount} for {pendingTemplate.name}
+                </p>
+              </div>
+
+              <div className="bg-muted/50 p-3 rounded mb-4">
+                <p className="text-sm">
+                  <strong>Each scene:</strong> ~{Math.round((customDuration / customSceneCount) * 10) / 10}s
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">(You can adjust individual scene durations later)</p>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCustomize(false);
+                    setPendingTemplate(null);
+                  }}
+                  className="flex-1 px-4 py-2 border border-border rounded bg-background text-foreground hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyCustomTemplate(pendingTemplate, customDuration, customSceneCount)}
+                  className="flex-1 px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600"
+                >
+                  Create Timeline
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-w-0 max-w-full overflow-hidden" style={{ height: "100vh" }}>
     <div
-      className={`fixed top-0 right-0 bottom-0 z-50 flex min-w-0 flex-col overflow-x-hidden overflow-y-hidden bg-background text-foreground transition-[left] duration-200 ease-out ${
-        sidebar && !sidebar.isCollapsed ? "left-[60px] md:left-[220px]" : "left-0"
-      }`}
+      className={`fixed top-0 right-0 bottom-0 z-50 flex min-w-0 flex-col overflow-x-hidden overflow-y-hidden bg-background text-foreground transition-[left] duration-200 ease-out ${sidebar && !sidebar.isCollapsed ? "left-[60px] md:left-[220px]" : "left-0"}`}
     >
       <header className="shrink-0 border-b border-border px-4 py-3">
         <div className="flex flex-wrap items-center gap-4">
@@ -453,11 +1889,24 @@ export default function VideoTimelinePage() {
               onChange={(e) => setScriptId(e.target.value || undefined)}
             >
               <option value="">Select a script</option>
-              {scripts.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.title}
-                </option>
-              ))}
+              {savedScripts.length > 0 && (
+                <optgroup label="From Coach">
+                  {savedScripts.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {scripts.length > 0 && (
+                <optgroup label="Library">
+                  {scripts.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </label>
           {scriptName && <span className="text-sm text-muted-foreground">{scriptName}</span>}
@@ -465,51 +1914,270 @@ export default function VideoTimelinePage() {
       </header>
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-hidden p-4">
-        {/* 9:16 preview */}
+        {/* Template picker when no scenes */}
+        {sceneBlocks.length === 0 ? (
+          <>
+            <div className="flex flex-col items-center justify-center gap-6 py-12">
+              <h2 className="text-lg font-semibold text-foreground">Start from a template</h2>
+              <p className="text-sm text-muted-foreground">Choose a structure or select a script above to load its scenes.</p>
+              <div className="flex flex-wrap justify-center gap-4">
+                {(Object.keys(TEMPLATES) as (keyof typeof TEMPLATES)[]).map((key) => {
+                  const t = TEMPLATES[key];
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        setPendingTemplatesKey(key);
+                        setCustomDuration(t.duration);
+                        setCustomSceneCount(t.sceneCount);
+                      }}
+                      className="flex flex-col items-start gap-1 rounded-xl border-2 border-border bg-card p-5 text-left w-52 hover:border-primary hover:bg-muted/50 transition-colors"
+                    >
+                      <span className="font-medium text-foreground">{t.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {t.sceneCount} scenes · {t.duration}s · {t.aspectRatio}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal: duration + scene count after template selection (e.g. TikTok Short) */}
+            {pendingTemplatesKey && (() => {
+              const t = TEMPLATES[pendingTemplatesKey];
+              const [durMin, durMax] = t.durationRange;
+              const [sceneMin, sceneMax] = t.sceneRange;
+              const perScene = customSceneCount > 0 ? Math.round((customDuration / customSceneCount) * 10) / 10 : 0;
+              return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                  <div className="bg-card border border-border rounded-lg p-6 max-w-md w-full shadow-lg text-foreground mx-4">
+                    <h3 className="text-xl font-bold mb-4">Customize: {t.name}</h3>
+
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium mb-2">Duration (seconds)</label>
+                      <input
+                        type="number"
+                        min={durMin}
+                        max={durMax}
+                        value={customDuration}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          setCustomDuration(Number.isFinite(v) ? Math.max(durMin, Math.min(durMax, v)) : durMin);
+                        }}
+                        className="w-full px-3 py-2 border border-input rounded bg-background text-foreground"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Range: {durMin}–{durMax}s · Default: {t.duration}s
+                      </p>
+                    </div>
+
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium mb-2">Scene count</label>
+                      <input
+                        type="number"
+                        min={sceneMin}
+                        max={sceneMax}
+                        value={customSceneCount}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          setCustomSceneCount(Number.isFinite(v) ? Math.max(sceneMin, Math.min(sceneMax, v)) : sceneMin);
+                        }}
+                        className="w-full px-3 py-2 border border-input rounded bg-background text-foreground"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Range: {sceneMin}–{sceneMax} scenes · Default: {t.sceneCount}
+                      </p>
+                    </div>
+
+                    <div className="bg-muted/50 p-3 rounded mb-4">
+                      <p className="text-sm">
+                        Each scene will be ~{perScene}s
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPendingTemplatesKey(null)}
+                        className="flex-1 px-4 py-2 border border-border rounded bg-background text-foreground hover:bg-muted"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyTemplateWithCustom(pendingTemplatesKey, customDuration, customSceneCount)}
+                        className="flex-1 px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600"
+                      >
+                        Create Timeline
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </>
+        ) : (
+          <>
+        {/* Preview: aspect ratio from selected template */}
         <div className="flex justify-center">
           <div
+            ref={previewRef}
             className="relative overflow-hidden rounded-lg bg-card border border-border"
-            style={{ aspectRatio: "9/16", width: 280 }}
+            style={{
+              aspectRatio: aspectRatio.replace(":", "/"),
+              width: aspectRatio === "16:9" ? 400 : 280,
+            }}
           >
-            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
-              {voiceoverUrl ? "Voiceover plays here" : "Select a script with voiceover"}
-            </div>
-            {currentCaption?.text && (
-              <div
-                className={`absolute inset-x-0 p-3 flex justify-center min-h-[20%] ${
-                  captionPosition === "bottom"
-                    ? "bottom-0 bg-gradient-to-t from-background/90 to-transparent items-end"
-                    : captionPosition === "top"
-                      ? "top-0 bg-gradient-to-b from-background/90 to-transparent items-start"
-                      : "top-1/2 -translate-y-1/2 items-center bg-background/80"
-                }`}
-              >
-                <div
-                  key={currentCaption.id}
-                  className={`max-w-full ${
-                    captionAnimation === "fadeIn"
-                      ? "caption-animate-fade-in"
-                      : captionAnimation === "slideUp"
-                        ? "caption-animate-slide-up"
-                        : captionAnimation === "pop"
-                          ? "caption-animate-pop"
-                          : ""
-                  }`}
-                >
-                  <p
-                    className={`text-center leading-relaxed max-w-full ${
-                      captionFontSize === "small"
-                        ? "text-xs"
-                        : captionFontSize === "large"
-                          ? "text-lg"
-                          : "text-sm"
-                    }`}
-                    style={{ color: captionTextColor }}
-                  >
-                    {currentCaption.text}
-                  </p>
+            {/* Preview: background + elements layered */}
+            {activeScene && (() => {
+              const sceneData = scenes[activeScene.index];
+              const backgroundMedia = sceneData ? getSceneBackgroundMedia(sceneData) : null;
+              const sceneColor = sceneData?.color ?? getScenePreviewColor(activeScene.index);
+              const elements = sceneData?.elements ?? [];
+              return (
+                <div className="absolute inset-0 w-full h-full">
+                  {/* Background */}
+                  {backgroundMedia?.type === "image" ? (
+                    <img
+                      src={backgroundMedia.url}
+                      alt=""
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  ) : backgroundMedia?.type === "video" ? (
+                    <video
+                      key={activeScene.index}
+                      ref={sceneVideoRef}
+                      src={backgroundMedia.url}
+                      muted
+                      playsInline
+                      className="absolute inset-0 w-full h-full object-cover"
+                      onLoadedMetadata={(e) => {
+                        const v = e.currentTarget;
+                        const start = activeScene.scene.startTime;
+                        const localTime = Math.max(0, currentTime - start);
+                        v.currentTime = localTime;
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="absolute inset-0 w-full h-full"
+                      style={{ backgroundColor: sceneColor }}
+                    />
+                  )}
+                  {/* Elements overlay */}
+                  {elements.slice(1).map((element) => (
+                    <div
+                      key={element.id}
+                      className="absolute pointer-events-none"
+                      style={{
+                        left: `${"position" in element && element.position ? element.position.x : 50}%`,
+                        top: `${"position" in element && element.position ? element.position.y : 50}%`,
+                        transform: "translate(-50%, -50%)",
+                      }}
+                    >
+                      {isTextEl(element) && (
+                        <p style={{ fontSize: `${element.fontSize}px`, color: element.color }}>
+                          {element.content || "Text"}
+                        </p>
+                      )}
+                      {isImageEl(element) && element.media?.url && (
+                        <img
+                          src={element.media.url}
+                          alt=""
+                          className="object-contain"
+                          style={{
+                            width: `${element.size.w}px`,
+                            height: `${element.size.h}px`,
+                          }}
+                        />
+                      )}
+                      {isGraphicEl(element) && (
+                        <div
+                          style={{
+                            width: `${element.size ?? 100}px`,
+                            height: `${element.size ?? 100}px`,
+                            backgroundColor: element.color,
+                            borderRadius: element.shape === "circle" ? "50%" : element.shape === "triangle" ? 0 : "4px",
+                            clipPath: element.shape === "triangle" ? "polygon(50% 0%, 0% 100%, 100% 100%)" : undefined,
+                          }}
+                        />
+                      )}
+                      {isStickerEl(element) && element.media?.url && (
+                        <img
+                          src={element.media.url}
+                          alt=""
+                          className="object-contain"
+                          style={{
+                            width: `${element.size ?? 100}px`,
+                            height: `${element.size ?? 100}px`,
+                          }}
+                        />
+                      )}
+                    </div>
+                  ))}
                 </div>
+              );
+            })()}
+            {!activeScene && (
+              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                {voiceoverUrl ? "Voiceover plays here" : "Select a script with voiceover"}
               </div>
+            )}
+            {console.log("RENDER CHECK - activeCaption:", activeCaption, "currentTime:", currentTime)}
+            {activeCaption && console.log("RENDERING CAPTION NOW")}
+            {activeCaption && (
+              <>
+                {/* Debug: proves activeCaption exists — remove when done testing */}
+                <div
+                  style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    background: "lime",
+                    padding: "10px",
+                    zIndex: 99999,
+                  }}
+                >
+                  CAPTION ACTIVE: {activeCaption.text}
+                </div>
+                {/* Actual caption overlay */}
+                <div
+                  style={{ zIndex: 9999 }}
+                  className={`absolute inset-0 pointer-events-none flex items-center justify-center`}
+                >
+                  <div
+                    className={`absolute left-0 right-0 flex justify-center px-4 pointer-events-none ${
+                      captionPosition === "top"
+                        ? "top-[10%]"
+                        : captionPosition === "middle"
+                          ? "top-1/2 -translate-y-1/2"
+                          : "bottom-[10%]"
+                    }`}
+                  >
+                    <p
+                      key={activeCaption.id}
+                      className={`max-w-full bg-background/80 px-4 py-2 rounded font-bold text-center ${
+                        captionAnimation === "fadeIn"
+                          ? "caption-animate-fade-in"
+                          : captionAnimation === "slideUp"
+                            ? "caption-animate-slide-up"
+                            : captionAnimation === "pop"
+                              ? "caption-animate-pop"
+                              : ""
+                      }`}
+                      style={{
+                        fontSize: captionFontSize === "small" ? 18 : captionFontSize === "large" ? 28 : 22,
+                        color: captionTextColor,
+                        textShadow: "2px 2px 4px rgba(0,0,0,0.8)",
+                      }}
+                    >
+                      {activeCaption.text}
+                    </p>
+                  </div>
+                </div>
+              </>
             )}
             {voiceoverUrl && (
               <audio
@@ -524,115 +2192,342 @@ export default function VideoTimelinePage() {
                 className="hidden"
               />
             )}
+            {musicUrl && (
+              <audio
+                ref={musicRef}
+                src={musicUrl}
+                onPlay={onPlay}
+                onPause={onPause}
+                preload="metadata"
+                className="hidden"
+              />
+            )}
           </div>
         </div>
 
         {/* Playback controls */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
-            onClick={isPlaying ? pause : play}
-            disabled={!voiceoverUrl}
-          >
-            {isPlaying ? "Pause" : "Play"}
-          </button>
-          <span className="text-sm text-muted-foreground tabular-nums">
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </span>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              onClick={isPlaying ? pause : play}
+              disabled={!voiceoverUrl || isExporting}
+            >
+              {isPlaying ? "Pause" : "Play"}
+            </button>
+            <span className="text-sm text-muted-foreground tabular-nums">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+          </div>
+
+          {/* Save & Export */}
+          <div className="flex flex-col gap-2">
+            {isExporting && (
+              <>
+                <p className="text-sm text-muted-foreground">Exporting...</p>
+                <div className="h-2 w-full max-w-xs rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-[width] duration-300"
+                    style={{ width: `${exportProgress}%` }}
+                  />
+                </div>
+              </>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="inline-flex w-fit rounded border border-input bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
+                onClick={handleSaveToLibrary}
+              >
+                💾 Save to Library
+              </button>
+              <button
+                type="button"
+                className="inline-flex w-fit rounded border border-green-600 bg-green-600/10 px-3 py-1.5 text-sm text-green-700 dark:text-green-400 hover:bg-green-600/20 disabled:opacity-50 disabled:pointer-events-none"
+                disabled={isExporting}
+                onClick={handleSchedule}
+              >
+                📅 Schedule
+              </button>
+              <button
+                type="button"
+                className="inline-flex w-fit rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:pointer-events-none"
+                disabled={!ffmpegLoaded || !scriptId || !voiceoverUrl || isExporting}
+                onClick={() => handleExportVideo()}
+              >
+                📹 Publish Now
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Timeline + scene edit panel */}
-        <div className="flex min-h-0 min-w-0 flex-1 gap-0 overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 gap-0 overflow-hidden pr-96">
         <div className="min-h-0 min-w-0 shrink-0 flex-1 overflow-hidden rounded-lg border border-border bg-card">
-          <div className="timeline-horizontal-scroll flex min-h-[140px] min-w-0 overflow-x-auto overflow-y-hidden">
+          <div
+            className="timeline-horizontal-scroll timeline-scroll flex min-h-[160px] min-w-0 overflow-x-auto overflow-y-hidden"
+            style={{
+              width: "100%",
+              overflowX: "scroll",
+              WebkitOverflowScrolling: "touch",
+              scrollbarWidth: "auto",
+              scrollbarColor: "#888 #e5e7eb",
+            }}
+          >
             <div className="shrink-0 w-24 border-r border-border bg-muted flex flex-col text-xs text-muted-foreground">
               <div className="shrink-0 border-b border-border" style={{ height: RULER_HEIGHT }} />
               <div className="flex-1 flex flex-col">
-                <div className="shrink-0 px-2 flex items-center border-b border-border" style={{ height: TRACK_HEIGHT }}>Scenes</div>
+                <div className="flex items-center gap-2 p-2 bg-muted/50 rounded border-b border-border shrink-0" style={{ height: TRACK_HEIGHT }}>
+                  <button
+                    type="button"
+                    onClick={addScene}
+                    className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                  >
+                    + Add Scene
+                  </button>
+                  <span className="text-xs text-muted-foreground">
+                    {scenes.length} scenes • {duration}s total
+                  </span>
+                </div>
                 <div className="shrink-0 px-2 flex items-center border-b border-border" style={{ height: TRACK_HEIGHT }}>Voiceover</div>
-                <div className="shrink-0 px-2 flex items-center" style={{ height: TRACK_HEIGHT }}>Captions</div>
+                <div className="shrink-0 px-2 flex items-center border-b border-border" style={{ height: TRACK_HEIGHT }}>Captions</div>
+                <div className="shrink-0 px-2 flex items-center" style={{ height: TRACK_HEIGHT }}>Music</div>
               </div>
             </div>
             <div
               ref={timelineRef}
-              className="relative shrink-0 overflow-y-hidden"
-              style={{ width: totalWidth || "100%", minWidth: 320 }}
+              className="relative shrink-0 overflow-y-hidden timeline-inner"
+              style={{ minWidth: timelineWidth, width: timelineWidth }}
               onClick={handleTimelineClick}
             >
-              {/* Ruler */}
+              {/* Ruler: every 1s for videos under 30s, every 5s for longer */}
               <div
                 className="sticky top-0 z-10 border-b border-border bg-muted text-xs text-muted-foreground"
-                style={{ height: RULER_HEIGHT, width: totalWidth }}
+                style={{ height: RULER_HEIGHT, width: timelineWidth }}
               >
-                {Array.from({ length: Math.ceil(duration) + 1 }, (_, i) => (
-                  <div
-                    key={i}
-                    className="absolute border-l border-border pl-1"
-                    style={{ left: i * PIXELS_PER_SECOND }}
-                  >
-                    {i}s
-                  </div>
-                ))}
+                {(() => {
+                  const step = effectiveDuration <= 30 ? 1 : 5;
+                  const count = Math.ceil(effectiveDuration / step) + 1;
+                  return Array.from({ length: count }, (_, i) => {
+                    const sec = i * step;
+                    return (
+                      <div
+                        key={i}
+                        className="absolute border-l border-border pl-1.5 min-w-[2rem]"
+                        style={{ left: timeToX(sec) }}
+                      >
+                        {sec}s
+                      </div>
+                    );
+                  });
+                })()}
               </div>
 
               {/* Tracks content */}
-              <div style={{ width: totalWidth }}>
+              <div style={{ width: timelineWidth, minWidth: timelineWidth }}>
                 <div
                   className="relative border-b border-border flex flex-row items-stretch"
-                  style={{ height: TRACK_HEIGHT, width: totalWidth }}
+                  style={{ height: TRACK_HEIGHT, width: timelineWidth }}
                 >
                   <DndContext sensors={sensors} onDragEnd={handleSceneDragEnd}>
                     <SortableContext
                       items={sceneSortableIds}
                       strategy={horizontalListSortingStrategy}
                     >
-                      {scenes.map((scene, i) => (
+                      {sceneBlocks.map((scene, i) => (
                         <SortableSceneBlock
                           key={scene.id}
                           scene={scene}
                           index={i}
                           widthPx={sceneSegmentWidthPx}
                           isSelected={selectedSceneIndex === i}
-                          onSelect={() => setSelectedSceneIndex(i)}
+                          onSelect={() => {
+                            setSelectedSceneIndex(i);
+                            setSelectedCaptionId(null);
+                          }}
                         />
                       ))}
                     </SortableContext>
                   </DndContext>
                 </div>
                 <div className="relative border-b border-border" style={{ height: TRACK_HEIGHT }}>
-                  {duration > 0 && (
-                    <div
-                      className="absolute top-1 h-[calc(100%-8px)] rounded bg-blue-600/80"
-                      style={{ left: 0, width: totalWidth }}
-                    />
+                  <input
+                    ref={voiceoverInputRef}
+                    type="file"
+                    accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/x-m4a"
+                    className="hidden"
+                    onChange={handleVoiceoverUpload}
+                  />
+                  {voiceoverUrl ? (
+                    <>
+                      {effectiveDuration > 0 &&
+                        sceneBlocks.map((scene, index) => {
+                          const sceneColor = SCENE_COLOR_HEX[index % SCENE_COLOR_HEX.length] ?? DEFAULT_SCENE_COLOR;
+                          const left = timeToX(scene.startTime);
+                          const width = Math.max(2, timeToX(scene.endTime) - timeToX(scene.startTime));
+                          return (
+                            <div
+                              key={scene.id}
+                              className="absolute top-1 h-[calc(100%-8px)] rounded flex items-center overflow-hidden"
+                              style={{
+                                left,
+                                width,
+                                backgroundColor: sceneColor,
+                                opacity: 0.85,
+                              }}
+                            >
+                              <span className="text-white text-xs px-1 truncate pointer-events-none">
+                                Voiceover {index + 1}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      <div className="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center gap-2 text-xs text-foreground">
+                        <span className="truncate max-w-[140px]" title={voiceoverFileName ?? undefined}>
+                          {voiceoverFileName ?? "Voiceover"}
+                        </span>
+                        {duration > 0 && (
+                          <span className="text-muted-foreground tabular-nums shrink-0">
+                            {formatTime(duration)}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className="shrink-0 rounded border border-border bg-muted/50 px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          onClick={() => voiceoverInputRef.current?.click()}
+                        >
+                          Replace
+                        </button>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded border border-destructive/50 text-destructive px-1.5 py-0.5 hover:bg-destructive/10"
+                          onClick={removeVoiceover}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 rounded border border-dashed border-border bg-muted/30 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      onClick={() => voiceoverInputRef.current?.click()}
+                    >
+                      Upload Voiceover
+                    </button>
                   )}
                 </div>
-                <div className="relative" style={{ height: TRACK_HEIGHT }}>
+                <div className="relative border-b border-border" style={{ height: TRACK_HEIGHT }}>
+                  {effectiveDuration > 0 &&
+                    sceneBlocks.map((scene, index) => {
+                      const sceneColor = SCENE_COLOR_HEX[index % SCENE_COLOR_HEX.length] ?? DEFAULT_SCENE_COLOR;
+                      const left = timeToX(scene.startTime);
+                      const width = Math.max(2, timeToX(scene.endTime) - timeToX(scene.startTime));
+                      return (
+                        <div
+                          key={`caption-seg-${scene.id}`}
+                          className="absolute top-1 h-[calc(100%-8px)] rounded pointer-events-none"
+                          style={{
+                            left,
+                            width,
+                            backgroundColor: sceneColor,
+                            opacity: 0.5,
+                          }}
+                          aria-hidden
+                        />
+                      );
+                    })}
+                  <button
+                    type="button"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 rounded border border-dashed border-border bg-muted/30 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    onClick={handleAddCaption}
+                  >
+                    Add Caption
+                  </button>
                   {captions.map((cap) => (
                     <div
                       key={cap.id}
-                      className="absolute top-1 h-[calc(100%-8px)] rounded bg-amber-600/70 px-1 overflow-hidden text-xs text-foreground"
+                      role="button"
+                      tabIndex={0}
+                      className={`absolute top-1 h-[calc(100%-8px)] rounded px-1 overflow-hidden text-xs text-foreground cursor-pointer z-10 ${
+                        selectedCaptionId === cap.id
+                          ? "bg-amber-500 ring-2 ring-foreground ring-offset-1 ring-offset-background"
+                          : "bg-amber-600/70 hover:bg-amber-600/90"
+                      }`}
                       style={{
                         left: timeToX(cap.startTime),
                         width: Math.max(4, timeToX(cap.endTime) - timeToX(cap.startTime)),
                       }}
                       title={cap.text}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedCaptionId(cap.id);
+                        setSelectedSceneIndex(null);
+                      }}
                     >
                       <span className="truncate block">{cap.text || "—"}</span>
                     </div>
                   ))}
                 </div>
+                <div className="relative" style={{ height: TRACK_HEIGHT }}>
+                  <input
+                    ref={musicInputRef}
+                    type="file"
+                    accept="audio/mpeg,.mp3"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const prev = musicUrl;
+                      if (prev) URL.revokeObjectURL(prev);
+                      setMusicUrl(URL.createObjectURL(file));
+                      e.target.value = "";
+                    }}
+                  />
+                  {musicUrl && duration > 0 ? (
+                    <div
+                      className="absolute top-1 h-[calc(100%-8px)] rounded bg-green-600/80 left-0"
+                      style={{ width: timelineWidth }}
+                      title="Music track"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 rounded border border-dashed border-border bg-muted/30 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      onClick={() => musicInputRef.current?.click()}
+                    >
+                      Add music
+                    </button>
+                  )}
+                </div>
+
+                {/* Add scene at bottom of timeline: 5s, next color, drag to reorder / click to edit duration */}
+                <div
+                  className="flex items-center justify-center border-t border-border bg-muted/30"
+                  style={{ height: TRACK_HEIGHT }}
+                >
+                  <button
+                    type="button"
+                    onClick={addScene}
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
+                  >
+                    + Add Scene
+                  </button>
+                  <span className="ml-3 text-xs text-muted-foreground">
+                    New scene: 5s · Drag to reorder · Click to edit duration
+                  </span>
+                </div>
               </div>
 
               {/* Playhead */}
-              {totalWidth > 0 && (
+              {timelineWidth > 0 && (
                 <div
                   data-playhead
                   role="slider"
                   aria-label="Playhead"
                   aria-valuemin={0}
-                  aria-valuemax={duration}
+                  aria-valuemax={effectiveDuration}
                   aria-valuenow={currentTime}
                   className="absolute top-0 bottom-0 w-0.5 cursor-ew-resize z-20"
                   style={{ left: playheadX, backgroundColor: PLAYHEAD_COLOR }}
@@ -648,16 +2543,178 @@ export default function VideoTimelinePage() {
           </div>
         </div>
 
-        {/* Scene edit panel */}
-        <div className="min-w-[320px] w-[320px] shrink-0 flex flex-col border-l border-border bg-card overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col p-5">
-            {selectedSceneIndex === null ? (
-              <p className="text-sm text-muted-foreground">Click a scene to edit it.</p>
-            ) : (
+        {/* Scene / Caption edit panel - fixed, full height, scroll */}
+        <div className="fixed top-0 right-0 h-screen w-96 bg-card border-l border-border shadow-lg overflow-y-auto z-40 p-6">
+          <div className="flex flex-col">
+            {selectedCaptionId !== null && selectedCaption ? (
               <>
-                <h2 className="text-xl font-semibold text-foreground mb-5 break-words">
-                  {scenes[selectedSceneIndex]?.text ?? "—"}
-                </h2>
+                <h2 className="text-xl font-semibold text-foreground mb-5">Edit Caption</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Text</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                      value={selectedCaption.text}
+                      onChange={(e) => updateCaption(selectedCaption.id, { text: e.target.value })}
+                      placeholder="Enter caption text..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Start time (seconds)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground tabular-nums"
+                      value={selectedCaption.startTime.toFixed(1)}
+                      onChange={(e) => {
+                        const start = parseFloat(e.target.value);
+                        if (!Number.isFinite(start) || start < 0) return;
+                        const dur = selectedCaption.endTime - selectedCaption.startTime;
+                        updateCaption(selectedCaption.id, { startTime: start, endTime: start + dur });
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+                      Duration {(selectedCaption.endTime - selectedCaption.startTime).toFixed(1)}s
+                    </label>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={10}
+                      step={0.1}
+                      className="w-full h-2 rounded-lg appearance-none bg-muted accent-primary"
+                      value={selectedCaption.endTime - selectedCaption.startTime}
+                      onChange={(e) => {
+                        const dur = parseFloat(e.target.value);
+                        updateCaption(selectedCaption.id, { endTime: selectedCaption.startTime + dur });
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Position</label>
+                    <select
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                      value={captionPosition}
+                      onChange={(e) =>
+                        setCaptionPosition(e.target.value as "bottom" | "middle" | "top")
+                      }
+                    >
+                      <option value="bottom">Bottom</option>
+                      <option value="middle">Middle</option>
+                      <option value="top">Top</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Font size</label>
+                    <select
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                      value={captionFontSize}
+                      onChange={(e) =>
+                        setCaptionFontSize(e.target.value as "small" | "medium" | "large")
+                      }
+                    >
+                      <option value="small">Small</option>
+                      <option value="medium">Medium</option>
+                      <option value="large">Large</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Text colour</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        className="h-9 w-14 cursor-pointer rounded border border-input bg-background p-1"
+                        value={captionTextColor}
+                        onChange={(e) => setCaptionTextColor(e.target.value)}
+                      />
+                      <span className="text-xs text-muted-foreground tabular-nums">{captionTextColor}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="w-full rounded border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive hover:bg-destructive/20"
+                    onClick={() => deleteCaption(selectedCaption.id)}
+                  >
+                    Delete caption
+                  </button>
+                </div>
+              </>
+            ) : selectedSceneIndex !== null ? (
+              <>
+                <input
+                  ref={sceneElementFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    const target = imageUploadTargetRef.current;
+                    e.target.value = "";
+                    if (!file || !target) return;
+                    const { sceneIndex, elementIndex } = target;
+                    imageUploadTargetRef.current = null;
+                    const scene = scenes[sceneIndex];
+                    const el = scene?.elements[elementIndex];
+                    if (isImageEl(el)) {
+                      const prev = el.media?.url;
+                      if (prev) URL.revokeObjectURL(prev);
+                      updateSceneElement(sceneIndex, elementIndex, { media: { url: URL.createObjectURL(file) } });
+                    } else if (isStickerEl(el)) {
+                      const prev = el.media?.url;
+                      if (prev) URL.revokeObjectURL(prev);
+                      updateSceneElement(sceneIndex, elementIndex, { media: { url: URL.createObjectURL(file) } });
+                    }
+                  }}
+                />
+                <div className="flex items-center justify-between gap-2 mb-5">
+                  <h2 className="text-xl font-semibold text-foreground break-words">
+                    {scenes[selectedSceneIndex]?.title ?? "—"}
+                  </h2>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/20"
+                    onClick={() => selectedSceneIndex !== null && deleteScene(selectedSceneIndex)}
+                  >
+                    Delete Scene
+                  </button>
+                </div>
+
+                {/* Duration: type custom value (e.g. 3.5s, 7s, 10s); timeline width auto-updates */}
+                {selectedSceneIndex !== null && (
+                  <div className="mb-5">
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Duration (seconds)</label>
+                    <input
+                      type="number"
+                      min={0.5}
+                      max={600}
+                      step={0.1}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground tabular-nums"
+                      value={editingDurationInput}
+                      onChange={(e) => setEditingDurationInput(e.target.value)}
+                      onBlur={() => {
+                        const v = parseFloat(editingDurationInput);
+                        if (Number.isFinite(v) && v >= 0.5) {
+                          updateSceneDuration(selectedSceneIndex, v);
+                          setEditingDurationInput(String(v));
+                        } else if (selectedSceneDuration !== null) {
+                          setEditingDurationInput(String(selectedSceneDuration));
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      placeholder="e.g. 3.5, 7, 10"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Timeline width auto-updates. Min 0.5s. Drag blocks to reorder.
+                    </p>
+                  </div>
+                )}
 
                 {/* Background media */}
                 <div className="mb-5">
@@ -673,17 +2730,19 @@ export default function VideoTimelinePage() {
                       e.target.value = "";
                     }}
                   />
-                  {sceneMedia[selectedSceneIndex] ? (
+                  {(() => {
+                  const bgMedia = selectedSceneIndex !== null ? getSceneBackgroundMedia(scenes[selectedSceneIndex]) : null;
+                  return bgMedia ? (
                     <div className="relative rounded-lg border border-border overflow-hidden bg-muted/30 aspect-video">
-                      {sceneMedia[selectedSceneIndex]!.type === "image" ? (
+                      {bgMedia.type === "image" ? (
                         <img
-                          src={sceneMedia[selectedSceneIndex]!.url}
+                          src={bgMedia.url}
                           alt="Scene background"
                           className="w-full h-full object-contain"
                         />
                       ) : (
                         <video
-                          src={sceneMedia[selectedSceneIndex]!.url}
+                          src={bgMedia.url}
                           className="w-full h-full object-contain"
                           muted
                           playsInline
@@ -694,14 +2753,12 @@ export default function VideoTimelinePage() {
                         type="button"
                         className="absolute bottom-2 right-2 rounded bg-background/90 px-2 py-1 text-xs text-foreground border border-border hover:bg-background"
                         onClick={() => {
-                          const entry = sceneMedia[selectedSceneIndex!];
-                          if (entry) URL.revokeObjectURL(entry.url);
-                          setSceneMedia((prev) => {
-                            const next = [...prev];
-                            if (selectedSceneIndex !== null && selectedSceneIndex < next.length)
-                              next[selectedSceneIndex] = null;
-                            return next;
-                          });
+                          const scene = scenes[selectedSceneIndex!];
+                          const first = scene?.elements[0];
+                          if (first && isBackgroundEl(first) && first.media?.url) {
+                            URL.revokeObjectURL(first.media.url);
+                            updateSceneElement(selectedSceneIndex!, 0, { media: null });
+                          }
                         }}
                       >
                         Remove
@@ -741,7 +2798,8 @@ export default function VideoTimelinePage() {
                         Browse
                       </button>
                     </div>
-                  )}
+                  );
+                  })()}
                 </div>
 
                 {/* Scene text */}
@@ -749,18 +2807,203 @@ export default function VideoTimelinePage() {
                   <label className="text-xs font-medium text-muted-foreground block mb-2">Scene text</label>
                   <textarea
                     className="w-full min-h-[140px] rounded-lg border border-input bg-background px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 leading-relaxed resize-y"
-                    value={sceneFullTexts[selectedSceneIndex] ?? ""}
+                    value={scenes[selectedSceneIndex]?.title ?? ""}
                     onChange={(e) => {
                       const i = selectedSceneIndex;
                       if (i === null) return;
-                      setSceneFullTexts((prev) => {
-                        const next = [...prev];
-                        if (i >= 0 && i < next.length) next[i] = e.target.value;
-                        return next;
-                      });
+                      const value = e.target.value;
+                      setScenes((prev) =>
+                        prev.map((s, idx) => (idx === i ? { ...s, title: value } : s))
+                      );
                     }}
                     placeholder="Enter scene text..."
                   />
+                </div>
+
+                {/* Scene elements: text + image only (preview renders on top of background) */}
+                <div className="mt-4 border-t border-border pt-4 mb-5">
+                  <h3 className="font-bold text-foreground mb-2">Overlays</h3>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => addElement("text")}
+                      className="rounded border border-input bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted"
+                    >
+                      Add Text
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addElement("image")}
+                      className="rounded border border-input bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted"
+                    >
+                      Add Image
+                    </button>
+                  </div>
+                  <div className="space-y-3 max-h-[280px] overflow-y-auto">
+                    {(scenes[selectedSceneIndex]?.elements ?? []).map((el, elementIndex) => {
+                      const positionY = "position" in el && el.position ? el.position.y : 50;
+                      const verticalPreset = positionY <= 25 ? "top" : positionY >= 75 ? "bottom" : "middle";
+                      const setVertical = (preset: "top" | "middle" | "bottom") => {
+                        const y = preset === "top" ? 15 : preset === "bottom" ? 85 : 50;
+                        updateSceneElement(selectedSceneIndex!, elementIndex, {
+                          position: { ...("position" in el ? el.position : { x: 50, y: 50 }), y },
+                        });
+                      };
+                      return (
+                      <div key={el.id} className="rounded-lg border border-border bg-muted/30 p-2 text-xs space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-foreground capitalize">{el.type}</span>
+                          <div className="flex items-center gap-1">
+                            {elementIndex > 1 && (
+                              <button
+                                type="button"
+                                className="rounded border border-border px-1.5 py-0.5 hover:bg-muted"
+                                onClick={() => moveSceneElement(selectedSceneIndex!, elementIndex, "back")}
+                              >
+                                Back
+                              </button>
+                            )}
+                            {elementIndex < (scenes[selectedSceneIndex]?.elements?.length ?? 0) - 1 && (
+                              <button
+                                type="button"
+                                className="rounded border border-border px-1.5 py-0.5 hover:bg-muted"
+                                onClick={() => moveSceneElement(selectedSceneIndex!, elementIndex, "front")}
+                              >
+                                Front
+                              </button>
+                            )}
+                            {!isBackgroundEl(el) && (
+                              <button
+                                type="button"
+                                className="rounded border border-destructive/50 text-destructive px-1.5 py-0.5 hover:bg-destructive/10"
+                                onClick={() => removeElement(elementIndex)}
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {isTextEl(el) && (
+                          <>
+                            <input
+                              type="text"
+                              className="w-full mt-2 rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
+                              value={el.content}
+                              onChange={(e) => updateElement(elementIndex, { content: e.target.value })}
+                              placeholder="Enter text"
+                            />
+                            <div>
+                              <span className="text-muted-foreground block mb-1">Position</span>
+                              <div className="flex gap-1">
+                                {(["top", "middle", "bottom"] as const).map((p) => (
+                                  <button
+                                    key={p}
+                                    type="button"
+                                    className={`rounded border px-2 py-1 capitalize ${verticalPreset === p ? "bg-primary text-primary-foreground border-primary" : "border-input bg-background hover:bg-muted"}`}
+                                    onClick={() => setVertical(p)}
+                                  >
+                                    {p}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <label className="flex items-center gap-1">
+                                <span>Size</span>
+                                <input
+                                  type="number"
+                                  className="w-14 rounded border border-input bg-background px-1 py-0.5 tabular-nums"
+                                  value={el.fontSize}
+                                  onChange={(e) =>
+                                    updateSceneElement(selectedSceneIndex!, elementIndex, {
+                                      fontSize: Number(e.target.value),
+                                    })
+                                  }
+                                />
+                              </label>
+                              <div className="flex items-center gap-1">
+                                <span>Color</span>
+                                <input
+                                  type="color"
+                                  className="h-6 w-8 cursor-pointer rounded border border-input"
+                                  value={el.color}
+                                  onChange={(e) =>
+                                    updateSceneElement(selectedSceneIndex!, elementIndex, { color: e.target.value })
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
+                        {isImageEl(el) && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              {el.media?.url && (
+                                <img src={el.media.url} alt="" className="h-10 w-10 rounded border border-border object-cover" />
+                              )}
+                              <button
+                                type="button"
+                                className="rounded border border-input bg-background px-2 py-1 text-xs hover:bg-muted"
+                                onClick={() => {
+                                  imageUploadTargetRef.current = { sceneIndex: selectedSceneIndex!, elementIndex };
+                                  sceneElementFileInputRef.current?.click();
+                                }}
+                              >
+                                {el.media?.url ? "Replace image" : "Upload image"}
+                              </button>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground block mb-1">Position</span>
+                              <div className="flex gap-1">
+                                {(["top", "middle", "bottom"] as const).map((p) => (
+                                  <button
+                                    key={p}
+                                    type="button"
+                                    className={`rounded border px-2 py-1 capitalize ${verticalPreset === p ? "bg-primary text-primary-foreground border-primary" : "border-input bg-background hover:bg-muted"}`}
+                                    onClick={() => setVertical(p)}
+                                  >
+                                    {p}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                type="number"
+                                className="w-14 rounded border border-input bg-background px-1 py-0.5 tabular-nums"
+                                placeholder="W"
+                                value={el.size.w}
+                                onChange={(e) =>
+                                  updateSceneElement(selectedSceneIndex!, elementIndex, {
+                                    size: { ...el.size, w: Number(e.target.value) },
+                                  })
+                                }
+                              />
+                              <input
+                                type="number"
+                                className="w-14 rounded border border-input bg-background px-1 py-0.5 tabular-nums"
+                                placeholder="H"
+                                value={el.size.h}
+                                onChange={(e) =>
+                                  updateSceneElement(selectedSceneIndex!, elementIndex, {
+                                    size: { ...el.size, h: Number(e.target.value) },
+                                  })
+                                }
+                              />
+                            </div>
+                          </div>
+                        )}
+                        {/* Legacy: graphic/sticker — delete only (no new ones added) */}
+                        {isGraphicEl(el) && (
+                          <p className="text-muted-foreground text-xs">Graphic. Use Delete to remove.</p>
+                        )}
+                        {isStickerEl(el) && (
+                          <p className="text-muted-foreground text-xs">Sticker. Use Delete to remove.</p>
+                        )}
+                      </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Duration */}
@@ -773,7 +3016,29 @@ export default function VideoTimelinePage() {
                   </div>
                 )}
               </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Click a scene or caption to edit it.</p>
             )}
+
+            {/* Music - always visible */}
+            <div className="mt-5 pt-5 border-t border-border space-y-4">
+              <h3 className="text-sm font-semibold text-foreground">Music</h3>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+                  Volume {musicUrl ? `${musicVolume}%` : ""}
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={musicVolume}
+                  onChange={(e) => setMusicVolume(Number(e.target.value))}
+                  className="w-full h-2 rounded-lg appearance-none bg-muted accent-primary"
+                  disabled={!musicUrl}
+                  title="Music volume"
+                />
+              </div>
+            </div>
 
             {/* Caption Style - always visible */}
             <div className="mt-5 pt-5 border-t border-border space-y-4">
@@ -838,6 +3103,8 @@ export default function VideoTimelinePage() {
           </div>
         </div>
         </div>
+          </>
+        )}
       </main>
     </div>
     </div>

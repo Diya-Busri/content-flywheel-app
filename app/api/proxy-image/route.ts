@@ -4,6 +4,7 @@
  * No base64 encoding. Only allows https URLs from Pexels/Unsplash.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 const ALLOWED_ORIGINS = [
   "images.pexels.com",

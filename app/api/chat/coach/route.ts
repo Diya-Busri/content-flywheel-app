@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import OpenAI from "openai";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
+import { coachSettingsTable } from "@/db/schema/coach-settings-schema";
 import { eq, and, isNull } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -10,7 +13,31 @@ export const runtime = "nodejs";
 const OPENAI_MODEL_DEFAULT = "gpt-4o-mini";
 const OPENAI_MODEL_VISION = "gpt-4o";
 
-const SYSTEM_PROMPT = `You are the user's best friend and business coach. You talk like a real person — casual, warm, direct, sometimes funny. No bullet points, no formal structure, no 'Great question!' type responses. Just talk naturally like you're on a phone call. Keep responses conversational and fairly short unless they really need detail. Use phrases like 'honestly', 'look', 'here's the thing', 'real talk' — sound human. You know they're building Content Flywheel, a SaaS for digital creators. Hype them up when they need it, be real with them when they need that too.`;
+const COACH_MODE_PROMPTS: Record<string, string> = {
+  business: `You are a direct, experienced startup coach. Focus on product decisions, growth strategy, and execution. No fluff. Real talk only.`,
+  finance: `You are a finance mentor for solo founders. Help with pricing strategy, understanding costs, revenue goals, and making smart money decisions. Be specific with numbers.`,
+  content: `You are a social media strategist who has grown faceless accounts to 100k+. Give specific, platform-aware advice for TikTok, Instagram and YouTube. Focus on what actually converts, not vanity metrics.`,
+  youtube: `You are a YouTube growth strategist who specialises in faceless channels and long-form content. You know what makes videos rank, retain viewers, and convert to subscribers.
+
+Talk like a straight-talking creator who has actually grown channels — not a corporate consultant. Short sentences, real advice, no fluff.
+
+Help with: video ideas, titles, thumbnails, scripts, hooks, retention tactics, SEO, channel positioning, monetisation strategy.
+
+Never say generic things like 'create valuable content' or 'be consistent'. Give specific, actionable advice tailored to their niche and channel size.`,
+  goals: `You are an accountability coach. Help the user identify their top priorities, break them into weekly actions, and stay focused. Be direct about what they should drop or deprioritise.`,
+  general: `You are their straight-talking friend. You speak like a real person texting — casual, short, occasionally use lowercase, no corporate words ever.
+
+Never say: 'I totally get that', 'that's exciting', 'I understand', 'it can feel', 'absolutely', 'certainly', 'great question', 'disheartening', 'I'm here to help'.
+
+Instead talk like a real friend would:
+- 'yeah the job market is cooked rn'
+- 'honestly just go in and do ur best'
+- 'ngl that sounds stressful'
+- 'what kind of placement are you going for?'
+
+Keep responses short. 2-3 sentences max unless they ask something that needs a longer answer. Match their energy — if they're casual, be casual. If they're stressed, be direct and helpful. No lectures. No lists unless asked.`,
+};
+const DEFAULT_COACH_MODE = "business";
 
 type IncomingMessage = {
   role: "user" | "assistant";
@@ -69,12 +96,34 @@ function buildProductContextBlock(product: {
 export async function POST(req: Request) {
   try {
     const { userId } = await auth();
+    const apiRl = await checkApiRateLimit(userId);
+
+    if (apiRl) return apiRl;
+
+    const rl = checkAiRateLimit(userId ?? null);
+    if (rl) return rl;
     const body = await req.json().catch(() => ({}));
-    const { messages, pageContext, productId } = body as {
+    const {
+      messages,
+      pageContext,
+      productId,
+      coachMode: requestedMode,
+      memoryEnabled,
+      previousSummaries,
+      userName: bodyUserName,
+      coachName: bodyCoachName,
+    } = body as {
       messages?: IncomingMessage[];
       pageContext?: string;
       productId?: string;
+      coachMode?: string;
+      memoryEnabled?: boolean;
+      previousSummaries?: string[];
+      userName?: string;
+      coachName?: string;
     };
+    const coachMode = typeof requestedMode === "string" && requestedMode in COACH_MODE_PROMPTS ? requestedMode : DEFAULT_COACH_MODE;
+    const systemPrompt = COACH_MODE_PROMPTS[coachMode];
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: "messages array required" }, { status: 400 });
@@ -98,6 +147,32 @@ export async function POST(req: Request) {
         ? `The user is currently on: ${pageContext.trim()}. Use this to give relevant next steps when helpful.`
         : "";
 
+    // Personalisation: user name and coach name (always, from body or coach_settings)
+    let userName = typeof bodyUserName === "string" ? bodyUserName.trim() : "";
+    let coachName = typeof bodyCoachName === "string" && bodyCoachName.trim() ? bodyCoachName.trim() : "";
+    if (userId && (!userName || !coachName)) {
+      const [settings] = await db
+        .select({ userName: coachSettingsTable.userName, coachName: coachSettingsTable.coachName })
+        .from(coachSettingsTable)
+        .where(eq(coachSettingsTable.userId, userId))
+        .limit(1);
+      if (settings) {
+        if (!userName) userName = (settings.userName ?? "").trim();
+        if (!coachName) coachName = (settings.coachName ?? "Coach").trim() || "Coach";
+      }
+    }
+    if (!coachName) coachName = "Coach";
+    const personalisation =
+      userName || coachName
+        ? `The user's name is ${userName || "the user"}. They want to be called ${userName || "the user"} in conversation. The coach's name is ${coachName}. Use the coach's name naturally when relevant, not in every message.`
+        : "";
+
+    // Memory: previous conversation summaries (only when memory enabled)
+    const memoryBlock =
+      memoryEnabled && Array.isArray(previousSummaries) && previousSummaries.length > 0
+        ? `Previous conversations summary:\n${previousSummaries.map((s) => `- ${s}`).join("\n")}`
+        : "";
+
     let productContext = "";
     if (userId && typeof productId === "string" && productId.trim()) {
       try {
@@ -119,7 +194,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const systemParts = [SYSTEM_PROMPT, pageNote, productContext].filter(Boolean);
+    const systemParts = [systemPrompt, personalisation, pageNote, memoryBlock, productContext].filter(Boolean);
     const openai = new OpenAI({ apiKey });
     const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {

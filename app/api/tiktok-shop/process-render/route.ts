@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { renderJobsTable } from "@/db/schema/library-schema";
 import { eq } from "drizzle-orm";

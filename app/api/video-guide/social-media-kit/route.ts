@@ -9,6 +9,8 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { eq, and, isNull } from "drizzle-orm";
 import { db } from "@/db/db";
 import { scriptsTable } from "@/db/schema/library-schema";
@@ -50,6 +52,12 @@ export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const apiRl = await checkApiRateLimit(userId);
+
+    if (apiRl) return apiRl;
+
+    const rl = checkAiRateLimit(userId);
+    if (rl) return rl;
 
     const formData = await request.formData().catch(() => null);
     if (!formData) {
@@ -80,7 +88,8 @@ export async function POST(request: NextRequest) {
           )
         )
         .limit(1);
-      if (!row || row.platform !== "video-guide") {
+      const isVideoGuide = row?.platform === "video-guide" || row?.platform === "content-studio";
+      if (!row || !isVideoGuide) {
         return NextResponse.json(
           { error: "Script not found or not a video guide." },
           { status: 404 }

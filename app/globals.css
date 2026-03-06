@@ -249,6 +249,18 @@
   }
 }
 
+/* AI Coach mic recording: sound wave bars (used globally) */
+@keyframes voice-wave {
+  0%, 100% {
+    transform: scaleY(0.4);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
 /* Intercom chat launcher: position bottom-left to avoid overlapping content */
 #intercom-container,
 .intercom-launcher {

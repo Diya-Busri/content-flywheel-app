@@ -20,6 +20,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { mapScriptToSceneOverlays } from "@/lib/video-guide-scene-overlays";
 import {
   ArrowLeft,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -45,6 +46,14 @@ import {
   Pause,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { cleanProductTitle, replaceProductTitleInText } from "@/lib/product-title";
 
 /** Social Media Kit shape (matches API response). */
@@ -208,11 +217,13 @@ export type VideoGuideData = {
     textOverlay?: string | TextOverlayObj | TextOverlayObj[];
     transition?: { toNextScene?: string; effects?: string; pacing?: string };
     audio?: { mood?: string };
+    format?: { aspect_ratio?: string; orientation?: string; resolution?: string };
   }>;
   editingSteps?: Record<string, string[]>;
   subtitleRecs?: { style?: string; font?: string; position?: string; animation?: string };
   musicRecs?: { mood?: string; sources?: string[]; volume?: string };
-  exportSettings?: { resolution?: string; fps?: number; format?: string; fileSize?: string };
+  exportSettings?: { resolution?: string; fps?: number; format?: string; fileSize?: string; aspectRatio?: string };
+  videoFormat?: { aspectRatio: string; orientation: string; resolution: string };
   platformTips?: string[];
   /** Single full-script voiceover URL (saved to Supabase). */
   timelineVoiceoverUrl?: string;
@@ -240,6 +251,14 @@ type Props = {
   productId?: string;
   /** Library script id when guide was loaded from My Library; passed to timeline so captions can auto-populate. */
   libraryScriptId?: string;
+  /** When true, guide came from Content Studio (YouTube); affects breadcrumb, back link, and title. */
+  isYouTubeMode?: boolean;
+  /** Override back link (e.g. to Content Studio scripts when isYouTubeMode). */
+  backUrl?: string;
+  /** Channel name for YouTube context subtitle. */
+  channelName?: string;
+  channelId?: string;
+  scriptId?: string;
   /** Called when user provides product name (e.g. from the "What is your product called?" prompt). Parent should update guide.productName and persist if libraryScriptId. */
   onProductNameChange?: (productName: string) => void;
   /** Called after full script is regenerated so parent can update guide.script and optionally guide.scenes (with textOverlay re-mapped). */
@@ -256,13 +275,27 @@ type Props = {
     frameworkRationale?: string;
     engagementTriggers?: string[];
   }) => void;
+  /** When true, show Content Studio / YouTube context (breadcrumb, back link, title). */
+  isYouTubeMode?: boolean;
+  /** Override back link URL (e.g. Content Studio scripts or Digital Products scripts). */
+  backUrl?: string;
+  /** Channel name for YouTube mode subtitle. */
+  channelName?: string;
 };
 
-export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceId, scripts: scriptsProp, productId, libraryScriptId, onProductNameChange, onScriptRegenerated, onScriptEdited, onSceneVoiceoverUrlsSaved, onScenesRegenerated }: Props) {
+export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceId, scripts: scriptsProp, productId, libraryScriptId, isYouTubeMode, backUrl, channelName, onProductNameChange, onScriptRegenerated, onScriptEdited, onSceneVoiceoverUrlsSaved, onScenesRegenerated }: Props) {
   const { toast } = useToast();
   const router = useRouter();
   const [scripts, setScripts] = useState<ScriptForGuide[]>(() => (Array.isArray(scriptsProp) && scriptsProp.length > 0 ? scriptsProp : []));
-  const [currentScriptIndex, setCurrentScriptIndex] = useState(0);
+  // 0-based index for the 4 angles (Story, Problem/Solution, Social Proof/Results, Curiosity/Controversy)
+  const [currentAngleIndex, setCurrentAngleIndex] = useState(0);
+
+  const angles = [
+    { name: "Story Angle" },
+    { name: "Problem/Solution Angle" },
+    { name: "Social Proof/Results Angle" },
+    { name: "Curiosity/Controversy Angle" },
+  ];
   const [regeneratingScript, setRegeneratingScript] = useState(false);
   const [regeneratingFullScript, setRegeneratingFullScript] = useState(false);
   const [regeneratingScenes, setRegeneratingScenes] = useState(false);
@@ -275,19 +308,47 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         : ELEVENLABS_VOICES[0].voiceId
   );
 
+  const [showConfig, setShowConfig] = useState(false);
+  const [config, setConfig] = useState(() => {
+    const initialVoice =
+      preferredVoiceId && preferredVoiceId.trim()
+        ? preferredVoiceId.trim()
+        : typeof window !== "undefined"
+          ? getDefaultVoiceId()
+          : ELEVENLABS_VOICES[0].voiceId;
+    return {
+      duration: 10,
+      sceneCount: 8,
+      selectedVoice: initialVoice,
+      voiceoverMode: "scene-by-scene" as "full" | "scene-by-scene",
+    };
+  });
+
   useEffect(() => {
     if (Array.isArray(scriptsProp) && scriptsProp.length > 0) {
       setScripts(scriptsProp);
-      setCurrentScriptIndex((i) => (i >= scriptsProp.length ? 0 : i));
+      setCurrentAngleIndex((i) => (i >= scriptsProp.length ? 0 : i));
     }
   }, [scriptsProp?.length]);
 
+  useEffect(() => {
+    if (guide.scenes?.length != null && guide.scenes.length >= 4 && guide.scenes.length <= 20) {
+      setConfig((c) => ({ ...c, sceneCount: guide.scenes!.length }));
+    }
+  }, [guide.scenes?.length]);
+
+  useEffect(() => {
+    if (showConfig && ELEVENLABS_VOICES.some((v) => v.voiceId === voiceId)) {
+      setConfig((c) => (c.selectedVoice === voiceId ? c : { ...c, selectedVoice: voiceId }));
+    }
+  }, [showConfig, voiceId]);
+
   const hasMultipleScripts = scripts.length > 1;
-  const effectiveScript = scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length
-    ? { hook: scripts[currentScriptIndex].hook, body: scripts[currentScriptIndex].body, cta: scripts[currentScriptIndex].cta }
+  const effectiveScript = scripts.length > 0 && currentAngleIndex >= 0 && currentAngleIndex < scripts.length
+    ? { hook: scripts[currentAngleIndex].hook, body: scripts[currentAngleIndex].body, cta: scripts[currentAngleIndex].cta }
     : guide.script;
-  const effectiveScriptTitle = scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length
-    ? scripts[currentScriptIndex].title
+  const effectiveScriptTitle = scripts.length > 0 && currentAngleIndex >= 0 && currentAngleIndex < scripts.length
+    ? scripts[currentAngleIndex].title
     : scriptTitle;
   const [stability, setStability] = useState(0.5);
   const [similarity, setSimilarity] = useState(0.75);
@@ -308,6 +369,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   /** URL of the audio currently playing for inline preview (full or scene). */
   const [playingPreviewUrl, setPlayingPreviewUrl] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const autoPlayAudioRef = useRef<HTMLAudioElement | null>(null);
   const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
   const [characterRefPreviewUrl, setCharacterRefPreviewUrl] = useState<string | null>(null);
@@ -342,10 +404,25 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const isPlaceholderName = PLACEHOLDER_NAMES.includes(effectiveProductName.toLowerCase().trim());
   const hasProductName = effectiveProductName.length > 0 && !isPlaceholderName;
   const rawProductTitle = effectiveProductName || undefined;
+  const stripMarkdown = (s: string) =>
+    String(s ?? "")
+      .replace(/^#+\s*/gm, "")
+      .replace(/\*\*/g, "");
+  /** Remove all "Visual prompt" / "vidual prompt" from script text (lines and bracketed inline). */
+  const stripVisualPromptLines = (text: string) => {
+    let out = text
+      .replace(/\[\s*(?:visual|vidual)\s+prompt\s*:[^\]]*\]/gi, "")
+      .split("\n")
+      .filter((line) => !/^\s*(?:visual|vidual)\s+prompt\s*:/i.test(line.trim()))
+      .join("\n");
+    out = out.replace(/\n{3,}/g, "\n\n").replace(/  +/g, " ").trim();
+    return out;
+  };
   const replacePlaceholderInScript = (t: string) => {
-    const s = String(t ?? "");
+    const s = stripMarkdown(String(t ?? ""));
+    const noVisualPrompts = stripVisualPromptLines(s);
     const replacement = hasProductName ? (cleanProductTitle(effectiveProductName) || effectiveProductName) : "[Your product name]";
-    return s.replace(/\bYour product\b/gi, replacement);
+    return noVisualPrompts.replace(/\bYour product\b/gi, replacement);
   };
   const displayScript = {
     hook: replacePlaceholderInScript(effectiveScript.hook),
@@ -357,11 +434,11 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const handleScriptBlur = useCallback(() => {
     if (!editedScript) return;
     onScriptEdited?.(editedScript);
-    if (scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length) {
-      setScripts((prev) => prev.map((s, i) => (i === currentScriptIndex ? { ...s, hook: editedScript.hook, body: editedScript.body, cta: editedScript.cta } : s)));
+    if (scripts.length > 0 && currentAngleIndex >= 0 && currentAngleIndex < scripts.length) {
+      setScripts((prev) => prev.map((s, i) => (i === currentAngleIndex ? { ...s, hook: editedScript.hook, body: editedScript.body, cta: editedScript.cta } : s)));
     }
     setEditedScript(null);
-  }, [editedScript, onScriptEdited, scripts.length, currentScriptIndex]);
+  }, [editedScript, onScriptEdited, scripts.length, currentAngleIndex]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -635,9 +712,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             return { ...scene, textOverlay: { ...existing, exactText: chunk } };
           });
           onScriptRegenerated?.(script, updatedScenes);
-          if (scripts.length > 0 && currentScriptIndex >= 0 && currentScriptIndex < scripts.length) {
+          if (scripts.length > 0 && currentAngleIndex >= 0 && currentAngleIndex < scripts.length) {
             setScripts((prev) =>
-              prev.map((s, i) => (i === currentScriptIndex ? { ...s, hook: script.hook, body: script.body, cta: script.cta } : s))
+              prev.map((s, i) => (i === currentAngleIndex ? { ...s, hook: script.hook, body: script.body, cta: script.cta } : s))
             );
           }
           const msg = lengthAdjustment === "shorter" ? "Script shortened." : lengthAdjustment === "longer" ? "Script expanded." : "Hook, body and CTA updated.";
@@ -649,12 +726,29 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         setRegeneratingFullScript(false);
       }
     },
-    [libraryScriptId, onScriptRegenerated, scripts.length, currentScriptIndex, toast, guide.scenes, guide.scenePrompts]
+    [libraryScriptId, onScriptRegenerated, scripts.length, currentAngleIndex, toast, guide.scenes, guide.scenePrompts]
+  );
+
+  const applyRegeneratePayload = useCallback(
+    (payload: {
+      scenes?: VideoGuideData["scenes"];
+      scenePrompts?: VideoGuideData["scenePrompts"];
+      storytellingFramework?: string;
+      frameworkRationale?: string;
+      engagementTriggers?: string[];
+    }) => {
+      if (payload.scenes && payload.scenePrompts && onScenesRegenerated) {
+        onScenesRegenerated(payload);
+        toast({ title: "Scenes regenerated", description: "Visual and text overlay prompts have been updated." });
+      }
+    },
+    [onScenesRegenerated, toast]
   );
 
   const handleRegenerateScenes = useCallback(async () => {
     if (!onScenesRegenerated) return;
     const script = displayScript;
+    const durationSeconds = config.duration * 60;
     setRegeneratingScenes(true);
     try {
       const res = await fetch("/api/video-guide/generate", {
@@ -667,6 +761,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           productName: guide.productName?.trim() || undefined,
           productId: productId || undefined,
           regenerateScenesOnly: true,
+          durationSeconds: durationSeconds >= 120 ? durationSeconds : 300,
+          targetSceneCount: config.sceneCount,
+          ...(isYouTubeMode && { source: "content-studio", platforms: ["youtube_longform"] }),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -679,8 +776,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         engagementTriggers?: string[];
       };
       if (payload.scenes && payload.scenePrompts) {
-        onScenesRegenerated(payload);
-        toast({ title: "Scenes regenerated", description: "Visual and text overlay prompts have been updated." });
+        applyRegeneratePayload(payload);
       } else {
         throw new Error("Invalid response");
       }
@@ -689,7 +785,50 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     } finally {
       setRegeneratingScenes(false);
     }
-  }, [displayScript, guide.productName, productId, onScenesRegenerated, toast]);
+  }, [displayScript, guide.productName, productId, onScenesRegenerated, toast, isYouTubeMode, config.duration, config.sceneCount, applyRegeneratePayload]);
+
+  const handleApplyConfiguration = useCallback(async () => {
+    if (!onScenesRegenerated) return;
+    const script = displayScript;
+    const durationSeconds = config.duration * 60;
+    setRegeneratingScenes(true);
+    try {
+      const res = await fetch("/api/video-guide/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hook: script.hook,
+          body: script.body,
+          cta: script.cta,
+          productName: guide.productName?.trim() || undefined,
+          productId: productId || undefined,
+          regenerateScenesOnly: true,
+          durationSeconds: durationSeconds >= 120 ? durationSeconds : 300,
+          targetSceneCount: config.sceneCount,
+          ...(isYouTubeMode && { source: "content-studio", platforms: ["youtube_longform"] }),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to regenerate guide");
+      const payload = data as {
+        scenes?: VideoGuideData["scenes"];
+        scenePrompts?: VideoGuideData["scenePrompts"];
+        storytellingFramework?: string;
+        frameworkRationale?: string;
+        engagementTriggers?: string[];
+      };
+      if (payload.scenes && payload.scenePrompts) {
+        applyRegeneratePayload(payload);
+        toast({ title: "Video guide updated", description: "Duration, scene count, and format have been applied." });
+      } else {
+        throw new Error("Invalid response");
+      }
+    } catch (e) {
+      toast({ title: "Apply failed", description: e instanceof Error ? e.message : "Try again", variant: "destructive" });
+    } finally {
+      setRegeneratingScenes(false);
+    }
+  }, [displayScript, guide.productName, productId, onScenesRegenerated, toast, isYouTubeMode, config.duration, config.sceneCount, applyRegeneratePayload]);
 
   const fullScriptText = `${currentScriptForDisplay.hook}\n\n${currentScriptForDisplay.body}\n\n${currentScriptForDisplay.cta}`;
   const scriptStats = useMemo(() => {
@@ -793,8 +932,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       return;
     }
     setGeneratingFull(true);
-    if (fullVoiceoverUrl) URL.revokeObjectURL(fullVoiceoverUrl);
+    if (fullVoiceoverUrl?.startsWith("blob:")) URL.revokeObjectURL(fullVoiceoverUrl);
     setFullVoiceoverUrl(null);
+    setFullVoiceoverDuration(null);
     try {
       const blob = await generateVoiceover(fullScriptText);
       let finalUrl: string;
@@ -807,36 +947,57 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           const err = await upRes.json().catch(() => ({}));
           throw new Error((err as { error?: string }).error || "Upload failed");
         }
-        const { url } = (await upRes.json()) as { url: string };
-        finalUrl = url;
+        const data = (await upRes.json()) as { url?: string };
+        finalUrl = typeof data?.url === "string" && data.url.trim() ? data.url.trim() : "";
+        if (!finalUrl) throw new Error("Upload did not return a URL");
       } else {
         finalUrl = URL.createObjectURL(blob);
       }
-      const durationSec = await new Promise<number>((resolve, reject) => {
+      // Show voiceover in UI immediately so it's visible "right away"
+      setFullVoiceoverUrl(finalUrl);
+      setFullVoiceoverDuration(null);
+      setGeneratingFull(false);
+      toast({ title: "Voiceover ready", description: "Playing full script audio." });
+      setPlayingPreviewUrl(finalUrl);
+      setTimeout(() => {
+        const audio = new Audio(finalUrl);
+        autoPlayAudioRef.current = audio;
+        audio.play().catch(() => {
+          setPlayingPreviewUrl(null);
+          autoPlayAudioRef.current = null;
+        });
+        audio.onended = () => {
+          setPlayingPreviewUrl(null);
+          autoPlayAudioRef.current = null;
+        };
+      }, 150);
+      // Get duration and save to library in background (don't block UI)
+      const durationSec = await new Promise<number | null>((resolve) => {
         const audio = new Audio(finalUrl);
         audio.onloadedmetadata = () => resolve(audio.duration);
-        audio.onerror = () => reject(new Error("Failed to load audio"));
+        audio.onerror = () => resolve(null);
+        setTimeout(() => resolve(null), 10000);
       });
+      if (durationSec != null && !Number.isNaN(durationSec)) setFullVoiceoverDuration(durationSec);
       if (libraryScriptId) {
-        await fetch(`/api/library/scripts/${libraryScriptId}`, {
+        const patchRes = await fetch(`/api/library/scripts/${libraryScriptId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             timelineVoiceoverUrl: finalUrl,
-            timelineVoiceoverDuration: durationSec,
+            timelineVoiceoverDuration: durationSec ?? 0,
           }),
         });
+        if (!patchRes.ok) {
+          toast({ title: "Voiceover saved here", description: "Could not save to library.", variant: "destructive" });
+        }
       }
-      setFullVoiceoverUrl(finalUrl);
-      setFullVoiceoverDuration(durationSec);
-      toast({ title: "Voiceover ready", description: "Full script audio generated and saved." });
     } catch (e) {
       toast({
         title: "Voiceover failed",
         description: e instanceof Error ? e.message : "Something went wrong",
         variant: "destructive",
       });
-    } finally {
       setGeneratingFull(false);
     }
   }, [fullScriptText, generateVoiceover, toast, fullVoiceoverUrl, libraryScriptId]);
@@ -1028,11 +1189,23 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
   const handlePlayPreview = useCallback((url: string) => {
     const el = previewAudioRef.current;
-    if (playingPreviewUrl === url && el) {
-      el.pause();
-      el.currentTime = 0;
+    const autoEl = autoPlayAudioRef.current;
+    if (playingPreviewUrl === url) {
+      if (el) {
+        el.pause();
+        el.currentTime = 0;
+      }
+      if (autoEl) {
+        autoEl.pause();
+        autoEl.currentTime = 0;
+        autoPlayAudioRef.current = null;
+      }
       setPlayingPreviewUrl(null);
       return;
+    }
+    if (autoEl) {
+      autoEl.pause();
+      autoPlayAudioRef.current = null;
     }
     if (!el) return;
     el.src = url;
@@ -1161,11 +1334,11 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   ]);
 
   const handleRegenerateScript = useCallback(async () => {
-    if (!productId || scripts.length === 0 || currentScriptIndex < 0 || currentScriptIndex >= scripts.length) {
+    if (!productId || scripts.length === 0 || currentAngleIndex < 0 || currentAngleIndex >= scripts.length) {
       toast({ title: "Cannot regenerate", description: "Product or script missing.", variant: "destructive" });
       return;
     }
-    const angle = scripts[currentScriptIndex].title;
+    const angle = scripts[currentAngleIndex].title;
     setRegeneratingScript(true);
     try {
       const res = await fetch("/api/digital-products/regenerate-script", {
@@ -1179,7 +1352,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       if (newScript) {
         setScripts((prev) => {
           const next = [...prev];
-          next[currentScriptIndex] = { ...newScript, id: next[currentScriptIndex].id };
+          next[currentAngleIndex] = { ...newScript, id: next[currentAngleIndex].id };
           return next;
         });
         toast({ title: "Script updated", description: `New "${angle}" variation ready.` });
@@ -1193,26 +1366,70 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     } finally {
       setRegeneratingScript(false);
     }
-  }, [productId, scripts, currentScriptIndex, toast]);
+  }, [productId, scripts, currentAngleIndex, toast]);
+
+  const backHref = backUrl ?? "/dashboard/digital-products/results";
+  const backLabel = isYouTubeMode ? "Back to Scripts" : "Back to Results";
 
   return (
-    <main className="min-h-screen bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white p-6 md:p-10">
+    <main className="min-h-screen bg-white dark:bg-background text-foreground p-6 md:p-10">
       <div className="max-w-3xl mx-auto">
+        {isYouTubeMode ? (
+          <Breadcrumb className="mb-4 text-sm text-gray-600 dark:text-muted-foreground">
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/dashboard/content-studio">Content Studio</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink href={backHref}>Scripts</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Video Guide</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        ) : (
+          <Breadcrumb className="mb-4 text-sm text-gray-600 dark:text-muted-foreground">
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/dashboard/digital-products">Digital Products</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink href={backHref}>Scripts</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Video Guide</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        )}
         <Link
-          href="/dashboard/digital-products/results"
-          className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-[#A0A0A0] hover:text-orange-500 mb-8 transition-colors"
+          href={backHref}
+          className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-muted-foreground hover:text-orange-500 mb-8 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Results
+          {backLabel}
         </Link>
 
         {!hasProductName && (
-          <div className="mb-6 p-4 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-[#1A1810]">
-            <p className="text-sm font-medium text-gray-900 dark:text-white mb-3">Set your product name so scripts and voiceovers use it instead of &quot;Your product&quot;</p>
+          <div className="mb-6 p-4 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-card">
+            <p className="text-sm font-medium text-foreground mb-3">Set your product name so scripts and voiceovers use it instead of &quot;Your product&quot;</p>
             <div className="flex flex-nowrap items-end gap-4">
               {userProducts.length > 0 && (
                 <div className="flex flex-col gap-1.5 shrink-0">
-                  <label className="text-xs text-gray-500 dark:text-[#A0A0A0]">Select one of your products</label>
+                  <label className="text-xs text-gray-500 dark:text-muted-foreground">Select one of your products</label>
                   <Select
                     onValueChange={(value) => {
                       const p = userProducts.find((x) => x.id === value);
@@ -1223,7 +1440,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                       }
                     }}
                   >
-                    <SelectTrigger className="w-[220px] border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F]">
+                    <SelectTrigger className="w-[220px] border-gray-200 dark:border-border bg-white dark:bg-background">
                       <SelectValue placeholder="Choose a product..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -1237,7 +1454,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 </div>
               )}
               <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                <label className="text-xs text-gray-500 dark:text-[#A0A0A0]">{userProducts.length > 0 ? "Or type a name" : "Type your product name"}</label>
+                <label className="text-xs text-gray-500 dark:text-muted-foreground">{userProducts.length > 0 ? "Or type a name" : "Type your product name"}</label>
                 <div className="flex items-center gap-2">
                   <Input
                     type="text"
@@ -1255,7 +1472,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                         }
                       }
                     }}
-                    className="flex-1 min-w-[140px] border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F]"
+                    className="flex-1 min-w-[140px] border-gray-200 dark:border-border bg-white dark:bg-background"
                   />
                   <Button
                     className="bg-orange-500 hover:bg-orange-600 text-white shrink-0"
@@ -1274,51 +1491,52 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 </div>
               </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-2">
+            <p className="text-xs text-gray-500 dark:text-muted-foreground mt-2">
               Pick a product from your library or type a name. Scripts and voiceovers will use this instead of a placeholder.
             </p>
           </div>
         )}
 
         {scripts.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 p-3 rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
-            <div className="flex items-center gap-2">
-              {hasMultipleScripts && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0 border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]"
-                  onClick={() => setCurrentScriptIndex((i) => (i <= 0 ? scripts.length - 1 : i - 1))}
-                  aria-label="Previous script"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-              )}
-              <span className="font-medium text-gray-900 dark:text-white min-w-[140px] text-center">
-                {effectiveScriptTitle ?? `Script ${currentScriptIndex + 1}`}
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 p-4 rounded-lg border border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                Guide ready
               </span>
-              {hasMultipleScripts && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0 border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0]"
-                  onClick={() => setCurrentScriptIndex((i) => (i >= scripts.length - 1 ? 0 : i + 1))}
-                  aria-label="Next script"
+              <span className="text-gray-300 dark:text-muted-foreground">|</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentAngleIndex((prev) => (prev - 1 + 4) % 4)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-muted rounded text-foreground transition-colors"
+                  aria-label="Previous angle"
                 >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              )}
+                  ← Previous
+                </button>
+                <span className="font-medium text-foreground min-w-[200px] text-center">
+                  {(angles[currentAngleIndex]?.name ?? effectiveScriptTitle ?? `Angle ${currentAngleIndex + 1}`)} ({currentAngleIndex + 1} of {scripts.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentAngleIndex((prev) => (prev + 1) % 4)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-muted rounded text-foreground transition-colors"
+                  aria-label="Next angle"
+                >
+                  Next →
+                </button>
+              </div>
             </div>
             {productId && (
               <Button
                 variant="outline"
                 size="sm"
-                className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-1.5"
+                className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted gap-1.5"
                 onClick={handleRegenerateScript}
                 disabled={regeneratingScript || !hasProductName}
               >
                 {regeneratingScript ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                Regenerate Script
+                Regenerate This Angle
               </Button>
             )}
           </div>
@@ -1326,24 +1544,30 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
         <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">Video Creation Guide</h1>
-            <p className="text-gray-600 dark:text-[#A0A0A0]">
-              {guide.overview ?? "Multi-platform video marketing guide."}
-              {hasProductName && (scriptTitle?.trim() || effectiveProductName) && (
-                <>
-                  {" "}
-                  <span className="text-gray-900 dark:text-white font-medium">
-                    {cleanProductTitle(scriptTitle ?? effectiveProductName) || scriptTitle || effectiveProductName}
-                  </span>
-                </>
-              )}
-            </p>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Video Creation Guide</h1>
+            {isYouTubeMode ? (
+              <p className="text-gray-600 dark:text-muted-foreground">
+                For: {channelName ?? "Your channel"} · Optimized for YouTube growth
+              </p>
+            ) : (
+              <p className="text-gray-600 dark:text-muted-foreground">
+                {guide.overview ?? "Multi-platform video marketing guide."}
+                {hasProductName && (scriptTitle?.trim() || effectiveProductName) && (
+                  <>
+                    {" "}
+                    <span className="text-foreground font-medium">
+                      {cleanProductTitle(scriptTitle ?? effectiveProductName) || scriptTitle || effectiveProductName}
+                    </span>
+                  </>
+                )}
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+              className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted hover:text-foreground"
               onClick={copyAllPrompts}
             >
               <Copy className="w-3.5 h-3.5 mr-1.5" />
@@ -1352,7 +1576,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             <Button
               variant="outline"
               size="sm"
-              className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+              className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted hover:text-foreground"
               onClick={copyAllPromptsMidjourney}
             >
               <Copy className="w-3.5 h-3.5 mr-1.5" />
@@ -1369,9 +1593,306 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           </div>
         </div>
 
-        <Card className="mb-8 border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A] overflow-visible">
+        {isYouTubeMode && (
+          <Card className="mb-6 border-green-200 dark:border-green-800/50 bg-green-50/50 dark:bg-green-950/20 overflow-visible">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+                YouTube Optimization
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-600 dark:text-muted-foreground">
+                Checklist for maximum reach and monetization
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <label className="flex items-center gap-2 text-foreground cursor-default">
+                <span className="text-green-600 dark:text-green-400">☑</span>
+                Hook within first 3 seconds
+              </label>
+              <label className="flex items-center gap-2 text-foreground cursor-default">
+                <span className="text-green-600 dark:text-green-400">☑</span>
+                Pattern interrupt at 30 seconds (retention cliff)
+              </label>
+              <label className="flex items-center gap-2 text-foreground cursor-default">
+                <span className="text-green-600 dark:text-green-400">☑</span>
+                Mid-roll ad placement markers (8min+ videos)
+              </label>
+              <label className="flex items-center gap-2 text-foreground cursor-default">
+                <span className="text-green-600 dark:text-green-400">☑</span>
+                End screen CTA (subscribe + next video)
+              </label>
+              <label className="flex items-center gap-2 text-foreground cursor-default">
+                <span className="text-green-600 dark:text-green-400">☑</span>
+                SEO-optimized title suggestions
+              </label>
+              <label className="flex items-center gap-2 text-foreground cursor-default">
+                <span className="text-green-600 dark:text-green-400">☑</span>
+                Description with timestamps
+              </label>
+              <label className="flex items-center gap-2 text-foreground cursor-default">
+                <span className="text-green-600 dark:text-green-400">☑</span>
+                Tag suggestions for algorithm
+              </label>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Video Configuration Panel */}
+        <div className="mb-8 border-2 border-orange-200 dark:border-orange-800 rounded-lg overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowConfig(!showConfig)}
+            className="w-full p-4 flex justify-between items-center hover:bg-orange-50 dark:hover:bg-orange-950/30 text-left"
+          >
+            <span className="font-semibold text-lg">⚙️ Video Configuration</span>
+            <span className="text-muted-foreground">{showConfig ? "▼" : "▶"}</span>
+          </button>
+
+          {showConfig && (
+            <div className="p-6 border-t-2 border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/20">
+              {/* Duration */}
+              <div className="mb-6">
+                <label className="block font-medium mb-3">🎬 Video Duration: {config.duration} minutes</label>
+                <div className="flex items-center gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-2"
+                    onClick={() => setConfig((c) => ({ ...c, duration: Math.max(5, c.duration - 5) }))}
+                  >
+                    ⬅️ Shorter (-5 min)
+                  </Button>
+                  <div className="flex-1 min-w-0">
+                    <Slider
+                      min={5}
+                      max={60}
+                      step={5}
+                      value={[config.duration]}
+                      onValueChange={([v]) => setConfig((c) => ({ ...c, duration: v ?? 10 }))}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                      <span>5 min</span>
+                      <span>30 min</span>
+                      <span>60 min</span>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-2"
+                    onClick={() => setConfig((c) => ({ ...c, duration: Math.min(60, c.duration + 5) }))}
+                  >
+                    Longer (+5 min) ➡️
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Word count: ~{config.duration * 150} words •
+                  {config.duration >= 8 ? " ✅ Mid-roll ads enabled" : " ❌ Mid-roll ads disabled (need 8+ min)"}
+                </p>
+              </div>
+
+              {/* Scene count */}
+              <div className="mb-6">
+                <label className="block font-medium mb-3">🎞️ Number of Scenes: {config.sceneCount} scenes</label>
+                <div className="flex items-center gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfig((c) => ({ ...c, sceneCount: Math.max(4, c.sceneCount - 1) }))}
+                  >
+                    −
+                  </Button>
+                  <div className="flex-1 min-w-0">
+                    <Slider
+                      min={4}
+                      max={20}
+                      step={1}
+                      value={[config.sceneCount]}
+                      onValueChange={([v]) => setConfig((c) => ({ ...c, sceneCount: v ?? 8 }))}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                      <span>4 scenes</span>
+                      <span>12 scenes</span>
+                      <span>20 scenes</span>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfig((c) => ({ ...c, sceneCount: Math.min(20, c.sceneCount + 1) }))}
+                  >
+                    +
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  ~{Math.floor((config.duration * 60) / config.sceneCount)} seconds per scene •
+                  {config.sceneCount <= 8 ? " Fewer scenes = more detail per scene" : " More scenes = faster pacing"}
+                  {config.duration >= 5 && (
+                    <span className="block mt-1">
+                      Tip: ~1 scene per minute matches script length for long-form (e.g. {config.duration} min → {Math.min(20, Math.max(8, config.duration))} scenes).
+                    </span>
+                  )}
+                </p>
+              </div>
+
+              {/* Voiceover mode */}
+              <div className="mb-6">
+                <label className="block font-medium mb-3">🎙️ Voiceover Generation Method</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setConfig((c) => ({ ...c, voiceoverMode: "scene-by-scene" }))}
+                    className={`p-4 border-2 rounded-lg text-left transition-colors ${
+                      config.voiceoverMode === "scene-by-scene"
+                        ? "border-orange-500 bg-background"
+                        : "border-border bg-background hover:border-orange-300"
+                    }`}
+                  >
+                    <div className="font-medium mb-1">📹 Scene-by-Scene</div>
+                    <div className="text-sm text-muted-foreground">
+                      Generate individual voiceovers for each scene. Better for editing flexibility, B-roll timing control.
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-2">{config.sceneCount} separate audio files</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfig((c) => ({ ...c, voiceoverMode: "full" }))}
+                    className={`p-4 border-2 rounded-lg text-left transition-colors ${
+                      config.voiceoverMode === "full"
+                        ? "border-orange-500 bg-background"
+                        : "border-border bg-background hover:border-orange-300"
+                    }`}
+                  >
+                    <div className="font-medium mb-1">🎬 Full Script</div>
+                    <div className="text-sm text-muted-foreground">
+                      Generate one continuous voiceover for entire video. Better for natural flow, consistent pacing.
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-2">1 complete {config.duration}-minute audio file</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Voice selection */}
+              <div className="mb-6">
+                <label className="block font-medium mb-3">🗣️ Select Voice</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {ELEVENLABS_VOICES.map((voice) => (
+                    <button
+                      key={voice.voiceId}
+                      type="button"
+                      onClick={() => {
+                        setConfig((c) => ({ ...c, selectedVoice: voice.voiceId }));
+                        setVoiceId(voice.voiceId);
+                      }}
+                      className={`p-4 border-2 rounded-lg text-left transition-colors ${
+                        config.selectedVoice === voice.voiceId
+                          ? "border-orange-500 bg-background"
+                          : "border-border bg-background hover:border-orange-300"
+                      }`}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="font-medium">{voice.name}</div>
+                        {config.selectedVoice === voice.voiceId && (
+                          <span className="text-orange-500 text-xs">✓ Selected</span>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground mb-2">{voice.description}</div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePreviewVoice(voice.voiceId);
+                        }}
+                        className="text-xs text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+                      >
+                        {previewingVoiceId === voice.voiceId ? (
+                          <Loader2 className="w-3 h-3 animate-spin inline" />
+                        ) : (
+                          "▶ Preview Voice"
+                        )}
+                      </button>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Apply */}
+              <div className="flex flex-wrap justify-between items-center gap-4 pt-4 border-t border-border">
+                <div className="text-sm text-muted-foreground">
+                  Estimated generation time: ~{Math.ceil(config.sceneCount * 2)} seconds
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleApplyConfiguration}
+                  disabled={regeneratingScenes || !onScenesRegenerated}
+                  className="bg-orange-500 hover:bg-orange-600 text-white font-semibold"
+                >
+                  {regeneratingScenes ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Apply & Regenerate Guide
+                </Button>
+              </div>
+
+              {/* Full script voiceover — visible here so it shows without scrolling */}
+              <div className="pt-6 mt-6 border-t border-border">
+                <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <Mic className="w-3.5 h-3.5" />
+                  Full script voiceover
+                </p>
+                {fullVoiceoverUrl ? (
+                  <div className="flex flex-wrap items-center gap-2 py-2 px-3 rounded-lg bg-gray-100 dark:bg-background border border-gray-200 dark:border-border">
+                    <span className="text-sm font-medium text-foreground min-w-[100px] shrink-0">Full script</span>
+                    <AudioWithSpeed src={fullVoiceoverUrl} speed={playbackSpeed} controls className="flex-1 min-w-0 max-w-md h-9" />
+                    <Button variant="outline" size="sm" className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 gap-1" asChild>
+                      <a href={fullVoiceoverUrl} download="voiceover-full.mp3">
+                        <Download className="w-3.5 h-3.5" />
+                        Download
+                      </a>
+                    </Button>
+                    {fullVoiceoverDuration != null && !Number.isNaN(fullVoiceoverDuration) && (
+                      <span className="text-sm text-gray-600 dark:text-muted-foreground shrink-0">{formatDuration(fullVoiceoverDuration)}</span>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 gap-1 text-destructive hover:text-destructive hover:bg-destructive/10 ml-auto"
+                      onClick={handleDeleteFullVoiceover}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="py-3 px-3 rounded-lg bg-gray-100 dark:bg-background border border-gray-200 dark:border-border">
+                    <p className="text-sm text-gray-600 dark:text-muted-foreground mb-3 flex items-center gap-2">
+                      <Mic className="w-4 h-4 text-orange-500 shrink-0" />
+                      No full voiceover yet. Generate one below — it will appear here.
+                    </p>
+                    <Button
+                      size="sm"
+                      className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+                      onClick={handleGenerateFullVoiceover}
+                      disabled={generatingFull || !fullScriptText.trim() || !hasProductName}
+                      title={!hasProductName ? "Set your product name above" : !fullScriptText.trim() ? "Add script content in Full Script section below" : undefined}
+                    >
+                      {generatingFull ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mic className="w-3.5 h-3.5" />}
+                      Generate Voiceover
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <Card className="mb-8 border-gray-200 dark:border-border bg-gray-50 dark:bg-card overflow-visible">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center justify-between gap-2 flex-wrap">
+            <CardTitle className="text-base font-medium text-foreground flex items-center justify-between gap-2 flex-wrap">
               <span className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-orange-500" />
                 Full Script
@@ -1385,7 +1906,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                  className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted hover:text-foreground"
                   onClick={() => handleRegenerateFullScript()}
                   disabled={regeneratingFullScript || !hasProductName}
                   title={!hasProductName ? "Set your product name above to enable" : undefined}
@@ -1402,7 +1923,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                      className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted hover:text-foreground"
                       onClick={() => handleRegenerateFullScript("shorter")}
                       disabled={regeneratingFullScript || !hasProductName}
                       title="Cut script by ~30%; keep hook and CTA intact"
@@ -1412,7 +1933,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                      className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted hover:text-foreground"
                       onClick={() => handleRegenerateFullScript("longer")}
                       disabled={regeneratingFullScript || !hasProductName}
                       title="Expand body by ~30%; more pain agitation or social proof"
@@ -1424,7 +1945,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                  className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted hover:text-foreground"
                   onClick={handleGenerateFullVoiceover}
                   disabled={generatingFull || !fullScriptText.trim() || !hasProductName}
                   title={!hasProductName ? "Set your product name above to enable" : !fullScriptText.trim() ? "Add script content first" : undefined}
@@ -1439,7 +1960,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                  className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted hover:text-foreground"
                   onClick={handleGeneratePerSceneVoiceover}
                   disabled={generatingPerScene || getSceneTexts().length === 0 || !hasProductName}
                   title={!hasProductName ? "Set your product name above to enable" : getSceneTexts().length === 0 ? "Scene breakdown required" : undefined}
@@ -1454,7 +1975,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                  className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted hover:text-foreground"
                   onClick={copyFullScript}
                 >
                   <Copy className="w-3.5 h-3.5 mr-1.5" />
@@ -1463,14 +1984,53 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               </div>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm text-gray-600 dark:text-[#B0B0B0] whitespace-pre-line overflow-visible">
+          <CardContent className="space-y-4 text-sm text-gray-600 dark:text-muted-foreground whitespace-pre-line overflow-visible">
+            {/* Full Voiceover — same style as Scene Voiceovers: one row with native audio when present */}
+            <div className="pt-2 border-t border-gray-200 dark:border-border">
+              <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <Mic className="w-3.5 h-3.5" />
+                Full Voiceover
+              </p>
+              {fullVoiceoverUrl ? (
+                <div className="flex flex-wrap items-center gap-2 py-2 px-3 rounded-lg bg-gray-100 dark:bg-background border border-gray-200 dark:border-border">
+                  <span className="text-sm font-medium text-foreground min-w-[100px] shrink-0">Full script</span>
+                  <AudioWithSpeed src={fullVoiceoverUrl} speed={playbackSpeed} controls className="flex-1 min-w-0 max-w-md h-9" />
+                  <Button variant="outline" size="sm" className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 gap-1" asChild>
+                    <a href={fullVoiceoverUrl} download="voiceover-full.mp3">
+                      <Download className="w-3.5 h-3.5" />
+                      Download
+                    </a>
+                  </Button>
+                  {fullVoiceoverDuration != null && !Number.isNaN(fullVoiceoverDuration) && (
+                    <span className="text-sm text-gray-600 dark:text-muted-foreground shrink-0">{formatDuration(fullVoiceoverDuration)}</span>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 gap-1 text-destructive hover:text-destructive hover:bg-destructive/10 ml-auto"
+                    onClick={handleDeleteFullVoiceover}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
+                  </Button>
+                </div>
+              ) : (
+                <div className="py-3 px-3 rounded-lg bg-gray-100 dark:bg-background border border-gray-200 dark:border-border">
+                  <p className="text-sm text-gray-600 dark:text-muted-foreground flex items-center gap-2">
+                    <Mic className="w-4 h-4 text-orange-500 shrink-0" />
+                    No full voiceover yet. Click <strong>Generate Voiceover</strong> above to create it — it will show here with a play bar, same as scene voiceovers.
+                  </p>
+                </div>
+              )}
+            </div>
             <div className="min-w-0">
               <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Hook</p>
               <textarea
                 value={currentScriptForDisplay.hook}
                 onChange={(e) => setEditedScript((prev) => ({ ...(prev ?? displayScript), hook: e.target.value }))}
                 onBlur={handleScriptBlur}
-                className="w-full min-h-[4rem] px-3 py-2 rounded-md border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white break-words resize-y text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                rows={Math.min(14, Math.max(6, Math.ceil((currentScriptForDisplay.hook || "").split(/\n/).length) + 2))}
+                className="w-full min-h-[12rem] px-3 py-2 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-background text-foreground break-words resize-y text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="Hook (0–3s)..."
               />
             </div>
@@ -1480,7 +2040,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 value={currentScriptForDisplay.body}
                 onChange={(e) => setEditedScript((prev) => ({ ...(prev ?? displayScript), body: e.target.value }))}
                 onBlur={handleScriptBlur}
-                className="w-full min-h-[8rem] px-3 py-2 rounded-md border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white break-words resize-y text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                rows={Math.min(50, Math.max(20, Math.ceil((currentScriptForDisplay.body || "").split(/\n/).length) + 2))}
+                className="w-full min-h-[32rem] px-3 py-2 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-background text-foreground break-words resize-y text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="Body..."
               />
             </div>
@@ -1490,66 +2051,21 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 value={currentScriptForDisplay.cta}
                 onChange={(e) => setEditedScript((prev) => ({ ...(prev ?? displayScript), cta: e.target.value }))}
                 onBlur={handleScriptBlur}
-                className="w-full min-h-[3rem] px-3 py-2 rounded-md border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white break-words resize-y text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                rows={Math.min(12, Math.max(6, Math.ceil((currentScriptForDisplay.cta || "").split(/\n/).length) + 2))}
+                className="w-full min-h-[8rem] px-3 py-2 rounded-md border border-gray-200 dark:border-border bg-white dark:bg-background text-foreground break-words resize-y text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="Call to action..."
               />
             </div>
-            <div className="pt-2 border-t border-gray-200 dark:border-[#2A2A2A] text-xs text-gray-500 dark:text-[#A0A0A0]">
+            <div className="pt-2 border-t border-gray-200 dark:border-border text-xs text-gray-500 dark:text-muted-foreground">
               {scriptStats.words > 0 ? `~${scriptStats.estimatedSeconds} ${scriptStats.estimatedSeconds === 1 ? "second" : "seconds"} at normal pace` : "—"} · {scriptStats.characters} characters · {scriptStats.words} words
             </div>
 
             {/* Inline preview audio (hidden) for Play button */}
             <audio ref={previewAudioRef} className="sr-only" preload="metadata" />
 
-            {/* Full Voiceover — visible immediately after generation or when loaded from Supabase */}
-            {fullVoiceoverUrl && (
-              <div className="pt-4 border-t border-gray-200 dark:border-[#2A2A2A]">
-                <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                  <Mic className="w-3.5 h-3.5" />
-                  Full Voiceover
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1.5"
-                    onClick={() => handlePlayPreview(fullVoiceoverUrl)}
-                  >
-                    {playingPreviewUrl === fullVoiceoverUrl ? (
-                      <Pause className="w-3.5 h-3.5" />
-                    ) : (
-                      <Play className="w-3.5 h-3.5" />
-                    )}
-                    {playingPreviewUrl === fullVoiceoverUrl ? "Stop" : "Play"}
-                  </Button>
-                  <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1.5" asChild>
-                    <a href={fullVoiceoverUrl} download="voiceover-full.mp3">
-                      <Download className="w-3.5 h-3.5" />
-                      Download
-                    </a>
-                  </Button>
-                  {fullVoiceoverDuration != null && !Number.isNaN(fullVoiceoverDuration) && (
-                    <span className="text-sm text-gray-600 dark:text-[#A0A0A0] shrink-0">
-                      {formatDuration(fullVoiceoverDuration)}
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-500 dark:text-[#6A6A6A] shrink-0">Generated just now</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={handleDeleteFullVoiceover}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            )}
-
             {/* Scene Voiceovers — list with Play, Download, duration, Delete per scene */}
             {perSceneUrls.some(Boolean) && (
-              <div className="pt-4 border-t border-gray-200 dark:border-[#2A2A2A]">
+              <div className="pt-4 border-t border-gray-200 dark:border-border">
                 <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-2 flex items-center gap-1.5">
                   <Mic className="w-3.5 h-3.5" />
                   Scene Voiceovers
@@ -1562,33 +2078,33 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     return (
                       <li
                         key={i}
-                        className="flex flex-wrap items-center gap-2 py-2 px-3 rounded-lg bg-gray-100 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#2A2A2A]"
+                        className="flex flex-wrap items-center gap-2 py-2 px-3 rounded-lg bg-gray-100 dark:bg-background border border-gray-200 dark:border-border"
                       >
-                        <span className="text-sm font-medium text-gray-900 dark:text-white min-w-[120px]">
+                        <span className="text-sm font-medium text-foreground min-w-[120px]">
                           {timingLabel}
                         </span>
                         <Button
                           variant="outline"
                           size="sm"
-                          className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1"
+                          className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 gap-1"
                           onClick={() => handlePlayPreview(url)}
                         >
                           {playingPreviewUrl === url ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                           {playingPreviewUrl === url ? "Stop" : "Play"}
                         </Button>
-                        <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1" asChild>
+                        <Button variant="outline" size="sm" className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 gap-1" asChild>
                           <a href={url} download={`voiceover-scene-${i + 1}.mp3`}>
                             <Download className="w-3.5 h-3.5" />
                             Download
                           </a>
                         </Button>
                         {duration != null && !Number.isNaN(duration) && (
-                          <span className="text-sm text-gray-600 dark:text-[#A0A0A0] shrink-0">{formatDuration(duration)}</span>
+                          <span className="text-sm text-gray-600 dark:text-muted-foreground shrink-0">{formatDuration(duration)}</span>
                         )}
                         <Button
                           variant="outline"
                           size="sm"
-                          className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1 text-destructive hover:text-destructive hover:bg-destructive/10 ml-auto"
+                          className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 gap-1 text-destructive hover:text-destructive hover:bg-destructive/10 ml-auto"
                           onClick={() => handleDeleteSceneVoiceover(i)}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1604,9 +2120,14 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="bg-gray-100 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] flex flex-wrap gap-1 p-1">
+          <TabsList className="bg-gray-100 dark:bg-card border border-gray-200 dark:border-border flex flex-wrap gap-1 p-1">
             <TabsTrigger value="scenes" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
               Scene Breakdown
+              {guide.videoFormat?.aspectRatio && (
+                <span className="ml-1.5 opacity-80" title={guide.videoFormat.orientation === "horizontal" ? "YouTube horizontal format" : "Vertical short-form format"}>
+                  {guide.videoFormat.aspectRatio === "16:9" ? " (16:9)" : " (9:16)"}
+                </span>
+              )}
             </TabsTrigger>
             <TabsTrigger value="editing" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
               Editing Guide
@@ -1630,15 +2151,15 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
           <TabsContent value="scenes" className="mt-6 space-y-4">
             {/* Character Setup */}
-            <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+            <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
                   <ImagePlus className="w-4 h-4 text-orange-500" />
                   Character Setup
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm text-gray-600 dark:text-[#B0B0B0]">
+                <p className="text-sm text-gray-600 dark:text-muted-foreground">
                   Use the same reference image across all scenes for consistent characters. Works best with Midjourney (--cref) and ChatGPT.
                 </p>
                 <label className="block">
@@ -1648,15 +2169,15 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     className="sr-only"
                     onChange={handleCharacterRefFile}
                   />
-                  <div className="border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] rounded-lg p-6 text-center hover:border-orange-500/50 transition-colors cursor-pointer bg-gray-100 dark:bg-[#0F0F0F]">
-                    <ImagePlus className="w-10 h-10 mx-auto text-gray-500 dark:text-[#A0A0A0] mb-2" />
-                    <p className="text-sm text-gray-600 dark:text-[#A0A0A0]">Upload your character reference image</p>
-                    <p className="text-xs text-gray-500 dark:text-[#6A6A6A] mt-1">PNG, JPG or WebP</p>
+                  <div className="border-2 border-dashed border-gray-200 dark:border-border rounded-lg p-6 text-center hover:border-orange-500/50 transition-colors cursor-pointer bg-gray-100 dark:bg-background">
+                    <ImagePlus className="w-10 h-10 mx-auto text-gray-500 dark:text-muted-foreground mb-2" />
+                    <p className="text-sm text-gray-600 dark:text-muted-foreground">Upload your character reference image</p>
+                    <p className="text-xs text-gray-500 dark:text-muted-foreground mt-1">PNG, JPG or WebP</p>
                   </div>
                 </label>
                 {characterRefPreviewUrl && (
                   <div className="flex flex-wrap items-start gap-4">
-                    <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] w-24 h-24 shrink-0">
+                    <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-border bg-gray-100 dark:bg-background w-24 h-24 shrink-0">
                       <img
                         src={characterRefPreviewUrl}
                         alt="Character reference"
@@ -1666,7 +2187,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="absolute top-0 right-0 h-6 w-6 rounded-bl bg-black/60 text-white hover:bg-black/80"
+                        className="absolute top-0 right-0 h-6 w-6 rounded-bl bg-background/80 text-foreground hover:bg-background"
                         onClick={() => {
                           URL.revokeObjectURL(characterRefPreviewUrl);
                           setCharacterRefPreviewUrl(null);
@@ -1684,10 +2205,10 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                           placeholder="Paste your hosted image URL"
                           value={characterRefPublicUrl ?? ""}
                           onChange={(e) => setCharacterRefPublicUrl(e.target.value || null)}
-                          className="mt-1 w-full rounded-md bg-gray-100 dark:bg-[#0F0F0F] border border-gray-200 dark:border-[#2A2A2A] px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-[#6A6A6A] focus:outline-none focus:ring-1 focus:ring-orange-500"
+                          className="mt-1 w-full rounded-md bg-gray-100 dark:bg-background border border-gray-200 dark:border-border px-3 py-2 text-sm text-foreground placeholder:text-gray-500 dark:placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-orange-500"
                         />
                       </label>
-                      <p className="text-xs text-gray-500 dark:text-[#6A6A6A]">Host your image (e.g. Discord, imgur) and paste the direct image URL here for --cref.</p>
+                      <p className="text-xs text-gray-500 dark:text-muted-foreground">Host your image (e.g. Discord, imgur) and paste the direct image URL here for --cref.</p>
                     </div>
                   </div>
                 )}
@@ -1697,8 +2218,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             {/* Pro tip */}
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 flex gap-3">
               <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-              <div className="text-sm text-gray-900 dark:text-white space-y-2">
-                <p className="font-medium text-gray-900 dark:text-white">Pro tip: Generate your main character first, then use that image as a reference for all scenes.</p>
+              <div className="text-sm text-foreground space-y-2">
+                <p className="font-medium text-foreground">Pro tip: Generate your main character first, then use that image as a reference for all scenes.</p>
                 <ul className="list-disc list-inside space-y-0.5 text-gray-700 dark:text-gray-200">
                   <li><strong>Midjourney:</strong> Use --cref flag (best consistency)</li>
                   <li><strong>ChatGPT:</strong> Upload reference image in each prompt</li>
@@ -1712,7 +2233,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] hover:text-gray-900 dark:hover:text-white"
+                  className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted hover:text-foreground"
                   onClick={handleRegenerateScenes}
                   disabled={regeneratingScenes || !displayScript.hook?.trim()}
                 >
@@ -1742,9 +2263,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               const vd = (scene as { visualDirection?: VisualDirection }).visualDirection;
               const transition = (scene as { transition?: { toNextScene?: string; effects?: string; pacing?: string } }).transition;
               return (
-                <Card key={i} className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+                <Card key={i} className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center justify-between gap-2 flex-wrap">
+                    <CardTitle className="text-base font-medium text-foreground flex items-center justify-between gap-2 flex-wrap">
                       <span>Scene {i + 1} · {scene.timing}</span>
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
                         <Select
@@ -1755,10 +2276,10 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                             setCopyFormatByScene((prev) => ({ ...prev, [i]: tool }));
                           }}
                         >
-                          <SelectTrigger className="w-[130px] h-8 border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] bg-gray-100 dark:bg-[#0F0F0F] text-xs">
+                          <SelectTrigger className="w-[130px] h-8 border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground bg-gray-100 dark:bg-background text-xs">
                             <SelectValue placeholder="Tool" />
                           </SelectTrigger>
-                          <SelectContent className="bg-gray-50 dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2A2A2A]">
+                          <SelectContent className="bg-gray-50 dark:bg-card border-gray-200 dark:border-border">
                             <SelectItem value="midjourney" className="text-sm">Midjourney</SelectItem>
                             <SelectItem value="grok" className="text-sm">Grok</SelectItem>
                             <SelectItem value="chatgpt" className="text-sm">ChatGPT</SelectItem>
@@ -1773,12 +2294,12 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                           onValueChange={(v) => {
                             if (v) setMediaTypeByScene((prev) => ({ ...prev, [i]: v as "still" | "video" }));
                           }}
-                          className="inline-flex rounded-md border border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] p-0.5"
+                          className="inline-flex rounded-md border border-gray-200 dark:border-border bg-gray-100 dark:bg-background p-0.5"
                         >
-                          <ToggleGroupItem value="still" className="h-7 px-2 text-xs data-[state=on]:bg-white dark:data-[state=on]:bg-[#2A2A2A] rounded" aria-label="Still image">
+                          <ToggleGroupItem value="still" className="h-7 px-2 text-xs data-[state=on]:bg-white dark:data-[state=on]:bg-muted rounded" aria-label="Still image">
                             Still Image
                           </ToggleGroupItem>
-                          <ToggleGroupItem value="video" className="h-7 px-2 text-xs data-[state=on]:bg-white dark:data-[state=on]:bg-[#2A2A2A] rounded" aria-label="Video clip">
+                          <ToggleGroupItem value="video" className="h-7 px-2 text-xs data-[state=on]:bg-white dark:data-[state=on]:bg-muted rounded" aria-label="Video clip">
                             Video Clip
                           </ToggleGroupItem>
                         </ToggleGroup>
@@ -1792,28 +2313,30 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                               return Math.max(0, parseFloat(parts[1]) - parseFloat(parts[0]));
                             })();
                             const camera = (scene as { cameraAngle?: string }).cameraAngle || "medium shot";
+                            const ar = guide.videoFormat?.aspectRatio ?? (scene as { format?: { aspect_ratio?: string } }).format?.aspect_ratio ?? "9:16";
+                            const isHorizontal = ar === "16:9";
                             let prompt = base;
-                            if (tool === "midjourney") prompt = `${base} --ar 9:16 --v 6 --style raw`;
-                            else if (tool === "grok") prompt = `${base}\n\nAspect ratio: 9:16\nStyle: photorealistic`;
-                            else if (tool === "chatgpt") prompt = `Generate a photorealistic vertical image (9:16 aspect ratio): ${base}`;
-                            else if (tool === "kling") prompt = `${base}\n\nFormat: vertical 9:16\nDuration: ${duration}s\nMotion: subtle slow push in\nCamera: ${camera}`;
-                            else if (tool === "runway") prompt = `${base}\nMotion amount: low\nCamera: ${camera} slow\nDuration: ${duration}s\nAspect ratio: 9:16`;
-                            else if (tool === "pika") prompt = `${base} | camera: ${camera} | motion: 1 | aspect ratio: 9:16 | duration: ${duration}s`;
+                            if (tool === "midjourney") prompt = `${base} --ar ${ar} --v 6 --style raw`;
+                            else if (tool === "grok") prompt = `${base}\n\nAspect ratio: ${ar}\nStyle: photorealistic`;
+                            else if (tool === "chatgpt") prompt = `Generate a photorealistic ${isHorizontal ? "horizontal" : "vertical"} image (${ar} aspect ratio): ${base}`;
+                            else if (tool === "kling") prompt = `${base}\n\nFormat: ${isHorizontal ? "horizontal" : "vertical"} ${ar}\nDuration: ${duration}s\nMotion: subtle slow push in\nCamera: ${camera}`;
+                            else if (tool === "runway") prompt = `${base}\nMotion amount: low\nCamera: ${camera} slow\nDuration: ${duration}s\nAspect ratio: ${ar}`;
+                            else if (tool === "pika") prompt = `${base} | camera: ${camera} | motion: 1 | aspect ratio: ${ar} | duration: ${duration}s`;
                             navigator.clipboard.writeText(prompt)
                               .then(() => toast({ title: "Copied", description: "AI prompt copied for " + tool }))
                               .catch(() => toast({ title: "Copy failed", variant: "destructive" }));
                           }}
-                          className="h-7 px-2 text-xs rounded border border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] bg-gray-100 dark:bg-[#0F0F0F] hover:bg-white hover:text-gray-900 dark:hover:bg-[#2A2A2A] dark:hover:text-white cursor-pointer"
+                          className="h-7 px-2 text-xs rounded border border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground bg-gray-100 dark:bg-background hover:bg-white hover:text-gray-900 dark:hover:bg-muted dark:hover:text-white cursor-pointer"
                         >
                           Copy AI Prompt
                         </button>
                       </div>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4 text-sm text-gray-600 dark:text-[#B0B0B0]">
+                  <CardContent className="space-y-4 text-sm text-gray-600 dark:text-muted-foreground">
                     <div>
                       <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Visual / AI image prompt</p>
-                      <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{fullPrompt}</p>
+                      <p className="text-foreground whitespace-pre-wrap">{stripMarkdown(fullPrompt ?? "")}</p>
                     </div>
                     {(vd?.cameraAngle || vd?.lightingMood || vd?.colorPalette || vd?.mediaType) && (
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
@@ -1828,9 +2351,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                         <p className="text-orange-500 font-medium text-xs uppercase tracking-wide">Text overlay</p>
                         {overlayObjs.map((obj, j) => (
                           <div key={j} className="pl-0 space-y-1">
-                            <p className="text-gray-900 dark:text-white">{obj.exactText ?? ""}</p>
+                            <p className="text-foreground">{stripMarkdown(obj.exactText ?? "")}</p>
                             {(obj.fontStyle || obj.size || obj.position || obj.color || obj.animation || obj.timingNote) && (
-                              <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-600 dark:text-[#A0A0A0]">
+                              <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-600 dark:text-muted-foreground">
                                 {obj.fontStyle && <span>Font: {obj.fontStyle}</span>}
                                 {obj.size && <span>Size: {obj.size}</span>}
                                 {obj.position && <span>Position: {obj.position}</span>}
@@ -1857,9 +2380,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           </TabsContent>
 
           <TabsContent value="editing" className="mt-6 space-y-4">
-<Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+<Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
             <CardHeader>
-                <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
                   <Film className="w-4 h-4 text-orange-500" />
                   Recommended tools & steps
                 </CardTitle>
@@ -1868,7 +2391,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 {Object.entries(editingSteps).map(([tool, steps]) => (
                   <div key={tool}>
                     <p className="text-orange-500 font-medium text-sm mb-2">{tool}</p>
-                    <ul className="list-disc list-inside text-sm text-gray-600 dark:text-[#B0B0B0] space-y-1">
+                    <ul className="list-disc list-inside text-sm text-gray-600 dark:text-muted-foreground space-y-1">
                       {steps.map((step, j) => (
                         <li key={j}>{step}</li>
                       ))}
@@ -1880,65 +2403,65 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           </TabsContent>
 
           <TabsContent value="subtitles" className="mt-6 space-y-4">
-<Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+<Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
             <CardHeader>
-                <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
                   <Type className="w-4 h-4 text-orange-500" />
                   Subtitles & text
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-gray-600 dark:text-[#B0B0B0]">
-                <p><span className="text-gray-900 dark:text-white">Style:</span> {subtitles.style ?? "—"}</p>
-                <p><span className="text-gray-900 dark:text-white">Font:</span> {subtitles.font ?? "—"}</p>
-                <p><span className="text-gray-900 dark:text-white">Position:</span> {subtitles.position ?? "—"}</p>
-                <p><span className="text-gray-900 dark:text-white">Animation:</span> {subtitles.animation ?? "—"}</p>
-                <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-2">Use CapCut: Edit → Captions → Auto Captions for word-by-word sync.</p>
+              <CardContent className="space-y-2 text-sm text-gray-600 dark:text-muted-foreground">
+                <p><span className="text-foreground">Style:</span> {subtitles.style ?? "—"}</p>
+                <p><span className="text-foreground">Font:</span> {subtitles.font ?? "—"}</p>
+                <p><span className="text-foreground">Position:</span> {subtitles.position ?? "—"}</p>
+                <p><span className="text-foreground">Animation:</span> {subtitles.animation ?? "—"}</p>
+                <p className="text-xs text-gray-500 dark:text-muted-foreground mt-2">Use CapCut: Edit → Captions → Auto Captions for word-by-word sync.</p>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="music" className="mt-6 space-y-4">
-<Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+<Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
             <CardHeader>
-                <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
                   <Music className="w-4 h-4 text-orange-500" />
                   Music & audio
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-gray-600 dark:text-[#B0B0B0]">
-                <p><span className="text-gray-900 dark:text-white">Mood:</span> {music.mood ?? "—"}</p>
-                <p><span className="text-gray-900 dark:text-white">Sources:</span> {Array.isArray(music.sources) ? music.sources.join(", ") : "—"}</p>
-                <p><span className="text-gray-900 dark:text-white">Volume:</span> {music.volume ?? "—"}</p>
-                <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-2">Sync beat drops with scene transitions. Use TikTok Sounds for trending audio.</p>
+              <CardContent className="space-y-2 text-sm text-gray-600 dark:text-muted-foreground">
+                <p><span className="text-foreground">Mood:</span> {music.mood ?? "—"}</p>
+                <p><span className="text-foreground">Sources:</span> {Array.isArray(music.sources) ? music.sources.join(", ") : "—"}</p>
+                <p><span className="text-foreground">Volume:</span> {music.volume ?? "—"}</p>
+                <p className="text-xs text-gray-500 dark:text-muted-foreground mt-2">Sync beat drops with scene transitions. Use TikTok Sounds for trending audio.</p>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="export" className="mt-6 space-y-4">
-<Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+<Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
             <CardHeader>
-                <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
                   <Upload className="w-4 h-4 text-orange-500" />
                   Export settings
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-gray-600 dark:text-[#B0B0B0]">
-                <p><span className="text-gray-900 dark:text-white">Resolution:</span> {exportSettings.resolution ?? "—"}</p>
-                <p><span className="text-gray-900 dark:text-white">FPS:</span> {exportSettings.fps ?? "—"}</p>
-                <p><span className="text-gray-900 dark:text-white">Format:</span> {exportSettings.format ?? "—"}</p>
-                <p><span className="text-gray-900 dark:text-white">File size:</span> {(exportSettings as { fileSize?: string }).fileSize ?? "—"}</p>
+              <CardContent className="space-y-2 text-sm text-gray-600 dark:text-muted-foreground">
+                <p><span className="text-foreground">Resolution:</span> {exportSettings.resolution ?? "—"}</p>
+                <p><span className="text-foreground">FPS:</span> {exportSettings.fps ?? "—"}</p>
+                <p><span className="text-foreground">Format:</span> {exportSettings.format ?? "—"}</p>
+                <p><span className="text-foreground">File size:</span> {(exportSettings as { fileSize?: string }).fileSize ?? "—"}</p>
               </CardContent>
             </Card>
             {platformTips.length > 0 && (
-              <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+              <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
                 <CardHeader>
-                  <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                  <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
                     <Volume2 className="w-4 h-4 text-orange-500" />
                     Platform tips
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="list-disc list-inside text-sm text-gray-600 dark:text-[#B0B0B0] space-y-1">
+                  <ul className="list-disc list-inside text-sm text-gray-600 dark:text-muted-foreground space-y-1">
                     {platformTips.map((t, i) => (
                       <li key={i}>{t}</li>
                     ))}
@@ -1951,14 +2474,14 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           <TabsContent value="social-kit" className="mt-6 space-y-4" id="social-media-kit-section">
             {!socialKit ? (
               hasTimelineUsage && libraryScriptId ? (
-                <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+                <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
                   <CardContent className="pt-6 pb-6">
                     <div className="flex flex-col items-center text-center max-w-md mx-auto">
                       <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-4">
                         <Video className="w-8 h-8 text-green-500" />
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">You&apos;ve used the Video Timeline</h3>
-                      <p className="text-gray-600 dark:text-[#A0A0A0] text-sm mb-6">
+                      <h3 className="text-lg font-semibold text-foreground mb-2">You&apos;ve used the Video Timeline</h3>
+                      <p className="text-gray-600 dark:text-muted-foreground text-sm mb-6">
                         Generate your Social Media Kit with titles, hashtags, and captions—no proof upload needed.
                       </p>
                       <Button
@@ -1977,17 +2500,17 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   </CardContent>
                 </Card>
               ) : (
-                <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+                <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
                   <CardContent className="pt-6 pb-6">
                     <div className="flex flex-col items-center text-center max-w-md mx-auto">
                       <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mb-4">
                         <Lock className="w-8 h-8 text-amber-500" />
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Upload proof to unlock</h3>
-                      <p className="text-gray-600 dark:text-[#A0A0A0] text-sm mb-2">
+                      <h3 className="text-lg font-semibold text-foreground mb-2">Upload proof to unlock</h3>
+                      <p className="text-gray-600 dark:text-muted-foreground text-sm mb-2">
                         Upload a screenshot or video preview to unlock your Social Media Kit
                       </p>
-                      <p className="text-gray-500 dark:text-[#6A6A6A] text-xs mb-6">
+                      <p className="text-gray-500 dark:text-muted-foreground text-xs mb-6">
                         We want to make sure you&apos;ve created your video before optimizing your social media presence. Or use the <strong>Video Timeline</strong> first to get access without proof.
                       </p>
                       <label className="w-full block">
@@ -2001,8 +2524,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                           }}
                         />
                         <div
-                          className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors bg-gray-100 dark:bg-[#0F0F0F] ${
-                            socialKitProofFile ? "border-orange-500/50" : "border-gray-200 dark:border-[#2A2A2A] hover:border-orange-500/50"
+                          className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors bg-gray-100 dark:bg-background ${
+                            socialKitProofFile ? "border-orange-500/50" : "border-gray-200 dark:border-border hover:border-orange-500/50"
                           }`}
                           onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                           onDrop={(e) => {
@@ -2013,11 +2536,11 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                             }
                           }}
                         >
-                          <Upload className="w-10 h-10 mx-auto text-gray-500 dark:text-[#A0A0A0] mb-2" />
-                          <p className="text-sm text-gray-600 dark:text-[#A0A0A0]">
+                          <Upload className="w-10 h-10 mx-auto text-gray-500 dark:text-muted-foreground mb-2" />
+                          <p className="text-sm text-gray-600 dark:text-muted-foreground">
                             {socialKitProofFile ? socialKitProofFile.name : "Drag and drop or click to upload"}
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-[#6A6A6A] mt-1">PNG, JPG, MP4 or MOV</p>
+                          <p className="text-xs text-gray-500 dark:text-muted-foreground mt-1">PNG, JPG, MP4 or MOV</p>
                         </div>
                       </label>
                       <Button
@@ -2042,7 +2565,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A]"
+                    className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted"
                     onClick={() => {
                       copyToClipboard(socialKitToText(socialKit), "Social Media Kit");
                     }}
@@ -2053,7 +2576,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A]"
+                    className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted"
                     onClick={() => {
                       const blob = new Blob([socialKitToText(socialKit)], { type: "text/plain" });
                       const url = URL.createObjectURL(blob);
@@ -2116,9 +2639,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     ],
                   },
                 ].map((section) => (
-                  <Card key={section.key} className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+                  <Card key={section.key} className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                      <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
                         <section.icon className="w-4 h-4 text-orange-500" />
                         {section.title}
                       </CardTitle>
@@ -2131,14 +2654,14 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 text-gray-600 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white shrink-0"
+                              className="h-7 text-gray-600 dark:text-muted-foreground hover:text-foreground shrink-0"
                               onClick={() => copyToClipboard(item.value ?? "", item.label)}
                             >
                               <Copy className="w-3 h-3 mr-1" />
                               Copy
                             </Button>
                           </div>
-                          <p className="text-sm text-gray-600 dark:text-[#B0B0B0] whitespace-pre-wrap">{item.value || "—"}</p>
+                          <p className="text-sm text-gray-600 dark:text-muted-foreground whitespace-pre-wrap">{item.value || "—"}</p>
                         </div>
                       ))}
                     </CardContent>
@@ -2149,13 +2672,13 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           </TabsContent>
 
           <TabsContent value="voiceover" className="mt-6 space-y-4">
-            <Card className="border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+            <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
               <CardHeader>
-                <CardTitle className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
                   <Mic className="w-4 h-4 text-orange-500" />
                   AI Voiceover (ElevenLabs)
                 </CardTitle>
-                <CardDescription className="text-gray-600 dark:text-[#A0A0A0]">
+                <CardDescription className="text-gray-600 dark:text-muted-foreground">
                   Choose a voice, adjust style, then generate. Your last selected voice is saved as default. To see more voices, add custom ones in your ElevenLabs account under Voices — they appear automatically on the customization page.
                 </CardDescription>
               </CardHeader>
@@ -2172,8 +2695,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                           key={v.voiceId}
                           className={`rounded-lg border-2 p-3 flex items-center justify-between gap-2 transition-colors ${
                             selected
-                              ? "border-orange-500 bg-orange-500/10 text-gray-900 dark:text-white"
-                              : "border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] hover:border-gray-300 dark:hover:border-[#3A3A3A]"
+                              ? "border-orange-500 bg-orange-500/10 text-foreground"
+                              : "border-gray-200 dark:border-border bg-gray-100 dark:bg-background hover:border-gray-300 dark:hover:border-[#3A3A3A]"
                           }`}
                         >
                           <button
@@ -2185,12 +2708,12 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                             }}
                           >
                             <span className="block font-medium text-sm">{v.name}</span>
-                            <span className="block text-xs text-gray-500 dark:text-[#A0A0A0]">{v.description}</span>
+                            <span className="block text-xs text-gray-500 dark:text-muted-foreground">{v.description}</span>
                           </button>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 h-8 w-8 p-0"
+                            className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 h-8 w-8 p-0"
                             onClick={(e) => {
                               e.stopPropagation();
                               handlePreviewVoice(v.voiceId);
@@ -2210,7 +2733,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 <div className="space-y-4">
                   <p className="text-orange-500 font-medium text-xs uppercase tracking-wide">Speed &amp; style</p>
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-[#B0B0B0] mb-1">Speaking speed (playback): {(playbackSpeed * 100) / 100}x</p>
+                    <p className="text-sm text-gray-600 dark:text-muted-foreground mb-1">Speaking speed (playback): {(playbackSpeed * 100) / 100}x</p>
                     <Slider
                       value={[playbackSpeed]}
                       onValueChange={([v]) => setPlaybackSpeed(v)}
@@ -2221,7 +2744,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-[#B0B0B0] mb-1">Stability: {Math.round(stability * 100)}%</p>
+                    <p className="text-sm text-gray-600 dark:text-muted-foreground mb-1">Stability: {Math.round(stability * 100)}%</p>
                     <Slider
                       value={[stability]}
                       onValueChange={([v]) => setStability(v)}
@@ -2232,7 +2755,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-[#B0B0B0] mb-1">Clarity: {Math.round(similarity * 100)}%</p>
+                    <p className="text-sm text-gray-600 dark:text-muted-foreground mb-1">Clarity: {Math.round(similarity * 100)}%</p>
                     <Slider
                       value={[similarity]}
                       onValueChange={([v]) => setSimilarity(v)}
@@ -2258,7 +2781,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     </Button>
                     <Button
                       variant="outline"
-                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
+                      className="border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-200 dark:hover:bg-muted gap-2"
                       onClick={handleGeneratePerSceneVoiceover}
                       disabled={generatingPerScene || getSceneTexts().length === 0 || !hasProductName}
                     >
@@ -2267,7 +2790,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     </Button>
                     <Button
                       variant="outline"
-                      className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-200 dark:hover:bg-[#2A2A2A] gap-2"
+                      className="border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-200 dark:hover:bg-muted gap-2"
                       onClick={() => {
                         if (libraryScriptId) {
                           router.push(`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`);
@@ -2279,7 +2802,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                       Open in Timeline
                     </Button>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-1.5">
+                  <p className="text-xs text-gray-500 dark:text-muted-foreground mt-1.5">
                     Full script = one audio file (Hook + Body + CTA). Scene voiceovers = one file per scene for the Video Timeline.
                   </p>
                 </div>
@@ -2291,17 +2814,17 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     <div className="flex flex-wrap items-center gap-3">
                       <AudioWithSpeed src={fullVoiceoverUrl} speed={playbackSpeed} controls className="max-w-full h-9 flex-1 min-w-0" />
                       {fullVoiceoverDuration != null && !Number.isNaN(fullVoiceoverDuration) && (
-                        <span className="text-sm text-gray-600 dark:text-[#A0A0A0] shrink-0">
+                        <span className="text-sm text-gray-600 dark:text-muted-foreground shrink-0">
                           {formatDuration(fullVoiceoverDuration)}
                         </span>
                       )}
-                      <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0" asChild>
+                      <Button variant="outline" size="sm" className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0" asChild>
                         <a href={fullVoiceoverUrl} download="voiceover-full.mp3">Download</a>
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1.5"
+                        className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 gap-1.5"
                         onClick={handleGenerateFullVoiceover}
                         disabled={generatingFull || !hasProductName}
                       >
@@ -2323,26 +2846,26 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                         const loading = generatingSceneIndex === i;
                         const timingLabel = scenes[i]?.timing ? `Scene ${i + 1} (${scenes[i].timing})` : `Scene ${i + 1}`;
                         return (
-                          <div key={i} className="rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-100 dark:bg-[#0F0F0F] p-3">
+                          <div key={i} className="rounded-lg border border-gray-200 dark:border-border bg-gray-100 dark:bg-background p-3">
                             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                               <span className="text-sm font-medium text-gray-700 dark:text-[#E0E0E0]">
                                 {timingLabel}
                               </span>
                               {duration != null && !Number.isNaN(duration) && (
-                                <span className="text-xs text-gray-500 dark:text-[#A0A0A0]">
+                                <span className="text-xs text-gray-500 dark:text-muted-foreground">
                                   {formatDuration(duration)}
                                 </span>
                               )}
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                               <AudioWithSpeed src={url} speed={playbackSpeed} controls className="flex-1 min-w-0 max-w-md h-9" />
-                              <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0" asChild>
+                              <Button variant="outline" size="sm" className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0" asChild>
                                 <a href={url} download={`voiceover-scene-${i + 1}.mp3`}>Download</a>
                               </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1"
+                                className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 gap-1"
                                 onClick={() => handleGenerateSingleSceneVoiceover(i)}
                                 disabled={loading || generatingPerScene}
                               >
@@ -2352,7 +2875,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0 gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
                                 onClick={() => handleDeleteSceneVoiceover(i)}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -2368,7 +2891,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                         <Button
                           variant="outline"
                           size="sm"
-                          className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-[#2A2A2A] gap-2"
+                          className="border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-muted gap-2"
                           onClick={() => router.push(`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`)}
                         >
                           <Film className="w-4 h-4" />
@@ -2384,18 +2907,18 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         </Tabs>
 
         {/* Ready to create your video? */}
-        <Card className="mt-8 border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]">
+        <Card className="mt-8 border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
           <CardHeader>
-            <CardTitle className="text-lg font-medium text-gray-900 dark:text-white">
+            <CardTitle className="text-lg font-medium text-foreground">
               Ready to create your video?
             </CardTitle>
-            <CardDescription className="text-gray-600 dark:text-[#B0B0B0]">
+            <CardDescription className="text-gray-600 dark:text-muted-foreground">
               Build your timeline here or copy titles, hashtags, and captions to use in another editor.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
             {libraryScriptId && (
-              <Button asChild variant="outline" className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-[#2A2A2A] gap-2">
+              <Button asChild variant="outline" className="border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-muted gap-2">
                 <Link href={`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`}>
                   <Film className="w-4 h-4" />
                   Open in Timeline
@@ -2420,7 +2943,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             <Button
               type="button"
               variant="outline"
-              className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-[#2A2A2A] gap-2"
+              className="border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-muted gap-2"
               onClick={() => {
                 setActiveTab("social-kit");
                 setTimeout(() => {

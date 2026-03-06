@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { Resend } from "resend";
+import { checkApiRateLimit, getClientIp } from "@/lib/rate-limit-api";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,8 @@ function getName(data: ClerkUserPayload): string {
 }
 
 export async function POST(req: Request) {
+  const rl = await checkApiRateLimit(getClientIp(req));
+  if (rl) return rl;
   if (!WEBHOOK_SECRET) {
     console.error("[Clerk webhook] CLERK_WEBHOOK_SECRET is not set");
     return NextResponse.json(

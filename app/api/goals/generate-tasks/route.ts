@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { generateTasks } from "@/lib/goals/generate-tasks";
 
 const VALID_DAYS = [7, 14, 30, 60, 90];

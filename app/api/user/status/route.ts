@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { getProfileByUserId } from "@/db/queries/profiles-queries";
 import { NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";

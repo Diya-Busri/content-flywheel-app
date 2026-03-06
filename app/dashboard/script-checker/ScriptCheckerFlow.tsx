@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { setVideoPrefill, getTimelineUrl } from "@/lib/video-prefill";
 import {
   Card,
   CardContent,
@@ -13,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, Upload, ArrowRight, Loader2, AlertCircle, AlertTriangle, Info, Sparkles, Copy, Download, RefreshCw, Library } from "lucide-react";
+import { ArrowLeft, Upload, ArrowRight, Loader2, AlertCircle, AlertTriangle, Info, Sparkles, Copy, Download, RefreshCw, Library, Film } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import type { ScriptViolation } from "@/app/api/script-checker/route";
 
@@ -49,6 +51,9 @@ function SideBySideComparison({
   onRecheck,
   onSaveToLibrary,
   savingToLibrary = false,
+  savedScriptId,
+  savedScriptTitle,
+  onCreateVideo,
 }: {
   originalScript: string;
   compliantScript: string;
@@ -59,6 +64,9 @@ function SideBySideComparison({
   onRecheck: () => void;
   onSaveToLibrary: () => void;
   savingToLibrary?: boolean;
+  savedScriptId?: string | null;
+  savedScriptTitle?: string | null;
+  onCreateVideo?: () => void;
 }) {
   const originalLines = originalScript.split("\n");
 
@@ -112,6 +120,12 @@ function SideBySideComparison({
           <RefreshCw className="w-3.5 h-3.5" />
           Re-check for compliance
         </Button>
+        {savedScriptId && onCreateVideo && (
+          <Button type="button" size="sm" onClick={onCreateVideo} className="gap-1.5 bg-orange-500 hover:bg-orange-600">
+            <Film className="w-3.5 h-3.5" />
+            Create video
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -269,10 +283,16 @@ export default function ScriptCheckerFlow() {
     runCheck(toCheck);
   };
 
+  const [savedScriptId, setSavedScriptId] = useState<string | null>(null);
+  const [savedScriptTitle, setSavedScriptTitle] = useState<string | null>(null);
+  const router = useRouter();
+
   const handleSaveToLibrary = async () => {
     const content = compliantScript ?? script;
     if (!content?.trim()) return;
     setSavingToLibrary(true);
+    setSavedScriptId(null);
+    setSavedScriptTitle(null);
     try {
       const res = await fetch("/api/library/scripts", {
         method: "POST",
@@ -283,9 +303,12 @@ export default function ScriptCheckerFlow() {
           platform,
         }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Failed to save");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to save");
+      const inserted = data as { id?: string; title?: string };
+      if (inserted?.id) {
+        setSavedScriptId(inserted.id);
+        setSavedScriptTitle(typeof inserted.title === "string" ? inserted.title : `Script – ${PLATFORM_LABELS[platform]}`);
       }
       toast({ title: "Saved to Library", description: "Your script is now in My Library." });
     } catch (err) {
@@ -297,6 +320,16 @@ export default function ScriptCheckerFlow() {
     } finally {
       setSavingToLibrary(false);
     }
+  };
+
+  const handleCreateVideo = () => {
+    if (!savedScriptId) return;
+    setVideoPrefill({
+      scriptId: savedScriptId,
+      title: savedScriptTitle ?? undefined,
+      source: "script-checker",
+    });
+    router.push(getTimelineUrl(savedScriptId));
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -594,6 +627,9 @@ export default function ScriptCheckerFlow() {
                     onRecheck={handleRecheckCompliant}
                     onSaveToLibrary={handleSaveToLibrary}
                     savingToLibrary={savingToLibrary}
+                    savedScriptId={savedScriptId}
+                    savedScriptTitle={savedScriptTitle}
+                    onCreateVideo={handleCreateVideo}
                   />
                 )}
                 <div className="space-y-4">

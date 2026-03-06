@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { z } from "zod";
 import { generateTikTokShopVideo } from "@/lib/video/tiktokshop/generate";
 

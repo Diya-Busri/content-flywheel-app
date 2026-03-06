@@ -1,6 +1,6 @@
 import { pgTable, text, timestamp, uuid, jsonb } from "drizzle-orm/pg-core";
 
-export type LibraryStatus = "draft" | "published" | "needs_review";
+export type LibraryStatus = "draft" | "scheduled" | "published" | "needs_review";
 
 export const scriptsTable = pgTable("scripts", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -53,4 +53,32 @@ export const renderJobsTable = pgTable("render_jobs", {
   payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/** User library items: generated images, etc. type = 'generated_image' stores image URL. */
+export const myLibraryTable = pgTable("my_library", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull(),
+  type: text("type").notNull(), // e.g. 'generated_image'
+  title: text("title").notNull(),
+  url: text("url"), // for generated_image, the image URL
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/** Scripts saved from AI Coach (YouTube Strategy) for Video Timeline. */
+export type SavedScriptScene = {
+  scene_number: number;
+  duration: number;
+  script_text: string;
+  image_url?: string | null;
+  caption?: string | null;
+};
+
+export const savedScriptsTable = pgTable("saved_scripts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull(),
+  title: text("title").notNull(),
+  scenesJson: jsonb("scenes_json").$type<SavedScriptScene[]>().notNull(),
+  voiceoverUrl: text("voiceover_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });

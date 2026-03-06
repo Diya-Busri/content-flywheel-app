@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -39,6 +40,8 @@ import {
   Calendar,
   ClipboardList,
   LayoutTemplate,
+  Eye,
+  Lock,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -51,9 +54,30 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import TemplatesClient from "@/app/dashboard/templates/TemplatesClient";
+import HistoryClient from "@/app/dashboard/history/HistoryClient";
+import { FeaturePreviewGate } from "@/components/feature-preview-gate";
 
-type LibraryTab = "products" | "scripts" | "all" | "bundles" | "trash";
+type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "trash";
+
+type TemplatePackItem = {
+  id: string;
+  packName: string;
+  templateType: string;
+  niche?: string;
+  status: string;
+  slideCount: number;
+  createdAt: string;
+};
 
 type LibraryItem = {
   id: string;
@@ -70,6 +94,10 @@ type LibraryItem = {
   bundleId?: string;
   /** When 'ai' or 'brand', product was auto-designed; show "AI Designed" badge. */
   designSource?: "ai" | "brand" | null;
+  /** Video: timeline project metadata (scenes, template, etc.). */
+  metadata?: Record<string, unknown>;
+  /** Video: platforms array, e.g. ['video-timeline']. */
+  platforms?: string[];
 };
 
 function formatDate(iso: string): string {
@@ -83,10 +111,28 @@ function formatDate(iso: string): string {
 function statusLabel(s: string): string {
   const m: Record<string, string> = {
     draft: "Draft",
+    scheduled: "Scheduled",
     published: "Published",
     "needs_review": "Needs review",
   };
   return m[s] ?? s;
+}
+
+/** Status badge colors for video cards: Draft (gray), Published (green), Scheduled (blue). */
+function statusBadgeClass(status: string): string {
+  const s = (status ?? "").toLowerCase();
+  if (s === "published") return "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/40";
+  if (s === "scheduled") return "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/40";
+  return "bg-gray-500/15 text-gray-600 dark:text-gray-400 border-gray-500/40";
+}
+
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0s";
+  const s = Math.round(seconds);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return sec > 0 ? `${m}:${sec.toString().padStart(2, "0")}` : `${m}m`;
 }
 
 function typeIcon(type: string) {
@@ -118,6 +164,18 @@ const FORMAT_LABELS: Record<string, string> = {
 function formatLabel(format: string | undefined): string {
   if (!format) return "";
   return FORMAT_LABELS[format] ?? format.charAt(0).toUpperCase() + format.slice(1);
+}
+
+/** Human-readable label for where a script came from (platform). */
+const SCRIPT_SOURCE_LABELS: Record<string, string> = {
+  "video-guide": "Digital Products",
+  "content-studio": "YouTube",
+  "script-checker": "Script Checker",
+  "all": "Script Checker",
+};
+function scriptSourceLabel(platform: string | undefined): string {
+  if (!platform) return "Library";
+  return SCRIPT_SOURCE_LABELS[platform.toLowerCase()] ?? platform.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /** Icon for product format (used in thumbnail placeholder). */
@@ -188,6 +246,10 @@ export default function LibraryFlow() {
   const [deletingAll, setDeletingAll] = useState(false);
   /** Item ids whose thumbnail failed to load (404, CORS, etc.) — show placeholder instead. */
   const [thumbnailErrors, setThumbnailErrors] = useState<Set<string>>(new Set());
+  /** Timeline video preview modal: open in timeline to preview (no stored video URL). */
+  const [previewVideo, setPreviewVideo] = useState<{ id: string; title: string; openHref: string } | null>(null);
+  const [templatePacks, setTemplatePacks] = useState<TemplatePackItem[]>([]);
+  const [packsLoading, setPacksLoading] = useState(false);
   const { toast } = useToast();
 
   const showThumbnail = (item: LibraryItem) =>
@@ -201,7 +263,7 @@ export default function LibraryFlow() {
     setLoading(true);
     try {
       const isTrash = tab === "trash";
-      const typeParam = isTrash ? "all" : tab === "bundles" ? "bundles" : tab === "all" ? "all" : tab;
+      const typeParam = isTrash ? "all" : tab === "bundles" ? "bundles" : tab === "timeline" ? "timeline" : tab === "all" ? "all" : tab;
       const url = isTrash
         ? `/api/library?type=all&deleted=true`
         : `/api/library?type=${typeParam}`;
@@ -217,8 +279,25 @@ export default function LibraryFlow() {
     }
   };
 
+  const fetchTemplatePacks = async () => {
+    setPacksLoading(true);
+    try {
+      const res = await fetch("/api/template-packs");
+      if (!res.ok) throw new Error("Failed to load template packs");
+      const data = await res.json();
+      setTemplatePacks(Array.isArray(data) ? data : []);
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to load template packs", variant: "destructive" });
+      setTemplatePacks([]);
+    } finally {
+      setPacksLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchItems();
+    if (tab === "templates" || tab === "history" || tab === "youtube") return;
+    if (tab === "template-packs") fetchTemplatePacks();
+    else fetchItems();
   }, [tab]);
 
   const filtered = items.filter((item) =>
@@ -227,13 +306,17 @@ export default function LibraryFlow() {
 
   const getEditLink = (item: LibraryItem) => {
     if (item.type === "product") return `/dashboard/digital-products/${item.id}/edit`;
+    if (item.type === "video" && Array.isArray(item.platforms) && item.platforms.includes("video-timeline")) {
+      return `/dashboard/video-timeline?projectId=${encodeURIComponent(item.id)}`;
+    }
     if (item.type === "video") return `/dashboard/library`;
-    if (item.type === "script" && item.platform === "video-guide") return `/dashboard/digital-products/video-guide?libraryScriptId=${encodeURIComponent(item.id)}`;
+    if (item.type === "script" && (item.platform === "video-guide" || item.platform === "content-studio")) return `/dashboard/digital-products/video-guide?libraryScriptId=${encodeURIComponent(item.id)}${item.platform === "content-studio" ? "&source=content-studio" : ""}`;
     if (item.type === "script") return `/dashboard/script-checker`;
     return "#";
   };
 
   const isTrashView = tab === "trash";
+  const isTimelineView = tab === "timeline";
 
   const handleDelete = async (item: LibraryItem, permanent = false) => {
     const message = permanent
@@ -288,7 +371,7 @@ export default function LibraryFlow() {
     }
   };
 
-  const showDeleteAll = !isTrashView && items.length > 0;
+  const showDeleteAll = !isTrashView && tab !== "template-packs" && tab !== "templates" && tab !== "history" && tab !== "youtube" && items.length > 0;
 
   return (
     <main className="p-6 md:p-10 max-w-5xl mx-auto">
@@ -312,6 +395,13 @@ export default function LibraryFlow() {
             <TabsTrigger value="products" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Digital Products</TabsTrigger>
             <TabsTrigger value="bundles" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Bundles</TabsTrigger>
             <TabsTrigger value="scripts" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Scripts</TabsTrigger>
+            <TabsTrigger value="timeline" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">My Videos</TabsTrigger>
+            <TabsTrigger value="youtube" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+              <span>YouTube</span>
+              <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden />
+            </TabsTrigger>
+            <TabsTrigger value="template-packs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Template Packs</TabsTrigger>
+            <TabsTrigger value="templates" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Templates</TabsTrigger>
             <TabsTrigger value="trash" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Trash</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2 flex-wrap">
@@ -339,6 +429,26 @@ export default function LibraryFlow() {
           </div>
         </div>
 
+        <Dialog open={!!previewVideo} onOpenChange={(open) => !open && setPreviewVideo(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Preview video</DialogTitle>
+              <DialogDescription>
+                {previewVideo ? `Open "${previewVideo.title}" in the Timeline editor to preview and export.` : ""}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setPreviewVideo(null)}>
+                Cancel
+              </Button>
+              {previewVideo && (
+                <Button asChild>
+                  <Link href={previewVideo.openHref}>Open in Timeline</Link>
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <AlertDialog open={deleteAllOpen} onOpenChange={setDeleteAllOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -371,10 +481,76 @@ export default function LibraryFlow() {
         </AlertDialog>
 
         <TabsContent value={tab} className="mt-0">
-          {loading ? (
+          {tab === "templates" ? (
+            <TemplatesClient />
+          ) : tab === "history" ? (
+            <HistoryClient />
+          ) : tab === "youtube" ? (
+            <FeaturePreviewGate title="YouTube">
+              <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+                <CardContent className="py-12 text-center">
+                  <Video className="w-12 h-12 text-orange-500 mx-auto mb-4" />
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">YouTube</h2>
+                  <p className="text-gray-600 dark:text-gray-400 mb-4 max-w-md mx-auto">
+                    Your YouTube scripts and video guides from Content Studio will appear here. This section is in development.
+                  </p>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/dashboard/content-studio">Content Studio</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            </FeaturePreviewGate>
+          ) : (tab === "template-packs" ? packsLoading : loading) ? (
             <div className="py-16 flex flex-col items-center justify-center">
               <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
               <p className="text-gray-600 dark:text-gray-400">Loading library...</p>
+            </div>
+          ) : tab === "template-packs" && templatePacks.length === 0 ? (
+            <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+              <CardContent className="py-12 text-center">
+                <LayoutTemplate className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-400 mb-2">No template packs yet</p>
+                <p className="text-sm text-gray-500 mb-4">
+                  Create slides in Template Studio and save a pack to see it here.
+                </p>
+                <Button asChild className="bg-orange-500 hover:bg-orange-600">
+                  <Link href="/dashboard/template-studio">Template Studio</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : tab === "template-packs" ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {templatePacks.map((pack) => (
+                <Card key={pack.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+                  <CardHeader className="pb-2 pt-3">
+                    <CardTitle className="text-base truncate text-gray-900 dark:text-white">{pack.packName}</CardTitle>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      <Badge variant="secondary" className="text-xs font-normal bg-orange-500/10 text-orange-600 dark:text-orange-400 border-0">
+                        {pack.templateType.replace(/_/g, " ")}
+                      </Badge>
+                    </div>
+                    <CardDescription className="text-xs">
+                      {pack.slideCount} slide{pack.slideCount !== 1 ? "s" : ""}
+                      {pack.niche ? ` • ${pack.niche}` : ""}
+                    </CardDescription>
+                    <p className="text-xs text-gray-500 mt-0.5">{formatDate(pack.createdAt)}</p>
+                  </CardHeader>
+                  <CardContent className="pt-0 flex gap-2 flex-wrap">
+                    <Button variant="outline" size="sm" className="flex-1 min-w-0" asChild>
+                      <Link href={`/dashboard/template-studio?packId=${encodeURIComponent(pack.id)}`}>
+                        <ExternalLink className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                        Re-open
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/dashboard/template-studio?packId=${encodeURIComponent(pack.id)}&download=1`}>
+                        <Download className="w-3.5 h-3.5" />
+                        Download
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           ) : filtered.length === 0 ? (
             <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
@@ -386,6 +562,17 @@ export default function LibraryFlow() {
                     <p className="text-sm text-gray-500">
                       Deleted items appear here. Restore them or delete permanently.
                     </p>
+                  </>
+                ) : tab === "timeline" ? (
+                  <>
+                    <Video className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
+                    <p className="text-gray-600 dark:text-gray-400 mb-2">No videos yet</p>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Create a video in the Timeline editor and export to save it here.
+                    </p>
+                    <Button asChild className="bg-orange-500 hover:bg-orange-600">
+                      <Link href="/dashboard/video-timeline">Open Timeline</Link>
+                    </Button>
                   </>
                 ) : tab === "bundles" ? (
                   <>
@@ -417,6 +604,120 @@ export default function LibraryFlow() {
                 )}
               </CardContent>
             </Card>
+          ) : tab === "timeline" ? (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((project) => {
+                const content = (project.metadata ?? {}) as {
+                  scenes?: { duration?: number; elements?: { media?: { url?: string } }[] }[];
+                  template?: { name?: string };
+                  platform?: string;
+                  publishedPlatforms?: string[];
+                  [key: string]: unknown;
+                };
+                const scenes = Array.isArray(content.scenes) ? content.scenes : [];
+                const totalDuration = scenes.reduce((acc, s) => acc + (Number(s.duration) || 0), 0);
+                const firstScene = scenes[0];
+                const backgroundMediaUrl =
+                  firstScene?.elements?.[0] && typeof firstScene.elements[0] === "object" && firstScene.elements[0] !== null && "media" in firstScene.elements[0]
+                    ? (firstScene.elements[0] as { media?: { url?: string } }).media?.url
+                    : undefined;
+                const templateName = content.template && typeof content.template === "object" && "name" in content.template ? String(content.template.name) : undefined;
+                const openHref = `/dashboard/video-timeline?projectId=${encodeURIComponent(project.id)}`;
+                const publishedPlatforms = Array.isArray(content.publishedPlatforms)
+                  ? content.publishedPlatforms
+                  : typeof content.platform === "string" && content.platform
+                    ? [content.platform]
+                    : [];
+                return (
+                  <Card key={project.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
+                    <div className="relative aspect-video bg-gray-200 dark:bg-[#2A2A2A] rounded-t-lg flex items-center justify-center overflow-hidden">
+                      {backgroundMediaUrl ? (
+                        <img src={backgroundMediaUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="text-4xl" aria-hidden>🎬</div>
+                      )}
+                      {totalDuration > 0 && (
+                        <span className="absolute top-2 right-2 rounded bg-black/70 text-white text-xs font-medium px-1.5 py-0.5">
+                          {formatDuration(totalDuration)}
+                        </span>
+                      )}
+                      {totalDuration > 0 && (
+                        <span className="absolute bottom-2 right-2 rounded bg-black/70 text-white text-xs font-medium px-1.5 py-0.5">
+                          {formatDuration(totalDuration)}
+                        </span>
+                      )}
+                    </div>
+                    <CardHeader className="pb-2 pt-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="text-base truncate text-gray-900 dark:text-white min-w-0">{project.title}</CardTitle>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Badge variant="outline" className={`text-xs font-normal ${statusBadgeClass(project.status ?? "draft")}`}>
+                            {statusLabel(project.status ?? "draft")}
+                          </Badge>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                                onClick={() => handleDelete(project)}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                      <CardDescription className="text-sm text-gray-600 dark:text-gray-400">
+                        {templateName ?? "Video"} • {scenes.length} scene{scenes.length !== 1 ? "s" : ""}
+                        {totalDuration > 0 && ` • ${formatDuration(totalDuration)}`}
+                      </CardDescription>
+                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+                        {formatDate(project.createdAt)}
+                      </p>
+                      {publishedPlatforms.length > 0 && (project.status ?? "").toLowerCase() === "published" && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {publishedPlatforms.map((p) => {
+                            const name = String(p).toLowerCase();
+                            const label = name.includes("tiktok") ? "TikTok" : name.includes("instagram") ? "Instagram" : name.includes("youtube") ? "YouTube" : p;
+                            return (
+                              <Badge key={p} variant="secondary" className="text-xs font-normal bg-muted">
+                                {label}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </CardHeader>
+                    <CardContent className="pt-0 flex gap-2 flex-wrap">
+                      <Button variant="outline" size="sm" className="flex-1 min-w-0" asChild>
+                        <Link href={openHref}>
+                          <ExternalLink className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                          Open
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        title="Preview"
+                        onClick={() => setPreviewVideo({ id: project.id, title: project.title, openHref })}
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="outline" size="sm" asChild title="Download">
+                        <Link href={openHref}>
+                          <Download className="w-3.5 h-3.5" />
+                        </Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           ) : tab === "bundles" ? (
             <div className="space-y-10">
               {groupByBundle(filtered).map(({ bundleId, bundleName, items: bundleItems }) => (
@@ -546,6 +847,11 @@ export default function LibraryFlow() {
                               AI Designed
                             </Badge>
                           )}
+                          {item.type === "script" && (
+                            <Badge variant="secondary" className="text-xs font-normal bg-blue-500/10 text-blue-600 dark:text-blue-400 border-0">
+                              From: {scriptSourceLabel(item.platform)}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                       <DropdownMenu>
@@ -606,6 +912,9 @@ export default function LibraryFlow() {
                     </div>
                     <CardDescription className="text-xs">
                       {formatDate(item.createdAt)} • {statusLabel(item.status)}
+                      {item.type === "script" && item.platform && (
+                        <span className="text-muted-foreground"> • From: {scriptSourceLabel(item.platform)}</span>
+                      )}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-0 flex gap-2">

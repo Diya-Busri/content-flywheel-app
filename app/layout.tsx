@@ -4,7 +4,6 @@ import { Providers } from "@/components/utilities/providers";
 import LayoutWrapper from "@/components/layout-wrapper";
 import { ClerkProvider } from "@clerk/nextjs";
 import { CoachOpenProvider } from "@/components/coach/CoachOpenContext";
-import { ChatCoachWidget } from "@/components/coach/ChatCoachWidget";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -47,7 +46,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <PaymentStatusAlert />
                 {children}
               </LayoutWrapper>
-              <ChatCoachWidget />
               <Toaster />
             </CoachOpenProvider>
           </Providers>

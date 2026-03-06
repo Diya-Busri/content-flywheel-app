@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { videoJobsTable } from "@/db/schema/video-jobs-schema";
 import { ugcCampaignProductsTable } from "@/db/schema/ugc-campaigns-schema";
@@ -26,6 +27,10 @@ export async function POST(request: Request) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const rl = await checkApiRateLimit(userId);
+
+    if (rl) return rl;
 
     const body = await request.json().catch(() => ({}));
     const faceProfileId = (body.faceProfileId as string)?.trim() || undefined;

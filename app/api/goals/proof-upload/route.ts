@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 // Create a public "proof-images" bucket in Supabase Storage; if not configured, ProofModal falls back to base64

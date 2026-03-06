@@ -1377,8 +1377,8 @@ export default function DiscoverFlow() {
     }
   };
 
-  const wrapperClass = "min-h-screen bg-[#0F0F0F] text-white";
-  const cardClass = "border-[#2A2A2A] bg-[#1A1A1A]";
+  const wrapperClass = "min-h-screen bg-background text-foreground";
+  const cardClass = "border-border bg-card";
 
   if (!hasLoadedFromStorage) {
     return (
@@ -1394,17 +1394,17 @@ export default function DiscoverFlow() {
     <main className={wrapperClass}>
       {/* Generating product overlay - blocks entire screen, no navigation until complete */}
       {(generating || createError || timeoutStillGenerating) && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0F0F0F]/98 backdrop-blur-md p-6" role="alert" aria-live="polite">
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/98 backdrop-blur-md p-6" role="alert" aria-live="polite">
           {timeoutStillGenerating ? (
             <>
-              <h2 className="text-xl font-semibold text-white mb-2">Still generating...</h2>
-              <p className="text-[#A0A0A0] text-center max-w-md mb-4">
+              <h2 className="text-xl font-semibold text-foreground mb-2">Still generating...</h2>
+              <p className="text-muted-foreground text-center max-w-md mb-4">
                 This may take a few more minutes. You can check My Library for your product or keep waiting here.
               </p>
               <div className="flex flex-wrap gap-3 justify-center">
                 <Button
                   variant="outline"
-                  className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#222]"
+                  className="border-border text-muted-foreground hover:bg-muted"
                   onClick={() => {
                     setTimeoutStillGenerating(null);
                     router.push("/dashboard/digital-products");
@@ -1457,12 +1457,12 @@ export default function DiscoverFlow() {
             </>
           ) : createError ? (
             <>
-              <h2 className="text-xl font-semibold text-white mb-2">Generation Failed</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-2">Generation Failed</h2>
               <p className="text-red-400 text-center max-w-md mb-6">{createError}</p>
               <div className="flex gap-3">
                 <Button
                   variant="outline"
-                  className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#222]"
+                  className="border-border text-muted-foreground hover:bg-muted"
                   onClick={() => setCreateError(null)}
                 >
                   Dismiss
@@ -1481,12 +1481,12 @@ export default function DiscoverFlow() {
             </>
           ) : (
             <>
-              <h2 className="text-xl font-semibold text-white mb-1">
+              <h2 className="text-xl font-semibold text-foreground mb-1">
                 Generating your {productFormat ? FORMAT_LABELS[productFormat] ?? "Product" : "Product"}...
               </h2>
               <p className="text-orange-500 font-medium mb-2">{selectedProduct?.name ?? "Product"}</p>
               {generateProgress && generateProgress.total > 0 && (
-                <p className="text-[#A0A0A0] text-sm mb-6">
+                <p className="text-muted-foreground text-sm mb-6">
                   Generating chapter {Math.min(generateProgress.completed + 1, generateProgress.total)} of {generateProgress.total}...
                 </p>
               )}
@@ -1499,13 +1499,13 @@ export default function DiscoverFlow() {
                     ) : i === generateStepIndex ? (
                       <Loader2 className="w-5 h-5 text-orange-500 animate-spin shrink-0" />
                     ) : (
-                      <span className="w-5 h-5 rounded-full border border-[#2A2A2A] shrink-0" />
+                      <span className="w-5 h-5 rounded-full border border-border shrink-0" />
                     )}
-                    <span className={i <= generateStepIndex ? "text-[#E0E0E0]" : "text-[#666]"}>{label}</span>
+                    <span className={i <= generateStepIndex ? "text-foreground" : "text-muted-foreground"}>{label}</span>
                   </div>
                 ))}
               </div>
-              <p className="text-sm text-[#A0A0A0] mt-8">
+              <p className="text-sm text-muted-foreground mt-8">
                 {productFormat === "workbook"
                   ? "Creating comprehensive workbook with exercises and worksheets... May take 1–3 minutes."
                   : productFormat === "course"
@@ -1520,10 +1520,10 @@ export default function DiscoverFlow() {
 
       {/* Resume or Start Fresh modal */}
       <Dialog open={showResumeModal} onOpenChange={(open) => !open && setShowResumeModal(false)}>
-        <DialogContent className="max-w-[600px] border-[#2A2A2A] bg-[#1A1A1A] text-white" onPointerDownOutside={(e) => e.preventDefault()}>
+        <DialogContent className="max-w-[600px] border-border bg-card text-foreground" onPointerDownOutside={(e) => e.preventDefault()}>
           <DialogHeader>
-            <DialogTitle className="text-xl text-white">Welcome back!</DialogTitle>
-            <DialogDescription className="text-[#A0A0A0]">
+            <DialogTitle className="text-xl text-foreground">Welcome back!</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               {savedProductId
                 ? "You have a product in progress. Open it in the editor or start a new discovery."
                 : "You have an in-progress discovery session. Continue where you left off or start fresh."}
@@ -1533,15 +1533,15 @@ export default function DiscoverFlow() {
             <button
               type="button"
               onClick={handleResume}
-              className="flex w-full items-start gap-4 rounded-lg border-2 border-orange-500 bg-[#2A2A2A] p-5 text-left transition-all hover:border-orange-500 hover:bg-orange-500/10 hover:-translate-y-0.5"
+              className="flex w-full items-start gap-4 rounded-lg border-2 border-orange-500 bg-muted p-5 text-left transition-all hover:border-orange-500 hover:bg-orange-500/10 hover:-translate-y-0.5"
             >
               <Play className="h-8 w-8 shrink-0 text-orange-500" />
               <div className="min-w-0 flex-1">
-                <div className="font-semibold text-white">{savedProductId ? "Open in editor" : "Continue where you left off"}</div>
-                <p className="mt-1 text-sm text-[#A0A0A0]">
+                <div className="font-semibold text-foreground">{savedProductId ? "Open in editor" : "Continue where you left off"}</div>
+                <p className="mt-1 text-sm text-muted-foreground">
                   {savedProductId ? "Go directly to the product editor to finish designing your product." : "Resume with all your generated content and progress saved."}
                 </p>
-                <p className="mt-2 text-xs text-[#666]">
+                <p className="mt-2 text-xs text-muted-foreground">
                   • Step {step} of 6
                   <br />
                   • {allNiches.length} niches explored
@@ -1569,7 +1569,7 @@ export default function DiscoverFlow() {
                 </p>
               </div>
             </button>
-            <div className="text-center text-xs text-[#555]">or</div>
+            <div className="text-center text-xs text-muted-foreground">or</div>
             <button
               type="button"
               onClick={() => {
@@ -1577,17 +1577,17 @@ export default function DiscoverFlow() {
                   handleStartFresh();
                 }
               }}
-              className="flex w-full items-start gap-4 rounded-lg border-2 border-[#444] bg-[#2A2A2A] p-5 text-left transition-all hover:border-[#666] hover:bg-[#333]"
+              className="flex w-full items-start gap-4 rounded-lg border-2 border-border bg-muted p-5 text-left transition-all hover:border-muted-foreground/50 hover:bg-muted"
             >
-              <Sparkles className="h-8 w-8 shrink-0 text-[#A0A0A0]" />
+              <Sparkles className="h-8 w-8 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
-                <div className="font-semibold text-white">Start fresh</div>
-                <p className="mt-1 text-sm text-[#A0A0A0]">Begin a new discovery session (previous work will be deleted).</p>
+                <div className="font-semibold text-foreground">Start fresh</div>
+                <p className="mt-1 text-sm text-muted-foreground">Begin a new discovery session (previous work will be deleted).</p>
               </div>
             </button>
           </div>
           <DialogFooter className="sm:justify-start">
-            <Button variant="ghost" className="text-[#A0A0A0]" onClick={() => router.push("/dashboard/digital-products")}>
+            <Button variant="ghost" className="text-muted-foreground" onClick={() => router.push("/dashboard/digital-products")}>
               Cancel
             </Button>
           </DialogFooter>
@@ -1597,20 +1597,20 @@ export default function DiscoverFlow() {
       <div className="max-w-3xl mx-auto p-6 md:p-10 pb-24">
         {/* Top nav: Dashboard + Digital Products so main app nav is discoverable */}
         <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6 text-sm">
-          <Link href="/dashboard" className="text-[#A0A0A0] hover:text-orange-500 transition-colors">
+          <Link href="/dashboard" className="text-muted-foreground hover:text-orange-500 transition-colors">
             Dashboard
           </Link>
-          <span className="text-[#555]">/</span>
-          <Link href="/dashboard/digital-products" className="text-[#A0A0A0] hover:text-orange-500 transition-colors">
+          <span className="text-muted-foreground">/</span>
+          <Link href="/dashboard/digital-products" className="text-muted-foreground hover:text-orange-500 transition-colors">
             Digital Products
           </Link>
-          <span className="text-[#555]">/</span>
-          <span className="text-white font-medium">Discover</span>
+          <span className="text-muted-foreground">/</span>
+          <span className="text-foreground font-medium">Discover</span>
         </nav>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <Link
             href="/dashboard/digital-products"
-            className="inline-flex items-center gap-2 text-sm text-[#A0A0A0] hover:text-orange-500 transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-orange-500 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Digital Products
@@ -1634,27 +1634,27 @@ export default function DiscoverFlow() {
 
         {/* Progress bar: fills proportionally from step 1 (~14%) to step 7 (100%), brand amber #F59E0B */}
         <div className="mb-8 [&>div>div]:bg-[#F59E0B]">
-          <Progress value={progressForStep(step)} className="h-2 bg-[#2A2A2A]" />
+          <Progress value={progressForStep(step)} className="h-2 bg-muted" />
         </div>
 
         {/* STEP 1 */}
         {step === 1 && (
           <>
             <h2 className="text-lg font-medium text-orange-500 mb-1">Step 1 of 7</h2>
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-8">Tell Us About You</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-8">Tell Us About You</h1>
 
             <div className="space-y-6">
               <div className="space-y-2">
-                <Label className="text-white">What topics interest you?</Label>
+                <Label className="text-foreground">What topics interest you?</Label>
                 <Textarea
                   placeholder="e.g., fitness, budgeting, productivity, travel, parenting, design..."
                   value={interests}
                   onChange={(e) => setInterests(e.target.value)}
                   rows={4}
                   disabled={dontKnowYet}
-                  className="bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-[#666] resize-none disabled:opacity-60"
+                  className="bg-card border-border text-foreground placeholder:text-muted-foreground resize-none disabled:opacity-60"
                 />
-                <p className="text-xs text-[#A0A0A0]">Don&apos;t overthink it - just list things you know about or enjoy</p>
+                <p className="text-xs text-muted-foreground">Don&apos;t overthink it - just list things you know about or enjoy</p>
                 <label className="flex items-center gap-2 cursor-pointer mt-3">
                   <Checkbox
                     checked={dontKnowYet}
@@ -1662,27 +1662,27 @@ export default function DiscoverFlow() {
                       setDontKnowYet(!!checked);
                       if (checked) setInterests("");
                     }}
-                    className="border-[#2A2A2A] data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
+                    className="border-border data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
                   />
-                  <span className="text-sm text-[#E0E0E0]">I&apos;m not sure yet — show me what&apos;s selling well</span>
+                  <span className="text-sm text-foreground">I&apos;m not sure yet — show me what&apos;s selling well</span>
                 </label>
               </div>
               <div className="space-y-3">
-                <Label className="text-white">What&apos;s your goal?</Label>
+                <Label className="text-foreground">What&apos;s your goal?</Label>
                 <RadioGroup value={goal} onValueChange={setGoal} className="grid gap-3">
                   {STEP_GOALS.map((g) => (
                     <label
                       key={g.value}
                       htmlFor={`goal-${g.value}`}
                       onClick={() => setGoal(g.value)}
-                      className="flex items-center gap-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 cursor-pointer hover:border-[#3A3A3A] hover:bg-[#222] has-[:checked]:border-orange-500 has-[:checked]:bg-orange-500/10"
+                      className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 cursor-pointer hover:border-muted-foreground/40 hover:bg-muted has-[:checked]:border-orange-500 has-[:checked]:bg-orange-500/10"
                     >
                       <RadioGroupItem
                         id={`goal-${g.value}`}
                         value={g.value}
-                        className="border-2 border-[#666] bg-[#0F0F0F] text-orange-500 focus:ring-2 focus:ring-orange-500 focus:ring-offset-0 data-[state=checked]:border-orange-500 data-[state=checked]:bg-orange-500/20 data-[state=checked]:text-orange-500 shrink-0"
+                        className="border-2 border-border bg-background text-orange-500 focus:ring-2 focus:ring-orange-500 focus:ring-offset-0 data-[state=checked]:border-orange-500 data-[state=checked]:bg-orange-500/20 data-[state=checked]:text-orange-500 shrink-0"
                       />
-                      <span className="text-sm text-[#E0E0E0] pointer-events-none">{g.label}</span>
+                      <span className="text-sm text-foreground pointer-events-none">{g.label}</span>
                     </label>
                   ))}
                 </RadioGroup>
@@ -1696,7 +1696,7 @@ export default function DiscoverFlow() {
                 )}
                 <Button
                   type="button"
-                  className="bg-orange-500 hover:bg-orange-600 text-white font-medium gap-2 px-6 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-orange-500"
+                  className="bg-orange-500 hover:bg-orange-600 text-foreground font-medium gap-2 px-6 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-orange-500"
                   onClick={handleStep2Start}
                   disabled={!canProceedStep1}
                 >
@@ -1712,40 +1712,40 @@ export default function DiscoverFlow() {
         {step === 2 && (
           <>
             <h2 className="text-lg font-medium text-orange-500 mb-1">Step 2 of 7</h2>
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Pick Your Niche</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Pick Your Niche</h1>
             {dontKnowYet ? (
-              <p className="text-[#A0A0A0] mb-8">Here are the hottest opportunities right now 🔥</p>
+              <p className="text-muted-foreground mb-8">Here are the hottest opportunities right now 🔥</p>
             ) : (
-              <p className="text-[#A0A0A0] mb-8">Based on your interests: {interests.trim() || "—"}</p>
+              <p className="text-muted-foreground mb-8">Based on your interests: {interests.trim() || "—"}</p>
             )}
 
             {nicheLoading ? (
               <div className="py-16 text-center">
                 <Loader2 className="w-12 h-12 text-orange-500 animate-spin mx-auto mb-4" />
-                <p className="text-[#A0A0A0]">{dontKnowYet ? "Loading trending niches..." : "Finding niches that match your interests..."}</p>
+                <p className="text-muted-foreground">{dontKnowYet ? "Loading trending niches..." : "Finding niches that match your interests..."}</p>
               </div>
             ) : (
               <div className="space-y-6">
                 {/* Filters */}
-                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
-                  <Filter className="w-4 h-4 text-[#A0A0A0]" />
-                  <span className="text-xs font-medium text-[#A0A0A0]">Saturation:</span>
-                  <select value={saturationFilter} onChange={(e) => setSaturationFilter(e.target.value)} className="rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white text-xs px-3 py-1.5">
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
+                  <Filter className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground">Saturation:</span>
+                  <select value={saturationFilter} onChange={(e) => setSaturationFilter(e.target.value)} className="rounded-lg bg-background border border-border text-foreground text-xs px-3 py-1.5">
                     <option value="all">All</option>
                     <option value="low">🟢 Low only</option>
                     <option value="medium">🟡 Medium</option>
                     <option value="high">🟠 High</option>
                     <option value="veryHigh">🔴 Very high</option>
                   </select>
-                  <span className="text-xs font-medium text-[#A0A0A0] ml-2">Revenue:</span>
-                  <select value={revenueFilter} onChange={(e) => setRevenueFilter(e.target.value)} className="rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white text-xs px-3 py-1.5">
+                  <span className="text-xs font-medium text-muted-foreground ml-2">Revenue:</span>
+                  <select value={revenueFilter} onChange={(e) => setRevenueFilter(e.target.value)} className="rounded-lg bg-background border border-border text-foreground text-xs px-3 py-1.5">
                     <option value="all">All</option>
                     <option value="1-2k">$500–2k/mo</option>
                     <option value="2-5k">$2–5k/mo</option>
                     <option value="5k+">$5k+/mo</option>
                   </select>
-                  <span className="text-xs font-medium text-[#A0A0A0] ml-2">Sort:</span>
-                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value as "opportunity" | "competition" | "revenue")} className="rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white text-xs px-3 py-1.5">
+                  <span className="text-xs font-medium text-muted-foreground ml-2">Sort:</span>
+                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value as "opportunity" | "competition" | "revenue")} className="rounded-lg bg-background border border-border text-foreground text-xs px-3 py-1.5">
                     <option value="opportunity">Best opportunity</option>
                     <option value="competition">Lowest competition</option>
                     <option value="revenue">Highest revenue</option>
@@ -1753,18 +1753,18 @@ export default function DiscoverFlow() {
                 </div>
 
                 {(saturationFilter !== "all" || revenueFilter !== "all") && (
-                  <p className="text-sm text-[#A0A0A0]">
+                  <p className="text-sm text-muted-foreground">
                     Showing {filteredAndSortedNiches.length} of {allNiches.length} niches
                   </p>
                 )}
 
                 {filteredAndSortedNiches.length === 0 ? (
-                  <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-8 text-center">
-                    <p className="text-[#A0A0A0] mb-4">No niches match your filters.</p>
+                  <div className="rounded-xl border border-border bg-card p-8 text-center">
+                    <p className="text-muted-foreground mb-4">No niches match your filters.</p>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#222]"
+                      className="border-border text-muted-foreground hover:bg-muted"
                       onClick={() => {
                         setSaturationFilter("all");
                         setRevenueFilter("all");
@@ -1783,12 +1783,12 @@ export default function DiscoverFlow() {
                       <Card key={n.id} className={cardClass}>
                         <CardContent className="p-5">
                           <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
-                            <h3 className="font-semibold text-white">{n.name}</h3>
+                            <h3 className="font-semibold text-foreground">{n.name}</h3>
                             <span className={`text-xs font-medium px-2 py-1 rounded-md border ${sat.className}`}>
                               {sat.emoji} {sat.label}
                             </span>
                           </div>
-                          <div className="flex flex-wrap gap-3 text-xs text-[#A0A0A0] mb-2">
+                          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mb-2">
                             <span>💰 Revenue: {n.revenue}</span>
                             <span>👥 Competition: {n.competition}</span>
                             <span>{trendLabel}</span>
@@ -1796,7 +1796,7 @@ export default function DiscoverFlow() {
                           {n.subNiches?.length > 0 && (
                             <p className="text-xs text-[#888] mb-2">Angles: {n.subNiches.join(" · ")}</p>
                           )}
-                          <p className="text-sm text-[#A0A0A0] mb-4">Why this works: {n.why}</p>
+                          <p className="text-sm text-muted-foreground mb-4">Why this works: {n.why}</p>
                           <Button
                             type="button"
                             size="sm"
@@ -1822,22 +1822,22 @@ export default function DiscoverFlow() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#1A1A1A]"
+                      className="border-border text-muted-foreground hover:bg-card"
                       onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
                       disabled={currentPage === 0}
                     >
                       ← Previous Niches
                     </Button>
-                    <div className="flex items-center gap-2 text-sm text-[#A0A0A0]">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <span>
                         Page {currentPage + 1} of {totalPages}
                       </span>
-                      <span className="text-[#666]">({filteredAndSortedNiches.length} total)</span>
+                      <span className="text-muted-foreground">({filteredAndSortedNiches.length} total)</span>
                     </div>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#1A1A1A]"
+                      className="border-border text-muted-foreground hover:bg-card"
                       onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
                       disabled={currentPage >= totalPages - 1}
                     >
@@ -1856,7 +1856,7 @@ export default function DiscoverFlow() {
                         aria-label={`Page ${idx + 1}`}
                         onClick={() => setCurrentPage(idx)}
                         className={`h-2 rounded-full transition-all ${
-                          idx === currentPage ? "w-6 bg-orange-500" : "w-2 bg-[#3A3A3A] hover:bg-[#555]"
+                          idx === currentPage ? "w-6 bg-orange-500" : "w-2 bg-muted-foreground/30 hover:bg-muted-foreground/50"
                         }`}
                       />
                     ))}
@@ -1866,10 +1866,10 @@ export default function DiscoverFlow() {
                 {/* Progress and no-limit messaging */}
                 {allNiches.length > 0 && (
                   <div className="text-center py-2">
-                    <p className="text-sm text-[#A0A0A0]">
+                    <p className="text-sm text-muted-foreground">
                       You&apos;ve explored {allNiches.length} niches across {totalPages} page{totalPages !== 1 ? "s" : ""}
                     </p>
-                    <p className="text-xs text-[#666] mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       Keep generating until you find the perfect fit — there&apos;s no limit!
                     </p>
                   </div>
@@ -1885,13 +1885,13 @@ export default function DiscoverFlow() {
                         </Button>
                       </div>
                       {allNiches.length === 0 && (
-                        <p className="text-sm text-[#A0A0A0] mt-1">You can still continue by entering your own niche below.</p>
+                        <p className="text-sm text-muted-foreground mt-1">You can still continue by entering your own niche below.</p>
                       )}
                     </AlertDescription>
                   </Alert>
                 )}
 
-                <Button variant="outline" className="w-full border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#1A1A1A]" onClick={handleGenerateMoreNiches} disabled={moreNichesLoading}>
+                <Button variant="outline" className="w-full border-border text-muted-foreground hover:bg-card" onClick={handleGenerateMoreNiches} disabled={moreNichesLoading}>
                   {moreNichesLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -1901,19 +1901,19 @@ export default function DiscoverFlow() {
                     <>
                       ✨ Show Me 6 More Niches
                       {allNiches.length > 0 && (
-                        <span className="text-sm ml-2 text-[#666]">({allNiches.length} generated so far)</span>
+                        <span className="text-sm ml-2 text-muted-foreground">({allNiches.length} generated so far)</span>
                       )}
                     </>
                   )}
                 </Button>
 
                 <div className="mt-6 space-y-3">
-                  <Label className="text-[#A0A0A0]">Or enter your own niche (min 3 characters)</Label>
+                  <Label className="text-muted-foreground">Or enter your own niche (min 3 characters)</Label>
                   <Input
                     placeholder="e.g. Budgeting for freelancers"
                     value={customNiche}
                     onChange={(e) => setCustomNiche(e.target.value)}
-                    className="bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-[#666]"
+                    className="bg-card border-border text-foreground placeholder:text-muted-foreground"
                   />
                   {customNiche.trim().length > 0 && customNiche.trim().length < 3 && (
                     <p className="text-xs text-amber-500/90">Enter at least 3 characters</p>
@@ -1921,7 +1921,7 @@ export default function DiscoverFlow() {
                 </div>
 
                 <div className="flex justify-between mt-6">
-                  <Button variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(1)}>← Back</Button>
+                  <Button variant="ghost" className="text-muted-foreground" onClick={() => setStep(1)}>← Back</Button>
                   <Button
                     className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => {
@@ -1954,33 +1954,33 @@ export default function DiscoverFlow() {
         {step === 3 && (
           <>
             <h2 className="text-lg font-medium text-orange-500 mb-1">Step 3 of 7</h2>
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Choose a Product</h1>
-            <p className="text-[#A0A0A0] mb-6">Based on niche: {selectedNiche?.name ?? "Your niche"}</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Choose a Product</h1>
+            <p className="text-muted-foreground mb-6">Based on niche: {selectedNiche?.name ?? "Your niche"}</p>
 
             {productSuggestionsLoading ? (
-              <div className="flex items-center justify-center gap-2 py-12 text-[#A0A0A0]">
+              <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span>Generating product ideas…</span>
               </div>
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-3 mb-4">
-                  <label className="text-sm text-[#A0A0A0]">Price:</label>
+                  <label className="text-sm text-muted-foreground">Price:</label>
                   <select
                     value={productPriceFilter}
                     onChange={(e) => { setProductPriceFilter(e.target.value); setProductCurrentPage(0); }}
-                    className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-white"
+                    className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground"
                   >
                     <option value="all">All</option>
                     <option value="under20">Under $20</option>
                     <option value="20-50">$20–50</option>
                     <option value="50+">$50+</option>
                   </select>
-                  <label className="text-sm text-[#A0A0A0] ml-2">Type:</label>
+                  <label className="text-sm text-muted-foreground ml-2">Type:</label>
                   <select
                     value={productTypeFilter}
                     onChange={(e) => { setProductTypeFilter(e.target.value); setProductCurrentPage(0); }}
-                    className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-white"
+                    className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground"
                   >
                     <option value="all">All</option>
                     <option value="Templates">Templates</option>
@@ -1988,11 +1988,11 @@ export default function DiscoverFlow() {
                     <option value="Courses">Courses</option>
                     <option value="Planners">Planners</option>
                   </select>
-                  <label className="text-sm text-[#A0A0A0] ml-2">Sort:</label>
+                  <label className="text-sm text-muted-foreground ml-2">Sort:</label>
                   <select
                     value={productSortBy}
                     onChange={(e) => { setProductSortBy(e.target.value as "potential" | "lowest" | "highest" | "easiest"); setProductCurrentPage(0); }}
-                    className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-white"
+                    className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground"
                   >
                     <option value="potential">Best seller potential</option>
                     <option value="lowest">Lowest price</option>
@@ -2002,15 +2002,15 @@ export default function DiscoverFlow() {
                 </div>
 
                 {(productPriceFilter !== "all" || productTypeFilter !== "all") && (
-                  <p className="text-sm text-[#A0A0A0] mb-3">
+                  <p className="text-sm text-muted-foreground mb-3">
                     Showing {filteredAndSortedProducts.length} of {allProductSuggestions.length || MOCK_PRODUCTS.length} products
                   </p>
                 )}
 
                 {filteredAndSortedProducts.length === 0 ? (
-                  <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-8 text-center">
-                    <p className="text-[#A0A0A0] mb-4">No products match your filters.</p>
-                    <Button variant="outline" size="sm" className="border-[#2A2A2A] text-[#A0A0A0]" onClick={() => { setProductPriceFilter("all"); setProductTypeFilter("all"); setProductCurrentPage(0); }}>
+                  <div className="rounded-xl border border-border bg-card p-8 text-center">
+                    <p className="text-muted-foreground mb-4">No products match your filters.</p>
+                    <Button variant="outline" size="sm" className="border-border text-muted-foreground" onClick={() => { setProductPriceFilter("all"); setProductTypeFilter("all"); setProductCurrentPage(0); }}>
                       Clear filters
                     </Button>
                   </div>
@@ -2020,26 +2020,26 @@ export default function DiscoverFlow() {
                       <Card key={p.id} className={cardClass}>
                         <CardContent className="p-5">
                           <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
-                            <h3 className="font-semibold text-white">{p.name}</h3>
-                            <span className="text-xs text-[#A0A0A0] flex items-center gap-1">
+                            <h3 className="font-semibold text-foreground">{p.name}</h3>
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
                               {getProductTypeIcon(p.type)} {p.type}
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-2 mb-2">
                             {p.complexity && (
-                              <span className="text-xs px-2 py-0.5 rounded bg-[#2A2A2A] text-[#A0A0A0]">
+                              <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
                                 {p.complexity}
                               </span>
                             )}
                             {p.estimatedTime && (
-                              <span className="text-xs text-[#666]">{p.estimatedTime}</span>
+                              <span className="text-xs text-muted-foreground">{p.estimatedTime}</span>
                             )}
                           </div>
                           <p className="text-xs text-orange-500 mb-0.5">Suggested Price: {p.price}</p>
-                          {p.priceNote && <p className="text-xs text-[#666] mb-2">{p.priceNote}</p>}
-                          <p className="text-sm text-[#A0A0A0] mb-1">What&apos;s included:</p>
-                          <p className="text-sm text-[#E0E0E0] mb-3">{p.included}</p>
-                          <p className="text-sm text-[#A0A0A0] mb-4">Why it sells: {p.why}</p>
+                          {p.priceNote && <p className="text-xs text-muted-foreground mb-2">{p.priceNote}</p>}
+                          <p className="text-sm text-muted-foreground mb-1">What&apos;s included:</p>
+                          <p className="text-sm text-foreground mb-3">{p.included}</p>
+                          <p className="text-sm text-muted-foreground mb-4">Why it sells: {p.why}</p>
                           <Button
                             type="button"
                             size="sm"
@@ -2064,19 +2064,19 @@ export default function DiscoverFlow() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#1A1A1A]"
+                      className="border-border text-muted-foreground hover:bg-card"
                       onClick={() => setProductCurrentPage((p) => Math.max(0, p - 1))}
                       disabled={productCurrentPage === 0}
                     >
                       ← Previous
                     </Button>
-                    <span className="text-sm text-[#A0A0A0]">
+                    <span className="text-sm text-muted-foreground">
                       Page {productCurrentPage + 1} of {totalProductPages} ({filteredAndSortedProducts.length} products total)
                     </span>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#1A1A1A]"
+                      className="border-border text-muted-foreground hover:bg-card"
                       onClick={() => setProductCurrentPage((p) => Math.min(totalProductPages - 1, p + 1))}
                       disabled={productCurrentPage >= totalProductPages - 1}
                     >
@@ -2087,7 +2087,7 @@ export default function DiscoverFlow() {
 
                 <Button
                   variant="outline"
-                  className="w-full border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#1A1A1A]"
+                  className="w-full border-border text-muted-foreground hover:bg-card"
                   onClick={handleGenerateMoreProducts}
                   disabled={moreProductsLoading}
                 >
@@ -2100,7 +2100,7 @@ export default function DiscoverFlow() {
                     <>
                       ✨ Generate 6 More Products
                       {(allProductSuggestions.length > 0 || MOCK_PRODUCTS.length > 0) && (
-                        <span className="text-sm ml-2 text-[#666]">
+                        <span className="text-sm ml-2 text-muted-foreground">
                           ({(allProductSuggestions.length || MOCK_PRODUCTS.length)} total)
                         </span>
                       )}
@@ -2111,21 +2111,21 @@ export default function DiscoverFlow() {
             )}
 
             {productSuggestionsError && !productSuggestionsLoading && (
-              <p className="text-xs text-[#666] mt-2">{productSuggestionsError}</p>
+              <p className="text-xs text-muted-foreground mt-2">{productSuggestionsError}</p>
             )}
 
             <div className="mt-6 space-y-3">
-              <Label className="text-[#A0A0A0]">Or enter your own product name</Label>
+              <Label className="text-muted-foreground">Or enter your own product name</Label>
               <Input
                 placeholder="e.g. My Budget Tracker"
                 value={customProductName}
                 onChange={(e) => setCustomProductName(e.target.value)}
-                className="bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-[#666]"
+                className="bg-card border-border text-foreground placeholder:text-muted-foreground"
               />
             </div>
 
             <div className="flex justify-between mt-6">
-              <Button variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(2)}>← Back</Button>
+              <Button variant="ghost" className="text-muted-foreground" onClick={() => setStep(2)}>← Back</Button>
               <Button
                 className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => {
@@ -2153,23 +2153,23 @@ export default function DiscoverFlow() {
         {step === 4 && (
           <>
             <h2 className="text-lg font-medium text-orange-500 mb-1">Step 4 of 7</h2>
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-8">Your Content Style</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-8">Your Content Style</h1>
 
-            <p className="text-[#A0A0A0] mb-6">How do you want to show up online?</p>
+            <p className="text-muted-foreground mb-6">How do you want to show up online?</p>
             <div className="grid gap-4">
               <button
                 type="button"
                 onClick={() => setFacelessOrPersonal("faceless")}
                 className={`w-full rounded-xl border-2 p-6 text-left transition-all cursor-pointer hover:border-orange-500/50 ${
-                  facelessOrPersonal === "faceless" ? "border-orange-500 bg-orange-500/10" : "border-[#2A2A2A] hover:bg-[#1A1A1A]"
+                  facelessOrPersonal === "faceless" ? "border-orange-500 bg-orange-500/10" : "border-border hover:bg-card"
                 }`}
               >
                 <div className="flex gap-4">
                   <div className="flex flex-col items-start gap-2 flex-1">
                     <div className="flex items-center gap-2 mb-2 w-full justify-between">
                       <span className="flex items-center gap-2">
-                        <User className="w-5 h-5 text-[#A0A0A0]" />
-                        <span className="font-semibold text-white">Faceless Content</span>
+                        <User className="w-5 h-5 text-muted-foreground" />
+                        <span className="font-semibold text-foreground">Faceless Content</span>
                       </span>
                       {facelessOrPersonal === "faceless" && (
                         <span className="flex items-center gap-1.5 text-xs font-medium text-orange-500 bg-orange-500/20 px-2 py-1 rounded-full">
@@ -2177,8 +2177,8 @@ export default function DiscoverFlow() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-[#A0A0A0] mb-3">Best for: Privacy & anonymity, testing multiple niches, scalable content production.</p>
-                    <p className="text-xs text-[#666]">Video styles: Text overlays on B-roll, screen recordings, animations & graphics.</p>
+                    <p className="text-sm text-muted-foreground mb-3">Best for: Privacy & anonymity, testing multiple niches, scalable content production.</p>
+                    <p className="text-xs text-muted-foreground">Video styles: Text overlays on B-roll, screen recordings, animations & graphics.</p>
                   </div>
                 </div>
               </button>
@@ -2186,15 +2186,15 @@ export default function DiscoverFlow() {
                 type="button"
                 onClick={() => setFacelessOrPersonal("personal")}
                 className={`w-full rounded-xl border-2 p-6 text-left transition-all cursor-pointer hover:border-orange-500/50 ${
-                  facelessOrPersonal === "personal" ? "border-orange-500 bg-orange-500/10" : "border-[#2A2A2A] hover:bg-[#1A1A1A]"
+                  facelessOrPersonal === "personal" ? "border-orange-500 bg-orange-500/10" : "border-border hover:bg-card"
                 }`}
               >
                 <div className="flex gap-4">
                   <div className="flex flex-col items-start gap-2 flex-1">
                     <div className="flex items-center gap-2 mb-2 w-full justify-between">
                       <span className="flex items-center gap-2">
-                        <Video className="w-5 h-5 text-[#A0A0A0]" />
-                        <span className="font-semibold text-white">Personal Brand</span>
+                        <Video className="w-5 h-5 text-muted-foreground" />
+                        <span className="font-semibold text-foreground">Personal Brand</span>
                       </span>
                       {facelessOrPersonal === "personal" && (
                         <span className="flex items-center gap-1.5 text-xs font-medium text-orange-500 bg-orange-500/20 px-2 py-1 rounded-full">
@@ -2202,14 +2202,14 @@ export default function DiscoverFlow() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-[#A0A0A0] mb-3">Best for: Building authority, long-term brand growth, trust & connection.</p>
-                    <p className="text-xs text-[#666]">Video styles: Talking head (you on camera), behind-the-scenes, story-driven content.</p>
+                    <p className="text-sm text-muted-foreground mb-3">Best for: Building authority, long-term brand growth, trust & connection.</p>
+                    <p className="text-xs text-muted-foreground">Video styles: Talking head (you on camera), behind-the-scenes, story-driven content.</p>
                   </div>
                 </div>
               </button>
             </div>
             <div className="flex justify-between mt-8">
-              <Button variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(3)}>← Back</Button>
+              <Button variant="ghost" className="text-muted-foreground" onClick={() => setStep(3)}>← Back</Button>
               <Button
                 className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => setStep(5)}
@@ -2228,21 +2228,21 @@ export default function DiscoverFlow() {
         {step === 5 && (
           <>
             <h2 className="text-lg font-medium text-orange-500 mb-1">Step 5 of 7</h2>
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Master the Basics</h1>
-            <p className="text-[#A0A0A0] mb-6">
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Master the Basics</h1>
+            <p className="text-muted-foreground mb-6">
               A complete sales masterclass tailored to your product{selectedProduct ? `: ${selectedProduct.name}` : ""}.
             </p>
 
             {salesGuideLoading ? (
-              <div className="flex items-center justify-center gap-2 py-12 text-[#A0A0A0]">
+              <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span>Building your sales guide…</span>
               </div>
             ) : salesGuide ? (
-              <Accordion type="multiple" className="w-full space-y-2 border border-[#2A2A2A] rounded-xl bg-[#1A1A1A] p-2">
+              <Accordion type="multiple" className="w-full space-y-2 border border-border rounded-xl bg-card p-2">
                 {/* 1. Product Overview */}
-                <AccordionItem value="overview" className="border-[#2A2A2A] px-3">
-                  <AccordionTrigger className="text-white hover:no-underline hover:text-orange-500">
+                <AccordionItem value="overview" className="border-border px-3">
+                  <AccordionTrigger className="text-foreground hover:no-underline hover:text-orange-500">
                     <span className="flex items-center gap-2">
                       <Target className="h-4 w-4 text-orange-500" />
                       Product Overview
@@ -2250,24 +2250,24 @@ export default function DiscoverFlow() {
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-2 text-sm">
-                      <p><span className="text-[#A0A0A0]">Product:</span> <span className="text-white">{salesGuide.productOverview.productName}</span></p>
-                      <p><span className="text-[#A0A0A0]">Format:</span> <span className="text-white">{salesGuide.productOverview.format}</span></p>
-                      <p><span className="text-[#A0A0A0]">Who it&apos;s for:</span> <span className="text-[#E0E0E0]">{salesGuide.productOverview.targetCustomer}</span></p>
-                      <p><span className="text-[#A0A0A0]">Transformation:</span> <span className="text-orange-500">{salesGuide.productOverview.transformation}</span></p>
+                      <p><span className="text-muted-foreground">Product:</span> <span className="text-foreground">{salesGuide.productOverview.productName}</span></p>
+                      <p><span className="text-muted-foreground">Format:</span> <span className="text-foreground">{salesGuide.productOverview.format}</span></p>
+                      <p><span className="text-muted-foreground">Who it&apos;s for:</span> <span className="text-foreground">{salesGuide.productOverview.targetCustomer}</span></p>
+                      <p><span className="text-muted-foreground">Transformation:</span> <span className="text-orange-500">{salesGuide.productOverview.transformation}</span></p>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
 
                 {/* 2. Pain Points */}
-                <AccordionItem value="pain" className="border-[#2A2A2A] px-3">
-                  <AccordionTrigger className="text-white hover:no-underline hover:text-orange-500">
+                <AccordionItem value="pain" className="border-border px-3">
+                  <AccordionTrigger className="text-foreground hover:no-underline hover:text-orange-500">
                     <span className="flex items-center gap-2">
                       <AlertCircle className="h-4 w-4 text-amber-500" />
                       Pain Points (Why customers need this)
                     </span>
                   </AccordionTrigger>
                   <AccordionContent>
-                    <ul className="space-y-2 text-sm text-[#E0E0E0]">
+                    <ul className="space-y-2 text-sm text-foreground">
                       {salesGuide.painPoints.map((p, i) => (
                         <li key={i} className="flex gap-2">
                           <span className="text-amber-500">⚠️</span>
@@ -2279,8 +2279,8 @@ export default function DiscoverFlow() {
                 </AccordionItem>
 
                 {/* 3. Solution */}
-                <AccordionItem value="solution" className="border-[#2A2A2A] px-3">
-                  <AccordionTrigger className="text-white hover:no-underline hover:text-orange-500">
+                <AccordionItem value="solution" className="border-border px-3">
+                  <AccordionTrigger className="text-foreground hover:no-underline hover:text-orange-500">
                     <span className="flex items-center gap-2">
                       <Zap className="h-4 w-4 text-green-500" />
                       Solution (How your product solves each pain)
@@ -2289,7 +2289,7 @@ export default function DiscoverFlow() {
                   <AccordionContent>
                     <div className="space-y-3 text-sm">
                       {salesGuide.solutions.map((s, i) => (
-                        <div key={i} className="rounded-lg border border-[#2A2A2A] p-3">
+                        <div key={i} className="rounded-lg border border-border p-3">
                           <p className="text-amber-500/90 mb-1">Pain: {s.pain}</p>
                           <p className="text-green-500/90 flex items-center gap-1">✅ Solution: {s.solution}</p>
                         </div>
@@ -2299,15 +2299,15 @@ export default function DiscoverFlow() {
                 </AccordionItem>
 
                 {/* 4. Key Benefits */}
-                <AccordionItem value="benefits" className="border-[#2A2A2A] px-3">
-                  <AccordionTrigger className="text-white hover:no-underline hover:text-orange-500">
+                <AccordionItem value="benefits" className="border-border px-3">
+                  <AccordionTrigger className="text-foreground hover:no-underline hover:text-orange-500">
                     <span className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500" />
                       Key Benefits
                     </span>
                   </AccordionTrigger>
                   <AccordionContent>
-                    <ul className="space-y-1.5 text-sm text-[#E0E0E0]">
+                    <ul className="space-y-1.5 text-sm text-foreground">
                       {salesGuide.keyBenefits.map((b, i) => (
                         <li key={i} className="flex gap-2">
                           <span className="text-green-500">✓</span>
@@ -2319,8 +2319,8 @@ export default function DiscoverFlow() {
                 </AccordionItem>
 
                 {/* 5. Objection Handling */}
-                <AccordionItem value="objections" className="border-[#2A2A2A] px-3">
-                  <AccordionTrigger className="text-white hover:no-underline hover:text-orange-500">
+                <AccordionItem value="objections" className="border-border px-3">
+                  <AccordionTrigger className="text-foreground hover:no-underline hover:text-orange-500">
                     <span className="flex items-center gap-2">
                       <MessageCircle className="h-4 w-4 text-orange-500" />
                       Objection Handling
@@ -2329,8 +2329,8 @@ export default function DiscoverFlow() {
                   <AccordionContent>
                     <div className="space-y-3 text-sm">
                       {salesGuide.objections.map((o, i) => (
-                        <div key={i} className="rounded-lg border border-[#2A2A2A] p-3 space-y-1">
-                          <p className="text-[#A0A0A0]">Objection: &ldquo;{o.objection}&rdquo;</p>
+                        <div key={i} className="rounded-lg border border-border p-3 space-y-1">
+                          <p className="text-muted-foreground">Objection: &ldquo;{o.objection}&rdquo;</p>
                           <p className="text-green-500/90 pl-2 border-l-2 border-green-500/50">→ {o.answer}</p>
                           <Button variant="ghost" size="sm" className="h-7 text-xs text-[#888] mt-1" onClick={() => copyToClipboard(`${o.objection}\n\nAnswer: ${o.answer}`, `obj-${i}`)}>
                             {copyFeedback === `obj-${i}` ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />} Copy
@@ -2342,16 +2342,16 @@ export default function DiscoverFlow() {
                 </AccordionItem>
 
                 {/* 6. Hooks */}
-                <AccordionItem value="hooks" className="border-[#2A2A2A] px-3">
-                  <AccordionTrigger className="text-white hover:no-underline hover:text-orange-500">
+                <AccordionItem value="hooks" className="border-border px-3">
+                  <AccordionTrigger className="text-foreground hover:no-underline hover:text-orange-500">
                     Hooks (The first 3 seconds)
                   </AccordionTrigger>
                   <AccordionContent>
-                    <p className="text-xs text-[#A0A0A0] mb-3">Why each hook works is listed below.</p>
+                    <p className="text-xs text-muted-foreground mb-3">Why each hook works is listed below.</p>
                     <div className="space-y-3">
                       {salesGuide.hooks.map((h, i) => (
-                        <div key={i} className="rounded-xl border-l-4 border-orange-500 bg-[#0F0F0F] p-4">
-                          <p className="text-sm text-[#E0E0E0] mb-1">&ldquo;{h.text}&rdquo;</p>
+                        <div key={i} className="rounded-xl border-l-4 border-orange-500 bg-background p-4">
+                          <p className="text-sm text-foreground mb-1">&ldquo;{h.text}&rdquo;</p>
                           <p className="text-xs text-[#888]">Why it works: {h.whyItWorks}</p>
                           <Button variant="ghost" size="sm" className="h-7 text-xs text-[#888] mt-2" onClick={() => copyToClipboard(h.text, `hook-${i}`)}>
                             {copyFeedback === `hook-${i}` ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />} Copy this hook
@@ -2363,16 +2363,16 @@ export default function DiscoverFlow() {
                 </AccordionItem>
 
                 {/* 7. CTAs */}
-                <AccordionItem value="ctas" className="border-[#2A2A2A] px-3">
-                  <AccordionTrigger className="text-white hover:no-underline hover:text-orange-500">
+                <AccordionItem value="ctas" className="border-border px-3">
+                  <AccordionTrigger className="text-foreground hover:no-underline hover:text-orange-500">
                     CTAs (Tell them what to do)
                   </AccordionTrigger>
                   <AccordionContent>
-                    <p className="text-xs text-[#A0A0A0] mb-3">Psychology behind each CTA.</p>
+                    <p className="text-xs text-muted-foreground mb-3">Psychology behind each CTA.</p>
                     <div className="space-y-3">
                       {salesGuide.ctas.map((c, i) => (
-                        <div key={i} className="rounded-xl border-l-4 border-orange-500 bg-[#0F0F0F] p-4">
-                          <p className="text-sm text-[#E0E0E0] mb-1">&ldquo;{c.text}&rdquo;</p>
+                        <div key={i} className="rounded-xl border-l-4 border-orange-500 bg-background p-4">
+                          <p className="text-sm text-foreground mb-1">&ldquo;{c.text}&rdquo;</p>
                           <p className="text-xs text-[#888]">Why it works: {c.whyItWorks}</p>
                           <Button variant="ghost" size="sm" className="h-7 text-xs text-[#888] mt-2" onClick={() => copyToClipboard(c.text, `cta-${i}`)}>
                             {copyFeedback === `cta-${i}` ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />} Copy this CTA
@@ -2384,12 +2384,12 @@ export default function DiscoverFlow() {
                 </AccordionItem>
 
                 {/* 8. Pricing Psychology */}
-                <AccordionItem value="pricing" className="border-[#2A2A2A] px-3">
-                  <AccordionTrigger className="text-white hover:no-underline hover:text-orange-500">
+                <AccordionItem value="pricing" className="border-border px-3">
+                  <AccordionTrigger className="text-foreground hover:no-underline hover:text-orange-500">
                     Pricing Psychology
                   </AccordionTrigger>
                   <AccordionContent>
-                    <ul className="space-y-1.5 text-sm text-[#E0E0E0]">
+                    <ul className="space-y-1.5 text-sm text-foreground">
                       {salesGuide.pricingPsychology.map((p, i) => (
                         <li key={i} className="flex gap-2">
                           <span className="text-orange-500">•</span>
@@ -2401,15 +2401,15 @@ export default function DiscoverFlow() {
                 </AccordionItem>
 
                 {/* 9. Ideal Customer Profile */}
-                <AccordionItem value="icp" className="border-[#2A2A2A] px-3">
-                  <AccordionTrigger className="text-white hover:no-underline hover:text-orange-500">
+                <AccordionItem value="icp" className="border-border px-3">
+                  <AccordionTrigger className="text-foreground hover:no-underline hover:text-orange-500">
                     <span className="flex items-center gap-2">
                       <User className="h-4 w-4 text-orange-500" />
                       Ideal Customer Profile
                     </span>
                   </AccordionTrigger>
                   <AccordionContent>
-                    <ul className="space-y-1.5 text-sm text-[#E0E0E0]">
+                    <ul className="space-y-1.5 text-sm text-foreground">
                       {salesGuide.idealCustomerProfile.map((item, i) => (
                         <li key={i} className="flex gap-2">
                           <span className="text-orange-500">•</span>
@@ -2421,12 +2421,12 @@ export default function DiscoverFlow() {
                 </AccordionItem>
 
                 {/* 10. Content Strategy */}
-                <AccordionItem value="content" className="border-[#2A2A2A] px-3">
-                  <AccordionTrigger className="text-white hover:no-underline hover:text-orange-500">
+                <AccordionItem value="content" className="border-border px-3">
+                  <AccordionTrigger className="text-foreground hover:no-underline hover:text-orange-500">
                     Content Strategy (Where to promote)
                   </AccordionTrigger>
                   <AccordionContent>
-                    <ul className="space-y-1.5 text-sm text-[#E0E0E0]">
+                    <ul className="space-y-1.5 text-sm text-foreground">
                       {salesGuide.contentStrategy.map((s, i) => (
                         <li key={i} className="flex gap-2">
                           <span className="text-orange-500">•</span>
@@ -2438,12 +2438,12 @@ export default function DiscoverFlow() {
                 </AccordionItem>
 
                 {/* 11. Launch Strategy */}
-                <AccordionItem value="launch" className="border-[#2A2A2A] px-3">
-                  <AccordionTrigger className="text-white hover:no-underline hover:text-orange-500">
+                <AccordionItem value="launch" className="border-border px-3">
+                  <AccordionTrigger className="text-foreground hover:no-underline hover:text-orange-500">
                     Launch Strategy
                   </AccordionTrigger>
                   <AccordionContent>
-                    <ul className="space-y-1.5 text-sm text-[#E0E0E0]">
+                    <ul className="space-y-1.5 text-sm text-foreground">
                       {salesGuide.launchStrategy.map((s, i) => (
                         <li key={i} className="flex gap-2">
                           <span className="text-orange-500">•</span>
@@ -2455,35 +2455,35 @@ export default function DiscoverFlow() {
                 </AccordionItem>
               </Accordion>
             ) : (
-              <div className="space-y-6 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
-                <p className="text-[#A0A0A0]">
+              <div className="space-y-6 rounded-xl border border-border bg-card p-6">
+                <p className="text-muted-foreground">
                   {selectedProduct
                     ? "Could not load the full sales guide. Here are generic hooks and CTAs you can use."
                     : "Select a product in Step 3 to get a full sales masterclass tailored to it. Meanwhile, here are general hooks and CTAs."}
                 </p>
                 <div>
-                  <h3 className="font-semibold text-white mb-2">Hooks</h3>
+                  <h3 className="font-semibold text-foreground mb-2">Hooks</h3>
                   <div className="space-y-2">
                     {HOOK_EXAMPLES.map((h, i) => (
-                      <div key={i} className="rounded-xl border-l-4 border-orange-500 bg-[#0F0F0F] p-3 text-sm text-[#E0E0E0]">&ldquo;{h}&rdquo;</div>
+                      <div key={i} className="rounded-xl border-l-4 border-orange-500 bg-background p-3 text-sm text-foreground">&ldquo;{h}&rdquo;</div>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white mb-2">CTAs</h3>
+                  <h3 className="font-semibold text-foreground mb-2">CTAs</h3>
                   <div className="space-y-2">
                     {CTA_EXAMPLES.map((c, i) => (
-                      <div key={i} className="rounded-xl border-l-4 border-orange-500 bg-[#0F0F0F] p-3 text-sm text-[#E0E0E0]">&ldquo;{c}&rdquo;</div>
+                      <div key={i} className="rounded-xl border-l-4 border-orange-500 bg-background p-3 text-sm text-foreground">&ldquo;{c}&rdquo;</div>
                     ))}
                   </div>
                 </div>
               </div>
             )}
 
-            <p className="text-xs text-[#A0A0A0] mt-6 mb-8">Use this guide when creating your content—our AI will reference these patterns in your scripts.</p>
+            <p className="text-xs text-muted-foreground mt-6 mb-8">Use this guide when creating your content—our AI will reference these patterns in your scripts.</p>
 
             <div className="flex justify-between">
-              <Button variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(4)}>← Back</Button>
+              <Button variant="ghost" className="text-muted-foreground" onClick={() => setStep(4)}>← Back</Button>
               <Button
                 className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => setStep(6)}
@@ -2505,8 +2505,8 @@ export default function DiscoverFlow() {
         {step === 6 && (
           <>
             <h2 className="text-lg font-medium text-orange-500 mb-1">Step 6 of 7</h2>
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Choose product format</h1>
-            <p className="text-[#A0A0A0] mb-8">How should we package your content? We&apos;ll generate a format-specific product.</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Choose product format</h1>
+            <p className="text-muted-foreground mb-8">How should we package your content? We&apos;ll generate a format-specific product.</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
               {PRODUCT_FORMATS.map((f) => {
@@ -2517,12 +2517,12 @@ export default function DiscoverFlow() {
                     type="button"
                     onClick={() => setProductFormat(f.id)}
                     className={`rounded-xl border-2 p-5 text-left transition-all ${
-                      productFormat === f.id ? "border-orange-500 bg-orange-500/10" : "border-[#2A2A2A] bg-[#1A1A1A] hover:border-[#3A3A3A]"
+                      productFormat === f.id ? "border-orange-500 bg-orange-500/10" : "border-border bg-card hover:border-muted-foreground/40"
                     }`}
                   >
                     <Icon className="w-8 h-8 text-orange-500 mb-3" />
-                    <p className="font-semibold text-white mb-1">{f.label}</p>
-                    <p className="text-xs text-[#A0A0A0]">{f.desc}</p>
+                    <p className="font-semibold text-foreground mb-1">{f.label}</p>
+                    <p className="text-xs text-muted-foreground">{f.desc}</p>
                     <p className="text-xs text-orange-500 mt-2">{productFormat === f.id ? "Selected" : "Select"}</p>
                   </button>
                 );
@@ -2554,20 +2554,20 @@ export default function DiscoverFlow() {
             {productFormat === "course" && (
               <Card className={`${cardClass} mb-6`}>
                 <CardContent className="p-5">
-                  <p className="font-medium text-white mb-3">Course options</p>
+                  <p className="font-medium text-foreground mb-3">Course options</p>
                   <div className="space-y-3 text-sm">
-                    <label className="flex items-center gap-2 text-[#E0E0E0] cursor-pointer">
-                      <input type="checkbox" checked={courseIncludeAvatar} onChange={(e) => setCourseIncludeAvatar(e.target.checked)} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                    <label className="flex items-center gap-2 text-foreground cursor-pointer">
+                      <input type="checkbox" checked={courseIncludeAvatar} onChange={(e) => setCourseIncludeAvatar(e.target.checked)} className="rounded border-border bg-background text-orange-500" />
                       Include avatar presenter
                     </label>
-                    <label className="flex items-center gap-2 text-[#E0E0E0] cursor-pointer">
-                      <input type="checkbox" checked={courseVoiceOver} onChange={(e) => setCourseVoiceOver(e.target.checked)} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                    <label className="flex items-center gap-2 text-foreground cursor-pointer">
+                      <input type="checkbox" checked={courseVoiceOver} onChange={(e) => setCourseVoiceOver(e.target.checked)} className="rounded border-border bg-background text-orange-500" />
                       Generate AI voiceover
                     </label>
                     {courseVoiceOver && (
                       <div className="flex items-center gap-2">
-                        <span className="text-[#A0A0A0]">Voice:</span>
-                        <select value={courseVoiceType} onChange={(e) => setCourseVoiceType(e.target.value)} className="rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                        <span className="text-muted-foreground">Voice:</span>
+                        <select value={courseVoiceType} onChange={(e) => setCourseVoiceType(e.target.value)} className="rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
                           <option value="professional-female">Professional Female</option>
                           <option value="professional-male">Professional Male</option>
                           <option value="casual">Casual</option>
@@ -2580,7 +2580,7 @@ export default function DiscoverFlow() {
             )}
 
             <div className="flex justify-between">
-              <Button type="button" variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(5)}>← Back</Button>
+              <Button type="button" variant="ghost" className="text-muted-foreground" onClick={() => setStep(5)}>← Back</Button>
               <Button
                 type="button"
                 className="relative z-10 cursor-pointer bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2602,20 +2602,20 @@ export default function DiscoverFlow() {
         {step === 7 && (
           <>
             <h2 className="text-lg font-medium text-orange-500 mb-1">Step 7 of 7</h2>
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Customize product</h1>
-            <p className="text-[#A0A0A0] mb-6">Adjust these options to tailor the generated content. You can leave defaults as-is.</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Customize product</h1>
+            <p className="text-muted-foreground mb-6">Adjust these options to tailor the generated content. You can leave defaults as-is.</p>
 
             {/* Basic options */}
             <Card className={`${cardClass} mb-4`}>
               <CardContent className="p-5">
-                <p className="font-semibold text-white mb-4">Basic</p>
+                <p className="font-semibold text-foreground mb-4">Basic</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
-                    <Label className="text-[#E0E0E0]">Number of chapters/sections</Label>
+                    <Label className="text-foreground">Number of chapters/sections</Label>
                     <select
                       value={productFormat === "planner" ? 7 : customization.numChapters}
                       onChange={(e) => setCustomization((c) => ({ ...c, numChapters: Number(e.target.value) }))}
-                      className="mt-1.5 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-2 text-sm"
+                      className="mt-1.5 w-full rounded-lg bg-background border border-border text-foreground px-3 py-2 text-sm"
                       disabled={productFormat === "planner"}
                     >
                       {[3, 4, 5, 6, 7].map((n) => (
@@ -2623,15 +2623,15 @@ export default function DiscoverFlow() {
                       ))}
                     </select>
                     {productFormat === "planner" && (
-                      <p className="text-xs text-[#A0A0A0] mt-1">Planners use 7 sections (intro + 3 planning layouts + disclaimer).</p>
+                      <p className="text-xs text-muted-foreground mt-1">Planners use 7 sections (intro + 3 planning layouts + disclaimer).</p>
                     )}
                   </div>
                   <div>
-                    <Label className="text-[#E0E0E0]">Content length per chapter</Label>
+                    <Label className="text-foreground">Content length per chapter</Label>
                     <select
                       value={customization.contentLength}
                       onChange={(e) => setCustomization((c) => ({ ...c, contentLength: e.target.value as CustomizationOptions["contentLength"] }))}
-                      className="mt-1.5 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-2 text-sm"
+                      className="mt-1.5 w-full rounded-lg bg-background border border-border text-foreground px-3 py-2 text-sm"
                     >
                       <option value="short">Short (~500 words)</option>
                       <option value="medium">Medium (~800 words)</option>
@@ -2639,11 +2639,11 @@ export default function DiscoverFlow() {
                     </select>
                   </div>
                   <div>
-                    <Label className="text-[#E0E0E0]">Content style</Label>
+                    <Label className="text-foreground">Content style</Label>
                     <select
                       value={customization.contentStyle}
                       onChange={(e) => setCustomization((c) => ({ ...c, contentStyle: e.target.value as CustomizationOptions["contentStyle"] }))}
-                      className="mt-1.5 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-2 text-sm"
+                      className="mt-1.5 w-full rounded-lg bg-background border border-border text-foreground px-3 py-2 text-sm"
                     >
                       <option value="text_only">Text only</option>
                       <option value="text_with_placeholders">Text with image placeholders</option>
@@ -2651,11 +2651,11 @@ export default function DiscoverFlow() {
                     </select>
                   </div>
                   <div>
-                    <Label className="text-[#E0E0E0]">Tone</Label>
+                    <Label className="text-foreground">Tone</Label>
                     <select
                       value={customization.tone}
                       onChange={(e) => setCustomization((c) => ({ ...c, tone: e.target.value as CustomizationOptions["tone"] }))}
-                      className="mt-1.5 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-2 text-sm"
+                      className="mt-1.5 w-full rounded-lg bg-background border border-border text-foreground px-3 py-2 text-sm"
                     >
                       <option value="professional">Professional</option>
                       <option value="casual">Casual</option>
@@ -2671,7 +2671,7 @@ export default function DiscoverFlow() {
             <button
               type="button"
               onClick={() => setShowAdvancedOptions((b) => !b)}
-              className="flex items-center gap-2 text-[#A0A0A0] hover:text-white text-sm mb-3"
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm mb-3"
             >
               {showAdvancedOptions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               Advanced options
@@ -2683,8 +2683,8 @@ export default function DiscoverFlow() {
                   {/* Ebook/Guide */}
                   {(productFormat === "ebook" || productFormat === "guide") && (
                     <div className="space-y-3">
-                      <p className="font-medium text-white">Ebook / Guide</p>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                      <p className="font-medium text-foreground">Ebook / Guide</p>
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                         <input
                           type="checkbox"
                           checked={customization.ebookGuide?.includeToc ?? true}
@@ -2692,11 +2692,11 @@ export default function DiscoverFlow() {
                             ...c,
                             ebookGuide: { ...(c.ebookGuide ?? DEFAULT_CUSTOMIZATION.ebookGuide!), includeToc: e.target.checked },
                           }))}
-                          className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500"
+                          className="rounded border-border bg-background text-orange-500"
                         />
                         Include Table of Contents
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                         <input
                           type="checkbox"
                           checked={customization.ebookGuide?.includeIntroConclusion ?? true}
@@ -2704,7 +2704,7 @@ export default function DiscoverFlow() {
                             ...c,
                             ebookGuide: { ...(c.ebookGuide ?? DEFAULT_CUSTOMIZATION.ebookGuide!), includeIntroConclusion: e.target.checked },
                           }))}
-                          className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500"
+                          className="rounded border-border bg-background text-orange-500"
                         />
                         Include introduction & conclusion chapters
                       </label>
@@ -2713,26 +2713,26 @@ export default function DiscoverFlow() {
                   {/* Workbook */}
                   {productFormat === "workbook" && (
                     <div className="space-y-3">
-                      <p className="font-medium text-white">Workbook</p>
+                      <p className="font-medium text-foreground">Workbook</p>
                       <div>
-                        <Label className="text-[#E0E0E0] text-sm">Exercises per section</Label>
+                        <Label className="text-foreground text-sm">Exercises per section</Label>
                         <select
                           value={customization.workbook?.exercisesPerSection ?? 5}
                           onChange={(e) => setCustomization((c) => ({
                             ...c,
                             workbook: { ...(c.workbook ?? DEFAULT_CUSTOMIZATION.workbook!), exercisesPerSection: Number(e.target.value) },
                           }))}
-                          className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm"
+                          className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm"
                         >
                           {[3, 5, 7].map((n) => <option key={n} value={n}>{n}</option>)}
                         </select>
                       </div>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
-                        <input type="checkbox" checked={customization.workbook?.includeAnswerKey ?? false} onChange={(e) => setCustomization((c) => ({ ...c, workbook: { ...(c.workbook ?? DEFAULT_CUSTOMIZATION.workbook!), includeAnswerKey: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                        <input type="checkbox" checked={customization.workbook?.includeAnswerKey ?? false} onChange={(e) => setCustomization((c) => ({ ...c, workbook: { ...(c.workbook ?? DEFAULT_CUSTOMIZATION.workbook!), includeAnswerKey: e.target.checked } }))} className="rounded border-border bg-background text-orange-500" />
                         Include answer key
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
-                        <input type="checkbox" checked={customization.workbook?.includeFillInBlanks ?? false} onChange={(e) => setCustomization((c) => ({ ...c, workbook: { ...(c.workbook ?? DEFAULT_CUSTOMIZATION.workbook!), includeFillInBlanks: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                        <input type="checkbox" checked={customization.workbook?.includeFillInBlanks ?? false} onChange={(e) => setCustomization((c) => ({ ...c, workbook: { ...(c.workbook ?? DEFAULT_CUSTOMIZATION.workbook!), includeFillInBlanks: e.target.checked } }))} className="rounded border-border bg-background text-orange-500" />
                         Include fill-in blanks
                       </label>
                     </div>
@@ -2740,23 +2740,23 @@ export default function DiscoverFlow() {
                   {/* Checklist */}
                   {productFormat === "checklist" && (
                     <div className="space-y-3">
-                      <p className="font-medium text-white">Checklist Pack</p>
+                      <p className="font-medium text-foreground">Checklist Pack</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label className="text-[#E0E0E0] text-sm">Number of checklists</Label>
-                          <select value={customization.checklist?.numChecklists ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, checklist: { ...(c.checklist ?? DEFAULT_CUSTOMIZATION.checklist!), numChecklists: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                          <Label className="text-foreground text-sm">Number of checklists</Label>
+                          <select value={customization.checklist?.numChecklists ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, checklist: { ...(c.checklist ?? DEFAULT_CUSTOMIZATION.checklist!), numChecklists: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
                             {[3, 5, 10].map((n) => <option key={n} value={n}>{n}</option>)}
                           </select>
                         </div>
                         <div>
-                          <Label className="text-[#E0E0E0] text-sm">Items per checklist</Label>
-                          <select value={customization.checklist?.itemsPerChecklist ?? 10} onChange={(e) => setCustomization((c) => ({ ...c, checklist: { ...(c.checklist ?? DEFAULT_CUSTOMIZATION.checklist!), itemsPerChecklist: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                          <Label className="text-foreground text-sm">Items per checklist</Label>
+                          <select value={customization.checklist?.itemsPerChecklist ?? 10} onChange={(e) => setCustomization((c) => ({ ...c, checklist: { ...(c.checklist ?? DEFAULT_CUSTOMIZATION.checklist!), itemsPerChecklist: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
                             {[5, 10, 15].map((n) => <option key={n} value={n}>{n}</option>)}
                           </select>
                         </div>
                       </div>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
-                        <input type="checkbox" checked={customization.checklist?.includeProgressTracking ?? false} onChange={(e) => setCustomization((c) => ({ ...c, checklist: { ...(c.checklist ?? DEFAULT_CUSTOMIZATION.checklist!), includeProgressTracking: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                        <input type="checkbox" checked={customization.checklist?.includeProgressTracking ?? false} onChange={(e) => setCustomization((c) => ({ ...c, checklist: { ...(c.checklist ?? DEFAULT_CUSTOMIZATION.checklist!), includeProgressTracking: e.target.checked } }))} className="rounded border-border bg-background text-orange-500" />
                         Include progress tracking
                       </label>
                     </div>
@@ -2764,27 +2764,27 @@ export default function DiscoverFlow() {
                   {/* Course */}
                   {productFormat === "course" && (
                     <div className="space-y-3">
-                      <p className="font-medium text-white">Course Outline</p>
+                      <p className="font-medium text-foreground">Course Outline</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label className="text-[#E0E0E0] text-sm">Number of modules</Label>
-                          <select value={customization.course?.numModules ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, course: { ...(c.course ?? DEFAULT_CUSTOMIZATION.course!), numModules: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                          <Label className="text-foreground text-sm">Number of modules</Label>
+                          <select value={customization.course?.numModules ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, course: { ...(c.course ?? DEFAULT_CUSTOMIZATION.course!), numModules: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
                             {[3, 5, 7].map((n) => <option key={n} value={n}>{n}</option>)}
                           </select>
                         </div>
                         <div>
-                          <Label className="text-[#E0E0E0] text-sm">Lessons per module</Label>
-                          <select value={customization.course?.lessonsPerModule ?? 3} onChange={(e) => setCustomization((c) => ({ ...c, course: { ...(c.course ?? DEFAULT_CUSTOMIZATION.course!), lessonsPerModule: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                          <Label className="text-foreground text-sm">Lessons per module</Label>
+                          <select value={customization.course?.lessonsPerModule ?? 3} onChange={(e) => setCustomization((c) => ({ ...c, course: { ...(c.course ?? DEFAULT_CUSTOMIZATION.course!), lessonsPerModule: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
                             {[3, 5].map((n) => <option key={n} value={n}>{n}</option>)}
                           </select>
                         </div>
                       </div>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
-                        <input type="checkbox" checked={customization.course?.includeLearningObjectives ?? true} onChange={(e) => setCustomization((c) => ({ ...c, course: { ...(c.course ?? DEFAULT_CUSTOMIZATION.course!), includeLearningObjectives: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                        <input type="checkbox" checked={customization.course?.includeLearningObjectives ?? true} onChange={(e) => setCustomization((c) => ({ ...c, course: { ...(c.course ?? DEFAULT_CUSTOMIZATION.course!), includeLearningObjectives: e.target.checked } }))} className="rounded border-border bg-background text-orange-500" />
                         Include learning objectives
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
-                        <input type="checkbox" checked={customization.course?.includeAssignments ?? true} onChange={(e) => setCustomization((c) => ({ ...c, course: { ...(c.course ?? DEFAULT_CUSTOMIZATION.course!), includeAssignments: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                        <input type="checkbox" checked={customization.course?.includeAssignments ?? true} onChange={(e) => setCustomization((c) => ({ ...c, course: { ...(c.course ?? DEFAULT_CUSTOMIZATION.course!), includeAssignments: e.target.checked } }))} className="rounded border-border bg-background text-orange-500" />
                         Include assignments
                       </label>
                     </div>
@@ -2792,19 +2792,19 @@ export default function DiscoverFlow() {
                   {/* Journal */}
                   {productFormat === "journal" && (
                     <div className="space-y-3">
-                      <p className="font-medium text-white">Journal</p>
+                      <p className="font-medium text-foreground">Journal</p>
                       <div>
-                        <Label className="text-[#E0E0E0] text-sm">Number of prompts</Label>
-                        <select value={customization.journal?.numPrompts ?? 20} onChange={(e) => setCustomization((c) => ({ ...c, journal: { ...(c.journal ?? DEFAULT_CUSTOMIZATION.journal!), numPrompts: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                        <Label className="text-foreground text-sm">Number of prompts</Label>
+                        <select value={customization.journal?.numPrompts ?? 20} onChange={(e) => setCustomization((c) => ({ ...c, journal: { ...(c.journal ?? DEFAULT_CUSTOMIZATION.journal!), numPrompts: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
                           {[10, 20, 30].map((n) => <option key={n} value={n}>{n}</option>)}
                         </select>
                       </div>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
-                        <input type="checkbox" checked={customization.journal?.includeLinedSpace ?? true} onChange={(e) => setCustomization((c) => ({ ...c, journal: { ...(c.journal ?? DEFAULT_CUSTOMIZATION.journal!), includeLinedSpace: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                        <input type="checkbox" checked={customization.journal?.includeLinedSpace ?? true} onChange={(e) => setCustomization((c) => ({ ...c, journal: { ...(c.journal ?? DEFAULT_CUSTOMIZATION.journal!), includeLinedSpace: e.target.checked } }))} className="rounded border-border bg-background text-orange-500" />
                         Include lined writing space
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
-                        <input type="checkbox" checked={customization.journal?.includeReflectionQuestions ?? true} onChange={(e) => setCustomization((c) => ({ ...c, journal: { ...(c.journal ?? DEFAULT_CUSTOMIZATION.journal!), includeReflectionQuestions: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                        <input type="checkbox" checked={customization.journal?.includeReflectionQuestions ?? true} onChange={(e) => setCustomization((c) => ({ ...c, journal: { ...(c.journal ?? DEFAULT_CUSTOMIZATION.journal!), includeReflectionQuestions: e.target.checked } }))} className="rounded border-border bg-background text-orange-500" />
                         Include reflection questions
                       </label>
                     </div>
@@ -2812,22 +2812,22 @@ export default function DiscoverFlow() {
                   {/* Planner */}
                   {productFormat === "planner" && (
                     <div className="space-y-3">
-                      <p className="font-medium text-white">Planner</p>
+                      <p className="font-medium text-foreground">Planner</p>
                       <div>
-                        <Label className="text-[#E0E0E0] text-sm">Duration</Label>
-                        <select value={customization.planner?.duration ?? "monthly"} onChange={(e) => setCustomization((c) => ({ ...c, planner: { ...(c.planner ?? DEFAULT_CUSTOMIZATION.planner!), duration: e.target.value as "weekly" | "monthly" | "quarterly" | "yearly" } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                        <Label className="text-foreground text-sm">Duration</Label>
+                        <select value={customization.planner?.duration ?? "monthly"} onChange={(e) => setCustomization((c) => ({ ...c, planner: { ...(c.planner ?? DEFAULT_CUSTOMIZATION.planner!), duration: e.target.value as "weekly" | "monthly" | "quarterly" | "yearly" } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
                           <option value="weekly">Weekly</option>
                           <option value="monthly">Monthly</option>
                           <option value="quarterly">Quarterly</option>
                           <option value="yearly">Yearly</option>
                         </select>
                       </div>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
-                        <input type="checkbox" checked={customization.planner?.includeGoalSetting ?? true} onChange={(e) => setCustomization((c) => ({ ...c, planner: { ...(c.planner ?? DEFAULT_CUSTOMIZATION.planner!), includeGoalSetting: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                        <input type="checkbox" checked={customization.planner?.includeGoalSetting ?? true} onChange={(e) => setCustomization((c) => ({ ...c, planner: { ...(c.planner ?? DEFAULT_CUSTOMIZATION.planner!), includeGoalSetting: e.target.checked } }))} className="rounded border-border bg-background text-orange-500" />
                         Include goal-setting pages
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
-                        <input type="checkbox" checked={customization.planner?.includeHabitTracker ?? true} onChange={(e) => setCustomization((c) => ({ ...c, planner: { ...(c.planner ?? DEFAULT_CUSTOMIZATION.planner!), includeHabitTracker: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                        <input type="checkbox" checked={customization.planner?.includeHabitTracker ?? true} onChange={(e) => setCustomization((c) => ({ ...c, planner: { ...(c.planner ?? DEFAULT_CUSTOMIZATION.planner!), includeHabitTracker: e.target.checked } }))} className="rounded border-border bg-background text-orange-500" />
                         Include habit tracker
                       </label>
                     </div>
@@ -2835,25 +2835,25 @@ export default function DiscoverFlow() {
                   {/* Spreadsheet */}
                   {productFormat === "spreadsheet" && (
                     <div className="space-y-3">
-                      <p className="font-medium text-white">Spreadsheet Tutorial</p>
+                      <p className="font-medium text-foreground">Spreadsheet Tutorial</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label className="text-[#E0E0E0] text-sm">Number of tutorials</Label>
-                          <select value={customization.spreadsheet?.numTutorials ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), numTutorials: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                          <Label className="text-foreground text-sm">Number of tutorials</Label>
+                          <select value={customization.spreadsheet?.numTutorials ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), numTutorials: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
                             {[3, 5, 7].map((n) => <option key={n} value={n}>{n}</option>)}
                           </select>
                         </div>
                         <div>
-                          <Label className="text-[#E0E0E0] text-sm">Difficulty</Label>
-                          <select value={customization.spreadsheet?.difficulty ?? "beginner"} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), difficulty: e.target.value as "beginner" | "intermediate" | "advanced" } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                          <Label className="text-foreground text-sm">Difficulty</Label>
+                          <select value={customization.spreadsheet?.difficulty ?? "beginner"} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), difficulty: e.target.value as "beginner" | "intermediate" | "advanced" } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
                             <option value="beginner">Beginner</option>
                             <option value="intermediate">Intermediate</option>
                             <option value="advanced">Advanced</option>
                           </select>
                         </div>
                       </div>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
-                        <input type="checkbox" checked={customization.spreadsheet?.includePracticeExercises ?? true} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), includePracticeExercises: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                        <input type="checkbox" checked={customization.spreadsheet?.includePracticeExercises ?? true} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), includePracticeExercises: e.target.checked } }))} className="rounded border-border bg-background text-orange-500" />
                         Include practice exercises
                       </label>
                     </div>
@@ -2861,15 +2861,15 @@ export default function DiscoverFlow() {
                   {/* Notion */}
                   {productFormat === "notion" && (
                     <div className="space-y-3">
-                      <p className="font-medium text-white">Notion Template</p>
+                      <p className="font-medium text-foreground">Notion Template</p>
                       <div>
-                        <Label className="text-[#E0E0E0] text-sm">Number of databases/views</Label>
-                        <select value={customization.notion?.numDatabases ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, notion: { ...(c.notion ?? DEFAULT_CUSTOMIZATION.notion!), numDatabases: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] text-white px-3 py-1.5 text-sm">
+                        <Label className="text-foreground text-sm">Number of databases/views</Label>
+                        <select value={customization.notion?.numDatabases ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, notion: { ...(c.notion ?? DEFAULT_CUSTOMIZATION.notion!), numDatabases: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
                           {[3, 5, 7].map((n) => <option key={n} value={n}>{n}</option>)}
                         </select>
                       </div>
-                      <label className="flex items-center gap-2 text-sm text-[#E0E0E0] cursor-pointer">
-                        <input type="checkbox" checked={customization.notion?.includeSetupInstructions ?? true} onChange={(e) => setCustomization((c) => ({ ...c, notion: { ...(c.notion ?? DEFAULT_CUSTOMIZATION.notion!), includeSetupInstructions: e.target.checked } }))} className="rounded border-[#2A2A2A] bg-[#0F0F0F] text-orange-500" />
+                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                        <input type="checkbox" checked={customization.notion?.includeSetupInstructions ?? true} onChange={(e) => setCustomization((c) => ({ ...c, notion: { ...(c.notion ?? DEFAULT_CUSTOMIZATION.notion!), includeSetupInstructions: e.target.checked } }))} className="rounded border-border bg-background text-orange-500" />
                         Include setup instructions
                       </label>
                     </div>
@@ -2900,7 +2900,7 @@ export default function DiscoverFlow() {
               </Button>
             </div>
             <div className="flex justify-between">
-              <Button type="button" variant="ghost" className="text-[#A0A0A0]" onClick={() => setStep(6)}>← Back</Button>
+              <Button type="button" variant="ghost" className="text-muted-foreground" onClick={() => setStep(6)}>← Back</Button>
               <Button
                 type="button"
                 className="relative z-10 cursor-pointer bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2923,10 +2923,10 @@ export default function DiscoverFlow() {
             </div>
 
             <Dialog open={showVideoPromptModal} onOpenChange={setShowVideoPromptModal}>
-              <DialogContent className="bg-[#1A1A1A] border-[#2A2A2A] text-white max-w-md">
+              <DialogContent className="bg-card border-border text-foreground max-w-md">
                 <DialogHeader>
                   <DialogTitle className="text-lg">Would you also like a Video Creation Guide?</DialogTitle>
-                  <DialogDescription className="text-[#A0A0A0]">
+                  <DialogDescription className="text-muted-foreground">
                     We can generate a step-by-step guide showing you exactly how to create TikTok-style promotional videos for your product, including AI prompts, editing tips, and scene breakdowns.
                   </DialogDescription>
                 </DialogHeader>
@@ -2934,7 +2934,7 @@ export default function DiscoverFlow() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#222]"
+                    className="border-border text-muted-foreground hover:bg-muted"
                     onClick={() => {
                       setShowVideoPromptModal(false);
                       handleCreateProduct(false);
@@ -2963,55 +2963,55 @@ export default function DiscoverFlow() {
       {/* Design choice modal — shown as soon as user clicks "Generate all 8"; generation starts only after they pick an option */}
       <Dialog open={showDesignChoiceModal} onOpenChange={(open) => { if (!open) setShowDesignChoiceModal(false); }}>
         <DialogContent
-          className="sm:max-w-md bg-[#1A1A1A] border-[#2A2A2A] text-white z-[100]"
+          className="sm:max-w-md bg-card border-border text-foreground z-[100]"
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => { setShowDesignChoiceModal(false); e.preventDefault(); }}
         >
           <DialogHeader>
-            <DialogTitle className="text-white">Choose how to design your products</DialogTitle>
-            <DialogDescription className="text-[#A0A0A0]">
+            <DialogTitle className="text-foreground">Choose how to design your products</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               Pick an option below. Generation will start only after you continue — we&apos;ll then apply your choice to all 8 products when they&apos;re ready. You can edit anything later in the editor.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
-            <label className="flex items-start gap-3 p-3 rounded-lg border border-[#2A2A2A] cursor-pointer hover:bg-[#2A2A2A]/50">
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
               <input type="radio" name="designChoice" checked={bundleDesignChoice === "ai"} onChange={() => setBundleDesignChoice("ai")} className="mt-0.5 text-orange-500" />
               <div>
-                <span className="text-sm font-medium text-white">Auto-design for me</span>
-                <p className="text-xs text-[#A0A0A0] mt-0.5">AI picks colours, fonts, and background images based on your niche.</p>
+                <span className="text-sm font-medium text-foreground">Auto-design for me</span>
+                <p className="text-xs text-muted-foreground mt-0.5">AI picks colours, fonts, and background images based on your niche.</p>
               </div>
             </label>
-            <label className="flex items-start gap-3 p-3 rounded-lg border border-[#2A2A2A] cursor-pointer hover:bg-[#2A2A2A]/50">
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
               <input type="radio" name="designChoice" checked={bundleDesignChoice === "brand"} onChange={() => setBundleDesignChoice("brand")} className="mt-0.5 text-orange-500" />
               <div>
-                <span className="text-sm font-medium text-white">Use my brand colours</span>
-                <p className="text-xs text-[#A0A0A0] mt-0.5">Uses your saved brand profile. {bundleBrandProfile === null && bundleDesignChoice === "brand" ? "Set up below first." : ""}</p>
+                <span className="text-sm font-medium text-foreground">Use my brand colours</span>
+                <p className="text-xs text-muted-foreground mt-0.5">Uses your saved brand profile. {bundleBrandProfile === null && bundleDesignChoice === "brand" ? "Set up below first." : ""}</p>
               </div>
             </label>
-            <label className="flex items-start gap-3 p-3 rounded-lg border border-[#2A2A2A] cursor-pointer hover:bg-[#2A2A2A]/50">
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
               <input type="radio" name="designChoice" checked={bundleDesignChoice === "manual"} onChange={() => setBundleDesignChoice("manual")} className="mt-0.5 text-orange-500" />
               <div>
-                <span className="text-sm font-medium text-white">I&apos;ll design manually</span>
-                <p className="text-xs text-[#A0A0A0] mt-0.5">Blank templates ready to edit in the library.</p>
+                <span className="text-sm font-medium text-foreground">I&apos;ll design manually</span>
+                <p className="text-xs text-muted-foreground mt-0.5">Blank templates ready to edit in the library.</p>
               </div>
             </label>
           </div>
           {bundleDesignChoice === "brand" && bundleBrandProfile === null && (
-            <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]/80 p-4 space-y-3">
-              <p className="text-sm font-medium text-white">Set up your brand first</p>
+            <div className="rounded-lg border border-border bg-background/80 p-4 space-y-3">
+              <p className="text-sm font-medium text-foreground">Set up your brand first</p>
               <div>
-                <Label className="text-xs text-[#E0E0E0]">Primary colour</Label>
+                <Label className="text-xs text-foreground">Primary colour</Label>
                 <div className="flex gap-2 mt-1.5 items-center">
                   <Popover>
                     <PopoverTrigger asChild>
                       <button
                         type="button"
-                        className="h-9 w-9 shrink-0 rounded-md border border-[#2A2A2A] bg-[#1A1A1A] hover:ring-2 hover:ring-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="h-9 w-9 shrink-0 rounded-md border border-border bg-card hover:ring-2 hover:ring-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500"
                         style={{ backgroundColor: bundleBrandForm.primaryColor }}
                         aria-label="Pick primary colour"
                       />
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-3 bg-[#1A1A1A] border-[#2A2A2A]" align="start">
+                    <PopoverContent className="w-auto p-3 bg-card border-border" align="start">
                       <div className="[&_.react-colorful]:h-32 [&_.react-colorful]:w-44 [&_.react-colorful]:rounded-md">
                         <HexColorPicker
                           color={bundleBrandForm.primaryColor}
@@ -3024,24 +3024,24 @@ export default function DiscoverFlow() {
                     type="text"
                     value={bundleBrandForm.primaryColor}
                     onChange={(e) => setBundleBrandForm((f) => ({ ...f, primaryColor: e.target.value }))}
-                    className="h-9 w-24 font-mono text-sm bg-[#1A1A1A] border-[#2A2A2A] text-white"
+                    className="h-9 w-24 font-mono text-sm bg-card border-border text-foreground"
                     placeholder="#1a1a1a"
                   />
                 </div>
               </div>
               <div>
-                <Label className="text-xs text-[#E0E0E0]">Secondary colour</Label>
+                <Label className="text-xs text-foreground">Secondary colour</Label>
                 <div className="flex gap-2 mt-1.5 items-center">
                   <Popover>
                     <PopoverTrigger asChild>
                       <button
                         type="button"
-                        className="h-9 w-9 shrink-0 rounded-md border border-[#2A2A2A] bg-[#1A1A1A] hover:ring-2 hover:ring-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="h-9 w-9 shrink-0 rounded-md border border-border bg-card hover:ring-2 hover:ring-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500"
                         style={{ backgroundColor: bundleBrandForm.secondaryColor }}
                         aria-label="Pick secondary colour"
                       />
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-3 bg-[#1A1A1A] border-[#2A2A2A]" align="start">
+                    <PopoverContent className="w-auto p-3 bg-card border-border" align="start">
                       <div className="[&_.react-colorful]:h-32 [&_.react-colorful]:w-44 [&_.react-colorful]:rounded-md">
                         <HexColorPicker
                           color={bundleBrandForm.secondaryColor}
@@ -3054,21 +3054,21 @@ export default function DiscoverFlow() {
                     type="text"
                     value={bundleBrandForm.secondaryColor}
                     onChange={(e) => setBundleBrandForm((f) => ({ ...f, secondaryColor: e.target.value }))}
-                    className="h-9 w-24 font-mono text-sm bg-[#1A1A1A] border-[#2A2A2A] text-white"
+                    className="h-9 w-24 font-mono text-sm bg-card border-border text-foreground"
                     placeholder="#475569"
                   />
                 </div>
               </div>
-              <p className="text-xs text-[#A0A0A0] pt-1">Social links (optional)</p>
-              <Input type="url" value={bundleBrandForm.tiktokUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, tiktokUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="TikTok URL" />
-              <Input type="url" value={bundleBrandForm.instagramUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, instagramUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="Instagram URL" />
-              <Input type="url" value={bundleBrandForm.youtubeUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, youtubeUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="YouTube URL" />
-              <Input type="url" value={bundleBrandForm.facebookUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, facebookUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="Facebook URL" />
-              <Input type="url" value={bundleBrandForm.websiteUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, websiteUrl: e.target.value }))} className="h-8 bg-[#1A1A1A] border-[#2A2A2A] text-white text-sm" placeholder="Website/Store URL" />
+              <p className="text-xs text-muted-foreground pt-1">Social links (optional)</p>
+              <Input type="url" value={bundleBrandForm.tiktokUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, tiktokUrl: e.target.value }))} className="h-8 bg-card border-border text-foreground text-sm" placeholder="TikTok URL" />
+              <Input type="url" value={bundleBrandForm.instagramUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, instagramUrl: e.target.value }))} className="h-8 bg-card border-border text-foreground text-sm" placeholder="Instagram URL" />
+              <Input type="url" value={bundleBrandForm.youtubeUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, youtubeUrl: e.target.value }))} className="h-8 bg-card border-border text-foreground text-sm" placeholder="YouTube URL" />
+              <Input type="url" value={bundleBrandForm.facebookUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, facebookUrl: e.target.value }))} className="h-8 bg-card border-border text-foreground text-sm" placeholder="Facebook URL" />
+              <Input type="url" value={bundleBrandForm.websiteUrl} onChange={(e) => setBundleBrandForm((f) => ({ ...f, websiteUrl: e.target.value }))} className="h-8 bg-card border-border text-foreground text-sm" placeholder="Website/Store URL" />
             </div>
           )}
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]" onClick={() => setShowDesignChoiceModal(false)}>Cancel</Button>
+            <Button variant="outline" className="border-border text-muted-foreground" onClick={() => setShowDesignChoiceModal(false)}>Cancel</Button>
             {bundleDesignChoice === "brand" && bundleBrandProfile === null ? (
               <Button
                 className="bg-orange-500 hover:bg-orange-600"
@@ -3123,13 +3123,13 @@ export default function DiscoverFlow() {
 
       {/* Full bundle progress dialog */}
       <Dialog open={((bundleGenerating || bundleItems.length > 0) && !bundleDialogDismissed)} onOpenChange={(open) => !open && closeBundleDialog()}>
-        <DialogContent className="sm:max-w-md bg-[#1A1A1A] border-[#2A2A2A] text-white">
+        <DialogContent className="sm:max-w-md bg-card border-border text-foreground">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-white">
+            <DialogTitle className="flex items-center gap-2 text-foreground">
               <Layers className="w-5 h-5 text-orange-500" />
               Generate Full Bundle
             </DialogTitle>
-                <DialogDescription className="text-[#A0A0A0]">
+                <DialogDescription className="text-muted-foreground">
               {bundleItems.length === 0
                 ? "Starting all 8 formats for your topic…"
                 : bundleComplete
@@ -3159,8 +3159,8 @@ export default function DiscoverFlow() {
           {bundleItems.length > 0 && (
             <ul className="space-y-2 max-h-[280px] overflow-y-auto mt-3">
               {bundleItems.map((item) => (
-                <li key={item.productId} className="flex items-center justify-between gap-3 rounded-md border border-[#2A2A2A] px-3 py-2 text-sm">
-                  <span className="font-medium text-white">{item.label}</span>
+                <li key={item.productId} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm">
+                  <span className="font-medium text-foreground">{item.label}</span>
                   {item.status === "generating" && (
                     <span className="flex items-center gap-1.5 text-amber-400">
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -3177,7 +3177,7 @@ export default function DiscoverFlow() {
                     <span className="flex items-center gap-1.5 text-red-400">
                       <XCircle className="w-4 h-4 shrink-0" />
                       Failed
-                      <Button type="button" variant="outline" size="sm" className="h-7 border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] hover:text-white shrink-0" onClick={() => handleRetryBundleItem(item)}>
+                      <Button type="button" variant="outline" size="sm" className="h-7 border-border text-muted-foreground hover:bg-muted hover:text-foreground shrink-0" onClick={() => handleRetryBundleItem(item)}>
                         <RefreshCw className="w-3.5 h-3.5 mr-1" />
                         Retry
                       </Button>
@@ -3198,7 +3198,7 @@ export default function DiscoverFlow() {
               <Button asChild className="bg-orange-500 hover:bg-orange-600">
                 <Link href="/dashboard/library" onClick={closeBundleDialog}>View in My Library</Link>
               </Button>
-              <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]" onClick={closeBundleDialog}>Close</Button>
+              <Button variant="outline" className="border-border text-muted-foreground" onClick={closeBundleDialog}>Close</Button>
             </DialogFooter>
           )}
           {bundleComplete && !designApplied && !applyingDesign && (
@@ -3206,7 +3206,7 @@ export default function DiscoverFlow() {
               <Button asChild className="bg-orange-500 hover:bg-orange-600">
                 <Link href="/dashboard/library" onClick={closeBundleDialog}>View in My Library</Link>
               </Button>
-              <Button variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]" onClick={closeBundleDialog}>Close</Button>
+              <Button variant="outline" className="border-border text-muted-foreground" onClick={closeBundleDialog}>Close</Button>
             </DialogFooter>
           )}
         </DialogContent>

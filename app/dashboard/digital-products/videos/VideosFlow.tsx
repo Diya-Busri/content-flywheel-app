@@ -240,14 +240,14 @@ export default function VideosFlow() {
   };
 
   const count = selectedScripts.length;
-  const cardClass = "border-[#2A2A2A] bg-[#1A1A1A]";
+  const cardClass = "border-border bg-card";
 
   return (
-    <main className="min-h-screen bg-[#0F0F0F] text-white mb-[100px]">
+    <main className="min-h-screen bg-background text-foreground mb-[100px]">
       <div className="max-w-4xl mx-auto p-6 md:p-10">
         <Link
           href="/dashboard/digital-products/scripts"
-          className="inline-flex items-center gap-2 text-sm text-[#A0A0A0] hover:text-orange-500 mb-6 transition-colors"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-orange-500 mb-6 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Scripts
@@ -256,18 +256,18 @@ export default function VideosFlow() {
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs font-medium text-orange-500 uppercase tracking-wider">Step 3 of 3</span>
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">Customize Your Videos</h1>
-        <p className="text-[#A0A0A0] mb-8">
-          Based on: <span className="font-medium text-white">{cleanProductTitle(productName) || productName || "Product"}</span>
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">Customize Your Videos</h1>
+        <p className="text-muted-foreground mb-8">
+          Based on: <span className="font-medium text-foreground">{cleanProductTitle(productName) || productName || "Product"}</span>
         </p>
 
         {count === 0 ? (
           <Card className={cardClass}>
             <CardContent className="py-12 text-center">
-              <p className="text-[#A0A0A0] mb-4">
+              <p className="text-muted-foreground mb-4">
                 No scripts selected. Go back and select at least one script to customize and create your Video Creation Guide.
               </p>
-              <Button asChild variant="outline" className="border-[#2A2A2A] text-[#A0A0A0]">
+              <Button asChild variant="outline" className="border-border text-muted-foreground">
                 <Link href="/dashboard/digital-products/scripts">Back to Scripts</Link>
               </Button>
             </CardContent>
@@ -276,8 +276,8 @@ export default function VideosFlow() {
           <div className="space-y-10">
             {/* VIDEO STYLE - 4 visual cards */}
             <div>
-              <Label className="text-white text-base font-medium mb-4 block">What type of video are you making?</Label>
-              <p className="text-sm text-[#A0A0A0] mb-4">Your guide will be tailored to your chosen style.</p>
+              <Label className="text-foreground text-base font-medium mb-4 block">What type of video are you making?</Label>
+              <p className="text-sm text-muted-foreground mb-4">Your guide will be tailored to your chosen style.</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {VIDEO_STYLES.map((s) => {
                   const Icon = s.icon;
@@ -289,12 +289,12 @@ export default function VideosFlow() {
                       className={`rounded-xl border-2 p-4 text-center transition-all ${
                         videoStyle === s.id
                           ? "border-orange-500 bg-orange-500/10"
-                          : "border-[#2A2A2A] bg-[#1A1A1A] hover:border-[#3A3A3A]"
+                          : "border-border bg-card hover:border-border/80"
                       }`}
                     >
-                      <Icon className="w-8 h-8 mx-auto mb-2 text-[#A0A0A0]" />
-                      <p className="text-sm font-medium text-white">{s.label}</p>
-                      <p className="text-xs text-[#A0A0A0] mt-0.5">{s.desc}</p>
+                      <Icon className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm font-medium text-foreground">{s.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{s.desc}</p>
                       <p className="text-xs text-orange-500 mt-2">{videoStyle === s.id ? "Selected" : "Select"}</p>
                     </button>
                   );
@@ -305,11 +305,11 @@ export default function VideosFlow() {
             {/* VOICE SETTINGS */}
             <Card className={cardClass}>
               <CardHeader>
-                <CardTitle className="text-lg text-white">Voice settings</CardTitle>
+                <CardTitle className="text-lg text-foreground">Voice settings</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <Label className="text-white">AI Voice</Label>
+                  <Label className="text-foreground">AI Voice</Label>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
                     <Select
                       value={selectedVoiceId}
@@ -317,26 +317,20 @@ export default function VideosFlow() {
                       disabled={voicesLoading}
                     >
                       <SelectTrigger
-                        className="w-full max-w-[280px] border border-[#444] text-white placeholder:text-[#A0A0A0] [&>svg]:text-white"
-                        style={{ backgroundColor: "#1a1a1a" }}
+                        className="w-full max-w-[280px] border border-border bg-input text-foreground placeholder:text-muted-foreground [&>svg]:text-foreground"
                       >
                         <SelectValue placeholder={voicesLoading ? "Loading voices…" : "Select a voice"} />
                       </SelectTrigger>
                       <SelectContent
                         position="popper"
                         data-voice-dropdown-content
-                        className="border border-[#444] shadow-xl [&_button]:text-white [&_svg]:text-white [&_[data-radix-select-viewport]]:bg-[#2a2a2a]"
-                        style={{
-                          backgroundColor: "#2a2a2a",
-                          color: "#ffffff",
-                          border: "1px solid #444",
-                        }}
+                        className="border border-border bg-popover text-popover-foreground shadow-xl [&_button]:text-foreground [&_svg]:text-foreground [&_[data-radix-select-viewport]]:bg-popover"
                       >
                         {voices.map((v) => (
                           <SelectItem
                             key={v.voice_id}
                             value={v.voice_id}
-                            className="cursor-pointer rounded-sm py-2 pl-8 pr-2 text-white bg-transparent focus:bg-[#FF6B35] focus:text-white data-[highlighted]:bg-[#FF6B35] data-[highlighted]:text-white data-[state=checked]:bg-[#FF6B35] data-[state=checked]:text-white focus:outline-none"
+                            className="cursor-pointer rounded-sm py-2 pl-8 pr-2 text-foreground bg-transparent focus:bg-orange-500 focus:text-white data-[highlighted]:bg-orange-500 data-[highlighted]:text-white data-[state=checked]:bg-orange-500 data-[state=checked]:text-white focus:outline-none"
                           >
                             {v.name}
                           </SelectItem>
@@ -346,7 +340,7 @@ export default function VideosFlow() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-1 border-[#2A2A2A] text-[#A0A0A0]"
+                      className="gap-1 border-border text-muted-foreground"
                       onClick={handlePreview}
                       disabled={previewLoading || !selectedVoiceId}
                     >
@@ -358,12 +352,12 @@ export default function VideosFlow() {
                       Play 5-second sample
                     </Button>
                   </div>
-                  <p className="text-xs text-[#A0A0A0] mt-2">
+                  <p className="text-xs text-muted-foreground mt-2">
                     Default voices from ElevenLabs are shown. Add custom voices in your ElevenLabs account under Voices — they&apos;ll appear here automatically.
                   </p>
                 </div>
                 <div>
-                  <Label className="text-white">Voice Speed: {speed[0].toFixed(1)}x</Label>
+                  <Label className="text-foreground">Voice Speed: {speed[0].toFixed(1)}x</Label>
                   <Slider
                     value={speed}
                     onValueChange={setSpeed}
@@ -379,17 +373,17 @@ export default function VideosFlow() {
             {/* VISUAL CUSTOMIZATION */}
             <Card className={cardClass}>
               <CardHeader>
-                <CardTitle className="text-lg text-white">Visual customization</CardTitle>
+                <CardTitle className="text-lg text-foreground">Visual customization</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <Label className="text-white">Background style</Label>
+                  <Label className="text-foreground">Background style</Label>
                   <div className="grid gap-2 mt-2">
                     {BACKGROUND_OPTIONS.map((b) => (
                       <label
                         key={b.value}
                         className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer ${
-                          background === b.value ? "border-orange-500 bg-orange-500/10" : "border-[#2A2A2A]"
+                          background === b.value ? "border-orange-500 bg-orange-500/10" : "border-border"
                         }`}
                       >
                         <input
@@ -400,14 +394,14 @@ export default function VideosFlow() {
                           onChange={() => setBackground(b.value)}
                           className="sr-only"
                         />
-                        <span className="text-sm text-[#E0E0E0]">{b.label}</span>
+                        <span className="text-sm text-foreground">{b.label}</span>
                       </label>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <Label className="text-white">Text caption style</Label>
-                  <p className="text-xs text-[#A0A0A0] mb-2">5 visual presets (click to select)</p>
+                  <Label className="text-foreground">Text caption style</Label>
+                  <p className="text-xs text-muted-foreground mb-2">5 visual presets (click to select)</p>
                   <div className="flex flex-wrap gap-2">
                     {CAPTION_PRESETS.map((c) => (
                       <button
@@ -415,7 +409,7 @@ export default function VideosFlow() {
                         type="button"
                         onClick={() => setCaptionStyle(c)}
                         className={`rounded-lg border px-3 py-2 text-sm transition-all ${
-                          captionStyle === c ? "border-orange-500 bg-orange-500/10 text-white" : "border-[#2A2A2A] text-[#A0A0A0]"
+                          captionStyle === c ? "border-orange-500 bg-orange-500/10 text-foreground" : "border-border text-muted-foreground"
                         }`}
                       >
                         {c}
@@ -433,10 +427,10 @@ export default function VideosFlow() {
                       if (!checked) setLogoFile(null);
                     }}
                   />
-                  <Label htmlFor="add-logo" className="text-sm text-[#E0E0E0] cursor-pointer">Add my logo (upload)</Label>
+                  <Label htmlFor="add-logo" className="text-sm text-foreground cursor-pointer">Add my logo (upload)</Label>
                 </div>
                 {addLogo && (
-                  <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 space-y-2">
+                  <div className="rounded-lg border border-border bg-muted p-3 space-y-2">
                     <input
                       type="file"
                       accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/jpg,image/svg+xml"
@@ -445,18 +439,18 @@ export default function VideosFlow() {
                         if (file) setLogoFile(file);
                         e.target.value = "";
                       }}
-                      className="block w-full text-sm text-[#A0A0A0] file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-[#2A2A2A] file:text-white file:text-sm file:cursor-pointer"
+                      className="block w-full text-sm text-muted-foreground file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-muted file:text-foreground file:text-sm file:cursor-pointer"
                     />
                     {logoFile && (
-                      <p className="text-xs text-[#A0A0A0]">
+                      <p className="text-xs text-muted-foreground">
                         Selected: {logoFile.name}
                       </p>
                     )}
                   </div>
                 )}
                 <div>
-                  <Label className="text-white text-sm">Brand colors</Label>
-                  <p className="text-xs text-[#A0A0A0] mb-2">Add up to 5 colors. Each can have a hex input and color picker.</p>
+                  <Label className="text-foreground text-sm">Brand colors</Label>
+                  <p className="text-xs text-muted-foreground mb-2">Add up to 5 colors. Each can have a hex input and color picker.</p>
                   <div className="space-y-2">
                     {brandColors.map((hex, i) => (
                       <div key={i} className="flex items-center gap-2">
@@ -468,7 +462,7 @@ export default function VideosFlow() {
                             next[i] = e.target.value;
                             setBrandColors(next);
                           }}
-                          className="w-10 h-10 rounded-lg border-2 border-[#2A2A2A] cursor-pointer bg-transparent"
+                          className="w-10 h-10 rounded-lg border-2 border-border cursor-pointer bg-transparent"
                         />
                         <input
                           type="text"
@@ -479,13 +473,13 @@ export default function VideosFlow() {
                             setBrandColors(next);
                           }}
                           placeholder="#FFFFFF"
-                          className="flex-1 min-w-0 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-white placeholder:text-[#6A6A6A]"
+                          className="flex-1 min-w-0 rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
                         />
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="shrink-0 h-9 w-9 text-[#A0A0A0] hover:text-white hover:bg-[#2A2A2A]"
+                          className="shrink-0 h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted"
                           onClick={() => setBrandColors((prev) => prev.filter((_, j) => j !== i))}
                           disabled={brandColors.length <= 1}
                         >
@@ -498,7 +492,7 @@ export default function VideosFlow() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="gap-1.5 border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] hover:text-white"
+                        className="gap-1.5 border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                         onClick={() => setBrandColors((prev) => [...prev, "#999999"])}
                       >
                         <Plus className="w-3.5 h-3.5" />
@@ -513,8 +507,8 @@ export default function VideosFlow() {
             {/* PLATFORM OPTIMIZATION */}
             <Card className={cardClass}>
               <CardHeader>
-                <CardTitle className="text-lg text-white">Target platforms</CardTitle>
-                <p className="text-sm text-[#A0A0A0]">Select all platforms you want to post on. The guide will include platform-specific strategies for each.</p>
+                <CardTitle className="text-lg text-foreground">Target platforms</CardTitle>
+                <p className="text-sm text-muted-foreground">Select all platforms you want to post on. The guide will include platform-specific strategies for each.</p>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -522,20 +516,20 @@ export default function VideosFlow() {
                     <label
                       key={p.id}
                       className={`flex items-start gap-3 cursor-pointer rounded-lg border p-3 transition-colors ${
-                        platforms[p.id] ? "border-orange-500 bg-orange-500/10" : "border-[#2A2A2A] hover:border-[#3A3A3A]"
+                        platforms[p.id] ? "border-orange-500 bg-orange-500/10" : "border-border hover:border-border/80"
                       }`}
                     >
                       <Checkbox checked={!!platforms[p.id]} onCheckedChange={() => togglePlatform(p.id)} />
                       <div>
-                        <span className="text-sm font-medium text-white">{p.label}</span>
+                        <span className="text-sm font-medium text-foreground">{p.label}</span>
                         <p className="text-xs text-orange-500/90 mt-0.5">{p.contentType}</p>
-                        <p className="text-xs text-[#A0A0A0] mt-0.5">{p.aspect} • {p.duration}</p>
-                        <p className="text-xs text-[#6A6A6A] mt-0.5">{p.note}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{p.aspect} • {p.duration}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{p.note}</p>
                       </div>
                     </label>
                   ))}
                 </div>
-                <p className="text-xs text-[#A0A0A0] mt-2">Platform selection happens before generation so the AI creates tailored content for each platform.</p>
+                <p className="text-xs text-muted-foreground mt-2">Platform selection happens before generation so the AI creates tailored content for each platform.</p>
               </CardContent>
             </Card>
           </div>
@@ -543,7 +537,7 @@ export default function VideosFlow() {
 
         {/* Bottom bar */}
         {count > 0 && (
-          <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#2A2A2A] bg-[#0F0F0F]/95 backdrop-blur py-4 px-4 md:px-6">
+          <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur py-4 px-4 md:px-6">
             <div className="max-w-4xl mx-auto flex flex-col gap-3">
               {generateProgress && (
                 <div className="flex items-center gap-3 rounded-lg bg-orange-500/10 border border-orange-500/30 px-4 py-2">
@@ -552,14 +546,14 @@ export default function VideosFlow() {
                     <p className="font-medium text-orange-200">{generateProgress}</p>
                     <p className="text-xs text-orange-200/80">This may take 2–5 minutes. Don&apos;t close this page.</p>
                   </div>
-                  <div className="flex-1 h-2 rounded-full bg-[#2A2A2A] overflow-hidden">
+                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                     <div className="h-full w-1/3 animate-pulse rounded-full bg-orange-500" style={{ animationDuration: "1.5s" }} />
                   </div>
                 </div>
               )}
               <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
                 <div className="flex flex-col sm:items-end gap-2 sm:ml-auto">
-                  <p className="text-sm text-[#A0A0A0]">
+                  <p className="text-sm text-muted-foreground">
                     Get a personalised step-by-step guide to create your video using free tools
                   </p>
                   <Button

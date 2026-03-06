@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Rnd } from "react-rnd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SaveAsTemplateButton } from "@/components/save-as-template-button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -60,6 +61,7 @@ import { HexColorPicker } from "react-colorful";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { ThumbnailMockup, THUMBNAIL_TEMPLATES, type ThumbnailTemplateId } from "@/components/product-editor/ThumbnailMockup";
 import { cleanMarkdownToHtml } from "@/lib/clean-markdown";
+import { sanitizeHtml } from "@/lib/sanitize-html";
 import html2canvas from "html2canvas";
 import { captureCanvasPagesToPdf } from "@/lib/pdf-client-export";
 import { getProxiedBackgroundImageUrl, getBackgroundUrlToSave } from "@/lib/proxy-image-url";
@@ -6324,19 +6326,27 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       </div>
                       {platformCopyResult ? (
                         <Card className="border-gray-200 bg-gray-50/80">
-                          <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
+                          <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-center justify-between gap-2">
                             <CardTitle className="text-sm font-semibold text-gray-900 sr-only">
                               Platform copy
                             </CardTitle>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 shrink-0"
-                              onClick={() => copyToClipboard(platformCopyResult, "Platform copy")}
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <SaveAsTemplateButton
+                                content={platformCopyResult}
+                                formatType="marketing"
+                                defaultTitle="Platform copy"
+                                size="sm"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 shrink-0"
+                                onClick={() => copyToClipboard(platformCopyResult, "Platform copy")}
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
                           </CardHeader>
                           <CardContent className="px-4 pb-3 pt-0">
                             <p className="text-sm text-gray-700 whitespace-pre-wrap">{platformCopyResult}</p>
@@ -6833,7 +6843,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             ) : null}
                             <div className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2" style={{ ...bodyStyles, color: pageTextColor ?? bodyStyles?.color ?? templatePreset.bodyColor }}>
                               {section.content || section.contentHtml ? (
-                                <div className="preview-content" dangerouslySetInnerHTML={{ __html: section.contentHtml ?? cleanMarkdownToHtml(section.content ?? "") }} />
+                                <div className="preview-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.contentHtml ?? cleanMarkdownToHtml(section.content ?? "")) }} />
                               ) : (
                                 <span className="text-[#999]">(Empty)</span>
                               )}

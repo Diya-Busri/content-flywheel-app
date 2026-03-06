@@ -2,13 +2,45 @@
  * POST /api/video-guide/generate
  * Generates a multi-platform Video Creation Guide with storytelling frameworks, platform-specific content,
  * content calendar, and repurposing guide.
- * Accepts: { hook, body, cta, productName?, productDescription?, productId?, stockImageUrls?, platforms? }
- * platforms: string[] e.g. ["tiktok", "instagram_reels", "youtube_shorts", ...]
+ * Accepts: { hook, body, cta, productName?, productDescription?, productId?, stockImageUrls?, platforms?, source? }
+ * platforms: string[] e.g. ["tiktok", "instagram_reels", "youtube_shorts", "youtube_longform", ...]
+ * source: 'content-studio' = YouTube horizontal (16:9); otherwise vertical (9:16)
  */
 export const dynamic = "force-dynamic";
 
+type VideoFormat = {
+  isYouTube: boolean;
+  aspectRatio: string;
+  orientation: string;
+  resolution: string;
+  aspectPhrase: string;
+};
+
+function getVideoFormat(source: unknown, platforms: string[]): VideoFormat {
+  const isYouTube =
+    source === "content-studio" ||
+    platforms.some((p) => String(p).toLowerCase().includes("youtube"));
+  return isYouTube
+    ? {
+        isYouTube: true,
+        aspectRatio: "16:9",
+        orientation: "horizontal",
+        resolution: "1920×1080",
+        aspectPhrase: "horizontal 16:9",
+      }
+    : {
+        isYouTube: false,
+        aspectRatio: "9:16",
+        orientation: "vertical",
+        resolution: "1080×1920",
+        aspectPhrase: "vertical 9:16",
+      };
+}
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { scriptsTable } from "@/db/schema/library-schema";
@@ -106,12 +138,23 @@ function buildCreativeBriefPrompt(
   hook: string,
   body: string,
   cta: string,
-  durationSeconds?: number
+  durationSeconds?: number,
+  format?: VideoFormat,
+  targetSceneCount?: number
 ): string {
+  const videoFormat = format ?? getVideoFormat(undefined, ["tiktok"]);
+  const { aspectPhrase, orientation, aspectRatio } = videoFormat;
   const lengthOpt = durationSeconds != null ? getVideoLengthOptionOrDefault(durationSeconds) : null;
-  const sceneInstruction = lengthOpt
-    ? `Total video length: ${lengthOpt.durationSec} seconds. Include exactly ${lengthOpt.scenesMin}–${lengthOpt.scenesMax} scenes. Each scene's "timing" must use timestamps that span 0s to ${lengthOpt.durationSec}s (e.g. "0-3s", "3-8s", ...).`
-    : "Include 5 scenes.";
+  const sceneCountMin = targetSceneCount != null ? targetSceneCount : lengthOpt?.scenesMin ?? 5;
+  const sceneCountMax = targetSceneCount != null ? targetSceneCount : lengthOpt?.scenesMax ?? 5;
+  const durationSec = lengthOpt?.durationSec ?? 300;
+  const sceneInstruction =
+    durationSeconds != null || targetSceneCount != null
+      ? `Total video length: ${durationSec} seconds. Include exactly ${sceneCountMin}–${sceneCountMax} scenes. Each scene's "timing" must use timestamps that span 0s to ${durationSec}s (e.g. "0-3s", "3-8s", ...).`
+      : "Include 5 scenes.";
+  const framingNote = videoFormat.isYouTube
+    ? `CRITICAL: This is a HORIZONTAL YouTube video (${aspectRatio}). Frame for widescreen: horizontal composition, rule of thirds left/right, wide/medium/close-up shots, depth from foreground to background. Every aiPrompt MUST include "${aspectPhrase}" (landscape).`
+    : `CRITICAL: This is a VERTICAL short-form video (${aspectRatio}). Frame for mobile: vertical composition, center subjects, close-ups and medium shots. Every aiPrompt MUST include "${aspectPhrase}".`;
   return `Product: "${productName}"
 ${productDesc ? `Description: ${productDesc}` : ""}
 IMPORTANT: Use the exact product name "${productName}" everywhere in the brief (scene text, overlays, prompts). Never use a placeholder; always use the product name above.
@@ -121,10 +164,12 @@ Script:
 - Body: "${(body || "").slice(0, 400)}"
 - CTA: "${cta || ""}"
 
-Generate a TikTok creative brief designed to SELL this product. Choose the best storytelling framework (Pain Point, Story, or Value Bomb) for this product.
+VIDEO FORMAT: ${orientation.toUpperCase()} ${aspectRatio}. ${framingNote}
+
+Generate a creative brief designed to SELL this product. Choose the best storytelling framework (Pain Point, Story, or Value Bomb) for this product.
 
 SALES INTENT — each scene must support the sale:
-- TEXT OVERLAY (exactText): Every line must do one of: (1) state a specific benefit of the product, (2) answer "why should I get this?", (3) show the transformation or result, or (4) be a clear CTA (e.g. "Link in bio," "Get it now"). Avoid vague filler; use copy that would convince someone to buy.
+- TEXT OVERLAY (exactText): Every line must do one of: (1) state a specific benefit of the product, (2) answer "why should I get this?", (3) show the transformation or result, or (4) be a clear CTA. ${videoFormat.isYouTube ? "For YouTube: use subscribe/like/comment CTAs (e.g. Subscribe for more, Like & turn on notifications, Comment below). NEVER use Link in bio or Check my profile — that is Instagram/TikTok. The FINAL (CTA) scene exactText MUST be YouTube-appropriate, e.g. SUBSCRIBE for More or Like & Subscribe." : 'For TikTok/Instagram: use CTAs like "Link in bio," "Get it now," "Try free."'}
 - VISUAL (aiPrompt): Scenes 3–4 must show the product or the outcome (e.g. person using the product, before/after, organized result). The visual should make the viewer want the product or feel the benefit. Use the product name "${productName}" in the prompt where the product appears on screen.
 
 CRITICAL — AI IMAGE PROMPTS (visualDirection.aiPrompt) — WORD COUNT ENFORCED:
@@ -138,12 +183,12 @@ Every aiPrompt MUST explicitly include ALL of the following (use this checklist)
 5. Art style: e.g. photorealistic, cinematic, editorial, lifestyle photography
 6. Color palette: e.g. warm tones, cool blues, muted earth tones, vibrant accents
 7. Mood/atmosphere: e.g. energetic, calm, dramatic, stressed, inspirational
-8. Aspect ratio: always include "vertical 9:16"
+8. Aspect ratio: always include "${aspectPhrase}"
 9. Quality keywords: end with "8k, ultra detailed, sharp focus" or similar
 
-Example of a VALID aiPrompt (50+ words): "Photorealistic close-up of a young woman in her mid-20s with natural makeup, wearing a cozy cream sweater, sitting at a messy wooden desk covered with crumpled bills and a laptop showing a bank account, soft warm lamplight casting shadows, stressed expression with her hand on her forehead, shallow depth of field, muted warm tones with pops of red from overdue notices, cinematic mood, vertical 9:16, ultra detailed, 8k"
+Example of a VALID aiPrompt (50+ words): "Photorealistic close-up of a young woman in her mid-20s with natural makeup, wearing a cozy cream sweater, sitting at a messy wooden desk covered with crumpled bills and a laptop showing a bank account, soft warm lamplight casting shadows, stressed expression with her hand on her forehead, shallow depth of field, muted warm tones with pops of red from overdue notices, cinematic mood, ${aspectPhrase}, ultra detailed, 8k"
 
-FORBIDDEN — do NOT output short prompts like "A young woman looking stressed while staring at bills on a cluttered desk, vertical 9:16, financial struggle theme". That is under 25 words and will be rejected. Every aiPrompt must be 50-80+ words with full subject, environment, lighting, camera, style, color, mood, aspect ratio, and quality keywords.
+FORBIDDEN — do NOT output short prompts. Every aiPrompt must be 50-80+ words with full subject, environment, lighting, camera, style, color, mood, aspect ratio (${aspectPhrase}), and quality keywords.
 
 Return ONLY this JSON object (no markdown, no code fences):
 {
@@ -154,7 +199,7 @@ Return ONLY this JSON object (no markdown, no code fences):
       "scene": "Scene 1 - [Name]",
       "timing": "0-2s",
       "visualDirection": {
-        "aiPrompt": "50-80 words minimum. Single dense paragraph with: subject (appearance, age, clothing, expression, pose), environment (specific objects/furniture/background), lighting, camera angle/framing, art style, color palette, mood, vertical 9:16, quality keywords (8k, ultra detailed, sharp focus). Paste-ready for DALL-E/Midjourney/Grok.",
+        "aiPrompt": "50-80 words minimum. Single dense paragraph with: subject (appearance, age, clothing, expression, pose), environment (specific objects/furniture/background), lighting, camera angle/framing, art style, color palette, mood, ${aspectPhrase}, quality keywords (8k, ultra detailed, sharp focus). Paste-ready for DALL-E/Midjourney/Grok.",
         "cameraAngle": "close-up" | "wide" | "overhead" | "medium",
         "lightingMood": "dark/moody" | "bright/clean" | "soft/warm" | "high contrast",
         "colorPalette": "Describe colors matching product branding",
@@ -287,6 +332,12 @@ export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const apiRl = await checkApiRateLimit(userId);
+
+    if (apiRl) return apiRl;
+
+    const rl = checkAiRateLimit(userId);
+    if (rl) return rl;
 
     const body = await request.json().catch(() => ({}));
     const {
@@ -302,6 +353,8 @@ export async function POST(request: NextRequest) {
       targetDurationSec: targetDurationSecReq,
       logoDataUrl,
       regenerateScenesOnly,
+      source: sourceReq,
+      targetSceneCount: targetSceneCountReq,
     } = body as {
       hook?: string;
       body?: string;
@@ -315,13 +368,23 @@ export async function POST(request: NextRequest) {
       targetDurationSec?: number;
       logoDataUrl?: string;
       regenerateScenesOnly?: boolean;
+      source?: string;
+      targetSceneCount?: number;
     };
+    const targetSceneCount =
+      typeof targetSceneCountReq === "number" && targetSceneCountReq >= 4 && targetSceneCountReq <= 50
+        ? targetSceneCountReq
+        : undefined;
     const durationSeconds =
-      (typeof durationSecondsReq === "number" && [15, 30, 60, 90].includes(durationSecondsReq) ? durationSecondsReq : null) ??
-      (typeof targetDurationSecReq === "number" && [15, 30, 60, 90].includes(targetDurationSecReq) ? targetDurationSecReq : null) ??
+      (typeof durationSecondsReq === "number" && durationSecondsReq > 0 ? durationSecondsReq : null) ??
+      (typeof targetDurationSecReq === "number" && targetDurationSecReq > 0 ? targetDurationSecReq : null) ??
       undefined;
 
     const selectedPlatforms = Array.isArray(platformsReq) && platformsReq.length > 0 ? platformsReq : ["tiktok"];
+    const videoFormat = getVideoFormat(sourceReq, selectedPlatforms);
+    if (videoFormat.isYouTube) {
+      console.log("[video-guide] Generating horizontal (16:9) YouTube video guide");
+    }
 
     const rawProductName = typeof productName === "string" ? productName.trim() : "";
     let productNameRes = cleanProductTitle(rawProductName) || rawProductName || "the product";
@@ -352,6 +415,14 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = process.env.OPENAI_API_KEY?.trim();
+
+    if (regenerateScenesOnly && !apiKey) {
+      return NextResponse.json(
+        { error: "OpenAI API key is not configured. Add OPENAI_API_KEY to your environment." },
+        { status: 503 }
+      );
+    }
+
     let creativeBrief: {
       storytellingFramework?: string;
       frameworkRationale?: string;
@@ -390,7 +461,10 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [
-            { role: "system", content: STORYTELLING_FRAMEWORK_SYSTEM },
+            {
+              role: "system",
+              content: STORYTELLING_FRAMEWORK_SYSTEM.replace(/vertical 9:16/gi, videoFormat.aspectPhrase),
+            },
             {
               role: "user",
               content: buildCreativeBriefPrompt(
@@ -399,12 +473,14 @@ export async function POST(request: NextRequest) {
                 hook || "",
                 bodyText || "",
                 cta || "",
-                durationSeconds
+                durationSeconds,
+                videoFormat,
+                targetSceneCount
               ),
             },
           ],
           temperature: 0.7,
-          max_tokens: 4000,
+          max_tokens: 8192,
         }),
       });
 
@@ -413,10 +489,26 @@ export async function POST(request: NextRequest) {
         const content = data.choices?.[0]?.message?.content?.trim() ?? "";
         let jsonStr = content.replace(/^```json?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
         try {
-          const parsed = JSON.parse(jsonStr);
-          if (parsed?.scenes && Array.isArray(parsed.scenes)) creativeBrief = parsed;
-        } catch {
-          // fallback below
+          const parsed = JSON.parse(jsonStr) as { scenes?: unknown[] };
+          if (parsed?.scenes && Array.isArray(parsed.scenes) && parsed.scenes.length > 0) creativeBrief = parsed as typeof creativeBrief;
+        } catch (parseErr) {
+          console.error("[video-guide] Creative brief JSON parse failed. Length:", jsonStr.length, "Preview:", jsonStr.slice(0, 200));
+          if (regenerateScenesOnly) {
+            return NextResponse.json(
+              { error: "Scene generation returned an invalid format. Please try again." },
+              { status: 422 }
+            );
+          }
+        }
+      } else {
+        const errBody = (await res.json().catch(() => ({}))) as { error?: { message?: string }; message?: string };
+        const errMsg = errBody?.error?.message ?? errBody?.message ?? res.statusText;
+        console.error("[video-guide] OpenAI error:", res.status, errMsg);
+        if (regenerateScenesOnly) {
+          return NextResponse.json(
+            { error: errMsg && errMsg.length < 200 ? errMsg : "AI service error. Please try again." },
+            { status: res.status >= 500 ? 502 : 422 }
+          );
         }
       }
     }
@@ -433,15 +525,38 @@ export async function POST(request: NextRequest) {
       for (const s of creativeBrief.scenes) {
         const prompt =
           s.visualDirection?.aiPrompt ||
-          `Generate a TikTok marketing scene, vertical 9:16, for ${productNameRes}`;
+          `Generate a marketing scene, ${videoFormat.aspectPhrase}, for ${productNameRes}`;
         scenePromptsOut.push({ scene: s.scene, timing: s.timing, prompt });
       }
+      const scenesWithFormat = creativeBrief.scenes.map((s, i) => {
+        const isLastScene = i === creativeBrief.scenes.length - 1;
+        const ctaOverlay =
+          isLastScene && videoFormat.isYouTube
+            ? { ...s.textOverlay, exactText: s.textOverlay?.exactText?.toLowerCase().includes("link in bio") ? "👇 SUBSCRIBE for More" : (s.textOverlay?.exactText ?? "👇 SUBSCRIBE for More") }
+            : isLastScene && !videoFormat.isYouTube
+              ? { ...s.textOverlay, exactText: s.textOverlay?.exactText ?? "Link in Bio 🔗" }
+              : s.textOverlay;
+        return {
+          ...s,
+          ...(ctaOverlay && { textOverlay: ctaOverlay }),
+          format: {
+            aspect_ratio: videoFormat.aspectRatio,
+            orientation: videoFormat.orientation,
+            resolution: videoFormat.resolution,
+          },
+        };
+      });
       return NextResponse.json({
-        scenes: creativeBrief.scenes,
+        scenes: scenesWithFormat,
         scenePrompts: scenePromptsOut,
         storytellingFramework: creativeBrief.storytellingFramework ?? undefined,
         frameworkRationale: creativeBrief.frameworkRationale ?? undefined,
         engagementTriggers: creativeBrief.engagementTriggers ?? undefined,
+        videoFormat: {
+          aspectRatio: videoFormat.aspectRatio,
+          orientation: videoFormat.orientation,
+          resolution: videoFormat.resolution,
+        },
       });
     }
 
@@ -528,11 +643,12 @@ export async function POST(request: NextRequest) {
 
     // Build scenePrompts from creative brief or fallback
     const scenePrompts: { scene: string; timing: string; prompt: string }[] = [];
+    const aspectPhrase = videoFormat.aspectPhrase;
     if (creativeBrief?.scenes?.length) {
       for (const s of creativeBrief.scenes) {
         const prompt =
           s.visualDirection?.aiPrompt ||
-          `Generate a TikTok marketing scene, vertical 9:16, for ${productNameRes}`;
+          `Generate a marketing scene, ${aspectPhrase}, for ${productNameRes}`;
         scenePrompts.push({
           scene: s.scene,
           timing: s.timing,
@@ -546,27 +662,27 @@ export async function POST(request: NextRequest) {
         {
           scene: "Pattern Interrupt (0-2s)",
           timing: "0-2s",
-          prompt: `Dramatic close-up of someone stressed or frustrated, dark moody lighting, vertical 9:16 format`,
+          prompt: `Dramatic close-up of someone stressed or frustrated, dark moody lighting, ${aspectPhrase} format`,
         },
         {
           scene: "Agitate Problem (2-5s)",
           timing: "2-5s",
-          prompt: `Person scrolling phone late at night overwhelmed, soft blue light, vertical 9:16`,
+          prompt: `Person scrolling phone late at night overwhelmed, soft blue light, ${aspectPhrase}`,
         },
         {
           scene: "The Shift (5-10s)",
           timing: "5-10s",
-          prompt: `Bright clean mockup of ${productNameRes} on tablet or laptop, professional lighting, minimal background, vertical 9:16`,
+          prompt: `Bright clean mockup of ${productNameRes} on tablet or laptop, professional lighting, minimal background, ${aspectPhrase}`,
         },
         {
           scene: "Proof/Value (10-13s)",
           timing: "10-13s",
-          prompt: `Quick flash of digital product pages/sections, text overlays showing benefits, vertical 9:16`,
+          prompt: `Quick flash of digital product pages/sections, text overlays showing benefits, ${aspectPhrase}`,
         },
         {
           scene: "CTA (13-15s)",
           timing: "13-15s",
-          prompt: `Bold text "${(cta || "Link in Bio").slice(0, 30)}" on gradient background, eye-catching, vertical 9:16`,
+          prompt: `Bold text "${(cta || "Link in Bio").slice(0, 30)}" on gradient background, eye-catching, ${aspectPhrase}`,
         }
       );
     }
@@ -598,12 +714,40 @@ export async function POST(request: NextRequest) {
       volume: "20% background, voice/text dominant. Sync beat drops with scene transitions.",
     };
 
-    const exportSettings = {
-      resolution: "1080×1920 (vertical)",
-      fps: 30,
-      format: "MP4",
-      fileSize: "Under 50MB for TikTok",
-    };
+    const exportSettings = videoFormat.isYouTube
+      ? {
+          resolution: "1920×1080 (horizontal)",
+          fps: 30,
+          format: "MP4",
+          fileSize: "YouTube standard",
+          aspectRatio: "16:9",
+        }
+      : {
+          resolution: "1080×1920 (vertical)",
+          fps: 30,
+          format: "MP4",
+          fileSize: "Under 50MB for TikTok",
+        };
+
+    const scenesWithFormat =
+      creativeBrief?.scenes?.map((s, i) => {
+        const isLastScene = i === (creativeBrief?.scenes?.length ?? 0) - 1;
+        const ctaOverlay =
+          isLastScene && videoFormat.isYouTube
+            ? { ...s.textOverlay, exactText: s.textOverlay?.exactText?.toLowerCase().includes("link in bio") ? "👇 SUBSCRIBE for More" : (s.textOverlay?.exactText ?? "👇 SUBSCRIBE for More") }
+            : isLastScene && !videoFormat.isYouTube
+              ? { ...s.textOverlay, exactText: s.textOverlay?.exactText ?? "Link in Bio 🔗" }
+              : s.textOverlay;
+        return {
+          ...s,
+          ...(ctaOverlay && { textOverlay: ctaOverlay }),
+          format: {
+            aspect_ratio: videoFormat.aspectRatio,
+            orientation: videoFormat.orientation,
+            resolution: videoFormat.resolution,
+          },
+        };
+      }) ?? null;
 
     const guide = {
       script: { hook: hook || "", body: bodyText || "", cta: cta || "" },
@@ -616,7 +760,12 @@ export async function POST(request: NextRequest) {
       productName: productNameRes,
       storytellingFramework: creativeBrief?.storytellingFramework ?? "Pain Point Angle",
       frameworkRationale: creativeBrief?.frameworkRationale ?? "Problem-solution structure converts well for digital products.",
-      scenes: creativeBrief?.scenes ?? null,
+      scenes: scenesWithFormat,
+      videoFormat: {
+        aspectRatio: videoFormat.aspectRatio,
+        orientation: videoFormat.orientation,
+        resolution: videoFormat.resolution,
+      },
       engagementTriggers: creativeBrief?.engagementTriggers ?? [
         "First frame must work as thumbnail — most important frame",
         "Text readable in 0.5 seconds",
@@ -634,6 +783,8 @@ export async function POST(request: NextRequest) {
     };
 
     // Save video guide to library so it appears in My Library alongside products and scripts
+    // Use platform "content-studio" when from YouTube/Content Studio, "video-guide" when from Digital Products
+    const scriptPlatform = sourceReq === "content-studio" ? "content-studio" : "video-guide";
     let savedScriptId: string | null = null;
     try {
       const [inserted] = await db
@@ -642,7 +793,7 @@ export async function POST(request: NextRequest) {
           userId,
           title: `Video Guide: ${productNameRes || "Untitled"}`.trim(),
           content: JSON.stringify(guide),
-          platform: "video-guide",
+          platform: scriptPlatform,
           productId: productId || null,
         })
         .returning({ id: scriptsTable.id });

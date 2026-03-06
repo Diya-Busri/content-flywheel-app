@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { generateProductContent } from "@/lib/generate-product-content";
 import { cleanProductTitle } from "@/lib/product-title";
 

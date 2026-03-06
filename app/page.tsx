@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/accordion";
 import { ReviewsCarousel } from "@/components/marketing/reviews-carousel";
 import { LandingNavbar } from "@/components/marketing/landing-navbar";
-import { ChatWidget } from "@/components/chat-widget";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -44,10 +43,6 @@ export default async function HomePage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 overflow-x-hidden">
       <LandingNavbar />
 
-      <div className="fixed bottom-4 right-4 z-50">
-        <ChatWidget />
-      </div>
-
       <main className="pt-16">
         {/* Hero - breathing room */}
         <section className="relative min-h-[85vh] sm:min-h-screen flex items-center bg-slate-50 dark:bg-slate-950">
@@ -76,7 +71,7 @@ export default async function HomePage() {
                   </Link>
                   <Link
                     href="#how-it-works"
-                    className="px-6 py-3 bg-slate-200 dark:bg-gray-800 hover:bg-slate-300 dark:hover:bg-gray-700 rounded-lg font-semibold text-base inline-flex items-center justify-center transition-all text-slate-900 dark:text-white"
+                    className="px-6 py-3 bg-slate-200 dark:bg-card hover:bg-slate-300 dark:hover:bg-gray-700 rounded-lg font-semibold text-base inline-flex items-center justify-center transition-all text-slate-900 dark:text-white"
                   >
                     See How It Works
                   </Link>
@@ -101,7 +96,7 @@ export default async function HomePage() {
               <div className="relative">
                 <div className="flex items-center justify-center gap-4 sm:gap-6">
                   <div className="relative group">
-                    <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-gray-800 dark:to-gray-900 rounded-xl shadow-xl flex flex-col items-center justify-center border border-slate-300 dark:border-gray-700 transition-all group-hover:scale-105">
+                    <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-gray-800 dark:to-gray-900 rounded-xl shadow-xl flex flex-col items-center justify-center border border-slate-300 dark:border-border transition-all group-hover:scale-105">
                       <Package className="w-10 h-10 sm:w-12 sm:h-12 text-slate-500 dark:text-gray-500 mb-1" />
                       <p className="text-xs text-slate-600 dark:text-gray-400 font-medium">BEFORE</p>
                       <p className="text-[10px] text-slate-500 dark:text-gray-500">Product photo</p>
@@ -129,7 +124,7 @@ export default async function HomePage() {
         </section>
 
         {/* Built for conversion - dedicated section with spacing */}
-        <section className="py-16 lg:py-24 bg-slate-100 dark:bg-gray-900/50">
+        <section className="py-16 lg:py-24 bg-slate-100 dark:bg-muted/50/50">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white mb-4">
               Built for conversion, not views
@@ -144,21 +139,21 @@ export default async function HomePage() {
         <section id="features" className="py-24">
           <div className="max-w-7xl mx-auto px-6">
             <div className="grid md:grid-cols-3 gap-8">
-              <div className="p-8 bg-white dark:bg-gray-800/50 rounded-2xl border border-slate-200 dark:border-gray-700 hover:border-orange-500/50 transition-all hover:scale-105 shadow-sm dark:shadow-none">
+              <div className="p-8 bg-white dark:bg-card/50 rounded-2xl border border-slate-200 dark:border-border hover:border-orange-500/50 transition-all hover:scale-105 shadow-sm dark:shadow-none">
                 <div className="text-5xl mb-6">📱</div>
                 <h3 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">Digital Product Creator</h3>
                 <p className="text-slate-600 dark:text-gray-400 leading-relaxed">
                   Transform your expertise into professional digital products. Workbooks, guides, templates - all AI-generated and ready to sell.
                 </p>
               </div>
-              <div className="p-8 bg-white dark:bg-gray-800/50 rounded-2xl border border-slate-200 dark:border-gray-700 hover:border-orange-500/50 transition-all hover:scale-105 shadow-sm dark:shadow-none">
+              <div className="p-8 bg-white dark:bg-card/50 rounded-2xl border border-slate-200 dark:border-border hover:border-orange-500/50 transition-all hover:scale-105 shadow-sm dark:shadow-none">
                 <div className="text-5xl mb-6">🛍️</div>
                 <h3 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">TikTok Shop Videos</h3>
                 <p className="text-slate-600 dark:text-gray-400 leading-relaxed">
                   Upload any product photo and get scroll-stopping TikTok Shop videos that convert browsers into buyers.
                 </p>
               </div>
-              <div className="p-8 bg-white dark:bg-gray-800/50 rounded-2xl border border-slate-200 dark:border-gray-700 hover:border-orange-500/50 transition-all hover:scale-105 shadow-sm dark:shadow-none">
+              <div className="p-8 bg-white dark:bg-card/50 rounded-2xl border border-slate-200 dark:border-border hover:border-orange-500/50 transition-all hover:scale-105 shadow-sm dark:shadow-none">
                 <div className="text-5xl mb-6">✅</div>
                 <h3 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">Script Compliance</h3>
                 <p className="text-slate-600 dark:text-gray-400 leading-relaxed">
@@ -231,7 +226,7 @@ export default async function HomePage() {
         </section>
 
         {/* What Our Users Say */}
-        <section id="reviews" className="py-24 bg-slate-100 dark:bg-gray-900/30">
+        <section id="reviews" className="py-24 bg-slate-100 dark:bg-muted/50/30">
           <div className="max-w-7xl mx-auto px-6">
             <div className="text-center">
             <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
@@ -311,7 +306,7 @@ export default async function HomePage() {
         </section>
 
         {/* Platforms */}
-        <section id="platforms" className="py-24 bg-slate-100 dark:bg-gray-900/30">
+        <section id="platforms" className="py-24 bg-slate-100 dark:bg-muted/50/30">
           <div className="max-w-7xl mx-auto px-6">
             <h2 className="text-center text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
               Works with all major platforms
@@ -352,7 +347,7 @@ export default async function HomePage() {
         </section>
 
         {/* FAQ */}
-        <section id="faq" className="py-24 bg-slate-100 dark:bg-gray-900/30">
+        <section id="faq" className="py-24 bg-slate-100 dark:bg-muted/50/30">
           <div className="max-w-7xl mx-auto px-6">
             <div className="text-center">
             <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -22,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, Link2, ChevronRight, Youtube, Tv } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import {
   saveProfileAction,
@@ -46,6 +47,7 @@ export default function SettingsContent({
   userImageUrl,
   settingsTableMissing = false,
 }: Props) {
+  const router = useRouter();
   const { toast } = useToast();
   const [displayName, setDisplayName] = useState(settings?.displayName ?? "");
   const [profileSaving, setProfileSaving] = useState(false);
@@ -82,6 +84,31 @@ export default function SettingsContent({
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [dangerLoading, setDangerLoading] = useState<"delete" | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+
+  const [contentSettings, setContentSettings] = useState<{
+    selected_niche: string | null;
+    content_style: string | null;
+    youtube_channels: Array<{ id: string; name: string; subscriber_count: number }>;
+  } | null>(null);
+  const [changeNicheModalOpen, setChangeNicheModalOpen] = useState(false);
+  const [changeNicheLoading, setChangeNicheLoading] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/content-studio/user-settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setContentSettings({
+          selected_niche: data.selected_niche ?? null,
+          content_style: data.content_style ?? null,
+          youtube_channels: Array.isArray(data.youtube_channels) ? data.youtube_channels : [],
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const planLabel =
     profile?.planDuration === "yearly"
@@ -373,6 +400,151 @@ export default function SettingsContent({
           )}
         </CardContent>
       </Card>
+
+      {/* 4. CONNECTED ACCOUNTS */}
+      <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+        <CardHeader>
+          <CardTitle className="text-lg text-gray-900 dark:text-white flex items-center gap-2">
+            <Link2 className="w-5 h-5" />
+            Connected accounts
+          </CardTitle>
+          <CardDescription className="text-gray-600 dark:text-gray-400">
+            Connect TikTok, YouTube, Instagram, and Facebook to auto-publish videos from the Content Calendar.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" asChild className="border-[#E5E7EB] dark:border-[#2A2A2A]">
+            <Link href="/dashboard/settings/connected-accounts" className="inline-flex items-center gap-2">
+              Manage connected accounts
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* 5. YOUTUBE CHANNELS (Content Studio) */}
+      <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]" id="youtube-channels">
+        <CardHeader>
+          <CardTitle className="text-lg text-gray-900 dark:text-white flex items-center gap-2">
+            <Youtube className="w-5 h-5" />
+            YouTube Channels
+          </CardTitle>
+          <CardDescription className="text-gray-600 dark:text-gray-400">
+            Content Studio niche and content style. Manage multiple channels once you reach 1M+ subscribers.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Current Niche</p>
+              <p className="text-sm text-gray-900 dark:text-white">
+                {contentSettings?.selected_niche ?? "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Content Style</p>
+              <p className="text-sm text-gray-900 dark:text-white">
+                {contentSettings?.content_style === "faceless"
+                  ? "Faceless"
+                  : contentSettings?.content_style === "ai-generated"
+                    ? "AI-Generated Videos"
+                    : contentSettings?.content_style === "personal-brand"
+                      ? "Personal Brand"
+                      : contentSettings?.content_style ?? "—"}
+              </p>
+            </div>
+          </div>
+          {contentSettings && (() => {
+            const has1mSubs = contentSettings.youtube_channels.some((c) => (c?.subscriber_count ?? 0) >= 1_000_000);
+            return has1mSubs ? (
+              <>
+                <p className="text-sm text-green-700 dark:text-green-300 font-medium">
+                  🎉 Multi-channel mode unlocked!
+                </p>
+                <Button
+                  onClick={() => setChangeNicheModalOpen(true)}
+                  className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                >
+                  <Tv className="w-4 h-4" />
+                  Change Niche
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  You&apos;ll unlock multi-channel mode when you reach 1 million subscribers.
+                </p>
+                <Button disabled variant="outline" className="gap-2 opacity-60 cursor-not-allowed">
+                  <Tv className="w-4 h-4" />
+                  Change Niche
+                </Button>
+              </>
+            );
+          })()}
+          <div>
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Channels</p>
+            {contentSettings?.youtube_channels?.length ? (
+              <ul className="space-y-2">
+                {contentSettings.youtube_channels.map((ch) => (
+                  <li
+                    key={ch.id}
+                    className="flex items-center justify-between rounded-lg border border-[#E5E7EB] dark:border-[#2A2A2A] px-3 py-2 text-sm"
+                  >
+                    <span className="text-gray-900 dark:text-white font-medium truncate">{ch.name || ch.id || "Unnamed"}</span>
+                    <span className="text-gray-500 dark:text-gray-400 shrink-0 ml-2">
+                      {(ch.subscriber_count ?? 0).toLocaleString()} subs
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No channels added yet. We&apos;ll add real channel tracking later.
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Change Niche modal: clear wizard progress, then go to Step 3 */}
+      <AlertDialog open={changeNicheModalOpen} onOpenChange={setChangeNicheModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change niche</AlertDialogTitle>
+            <AlertDialogDescription>
+              You&apos;ll go to the Content Studio wizard to pick a new niche. Your wizard progress will be reset so you can re-flow from the start.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={changeNicheLoading}>Cancel</AlertDialogCancel>
+            <Button
+              disabled={changeNicheLoading}
+              className="bg-orange-500 hover:bg-orange-600 text-white"
+              onClick={async () => {
+                setChangeNicheLoading(true);
+                try {
+                  const res = await fetch("/api/content-studio/wizard-progress", { method: "DELETE" });
+                  if (!res.ok) throw new Error("Failed to clear progress");
+                  setChangeNicheModalOpen(false);
+                  toast({ title: "Progress cleared", description: "Redirecting to pick a new niche." });
+                  router.push("/dashboard/content-studio/create?step=3");
+                } catch (e) {
+                  toast({
+                    title: "Error",
+                    description: e instanceof Error ? e.message : "Could not clear progress",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setChangeNicheLoading(false);
+                }
+              }}
+            >
+              {changeNicheLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Go to Step 3
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* DANGER ZONE */}
       <Card className="border-red-200 dark:border-red-900/50 bg-white dark:bg-[#1A1A1A]">

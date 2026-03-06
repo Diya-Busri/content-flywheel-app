@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { cleanProductTitle } from "@/lib/product-title";
 import { extractProductDetails } from "@/lib/tiktok-shop/extract-product";
 import { generateProductBreakdown } from "@/lib/tiktok-shop/product-breakdown";

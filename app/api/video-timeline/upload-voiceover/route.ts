@@ -11,6 +11,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 const BUCKET = "timeline-media";
@@ -38,6 +39,12 @@ export async function POST(request: NextRequest) {
 
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+
+    const rl = await checkApiRateLimit(userId);
+
+
+    if (rl) return rl;
 
     const formData = await request.formData().catch(() => null);
     if (!formData) return NextResponse.json({ error: "FormData required" }, { status: 400 });

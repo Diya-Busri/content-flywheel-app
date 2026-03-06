@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Icon } from "@iconify/react";
 import { cleanMarkdownToHtml } from "@/lib/clean-markdown";
+import { sanitizeHtml } from "@/lib/sanitize-html";
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
@@ -338,7 +339,7 @@ export default function ProductPrintPage() {
                     style={{ ...bodyStyles, color: bodyStyles?.color ?? preset.bodyColor }}
                   >
                     {section.content || section.contentHtml ? (
-                      <div className="preview-content" dangerouslySetInnerHTML={{ __html: section.contentHtml ?? cleanMarkdownToHtml(section.content ?? "") }} />
+                      <div className="preview-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.contentHtml ?? cleanMarkdownToHtml(section.content ?? "")) }} />
                     ) : (
                       <span className="text-[#999]">(Empty)</span>
                     )}

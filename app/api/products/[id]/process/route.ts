@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
+import { productHistoryTable } from "@/db/schema/product-history-schema";
 import { eq } from "drizzle-orm";
 import {
   generateProductOutline,
@@ -41,6 +43,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const [existingRow] = await db
       .select({
         id: productsTable.id,
+        userId: productsTable.userId,
         status: productsTable.status,
         format: productsTable.format,
         title: productsTable.title,
@@ -242,6 +245,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       .where(eq(productsTable.id, productId));
     if (format !== "planner") {
       console.log("[DIAG] Final save to DB — status=draft", { productId, format, totalSections: sectionsWithContent.length });
+    }
+
+    const userId = (existing as { userId?: string })?.userId;
+    if (userId) {
+      try {
+        await db.insert(productHistoryTable).values({
+          userId,
+          productId,
+          productTitle: productName || existing.title,
+          formatType: format,
+          contentJson: {
+            sections: sectionsWithContent,
+            designSettings,
+          },
+          status: "complete",
+        });
+      } catch (historyErr) {
+        console.error("[products/process] product_history insert failed:", historyErr);
+      }
     }
 
     return NextResponse.json({ ok: true });

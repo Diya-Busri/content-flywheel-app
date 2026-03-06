@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { updateProfile, updateProfileByStripeCustomerId } from "@/db/queries/profiles-queries";
+import { checkApiRateLimit, getClientIp } from "@/lib/rate-limit-api";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -18,6 +19,8 @@ const relevantEvents = new Set([
 ]);
 
 export async function POST(request: NextRequest) {
+  const rl = await checkApiRateLimit(getClientIp(request));
+  if (rl) return rl;
   if (!WEBHOOK_SECRET) {
     console.error("[Stripe webhook] STRIPE_WEBHOOK_SECRET is not set");
     return NextResponse.json(

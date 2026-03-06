@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { faceProfilesTable } from "@/db/schema/face-profiles-schema";
 import { eq, desc } from "drizzle-orm";
@@ -13,6 +14,10 @@ export async function GET() {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const rl = await checkApiRateLimit(userId);
+
+    if (rl) return rl;
 
     const profiles = await db
       .select()

@@ -1,0 +1,30 @@
+import type { Metadata } from "next";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import { FeaturePreviewGate } from "@/components/feature-preview-gate";
+import TemplateStudioClient from "./TemplateStudioClient";
+
+export const metadata: Metadata = {
+  title: "Template Studio | Content Flywheel",
+  description: "Create and manage template packs for quotes, tips, affirmations, product promos, and tutorials",
+};
+
+export default function TemplateStudioPage() {
+  const { userId } = auth();
+  if (!userId) redirect("/sign-in");
+
+  return (
+    <FeaturePreviewGate title="Template Studio">
+      {/* Full page content (revealed when unlocked) */}
+      <main className="p-6 md:p-10">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          Template Studio
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">
+          Create template packs with slides and captions for quotes, tips, affirmations, product promos, and tutorials.
+        </p>
+        <TemplateStudioClient />
+      </main>
+    </FeaturePreviewGate>
+  );
+}

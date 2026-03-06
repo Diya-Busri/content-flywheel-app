@@ -2,17 +2,26 @@
  * Stock photos via Pexels (free API key at https://www.pexels.com/api/)
  * Keeps same response shape as before for the Graphics tab.
  * Banned keywords (door, building, architecture, etc.) are replaced with a safe default.
+ * API key must be server-only (PEXELS_API_KEY). Do not use NEXT_PUBLIC_ for Pexels key.
  */
+import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { sanitizePexelsQuery } from "@/lib/auto-design-suggestion";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 export async function GET(request: Request) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const rl = await checkApiRateLimit(userId);
+  if (rl) return rl;
+
   const { searchParams } = new URL(request.url);
   const rawQuery = searchParams.get("query") || "golden bokeh light";
   const query = sanitizePexelsQuery(rawQuery);
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const perPage = Math.min(30, Math.max(1, parseInt(searchParams.get("per_page") || "24", 10)));
 
-  const apiKey = process.env.PEXELS_API_KEY || process.env.NEXT_PUBLIC_PEXELS_API_KEY;
+  const apiKey = process.env.PEXELS_API_KEY;
   if (!apiKey) {
     return Response.json(
       { error: "PEXELS_API_KEY is not configured. Get a free key at https://www.pexels.com/api/" },

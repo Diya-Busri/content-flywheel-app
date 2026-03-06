@@ -4,6 +4,16 @@ import { useState, useCallback, useEffect, useRef } from "react";
 
 const STORAGE_KEY = "ai-coach-history";
 
+const IMAGE_ACTION_WORDS = /\b(create|make|generate|draw|show\s+me)\b/i;
+const IMAGE_SUBJECT_WORDS = /\b(image|picture|photo|illustration)s?\b/i;
+
+/** Detect if the user message is requesting an image (e.g. "generate an image of a cat"). */
+export function isImageRequest(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  return IMAGE_ACTION_WORDS.test(t) && IMAGE_SUBJECT_WORDS.test(t);
+}
+
 export type CoachMessage = {
   role: "user" | "assistant";
   content: string;
@@ -49,10 +59,28 @@ export type UseChatCoachOptions = {
   onAssistantComplete?: (text: string) => void;
   /** When set, coach API injects this product's details into the system prompt. */
   productId?: string | null;
+  /** Coach mode id: business | finance | content | goals | general. Sent to API to select system prompt. */
+  coachMode?: string;
+  /** Memory feature: include name context and previous summaries in system prompt. */
+  memoryEnabled?: boolean;
+  userName?: string;
+  coachName?: string;
+  previousSummaries?: string[];
 };
 
 export function useChatCoach(pageContext: string, options: UseChatCoachOptions = {}) {
-  const { persist = false, initialMessages, onMessagesChange, onAssistantComplete, productId } = options;
+  const {
+    persist = false,
+    initialMessages,
+    onMessagesChange,
+    onAssistantComplete,
+    productId,
+    coachMode = "business",
+    memoryEnabled = false,
+    userName = "",
+    coachName = "Coach",
+    previousSummaries = [],
+  } = options;
   const onMessagesChangeRef = useRef(onMessagesChange);
   onMessagesChangeRef.current = onMessagesChange;
 
@@ -102,7 +130,7 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
       setIsLoading(true);
 
       try {
-        const res = await fetch("/api/generate-image", {
+        const res = await fetch("/api/chat/coach/generate-image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt: trimmed }),
@@ -124,7 +152,7 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
           const next = [...prev];
           const last = next[next.length - 1];
           if (last?.role === "assistant") {
-            next[next.length - 1] = { ...last, content: err instanceof Error ? err.message : "Image generation failed." };
+            next[next.length - 1] = { ...last, content: "Couldn't generate that one, try describing it differently." };
           }
           return next;
         });
@@ -161,11 +189,63 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
           : {}),
       }));
 
+      const isImage = isImageRequest(trimmed);
+      if (isImage) {
+        try {
+          const res = await fetch("/api/chat/coach/generate-image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: trimmed }),
+          });
+          const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+          if (data.url) {
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") {
+                next[next.length - 1] = { ...last, content: "Here you go 👇", imageUrl: data.url };
+              }
+              return next;
+            });
+          } else {
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") {
+                next[next.length - 1] = { ...last, content: "Couldn't generate that one, try describing it differently." };
+              }
+              return next;
+            });
+          }
+        } catch {
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.role === "assistant") {
+              next[next.length - 1] = { ...last, content: "Couldn't generate that one, try describing it differently." };
+            }
+            return next;
+          });
+        } finally {
+          setIsLoading(false);
+        }
+        return;
+      }
+
       try {
         const res = await fetch("/api/chat/coach", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: body, pageContext, productId: productId ?? undefined }),
+          body: JSON.stringify({
+            messages: body,
+            pageContext,
+            productId: productId ?? undefined,
+            coachMode,
+            memoryEnabled,
+            userName: userName || undefined,
+            coachName: coachName || undefined,
+            previousSummaries: memoryEnabled && previousSummaries.length > 0 ? previousSummaries : undefined,
+          }),
         });
 
         if (!res.ok) {
@@ -237,7 +317,7 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
         setIsLoading(false);
       }
     },
-    [messages, isLoading, productId]
+    [messages, isLoading, productId, coachMode, memoryEnabled, userName, coachName, previousSummaries]
   );
 
   return { messages, sendMessage, generateImage, clearChat, isLoading };

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import OpenAI from "openai";
 import { put } from "@vercel/blob";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 
 export const maxDuration = 60;
 
@@ -15,6 +17,12 @@ export async function POST(request: Request) {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const apiRl = await checkApiRateLimit(userId);
+
+    if (apiRl) return apiRl;
+
+    const rl = checkAiRateLimit(userId);
+    if (rl) return rl;
 
     const body = await request.json().catch(() => ({}));
     const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";

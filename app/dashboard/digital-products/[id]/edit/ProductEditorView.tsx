@@ -33,15 +33,15 @@ export function ProductEditorView() {
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       <style dangerouslySetInnerHTML={{ __html: PRODUCT_EDITOR_PREVIEW_CSS }} />
-      <header className="sticky top-0 z-40 border-b border-gray-800 bg-gray-900 px-6 py-3">
+      <header className="sticky top-0 z-40 border-b border-border bg-background px-6 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/dashboard/digital-products" className="text-gray-400 hover:text-white text-sm transition-colors">
+            <Link href="/dashboard/digital-products" className="text-muted-foreground hover:text-white text-sm transition-colors">
               ← Back
             </Link>
             <h1 className="text-lg font-semibold text-white truncate max-w-[220px] md:max-w-md">{product?.title ?? "Product"}</h1>
             {saving ? (
-              <span className="flex items-center gap-1.5 text-sm text-gray-400">
+              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin" /> Saving...
               </span>
             ) : lastSaved ? (
@@ -53,7 +53,7 @@ export function ProductEditorView() {
               type="button"
               onClick={handleUndo}
               disabled={historyIndex <= 0}
-              className="p-2 hover:bg-gray-800 rounded disabled:opacity-30 text-gray-200 transition-colors"
+              className="p-2 hover:bg-muted rounded disabled:opacity-30 text-foreground transition-colors"
               title="Undo (Ctrl+Z)"
             >
               <Undo2 className="w-5 h-5" />
@@ -62,7 +62,7 @@ export function ProductEditorView() {
               type="button"
               onClick={handleRedo}
               disabled={historyIndex >= (history?.length ?? 1) - 1}
-              className="p-2 hover:bg-gray-800 rounded disabled:opacity-30 text-gray-200 transition-colors"
+              className="p-2 hover:bg-muted rounded disabled:opacity-30 text-foreground transition-colors"
               title="Redo (Ctrl+Shift+Z)"
             >
               <Redo2 className="w-5 h-5" />
@@ -72,7 +72,7 @@ export function ProductEditorView() {
             <button
               type="button"
               onClick={() => setShowHistory((v: boolean) => !v)}
-              className="p-2 hover:bg-gray-800 rounded text-gray-400 hover:text-white transition-colors"
+              className="p-2 hover:bg-muted rounded text-muted-foreground hover:text-white transition-colors"
               title="History"
             >
               <BookOpen className="w-5 h-5" />
@@ -129,7 +129,7 @@ export function ProductEditorView() {
       )}
 
       <div className="flex flex-1 min-h-0 p-8">
-        <div className="flex-1 bg-gray-800 rounded-lg flex items-center justify-center text-gray-400">
+        <div className="flex-1 bg-muted rounded-lg flex items-center justify-center text-muted-foreground">
           <p>Editor canvas — full UI is being restored. Use Preview and Export above.</p>
         </div>
       </div>
