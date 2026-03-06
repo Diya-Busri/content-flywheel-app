@@ -28,7 +28,6 @@ export function sanitizeHtml(html: string): string {
   if (typeof html !== "string") return "";
   if (typeof window !== "undefined") {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const DOMPurify = require("dompurify");
       if (typeof DOMPurify.sanitize === "function") {
         return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOW_DATA_ATTR: false });
