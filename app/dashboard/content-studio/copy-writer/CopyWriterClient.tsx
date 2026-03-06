@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { setVideoPrefill, getTimelineUrl } from "@/lib/video-prefill";
 import { getTemplatePrefill, clearTemplatePrefill } from "@/lib/template-prefill";
@@ -251,40 +251,40 @@ export default function CopyWriterClient() {
             Generate titles
           </Button>
           {titles.length > 0 && (
-            <div className="space-y-3 pt-2">
-              {titles.map((opt, i) => (
-                <div
-                  key={i}
-                  className="flex items-start justify-between gap-3 rounded-lg border border-[#E5E7EB] dark:border-[#2A2A2A] p-3 bg-gray-50/50 dark:bg-[#0d0d0d]"
-                >
-                  <div className="min-w-0 flex-1">
-                    <span className="text-xs font-medium text-orange-500 uppercase tracking-wide">
-                      {opt.style}
-                    </span>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">
-                      {opt.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {opt.characterCount}
-                      {platformInfo ? ` / ${platformInfo.titleLimit} chars` : " chars"}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0 h-8 w-8 p-0"
-                    onClick={() => copyToClipboard(opt.title, `title-${i}`)}
+            <>
+              <div className="space-y-3 pt-2">
+                {titles.map((opt, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start justify-between gap-3 rounded-lg border border-[#E5E7EB] dark:border-[#2A2A2A] p-3 bg-gray-50/50 dark:bg-[#0d0d0d]"
                   >
-                    {copiedId === `title-${i}` ? (
-                      <Check className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <Copy className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
-              ))}
-            </div>
-            {titles.length > 0 && (
+                    <div className="min-w-0 flex-1">
+                      <span className="text-xs font-medium text-orange-500 uppercase tracking-wide">
+                        {opt.style}
+                      </span>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">
+                        {opt.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {opt.characterCount}
+                        {platformInfo ? ` / ${platformInfo.titleLimit} chars` : " chars"}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 h-8 w-8 p-0"
+                      onClick={() => copyToClipboard(opt.title, `title-${i}`)}
+                    >
+                      {copiedId === `title-${i}` ? (
+                        <Check className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
               <div className="mt-3 pt-3 border-t border-[#E5E7EB] dark:border-[#2A2A2A]">
                 <SaveAsTemplateButton
                   content={titles.map((t) => t.title).join("\n")}
@@ -292,7 +292,7 @@ export default function CopyWriterClient() {
                   defaultTitle={`Titles: ${topic.trim() || "Copy Writer"}`}
                 />
               </div>
-            )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -467,7 +467,7 @@ function SectionBlock({
   copyId: string;
   copiedId: string | null;
   onCopy: (text: string, id: string) => void;
-  icon?: React.ReactNode;
+  icon?: ReactNode;
 }) {
   return (
     <div className="rounded-lg border border-[#E5E7EB] dark:border-[#2A2A2A] p-3 bg-gray-50/50 dark:bg-[#0d0d0d]">

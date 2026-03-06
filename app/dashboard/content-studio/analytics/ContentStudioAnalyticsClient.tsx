@@ -27,6 +27,7 @@ import {
   Sparkles,
   BarChart3,
 } from "lucide-react";
+import { derivePerVideoRows, type BestVideoRow, type PerVideoRow } from "./analytics-utils";
 
 type PlatformBreakdownRow = {
   platform: string;
@@ -34,14 +35,6 @@ type PlatformBreakdownRow = {
   likes: number;
   comments: number;
   shares: number;
-};
-
-type BestVideoRow = {
-  id: string;
-  title: string;
-  platform: string;
-  views: number;
-  engagement: string;
 };
 
 type GrowthRow = {
@@ -58,14 +51,6 @@ type VideoAnalyticsData = {
   platformBreakdown: PlatformBreakdownRow[];
   bestVideos: BestVideoRow[];
   growthOverTime: GrowthRow[];
-};
-
-type PerVideoRow = BestVideoRow & {
-  ctr: string;
-  avd: string;
-  retentionCurve: number[];
-  trafficSources: { source: string; pct: number }[];
-  demographics: { age: string; pct: number }[];
 };
 
 const DEFAULT_INSIGHTS = [
@@ -87,29 +72,6 @@ const chartConfigGrowth: ChartConfig = {
   subscribers: { label: "Subscribers", color: "#3b82f6" },
   month: { label: "Month" },
 };
-
-function derivePerVideoRows(bestVideos: BestVideoRow[]): PerVideoRow[] {
-  const sources = [
-    { source: "Browse", pct: 45 },
-    { source: "Search", pct: 28 },
-    { source: "Suggested", pct: 18 },
-    { source: "External", pct: 9 },
-  ];
-  const ages = [
-    { age: "18–24", pct: 32 },
-    { age: "25–34", pct: 41 },
-    { age: "35–44", pct: 18 },
-    { age: "45+", pct: 9 },
-  ];
-  return bestVideos.slice(0, 10).map((v, i) => ({
-    ...v,
-    ctr: `${(4.2 + i * 0.3).toFixed(1)}%`,
-    avd: `${Math.round(45 + i * 8)}%`,
-    retentionCurve: [100, 78, 62, 51, 44, 38, 34, 31, 28, 26].map((p) => p - i * 2),
-    trafficSources: sources.map((s) => ({ ...s, pct: Math.max(5, s.pct + (i % 3) * 2 - 2 })),
-    demographics: ages,
-  }));
-}
 
 export default function ContentStudioAnalyticsClient() {
   const [data, setData] = useState<VideoAnalyticsData | null>(null);
@@ -208,7 +170,7 @@ export default function ContentStudioAnalyticsClient() {
   const watchTimeHours = Math.round((d.totalViews * 2.5) / 60) || 0; // placeholder: 2.5 min avg
 
   return (
-    <>
+    <div>
       {/* AI Insights */}
       <section className="mb-10">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -464,7 +426,7 @@ export default function ContentStudioAnalyticsClient() {
           Best performing content
         </h2>
         <div className="grid gap-6 lg:grid-cols-3">
-          <Card className={CARD_CLASS lg:col-span-2}>
+          <Card className={`${CARD_CLASS} lg:col-span-2`}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center gap-2">
                 <Video className="w-4 h-4" />
@@ -581,6 +543,6 @@ export default function ContentStudioAnalyticsClient() {
           Refresh
         </button>
       </div>
-    </>
+    </div>
   );
 }
