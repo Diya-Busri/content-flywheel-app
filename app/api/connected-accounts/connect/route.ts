@@ -44,7 +44,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
       return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     }
     case "instagram": {
-      const appId = process.env.FACEBOOK_APP_ID;
+      const appId = process.env.INSTAGRAM_BASIC_APP_ID;
       if (!appId) return null;
       const params = new URLSearchParams({
         client_id: appId,

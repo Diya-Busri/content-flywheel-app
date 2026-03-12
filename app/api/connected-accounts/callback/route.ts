@@ -121,19 +121,48 @@ export async function GET(request: NextRequest) {
         }
         break;
       }
-      case "instagram":
+      case "instagram": {
+        const instagramClientId = process.env.INSTAGRAM_BASIC_APP_ID;
+        const instagramClientSecret = process.env.INSTAGRAM_BASIC_APP_SECRET;
+        if (!instagramClientId || !instagramClientSecret) {
+          return errorRedirect("Instagram OAuth not configured.");
+        }
+        const res = await fetch("https://api.instagram.com/oauth/access_token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: instagramClientId,
+            client_secret: instagramClientSecret,
+            grant_type: "authorization_code",
+            redirect_uri: callbackUrl,
+            code,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.access_token) {
+          return errorRedirect(data.error_message || "Instagram token exchange failed.");
+        }
+        accessToken = data.access_token;
+        platformUserId = data.user_id != null ? String(data.user_id) : null;
+        if (data.expires_in) {
+          const d = new Date();
+          d.setSeconds(d.getSeconds() + data.expires_in);
+          expiresAt = d;
+        }
+        break;
+      }
       case "facebook": {
-        const appId = process.env.FACEBOOK_APP_ID;
-        const appSecret = process.env.FACEBOOK_APP_SECRET;
-        if (!appId || !appSecret) {
-          return errorRedirect("Facebook/Instagram OAuth not configured.");
+        const facebookAppId = process.env.FACEBOOK_APP_ID;
+        const facebookAppSecret = process.env.FACEBOOK_APP_SECRET;
+        if (!facebookAppId || !facebookAppSecret) {
+          return errorRedirect("Facebook OAuth not configured.");
         }
         const res = await fetch(
-          `https://graph.facebook.com/v18.0/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${encodeURIComponent(callbackUrl)}&code=${encodeURIComponent(code)}`
+          `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${facebookAppId}&client_secret=${facebookAppSecret}&redirect_uri=${encodeURIComponent(callbackUrl)}&code=${encodeURIComponent(code)}`
         );
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.access_token) {
-          return errorRedirect(data.error?.message || "Meta token exchange failed.");
+          return errorRedirect(data.error?.message || "Facebook token exchange failed.");
         }
         accessToken = data.access_token;
         if (data.expires_in) {
