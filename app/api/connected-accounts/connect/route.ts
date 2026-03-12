@@ -49,7 +49,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
       if (!appId) return null;
       const scope = platform === "instagram"
         ? "instagram_business_basic"
-        : "public_profile";
+        : "email";
       const params = new URLSearchParams({
         client_id: appId,
         redirect_uri: callbackUrl,
@@ -57,7 +57,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
         scope,
         state,
       });
-      return `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}`;
+      return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`;
     }
     default:
       return null;
