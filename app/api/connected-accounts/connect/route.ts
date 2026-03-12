@@ -62,7 +62,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
         client_id: appId,
         redirect_uri: callbackUrl,
         response_type: "code",
-        scope: "email,public_profile,pages_show_list,instagram_basic,instagram_content_publish",
+        scope: "email,public_profile",
         state,
       });
       return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`;
