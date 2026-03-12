@@ -43,18 +43,26 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
       });
       return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     }
-    case "instagram":
-    case "facebook": {
+    case "instagram": {
       const appId = process.env.FACEBOOK_APP_ID;
       if (!appId) return null;
-      const scope = platform === "instagram"
-        ? "instagram_business_basic"
-        : "email";
       const params = new URLSearchParams({
         client_id: appId,
         redirect_uri: callbackUrl,
         response_type: "code",
-        scope,
+        scope: "user_profile,user_media",
+        state,
+      });
+      return `https://api.instagram.com/oauth/authorize?${params.toString()}`;
+    }
+    case "facebook": {
+      const appId = process.env.FACEBOOK_APP_ID;
+      if (!appId) return null;
+      const params = new URLSearchParams({
+        client_id: appId,
+        redirect_uri: callbackUrl,
+        response_type: "code",
+        scope: "public_profile",
         state,
       });
       return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`;
