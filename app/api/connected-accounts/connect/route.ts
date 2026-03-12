@@ -48,7 +48,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
       const appId = process.env.FACEBOOK_APP_ID;
       if (!appId) return null;
       const scope = platform === "instagram"
-        ? "instagram_account_read_access"
+        ? "instagram_business_basic"
         : "public_profile";
       const params = new URLSearchParams({
         client_id: appId,
