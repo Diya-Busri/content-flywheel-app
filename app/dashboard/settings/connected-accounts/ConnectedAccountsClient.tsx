@@ -250,7 +250,7 @@ export default function ConnectedAccountsClient() {
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        Required env: TikTok (<code>TIKTOK_CLIENT_KEY</code>, <code>TIKTOK_CLIENT_SECRET</code>), YouTube (<code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>), Instagram (<code>INSTAGRAM_BASIC_APP_ID</code>, <code>INSTAGRAM_BASIC_APP_SECRET</code>), Facebook (<code>FACEBOOK_APP_ID</code>, <code>FACEBOOK_APP_SECRET</code>). Set <code>NEXT_PUBLIC_APP_URL</code> to your app URL (e.g. https://contentflywheel.co.uk). Add <code>https://contentflywheel.co.uk/api/connected-accounts/callback</code> to Facebook Login and Instagram Basic Display → Valid OAuth Redirect URIs.
+        Required env: TikTok (<code>TIKTOK_CLIENT_KEY</code>, <code>TIKTOK_CLIENT_SECRET</code>), YouTube (<code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>), Instagram &amp; Facebook (<code>FACEBOOK_APP_ID</code>, <code>FACEBOOK_APP_SECRET</code>). Set <code>NEXT_PUBLIC_APP_URL</code> to your app URL (e.g. https://contentflywheel.co.uk). Add <code>https://contentflywheel.co.uk/api/connected-accounts/callback</code> to Facebook Login → Valid OAuth Redirect URIs.
       </p>
 
       <AlertDialog open={!!disconnectPlatform} onOpenChange={(open) => !open && setDisconnectPlatform(null)}>

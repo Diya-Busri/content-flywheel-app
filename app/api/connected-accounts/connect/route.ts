@@ -44,16 +44,16 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
       return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     }
     case "instagram": {
-      const appId = process.env.INSTAGRAM_BASIC_APP_ID;
+      const appId = process.env.FACEBOOK_APP_ID;
       if (!appId) return null;
       const params = new URLSearchParams({
         client_id: appId,
         redirect_uri: callbackUrl,
         response_type: "code",
-        scope: "user_profile,user_media",
+        scope: "user_media,instagram_basic,pages_show_list",
         state,
       });
-      return `https://api.instagram.com/oauth/authorize?${params.toString()}`;
+      return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`;
     }
     case "facebook": {
       const appId = process.env.FACEBOOK_APP_ID;
@@ -62,7 +62,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
         client_id: appId,
         redirect_uri: callbackUrl,
         response_type: "code",
-        scope: "public_profile",
+        scope: "email,public_profile,pages_show_list,instagram_basic,instagram_content_publish",
         state,
       });
       return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`;

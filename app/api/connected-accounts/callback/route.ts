@@ -122,32 +122,35 @@ export async function GET(request: NextRequest) {
         break;
       }
       case "instagram": {
-        const instagramClientId = process.env.INSTAGRAM_BASIC_APP_ID;
-        const instagramClientSecret = process.env.INSTAGRAM_BASIC_APP_SECRET;
-        if (!instagramClientId || !instagramClientSecret) {
-          return errorRedirect("Instagram OAuth not configured.");
+        const facebookAppId = process.env.FACEBOOK_APP_ID;
+        const facebookAppSecret = process.env.FACEBOOK_APP_SECRET;
+        if (!facebookAppId || !facebookAppSecret) {
+          return errorRedirect("Instagram OAuth not configured (uses FACEBOOK_APP_ID, FACEBOOK_APP_SECRET).");
         }
-        const res = await fetch("https://api.instagram.com/oauth/access_token", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            client_id: instagramClientId,
-            client_secret: instagramClientSecret,
-            grant_type: "authorization_code",
-            redirect_uri: callbackUrl,
-            code,
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.access_token) {
-          return errorRedirect(data.error_message || "Instagram token exchange failed.");
+        const tokenRes = await fetch(
+          `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${facebookAppId}&client_secret=${facebookAppSecret}&redirect_uri=${encodeURIComponent(callbackUrl)}&code=${encodeURIComponent(code)}`
+        );
+        const tokenData = await tokenRes.json().catch(() => ({}));
+        if (!tokenRes.ok || !tokenData.access_token) {
+          return errorRedirect(tokenData.error?.message || "Instagram token exchange failed.");
         }
-        accessToken = data.access_token;
-        platformUserId = data.user_id != null ? String(data.user_id) : null;
-        if (data.expires_in) {
+        accessToken = tokenData.access_token;
+        if (tokenData.expires_in) {
           const d = new Date();
-          d.setSeconds(d.getSeconds() + data.expires_in);
+          d.setSeconds(d.getSeconds() + tokenData.expires_in);
           expiresAt = d;
+        }
+        // Get Instagram Business Account ID + username via Graph API
+        const accountsRes = await fetch(
+          `https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account{id,username}&access_token=${encodeURIComponent(accessToken)}`
+        );
+        const accountsData = await accountsRes.json().catch(() => ({}));
+        const pages = accountsData?.data ?? [];
+        const pageWithIg = pages.find((p: { instagram_business_account?: { id: string; username?: string } }) => p.instagram_business_account);
+        if (pageWithIg?.instagram_business_account) {
+          const ig = pageWithIg.instagram_business_account;
+          platformUserId = ig.id ?? null;
+          platformUsername = ig.username ?? null;
         }
         break;
       }
