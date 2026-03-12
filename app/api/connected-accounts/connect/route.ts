@@ -48,8 +48,8 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
       const appId = process.env.FACEBOOK_APP_ID;
       if (!appId) return null;
       const scope = platform === "instagram"
-        ? "instagram_basic,instagram_content_publish"
-        : "pages_manage_posts,pages_read_engagement";
+        ? "instagram_account_read_access"
+        : "public_profile";
       const params = new URLSearchParams({
         client_id: appId,
         redirect_uri: callbackUrl,
