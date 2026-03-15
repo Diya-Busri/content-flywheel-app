@@ -133,7 +133,7 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
         const res = await fetch("/api/chat/coach/generate-image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: trimmed }),
+          body: JSON.stringify({ prompt: trimmed, aspectRatio: "16:9" }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -195,7 +195,7 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
           const res = await fetch("/api/chat/coach/generate-image", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: trimmed }),
+            body: JSON.stringify({ prompt: trimmed, aspectRatio: "16:9" }),
           });
           const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
           if (data.url) {

@@ -1108,7 +1108,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             <ToastAction
               altText="Go to Timeline"
               onClick={() => {
-                router.push(`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`);
+                router.push(`/dashboard/video-timeline?libraryScriptId=${encodeURIComponent(libraryScriptId)}`);
               }}
             >
               Go to Timeline
@@ -2793,7 +2793,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                       className="border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-200 dark:hover:bg-muted gap-2"
                       onClick={() => {
                         if (libraryScriptId) {
-                          router.push(`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`);
+                          router.push(`/dashboard/video-timeline?libraryScriptId=${encodeURIComponent(libraryScriptId)}`);
                         }
                       }}
                       disabled={!libraryScriptId}
@@ -2892,7 +2892,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                           variant="outline"
                           size="sm"
                           className="border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-muted gap-2"
-                          onClick={() => router.push(`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`)}
+                          onClick={() => router.push(`/dashboard/video-timeline?libraryScriptId=${encodeURIComponent(libraryScriptId)}`)}
                         >
                           <Film className="w-4 h-4" />
                           Open in Timeline
@@ -2919,7 +2919,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           <CardContent className="flex flex-wrap gap-3">
             {libraryScriptId && (
               <Button asChild variant="outline" className="border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-muted gap-2">
-                <Link href={`/dashboard/video-timeline?scriptId=${encodeURIComponent(libraryScriptId)}`}>
+                <Link href={`/dashboard/video-timeline?libraryScriptId=${encodeURIComponent(libraryScriptId)}`}>
                   <Film className="w-4 h-4" />
                   Open in Timeline
                 </Link>
@@ -2932,7 +2932,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               <Link
                 href={
                   libraryScriptId
-                    ? `/dashboard/video-timeline?importVoiceover=1&scriptId=${encodeURIComponent(libraryScriptId)}`
+                    ? `/dashboard/video-timeline?importVoiceover=1&libraryScriptId=${encodeURIComponent(libraryScriptId)}`
                     : "/dashboard/video-timeline?importVoiceover=1"
                 }
               >

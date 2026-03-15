@@ -3,34 +3,72 @@ import { auth } from "@clerk/nextjs/server";
 import OpenAI from "openai";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const STYLE_KEYWORDS = /watercolor|oil\s*painting|sketch|minimalist|minimal|realistic|cartoon|3d\s*render|vintage|abstract|anime|manga|pixel\s*art|photograph|photo\s*style|cinematic|noir|style\s*of|in\s*the\s*style|look\s*like/i;
+const STYLE_KEYWORDS = /watercolor|oil\s*painting|sketch|minimalist|minimal|realistic|photorealistic|cartoon|3d\s*render|vintage|abstract|anime|manga|pixel\s*art|photograph|photo\s*style|cinematic|noir|b-roll|style\s*of|in\s*the\s*style|look\s*like|suitable\s*for\s*video/i;
+
+const BUCKET = "timeline-media";
+
+/** DALL-E 3 landscape 16:9 (YouTube) — only supported landscape size for reliable 16:9. */
+const SIZE_16_9 = "1792x1024" as const;
+const SIZE_SQUARE = "1024x1024" as const;
 
 /**
  * Enhance prompt for DALL-E: append default style unless user specified a style.
+ * Script-sourced prompts often already include "photorealistic, b-roll" — preserve those.
  */
 function enhancePrompt(userPrompt: string): string {
   const trimmed = userPrompt.trim();
   if (STYLE_KEYWORDS.test(trimmed)) return trimmed;
-  return `${trimmed}. High quality, clean, digital illustration style.`;
+  return `${trimmed}. Photorealistic, professional b-roll style, suitable for video.`;
+}
+
+function isBucketMissingError(err: unknown): boolean {
+  const msg = String(err instanceof Error ? err.message : err).toLowerCase();
+  return /bucket|not found|no such|404|does not exist/.test(msg);
+}
+
+/** Upload image bytes to Supabase Storage and return public URL. Returns null if Supabase not configured. */
+async function uploadImageToStorage(userId: string, buffer: Buffer, contentType: string): Promise<string | null> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  const ext = (contentType || "image/png").toLowerCase().includes("png") ? "png" : "jpg";
+  const path = `${userId}/dalle/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  let result = await supabase.storage.from(BUCKET).upload(path, buffer, {
+    contentType: contentType || "image/png",
+    upsert: true,
+  });
+  if (result.error && isBucketMissingError(result.error)) {
+    await supabase.storage.createBucket(BUCKET, { public: true });
+    result = await supabase.storage.from(BUCKET).upload(path, buffer, {
+      contentType: contentType || "image/png",
+      upsert: true,
+    });
+  }
+  if (result.error) {
+    console.error("[generate-image] Supabase upload error:", result.error.message);
+    return null;
+  }
+  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(result.data.path);
+  return urlData.publicUrl;
 }
 
 /**
- * POST: Generate image with DALL-E 3 for AI Coach.
- * Body: { prompt: string } (user message).
- * Returns { url } or { error }.
+ * POST: Generate ONE 16:9 image per script section (DALL-E 3), then persist URL.
+ * Body: { prompt: string, aspectRatio?: "16:9" }. One image per request (no batching).
+ * - Uses 1792x1024 for 16:9, quality "standard".
+ * - Uploads image to Supabase Storage so URL is stable (stored in DB when user exports timeline).
+ * Returns { url } (permanent if Supabase configured) or { error }.
  */
 export async function POST(req: Request) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const apiRl = await checkApiRateLimit(userId);
-
     if (apiRl) return apiRl;
-
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
 
@@ -38,25 +76,51 @@ export async function POST(req: Request) {
     const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
     if (!prompt) return NextResponse.json({ error: "prompt is required" }, { status: 400 });
 
+    const aspectRatio = typeof body.aspectRatio === "string" ? body.aspectRatio : undefined;
+    // Force 16:9 for script/section images so timeline and export are reliable
+    const size = aspectRatio === "16:9" ? SIZE_16_9 : SIZE_SQUARE;
+
     const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 503 });
 
     const openai = new OpenAI({ apiKey });
     const enhanced = enhancePrompt(prompt);
 
-    const response = await openai.images.generate({
-      model: "dall-e-3",
-      prompt: enhanced,
-      n: 1,
-      size: "1024x1024",
-      response_format: "url",
-    });
-
-    const imageUrl = response.data[0]?.url;
+    let imageUrl: string | undefined;
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await openai.images.generate({
+          model: "dall-e-3",
+          prompt: enhanced,
+          n: 1,
+          size,
+          quality: "standard",
+          response_format: "url",
+        });
+        imageUrl = response.data[0]?.url;
+        if (imageUrl && typeof imageUrl === "string") break;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
     if (!imageUrl || typeof imageUrl !== "string") {
-      return NextResponse.json({ error: "No image URL returned" }, { status: 500 });
+      const msg = lastErr instanceof Error ? lastErr.message : "No image URL returned";
+      return NextResponse.json({ error: msg }, { status: 500 });
     }
 
+    // Persist: fetch image and upload to our storage so URL is stable (for timeline/DB)
+    try {
+      const res = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
+      if (res.ok) {
+        const buf = Buffer.from(await res.arrayBuffer());
+        const contentType = res.headers.get("content-type") || "image/png";
+        const permanentUrl = await uploadImageToStorage(userId, buf, contentType);
+        if (permanentUrl) return NextResponse.json({ url: permanentUrl });
+      }
+    } catch (uploadErr) {
+      console.warn("[generate-image] Storage upload failed, returning DALL-E URL:", uploadErr);
+    }
     return NextResponse.json({ url: imageUrl });
   } catch (err) {
     console.error("[chat/coach/generate-image]", err);

@@ -20,14 +20,29 @@ function hasActiveSubscription(profile: any | null): boolean {
 }
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  // Fetch user profile once at the layout level
   const { userId } = auth();
 
   if (!userId) {
     return redirect("/sign-in");
   }
 
-  let profile = await getProfileByUserId(userId);
+  let profile: Awaited<ReturnType<typeof getProfileByUserId>> = null;
+  try {
+    profile = await getProfileByUserId(userId);
+  } catch (e) {
+    console.error("Dashboard: getProfileByUserId failed", e);
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4">
+        <h2 className="text-lg font-semibold">Unable to load dashboard</h2>
+        <p className="text-center text-sm text-muted-foreground">
+          Profile could not be loaded. This is often due to a temporary database or server issue.
+        </p>
+        <a href="/dashboard" className="text-sm text-primary underline hover:no-underline">
+          Try again
+        </a>
+      </div>
+    );
+  }
 
   // If no profile, try creating one (handles race with root layout)
   if (!profile) {
@@ -44,16 +59,12 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     }
   }
 
-  // Get the current user (needed for email and for admin bypass)
   const user = await currentUser();
   const userEmail = user?.emailAddresses?.[0]?.emailAddress || "";
 
-  // Admin bypass: if user email matches ADMIN_EMAIL, allow full access without subscription
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const isAdmin = adminEmail && userEmail.trim().toLowerCase() === adminEmail;
 
-  // Paywall: redirect to pricing if not admin and user does not have an active subscription.
-  // After paying with Stripe, they can access the dashboard.
   if (!isAdmin && !hasActiveSubscription(profile)) {
     redirect("/pricing");
   }

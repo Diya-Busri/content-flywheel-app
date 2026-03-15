@@ -324,13 +324,15 @@ export default function VideosFlow() {
                       <SelectContent
                         position="popper"
                         data-voice-dropdown-content
-                        className="border border-border bg-popover text-popover-foreground shadow-xl [&_button]:text-foreground [&_svg]:text-foreground [&_[data-radix-select-viewport]]:bg-popover"
+                        style={{ backgroundColor: "#ffffff", color: "#111827" }}
+                        className="max-h-[min(20rem,70vh)] min-w-[var(--radix-select-trigger-width)] w-full max-w-[320px] border border-gray-200 shadow-xl overflow-y-auto [&_[data-radix-select-viewport]]:p-2 [&_[data-radix-select-viewport]]:max-h-[min(18rem,65vh)]"
                       >
                         {voices.map((v) => (
                           <SelectItem
                             key={v.voice_id}
                             value={v.voice_id}
-                            className="cursor-pointer rounded-sm py-2 pl-8 pr-2 text-foreground bg-transparent focus:bg-orange-500 focus:text-white data-[highlighted]:bg-orange-500 data-[highlighted]:text-white data-[state=checked]:bg-orange-500 data-[state=checked]:text-white focus:outline-none"
+                            style={{ color: "#111827" }}
+                            className="cursor-pointer rounded-md py-2.5 pl-8 pr-3 text-base bg-transparent focus:bg-orange-500 focus:text-white data-[highlighted]:bg-orange-500 data-[highlighted]:text-white data-[state=checked]:bg-orange-500 data-[state=checked]:text-white focus:outline-none [&[data-highlighted]]:!text-white [&[data-state=checked]]:!text-white"
                           >
                             {v.name}
                           </SelectItem>

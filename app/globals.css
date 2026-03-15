@@ -267,3 +267,24 @@
   left: 20px !important;
   right: auto !important;
 }
+
+/* AI Voice dropdown: always readable (white background, dark text) on Customize Videos */
+[data-voice-dropdown-content] {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+[data-voice-dropdown-content] [data-radix-select-viewport] {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+[data-voice-dropdown-content] [role="option"] {
+  color: #111827 !important;
+}
+[data-voice-dropdown-content] [role="option"]:not([data-highlighted]):not([data-state="checked"]) {
+  color: #111827 !important;
+}
+[data-voice-dropdown-content] [role="option"][data-highlighted],
+[data-voice-dropdown-content] [role="option"][data-state="checked"] {
+  background-color: #ea580c !important;
+  color: #ffffff !important;
+}

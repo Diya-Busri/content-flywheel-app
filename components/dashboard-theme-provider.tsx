@@ -1,8 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-
-const STORAGE_KEY = "dashboard-theme";
+import { useTheme } from "next-themes";
 
 export type DashboardTheme = "dark" | "light";
 
@@ -13,15 +12,6 @@ type ContextValue = {
 };
 
 const DashboardThemeContext = createContext<ContextValue | null>(null);
-
-function readStoredTheme(): DashboardTheme {
-  if (typeof window === "undefined") return "dark";
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "light" || stored === "dark") return stored;
-  } catch (_) {}
-  return "dark";
-}
 
 export function useDashboardTheme(): ContextValue {
   const ctx = useContext(DashboardThemeContext);
@@ -36,53 +26,32 @@ interface DashboardThemeProviderProps {
 }
 
 export function DashboardThemeProvider({ children, className = "" }: DashboardThemeProviderProps) {
-  const [theme, setThemeState] = useState<DashboardTheme>("dark");
+  const { setTheme: setNextTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setThemeState(readStoredTheme());
     setMounted(true);
   }, []);
 
-  const setTheme = useCallback((next: DashboardTheme) => {
-    setThemeState(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, next);
-    } catch (_) {}
-  }, []);
+  // Resolve to "light" | "dark" for dashboard; avoid flash by defaulting to dark until mounted
+  const effectiveTheme: DashboardTheme =
+    mounted && resolvedTheme === "light" ? "light" : "dark";
+
+  const setTheme = useCallback(
+    (next: DashboardTheme) => {
+      setNextTheme(next);
+    },
+    [setNextTheme]
+  );
 
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) => {
-      const next = prev === "dark" ? "light" : "dark";
-      try {
-        localStorage.setItem(STORAGE_KEY, next);
-      } catch (_) {}
-      return next;
-    });
-  }, []);
-
-  // Avoid flash: once mounted, use stored theme; before that use default dark
-  const effectiveTheme = mounted ? theme : "dark";
-  // Tailwind darkMode: ["class"] — add "dark" to html so ALL descendants (including portaled content) get dark: variants
-  const themeClass = effectiveTheme === "dark" ? "dark" : "";
-
-  useEffect(() => {
-    if (!mounted) return;
-    const root = document.documentElement;
-    if (themeClass) {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-    return () => {
-      root.classList.remove("dark");
-    };
-  }, [mounted, themeClass]);
+    setNextTheme(resolvedTheme === "dark" ? "light" : "dark");
+  }, [setNextTheme, resolvedTheme]);
 
   return (
     <DashboardThemeContext.Provider value={{ theme: effectiveTheme, setTheme, toggleTheme }}>
       <div
-        className={`${themeClass} ${className}`.trim()}
+        className={className}
         data-theme={effectiveTheme}
         suppressHydrationWarning
       >

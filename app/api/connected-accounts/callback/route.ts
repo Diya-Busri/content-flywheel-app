@@ -50,7 +50,10 @@ export async function GET(request: NextRequest) {
       process.env.NEXT_PUBLIC_APP_URL ||
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
       "http://localhost:3000";
-    const callbackUrl = `${baseUrl.replace(/\/$/, "")}/api/connected-accounts/callback?platform=${platform}`;
+    const PRODUCTION_CALLBACK_BASE = "https://contentflywheel.co.uk";
+    const isProduction = baseUrl?.includes("contentflywheel.co.uk");
+    const callbackBase = isProduction ? PRODUCTION_CALLBACK_BASE : baseUrl?.replace(/\/$/, "") ?? "http://localhost:3000";
+    const callbackUrl = `${callbackBase}/api/connected-accounts/callback?platform=${platform}`;
 
     let accessToken: string;
     let refreshToken: string | null = null;

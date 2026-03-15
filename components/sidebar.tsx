@@ -112,7 +112,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
 
       <div
         className={`sidebar no-print h-screen flex-shrink-0 bg-white dark:bg-card backdrop-blur-xl border-r border-[#E5E7EB] dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20 transition-[width] duration-200 ease-in-out ${
-          isCollapsed ? "w-0 min-w-0 border-r-0" : "w-[60px] md:w-[220px]"
+          isCollapsed ? "w-0 min-w-0 border-r-0" : "w-[60px] md:w-[220px] min-w-[60px] md:min-w-[220px]"
         }`}
         style={mounted && isCollapsed ? { width: 0, minWidth: 0 } : undefined}
       >

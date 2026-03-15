@@ -7,44 +7,38 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@clerk/nextjs";
-import { checkPaymentFailedAction } from "@/actions/profiles-actions";
 
 /**
- * Payment status alert component that uses server actions to check payment status
- * Only shows when payment has failed and user is not on the pricing page
+ * Payment status alert component. Uses GET /api/payment-status so it works on every page
+ * without relying on server actions (which can 404 when the action is not bound to the current route).
+ * Only shows when payment has failed and user is not on the pricing page.
  */
 export function PaymentStatusAlert() {
   const [hasPaymentFailed, setHasPaymentFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const pathname = usePathname();
   const { userId } = useAuth();
-  
-  // Don't show on pricing page to avoid redundancy
+
   const isVisible = pathname !== "/pricing";
-  
-  // Check payment status on initial load and set up a less frequent check
+
   useEffect(() => {
     if (!userId || !isVisible) return;
-    
+
     const checkPaymentStatus = async () => {
       try {
         setIsLoading(true);
-        // Use server action (more efficient than API route)
-        const { paymentFailed } = await checkPaymentFailedAction();
-        setHasPaymentFailed(paymentFailed);
+        const res = await fetch("/api/payment-status", { method: "GET" });
+        const data = res.ok ? await res.json() : { paymentFailed: false };
+        setHasPaymentFailed(data.paymentFailed === true);
       } catch (error) {
         console.error("Error checking payment status:", error);
       } finally {
         setIsLoading(false);
       }
     };
-    
-    // Initial check
+
     checkPaymentStatus();
-    
-    // Set up a less frequent check (every 5 minutes instead of every minute)
     const intervalId = setInterval(checkPaymentStatus, 5 * 60 * 1000);
-    
     return () => clearInterval(intervalId);
   }, [userId, isVisible]);
   

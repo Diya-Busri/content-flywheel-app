@@ -71,7 +71,14 @@ export type SavedScriptScene = {
   duration: number;
   script_text: string;
   image_url?: string | null;
+  video_url?: string | null;
   caption?: string | null;
+  /** e.g. zoom in, pan left, fade, ken burns */
+  animation_type?: string | null;
+  /** Per-scene voiceover URL (ElevenLabs clip for this section only). */
+  voiceover_url?: string | null;
+  /** Section label for timeline display (e.g. "Hook (0:00-0:30)"). */
+  section_label?: string | null;
 };
 
 export const savedScriptsTable = pgTable("saved_scripts", {

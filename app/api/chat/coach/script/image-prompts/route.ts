@@ -7,11 +7,12 @@ import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-type ScenePrompt = { scene_number: number; prompt: string };
+type ScenePrompt = { scene_number: number; prompt: string; section_label?: string; animation_style?: string; duration_seconds?: number };
 
 /**
  * POST: Break script into scenes and return one detailed image prompt per scene.
- * Body: { script: string }. Returns { prompts: { scene_number, prompt }[] }.
+ * Body: { script: string }. Returns { prompts: { scene_number, prompt, section_label? }[] }.
+ * All images are 16:9 landscape for YouTube. Section labels include timestamps for video editing.
  */
 export async function POST(req: Request) {
   try {
@@ -38,12 +39,33 @@ export async function POST(req: Request) {
       messages: [
         {
           role: "system",
-          content: `You are a video director. Given a YouTube script, split it into clear visual scenes and output a single detailed image prompt per scene suitable for DALL-E or Midjourney.
-Rules:
+          content: `You are a video director. Generate image prompts ORGANIZED BY SCRIPT SECTIONS with timestamps so users can match images to their video edit. ALL images must be 16:9 LANDSCAPE for YouTube — never square.
+
+OUTPUT FORMAT:
+- Parse the script into clear sections (Introduction, Section 1: [topic], Section 2: [topic], etc.) and assign approximate timestamps (e.g. 0:00-0:30, 0:30-2:00, 2:00-3:30) based on typical pacing.
+- For each image, provide a "section_label" that shows which script section it belongs to and the time range. Example labels:
+  "Introduction (0:00-0:30) - Hook about business models"
+  "Section 1: Traditional Models (0:30-2:00)"
+  "Section 2: Modern Models (2:00-3:30)"
+- Generate one image prompt per distinct visual within that section. Order prompts to follow the script outline.
+
+CONTENT RULES (match script literally, not generic "business vibes"):
+- Traditional retail / physical store → retail store interior, checkout, customers
+- Manufacturing / factory → factory floor, production line, machinery
+- Subscription / SaaS → subscription app interface (e.g. Netflix, Spotify) on screen
+- Apple ecosystem → Apple products (iPhone, MacBook, iPad) arranged together
+- Cloud storage (e.g. Dropbox) → cloud storage app interface on laptop
+- Customer purchase / e-commerce → customer on laptop/phone completing purchase
+- Be literal: each prompt must depict the exact concept from the script.
+
+JSON RULES:
 - Output valid JSON only, no markdown or extra text.
-- Format: { "prompts": [ { "scene_number": 1, "prompt": "detailed description for image generation" }, ... ] }
-- Each prompt should describe one key visual: setting, mood, subject, style. Be specific (e.g. "A person at a desk with laptop, soft window light, modern office, shallow depth of field").
-- One scene per distinct visual moment. Typically 3-10 scenes for a short script.`,
+- Format: { "prompts": [ { "scene_number": 1, "prompt": "detailed description", "section_label": "Introduction (0:00-0:30) - Hook", "animation_style": "slow zoom in", "duration_seconds": 5 }, ... ] }
+- Include "animation_style" for each: e.g. "zoom in", "pan left", "fade cut", "ken burns", "static".
+- Include "duration_seconds" (number) for each scene, e.g. 5 or 8.
+- Every prompt must end with: "Photorealistic, professional b-roll style, 16:9 landscape format for YouTube."
+- 6-9 prompts when the script has that many distinct sections/concepts. Include section_label for every prompt so users can match images to script timestamps for editing.
+- No abstract art, no decorative patterns. All images 16:9 landscape.`,
         },
         {
           role: "user",
@@ -63,11 +85,30 @@ Rules:
       return NextResponse.json({ error: "Invalid model response" }, { status: 500 });
     }
 
+    const B_ROLL_16_9_SUFFIX = " Photorealistic, professional b-roll style, 16:9 landscape format for YouTube.";
+    const hasBrollAnd169 = /photorealistic|b-roll|16:9|landscape.*youtube/i;
+
     const prompts = Array.isArray(parsed.prompts)
-      ? (parsed.prompts as ScenePrompt[]).map((p) => ({
-          scene_number: typeof p.scene_number === "number" ? p.scene_number : 0,
-          prompt: typeof p.prompt === "string" ? p.prompt.trim() : "",
-        }))
+      ? (parsed.prompts as ScenePrompt[]).map((p) => {
+          let prompt = typeof p.prompt === "string" ? p.prompt.trim() : "";
+          if (prompt && !hasBrollAnd169.test(prompt)) prompt = prompt + B_ROLL_16_9_SUFFIX;
+          const section_label = typeof (p as ScenePrompt & { section_label?: string }).section_label === "string"
+            ? (p as ScenePrompt & { section_label: string }).section_label.trim()
+            : undefined;
+          const animation_style = typeof (p as ScenePrompt & { animation_style?: string }).animation_style === "string"
+            ? (p as ScenePrompt & { animation_style: string }).animation_style.trim() || undefined
+            : undefined;
+          const duration_seconds = typeof (p as ScenePrompt & { duration_seconds?: number }).duration_seconds === "number"
+            ? (p as ScenePrompt & { duration_seconds: number }).duration_seconds
+            : undefined;
+          return {
+            scene_number: typeof p.scene_number === "number" ? p.scene_number : 0,
+            prompt,
+            ...(section_label ? { section_label } : {}),
+            ...(animation_style ? { animation_style } : {}),
+            ...(duration_seconds != null ? { duration_seconds } : {}),
+          };
+        })
       : [];
 
     return NextResponse.json({ prompts });

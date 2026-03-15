@@ -20,6 +20,8 @@ export type TimelineProjectContent = {
     textColor?: string;
     animation?: string;
   };
+  /** Scene transition: fade | slideLeft | slideRight | wipe | zoom (used by server compile). */
+  sceneTransition?: string;
   aspectRatio?: string;
   totalDuration?: number;
 };

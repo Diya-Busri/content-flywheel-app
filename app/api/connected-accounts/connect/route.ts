@@ -8,12 +8,20 @@ export const dynamic = "force-dynamic";
 
 const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
 
+/** Production callback base — add this exact callback path to Google & Meta OAuth apps. */
+const PRODUCTION_CALLBACK_BASE = "https://contentflywheel.co.uk";
+
+/** Facebook OAuth scope only. Instagram uses Instagram Basic Display API (separate app) later. */
+const FB_SCOPES = "public_profile";
+
 function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null {
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
     "http://localhost:3000";
-  const callbackUrl = `${baseUrl.replace(/\/$/, "")}/api/connected-accounts/callback?platform=${platform}`;
+  const isProduction = baseUrl?.includes("contentflywheel.co.uk");
+  const callbackBase = isProduction ? PRODUCTION_CALLBACK_BASE : baseUrl?.replace(/\/$/, "") ?? "http://localhost:3000";
+  const callbackUrl = `${callbackBase}/api/connected-accounts/callback?platform=${platform}`;
 
   switch (platform) {
     case "tiktok": {
@@ -50,7 +58,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
         client_id: appId,
         redirect_uri: callbackUrl,
         response_type: "code",
-        scope: "user_media,instagram_basic,pages_show_list",
+        scope: FB_SCOPES,
         state,
       });
       return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`;
@@ -62,7 +70,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
         client_id: appId,
         redirect_uri: callbackUrl,
         response_type: "code",
-        scope: "email,public_profile",
+        scope: FB_SCOPES,
         state,
       });
       return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`;

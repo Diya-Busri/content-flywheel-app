@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { savedScriptsTable } from "@/db/schema/library-schema";
+import type { SavedScriptScene } from "@/db/schema/library-schema";
 import { eq, and } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export async function GET(
   }
 }
 
-/** PATCH: Update voiceover_url (e.g. after uploading from Coach). */
+/** PATCH: Update voiceover_url and/or scenes_json (e.g. after uploading per-scene voiceovers from Coach). */
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -53,13 +54,21 @@ export async function PATCH(
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
     const body = await req.json().catch(() => ({}));
-    const voiceoverUrl = typeof (body as { voiceover_url?: string }).voiceover_url === "string"
-      ? (body as { voiceover_url: string }).voiceover_url.trim() || null
-      : null;
+    const b = body as { voiceover_url?: string; scenes_json?: SavedScriptScene[] };
+    const voiceoverUrl = typeof b.voiceover_url === "string" ? b.voiceover_url.trim() || null : undefined;
+    const scenesJson = Array.isArray(b.scenes_json) ? b.scenes_json : undefined;
+
+    const updates: { voiceoverUrl?: string | null; scenesJson?: SavedScriptScene[] } = {};
+    if (voiceoverUrl !== undefined) updates.voiceoverUrl = voiceoverUrl;
+    if (scenesJson !== undefined) updates.scenesJson = scenesJson;
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: "Provide voiceover_url and/or scenes_json" }, { status: 400 });
+    }
 
     const [row] = await db
       .update(savedScriptsTable)
-      .set({ voiceoverUrl })
+      .set(updates)
       .where(and(eq(savedScriptsTable.id, id), eq(savedScriptsTable.userId, userId)))
       .returning();
 
@@ -68,9 +77,10 @@ export async function PATCH(
     return NextResponse.json({
       id: row.id,
       voiceover_url: row.voiceoverUrl ?? null,
+      scenes_json: row.scenesJson ?? [],
     });
   } catch (err) {
     console.error("[saved-scripts/[id]] PATCH", err);
-    return NextResponse.json({ error: "Failed to update script" }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to update" }, { status: 500 });
   }
 }

@@ -267,12 +267,20 @@ export default function LibraryFlow() {
       const url = isTrash
         ? `/api/library?type=all&deleted=true`
         : `/api/library?type=${typeParam}`;
-      const res = await fetch(url);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (!res.ok) throw new Error("Failed to load library");
       const data = await res.json();
-      setItems(data ?? []);
+      setItems(Array.isArray(data) ? data : []);
     } catch (err) {
-      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to load library", variant: "destructive" });
+      const message = err instanceof Error ? err.message : "Failed to load library";
+      if ((err as { name?: string })?.name === "AbortError") {
+        toast({ title: "Timeout", description: "Library took too long to load. Try again.", variant: "destructive" });
+      } else {
+        toast({ title: "Error", description: message, variant: "destructive" });
+      }
       setItems([]);
     } finally {
       setLoading(false);

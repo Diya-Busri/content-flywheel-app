@@ -20,6 +20,7 @@ export const metadata: Metadata = {
   title: "Content Flywheel - AI Video Generation for Social Media",
   description:
     "Turn products into sales-driving videos for TikTok, Instagram, and YouTube. AI-powered video creation focused on conversion, not vanity metrics.",
+  icons: { icon: "/icon.svg" },
 };
 
 // Root layout is synchronous - no blocking auth() call. Sign-in/sign-up pages load instantly.
