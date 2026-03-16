@@ -155,7 +155,7 @@ export default function VideoGuidePage() {
         if (!res.ok) throw new Error("Failed to load guide");
         return res.json();
       })
-      .then((script: { content?: string; title?: string; platform?: string }) => {
+      .then((script: { content?: string; title?: string; platform?: string; productId?: string | null }) => {
         const isVideoGuide = script.platform === "video-guide" || script.platform === "content-studio";
         if (!isVideoGuide || !script.content) {
           setError("This library item is not a video guide.");
@@ -164,7 +164,19 @@ export default function VideoGuidePage() {
         const data = JSON.parse(script.content) as VideoGuideData;
         if (data && data.script && Array.isArray(data.scenePrompts)) {
           setGuide(data);
-          setScriptTitle(script.title?.replace(/^Video Guide:\s*/i, "") || "");
+          const title = script.title?.replace(/^Video Guide:\s*/i, "") || "";
+          setScriptTitle(title);
+          if (script.productId) setProductIdForGuide(script.productId);
+          // Build a single script entry so "Regenerate This Angle" works when opening from library
+          const singleScript = {
+            id: scriptId,
+            title: title || "Script",
+            length: 30,
+            hook: data.script.hook,
+            body: data.script.body,
+            cta: data.script.cta,
+          };
+          setScriptsForGuide([singleScript]);
         } else {
           setError("Invalid guide data.");
         }

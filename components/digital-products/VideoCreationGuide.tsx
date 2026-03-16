@@ -1334,17 +1334,25 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   ]);
 
   const handleRegenerateScript = useCallback(async () => {
-    if (!productId || scripts.length === 0 || currentAngleIndex < 0 || currentAngleIndex >= scripts.length) {
+    const hasScripts = scripts.length > 0 && currentAngleIndex >= 0 && currentAngleIndex < scripts.length;
+    const canRegenerate = (productId || libraryScriptId) && hasScripts;
+    if (!canRegenerate) {
       toast({ title: "Cannot regenerate", description: "Product or script missing.", variant: "destructive" });
       return;
     }
     const angle = scripts[currentAngleIndex].title;
     setRegeneratingScript(true);
     try {
-      const res = await fetch("/api/digital-products/regenerate-script", {
+      const url = productId
+        ? "/api/digital-products/regenerate-script"
+        : "/api/video-guide/regenerate-angle";
+      const body = productId
+        ? { productId, angle }
+        : { libraryScriptId, angle };
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId, angle }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error ?? "Regeneration failed");
@@ -1366,7 +1374,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     } finally {
       setRegeneratingScript(false);
     }
-  }, [productId, scripts, currentAngleIndex, toast]);
+  }, [productId, libraryScriptId, scripts, currentAngleIndex, toast]);
 
   const backHref = backUrl ?? "/dashboard/digital-products/results";
   const backLabel = isYouTubeMode ? "Back to Scripts" : "Back to Results";
