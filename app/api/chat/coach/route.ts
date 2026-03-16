@@ -47,6 +47,7 @@ Never say generic things like 'create valuable content' or 'be consistent'. Give
 
 4. **VOICEOVER**
    - Tell them: "Use **Generate Voiceover** in the panel below the script — it uses ElevenLabs to create AI voiceover for the full script."
+   - If they paste a script in the chat: "You can also click **Voice-Over** (next to the message box) to generate a downloadable MP3 from any script without sending it as a message."
 
 5. **VIDEO TIMELINE**
    - Tell them: "Click **Export Timeline for Editing** in the panel to send this script, voiceover, and scene prompts to the Video Timeline. There you can sync audio, add visuals (from prompts or your own), and export."

@@ -1,6 +1,7 @@
 /**
  * GET /api/elevenlabs/voices
  * Fetches available voices from ElevenLabs /v1/voices using ELEVENLABS_API_KEY.
+ * Caches response (voices don't change often). Returns id, name, description, preview_url.
  */
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
@@ -10,9 +11,32 @@ import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 
 export const dynamic = "force-dynamic";
 
-export type ElevenLabsVoiceItem = { voice_id: string; name: string };
+type VoiceLabels = { accent?: string; age?: string; description?: string; gender?: string; use_case?: string };
 
-export async function GET() {
+export type ElevenLabsVoiceItem = {
+  voice_id: string;
+  name: string;
+  /** Human-readable: e.g. "Professional, Male, Calm" from category + labels */
+  description?: string;
+  /** App URL to play 5-second preview (requires auth). */
+  preview_url?: string;
+};
+
+/** Build description from category and labels for display in UI. */
+function buildDescription(
+  category?: string,
+  labels?: VoiceLabels | null
+): string {
+  const parts: string[] = [];
+  if (category) parts.push(category.charAt(0).toUpperCase() + category.slice(1));
+  if (labels?.gender) parts.push(labels.gender);
+  if (labels?.description) parts.push(labels.description);
+  if (labels?.accent) parts.push(labels.accent);
+  if (labels?.age) parts.push(labels.age);
+  return parts.length ? parts.join(", ") : "";
+}
+
+export async function GET(request: Request) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,10 +48,7 @@ export async function GET() {
     if (rl) return rl;
 
     const apiKey = getElevenLabsApiKey();
-    console.log("[elevenlabs/voices] ELEVENLABS_API_KEY present:", !!apiKey, "length:", apiKey?.length ?? 0, "first 10 chars:", apiKey ? `${apiKey.slice(0, 10)}...` : "n/a");
-
     if (!apiKey) {
-      console.error("[elevenlabs/voices] Missing ELEVENLABS_API_KEY. Set it in Vercel Project Settings > Environment Variables (or .env.local for local).");
       return NextResponse.json(
         { error: "ELEVENLABS_API_KEY is not configured. Add it in project environment variables (e.g. Vercel)." },
         { status: 503 }
@@ -40,16 +61,15 @@ export async function GET() {
         "xi-api-key": apiKey,
         "Content-Type": "application/json",
       },
+      next: { revalidate: 300 },
     });
 
     const bodyText = await res.text();
-    console.log("[elevenlabs/voices] ElevenLabs response status:", res.status, "body length:", bodyText.length);
-
     if (!res.ok) {
-      console.error("[elevenlabs/voices] ElevenLabs API error:", res.status, "body:", bodyText.slice(0, 500));
+      console.error("[elevenlabs/voices] ElevenLabs API error:", res.status, bodyText.slice(0, 500));
       const message =
         res.status === 401
-          ? "Invalid API key. Check the key at elevenlabs.io and in Vercel env vars. If you just updated it, redeploy the site so the new key is used."
+          ? "Invalid API key. Check the key at elevenlabs.io and in Vercel env vars."
           : res.status === 403
             ? "Access denied"
             : "Failed to load voices";
@@ -59,7 +79,15 @@ export async function GET() {
       );
     }
 
-    let data: { voices?: Array<{ voice_id?: string; id?: string; name?: string }> };
+    let data: {
+      voices?: Array<{
+        voice_id?: string;
+        id?: string;
+        name?: string;
+        category?: string;
+        labels?: VoiceLabels;
+      }>;
+    };
     try {
       data = JSON.parse(bodyText) as typeof data;
     } catch (parseErr) {
@@ -68,22 +96,20 @@ export async function GET() {
     }
 
     const raw = Array.isArray(data.voices) ? data.voices : [];
-    if (raw.length > 0) {
-      const first = raw[0] as Record<string, unknown>;
-      console.log("[elevenlabs/voices] First voice keys:", Object.keys(first ?? {}));
-    } else {
-      console.warn("[elevenlabs/voices] No voices in response. Top-level keys:", Object.keys(data));
-    }
-
     const voices: ElevenLabsVoiceItem[] = raw
-      .filter((v) => v && (v.voice_id ?? (v as { id?: string }).id) && v.name)
-      .map((v) => ({
-        voice_id: String((v as { voice_id?: string }).voice_id ?? (v as { id?: string }).id),
-        name: String(v.name),
-      }))
+      .filter((v) => v && (v.voice_id ?? v.id) && v.name)
+      .map((v) => {
+        const id = String(v.voice_id ?? v.id);
+        const description = buildDescription(v.category, v.labels);
+        return {
+          voice_id: id,
+          name: String(v.name),
+          description: description || undefined,
+          preview_url: `/api/elevenlabs/voices/${encodeURIComponent(id)}/preview`,
+        };
+      })
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    console.log("[elevenlabs/voices] Returning voices count:", voices.length);
     return NextResponse.json({ voices });
   } catch (e) {
     console.error("[elevenlabs/voices] Unexpected error:", e);

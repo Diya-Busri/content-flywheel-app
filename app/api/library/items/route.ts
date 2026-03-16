@@ -7,8 +7,8 @@ import { myLibraryTable } from "@/db/schema/library-schema";
 export const dynamic = "force-dynamic";
 
 /**
- * POST: Save an item to my_library (e.g. generated_image from AI Coach).
- * Body: { type: 'generated_image', title: string, url: string }
+ * POST: Save an item to my_library (e.g. generated_image, voice_over from AI Coach).
+ * Body: { type: 'generated_image' | 'voice_over', title: string, url?: string }
  */
 export async function POST(req: Request) {
   try {
@@ -20,9 +20,9 @@ export async function POST(req: Request) {
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const url = typeof body.url === "string" ? body.url.trim() : "";
 
-    if (type !== "generated_image" || !title) {
+    if ((type !== "generated_image" && type !== "voice_over") || !title) {
       return NextResponse.json(
-        { error: "type must be 'generated_image' and title is required" },
+        { error: "type must be 'generated_image' or 'voice_over' and title is required" },
         { status: 400 }
       );
     }
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
       .insert(myLibraryTable)
       .values({
         userId,
-        type: "generated_image",
+        type,
         title,
         url: url || null,
       })

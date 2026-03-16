@@ -18,6 +18,8 @@ export type CoachMessage = {
   role: "user" | "assistant";
   content: string;
   imageUrl?: string;
+  /** Assistant message: URL of generated voice-over audio (e.g. from Supabase). */
+  voiceOverUrl?: string;
   /** User message: image data URLs for inline display and vision API */
   imageUrls?: string[];
   /** User message: uploaded PDF/txt with extracted text */

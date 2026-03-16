@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Send, Loader2, Volume2, VolumeX, ImagePlus, Plus, Search, Trash2, Mic, Phone, PhoneOff, Paperclip, FileText, X, ChevronDown, ChevronLeft, ChevronRight, Package, Copy, BookOpen, Sparkles, Save, Pencil, Download, Pin } from "lucide-react";
+import { Send, Loader2, Volume2, VolumeX, ImagePlus, Plus, Search, Trash2, Mic, Phone, PhoneOff, Paperclip, FileText, X, ChevronDown, ChevronLeft, ChevronRight, Package, Copy, BookOpen, Sparkles, Save, Pencil, Download, Pin, AudioLines, Play, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +36,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
+import { Slider } from "@/components/ui/slider";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useChatCoach } from "@/hooks/useChatCoach";
 import type { CoachMessage } from "@/hooks/useChatCoach";
 import { cn } from "@/lib/utils";
@@ -1171,6 +1178,18 @@ function ChatPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const [voiceOverOpen, setVoiceOverOpen] = useState(false);
+  const [voiceOverScript, setVoiceOverScript] = useState("");
+  const [voiceOverVoiceId, setVoiceOverVoiceId] = useState("pNInz6obpgDQGcFmaJgB");
+  const [voiceOverVoices, setVoiceOverVoices] = useState<{ voice_id: string; name: string; description?: string; preview_url?: string }[]>([]);
+  const [voiceOverStability, setVoiceOverStability] = useState(0.5);
+  const [voiceOverSimilarity, setVoiceOverSimilarity] = useState(0.75);
+  const [voiceOverGenerating, setVoiceOverGenerating] = useState(false);
+  const [voiceOverProgress, setVoiceOverProgress] = useState(0);
+  const [voiceOverError, setVoiceOverError] = useState<string | null>(null);
+  const [voiceOverPreviewVoiceId, setVoiceOverPreviewVoiceId] = useState<string | null>(null);
+  const voiceOverPreviewAudioRef = useRef<HTMLAudioElement | null>(null);
+
   const realtimeAudioRef = useRef<HTMLAudioElement | null>(null);
   const realtimePcRef = useRef<RTCPeerConnection | null>(null);
   const realtimeStreamRef = useRef<MediaStream | null>(null);
@@ -1657,6 +1676,72 @@ function ChatPanel({
     }
   }, [saveResponseModal, saveResponseTitle, toast]);
 
+  const openVoiceOverDialog = useCallback(() => {
+    const text = textareaRef.current?.value?.trim() ?? "";
+    setVoiceOverScript(text);
+    setVoiceOverError(null);
+    setVoiceOverProgress(0);
+    setVoiceOverOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!voiceOverOpen) return;
+    fetch("/api/elevenlabs/voices")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { voices?: { voice_id: string; name: string }[] } | null) => {
+        if (data?.voices?.length) setVoiceOverVoices(data.voices);
+      })
+      .catch(() => {});
+  }, [voiceOverOpen]);
+
+  const handleGenerateVoiceOver = useCallback(async () => {
+    const script = voiceOverScript.trim();
+    if (!script) {
+      setVoiceOverError("Paste or type a script first.");
+      return;
+    }
+    setVoiceOverGenerating(true);
+    setVoiceOverError(null);
+    setVoiceOverProgress(10);
+    const progressInterval = setInterval(() => {
+      setVoiceOverProgress((p) => Math.min(p + 8, 85));
+    }, 400);
+    try {
+      const res = await fetch("/api/ai-coach/voice-over", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          script,
+          voiceId: voiceOverVoiceId,
+          stability: voiceOverStability,
+          similarity: voiceOverSimilarity,
+          saveToLibrary: false,
+        }),
+      });
+      clearInterval(progressInterval);
+      setVoiceOverProgress(100);
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Voice-over failed");
+      }
+      if (!data.url) throw new Error("No URL returned");
+      onMessagesChange([
+        ...messages,
+        { role: "assistant", content: "Here's your voice-over.", voiceOverUrl: data.url },
+      ]);
+      toast({ title: "Voice-over ready", description: "Play or download below." });
+      setVoiceOverOpen(false);
+      setVoiceOverScript("");
+    } catch (err) {
+      setVoiceOverError(err instanceof Error ? err.message : "Generation failed");
+      toast({ title: "Voice-over failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      clearInterval(progressInterval);
+      setVoiceOverGenerating(false);
+      setVoiceOverProgress(0);
+    }
+  }, [voiceOverScript, voiceOverVoiceId, voiceOverStability, voiceOverSimilarity, messages, onMessagesChange, toast]);
+
   const handleTextareaInput = () => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -1966,6 +2051,64 @@ function ChatPanel({
                         <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" />
                       </span>
                     )}
+                    {msg.role === "assistant" && msg.voiceOverUrl && (
+                      <div className="mt-2 flex flex-col gap-2">
+                        <audio
+                          src={msg.voiceOverUrl}
+                          controls
+                          className="w-full max-w-md h-9"
+                          preload="metadata"
+                        />
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={async () => {
+                              try {
+                                const a = document.createElement("a");
+                                a.href = msg.voiceOverUrl!;
+                                a.download = `voice-over-${Date.now()}.mp3`;
+                                a.click();
+                                toast({ title: "Downloaded" });
+                              } catch {
+                                toast({ title: "Download failed", variant: "destructive" });
+                              }
+                            }}
+                          >
+                            <Download className="h-4 w-4" />
+                            Download .mp3
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={async () => {
+                              try {
+                                const res = await fetch("/api/library/items", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    type: "voice_over",
+                                    title: `Voice-over ${new Date().toLocaleDateString()}`,
+                                    url: msg.voiceOverUrl,
+                                  }),
+                                });
+                                if (!res.ok) throw new Error("Save failed");
+                                toast({ title: "Saved to My Library", description: "Find it in My Library." });
+                              } catch {
+                                toast({ title: "Could not save to library", variant: "destructive" });
+                              }
+                            }}
+                          >
+                            <Save className="h-4 w-4" />
+                            Save to Library
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                     {msg.role === "assistant" && msg.imageUrl && (
                       <div className="mt-2 flex flex-col gap-2">
                         <div className="rounded-xl overflow-hidden border border-border bg-muted/30 max-w-full w-fit">
@@ -2185,6 +2328,18 @@ function ChatPanel({
           <Button
             type="button"
             variant="outline"
+            size="icon"
+            onClick={openVoiceOverDialog}
+            disabled={isLoading || isRecording}
+            className="shrink-0 h-10 w-10 border-border"
+            title="Generate voice-over"
+            aria-label="Generate voice-over from script"
+          >
+            <AudioLines className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
             size={isRecording ? "default" : "icon"}
             onClick={toggleVoiceInput}
             disabled={isLoading}
@@ -2289,6 +2444,173 @@ function ChatPanel({
             </Button>
             <Button onClick={handleSaveToLibrary} disabled={!saveResponseTitle.trim() || savingToLibrary}>
               {savingToLibrary ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={voiceOverOpen} onOpenChange={(open) => !voiceOverGenerating && setVoiceOverOpen(open)}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Generate voice-over</DialogTitle>
+          </DialogHeader>
+          <audio
+            ref={voiceOverPreviewAudioRef}
+            className="hidden"
+            onEnded={() => setVoiceOverPreviewVoiceId(null)}
+          />
+          <div className="space-y-4 py-2 overflow-y-auto min-h-0">
+            <div className="space-y-2">
+              <Label htmlFor="voice-over-script">Script</Label>
+              <textarea
+                id="voice-over-script"
+                value={voiceOverScript}
+                onChange={(e) => setVoiceOverScript(e.target.value)}
+                placeholder="Paste or type your script here…"
+                rows={4}
+                className={cn(
+                  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground",
+                  "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                )}
+                disabled={voiceOverGenerating}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Voice</Label>
+              <div className="grid gap-2 max-h-[200px] overflow-y-auto pr-1">
+                {voiceOverVoices.length === 0 ? (
+                  <div
+                    className={cn(
+                      "flex items-center justify-between gap-2 rounded-lg border border-border p-3 cursor-pointer transition-colors",
+                      voiceOverVoiceId === "pNInz6obpgDQGcFmaJgB"
+                        ? "ring-2 ring-orange-500 bg-orange-500/10 border-orange-500/50"
+                        : "hover:bg-muted/50"
+                    )}
+                    onClick={() => setVoiceOverVoiceId("pNInz6obpgDQGcFmaJgB")}
+                  >
+                    <div>
+                      <p className="font-medium text-sm">Adam</p>
+                      <p className="text-xs text-muted-foreground">Default voice</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground">Default</span>
+                  </div>
+                ) : (
+                  voiceOverVoices.map((v) => {
+                    const isSelected = voiceOverVoiceId === v.voice_id;
+                    const isPlaying = voiceOverPreviewVoiceId === v.voice_id;
+                    return (
+                      <div
+                        key={v.voice_id}
+                        className={cn(
+                          "flex items-center justify-between gap-2 rounded-lg border p-3 cursor-pointer transition-colors",
+                          isSelected
+                            ? "ring-2 ring-orange-500 bg-orange-500/10 border-orange-500/50"
+                            : "border-border hover:bg-muted/50"
+                        )}
+                        onClick={() => setVoiceOverVoiceId(v.voice_id)}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm truncate">{v.name}</p>
+                          {v.description && (
+                            <p className="text-xs text-muted-foreground truncate">{v.description}</p>
+                          )}
+                        </div>
+                        {v.preview_url && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="shrink-0 h-8 gap-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const el = voiceOverPreviewAudioRef.current;
+                              if (!el) return;
+                              if (isPlaying) {
+                                el.pause();
+                                el.currentTime = 0;
+                                setVoiceOverPreviewVoiceId(null);
+                                return;
+                              }
+                              setVoiceOverPreviewVoiceId(v.voice_id);
+                              el.src = v.preview_url!;
+                              el.play().catch(() => setVoiceOverPreviewVoiceId(null));
+                            }}
+                          >
+                            {isPlaying ? (
+                              <>
+                                <Square className="h-3.5 w-3.5" />
+                                Stop
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-3.5 w-3.5" />
+                                Preview
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            <Collapsible defaultOpen={false}>
+              <CollapsibleTrigger asChild>
+                <Button type="button" variant="ghost" size="sm" className="text-muted-foreground -ml-2">
+                  Advanced (stability & similarity)
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-2">
+                <div className="space-y-2">
+                  <Label>Stability: {voiceOverStability.toFixed(1)}</Label>
+                  <Slider
+                    value={[voiceOverStability]}
+                    onValueChange={([val]) => setVoiceOverStability(val ?? 0.5)}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    disabled={voiceOverGenerating}
+                    className="w-full"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Similarity: {voiceOverSimilarity.toFixed(1)}</Label>
+                  <Slider
+                    value={[voiceOverSimilarity]}
+                    onValueChange={([val]) => setVoiceOverSimilarity(val ?? 0.75)}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    disabled={voiceOverGenerating}
+                    className="w-full"
+                  />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+            {voiceOverGenerating && (
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Generating voice-over…</p>
+                <Progress value={voiceOverProgress} className="h-2" />
+              </div>
+            )}
+            {voiceOverError && (
+              <p className="text-sm text-destructive">{voiceOverError}</p>
+            )}
+          </div>
+          <DialogFooter className="shrink-0">
+            <Button variant="outline" onClick={() => setVoiceOverOpen(false)} disabled={voiceOverGenerating}>
+              Cancel
+            </Button>
+            <Button onClick={handleGenerateVoiceOver} disabled={voiceOverGenerating || !voiceOverScript.trim()}>
+              {voiceOverGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating…
+                </>
+              ) : (
+                "Generate voice-over"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
