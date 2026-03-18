@@ -28,7 +28,7 @@ import { getTemplateStudioPrefill, clearTemplateStudioPrefill } from "@/lib/temp
 import { SlideDeck } from "./SlideDeck";
 import { SlidePreview } from "./SlidePreview";
 
-type CreationMode = "1" | "2" | "3" | "4" | "5" | "6";
+type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7";
 type TemplateType = "quotes" | "tips" | "affirmations";
 type FontStyle = "modern" | "elegant" | "bold" | "minimal";
 type SlideItem = { heading: string; body: string; bg_color?: string };
@@ -41,6 +41,7 @@ const CREATION_MODE_OPTIONS: { value: CreationMode; label: string }[] = [
   { value: "4", label: "Motivational Content" },
   { value: "5", label: "Viral Hook Carousel (For Growth)" },
   { value: "6", label: "Sales/Product Launch Carousel" },
+  { value: "7", label: "AI Story" },
 ];
 
 const TEMPLATE_OPTIONS: { value: TemplateType; label: string }[] = [
@@ -74,6 +75,12 @@ const CTA_GOAL_OPTIONS = [
 const SLIDE_COUNT_OPTIONS = [5, 10, 20] as const;
 const SLIDE_COUNT_VIRAL_OPTIONS = [5, 6, 7, 8, 9, 10] as const;
 
+const AI_STORY_TONE_OPTIONS = [
+  { value: "Sad", label: "Sad" },
+  { value: "Dramatic", label: "Dramatic" },
+  { value: "Shocking", label: "Shocking" },
+];
+
 const FONT_OPTIONS: { value: FontStyle; label: string }[] = [
   { value: "modern", label: "Modern" },
   { value: "elegant", label: "Elegant" },
@@ -100,6 +107,12 @@ export default function TemplateStudioClient() {
   const [ctaGoal, setCtaGoal] = useState("Get followers");
   const [slideCountViral, setSlideCountViral] = useState<5 | 6 | 7 | 8 | 9 | 10>(10);
   const [setupLoaded, setSetupLoaded] = useState(false);
+  const [characters, setCharacters] = useState("");
+  const [theme, setTheme] = useState("");
+  const [aiStoryTone, setAiStoryTone] = useState("Dramatic");
+  const [episodeNumber, setEpisodeNumber] = useState(1);
+  const [aiStoryLoading, setAiStoryLoading] = useState(false);
+  const [aiStoryScenes, setAiStoryScenes] = useState<{ sceneNumber: number; dialogue: string; imagePrompt: string }[]>([]);
 
   const [slides, setSlides] = useState<SlideItem[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -485,13 +498,15 @@ export default function TemplateStudioClient() {
   }, [searchParams]);
 
   const canProceedStep1 =
-    mode === "1" || mode === "4"
-      ? niche.trim().length > 0
-      : mode === "2" || mode === "6"
-        ? brandName.trim().length > 0
-        : mode === "5"
-          ? niche.trim().length > 0
-          : brandName.trim().length > 0;
+    mode === "7"
+      ? (characters.trim().length > 0 && theme.trim().length > 0)
+      : mode === "1" || mode === "4"
+        ? niche.trim().length > 0
+        : mode === "2" || mode === "6"
+          ? brandName.trim().length > 0
+          : mode === "5"
+            ? niche.trim().length > 0
+            : (brandName.trim().length > 0);
 
   return (
     <div className="space-y-8">
@@ -517,6 +532,7 @@ export default function TemplateStudioClient() {
       </div>
 
       {step === 1 && (
+        <>
         <Card>
           <CardHeader>
             <CardTitle>Template Setup</CardTitle>
@@ -757,6 +773,59 @@ export default function TemplateStudioClient() {
               </>
             )}
 
+            {mode === "7" && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="characters">Characters</Label>
+                  <Input
+                    id="characters"
+                    placeholder="e.g. Banana, Strawberry, Cherry"
+                    value={characters}
+                    onChange={(e) => setCharacters(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="theme">Theme</Label>
+                  <Input
+                    id="theme"
+                    placeholder="e.g. hospital drama, cheating scandal"
+                    value={theme}
+                    onChange={(e) => setTheme(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tone</Label>
+                  <Select
+                    value={aiStoryTone}
+                    onValueChange={(v) => setAiStoryTone(v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AI_STORY_TONE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="episodeNumber">Episode number</Label>
+                  <Input
+                    id="episodeNumber"
+                    type="number"
+                    min={1}
+                    value={episodeNumber}
+                    onChange={(e) => setEpisodeNumber(Number(e.target.value) || 1)}
+                  />
+                </div>
+              </>
+            )}
+
+            {mode !== "7" && (
+              <>
             <div className="space-y-2">
               <Label>Number of slides</Label>
               <Select
@@ -846,18 +915,88 @@ export default function TemplateStudioClient() {
                 </SelectContent>
               </Select>
             </div>
+              </>
+            )}
 
             <div className="flex justify-end">
               <Button
                 onClick={async () => {
-                  await saveSetup();
-                  setStep(2);
+                  if (mode === "7") {
+                    setAiStoryLoading(true);
+                    setAiStoryScenes([]);
+                    try {
+                      const res = await fetch("/api/content-studio/ai-story/generate", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          characters: characters.trim(),
+                          theme: theme.trim(),
+                          tone: aiStoryTone,
+                          episodeNumber,
+                        }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) {
+                        throw new Error(data?.error ?? "Request failed");
+                      }
+                      const scenesList = Array.isArray(data.scenes) ? data.scenes : [];
+                      setAiStoryScenes(scenesList.map((s: { sceneNumber?: number; dialogue?: string; imagePrompt?: string }, i: number) => ({
+                        sceneNumber: typeof s.sceneNumber === "number" && s.sceneNumber >= 1 ? s.sceneNumber : i + 1,
+                        dialogue: typeof s.dialogue === "string" ? s.dialogue : "",
+                        imagePrompt: typeof s.imagePrompt === "string" ? s.imagePrompt : "",
+                      })));
+                      toast({ title: "AI Story generated", description: `${scenesList.length} scenes ready.` });
+                    } catch (e) {
+                      toast({
+                        title: "AI Story failed",
+                        description: e instanceof Error ? e.message : "Something went wrong",
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setAiStoryLoading(false);
+                    }
+                  } else {
+                    await saveSetup();
+                    setStep(2);
+                  }
                 }}
-                disabled={!canProceedStep1}
+                disabled={!canProceedStep1 || (mode === "7" && aiStoryLoading)}
               >
                 Next — Generate content
-                <ArrowRight className="w-4 h-4 ml-2" />
+                {mode === "7" && aiStoryLoading ? (
+                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                ) : (
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                )}
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        </>
+      )}
+
+      {step === 1 && mode === "7" && aiStoryScenes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Scenes</CardTitle>
+            <CardDescription>Generated scenes for your AI Story.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {aiStoryScenes.map((scene) => (
+                <Card key={scene.sceneNumber}>
+                  <CardHeader className="p-4 pb-2">
+                    <CardTitle className="text-sm">Scene {scene.sceneNumber}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0 space-y-2 text-sm">
+                    <p className="font-medium">Dialogue</p>
+                    <p className="text-muted-foreground whitespace-pre-wrap">{scene.dialogue}</p>
+                    <p className="font-medium">Image prompt</p>
+                    <p className="text-muted-foreground whitespace-pre-wrap">{scene.imagePrompt}</p>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </CardContent>
         </Card>
