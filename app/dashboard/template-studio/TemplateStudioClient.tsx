@@ -81,6 +81,13 @@ const AI_STORY_TONE_OPTIONS = [
   { value: "Shocking", label: "Shocking" },
 ];
 
+const AI_STORY_STYLE_OPTIONS = [
+  { value: "Brainrot", label: "Brainrot" },
+  { value: "Classic Dramatic", label: "Classic Dramatic" },
+  { value: "Dark & Twisted", label: "Dark & Twisted" },
+  { value: "Wholesome", label: "Wholesome" },
+];
+
 const FONT_OPTIONS: { value: FontStyle; label: string }[] = [
   { value: "modern", label: "Modern" },
   { value: "elegant", label: "Elegant" },
@@ -108,8 +115,10 @@ export default function TemplateStudioClient() {
   const [slideCountViral, setSlideCountViral] = useState<5 | 6 | 7 | 8 | 9 | 10>(10);
   const [setupLoaded, setSetupLoaded] = useState(false);
   const [characters, setCharacters] = useState("");
+  const [characterNames, setCharacterNames] = useState("");
   const [theme, setTheme] = useState("");
   const [aiStoryTone, setAiStoryTone] = useState("Dramatic");
+  const [aiStoryStyle, setAiStoryStyle] = useState("Brainrot");
   const [episodeNumber, setEpisodeNumber] = useState(1);
   const [aiStoryLoading, setAiStoryLoading] = useState(false);
   const [aiStoryScenes, setAiStoryScenes] = useState<{ sceneNumber: number; dialogue: string; imagePrompt: string }[]>([]);
@@ -117,6 +126,8 @@ export default function TemplateStudioClient() {
   const [elevenLabsVoices, setElevenLabsVoices] = useState<{ voice_id: string; name: string; description?: string }[]>([]);
   const [voiceoverLoadingScene, setVoiceoverLoadingScene] = useState<number | null>(null);
   const [voiceoverUrls, setVoiceoverUrls] = useState<Record<number, string>>({});
+  const [sceneImageUrls, setSceneImageUrls] = useState<Record<number, string>>({});
+  const [sceneImageLoadingScene, setSceneImageLoadingScene] = useState<number | null>(null);
 
   const [slides, setSlides] = useState<SlideItem[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -795,13 +806,23 @@ export default function TemplateStudioClient() {
             {mode === "7" && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="characters">Characters</Label>
+                  <Label htmlFor="characters">Character Types</Label>
                   <Input
                     id="characters"
                     placeholder="e.g. Banana, Strawberry, Cherry"
                     value={characters}
                     onChange={(e) => setCharacters(e.target.value)}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="characterNames">Character Names (optional)</Label>
+                  <Input
+                    id="characterNames"
+                    placeholder="e.g. Skibidi Nana, Rizz Berry, Based Cherry"
+                    value={characterNames}
+                    onChange={(e) => setCharacterNames(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Leave blank to auto-generate names</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="theme">Theme</Label>
@@ -823,6 +844,24 @@ export default function TemplateStudioClient() {
                     </SelectTrigger>
                     <SelectContent>
                       {AI_STORY_TONE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Story Style</Label>
+                  <Select
+                    value={aiStoryStyle}
+                    onValueChange={(v) => setAiStoryStyle(v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AI_STORY_STYLE_OPTIONS.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
                           {opt.label}
                         </SelectItem>
@@ -949,8 +988,10 @@ export default function TemplateStudioClient() {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                           characters: characters.trim(),
+                          characterNames: characterNames.trim() || undefined,
                           theme: theme.trim(),
                           tone: aiStoryTone,
+                          style: aiStoryStyle,
                           episodeNumber,
                         }),
                       });
@@ -965,6 +1006,7 @@ export default function TemplateStudioClient() {
                         imagePrompt: typeof s.imagePrompt === "string" ? s.imagePrompt : "",
                       })));
                       setVoiceoverUrls({});
+                      setSceneImageUrls({});
                       toast({ title: "AI Story generated", description: `${scenesList.length} scenes ready.` });
                     } catch (e) {
                       toast({
@@ -1041,12 +1083,47 @@ export default function TemplateStudioClient() {
                 const voiceId = speaker && characterVoices[speaker] ? characterVoices[speaker] : elevenLabsVoices[0]?.voice_id ?? "";
                 const voiceoverUrl = voiceoverUrls[scene.sceneNumber];
                 const loading = voiceoverLoadingScene === scene.sceneNumber;
+                const sceneImageUrl = sceneImageUrls[scene.sceneNumber];
+                const imageLoading = sceneImageLoadingScene === scene.sceneNumber;
                 return (
                 <Card key={scene.sceneNumber}>
                   <CardHeader className="p-4 pb-2">
                     <CardTitle className="text-sm">Scene {scene.sceneNumber}</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 pt-0 space-y-2 text-sm">
+                    {sceneImageUrl && (
+                      <img src={sceneImageUrl} alt={`Scene ${scene.sceneNumber}`} className="w-full rounded-md object-cover aspect-square" />
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      disabled={imageLoading}
+                      onClick={async () => {
+                        setSceneImageLoadingScene(scene.sceneNumber);
+                        try {
+                          const res = await fetch("/api/generate-image", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ prompt: scene.imagePrompt }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data?.error ?? "Failed");
+                          setSceneImageUrls((prev) => ({ ...prev, [scene.sceneNumber]: data.url }));
+                        } catch (e) {
+                          toast({
+                            title: "Image generation failed",
+                            description: e instanceof Error ? e.message : "Something went wrong",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setSceneImageLoadingScene(null);
+                        }
+                      }}
+                    >
+                      {imageLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                      Generate Image
+                    </Button>
                     <p className="font-medium">Dialogue</p>
                     <p className="text-muted-foreground whitespace-pre-wrap">{scene.dialogue}</p>
                     <p className="font-medium">Image prompt</p>
