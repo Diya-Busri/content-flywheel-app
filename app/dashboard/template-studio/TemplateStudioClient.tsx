@@ -113,6 +113,10 @@ export default function TemplateStudioClient() {
   const [episodeNumber, setEpisodeNumber] = useState(1);
   const [aiStoryLoading, setAiStoryLoading] = useState(false);
   const [aiStoryScenes, setAiStoryScenes] = useState<{ sceneNumber: number; dialogue: string; imagePrompt: string }[]>([]);
+  const [characterVoices, setCharacterVoices] = useState<Record<string, string>>({});
+  const [elevenLabsVoices, setElevenLabsVoices] = useState<{ voice_id: string; name: string; description?: string }[]>([]);
+  const [voiceoverLoadingScene, setVoiceoverLoadingScene] = useState<number | null>(null);
+  const [voiceoverUrls, setVoiceoverUrls] = useState<Record<number, string>>({});
 
   const [slides, setSlides] = useState<SlideItem[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -496,6 +500,21 @@ export default function TemplateStudioClient() {
       }
     })();
   }, [searchParams]);
+
+  useEffect(() => {
+    if (mode !== "7" || aiStoryScenes.length === 0 || elevenLabsVoices.length > 0) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/elevenlabs/voices");
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data?.voices) ? data.voices : [];
+        setElevenLabsVoices(list);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [mode, aiStoryScenes.length, elevenLabsVoices.length]);
 
   const canProceedStep1 =
     mode === "7"
@@ -945,6 +964,7 @@ export default function TemplateStudioClient() {
                         dialogue: typeof s.dialogue === "string" ? s.dialogue : "",
                         imagePrompt: typeof s.imagePrompt === "string" ? s.imagePrompt : "",
                       })));
+                      setVoiceoverUrls({});
                       toast({ title: "AI Story generated", description: `${scenesList.length} scenes ready.` });
                     } catch (e) {
                       toast({
@@ -977,6 +997,37 @@ export default function TemplateStudioClient() {
       )}
 
       {step === 1 && mode === "7" && aiStoryScenes.length > 0 && (
+        <>
+        <Card>
+          <CardHeader>
+            <CardTitle>Character Voices</CardTitle>
+            <CardDescription>Assign a voice to each character. Used when generating voiceover for a scene.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {[...new Set(characters.split(",").map((c) => c.trim()).filter(Boolean))].map((charName) => (
+              <div key={charName} className="space-y-2">
+                <Label>{charName}</Label>
+                <Select
+                  value={characterVoices[charName] ?? ""}
+                  onValueChange={(v) => setCharacterVoices((prev) => ({ ...prev, [charName]: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select voice" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {elevenLabsVoices.map((v) => (
+                      <SelectItem key={v.voice_id} value={v.voice_id}>
+                        {v.name}
+                        {v.description ? ` — ${v.description}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Scenes</CardTitle>
@@ -984,7 +1035,13 @@ export default function TemplateStudioClient() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {aiStoryScenes.map((scene) => (
+              {aiStoryScenes.map((scene) => {
+                const speakerMatch = scene.dialogue.match(/^([^:]+):/);
+                const speaker = speakerMatch ? speakerMatch[1].trim() : null;
+                const voiceId = speaker && characterVoices[speaker] ? characterVoices[speaker] : elevenLabsVoices[0]?.voice_id ?? "";
+                const voiceoverUrl = voiceoverUrls[scene.sceneNumber];
+                const loading = voiceoverLoadingScene === scene.sceneNumber;
+                return (
                 <Card key={scene.sceneNumber}>
                   <CardHeader className="p-4 pb-2">
                     <CardTitle className="text-sm">Scene {scene.sceneNumber}</CardTitle>
@@ -994,12 +1051,50 @@ export default function TemplateStudioClient() {
                     <p className="text-muted-foreground whitespace-pre-wrap">{scene.dialogue}</p>
                     <p className="font-medium">Image prompt</p>
                     <p className="text-muted-foreground whitespace-pre-wrap">{scene.imagePrompt}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      disabled={!voiceId || loading}
+                      onClick={async () => {
+                        setVoiceoverLoadingScene(scene.sceneNumber);
+                        try {
+                          const scriptText = scene.dialogue.includes(":")
+                              ? scene.dialogue.slice(scene.dialogue.indexOf(":") + 1).trim()
+                              : scene.dialogue;
+                          const res = await fetch("/api/ai-coach/voice-over", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ script: scriptText, voiceId }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data?.error ?? "Failed");
+                          setVoiceoverUrls((prev) => ({ ...prev, [scene.sceneNumber]: data.url }));
+                        } catch (e) {
+                          toast({
+                            title: "Voiceover failed",
+                            description: e instanceof Error ? e.message : "Something went wrong",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setVoiceoverLoadingScene(null);
+                        }
+                      }}
+                    >
+                      {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                      Generate Voiceover
+                    </Button>
+                    {voiceoverUrl && (
+                      <audio src={voiceoverUrl} controls className="w-full mt-2" />
+                    )}
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
+        </>
       )}
 
       {step === 2 && (
