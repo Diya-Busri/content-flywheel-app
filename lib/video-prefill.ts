@@ -12,6 +12,17 @@ export type TimelineScenePrefill = {
   text_overlay?: string;
   overlay_timing?: string;
   voiceover_line?: string;
+  /** Template Studio: background image URL for timeline clip */
+  imageUrl?: string;
+  /** Template Studio: animation/video URL for timeline clip video layer */
+  videoUrl?: string;
+  /** Template Studio: voiceover audio URL for timeline clip audio track */
+  audioUrl?: string;
+  /** Alternate keys some flows use for the same Supabase voiceovers URL */
+  voiceoverUrl?: string;
+  voiceover_url?: string;
+  /** Template Studio: dialogue/caption text for timeline clip caption */
+  captionText?: string;
 };
 
 export type VideoPrefill = {
@@ -22,10 +33,10 @@ export type VideoPrefill = {
   hashtags?: string;
   scheduledAt?: string; // ISO date or datetime
   /** Optional: hint from which tool (for analytics or UI) */
-  source?: "video-ideas" | "script-checker" | "thumbnails" | "copy-writer" | "seo" | "calendar" | "campaign-mode";
+  source?: "video-ideas" | "script-checker" | "thumbnails" | "copy-writer" | "seo" | "calendar" | "campaign-mode" | "template-studio";
   /** From Campaign Mode: voiceover text for TTS / timeline */
   voiceoverText?: string;
-  /** From Campaign Mode: scenes to pre-fill timeline */
+  /** From Campaign Mode / Template Studio: scenes to pre-fill timeline */
   timelineScenes?: TimelineScenePrefill[];
 };
 
@@ -46,6 +57,17 @@ export function getVideoPrefill(): VideoPrefill | null {
         text_overlay: typeof o.text_overlay === "string" ? o.text_overlay : undefined,
         overlay_timing: typeof o.overlay_timing === "string" ? o.overlay_timing : undefined,
         voiceover_line: typeof o.voiceover_line === "string" ? o.voiceover_line : undefined,
+        imageUrl: typeof o.imageUrl === "string" ? o.imageUrl : undefined,
+        videoUrl: typeof o.videoUrl === "string" ? o.videoUrl : undefined,
+        audioUrl:
+          typeof o.audioUrl === "string"
+            ? o.audioUrl
+            : typeof o.voiceoverUrl === "string"
+              ? o.voiceoverUrl
+              : typeof o.voiceover_url === "string"
+                ? o.voiceover_url
+                : undefined,
+        captionText: typeof o.captionText === "string" ? o.captionText : undefined,
       };
     }) : undefined;
     return {

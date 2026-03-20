@@ -18,7 +18,7 @@ export const connectedAccountsTable = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (t) => [
-    uniqueIndex("connected_accounts_user_platform").on(t.userId, t.platform),
+    uniqueIndex("connected_accounts_user_platform_user").on(t.userId, t.platform, t.platformUserId),
   ]
 );
 

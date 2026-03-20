@@ -62,7 +62,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const user = await currentUser();
   const userEmail = user?.emailAddresses?.[0]?.emailAddress || "";
 
-  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
   const isAdmin = adminEmail && userEmail.trim().toLowerCase() === adminEmail;
 
   if (!isAdmin && !hasActiveSubscription(profile)) {

@@ -1,7 +1,8 @@
 /**
  * POST /api/ai-coach/voice-over
  * Generate voice-over from script via ElevenLabs, upload to Supabase, optionally save to My Library.
- * Body: { script: string, voiceId?: string, stability?: number, similarity?: number, saveToLibrary?: boolean }
+ * Body: { script: string, voiceId?: string, stability?: number, similarity?: number, saveToLibrary?: boolean, maxDurationSeconds?: number }
+ * When maxDurationSeconds is set (e.g. 5), audio longer than that is sped up with FFmpeg atempo before upload.
  * Returns: { url: string, libraryId?: string }
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -12,6 +13,7 @@ import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { db } from "@/db/db";
 import { myLibraryTable } from "@/db/schema/library-schema";
+import { fitMp3BufferToMaxDuration } from "@/lib/fit-mp3-to-max-duration";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +117,12 @@ export async function POST(request: NextRequest) {
     const stability = typeof body.stability === "number" ? Math.max(0, Math.min(1, body.stability)) : 0.5;
     const similarity = typeof body.similarity === "number" ? Math.max(0, Math.min(1, body.similarity)) : 0.75;
     const saveToLibrary = body.saveToLibrary === true;
+    const maxDurationSeconds =
+      typeof body.maxDurationSeconds === "number" &&
+      Number.isFinite(body.maxDurationSeconds) &&
+      body.maxDurationSeconds > 0
+        ? body.maxDurationSeconds
+        : null;
 
     if (!script) {
       return NextResponse.json({ error: "script is required" }, { status: 400 });

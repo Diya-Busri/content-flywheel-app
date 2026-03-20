@@ -69,6 +69,8 @@ export async function POST(request: NextRequest) {
     formData.append("file", blob, "audio.mp3");
     formData.append("model", "whisper-1");
     formData.append("response_format", "verbose_json");
+    // Request word-level timestamps for accurate word-by-word captions (Whisper only)
+    formData.append("timestamp_granularities[]", "word");
 
     const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
@@ -85,7 +87,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let data: { segments?: Array<{ start?: number; end?: number; text?: string }>; text?: string };
+    let data: {
+      segments?: Array<{ start?: number; end?: number; text?: string }>;
+      words?: Array<{ word: string; start: number; end: number }>;
+      text?: string;
+    };
     try {
       data = JSON.parse(raw);
     } catch {
@@ -111,13 +117,23 @@ export async function POST(request: NextRequest) {
           }))
       : [];
 
+    const words =
+      Array.isArray(data.words) &&
+      data.words.every(
+        (w): w is { word: string; start: number; end: number } =>
+          typeof w.word === "string" && typeof w.start === "number" && typeof w.end === "number"
+      )
+        ? data.words.map((w) => ({ word: w.word.trim(), start: w.start, end: w.end })).filter((w) => w.word.length > 0)
+        : undefined;
+
     if (segments.length === 0 && typeof data.text === "string" && data.text.trim()) {
       return NextResponse.json({
         segments: [{ text: data.text.trim(), start: 0, end: Math.max(1, data.text.length * 0.05) }],
+        ...(words && words.length > 0 ? { words } : {}),
       });
     }
 
-    return NextResponse.json({ segments });
+    return NextResponse.json({ segments, ...(words && words.length > 0 ? { words } : {}) });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[transcribe] Error:", err);

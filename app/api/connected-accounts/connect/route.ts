@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { getOAuthCallbackUrl } from "@/lib/connected-accounts-oauth-origin";
 import type { ConnectedPlatform } from "@/db/schema/connected-accounts-schema";
 import { randomBytes } from "crypto";
 
@@ -8,20 +8,65 @@ export const dynamic = "force-dynamic";
 
 const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
 
-/** Production callback base — add this exact callback path to Google & Meta OAuth apps. */
-const PRODUCTION_CALLBACK_BASE = "https://contentflywheel.co.uk";
+/** Facebook Login only — https://www.facebook.com/v21.0/dialog/oauth (never use for Instagram). */
+const FACEBOOK_LOGIN_SCOPES = "pages_show_list,pages_read_engagement,public_profile";
 
-/** Facebook OAuth scope only. Instagram uses Instagram Basic Display API (separate app) later. */
-const FB_SCOPES = "public_profile";
+/** Instagram Business Login only — https://www.instagram.com/oauth/authorize (never use FACEBOOK_APP_ID here). */
+const INSTAGRAM_BUSINESS_SCOPES = "instagram_business_basic,instagram_business_content_publish";
 
-function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-    "http://localhost:3000";
-  const isProduction = baseUrl?.includes("contentflywheel.co.uk");
-  const callbackBase = isProduction ? PRODUCTION_CALLBACK_BASE : baseUrl?.replace(/\/$/, "") ?? "http://localhost:3000";
-  const callbackUrl = `${callbackBase}/api/connected-accounts/callback?platform=${platform}`;
+const FACEBOOK_DIALOG_OAUTH = "https://www.facebook.com/v21.0/dialog/oauth";
+const INSTAGRAM_OAUTH_AUTHORIZE = "https://www.instagram.com/oauth/authorize";
+
+/**
+ * Facebook Login: Meta dialog OAuth, Facebook App ID, page/user scopes only.
+ */
+function buildFacebookLoginAuthUrl(callbackUrl: string, state: string): string | null {
+  const facebookAppId = process.env.FACEBOOK_APP_ID?.trim() ?? "";
+  if (!facebookAppId) return null;
+  const params = new URLSearchParams({
+    client_id: facebookAppId,
+    redirect_uri: callbackUrl,
+    response_type: "code",
+    scope: FACEBOOK_LOGIN_SCOPES,
+    state,
+  });
+  const authUrl = `${FACEBOOK_DIALOG_OAUTH}?${params.toString()}`;
+  console.log("[connected-accounts/connect] Facebook Login:", {
+    endpoint: FACEBOOK_DIALOG_OAUTH,
+    client_id: facebookAppId,
+    scope: FACEBOOK_LOGIN_SCOPES,
+    redirect_uri: callbackUrl,
+    fullAuthUrl: authUrl,
+  });
+  return authUrl;
+}
+
+/**
+ * Instagram Business Login: Instagram authorize URL, Instagram App ID, IG business scopes only.
+ */
+function buildInstagramBusinessLoginAuthUrl(callbackUrl: string, state: string): string | null {
+  const instagramAppId = process.env.INSTAGRAM_APP_ID?.trim() ?? "";
+  if (!instagramAppId) return null;
+  const params = new URLSearchParams({
+    client_id: instagramAppId,
+    redirect_uri: callbackUrl,
+    response_type: "code",
+    scope: INSTAGRAM_BUSINESS_SCOPES,
+    state,
+  });
+  const authUrl = `${INSTAGRAM_OAUTH_AUTHORIZE}?${params.toString()}`;
+  console.log("[connected-accounts/connect] Instagram Business Login:", {
+    endpoint: INSTAGRAM_OAUTH_AUTHORIZE,
+    client_id: instagramAppId,
+    scope: INSTAGRAM_BUSINESS_SCOPES,
+    redirect_uri: callbackUrl,
+    fullAuthUrl: authUrl,
+  });
+  return authUrl;
+}
+
+function buildAuthUrl(platform: ConnectedPlatform, state: string, request: NextRequest): string | null {
+  const callbackUrl = getOAuthCallbackUrl(request);
 
   switch (platform) {
     case "tiktok": {
@@ -40,6 +85,8 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
     case "youtube": {
       const clientId = process.env.GOOGLE_CLIENT_ID;
       if (!clientId) return null;
+      const xfHost = request.headers.get("x-forwarded-host");
+      const hostHeader = request.headers.get("host");
       const params = new URLSearchParams({
         client_id: clientId,
         redirect_uri: callbackUrl,
@@ -49,31 +96,24 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string): string | null
         prompt: "consent",
         state,
       });
-      return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+      console.log("[connected-accounts/connect] YouTube OAuth diagnostics:", {
+        callbackUrl,
+        redirect_uri_in_params: params.get("redirect_uri"),
+        x_forwarded_host: xfHost,
+        host: hostHeader,
+        note: "callbackUrl is from Host headers via getOAuthCallbackUrl(), not NEXT_PUBLIC_APP_URL",
+        NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "(unset)",
+      });
+      console.log("[connected-accounts/connect] YouTube redirect_uri sent to Google:", callbackUrl);
+      console.log("[connected-accounts/connect] YouTube full auth URL:", authUrl);
+      return authUrl;
     }
     case "instagram": {
-      const appId = process.env.FACEBOOK_APP_ID;
-      if (!appId) return null;
-      const params = new URLSearchParams({
-        client_id: appId,
-        redirect_uri: callbackUrl,
-        response_type: "code",
-        scope: FB_SCOPES,
-        state,
-      });
-      return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`;
+      return buildInstagramBusinessLoginAuthUrl(callbackUrl, state);
     }
     case "facebook": {
-      const appId = process.env.FACEBOOK_APP_ID;
-      if (!appId) return null;
-      const params = new URLSearchParams({
-        client_id: appId,
-        redirect_uri: callbackUrl,
-        response_type: "code",
-        scope: FB_SCOPES,
-        state,
-      });
-      return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`;
+      return buildFacebookLoginAuthUrl(callbackUrl, state);
     }
     default:
       return null;
@@ -97,7 +137,8 @@ export async function POST(request: NextRequest) {
     }
 
     const state = `${platform}:${randomBytes(16).toString("hex")}`;
-    const authUrl = buildAuthUrl(platform, state);
+    console.log("[connected-accounts/connect] Starting OAuth for platform:", platform);
+    const authUrl = buildAuthUrl(platform, state, request);
     if (!authUrl) {
       return NextResponse.json(
         {

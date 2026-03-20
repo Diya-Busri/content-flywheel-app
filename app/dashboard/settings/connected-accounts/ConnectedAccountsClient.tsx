@@ -26,6 +26,7 @@ import { useToast } from "@/components/ui/use-toast";
 type ConnectedPlatform = "tiktok" | "youtube" | "instagram" | "facebook";
 
 type ConnectedAccount = {
+  id: string;
   platform: string;
   platformUsername: string | null;
   platformUserId: string | null;
@@ -56,7 +57,7 @@ export default function ConnectedAccountsClient() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState<ConnectedPlatform | null>(null);
-  const [disconnectPlatform, setDisconnectPlatform] = useState<ConnectedPlatform | null>(null);
+  const [disconnectTarget, setDisconnectTarget] = useState<{ platform: ConnectedPlatform; accountId?: string } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const { toast } = useToast();
 
@@ -127,18 +128,21 @@ export default function ConnectedAccountsClient() {
   };
 
   const handleDisconnect = async () => {
-    if (!disconnectPlatform) return;
+    if (!disconnectTarget) return;
     setDisconnecting(true);
     try {
-      const res = await fetch(`/api/connected-accounts/${disconnectPlatform}`, {
+      const qs = disconnectTarget.accountId
+        ? `?accountId=${encodeURIComponent(disconnectTarget.accountId)}`
+        : "";
+      const res = await fetch(`/api/connected-accounts/${disconnectTarget.platform}${qs}`, {
         method: "DELETE",
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error ?? "Failed to disconnect");
       }
-      toast({ title: "Disconnected", description: `${PLATFORM_LABELS[disconnectPlatform]} has been disconnected.` });
-      setDisconnectPlatform(null);
+      toast({ title: "Disconnected", description: `${PLATFORM_LABELS[disconnectTarget.platform]} has been disconnected.` });
+      setDisconnectTarget(null);
       fetchAccounts();
     } catch (e) {
       toast({
@@ -151,13 +155,15 @@ export default function ConnectedAccountsClient() {
     }
   };
 
-  const connectedMap =
+  const connectedByPlatform =
     data?.connected.reduce(
       (acc, c) => {
-        acc[c.platform] = c;
+        const key = c.platform as ConnectedPlatform;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(c);
         return acc;
       },
-      {} as Record<string, ConnectedAccount>
+      {} as Record<ConnectedPlatform, ConnectedAccount[]>
     ) ?? {};
   const platforms = data?.platforms ?? (["tiktok", "youtube", "instagram", "facebook"] as ConnectedPlatform[]);
 
@@ -170,79 +176,107 @@ export default function ConnectedAccountsClient() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="max-w-3xl space-y-6">
       <Link
         href="/dashboard/settings"
         className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="w-4 h-4" />
+        <ArrowLeft className="h-4 w-4" />
         Back to Settings
       </Link>
 
-      <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+      <Card className="border-[#E5E7EB] bg-white dark:border-[#2A2A2A] dark:bg-[#1A1A1A]">
         <CardHeader>
           <CardTitle className="text-lg text-gray-900 dark:text-white">
             Connected accounts
           </CardTitle>
           <CardDescription className="text-gray-600 dark:text-gray-400">
-            Connect your social accounts to auto-publish videos from the Content Calendar. Tokens are stored securely and used only for publishing.
+            Connect your social accounts to auto-publish videos from the Content Calendar. Tokens are
+            stored securely and used only for publishing.
           </CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-4">
           {platforms.map((platform) => {
-            const account = connectedMap[platform];
-            const isConnected = !!account;
+            const accounts = connectedByPlatform[platform] ?? [];
+            const isConnected = accounts.length > 0;
             const isConnecting = connecting === platform;
+            const canAddAnother =
+              (platform === "youtube" || platform === "instagram") && isConnected;
 
             return (
-              <div
-                key={platform}
-                className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[#E5E7EB] dark:border-[#2A2A2A] p-4 bg-gray-50/50 dark:bg-[#0F0F0F]/50"
-              >
-                <div>
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    {PLATFORM_LABELS[platform]}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {PLATFORM_DESCRIPTIONS[platform]}
-                  </p>
-                  {isConnected && account.platformUsername && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Connected as @{account.platformUsername}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {isConnected ? (
-                    <>
-                      <span className="inline-flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
-                        <Check className="w-4 h-4" />
-                        Connected
-                      </span>
+              <div key={platform} className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[#E5E7EB] bg-gray-50/50 p-4 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]/50">
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">{PLATFORM_LABELS[platform]}</p>
+                    <p className="text-sm text-muted-foreground">{PLATFORM_DESCRIPTIONS[platform]}</p>
+
+                    {isConnected && (
+                      <div className="mt-2 space-y-1">
+                        {accounts.map((account, idx) => (
+                          <p key={account.id} className="text-xs text-muted-foreground">
+                            Connected #{idx + 1}
+                            {account.platformUsername ? ` as @${account.platformUsername}` : ""}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {isConnected ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled
+                          className="bg-emerald-600 text-white hover:bg-emerald-600"
+                        >
+                          <Check className="mr-1 h-4 w-4" />
+                          Connected
+                        </Button>
+                        {canAddAnother && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void handleConnect(platform)}
+                            disabled={isConnecting}
+                          >
+                            {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            + Add another account
+                          </Button>
+                        )}
+                      </>
+                    ) : (
                       <Button
+                        size="sm"
+                        onClick={() => handleConnect(platform)}
+                        disabled={isConnecting}
+                        className="bg-orange-500 hover:bg-orange-600"
+                      >
+                        {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Connect
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {isConnected && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {accounts.map((account, idx) => (
+                      <Button
+                        key={account.id}
                         variant="outline"
                         size="sm"
-                        onClick={() => setDisconnectPlatform(platform)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setDisconnectTarget({ platform, accountId: account.id })}
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                       >
-                        <Unplug className="w-4 h-4 mr-1" />
-                        Disconnect
+                        <Unplug className="mr-1 h-4 w-4" />
+                        Disconnect {PLATFORM_LABELS[platform]} #{idx + 1}
                       </Button>
-                    </>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => handleConnect(platform)}
-                      disabled={isConnecting}
-                      className="bg-orange-500 hover:bg-orange-600"
-                    >
-                      {isConnecting ? (
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      ) : null}
-                      Connect
-                    </Button>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -250,13 +284,27 @@ export default function ConnectedAccountsClient() {
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        Required env: TikTok (<code>TIKTOK_CLIENT_KEY</code>, <code>TIKTOK_CLIENT_SECRET</code>), YouTube (<code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>), Instagram &amp; Facebook (<code>FACEBOOK_APP_ID</code>, <code>FACEBOOK_APP_SECRET</code>). Set <code>NEXT_PUBLIC_APP_URL</code> to your app URL (e.g. https://contentflywheel.co.uk). Add <code>https://contentflywheel.co.uk/api/connected-accounts/callback</code> to Facebook Login → Valid OAuth Redirect URIs.
+        Required env: TikTok (<code>TIKTOK_CLIENT_KEY</code>, <code>TIKTOK_CLIENT_SECRET</code>), YouTube (
+        <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>), Facebook (
+        <code>FACEBOOK_APP_ID</code>, <code>FACEBOOK_APP_SECRET</code>), Instagram Business Login (
+        <code>INSTAGRAM_APP_ID</code> (Instagram App ID from Meta → Instagram → Business login; required for Instagram
+        connect), <code>INSTAGRAM_APP_SECRET</code> or <code>FACEBOOK_APP_SECRET</code> for the token exchange). Set{" "}
+        <code>NEXT_PUBLIC_APP_URL</code> to your app URL.
+        Add <code>https://contentflywheel.co.uk/api/connected-accounts/callback</code> under Facebook Login → Valid
+        OAuth Redirect URIs and under Instagram → API setup with Instagram login → OAuth redirect URIs.
       </p>
 
-      <AlertDialog open={!!disconnectPlatform} onOpenChange={(open) => !open && setDisconnectPlatform(null)}>
+      <AlertDialog
+        open={!!disconnectTarget}
+        onOpenChange={(open) => {
+          if (!open) setDisconnectTarget(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Disconnect {disconnectPlatform ? PLATFORM_LABELS[disconnectPlatform] : ""}?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Disconnect {disconnectTarget ? PLATFORM_LABELS[disconnectTarget.platform] : ""}?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               Stored access tokens will be removed. You can reconnect at any time.
             </AlertDialogDescription>
@@ -268,7 +316,7 @@ export default function ConnectedAccountsClient() {
               disabled={disconnecting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {disconnecting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              {disconnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Disconnect
             </AlertDialogAction>
           </AlertDialogFooter>

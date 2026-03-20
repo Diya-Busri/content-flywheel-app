@@ -10,7 +10,8 @@ const isPublicRoute = createRouteMatcher([
   "/refund-policy",
   "/pricing",
   "/pay(.*)",
-  "/api/(.*)",
+  /** All API routes (nested paths included); individual routes still enforce auth inside handlers. */
+  "/api(.*)",
 ]);
 
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);

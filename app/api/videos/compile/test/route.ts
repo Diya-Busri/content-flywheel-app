@@ -17,8 +17,18 @@ import { tmpdir } from "os";
 const BUCKET = "timeline-media";
 
 const TEST_SCENES: CompileScene[] = [
-  { duration: 5, image_url: "https://picsum.photos/1920/1080", video_url: null },
-  { duration: 5, image_url: "https://picsum.photos/1920/1080", video_url: null },
+  {
+    duration: 5,
+    image_url: "https://picsum.photos/1920/1080",
+    video_url: null,
+    dialogue: "No Cap Nana: Yo, this is a test line for scene one.",
+  },
+  {
+    duration: 5,
+    image_url: "https://picsum.photos/1920/1080",
+    video_url: null,
+    dialogue: "Skibidi Banana: Fr fr, scene two looks bussin.",
+  },
 ];
 const TEST_VOICEOVER_URL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
 
@@ -49,7 +59,7 @@ export async function POST() {
     const scenesJson = TEST_SCENES.map((s, i) => ({
       scene_number: i + 1,
       duration: s.duration,
-      script_text: `Test scene ${i + 1}`,
+      script_text: s.dialogue ?? `Test scene ${i + 1}`,
       image_url: s.image_url,
       video_url: null,
     }));

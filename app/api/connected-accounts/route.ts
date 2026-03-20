@@ -44,6 +44,7 @@ export async function GET() {
 
     const rows = await db
       .select({
+        id: connectedAccountsTable.id,
         platform: connectedAccountsTable.platform,
         platformUsername: connectedAccountsTable.platformUsername,
         platformUserId: connectedAccountsTable.platformUserId,
@@ -54,6 +55,7 @@ export async function GET() {
       .where(eq(connectedAccountsTable.userId, userId));
 
     const connected = rows.map((r) => ({
+      id: r.id,
       platform: r.platform,
       platformUsername: r.platformUsername ?? null,
       platformUserId: r.platformUserId ?? null,

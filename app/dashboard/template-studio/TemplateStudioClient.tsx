@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import html2canvas from "html2canvas";
 import JSZip from "jszip";
 import {
@@ -23,16 +23,37 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, Sparkles, RefreshCw, ArrowRight, ArrowLeft, Download, Copy, Save } from "lucide-react";
+import {
+  Loader2,
+  Sparkles,
+  RefreshCw,
+  ArrowRight,
+  ArrowLeft,
+  Download,
+  Copy,
+  Save,
+  Film,
+  ExternalLink,
+} from "lucide-react";
 import { getTemplateStudioPrefill, clearTemplateStudioPrefill } from "@/lib/template-studio-prefill";
+import { setVideoPrefill, getTimelineUrl } from "@/lib/video-prefill";
 import { SlideDeck } from "./SlideDeck";
 import { SlidePreview } from "./SlidePreview";
+import { parseCharacterTypes } from "@/lib/ai-story-character-style";
+import { getPrimaryCharacterTypeForScene } from "@/lib/ai-story-reference-image";
+import { BGM_SELECT_OPTIONS, type BgmSelectValue } from "@/lib/bgm-tracks";
 
 type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7";
 type TemplateType = "quotes" | "tips" | "affirmations";
 type FontStyle = "modern" | "elegant" | "bold" | "minimal";
 type SlideItem = { heading: string; body: string; bg_color?: string };
 type CaptionItem = { caption: string; hashtags: string; alt_text: string };
+type SocialMediaPack = {
+  caption: string;
+  title: string;
+  hashtags: string[];
+  youtubeDescription: string;
+};
 
 const CREATION_MODE_OPTIONS: { value: CreationMode; label: string }[] = [
   { value: "2", label: "Promote My App or Business" },
@@ -88,12 +109,98 @@ const AI_STORY_STYLE_OPTIONS = [
   { value: "Wholesome", label: "Wholesome" },
 ];
 
+const toSpeakable = (text: string) => {
+  return text
+    .replace(/\bfr fr\b/gi, "for real for real")
+    .replace(/\bfr\b/gi, "for real")
+    .replace(/\bngl\b/gi, "not gonna lie")
+    .replace(/\bidk\b/gi, "I don't know")
+    .replace(/\bomg\b/gi, "oh my god")
+    .replace(/\bnpc\b/gi, "en pee see")
+    .replace(/\blol\b/gi, "laughing out loud")
+    .replace(/\bimo\b/gi, "in my opinion")
+    .replace(/\bbtw\b/gi, "by the way")
+    .replace(/\bL \+ ratio\b/gi, "L plus ratio")
+    .replace(/\bno cap\b/gi, "no cap")
+    .replace(/\bskibidi\b/gi, "ski-biddy")
+    .replace(/\bgyatt\b/gi, "gyat")
+    .replace(/\basap\b/gi, "as soon as possible")
+    .replace(/\*[^*]+\*/g, "")
+    .trim();
+};
+
+const ELEVENLABS_DEFAULT_VOICE_FEMALE = "21m00Tcm4TlvDq8ikWAM";
+const ELEVENLABS_DEFAULT_VOICE_MALE = "TxGEqnHWrfWFTfGW9XjX";
+
+function getDefaultVoiceIdForCharacter(characterName: string): string {
+  const n = characterName.toLowerCase();
+  if (/\b(nana|berry|cherry|strawberry)\b/.test(n)) return ELEVENLABS_DEFAULT_VOICE_FEMALE;
+  if (/\b(banana|skibidi|sigma|rizz)\b/.test(n)) return ELEVENLABS_DEFAULT_VOICE_MALE;
+  return ELEVENLABS_DEFAULT_VOICE_FEMALE;
+}
+
 const FONT_OPTIONS: { value: FontStyle; label: string }[] = [
   { value: "modern", label: "Modern" },
   { value: "elegant", label: "Elegant" },
   { value: "bold", label: "Bold" },
   { value: "minimal", label: "Minimal" },
 ];
+
+const LIBRARY_DRAFT_STORAGE_KEY = "content-flywheel-template-studio-library-draft-id";
+const TIMELINE_SCENE_DURATION = 5;
+/** AI Story generate route returns exactly 8 scenes. */
+const AI_STORY_SCENE_COUNT = 8;
+const SCENE_COLOR_HEX = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
+
+function isHttpUrl(s: string | undefined | null): boolean {
+  const t = typeof s === "string" ? s.trim() : "";
+  return t.startsWith("http://") || t.startsWith("https://");
+}
+
+/** Build timeline-format content (Scene[] + captions) for video-timeline save/update. */
+function buildTimelineContentFromAiStory(
+  aiStoryScenes: { sceneNumber: number; dialogue: string }[],
+  sceneImageUrls: Record<number, string>,
+  sceneVideoUrls: Record<number, string>,
+  voiceoverUrls: Record<number, string>
+): { scenes: unknown[]; captions: unknown[]; totalDuration: number } {
+  const scenes = aiStoryScenes.map((scene, i) => {
+    const duration = TIMELINE_SCENE_DURATION;
+    const startTime = i * duration;
+    const title = (scene.dialogue?.trim() || `Scene ${i + 1}`).slice(0, 80);
+    const videoUrl = sceneVideoUrls[scene.sceneNumber];
+    const imageUrl = sceneImageUrls[scene.sceneNumber];
+    const media = videoUrl
+      ? { url: videoUrl, type: "video" as const }
+      : imageUrl
+        ? { url: imageUrl, type: "image" as const }
+        : null;
+    return {
+      id: `template-scene-${i}`,
+      title,
+      duration,
+      color: SCENE_COLOR_HEX[i % SCENE_COLOR_HEX.length],
+      elements: [{ id: `template-scene-${i}-bg`, type: "background" as const, media }],
+      startTime,
+      ...(voiceoverUrls[scene.sceneNumber] ? { audioUrl: voiceoverUrls[scene.sceneNumber] } : {}),
+    };
+  });
+  const captions = aiStoryScenes
+    .map((s, i) => {
+      const text = s.dialogue?.trim();
+      if (!text) return null;
+      const startTime = i * TIMELINE_SCENE_DURATION;
+      return {
+        id: `cap-template-${i}`,
+        text,
+        startTime,
+        endTime: startTime + TIMELINE_SCENE_DURATION,
+      };
+    })
+    .filter((c): c is NonNullable<typeof c> => c != null);
+  const totalDuration = scenes.length * TIMELINE_SCENE_DURATION;
+  return { scenes, captions, totalDuration };
+}
 
 export default function TemplateStudioClient() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -121,13 +228,43 @@ export default function TemplateStudioClient() {
   const [aiStoryStyle, setAiStoryStyle] = useState("Brainrot");
   const [episodeNumber, setEpisodeNumber] = useState(1);
   const [aiStoryLoading, setAiStoryLoading] = useState(false);
-  const [aiStoryScenes, setAiStoryScenes] = useState<{ sceneNumber: number; dialogue: string; imagePrompt: string }[]>([]);
+  const [aiStoryScenes, setAiStoryScenes] = useState<{ sceneNumber: number; dialogue: string; imagePrompt: string; motionPrompt?: string }[]>([]);
+  const [socialMediaPack, setSocialMediaPack] = useState<SocialMediaPack | null>(null);
+  const [socialMediaPackLoading, setSocialMediaPackLoading] = useState(false);
+  const [aiStoryCharacterStyle, setAiStoryCharacterStyle] = useState<string>("");
+  /** Per-character reference image URLs (FLUX text-to-image); used as img2img anchors for scenes. */
+  const [characterReferenceUrls, setCharacterReferenceUrls] = useState<Record<string, string>>({});
+  const [characterPreviewLoading, setCharacterPreviewLoading] = useState(false);
+  const [aiStoryUiPhase, setAiStoryUiPhase] = useState<"form" | "characterPreview">("form");
   const [characterVoices, setCharacterVoices] = useState<Record<string, string>>({});
   const [elevenLabsVoices, setElevenLabsVoices] = useState<{ voice_id: string; name: string; description?: string }[]>([]);
   const [voiceoverLoadingScene, setVoiceoverLoadingScene] = useState<number | null>(null);
   const [voiceoverUrls, setVoiceoverUrls] = useState<Record<number, string>>({});
   const [sceneImageUrls, setSceneImageUrls] = useState<Record<number, string>>({});
   const [sceneImageLoadingScene, setSceneImageLoadingScene] = useState<number | null>(null);
+  const [sceneVideoUrls, setSceneVideoUrls] = useState<Record<number, string>>({});
+  const [sceneAnimateLoadingScene, setSceneAnimateLoadingScene] = useState<number | null>(null);
+  const [sceneAnimationRequestIds, setSceneAnimationRequestIds] = useState<Record<number, string>>({});
+  const [sceneAnimationStatus, setSceneAnimationStatus] = useState<Record<number, string>>({});
+  const [sceneAnimationTimedOut, setSceneAnimationTimedOut] = useState<Record<number, boolean>>({});
+
+  const [storyVideoExporting, setStoryVideoExporting] = useState(false);
+  const [storyVideoExportPhase, setStoryVideoExportPhase] = useState<"saving" | "compiling" | null>(null);
+  const [storyVideoExportUrl, setStoryVideoExportUrl] = useState<string | null>(null);
+  const [storyVideoExportScriptId, setStoryVideoExportScriptId] = useState<string | null>(null);
+  const [storyVideoExportError, setStoryVideoExportError] = useState<string | null>(null);
+  const [storyBackgroundMusic, setStoryBackgroundMusic] = useState<BgmSelectValue>("none");
+
+  const [libraryDraftVideoId, setLibraryDraftVideoId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return sessionStorage.getItem(LIBRARY_DRAFT_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const [libraryDraftSaving, setLibraryDraftSaving] = useState(false);
+  const libraryCreateInFlightRef = useRef(false);
 
   const [slides, setSlides] = useState<SlideItem[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -138,9 +275,220 @@ export default function TemplateStudioClient() {
   const [packName, setPackName] = useState("");
   const [savingPack, setSavingPack] = useState(false);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const animationPollCountRef = useRef<Record<number, number>>({});
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const { toast } = useToast();
+
+  const socialMediaPackText = useMemo(() => {
+    if (!socialMediaPack) return "";
+    const hashtagsLine = socialMediaPack.hashtags.join(" ");
+    return [
+      "TikTok/Instagram Caption:",
+      socialMediaPack.caption,
+      "",
+      "Title:",
+      socialMediaPack.title,
+      "",
+      "Hashtags:",
+      hashtagsLine,
+      "",
+      "YouTube Description:",
+      socialMediaPack.youtubeDescription,
+    ].join("\n");
+  }, [socialMediaPack]);
+
+  const canProceedStep1 =
+    mode === "7"
+      ? (characters.trim().length > 0 && theme.trim().length > 0)
+      : mode === "1" || mode === "4"
+        ? niche.trim().length > 0
+        : mode === "2" || mode === "6"
+          ? brandName.trim().length > 0
+          : mode === "5"
+            ? niche.trim().length > 0
+            : (brandName.trim().length > 0);
+
+  const useImg2ImgSceneImages = useMemo(
+    () => Object.keys(characterReferenceUrls).length > 0,
+    [characterReferenceUrls]
+  );
+
+  const characterReferenceUrlsSerializeKey = useMemo(
+    () => JSON.stringify(characterReferenceUrls),
+    [characterReferenceUrls]
+  );
+
+  const runCharacterStylePreview = useCallback(async () => {
+    if (mode !== "7" || !canProceedStep1) return;
+    setCharacterPreviewLoading(true);
+    setCharacterReferenceUrls({});
+    try {
+      const res = await fetch("/api/content-studio/ai-story/reference-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          characters: characters.trim(),
+          theme: theme.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(typeof data?.error === "string" ? data.error : "Failed to generate reference images");
+      const refs = (data.referenceUrls as Record<string, string>) ?? {};
+      setCharacterReferenceUrls(refs);
+      setAiStoryUiPhase("characterPreview");
+      toast({
+        title: "Reference images ready",
+        description: "These anchors FLUX image-to-image for each scene. Generate your story when ready.",
+      });
+    } catch (e) {
+      toast({
+        title: "Reference images failed",
+        description: e instanceof Error ? e.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setCharacterPreviewLoading(false);
+    }
+  }, [mode, canProceedStep1, characters, theme, toast]);
+
+  const runGenerateAiStory = useCallback(async () => {
+    if (mode !== "7") return;
+    setAiStoryLoading(true);
+    setAiStoryScenes([]);
+    setSocialMediaPack(null);
+    try {
+      const res = await fetch("/api/content-studio/ai-story/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          characters: characters.trim(),
+          characterNames: characterNames.trim() || undefined,
+          theme: theme.trim(),
+          tone: aiStoryTone,
+          style: aiStoryStyle,
+          episodeNumber,
+          ...(Object.keys(characterReferenceUrls).length > 0
+            ? { consistencyMode: "img2img" as const }
+            : {}),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error ?? "Request failed");
+      }
+      const scenesList = Array.isArray(data.scenes) ? data.scenes : [];
+      setAiStoryScenes(
+        scenesList.map(
+          (
+            s: { sceneNumber?: number; dialogue?: string; imagePrompt?: string; motionPrompt?: string },
+            i: number
+          ) => ({
+            sceneNumber: typeof s.sceneNumber === "number" && s.sceneNumber >= 1 ? s.sceneNumber : i + 1,
+            dialogue: typeof s.dialogue === "string" ? s.dialogue : "",
+            imagePrompt: typeof s.imagePrompt === "string" ? s.imagePrompt : "",
+            motionPrompt: typeof s.motionPrompt === "string" ? s.motionPrompt : "",
+          })
+        )
+      );
+      setAiStoryCharacterStyle(typeof data.characterStyle === "string" ? data.characterStyle : "");
+      const pack = data.socialMediaPack as {
+        caption?: string;
+        title?: string;
+        hashtags?: string[];
+        youtubeDescription?: string;
+      } | undefined;
+      setSocialMediaPack({
+        caption: typeof pack?.caption === "string" ? pack.caption : "",
+        title: typeof pack?.title === "string" ? pack.title : "",
+        hashtags: Array.isArray(pack?.hashtags) ? pack.hashtags.filter((h): h is string => typeof h === "string") : [],
+        youtubeDescription: typeof pack?.youtubeDescription === "string" ? pack.youtubeDescription : "",
+      });
+      setVoiceoverUrls({});
+      setSceneImageUrls({});
+      setSceneVideoUrls({});
+      setSceneAnimationRequestIds({});
+      setSceneAnimationStatus({});
+      setSceneAnimationTimedOut({});
+      setLibraryDraftVideoId(null);
+      try {
+        sessionStorage.removeItem(LIBRARY_DRAFT_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+      toast({ title: "AI Story generated", description: `${scenesList.length} scenes ready.` });
+    } catch (e) {
+      toast({
+        title: "AI Story failed",
+        description: e instanceof Error ? e.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setAiStoryLoading(false);
+    }
+  }, [
+    mode,
+    characters,
+    characterNames,
+    theme,
+    aiStoryTone,
+    aiStoryStyle,
+    episodeNumber,
+    characterReferenceUrls,
+    toast,
+  ]);
+
+  const handleCopySocialMediaPack = useCallback(() => {
+    if (!socialMediaPackText.trim()) return;
+    navigator.clipboard.writeText(socialMediaPackText).then(
+      () => toast({ title: "Copied", description: "Social Media Pack copied to clipboard." }),
+      () => toast({ title: "Copy failed", variant: "destructive" })
+    );
+  }, [socialMediaPackText, toast]);
+
+  const handleRegenerateSocialMediaPack = useCallback(async () => {
+    if (mode !== "7" || aiStoryScenes.length === 0) return;
+    setSocialMediaPackLoading(true);
+    try {
+      const res = await fetch("/api/content-studio/ai-story/social-media-pack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          characters: characters.trim(),
+          characterNames: characterNames.trim(),
+          theme: theme.trim(),
+          tone: aiStoryTone,
+          style: aiStoryStyle,
+          episodeNumber,
+          scenes: aiStoryScenes.map((s) => ({ dialogue: s.dialogue })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(typeof data?.error === "string" ? data.error : "Failed to regenerate social pack");
+      const pack = data.socialMediaPack as {
+        caption?: string;
+        title?: string;
+        hashtags?: string[];
+        youtubeDescription?: string;
+      } | undefined;
+      setSocialMediaPack({
+        caption: typeof pack?.caption === "string" ? pack.caption : "",
+        title: typeof pack?.title === "string" ? pack.title : "",
+        hashtags: Array.isArray(pack?.hashtags) ? pack.hashtags.filter((h): h is string => typeof h === "string") : [],
+        youtubeDescription: typeof pack?.youtubeDescription === "string" ? pack.youtubeDescription : "",
+      });
+      toast({ title: "Social Media Pack regenerated" });
+    } catch (e) {
+      toast({
+        title: "Failed to regenerate social pack",
+        description: e instanceof Error ? e.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setSocialMediaPackLoading(false);
+    }
+  }, [mode, aiStoryScenes, characters, characterNames, theme, aiStoryTone, aiStoryStyle, episodeNumber, toast]);
 
   const generateSlides = useCallback(
     async (regenerateIndex?: number) => {
@@ -417,6 +765,190 @@ export default function TemplateStudioClient() {
     }
   }, [mode, brandName, niche, templateType, slideCount, slideCountViral, brandPrimary, brandSecondary, fontStyle, productDescription, targetAudience, painPoints, brandVibe, postGoal, hookAngle, ctaGoal]);
 
+  /** SessionStorage prefill for /dashboard/video-timeline (must run before navigation). */
+  const writeAiStoryTimelinePrefill = useCallback(() => {
+    if (mode !== "7" || aiStoryScenes.length === 0) return;
+    const timelineScenes = aiStoryScenes.map((scene) => ({
+      scene_number: scene.sceneNumber,
+      duration_seconds: TIMELINE_SCENE_DURATION,
+      imageUrl: sceneImageUrls[scene.sceneNumber] ?? undefined,
+      videoUrl: sceneVideoUrls[scene.sceneNumber] ?? undefined,
+      audioUrl: voiceoverUrls[scene.sceneNumber] ?? undefined,
+      captionText: scene.dialogue?.trim() || undefined,
+    }));
+    setVideoPrefill({
+      source: "template-studio",
+      title: "AI Story",
+      timelineScenes,
+    });
+  }, [mode, aiStoryScenes, sceneImageUrls, sceneVideoUrls, voiceoverUrls]);
+
+  /** Ensure My Library draft row has latest per-scene audioUrl before timeline GET (avoids race with debounced PATCH). */
+  const flushAiStoryDraftToLibrary = useCallback(async (): Promise<boolean> => {
+    if (!libraryDraftVideoId || mode !== "7" || aiStoryScenes.length === 0) return true;
+    const { scenes, captions, totalDuration } = buildTimelineContentFromAiStory(
+      aiStoryScenes,
+      sceneImageUrls,
+      sceneVideoUrls,
+      voiceoverUrls
+    );
+    try {
+      const res = await fetch(`/api/video-timeline/videos/${encodeURIComponent(libraryDraftVideoId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          metadata: {
+            scenes,
+            captions,
+            totalDuration,
+            sourceType: "ai-story",
+            savedAt: new Date().toISOString(),
+            ...(Object.keys(characterReferenceUrls).length > 0
+              ? { aiStoryCharacterReferenceUrls: characterReferenceUrls }
+              : {}),
+          },
+        }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }, [
+    libraryDraftVideoId,
+    mode,
+    aiStoryScenes,
+    sceneImageUrls,
+    sceneVideoUrls,
+    voiceoverUrls,
+    characterReferenceUrlsSerializeKey,
+  ]);
+
+  const openVideoTimeline = useCallback(async () => {
+    writeAiStoryTimelinePrefill();
+    if (libraryDraftVideoId) {
+      const ok = await flushAiStoryDraftToLibrary();
+      if (!ok) {
+        toast({
+          title: "Could not sync draft",
+          description: "Opening the timeline anyway. If clip audio is missing, refresh the page.",
+          variant: "destructive",
+        });
+      }
+      router.push(`/dashboard/video-timeline?projectId=${encodeURIComponent(libraryDraftVideoId)}`);
+    } else {
+      router.push(getTimelineUrl());
+    }
+    toast({
+      title: "Opening Video Timeline",
+      description: "Scenes are pre-loaded. Reorder, trim, and export your MP4.",
+    });
+  }, [writeAiStoryTimelinePrefill, flushAiStoryDraftToLibrary, libraryDraftVideoId, router, toast]);
+
+  const canExportStoryVideo = useMemo(() => {
+    if (mode !== "7" || step !== 1 || aiStoryScenes.length !== AI_STORY_SCENE_COUNT) return false;
+    return aiStoryScenes.every((s) => {
+      const v = sceneVideoUrls[s.sceneNumber];
+      const vo = voiceoverUrls[s.sceneNumber];
+      return isHttpUrl(v) && isHttpUrl(vo);
+    });
+  }, [mode, step, aiStoryScenes, sceneVideoUrls, voiceoverUrls]);
+
+  const handleExportStoryVideo = useCallback(async () => {
+    if (!canExportStoryVideo) return;
+    setStoryVideoExportError(null);
+    setStoryVideoExportUrl(null);
+    setStoryVideoExporting(true);
+    setStoryVideoExportPhase("saving");
+    writeAiStoryTimelinePrefill();
+    if (libraryDraftVideoId) {
+      await flushAiStoryDraftToLibrary();
+    }
+    try {
+      const ordered = [...aiStoryScenes].sort((a, b) => a.sceneNumber - b.sceneNumber);
+      const scenes_json = ordered.map((scene) => {
+        const video_url = sceneVideoUrls[scene.sceneNumber]?.trim() ?? null;
+        const image_url = sceneImageUrls[scene.sceneNumber]?.trim() ?? null;
+        const voiceover_url = voiceoverUrls[scene.sceneNumber]?.trim() ?? null;
+        const dialogue = scene.dialogue?.trim() ?? "";
+        return {
+          scene_number: scene.sceneNumber,
+          duration: TIMELINE_SCENE_DURATION,
+          script_text: dialogue,
+          image_url: image_url && isHttpUrl(image_url) ? image_url : null,
+          video_url: video_url && isHttpUrl(video_url) ? video_url : null,
+          caption: dialogue || null,
+          animation_type: "video",
+          voiceover_url: voiceover_url && isHttpUrl(voiceover_url) ? voiceover_url : null,
+          section_label: `Scene ${scene.sceneNumber}`,
+        };
+      });
+      const saveRes = await fetch("/api/saved-scripts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `AI Story — Episode ${episodeNumber}`,
+          scenes_json,
+        }),
+      });
+      const saveData = (await saveRes.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!saveRes.ok) {
+        throw new Error(typeof saveData.error === "string" ? saveData.error : "Failed to save script for export");
+      }
+      const scriptId = typeof saveData.id === "string" ? saveData.id : "";
+      if (!scriptId) throw new Error("No script id returned");
+      setStoryVideoExportScriptId(scriptId);
+
+      setStoryVideoExportPhase("compiling");
+      const compileRes = await fetch("/api/videos/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scriptId,
+          transition: "fade",
+          backgroundMusic: storyBackgroundMusic,
+        }),
+      });
+      const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!compileRes.ok) {
+        throw new Error(typeof compileData.error === "string" ? compileData.error : "Video compile failed");
+      }
+      const url = typeof compileData.url === "string" ? compileData.url.trim() : "";
+      if (!url) throw new Error("No MP4 URL returned");
+      setStoryVideoExportUrl(url);
+      toast({
+        title: "Story video ready",
+        description: "Your MP4 is ready to download.",
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Export failed";
+      setStoryVideoExportError(msg);
+      toast({ title: "Export failed", description: msg, variant: "destructive" });
+    } finally {
+      setStoryVideoExporting(false);
+      setStoryVideoExportPhase(null);
+    }
+  }, [
+    aiStoryScenes,
+    canExportStoryVideo,
+    episodeNumber,
+    flushAiStoryDraftToLibrary,
+    libraryDraftVideoId,
+    sceneImageUrls,
+    sceneVideoUrls,
+    storyBackgroundMusic,
+    toast,
+    voiceoverUrls,
+    writeAiStoryTimelinePrefill,
+  ]);
+
+  useEffect(() => {
+    if (!canExportStoryVideo) {
+      setStoryVideoExportUrl(null);
+      setStoryVideoExportScriptId(null);
+      setStoryVideoExportError(null);
+    }
+  }, [canExportStoryVideo]);
+
   useEffect(() => {
     if (setupLoaded || searchParams.get("packId")) return;
     (async () => {
@@ -427,6 +959,16 @@ export default function TemplateStudioClient() {
         setSetupLoaded(true);
         if (data.mode && ["1", "2", "3", "4", "5", "6"].includes(data.mode)) setMode(data.mode);
         const i = data.inputs || {};
+        if (Array.isArray(data.scenes) && data.scenes.length > 0) {
+          setAiStoryScenes(
+            data.scenes.map((s: { sceneNumber?: number; id?: number; dialogue?: string; imagePrompt?: string; motionPrompt?: string }, idx: number) => ({
+              sceneNumber: typeof s.sceneNumber === "number" && s.sceneNumber >= 1 ? s.sceneNumber : (typeof s.id === "number" ? s.id : idx + 1),
+              dialogue: typeof s.dialogue === "string" ? s.dialogue : "",
+              imagePrompt: typeof s.imagePrompt === "string" ? s.imagePrompt : "",
+              motionPrompt: typeof s.motionPrompt === "string" ? s.motionPrompt : "",
+            }))
+          );
+        }
         if (typeof i.brandName === "string") setBrandName(i.brandName);
         if (typeof i.niche === "string") setNiche(i.niche);
         if (["quotes", "tips", "affirmations"].includes(i.templateType)) setTemplateType(i.templateType);
@@ -447,6 +989,98 @@ export default function TemplateStudioClient() {
       }
     })();
   }, [setupLoaded, searchParams]);
+
+  // Auto-sync AI Story scenes to Video Timeline prefill (sessionStorage). Timeline stays up to date as images/animations/voiceovers are generated.
+  useEffect(() => {
+    writeAiStoryTimelinePrefill();
+  }, [writeAiStoryTimelinePrefill]);
+
+  // Auto-save AI Story to My Library (draft). Create once, then PATCH on every scene/content update.
+  useEffect(() => {
+    if (mode !== "7" || aiStoryScenes.length === 0) return;
+    const { scenes, captions, totalDuration } = buildTimelineContentFromAiStory(
+      aiStoryScenes,
+      sceneImageUrls,
+      sceneVideoUrls,
+      voiceoverUrls
+    );
+    const metadata = {
+      scenes,
+      captions,
+      totalDuration,
+      sourceType: "ai-story" as const,
+      savedAt: new Date().toISOString(),
+      ...(Object.keys(characterReferenceUrls).length > 0
+        ? { aiStoryCharacterReferenceUrls: characterReferenceUrls }
+        : {}),
+    };
+
+    let cancelled = false;
+    setLibraryDraftSaving(true);
+    if (libraryDraftVideoId) {
+      fetch(`/api/video-timeline/videos/${encodeURIComponent(libraryDraftVideoId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ metadata }),
+      })
+        .then((res) => {
+          if (cancelled) return;
+          if (!res.ok) throw new Error("Update failed");
+        })
+        .catch(() => {
+          if (!cancelled) setLibraryDraftSaving(false);
+        })
+        .finally(() => {
+          if (!cancelled) setLibraryDraftSaving(false);
+        });
+    } else if (!libraryCreateInFlightRef.current) {
+      libraryCreateInFlightRef.current = true;
+      fetch("/api/video-timeline/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "AI Story (Draft)",
+          content: {
+            scenes,
+            captions,
+            totalDuration,
+            sourceType: "ai-story",
+          },
+        }),
+      })
+        .then((res) => res.json())
+        .then((data: { id?: string; error?: string }) => {
+          if (cancelled) return;
+          libraryCreateInFlightRef.current = false;
+          if (data.error || !data.id) return;
+          setLibraryDraftVideoId(data.id);
+          try {
+            sessionStorage.setItem(LIBRARY_DRAFT_STORAGE_KEY, data.id);
+          } catch {
+            // ignore
+          }
+        })
+        .catch(() => {
+          libraryCreateInFlightRef.current = false;
+        })
+        .finally(() => {
+          if (!cancelled) setLibraryDraftSaving(false);
+        });
+    } else {
+      setLibraryDraftSaving(false);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    mode,
+    aiStoryScenes,
+    sceneImageUrls,
+    sceneVideoUrls,
+    voiceoverUrls,
+    libraryDraftVideoId,
+    characterReferenceUrlsSerializeKey,
+  ]);
 
   // Prefill from Campaign Mode (carousel): slides + brand colours
   useEffect(() => {
@@ -527,16 +1161,102 @@ export default function TemplateStudioClient() {
     })();
   }, [mode, aiStoryScenes.length, elevenLabsVoices.length]);
 
-  const canProceedStep1 =
-    mode === "7"
-      ? (characters.trim().length > 0 && theme.trim().length > 0)
-      : mode === "1" || mode === "4"
-        ? niche.trim().length > 0
-        : mode === "2" || mode === "6"
-          ? brandName.trim().length > 0
-          : mode === "5"
-            ? niche.trim().length > 0
-            : (brandName.trim().length > 0);
+  // Poll animation status every 5s when we have pending requestIds. Max 10 min (120 polls).
+  useEffect(() => {
+    const entries = Object.entries(sceneAnimationRequestIds);
+    if (entries.length === 0) return;
+
+    const POLL_INTERVAL_MS = 5000;
+    const MAX_POLLS = 120; // 10 min
+
+    const pollOne = async (sceneNumber: number, requestId: string) => {
+      const count = (animationPollCountRef.current[sceneNumber] ?? 0) + 1;
+      animationPollCountRef.current[sceneNumber] = count;
+      if (count > MAX_POLLS) {
+        setSceneAnimationRequestIds((prev) => {
+          const next = { ...prev };
+          delete next[sceneNumber];
+          return next;
+        });
+        setSceneAnimationStatus((prev) => ({ ...prev, [sceneNumber]: "" }));
+        setSceneAnimationTimedOut((prev) => ({ ...prev, [sceneNumber]: true }));
+        setSceneAnimateLoadingScene((s) => (s === sceneNumber ? null : s));
+        return;
+      }
+      try {
+        const res = await fetch(
+          `/api/content-studio/ai-story/animate/status?requestId=${encodeURIComponent(requestId)}`
+        );
+        const data = (await res.json()) as {
+          status?: string;
+          videoUrl?: string;
+          error?: string;
+        };
+        const status = data.status ?? "IN_QUEUE";
+        setSceneAnimationStatus((prev) => ({ ...prev, [sceneNumber]: status }));
+
+        if (status === "COMPLETED" && data.videoUrl) {
+          setSceneVideoUrls((prev) => ({ ...prev, [sceneNumber]: data.videoUrl! }));
+          setSceneAnimationRequestIds((prev) => {
+            const next = { ...prev };
+            delete next[sceneNumber];
+            return next;
+          });
+          setSceneAnimationStatus((prev) => ({ ...prev, [sceneNumber]: "" }));
+          setSceneAnimationTimedOut((prev) => ({ ...prev, [sceneNumber]: false }));
+          setSceneAnimateLoadingScene((s) => (s === sceneNumber ? null : s));
+          delete animationPollCountRef.current[sceneNumber];
+          return;
+        }
+        if (status === "FAILED") {
+          toast({
+            title: "Animation failed",
+            description: data.error ?? "Try again.",
+            variant: "destructive",
+          });
+          setSceneAnimationRequestIds((prev) => {
+            const next = { ...prev };
+            delete next[sceneNumber];
+            return next;
+          });
+          setSceneAnimationStatus((prev) => ({ ...prev, [sceneNumber]: "" }));
+          setSceneAnimateLoadingScene((s) => (s === sceneNumber ? null : s));
+          delete animationPollCountRef.current[sceneNumber];
+        }
+      } catch {
+        // Keep polling on network error
+      }
+    };
+
+    const interval = setInterval(() => {
+      entries.forEach(([sceneNumStr, requestId]) => {
+        const sceneNumber = Number(sceneNumStr);
+        if (!requestId) return;
+        pollOne(sceneNumber, requestId);
+      });
+    }, POLL_INTERVAL_MS);
+
+    // First poll immediately
+    entries.forEach(([sceneNumStr, requestId]) => {
+      const sceneNumber = Number(sceneNumStr);
+      if (requestId) pollOne(sceneNumber, requestId);
+    });
+
+    return () => clearInterval(interval);
+  }, [sceneAnimationRequestIds, toast]);
+
+  // Dev: expose scenes with imageUrl so you can run console.log(scenes) and verify full URLs
+  useEffect(() => {
+    if (typeof window === "undefined" || process.env.NODE_ENV !== "development") return;
+    const scenesWithImageUrls = aiStoryScenes.map((s) => ({
+      ...s,
+      imageUrl: sceneImageUrls[s.sceneNumber] ?? undefined,
+    }));
+    (window as unknown as { __templateStudioDebug?: { scenes: typeof scenesWithImageUrls; sceneImageUrls: Record<number, string> } }).__templateStudioDebug = {
+      scenes: scenesWithImageUrls,
+      sceneImageUrls: { ...sceneImageUrls },
+    };
+  }, [aiStoryScenes, sceneImageUrls]);
 
   return (
     <div className="space-y-8">
@@ -976,64 +1696,103 @@ export default function TemplateStudioClient() {
               </>
             )}
 
-            <div className="flex justify-end">
-              <Button
-                onClick={async () => {
-                  if (mode === "7") {
-                    setAiStoryLoading(true);
-                    setAiStoryScenes([]);
-                    try {
-                      const res = await fetch("/api/content-studio/ai-story/generate", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          characters: characters.trim(),
-                          characterNames: characterNames.trim() || undefined,
-                          theme: theme.trim(),
-                          tone: aiStoryTone,
-                          style: aiStoryStyle,
-                          episodeNumber,
-                        }),
-                      });
-                      const data = await res.json();
-                      if (!res.ok) {
-                        throw new Error(data?.error ?? "Request failed");
-                      }
-                      const scenesList = Array.isArray(data.scenes) ? data.scenes : [];
-                      setAiStoryScenes(scenesList.map((s: { sceneNumber?: number; dialogue?: string; imagePrompt?: string }, i: number) => ({
-                        sceneNumber: typeof s.sceneNumber === "number" && s.sceneNumber >= 1 ? s.sceneNumber : i + 1,
-                        dialogue: typeof s.dialogue === "string" ? s.dialogue : "",
-                        imagePrompt: typeof s.imagePrompt === "string" ? s.imagePrompt : "",
-                      })));
-                      setVoiceoverUrls({});
-                      setSceneImageUrls({});
-                      toast({ title: "AI Story generated", description: `${scenesList.length} scenes ready.` });
-                    } catch (e) {
-                      toast({
-                        title: "AI Story failed",
-                        description: e instanceof Error ? e.message : "Something went wrong",
-                        variant: "destructive",
-                      });
-                    } finally {
-                      setAiStoryLoading(false);
+            <div className="flex flex-wrap justify-end gap-2">
+              {mode === "7" && aiStoryScenes.length === 0 && aiStoryUiPhase === "characterPreview" ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setAiStoryUiPhase("form");
+                      setCharacterReferenceUrls({});
+                    }}
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back to setup
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => void runGenerateAiStory()}
+                    disabled={
+                      Object.keys(characterReferenceUrls).length === 0 || aiStoryLoading
                     }
-                  } else {
-                    await saveSetup();
-                    setStep(2);
+                  >
+                    Lock references &amp; generate story
+                    {aiStoryLoading ? (
+                      <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                    ) : (
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={async () => {
+                    if (mode === "7") {
+                      if (aiStoryScenes.length > 0) {
+                        await runGenerateAiStory();
+                        return;
+                      }
+                      await runCharacterStylePreview();
+                    } else {
+                      await saveSetup();
+                      setStep(2);
+                    }
+                  }}
+                  disabled={
+                    !canProceedStep1 ||
+                    (mode === "7" && (aiStoryLoading || characterPreviewLoading))
                   }
-                }}
-                disabled={!canProceedStep1 || (mode === "7" && aiStoryLoading)}
-              >
-                Next — Generate content
-                {mode === "7" && aiStoryLoading ? (
-                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
-                ) : (
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                )}
-              </Button>
+                >
+                  {mode === "7"
+                    ? aiStoryScenes.length > 0
+                      ? "Regenerate story"
+                      : "Continue to reference images"
+                    : "Next — Generate content"}
+                  {mode === "7" && (aiStoryLoading || characterPreviewLoading) ? (
+                    <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                  ) : (
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  )}
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
+
+        {mode === "7" && aiStoryUiPhase === "characterPreview" && Object.keys(characterReferenceUrls).length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Character reference images</CardTitle>
+              <CardDescription>
+                Each portrait is generated once with fal.ai FLUX.1 [dev]. Scene stills use FLUX image-to-image with this image as the anchor — prompts describe only action and setting, not appearance.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {parseCharacterTypes(characters)
+                  .filter((t) => characterReferenceUrls[t])
+                  .map((t) => (
+                    <div key={t} className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                      <p className="font-medium text-sm">{t}</p>
+                      {characterReferenceUrls[t] ? (
+                        <img
+                          src={characterReferenceUrls[t]}
+                          alt={`${t} reference`}
+                          className="w-full rounded-md aspect-square object-cover"
+                        />
+                      ) : (
+                        <div className="aspect-square rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                          No preview image
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         </>
       )}
@@ -1046,7 +1805,11 @@ export default function TemplateStudioClient() {
             <CardDescription>Assign a voice to each character. Used when generating voiceover for a scene.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {[...new Set(characters.split(",").map((c) => c.trim()).filter(Boolean))].map((charName) => (
+            {(
+              characterNames.trim()
+                ? characterNames.split(",").map((c) => c.trim()).filter(Boolean)
+                : [...new Set(aiStoryScenes.map((s) => s.dialogue.match(/^([^:]+):/)).filter(Boolean).map((m) => (m as RegExpMatchArray)[1].trim()))]
+            ).map((charName) => (
               <div key={charName} className="space-y-2">
                 <Label>{charName}</Label>
                 <Select
@@ -1065,6 +1828,7 @@ export default function TemplateStudioClient() {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">Leave blank and AI will auto-assign a suitable voice</p>
               </div>
             ))}
           </CardContent>
@@ -1078,22 +1842,37 @@ export default function TemplateStudioClient() {
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {aiStoryScenes.map((scene) => {
-                const speakerMatch = scene.dialogue.match(/^([^:]+):/);
-                const speaker = speakerMatch ? speakerMatch[1].trim() : null;
-                const voiceId = speaker && characterVoices[speaker] ? characterVoices[speaker] : elevenLabsVoices[0]?.voice_id ?? "";
+                const characterNameMatch = scene.dialogue.match(/^([^:]+):/);
+                const characterName = characterNameMatch ? characterNameMatch[1].trim() : null;
+                const voiceId = characterName && characterVoices[characterName]
+                  ? characterVoices[characterName]
+                  : characterName
+                    ? getDefaultVoiceIdForCharacter(characterName)
+                    : elevenLabsVoices[0]?.voice_id ?? "";
                 const voiceoverUrl = voiceoverUrls[scene.sceneNumber];
                 const loading = voiceoverLoadingScene === scene.sceneNumber;
-                const sceneImageUrl = sceneImageUrls[scene.sceneNumber];
+                const storedImageUrl = sceneImageUrls[scene.sceneNumber];
+                const isStoredUrlValid =
+                  typeof storedImageUrl === "string" &&
+                  storedImageUrl.trim() !== "" &&
+                  (storedImageUrl.startsWith("http://") || storedImageUrl.startsWith("https://") || storedImageUrl.startsWith("data:image/"));
+                const sceneImageUrl = isStoredUrlValid ? storedImageUrl.trim() : "";
                 const imageLoading = sceneImageLoadingScene === scene.sceneNumber;
+                const sceneVideoUrl = sceneVideoUrls[scene.sceneNumber];
+                const animateRequestId = sceneAnimationRequestIds[scene.sceneNumber];
+                const animateStatus = sceneAnimationStatus[scene.sceneNumber];
+                const animateTimedOut = sceneAnimationTimedOut[scene.sceneNumber];
+                const animateLoading =
+                  sceneAnimateLoadingScene === scene.sceneNumber || !!animateRequestId;
                 return (
                 <Card key={scene.sceneNumber}>
                   <CardHeader className="p-4 pb-2">
                     <CardTitle className="text-sm">Scene {scene.sceneNumber}</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 pt-0 space-y-2 text-sm">
-                    {sceneImageUrl && (
+                    {sceneImageUrl ? (
                       <img src={sceneImageUrl} alt={`Scene ${scene.sceneNumber}`} className="w-full rounded-md object-cover aspect-square" />
-                    )}
+                    ) : null}
                     <Button
                       variant="outline"
                       size="sm"
@@ -1102,14 +1881,63 @@ export default function TemplateStudioClient() {
                       onClick={async () => {
                         setSceneImageLoadingScene(scene.sceneNumber);
                         try {
-                          const res = await fetch("/api/generate-image", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ prompt: scene.imagePrompt }),
-                          });
-                          const data = await res.json();
+                          const types = parseCharacterTypes(characters);
+                          const primaryType = getPrimaryCharacterTypeForScene(
+                            scene.dialogue,
+                            characters,
+                            characterNames
+                          );
+                          const refUrl =
+                            (primaryType && characterReferenceUrls[primaryType]) ||
+                            (types[0] ? characterReferenceUrls[types[0]] : undefined);
+
+                          let res: Response;
+                          let data: { url?: string; error?: string };
+
+                          if (useImg2ImgSceneImages && refUrl) {
+                            const sceneBody = {
+                              referenceImageUrl: refUrl,
+                              prompt: scene.imagePrompt,
+                            };
+                            console.log("[AI Story] fal img2img scene-image:", sceneBody);
+                            res = await fetch("/api/content-studio/ai-story/scene-image", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify(sceneBody),
+                            });
+                            data = await res.json();
+                          } else {
+                            const imageBody = {
+                              prompt: scene.imagePrompt,
+                              ...(!useImg2ImgSceneImages && aiStoryCharacterStyle
+                                ? { characterStyle: aiStoryCharacterStyle }
+                                : {}),
+                            };
+                            console.log("[AI Story] DALL-E generate-image prompt:", scene.imagePrompt);
+                            res = await fetch("/api/generate-image", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify(imageBody),
+                            });
+                            data = await res.json();
+                          }
+                          console.log("[AI Story] image API response keys:", Object.keys(data));
                           if (!res.ok) throw new Error(data?.error ?? "Failed");
-                          setSceneImageUrls((prev) => ({ ...prev, [scene.sceneNumber]: data.url }));
+                          // Resolve full image URL (no truncation): API returns { url } or raw { data: [{ url }] }.
+                          const rawFromUrl = typeof data?.url === "string" ? data.url.trim() : "";
+                          const rawFromImageUrl = typeof (data as { imageUrl?: string }).imageUrl === "string" ? (data as { imageUrl: string }).imageUrl.trim() : "";
+                          const rawFromData = Array.isArray((data as { data?: { url?: string }[] }).data) && typeof (data as { data: { url?: string }[] }).data[0]?.url === "string" ? (data as { data: { url: string }[] }).data[0].url.trim() : "";
+                          const url = rawFromUrl || rawFromImageUrl || rawFromData;
+                          if (url && (url.startsWith("data:image/") || url.startsWith("https://") || url.startsWith("http://"))) {
+                            setSceneImageUrls((prev) => ({ ...prev, [scene.sceneNumber]: url }));
+                            console.log("Scene image URL saved (full, not truncated)", { sceneNumber: scene.sceneNumber, urlLength: url.length, startsWithHttps: url.startsWith("https://"), preview: url.slice(0, 60) + (url.length > 60 ? "..." : ""), tip: "In console run: __templateStudioDebug.scenes to verify each scene.imageUrl is the full URL" });
+                          } else {
+                            toast({
+                              title: "Invalid image URL",
+                              description: "The server did not return a valid image URL. Try again.",
+                              variant: "destructive",
+                            });
+                          }
                         } catch (e) {
                           toast({
                             title: "Image generation failed",
@@ -1124,6 +1952,90 @@ export default function TemplateStudioClient() {
                       {imageLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                       Generate Image
                     </Button>
+                    {sceneImageUrl ? (
+                      <>
+                        {animateTimedOut ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => {
+                              setSceneAnimationTimedOut((prev) => ({ ...prev, [scene.sceneNumber]: false }));
+                            }}
+                          >
+                            Try again
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            disabled={animateLoading}
+                            onClick={async () => {
+                              setSceneAnimateLoadingScene(scene.sceneNumber);
+                              setSceneAnimationTimedOut((prev) => ({ ...prev, [scene.sceneNumber]: false }));
+                              try {
+                                const res = await fetch("/api/content-studio/ai-story/animate", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    imageUrl: sceneImageUrl,
+                                    motionPrompt: scene.motionPrompt || scene.imagePrompt,
+                                  }),
+                                });
+                                const data = (await res.json()) as {
+                                  requestId?: string | null;
+                                  request_id?: string | null;
+                                  videoUrl?: string;
+                                  error?: string;
+                                };
+                                if (!res.ok) throw new Error(data?.error ?? "Failed");
+                                const requestId = data.requestId ?? data.request_id ?? null;
+                                console.log("Animation request_id:", requestId, "full response:", data);
+                                if (data.videoUrl) {
+                                  setSceneVideoUrls((prev) => ({ ...prev, [scene.sceneNumber]: data.videoUrl }));
+                                  setSceneAnimateLoadingScene(null);
+                                  return;
+                                }
+                                if (requestId) {
+                                  animationPollCountRef.current[scene.sceneNumber] = 0;
+                                  setSceneAnimationRequestIds((prev) => ({
+                                    ...prev,
+                                    [scene.sceneNumber]: requestId,
+                                  }));
+                                  setSceneAnimationStatus((prev) => ({ ...prev, [scene.sceneNumber]: "IN_QUEUE" }));
+                                } else {
+                                  setSceneAnimateLoadingScene(null);
+                                  throw new Error("No requestId or videoUrl returned");
+                                }
+                              } catch (e) {
+                                toast({
+                                  title: "Animation failed",
+                                  description: e instanceof Error ? e.message : "Something went wrong",
+                                  variant: "destructive",
+                                });
+                                setSceneAnimateLoadingScene(null);
+                              }
+                            }}
+                          >
+                            {animateLoading ? (
+                              <span className="flex items-center gap-2">
+                                <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                                <span>
+                                  Generating animation… (may take 2–10 mins)
+                                  {animateStatus ? ` — ${animateStatus.replace("_", " ")}` : ""}
+                                </span>
+                              </span>
+                            ) : (
+                              "Animate Scene"
+                            )}
+                          </Button>
+                        )}
+                        {sceneVideoUrl && (
+                          <video src={sceneVideoUrl} controls className="w-full rounded-md mt-2 aspect-[9/16] object-cover" />
+                        )}
+                      </>
+                    ) : null}
                     <p className="font-medium">Dialogue</p>
                     <p className="text-muted-foreground whitespace-pre-wrap">{scene.dialogue}</p>
                     <p className="font-medium">Image prompt</p>
@@ -1134,19 +2046,39 @@ export default function TemplateStudioClient() {
                       className="w-full"
                       disabled={!voiceId || loading}
                       onClick={async () => {
+                        const characterNameFromDialogue = scene.dialogue.match(/^([^:]+):/)?.[1]?.trim() ?? null;
+                        const voiceIdToUse = characterNameFromDialogue && characterVoices[characterNameFromDialogue]
+                          ? characterVoices[characterNameFromDialogue]
+                          : characterNameFromDialogue
+                            ? getDefaultVoiceIdForCharacter(characterNameFromDialogue)
+                            : elevenLabsVoices[0]?.voice_id ?? "";
                         setVoiceoverLoadingScene(scene.sceneNumber);
                         try {
                           const scriptText = scene.dialogue.includes(":")
                               ? scene.dialogue.slice(scene.dialogue.indexOf(":") + 1).trim()
                               : scene.dialogue;
+                          const speakableText = toSpeakable(scriptText);
                           const res = await fetch("/api/ai-coach/voice-over", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ script: scriptText, voiceId }),
+                            body: JSON.stringify({
+                              script: speakableText,
+                              voiceId: voiceIdToUse,
+                              maxDurationSeconds: TIMELINE_SCENE_DURATION,
+                            }),
                           });
-                          const data = await res.json();
+                          const data = (await res.json()) as { url?: string; error?: string; publicUrl?: string; audioUrl?: string };
                           if (!res.ok) throw new Error(data?.error ?? "Failed");
-                          setVoiceoverUrls((prev) => ({ ...prev, [scene.sceneNumber]: data.url }));
+                          const voUrl =
+                            typeof data.url === "string"
+                              ? data.url
+                              : typeof data.publicUrl === "string"
+                                ? data.publicUrl
+                                : typeof data.audioUrl === "string"
+                                  ? data.audioUrl
+                                  : "";
+                          if (!voUrl.trim()) throw new Error("No audio URL returned");
+                          setVoiceoverUrls((prev) => ({ ...prev, [scene.sceneNumber]: voUrl.trim() }));
                         } catch (e) {
                           toast({
                             title: "Voiceover failed",
@@ -1168,6 +2100,181 @@ export default function TemplateStudioClient() {
                 </Card>
                 );
               })}
+            </div>
+            <div className="mt-6 pt-4 border-t space-y-3">
+              {(libraryDraftSaving || libraryDraftVideoId) && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/60 px-3 py-2 text-sm">
+                  {libraryDraftSaving && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                  )}
+                  {libraryDraftVideoId ? (
+                    <>
+                      <span className="text-muted-foreground">
+                        {libraryDraftSaving ? "Saving to My Library…" : "Saved to My Library (draft)."}
+                      </span>
+                      <Button
+                        variant="link"
+                        className="h-auto p-0 text-primary underline"
+                        onClick={() => void openVideoTimeline()}
+                      >
+                        {libraryDraftSaving ? "Open draft" : "View draft"}
+                      </Button>
+                      {!libraryDraftSaving && (
+                        <>
+                          <span className="text-muted-foreground">or</span>
+                          <Button
+                            variant="link"
+                            className="h-auto p-0 text-primary underline"
+                            onClick={() => router.push("/dashboard/library")}
+                          >
+                            Open from My Library
+                          </Button>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">Saving to My Library…</span>
+                  )}
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                <Film className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground">
+                  Your video timeline has <strong className="text-foreground">{aiStoryScenes.length}</strong> clip{aiStoryScenes.length !== 1 ? "s" : ""} ready.
+                </span>
+                <Button variant="link" className="h-auto p-0 text-primary underline" onClick={() => void openVideoTimeline()}>
+                  View in Video Timeline
+                </Button>
+              </div>
+              <Button variant="default" className="w-full sm:w-auto" onClick={() => void openVideoTimeline()}>
+                <Film className="w-4 h-4 mr-2" />
+                View in Video Timeline
+              </Button>
+              <p className="text-sm text-muted-foreground">
+                Timeline auto-updates as you generate images, animations, and voiceovers. Open when ready to edit or export MP4.
+              </p>
+              {canExportStoryVideo && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Export story video</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      All {AI_STORY_SCENE_COUNT} scenes have animation and voiceover. Save a script, stitch one MP4 on the server, then download — no need to open the timeline first.
+                    </p>
+                  </div>
+                  <div className="space-y-2 max-w-xs">
+                    <Label htmlFor="story-bgm" className="text-foreground">
+                      Background music
+                    </Label>
+                    <Select
+                      value={storyBackgroundMusic}
+                      onValueChange={(v) => setStoryBackgroundMusic(v as BgmSelectValue)}
+                    >
+                      <SelectTrigger id="story-bgm" className="w-full">
+                        <SelectValue placeholder="Background music" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BGM_SELECT_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Looped bed track under the voice at low volume (~18%).{" "}
+                      <a
+                        href="/bgm/ATTRIBUTION.md"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline text-primary"
+                      >
+                        Attribution
+                      </a>
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600"
+                    disabled={storyVideoExporting}
+                    onClick={() => void handleExportStoryVideo()}
+                  >
+                    {storyVideoExporting ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4 mr-2" />
+                    )}
+                    Export Story Video
+                  </Button>
+                  {storyVideoExporting && storyVideoExportPhase && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                      {storyVideoExportPhase === "saving"
+                        ? "Saving script and syncing timeline…"
+                        : "Stitching MP4 (this can take a few minutes)…"}
+                    </p>
+                  )}
+                  {storyVideoExportError && (
+                    <p className="text-sm text-destructive">{storyVideoExportError}</p>
+                  )}
+                  {storyVideoExportUrl && !storyVideoExporting && (
+                    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 pt-1">
+                      <Button variant="default" asChild>
+                        <a href={storyVideoExportUrl} download target="_blank" rel="noopener noreferrer">
+                          <Download className="w-4 h-4 mr-2" />
+                          Download MP4
+                        </a>
+                      </Button>
+                      {storyVideoExportScriptId && (
+                        <Button variant="outline" asChild>
+                          <a href={getTimelineUrl(storyVideoExportScriptId)}>
+                            <ExternalLink className="w-4 h-4 mr-2" />
+                            Edit in Timeline
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {socialMediaPack && (
+                <div className="rounded-lg border border-orange-200 bg-orange-50/60 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Social Media Pack</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Auto-generated from this episode's theme, characters, and dialogue.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      disabled={socialMediaPackLoading}
+                      onClick={handleCopySocialMediaPack}
+                    >
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copy
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      disabled={socialMediaPackLoading}
+                      onClick={() => void handleRegenerateSocialMediaPack()}
+                    >
+                      {socialMediaPackLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                      Regenerate
+                    </Button>
+                  </div>
+                  <Textarea
+                    readOnly
+                    value={socialMediaPackText}
+                    className="min-h-[260px] font-mono text-xs"
+                  />
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

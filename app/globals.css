@@ -261,6 +261,16 @@
   }
 }
 
+/* Video timeline: placeholder when scene has no media (no black screen) */
+@keyframes video-placeholder-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
 /* Intercom chat launcher: position bottom-left to avoid overlapping content */
 #intercom-container,
 .intercom-launcher {

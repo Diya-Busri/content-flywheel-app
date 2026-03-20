@@ -2241,9 +2241,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
       });
-      const data = (await res.json()) as { url?: string; error?: string };
+      const data = (await res.json()) as { url?: string; imageUrl?: string; data?: { url?: string }[]; error?: string };
+      console.log("DALL-E Response:", data);
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
-      if (data.url) setAiImageUrl(data.url);
+      const imageUrl =
+        (typeof data.url === "string" && data.url.trim()) ||
+        (typeof data.imageUrl === "string" && data.imageUrl.trim()) ||
+        (Array.isArray(data.data) && typeof data.data[0]?.url === "string" && data.data[0].url.trim())
+          ? (data.url?.trim() ?? data.imageUrl?.trim() ?? data.data?.[0]?.url?.trim() ?? "")
+          : "";
+      if (imageUrl) setAiImageUrl(imageUrl);
       else throw new Error("No image URL returned");
     } catch (err) {
       toast({ title: "AI image failed", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });

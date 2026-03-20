@@ -45,6 +45,8 @@ export async function GET() {
     });
 
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    console.log("[auth/youtube] redirect_uri sent to Google:", callbackUrl);
+    console.log("[auth/youtube] full Google auth URL:", authUrl);
     return NextResponse.redirect(authUrl);
   } catch (err) {
     console.error("[auth/youtube]", err);

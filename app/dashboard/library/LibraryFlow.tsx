@@ -761,6 +761,11 @@ export default function LibraryFlow() {
                                     AI Designed
                                   </Badge>
                                 )}
+                                {item.type === "video" && (item.metadata as { sourceType?: string })?.sourceType === "ai-story" && (
+                                  <Badge variant="secondary" className="text-xs font-normal bg-violet-500/10 text-violet-600 dark:text-violet-400 border-0">
+                                    AI Story
+                                  </Badge>
+                                )}
                               </div>
                             </div>
                             <DropdownMenu>
@@ -858,6 +863,11 @@ export default function LibraryFlow() {
                           {item.type === "script" && (
                             <Badge variant="secondary" className="text-xs font-normal bg-blue-500/10 text-blue-600 dark:text-blue-400 border-0">
                               From: {scriptSourceLabel(item.platform)}
+                            </Badge>
+                          )}
+                          {item.type === "video" && (item.metadata as { sourceType?: string })?.sourceType === "ai-story" && (
+                            <Badge variant="secondary" className="text-xs font-normal bg-violet-500/10 text-violet-600 dark:text-violet-400 border-0">
+                              AI Story
                             </Badge>
                           )}
                         </div>

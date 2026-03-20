@@ -4,6 +4,11 @@ import "./timeline-scroll.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getVideoPrefill, clearVideoPrefill } from "@/lib/video-prefill";
+import {
+  buildViralCaptionDrawtextChain,
+  VIRAL_CAPTION_BOTTOM_PAD,
+  VIRAL_CAPTION_FONT_SIZES,
+} from "@/lib/video-caption-ffmpeg";
 import { Loader2, Menu, PanelLeftClose, ZoomIn, ZoomOut, Maximize2, PanelRightOpen, Undo2, Redo2 } from "lucide-react";
 import { useSidebar } from "@/components/sidebar-context";
 import type { FFmpeg } from "@ffmpeg/ffmpeg";
@@ -23,14 +28,15 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 const PIXELS_PER_SECOND = 200;
-const TRACK_HEIGHT = 56;
-const RULER_HEIGHT = 28;
+const TRACK_HEIGHT = 44;
+const RULER_HEIGHT = 24;
 const SCENE_BLOCK_MIN_WIDTH = 88;
 const SNAP_GRID_SEC = 0.5;
 const PLAYHEAD_COLOR = "#ef4444";
 const RESIZE_HANDLE_WIDTH = 8;
 
-type CaptionBlock = { id: string; text: string; startTime: number; endTime: number };
+type WordTiming = { word: string; start: number; end: number };
+type CaptionBlock = { id: string; text: string; startTime: number; endTime: number; wordTimings?: WordTiming[] };
 
 type SceneBlock = { id: string; text: string; startTime: number; endTime: number; colorClass: string };
 
@@ -64,6 +70,8 @@ type Scene = {
   animationType?: string | null;
   /** Start time in seconds (for drag-to-reposition). If set, block is position-based; else derived from order. */
   startTime?: number;
+  /** Per-clip audio (e.g. voiceover from Template Studio). When set, used for this clip in playback and export. */
+  audioUrl?: string | null;
 };
 
 function isBackgroundEl(el: SceneElement): el is BackgroundElement {
@@ -83,9 +91,9 @@ function isStickerEl(el: SceneElement): el is StickerElement {
 }
 
 type SceneAsset =
-  | { startTime: number; duration: number; type: "image"; file: string; captionText?: string; captionStartTime?: number; captionEndTime?: number }
-  | { startTime: number; duration: number; type: "video"; file: string; captionText?: string; captionStartTime?: number; captionEndTime?: number }
-  | { startTime: number; duration: number; type: "color"; color: string; captionText?: string; captionStartTime?: number; captionEndTime?: number };
+  | { startTime: number; duration: number; type: "image"; file: string; audioUrl?: string | null; captionText?: string; captionStartTime?: number; captionEndTime?: number }
+  | { startTime: number; duration: number; type: "video"; file: string; audioUrl?: string | null; captionText?: string; captionStartTime?: number; captionEndTime?: number }
+  | { startTime: number; duration: number; type: "color"; color: string; audioUrl?: string | null; captionText?: string; captionStartTime?: number; captionEndTime?: number };
 
 const DEFAULT_SCENE_COLOR = "#1a1a1a";
 
@@ -95,8 +103,8 @@ const SCENE_COLORS = ["#3b82f6", "#a855f7", "#22c55e", "#f97316", "#ec4899"];
 const VIDEO_TEMPLATES = [
   {
     id: "tiktok-short",
-    name: "TikTok Short",
-    description: "Quick, punchy vertical videos",
+    name: "TikTok / Stories",
+    description: "Full-screen vertical 9:16 — TikTok, IG Stories, Reels",
     durationRange: [5, 60] as [number, number],
     sceneRange: [1, 10] as [number, number],
     defaultDuration: 15,
@@ -152,20 +160,38 @@ const VIDEO_TEMPLATES = [
 
 type VideoTemplate = (typeof VIDEO_TEMPLATES)[number];
 
+/** One-click caption style presets */
+const CAPTION_PRESETS = [
+  { name: "Text only", position: "bottom" as const, fontSize: "medium" as const, textColor: "#ffffff", animation: "fadeIn" as const, background: "none" as const, displayMode: "full" as const },
+  { name: "Classic", position: "bottom" as const, fontSize: "medium" as const, textColor: "#ffffff", animation: "fadeIn" as const, background: "pill" as const, displayMode: "full" as const },
+  { name: "Yellow subs", position: "bottom" as const, fontSize: "medium" as const, textColor: "#facc15", animation: "slideUp" as const, background: "none" as const, displayMode: "full" as const },
+  { name: "Bold black", position: "middle" as const, fontSize: "large" as const, textColor: "#000000", animation: "pop" as const, background: "pill" as const, displayMode: "full" as const },
+  { name: "Minimal", position: "top" as const, fontSize: "small" as const, textColor: "#e5e5e5", animation: "none" as const, background: "none" as const, displayMode: "full" as const },
+  { name: "Karaoke bar", position: "bottom" as const, fontSize: "large" as const, textColor: "#ffffff", animation: "slideUp" as const, background: "bar" as const, displayMode: "full" as const },
+  { name: "Soft white", position: "bottom" as const, fontSize: "medium" as const, textColor: "#fafafa", animation: "fadeIn" as const, background: "pill" as const, displayMode: "full" as const },
+  { name: "Word by word", position: "bottom" as const, fontSize: "medium" as const, textColor: "#ffffff", animation: "fadeIn" as const, background: "pill" as const, displayMode: "wordByWord" as const },
+  { name: "Single word", position: "bottom" as const, fontSize: "large" as const, textColor: "#ffffff", animation: "pop" as const, background: "pill" as const, displayMode: "singleWord" as const },
+] as const;
+
 function getActiveScene(
   currentTime: number,
   scenes: SceneBlock[]
 ): { scene: SceneBlock; index: number } | null {
   if (scenes.length === 0) return null;
-  if (currentTime < scenes[0].startTime) return null;
-  if (currentTime >= scenes[scenes.length - 1].endTime) return null;
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
     if (currentTime >= scene.startTime && currentTime < scene.endTime) {
       return { scene, index: i };
     }
   }
-  return null;
+  // Before first scene: show first scene
+  if (currentTime < scenes[0].startTime) return { scene: scenes[0], index: 0 };
+  // Past last scene: show last scene (hold last frame)
+  if (currentTime >= scenes[scenes.length - 1].endTime) return { scene: scenes[scenes.length - 1], index: scenes.length - 1 };
+  // In a gap: show the PREVIOUS scene (hold last frame) so we never show a blank/next scene with no media
+  const firstAfter = scenes.findIndex((s) => s.endTime > currentTime);
+  if (firstAfter > 0) return { scene: scenes[firstAfter - 1], index: firstAfter - 1 };
+  return { scene: scenes[0], index: 0 };
 }
 
 function getScenePreviewColor(index: number): string {
@@ -183,6 +209,18 @@ function getActiveCaption(
     }
   }
   return null;
+}
+
+/** For per-clip audio: at time t, return the block and its scene (with optional audioUrl). */
+function getActiveBlockAndScene(
+  sceneBlocks: SceneBlock[],
+  sceneList: Scene[],
+  t: number
+): { block: SceneBlock; scene: Scene } | null {
+  const active = getActiveScene(t, sceneBlocks);
+  if (!active) return null;
+  const scene = sceneList.find((s) => s.id === active.scene.id);
+  return scene ? { block: active.scene, scene } : null;
 }
 
 type ScriptContent = {
@@ -285,6 +323,17 @@ function getSceneBackgroundMedia(scene: Scene): { url: string; type: "image" | "
   return first && isBackgroundEl(first) ? first.media : null;
 }
 
+/** Library/API may store per-scene voice as voiceover_url; timeline uses audioUrl. */
+function normalizeSceneClipAudioUrl(scene: Scene): Scene {
+  const a = scene.audioUrl?.trim();
+  if (a) return scene;
+  const o = scene as Scene & { voiceover_url?: string; voiceoverUrl?: string };
+  const fb = (
+    typeof o.voiceover_url === "string" ? o.voiceover_url : typeof o.voiceoverUrl === "string" ? o.voiceoverUrl : ""
+  ).trim();
+  return fb ? { ...scene, audioUrl: fb } : scene;
+}
+
 function buildSceneBlocksFromScenes(sceneList: Scene[]): SceneBlock[] {
   if (sceneList.length === 0) return [];
   const withStart = sceneList.map((scene, i) => {
@@ -307,7 +356,30 @@ function buildSceneBlocksFromScenes(sceneList: Scene[]): SceneBlock[] {
   return blocks.slice().sort((a, b) => a.startTime - b.startTime);
 }
 
-function createScene(id: string, title: string, duration: number, color: string, startTime?: number): Scene {
+/** Pack scenes back-to-back from t=0 in timeline order (removes blank gaps between scenes and lead-in). Returns same reference if nothing to fix. */
+function collapseAllSceneGapsToContiguous(sceneList: Scene[]): Scene[] {
+  if (sceneList.length === 0) return sceneList;
+  const blocks = buildSceneBlocksFromScenes(sceneList).sort((a, b) => a.startTime - b.startTime);
+  let t = 0;
+  const idToTiming = new Map<string, { startTime: number; duration: number }>();
+  for (const b of blocks) {
+    const dur = Math.max(0.5, b.endTime - b.startTime);
+    idToTiming.set(b.id, { startTime: t, duration: dur });
+    t += dur;
+  }
+  let changed = false;
+  const next = sceneList.map((scene) => {
+    const u = idToTiming.get(scene.id);
+    if (!u) return scene;
+    const b = blocks.find((x) => x.id === scene.id);
+    if (!b) return scene;
+    if (Math.abs(b.startTime - u.startTime) > 0.02 || Math.abs(b.endTime - b.startTime - u.duration) > 0.02) changed = true;
+    return { ...scene, startTime: u.startTime, duration: u.duration };
+  });
+  return changed ? next : sceneList;
+}
+
+function createScene(id: string, title: string, duration: number, color: string, startTime?: number, audioUrl?: string | null): Scene {
   return {
     id,
     title,
@@ -315,6 +387,7 @@ function createScene(id: string, title: string, duration: number, color: string,
     color,
     elements: [{ id: `${id}-bg`, type: ELEMENT_TYPES.BACKGROUND, media: null }],
     ...(typeof startTime === "number" ? { startTime } : {}),
+    ...(audioUrl != null && audioUrl !== "" ? { audioUrl } : {}),
   };
 }
 
@@ -326,7 +399,8 @@ function createSceneWithBackground(
   imageUrl: string | null,
   videoUrl?: string | null,
   animationType?: string | null,
-  startTime?: number
+  startTime?: number,
+  audioUrl?: string | null
 ): Scene {
   const media =
     videoUrl && videoUrl.trim()
@@ -342,6 +416,7 @@ function createSceneWithBackground(
     elements: [{ id: `${id}-bg`, type: ELEMENT_TYPES.BACKGROUND, media }],
     ...(animationType != null && animationType !== "" ? { animationType } : {}),
     ...(typeof startTime === "number" ? { startTime } : {}),
+    ...(audioUrl != null && audioUrl !== "" ? { audioUrl } : {}),
   };
 }
 
@@ -367,14 +442,19 @@ function collectSceneAssets(
     const captionEndTime = overlappingCaption
       ? Math.min(overlappingCaption.endTime, endTime)
       : undefined;
-    const captionText = overlappingCaption?.text;
+    /** Full dialogue line (e.g. "Name: …") for burned-in export captions */
+    const captionText = overlappingCaption
+      ? overlappingCaption.text.replace(/\r?\n/g, " ").trim()
+      : undefined;
 
+    const clipAudioUrl = scene?.audioUrl && scene.audioUrl.trim() ? scene.audioUrl.trim() : undefined;
     if (media && media.url) {
       return {
         startTime,
         duration,
         type: media.type,
         file: media.url,
+        ...(clipAudioUrl != null && { audioUrl: clipAudioUrl }),
         ...(captionText !== undefined && { captionText, captionStartTime, captionEndTime }),
       };
     }
@@ -383,6 +463,7 @@ function collectSceneAssets(
       duration,
       type: "color",
       color: DEFAULT_SCENE_COLOR,
+      ...(clipAudioUrl != null && { audioUrl: clipAudioUrl }),
       ...(captionText !== undefined && { captionText, captionStartTime, captionEndTime }),
     };
   });
@@ -419,10 +500,6 @@ function hexToFfmpeg(hex: string): string {
   return "0xffffff";
 }
 
-function escapeDrawtext(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/'/g, "'\\''").replace(/:/g, "\\:");
-}
-
 type ExportCaptionStyle = {
   position: "bottom" | "middle" | "top";
   fontSize: "small" | "medium" | "large";
@@ -433,9 +510,11 @@ type ExportCaptionStyle = {
 function buildExportFilterComplex(
   assets: SceneAsset[],
   hasMusic: boolean,
-  captionStyle: ExportCaptionStyle
+  captionStyle: ExportCaptionStyle,
+  /** When using per-clip audio, scene files start after clip audios + optional music. Otherwise 1 (voiceover only) or 2 (voiceover + music). */
+  firstSceneInputIndex?: number
 ): { filter: string; videoLabel: string } {
-  const firstSceneInputIndex = hasMusic ? 2 : 1;
+  const firstSceneInputIndexResolved = firstSceneInputIndex ?? (hasMusic ? 2 : 1);
   let fileIndex = 0;
   const segmentLabels: string[] = [];
   const parts: string[] = [];
@@ -449,7 +528,7 @@ function buildExportFilterComplex(
         `color=c=${hex}:s=${EXPORT_WIDTH}x${EXPORT_HEIGHT}:d=${dur},format=yuv420p[v${i}]`
       );
     } else {
-      const idx = firstSceneInputIndex + fileIndex;
+      const idx = firstSceneInputIndexResolved + fileIndex;
       fileIndex += 1;
       parts.push(
         `[${idx}:v]scale=${EXPORT_WIDTH}:${EXPORT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${EXPORT_WIDTH}:${EXPORT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,setsar=1,trim=duration=${dur},setpts=PTS-STARTPTS,format=yuv420p[v${i}]`
@@ -461,15 +540,14 @@ function buildExportFilterComplex(
   const concatLabel = segmentLabels.join("");
   parts.push(`${concatLabel}concat=n=${assets.length}:v=1:a=0[vout]`);
 
-  const fontSizeMap = { small: 28, medium: 36, large: 48 };
-  const yMap = {
-    bottom: "h-th-80",
-    middle: "(h-th)/2",
-    top: "80",
-  };
-  const fs = fontSizeMap[captionStyle.fontSize];
-  const baseY = yMap[captionStyle.position];
-  const fontcolor = hexToFfmpeg(captionStyle.textColor);
+  const viralFs =
+    captionStyle.fontSize === "large"
+      ? VIRAL_CAPTION_FONT_SIZES.large
+      : captionStyle.fontSize === "small"
+        ? VIRAL_CAPTION_FONT_SIZES.small
+        : VIRAL_CAPTION_FONT_SIZES.medium;
+  const viralBottomPad = VIRAL_CAPTION_BOTTOM_PAD;
+  const viralBaseY = `h-text_h-${viralBottomPad}`;
   const anim = captionStyle.animation;
 
   let videoLabel = "vout";
@@ -477,13 +555,13 @@ function buildExportFilterComplex(
   for (let i = 0; i < assets.length; i++) {
     const a = assets[i];
     if (a.captionText == null || a.captionText.trim() === "" || a.captionStartTime == null || a.captionEndTime == null) continue;
+    const fullLine = a.captionText.trim();
     const start = a.captionStartTime;
     const end = a.captionEndTime;
-    const text = escapeDrawtext(a.captionText.trim());
     const nextLabel = `vc${i}`;
     const enable = `between(t\\,${start}\\,${end})`;
-    let yExpr = baseY;
-    let alphaExpr = "1";
+    let yExpr = viralBaseY;
+    let alphaExpr: string | undefined = undefined;
     if (anim === "fadeIn" || anim === "pop") {
       const fadeDur = 0.4;
       alphaExpr = `if(lt(t\\,${start + fadeDur})\\,(t-${start})/${fadeDur}\\,1)`;
@@ -491,13 +569,19 @@ function buildExportFilterComplex(
     if (anim === "slideUp" || anim === "pop") {
       const slideDur = 0.35;
       const offset = 60;
-      if (baseY === "h-th-80") yExpr = `if(lt(t\\,${start + slideDur})\\,h-th-80+${offset}*(1-(t-${start})/${slideDur})\\,h-th-80)`;
-      else if (baseY === "(h-th)/2") yExpr = `if(lt(t\\,${start + slideDur})\\,(h-th)/2+${offset}*(1-(t-${start})/${slideDur})\\,(h-th)/2)`;
-      else yExpr = `if(lt(t\\,${start + slideDur})\\,80+${offset}*(1-(t-${start})/${slideDur})\\,80)`;
+      yExpr = `if(lt(t\\,${start + slideDur})\\,h-text_h-${viralBottomPad}+${offset}*(1-(t-${start})/${slideDur})\\,h-text_h-${viralBottomPad})`;
     }
-    const alphaOpt = alphaExpr !== "1" ? `:alpha='${alphaExpr}'` : "";
     captionParts.push(
-      `[${videoLabel}]drawtext=text='${text}':fontsize=${fs}:fontcolor=${fontcolor}:x=(w-tw)/2:y=${yExpr}:enable='${enable}'${alphaOpt}[${nextLabel}]`
+      buildViralCaptionDrawtextChain(videoLabel, nextLabel, {
+        videoWidth: EXPORT_WIDTH,
+        dialogueLine: fullLine,
+        fontSize: viralFs,
+        bottomPadPx: viralBottomPad,
+        yExpr,
+        enableExpr: enable,
+        alphaExpr,
+        midLabel: `vcap_mid_${i}`,
+      })
     );
     videoLabel = nextLabel;
   }
@@ -509,10 +593,15 @@ function buildExportFilterComplex(
   return { filter: parts.join(";"), videoLabel };
 }
 
+function hasAssetAudioUrl(a: SceneAsset): a is SceneAsset & { audioUrl: string } {
+  return "audioUrl" in a && !!a.audioUrl && typeof (a as { audioUrl?: string }).audioUrl === "string";
+}
+
 async function exportVideo(params: {
   ffmpeg: FFmpeg;
   fetchFile: (url: string) => Promise<Uint8Array>;
-  voiceoverUrl: string;
+  /** Global voiceover; when null/empty, per-clip audio (asset.audioUrl) is used if present. */
+  voiceoverUrl: string | null;
   musicUrl: string | null;
   musicVolume: number;
   assets: SceneAsset[];
@@ -521,6 +610,13 @@ async function exportVideo(params: {
   onProgress: (p: number) => void;
 }): Promise<Uint8Array> {
   const { ffmpeg, fetchFile, voiceoverUrl, musicUrl, musicVolume, assets, captionStyle, totalDuration, onProgress } = params;
+
+  const usePerClipAudio = !voiceoverUrl?.trim() && assets.some(hasAssetAudioUrl);
+  const clipAudioAssets = usePerClipAudio ? assets.filter(hasAssetAudioUrl) : [];
+
+  if (!voiceoverUrl?.trim() && !usePerClipAudio) {
+    throw new Error("No audio for export: set a voiceover or use scenes with per-clip audio.");
+  }
 
   const progressHandler = ({ message }: { message: string }) => {
     const m = message.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
@@ -536,12 +632,22 @@ async function exportVideo(params: {
   ffmpeg.on("log", progressHandler);
 
   try {
-    console.log("[exportVideo] Starting export...");
+    console.log("[exportVideo] Starting export...", usePerClipAudio ? "(per-clip audio)" : "(global voiceover)");
 
-    console.log("[exportVideo] Writing voiceover to ffmpeg FS...");
-    const voiceoverData = await fetchFile(voiceoverUrl);
-    await ffmpeg.writeFile("voiceover.mp3", voiceoverData);
-    console.log("[exportVideo] Voiceover written, size:", voiceoverData.byteLength, "bytes");
+    if (usePerClipAudio) {
+      for (let i = 0; i < clipAudioAssets.length; i++) {
+        const a = clipAudioAssets[i];
+        const name = `clip_audio_${i}.mp3`;
+        const data = await fetchFile(a.audioUrl);
+        await ffmpeg.writeFile(name, data);
+        console.log("[exportVideo] Clip audio", i, "written, startTime=" + a.startTime + "s, size:", data.byteLength);
+      }
+    } else {
+      console.log("[exportVideo] Writing voiceover to ffmpeg FS...");
+      const voiceoverData = await fetchFile(voiceoverUrl!);
+      await ffmpeg.writeFile("voiceover.mp3", voiceoverData);
+      console.log("[exportVideo] Voiceover written, size:", voiceoverData.byteLength, "bytes");
+    }
 
     if (musicUrl) {
       console.log("[exportVideo] Writing music to ffmpeg FS...");
@@ -568,16 +674,39 @@ async function exportVideo(params: {
     console.log("[exportVideo] Scene files written:", fileIndex, "file(s). Color-only scenes use filter, no file.");
 
     const hasMusic = !!musicUrl;
-    console.log("[exportVideo] Building filter_complex (concat + captions, caption animation:", captionStyle.animation + ")...");
-    const { filter: videoFilter, videoLabel } = buildExportFilterComplex(assets, hasMusic, captionStyle);
+    const numClipAudios = clipAudioAssets.length;
+    const firstSceneInputIndex = usePerClipAudio ? numClipAudios + (hasMusic ? 1 : 0) : undefined;
+    const { filter: videoFilter, videoLabel } = buildExportFilterComplex(assets, hasMusic, captionStyle, firstSceneInputIndex);
     const musicGain = Math.max(0, Math.min(1, musicVolume / 100));
-    const fullFilter = hasMusic
-      ? `${videoFilter};[0:a]volume=1[va];[1:a]volume=${musicGain}[ma];[va][ma]amix=inputs=2:duration=first[aout]`
-      : videoFilter;
-    console.log("[exportVideo] Audio: voiceover +", hasMusic ? "music at " + Math.round(musicGain * 100) + "%" : "no music");
 
-    const args: string[] = ["-y", "-i", "voiceover.mp3"];
-    if (hasMusic) args.push("-i", "music.mp3");
+    let fullFilter: string;
+    let audioMap: string;
+    const args: string[] = ["-y"];
+
+    if (usePerClipAudio) {
+      for (let i = 0; i < numClipAudios; i++) args.push("-i", `clip_audio_${i}.mp3`);
+      if (hasMusic) args.push("-i", "music.mp3");
+      const adelayParts = clipAudioAssets.map((a, i) => {
+        const ms = Math.round(a.startTime * 1000);
+        return `[${i}:a]adelay=${ms}|${ms}[a${i}]`;
+      });
+      const amixInputs = clipAudioAssets.map((_, i) => `[a${i}]`).join("");
+      const clipMix = `${adelayParts.join(";")};${amixInputs}amix=inputs=${numClipAudios}:duration=longest[va]`;
+      fullFilter = hasMusic
+        ? `${videoFilter};${clipMix};[va]volume=1[va2];[${numClipAudios}:a]volume=${musicGain}[ma];[va2][ma]amix=inputs=2:duration=first[aout]`
+        : `${videoFilter};${clipMix}`;
+      audioMap = hasMusic ? "[aout]" : "[va]";
+      console.log("[exportVideo] Audio: per-clip mix (" + numClipAudios + " clips)" + (hasMusic ? " + music at " + Math.round(musicGain * 100) + "%" : ""));
+    } else {
+      args.push("-i", "voiceover.mp3");
+      if (hasMusic) args.push("-i", "music.mp3");
+      fullFilter = hasMusic
+        ? `${videoFilter};[0:a]volume=1[va];[1:a]volume=${musicGain}[ma];[va][ma]amix=inputs=2:duration=first[aout]`
+        : videoFilter;
+      audioMap = hasMusic ? "[aout]" : "0:a";
+      console.log("[exportVideo] Audio: voiceover +", hasMusic ? "music at " + Math.round(musicGain * 100) + "%" : "no music");
+    }
+
     fileIndex = 0;
     for (let i = 0; i < assets.length; i++) {
       const a = assets[i];
@@ -589,9 +718,7 @@ async function exportVideo(params: {
         fileIndex += 1;
       }
     }
-    args.push("-filter_complex", fullFilter, "-map", `[${videoLabel}]`);
-    if (hasMusic) args.push("-map", "[aout]");
-    else args.push("-map", "0:a");
+    args.push("-filter_complex", fullFilter, "-map", `[${videoLabel}]`, "-map", audioMap);
     args.push(
       "-c:v", "libx264",
       "-c:a", "aac",
@@ -901,6 +1028,11 @@ function parseContent(content: unknown): ScriptContent {
   return {};
 }
 
+/** Remove leading speaker label (e.g. "Narrator:", "Apple:") so only the line is shown. */
+function stripSpeakerPrefix(text: string): string {
+  return text.replace(/^\s*[^:]+:\s*/i, "").trim();
+}
+
 function getCaptions(content: ScriptContent): CaptionBlock[] {
   const raw = content.captions;
   if (!Array.isArray(raw)) return [];
@@ -951,6 +1083,9 @@ export default function VideoTimelinePage() {
   const [captionPosition, setCaptionPosition] = useState<"bottom" | "middle" | "top">("bottom");
   const [captionFontSize, setCaptionFontSize] = useState<"small" | "medium" | "large">("medium");
   const [captionTextColor, setCaptionTextColor] = useState("#ffffff");
+  const [captionBackground, setCaptionBackground] = useState<"none" | "pill" | "bar">("pill");
+  /** "full" = whole line; "wordByWord" = build up with highlight; "singleWord" = only current word on screen */
+  const [captionDisplayMode, setCaptionDisplayMode] = useState<"full" | "wordByWord" | "singleWord">("full");
 
   /** Transition between scenes (preview + server export). */
   type SceneTransitionType = "fade" | "slideLeft" | "slideRight" | "wipe" | "zoom";
@@ -1010,6 +1145,55 @@ export default function VideoTimelinePage() {
     return Math.max(0, ...blocks.map((b) => b.endTime));
   }, [scenes]);
   const sceneBlocks = useMemo(() => buildSceneBlocksFromScenes(scenes), [scenes]);
+  const hasPerClipAudio = useMemo(() => scenes.some((s) => !!s.audioUrl?.trim()), [scenes]);
+  const activeBlockAndScene = useMemo(
+    () => getActiveBlockAndScene(sceneBlocks, scenes, currentTime),
+    [sceneBlocks, scenes, currentTime]
+  );
+  const playbackSrc =
+    hasPerClipAudio && activeBlockAndScene?.scene?.audioUrl
+      ? activeBlockAndScene.scene.audioUrl!
+      : voiceoverUrl ?? "";
+  const playbackStartOffset =
+    hasPerClipAudio && activeBlockAndScene?.scene?.audioUrl ? activeBlockAndScene.block.startTime : 0;
+  const playbackStartOffsetRef = useRef(0);
+
+  useEffect(() => {
+    playbackStartOffsetRef.current = playbackStartOffset;
+    const el = audioRef.current;
+    if (el && playbackSrc) {
+      const target = Math.max(0, currentTime - playbackStartOffset);
+      if (Math.abs(el.currentTime - target) > 0.15) el.currentTime = target;
+    }
+  }, [playbackSrc, playbackStartOffset, currentTime]);
+
+  /** Remove blank gaps: scenes are always packed back-to-back from 0s (like "Remove gaps"). Shift captions only when they shared a leading offset with scenes. */
+  useEffect(() => {
+    if (scenes.length === 0) return;
+    const blocksBefore = buildSceneBlocksFromScenes(scenes).sort((a, b) => a.startTime - b.startTime);
+    const minStart = blocksBefore[0].startTime;
+    const nextScenes = collapseAllSceneGapsToContiguous(scenes);
+    if (nextScenes === scenes) return;
+    if (minStart > 0.02) {
+      const capMin = captions.length > 0 ? Math.min(...captions.map((c) => c.startTime)) : Infinity;
+      if (capMin >= minStart - 0.05) {
+        setCaptions((prev) =>
+          prev.map((c) => ({
+            ...c,
+            startTime: Math.max(0, c.startTime - minStart),
+            endTime: Math.max(0, c.endTime - minStart),
+            wordTimings: c.wordTimings?.map((w) => ({
+              ...w,
+              start: w.start - minStart,
+              end: w.end - minStart,
+            })),
+          }))
+        );
+      }
+    }
+    setScenes(nextScenes);
+  }, [scenes, captions]);
+
   const selectedCaption = useMemo(
     () => captions.find((c) => c.id === selectedCaptionId) ?? null,
     [captions, selectedCaptionId]
@@ -1047,6 +1231,7 @@ export default function VideoTimelinePage() {
 
   const sidebar = useSidebar();
   const sceneVideoRef = useRef<HTMLVideoElement>(null);
+  const nextSceneVideoRef = useRef<HTMLVideoElement>(null);
   const playbackTailRef = useRef<{ rafId: number; timelineEnd: number; lastTs: number; lastUpdateTs: number; tailTime: number } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const imageUploadTargetRef = useRef<{ sceneIndex: number; elementIndex: number } | null>(null);
@@ -1113,6 +1298,32 @@ export default function VideoTimelinePage() {
     if (isPlaying && video.paused) video.play().catch(() => {});
     if (!isPlaying && !video.paused) video.pause();
   }, [currentTime, activeScene, activeSceneIndexInScenes, scenes, isPlaying]);
+
+  // Preload and start next scene video during transition so crossfade has no black
+  useEffect(() => {
+    if (!activeScene || !sceneBlocks.length) return;
+    const sortedBlocks = [...sceneBlocks].sort((a, b) => a.startTime - b.startTime);
+    const currentIdx = sortedBlocks.findIndex((b) => b.id === activeScene.scene.id);
+    const nextBlock = currentIdx >= 0 && currentIdx < sortedBlocks.length - 1 ? sortedBlocks[currentIdx + 1] : null;
+    const PREVIEW_XFADE = 0.25;
+    const PREVIEW_NEXT_MOUNT_LEAD = 0.5;
+    const xfadeStart = activeScene.scene.endTime - PREVIEW_XFADE;
+    const inNextLayerMountZone =
+      nextBlock && currentTime >= xfadeStart - PREVIEW_NEXT_MOUNT_LEAD && currentTime < activeScene.scene.endTime;
+    const inTransitionZone = nextBlock && currentTime >= xfadeStart && currentTime < activeScene.scene.endTime;
+    if (!inNextLayerMountZone || !nextBlock) return;
+    const nextSceneData = scenes.find((s) => s.id === nextBlock.id);
+    const nextMedia = nextSceneData ? getSceneBackgroundMedia(nextSceneData) : null;
+    if (nextMedia?.type !== "video") return;
+    const nextVideo = nextSceneVideoRef.current;
+    if (!nextVideo) return;
+    if (Math.abs(nextVideo.currentTime) > 0.05) nextVideo.currentTime = 0;
+    // Only decode/play during the visible crossfade so we are not running two videos for the whole lead window
+    if (isPlaying && inTransitionZone && nextVideo.readyState >= 2 && nextVideo.paused) {
+      nextVideo.play().catch(() => {});
+    }
+    if ((!isPlaying || !inTransitionZone) && !nextVideo.paused) nextVideo.pause();
+  }, [currentTime, activeScene, sceneBlocks, scenes, isPlaying]);
 
   // Clear selection if it becomes invalid (e.g. after script change)
   useEffect(() => {
@@ -1220,7 +1431,7 @@ export default function VideoTimelinePage() {
           setVoiceoverFileName(null);
           let totalDur = 0;
           let runStart = 0;
-          const sceneList = scenesJson.map((s: { duration?: number; script_text?: string; image_url?: string | null; video_url?: string | null; animation_type?: string | null; section_label?: string | null }, i: number) => {
+          const sceneList = scenesJson.map((s: { duration?: number; script_text?: string; image_url?: string | null; video_url?: string | null; animation_type?: string | null; section_label?: string | null; voiceover_url?: string | null }, i: number) => {
             const dur = typeof s.duration === "number" && s.duration > 0 ? s.duration : 5;
             totalDur += dur;
             const title = typeof s.section_label === "string" && s.section_label.trim()
@@ -1231,6 +1442,10 @@ export default function VideoTimelinePage() {
             const imageUrl = typeof s.image_url === "string" && s.image_url.trim() ? s.image_url.trim() : null;
             const videoUrl = typeof s.video_url === "string" && s.video_url.trim() ? s.video_url.trim() : null;
             const animationType = typeof s.animation_type === "string" && s.animation_type.trim() ? s.animation_type.trim() : null;
+            const voiceUrl =
+              typeof s.voiceover_url === "string" && s.voiceover_url.trim().startsWith("http")
+                ? s.voiceover_url.trim()
+                : null;
             const scene = createSceneWithBackground(
               `scene_${i + 1}`,
               title,
@@ -1239,7 +1454,8 @@ export default function VideoTimelinePage() {
               imageUrl,
               videoUrl,
               animationType,
-              runStart
+              runStart,
+              voiceUrl
             );
             runStart += dur;
             return scene;
@@ -1249,8 +1465,12 @@ export default function VideoTimelinePage() {
           let start = 0;
           const caps: CaptionBlock[] = scenesJson.map((s, i) => {
             const dur = typeof s.duration === "number" && s.duration > 0 ? s.duration : 5;
-            const text = (typeof s.caption === "string" ? s.caption : s.script_text) ?? "";
-            const block: CaptionBlock = { id: `cap-${i}`, text: text.slice(0, 200), startTime: start, endTime: start + dur };
+            /** Prefer script_text (full dialogue); legacy caption rows were sometimes truncated. */
+            const text =
+              (typeof s.script_text === "string" && s.script_text.trim() && s.script_text) ||
+              (typeof s.caption === "string" ? s.caption : "") ||
+              "";
+            const block: CaptionBlock = { id: `cap-${i}`, text: text.trim(), startTime: start, endTime: start + dur };
             start += dur;
             return block;
           });
@@ -1261,17 +1481,34 @@ export default function VideoTimelinePage() {
             try {
               const raw = localStorage.getItem(`cf-video-timeline-draft-${scriptId}`);
               if (raw) {
-                const draft = JSON.parse(raw) as { scriptId?: string; scenes?: unknown[]; captions?: unknown[]; voiceoverUrl?: string | null; musicUrl?: string | null; musicVolume?: number; captionPosition?: string; captionFontSize?: string; captionTextColor?: string; captionAnimation?: string; sceneTransition?: string; aspectRatio?: string; voiceoverDuration?: number; scriptName?: string };
+                const draft = JSON.parse(raw) as { scriptId?: string; scenes?: unknown[]; captions?: unknown[]; voiceoverUrl?: string | null; musicUrl?: string | null; musicVolume?: number; captionPosition?: string; captionFontSize?: string; captionTextColor?: string; captionAnimation?: string; captionBackground?: string; captionDisplayMode?: string; sceneTransition?: string; aspectRatio?: string; voiceoverDuration?: number; scriptName?: string };
                 const draftSceneCount = Array.isArray(draft.scenes) ? draft.scenes.length : 0;
                 if (draft?.scriptId === scriptId && draftSceneCount >= sceneCountFromScript) {
-                  setScenes(draft.scenes as Scene[]);
+                  const draftScenes = draft.scenes as Scene[];
+                  const totalDuration = typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0 ? draft.voiceoverDuration : 0;
+                  const draftSceneTotal = draftScenes.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 0), 0);
+                  const needNormalize = totalDuration > 0 && draftScenes.length >= 2 && draftSceneTotal < totalDuration * 0.9;
+                  const scenesToSet = needNormalize
+                    ? draftScenes.map((s, i) => ({
+                        ...s,
+                        startTime: i * (totalDuration / draftScenes.length),
+                        duration: totalDuration / draftScenes.length,
+                      }))
+                    : draftScenes;
+                  setScenes(scenesToSet);
                   if (Array.isArray(draft.captions)) {
                     setCaptions(
-                      draft.captions.map((c: { id?: string; text?: string; startTime?: number; endTime?: number }, i: number) => ({
+                      draft.captions.map((c: { id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }, i: number) => ({
                         id: typeof c.id === "string" ? c.id : `cap-${i}`,
                         text: typeof c.text === "string" ? c.text : "",
                         startTime: typeof c.startTime === "number" ? c.startTime : 0,
                         endTime: typeof c.endTime === "number" ? c.endTime : 0,
+                        wordTimings: Array.isArray(c.wordTimings)
+                          ? c.wordTimings.filter(
+                              (w): w is WordTiming =>
+                                typeof w?.word === "string" && typeof w?.start === "number" && typeof w?.end === "number"
+                            )
+                          : undefined,
                       }))
                     );
                   }
@@ -1282,6 +1519,8 @@ export default function VideoTimelinePage() {
                   if (draft.captionFontSize === "small" || draft.captionFontSize === "medium" || draft.captionFontSize === "large") setCaptionFontSize(draft.captionFontSize);
                   if (typeof draft.captionTextColor === "string") setCaptionTextColor(draft.captionTextColor);
                   if (draft.captionAnimation === "none" || draft.captionAnimation === "fadeIn" || draft.captionAnimation === "slideUp" || draft.captionAnimation === "pop") setCaptionAnimation(draft.captionAnimation);
+                  if (draft.captionBackground === "none" || draft.captionBackground === "pill" || draft.captionBackground === "bar") setCaptionBackground(draft.captionBackground);
+                  if (draft.captionDisplayMode === "full" || draft.captionDisplayMode === "wordByWord" || draft.captionDisplayMode === "singleWord") setCaptionDisplayMode(draft.captionDisplayMode);
                   if (draft.sceneTransition === "fade" || draft.sceneTransition === "slideLeft" || draft.sceneTransition === "slideRight" || draft.sceneTransition === "wipe" || draft.sceneTransition === "zoom") setSceneTransitionType(draft.sceneTransition);
                   if (typeof draft.aspectRatio === "string") setAspectRatio(draft.aspectRatio);
                   if (typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0) setVoiceoverDuration(draft.voiceoverDuration);
@@ -1330,32 +1569,61 @@ export default function VideoTimelinePage() {
           setVoiceoverFileName(null);
           const dur = typeof content.timelineVoiceoverDuration === "number" ? content.timelineVoiceoverDuration : 0;
           setVoiceoverDuration(dur);
-          setCaptions(getCaptions(content));
+          const caps = getCaptions(content);
+          setCaptions(caps);
           const fullTexts = getSceneFullTexts(content);
           const perSceneDuration = fullTexts.length > 0 && dur > 0 ? dur / fullTexts.length : 5;
-          setScenes(
-            fullTexts.map((title, i) =>
-              createScene(`scene_${i + 1}`, title, perSceneDuration, SCENE_COLORS[i % SCENE_COLORS.length])
-            )
-          );
+          if (fullTexts.length > 0) {
+            setScenes(
+              fullTexts.map((title, i) =>
+                createScene(`scene_${i + 1}`, title, perSceneDuration, SCENE_COLORS[i % SCENE_COLORS.length])
+              )
+            );
+          } else if (caps.length > 0) {
+            const captionDuration = Math.max(dur, ...caps.map((c) => c.endTime).filter(Number.isFinite));
+            const singleSceneDuration = captionDuration > 0 ? captionDuration : 5;
+            setScenes([
+              createScene("scene_1", caps[0]?.text?.slice(0, 50) || "Scene 1", singleSceneDuration, SCENE_COLORS[0]),
+            ]);
+            if (dur <= 0 && captionDuration > 0) setVoiceoverDuration(captionDuration);
+          } else {
+            setScenes([]);
+          }
           setSelectedSceneIndex(null);
           // Restore draft only if it has at least as many scenes as the script (so 5-scene script isn't overwritten by a 3-scene draft)
-          const sceneCountFromScript = fullTexts.length;
+          const sceneCountFromScript = fullTexts.length || (caps.length > 0 ? 1 : 0);
           if (scriptId && typeof window !== "undefined" && sceneCountFromScript > 0) {
             try {
               const raw = localStorage.getItem(`cf-video-timeline-draft-${scriptId}`);
               if (raw) {
-                const draft = JSON.parse(raw) as { scriptId?: string; scenes?: unknown[]; captions?: unknown[]; voiceoverUrl?: string | null; musicUrl?: string | null; musicVolume?: number; captionPosition?: string; captionFontSize?: string; captionTextColor?: string; captionAnimation?: string; sceneTransition?: string; aspectRatio?: string; voiceoverDuration?: number; scriptName?: string };
+                const draft = JSON.parse(raw) as { scriptId?: string; scenes?: unknown[]; captions?: unknown[]; voiceoverUrl?: string | null; musicUrl?: string | null; musicVolume?: number; captionPosition?: string; captionFontSize?: string; captionTextColor?: string; captionAnimation?: string; captionBackground?: string; captionDisplayMode?: string; sceneTransition?: string; aspectRatio?: string; voiceoverDuration?: number; scriptName?: string };
                 const draftSceneCount = Array.isArray(draft.scenes) ? draft.scenes.length : 0;
                 if (draft?.scriptId === scriptId && draftSceneCount >= sceneCountFromScript) {
-                  setScenes(draft.scenes as Scene[]);
+                  const draftScenes = draft.scenes as Scene[];
+                  const totalDuration = typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0 ? draft.voiceoverDuration : 0;
+                  const draftSceneTotal = draftScenes.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 0), 0);
+                  const needNormalize = totalDuration > 0 && draftScenes.length >= 2 && draftSceneTotal < totalDuration * 0.9;
+                  const scenesToSet = needNormalize
+                    ? draftScenes.map((s, i) => ({
+                        ...s,
+                        startTime: i * (totalDuration / draftScenes.length),
+                        duration: totalDuration / draftScenes.length,
+                      }))
+                    : draftScenes;
+                  setScenes(scenesToSet);
                   if (Array.isArray(draft.captions)) {
                     setCaptions(
-                      draft.captions.map((c: { id?: string; text?: string; startTime?: number; endTime?: number }, i: number) => ({
+                      draft.captions.map((c: { id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }, i: number) => ({
                         id: typeof c.id === "string" ? c.id : `cap-${i}`,
                         text: typeof c.text === "string" ? c.text : "",
                         startTime: typeof c.startTime === "number" ? c.startTime : 0,
                         endTime: typeof c.endTime === "number" ? c.endTime : 0,
+                        wordTimings: Array.isArray(c.wordTimings)
+                          ? c.wordTimings.filter(
+                              (w): w is WordTiming =>
+                                typeof w?.word === "string" && typeof w?.start === "number" && typeof w?.end === "number"
+                            )
+                          : undefined,
                       }))
                     );
                   }
@@ -1366,6 +1634,8 @@ export default function VideoTimelinePage() {
                   if (draft.captionFontSize === "small" || draft.captionFontSize === "medium" || draft.captionFontSize === "large") setCaptionFontSize(draft.captionFontSize);
                   if (typeof draft.captionTextColor === "string") setCaptionTextColor(draft.captionTextColor);
                   if (draft.captionAnimation === "none" || draft.captionAnimation === "fadeIn" || draft.captionAnimation === "slideUp" || draft.captionAnimation === "pop") setCaptionAnimation(draft.captionAnimation);
+                  if (draft.captionBackground === "none" || draft.captionBackground === "pill" || draft.captionBackground === "bar") setCaptionBackground(draft.captionBackground);
+                  if (draft.captionDisplayMode === "full" || draft.captionDisplayMode === "wordByWord" || draft.captionDisplayMode === "singleWord") setCaptionDisplayMode(draft.captionDisplayMode);
                   if (draft.sceneTransition === "fade" || draft.sceneTransition === "slideLeft" || draft.sceneTransition === "slideRight" || draft.sceneTransition === "wipe" || draft.sceneTransition === "zoom") setSceneTransitionType(draft.sceneTransition);
                   if (typeof draft.aspectRatio === "string") setAspectRatio(draft.aspectRatio);
                   if (typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0) setVoiceoverDuration(draft.voiceoverDuration);
@@ -1424,6 +1694,46 @@ export default function VideoTimelinePage() {
       setScenes(campaignScenes);
       setSelectedTemplate(VIDEO_TEMPLATES[4]);
     }
+    if (prefill.source === "template-studio" && prefill.timelineScenes?.length) {
+      const defaultDuration = 5;
+      let runStart = 0;
+      const templateScenes: Scene[] = prefill.timelineScenes.map((s, i) => {
+        const duration = typeof s.duration_seconds === "number" ? s.duration_seconds : defaultDuration;
+        const title = (s.captionText ?? s.visual ?? `Scene ${(s.scene_number ?? i) + 1}`).slice(0, 80);
+        const scene = createSceneWithBackground(
+          `template-scene-${i}`,
+          title,
+          duration,
+          SCENE_COLOR_HEX[i % SCENE_COLOR_HEX.length],
+          s.imageUrl ?? null,
+          s.videoUrl ?? null,
+          undefined,
+          runStart,
+          s.audioUrl ?? null
+        );
+        runStart += duration;
+        return scene;
+      });
+      const captions: CaptionBlock[] = prefill.timelineScenes
+        .map((s, i) => {
+          const duration = typeof s.duration_seconds === "number" ? s.duration_seconds : defaultDuration;
+          const startTime = prefill.timelineScenes!.slice(0, i).reduce((sum, x) => sum + (typeof x.duration_seconds === "number" ? x.duration_seconds : defaultDuration), 0);
+          const text = s.captionText?.trim();
+          if (!text) return null;
+          return {
+            id: `cap-template-${i}`,
+            text,
+            startTime,
+            endTime: startTime + duration,
+          };
+        })
+        .filter((c): c is CaptionBlock => c != null);
+      setScenes(templateScenes);
+      if (captions.length > 0) setCaptions(captions);
+      const totalDuration = templateScenes.reduce((sum, sc) => sum + sc.duration, 0);
+      if (totalDuration > 0) setVoiceoverDuration(totalDuration);
+      setSelectedTemplate(VIDEO_TEMPLATES[4]);
+    }
     if (prefill.voiceoverText?.trim()) {
       try {
         navigator.clipboard.writeText(prefill.voiceoverText.trim());
@@ -1452,18 +1762,37 @@ export default function VideoTimelinePage() {
         scriptId?: string | null;
       };
       const meta = data.metadata ?? {};
-      // Scenes
+      // Scenes (normalize so they fill total duration for normal video flow)
       const scenesList = Array.isArray(meta.scenes) ? meta.scenes : [];
-      if (scenesList.length > 0) setScenes(scenesList as Scene[]);
+      const totalDuration = typeof meta.totalDuration === "number" && meta.totalDuration > 0 ? meta.totalDuration : 0;
+      if (scenesList.length > 0) {
+        const list = (scenesList as Scene[]).map(normalizeSceneClipAudioUrl);
+        const sceneTotal = list.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 0), 0);
+        const needNormalize = totalDuration > 0 && list.length >= 2 && sceneTotal < totalDuration * 0.9;
+        const scenesToSet = needNormalize
+          ? list.map((s, i) => ({
+              ...s,
+              startTime: i * (totalDuration / list.length),
+              duration: totalDuration / list.length,
+            }))
+          : list;
+        setScenes(scenesToSet);
+      }
       // Captions
       const caps = Array.isArray(meta.captions) ? meta.captions : [];
       if (caps.length > 0) {
         setCaptions(
-          caps.map((c: { id?: string; text?: string; startTime?: number; endTime?: number }, i: number) => ({
+          caps.map((c: { id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }, i: number) => ({
             id: typeof c.id === "string" ? c.id : `cap-${i}`,
             text: typeof c.text === "string" ? c.text : "",
             startTime: typeof c.startTime === "number" ? c.startTime : 0,
             endTime: typeof c.endTime === "number" ? c.endTime : 0,
+            wordTimings: Array.isArray(c.wordTimings)
+              ? c.wordTimings.filter(
+                  (w): w is WordTiming =>
+                    typeof w?.word === "string" && typeof w?.start === "number" && typeof w?.end === "number"
+                )
+              : undefined,
           }))
         );
       }
@@ -1476,6 +1805,8 @@ export default function VideoTimelinePage() {
       if (style.fontSize === "small" || style.fontSize === "medium" || style.fontSize === "large") setCaptionFontSize(style.fontSize as "small" | "medium" | "large");
       if (typeof style.textColor === "string") setCaptionTextColor(style.textColor);
       if (style.animation === "none" || style.animation === "fadeIn" || style.animation === "slideUp" || style.animation === "pop") setCaptionAnimation(style.animation as "none" | "fadeIn" | "slideUp" | "pop");
+      if (style.background === "none" || style.background === "pill" || style.background === "bar") setCaptionBackground(style.background);
+      if (style.displayMode === "full" || style.displayMode === "wordByWord" || style.displayMode === "singleWord") setCaptionDisplayMode(style.displayMode);
       const transition = meta.sceneTransition;
       if (transition === "fade" || transition === "slideLeft" || transition === "slideRight" || transition === "wipe" || transition === "zoom") setSceneTransitionType(transition);
       if (typeof meta.aspectRatio === "string") setAspectRatio(meta.aspectRatio);
@@ -1486,7 +1817,6 @@ export default function VideoTimelinePage() {
       }
       if (data.scriptId != null) setScriptId(data.scriptId ?? undefined);
       if (typeof data.title === "string" && data.title.trim()) setScriptName(data.title.trim());
-      alert("✅ Project loaded!");
     } catch (err) {
       console.error("Load project failed:", err);
       alert(err instanceof Error ? err.message : "Failed to load project");
@@ -1514,6 +1844,8 @@ export default function VideoTimelinePage() {
         captionFontSize,
         captionTextColor,
         captionAnimation,
+        captionBackground,
+        captionDisplayMode,
         sceneTransition: sceneTransitionType,
         aspectRatio,
         voiceoverDuration: voiceoverDuration > 0 ? voiceoverDuration : undefined,
@@ -1523,7 +1855,7 @@ export default function VideoTimelinePage() {
     } catch {
       // ignore
     }
-  }, [scriptId, projectIdFromUrl, scriptName, scenes, captions, voiceoverUrl, musicUrl, musicVolume, captionPosition, captionFontSize, captionTextColor, captionAnimation, sceneTransitionType, aspectRatio, voiceoverDuration]);
+  }, [scriptId, projectIdFromUrl, scriptName, scenes, captions, voiceoverUrl, musicUrl, musicVolume, captionPosition, captionFontSize, captionTextColor, captionAnimation, captionBackground, captionDisplayMode, sceneTransitionType, aspectRatio, voiceoverDuration]);
 
   // When scene count changes (add/remove), save draft immediately so scenes don't disappear on refresh
   useEffect(() => {
@@ -1538,13 +1870,14 @@ export default function VideoTimelinePage() {
     if (!scriptId || projectIdFromUrl || typeof window === "undefined") return;
     const t = setTimeout(saveDraft, 1500);
     return () => clearTimeout(t);
-  }, [scriptId, projectIdFromUrl, scriptName, scenes, captions, voiceoverUrl, musicUrl, musicVolume, captionPosition, captionFontSize, captionTextColor, captionAnimation, sceneTransitionType, aspectRatio, voiceoverDuration, saveDraft]);
+  }, [scriptId, projectIdFromUrl, scriptName, scenes, captions, voiceoverUrl, musicUrl, musicVolume, captionPosition, captionFontSize, captionTextColor, captionAnimation, captionBackground, captionDisplayMode, sceneTransitionType, aspectRatio, voiceoverDuration, saveDraft]);
 
   // Audio events: time update, duration, play/pause
   const onTimeUpdate = useCallback(() => {
     const el = audioRef.current;
     if (!el || isDraggingPlayhead) return;
-    const newTime = el.currentTime;
+    const offset = playbackStartOffsetRef.current ?? 0;
+    const newTime = offset + el.currentTime;
     setCurrentTime(newTime);
     const caption = getActiveCaption(newTime, captions);
     setActiveCaption(caption);
@@ -1576,8 +1909,30 @@ export default function VideoTimelinePage() {
 
   const onPlaybackEnded = useCallback(() => {
     const el = audioRef.current;
-    const voiceEnd = Number(el?.duration) ? el.duration : (voiceoverDuration > 0 ? voiceoverDuration : 0);
-    const timelineEnd = Math.max(duration, voiceEnd);
+    let voiceEnd = Number(el?.duration) ? el.duration : (voiceoverDuration > 0 ? voiceoverDuration : 0);
+    let timelineEnd = Math.max(duration, voiceEnd);
+
+    if (hasPerClipAudio && activeBlockAndScene?.scene?.audioUrl) {
+      const blocksWithAudio = sceneBlocks
+        .map((b) => ({ block: b, scene: scenes.find((s) => s.id === b.id) }))
+        .filter((x): x is { block: SceneBlock; scene: Scene } => !!x.scene?.audioUrl?.trim())
+        .sort((a, b) => a.block.startTime - b.block.startTime);
+      const currentStart = activeBlockAndScene.block.startTime;
+      const next = blocksWithAudio.find((x) => x.block.startTime > currentStart);
+      if (next) {
+        setCurrentTime(next.block.startTime);
+        setActiveCaption(getActiveCaption(next.block.startTime, captions));
+        const music = musicRef.current;
+        if (music) music.currentTime = next.block.startTime;
+        // Start next clip on next tick so the audio element has the new src from React
+        setTimeout(() => play(), 0);
+        return;
+      }
+      // No next clip with audio: continue playhead through rest of timeline (tail from end of current block)
+      voiceEnd = activeBlockAndScene.block.endTime;
+      timelineEnd = Math.max(duration, voiceEnd);
+    }
+
     // Pause voice and music; scene video may keep playing if we run the tail
     audioRef.current?.pause();
     musicRef.current?.pause();
@@ -1585,7 +1940,6 @@ export default function VideoTimelinePage() {
 
     const hasMoreTimeline = Number.isFinite(timelineEnd) && timelineEnd > voiceEnd + 0.05;
     if (hasMoreTimeline) {
-      // Continue playhead through the rest of the timeline without voiceover (throttle setState to avoid "Maximum update depth")
       const TAIL_INTERVAL_MS = 100;
       const r = { rafId: 0, timelineEnd, lastTs: performance.now(), lastUpdateTs: performance.now(), tailTime: voiceEnd };
       playbackTailRef.current = r;
@@ -1623,21 +1977,26 @@ export default function VideoTimelinePage() {
       setActiveCaption(getActiveCaption(endTime, captions));
     }
     setIsPlaying(false);
-  }, [pause, voiceoverDuration, duration, captions]);
+  }, [pause, voiceoverDuration, duration, captions, hasPerClipAudio, activeBlockAndScene, sceneBlocks, scenes, play]);
 
-  const seekTo = useCallback((t: number) => {
-    const el = audioRef.current;
-    const maxT = el?.duration ? el.duration : voiceoverDuration > 0 ? voiceoverDuration : duration;
-    const clamped = Math.max(0, Math.min(t, maxT));
-    if (el) {
-      el.currentTime = clamped;
-    }
-    setCurrentTime(clamped);
-    const caption = getActiveCaption(clamped, captions);
-    setActiveCaption(caption);
-    const music = musicRef.current;
-    if (music) music.currentTime = clamped;
-  }, [duration, voiceoverDuration, captions]);
+  const seekTo = useCallback(
+    (t: number) => {
+      const el = audioRef.current;
+      const maxT = hasPerClipAudio ? duration : el?.duration ? el.duration : voiceoverDuration > 0 ? voiceoverDuration : duration;
+      const clamped = Math.max(0, Math.min(t, maxT));
+      const active = getActiveBlockAndScene(sceneBlocks, scenes, clamped);
+      if (el) {
+        const offset = hasPerClipAudio && active?.scene?.audioUrl ? active.block.startTime : 0;
+        el.currentTime = Math.max(0, clamped - offset);
+      }
+      setCurrentTime(clamped);
+      const caption = getActiveCaption(clamped, captions);
+      setActiveCaption(caption);
+      const music = musicRef.current;
+      if (music) music.currentTime = clamped;
+    },
+    [duration, voiceoverDuration, captions, hasPerClipAudio, sceneBlocks, scenes]
+  );
 
   // Timeline width: base width from duration, then zoom (0.25–3)
   const totalSceneDuration = duration;
@@ -1957,6 +2316,8 @@ export default function VideoTimelinePage() {
           fontSize: captionFontSize,
           textColor: captionTextColor,
           animation: captionAnimation,
+          background: captionBackground,
+          displayMode: captionDisplayMode,
         },
         sceneTransition: sceneTransitionType,
         aspectRatio,
@@ -1976,6 +2337,8 @@ export default function VideoTimelinePage() {
       captionFontSize,
       captionTextColor,
       captionAnimation,
+      captionBackground,
+      captionDisplayMode,
       sceneTransitionType,
       aspectRatio,
       voiceoverDuration,
@@ -2040,8 +2403,9 @@ export default function VideoTimelinePage() {
       alert(error ?? "Export validation failed");
       return;
     }
-    if (!voiceoverUrl) {
-      alert("No voiceover to export");
+    const hasPerClipAudio = assets.some(hasAssetAudioUrl);
+    if (!voiceoverUrl?.trim() && !hasPerClipAudio) {
+      alert("No voiceover or per-clip audio to export. Add a voiceover or use scenes with audio.");
       return;
     }
     let savedVideoId: string | null = null;
@@ -2066,7 +2430,7 @@ export default function VideoTimelinePage() {
       const data = await exportVideo({
         ffmpeg,
         fetchFile,
-        voiceoverUrl,
+        voiceoverUrl: voiceoverUrl?.trim() || null,
         musicUrl,
         musicVolume,
         assets,
@@ -2107,6 +2471,14 @@ export default function VideoTimelinePage() {
         await ffmpeg.deleteFile("voiceover.mp3");
       } catch {
         /* ignore */
+      }
+      const numClipAudios = assets.filter(hasAssetAudioUrl).length;
+      for (let i = 0; i < numClipAudios; i++) {
+        try {
+          await ffmpeg.deleteFile(`clip_audio_${i}.mp3`);
+        } catch {
+          /* ignore */
+        }
       }
       if (musicUrl) {
         try {
@@ -2346,25 +2718,37 @@ export default function VideoTimelinePage() {
     setExpandedSceneIndex(null);
   }, [voiceoverDuration, duration, scenes.length]);
 
-  /** Remove gaps between scenes: place each scene back-to-back so there are no empty gaps. */
-  const handleCompactScenes = useCallback(() => {
-    pushUndoSnapshot();
-    const blocks = buildSceneBlocksFromScenes(scenes).sort((a, b) => a.startTime - b.startTime);
-    if (blocks.length === 0) return;
-    let t = 0;
+  /** When total duration (e.g. voiceover) is much longer than current scene blocks, auto-fill so video doesn't go blank after first scene. */
+  const hasAutoFilledScenesRef = useRef(false);
+  const lastProjectKeyRef = useRef<string>("");
+  useEffect(() => {
+    const key = `${projectIdFromUrl ?? ""}-${scriptId ?? ""}`;
+    if (key !== lastProjectKeyRef.current) {
+      lastProjectKeyRef.current = key;
+      hasAutoFilledScenesRef.current = false;
+    }
+  }, [projectIdFromUrl, scriptId]);
+  useEffect(() => {
+    if (voiceoverDuration <= 0 || scenes.length < 2) return;
+    if (duration >= voiceoverDuration * 0.9) return;
+    if (hasAutoFilledScenesRef.current) return;
+    hasAutoFilledScenesRef.current = true;
+    const total = voiceoverDuration;
+    const segDuration = total / scenes.length;
     setScenes((prev) =>
-      prev.map((scene) => {
-        const block = blocks.find((b) => b.id === scene.id);
-        if (!block) return scene;
-        const dur = Math.max(0.5, block.endTime - block.startTime);
-        const startTime = t;
-        t += dur;
-        return { ...scene, startTime, duration: dur };
-      })
+      prev.map((s, i) => ({ ...s, startTime: i * segDuration, duration: segDuration }))
     );
     setSelectedSceneIndex(null);
     setExpandedSceneIndex(null);
-  }, [scenes, pushUndoSnapshot]);
+  }, [voiceoverDuration, duration, scenes.length]);
+
+  /** Remove gaps between scenes: place each scene back-to-back (sorted timeline order). */
+  const handleCompactScenes = useCallback(() => {
+    pushUndoSnapshot();
+    setScenes((prev) => collapseAllSceneGapsToContiguous(prev));
+    setSelectedSceneIndex(null);
+    setExpandedSceneIndex(null);
+  }, [pushUndoSnapshot]);
 
   /** Split selected scene at current playhead. */
   const handleSplitScene = useCallback(() => {
@@ -2443,6 +2827,7 @@ export default function VideoTimelinePage() {
       }
       const data = (await res.json().catch(() => ({}))) as {
         segments?: Array<{ text: string; start: number; end: number }>;
+        words?: Array<{ word: string; start: number; end: number }>;
         error?: string;
       };
       if (!res.ok) {
@@ -2453,16 +2838,30 @@ export default function VideoTimelinePage() {
         setTranscribeError("No speech detected in the voiceover.");
         return;
       }
+      const words = data.words ?? [];
+      // Assign each word to the segment that contains its start time (for word-by-word sync)
+      const segmentWordTimings = segments.map((seg) => {
+        const segWords = words.filter(
+          (w) => typeof w.start === "number" && w.start >= seg.start && w.start < seg.end
+        ) as WordTiming[];
+        return segWords.length > 0 ? segWords : undefined;
+      });
       pushUndoSnapshot();
       const newCaptions: CaptionBlock[] = segments.map((seg, i) => ({
         id: `cap-${Date.now()}-${i}`,
         text: seg.text,
         startTime: seg.start,
         endTime: seg.end,
+        wordTimings: segmentWordTimings[i],
       }));
       setCaptions(newCaptions);
       setSelectedCaptionId(null);
       setSelectedSceneIndex(null);
+      // Expand timeline to match transcribed length so ruler and playback cover full voiceover
+      const transcribedEnd = Math.max(0, ...segments.map((s) => s.end));
+      if (transcribedEnd > 0) {
+        setVoiceoverDuration((prev) => (prev < transcribedEnd ? transcribedEnd : prev));
+      }
     } catch (err) {
       setTranscribeError(err instanceof Error ? err.message : "Failed to generate subtitles");
     } finally {
@@ -2485,7 +2884,8 @@ export default function VideoTimelinePage() {
     sorted.forEach((cap, i) => {
       lines.push(String(i + 1));
       lines.push(`${toSrtTime(cap.startTime)} --> ${toSrtTime(cap.endTime)}`);
-      lines.push((cap.text || "").replace(/\r?\n/g, " ").trim() || "(no text)");
+      const line = stripSpeakerPrefix(cap.text || "").replace(/\r?\n/g, " ").trim() || "(no text)";
+      lines.push(line);
       lines.push("");
     });
     const blob = new Blob([lines.join("\r\n")], { type: "text/plain;charset=utf-8" });
@@ -2731,7 +3131,7 @@ export default function VideoTimelinePage() {
         </div>
       </header>
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-hidden p-4">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden p-4 bg-muted/20">
         {/* Template picker when no scenes */}
         {sceneBlocks.length === 0 ? (
           <>
@@ -2840,24 +3240,29 @@ export default function VideoTimelinePage() {
           </>
         ) : (
           <>
-        {/* Preview: aspect ratio from selected template */}
-        <div className="flex justify-center">
-          <div
-            ref={previewRef}
-            className="relative overflow-hidden rounded-lg bg-card border border-border"
-            style={{
-              aspectRatio: aspectRatio.replace(":", "/"),
-              width: aspectRatio === "16:9" ? 400 : 280,
-            }}
-          >
+        {/* Player: preview + controls in one card */}
+        <div className="flex flex-col items-center gap-2 shrink-0">
+          <div className="flex justify-center w-full">
+            <div
+              ref={previewRef}
+              className="relative overflow-hidden rounded-lg border border-border shadow-sm"
+              style={{
+                aspectRatio: aspectRatio.replace(":", "/"),
+                width: aspectRatio === "16:9" ? 400 : 280,
+                backgroundColor: "#374151",
+              }}
+            >
             {/* Preview: background + elements layered; crossfade when nearing next scene */}
             {activeScene && (() => {
               const sortedBlocks = [...sceneBlocks].sort((a, b) => a.startTime - b.startTime);
               const currentIdx = sortedBlocks.findIndex((b) => b.id === activeScene.scene.id);
               const nextBlock = currentIdx >= 0 && currentIdx < sortedBlocks.length - 1 ? sortedBlocks[currentIdx + 1] : null;
-              const PREVIEW_XFADE = 1; // 1s transition in preview so it's clearly visible
+              const PREVIEW_XFADE = 0.25; // Short transition so scenes flow with no visible gap
+              const PREVIEW_NEXT_MOUNT_LEAD = 0.5; // Mount next layer early so video can decode (reduces black at cut)
               const xfadeStart = activeScene.scene.endTime - PREVIEW_XFADE;
               const inTransitionZone = nextBlock && currentTime >= xfadeStart && currentTime < activeScene.scene.endTime;
+              const inNextLayerMountZone =
+                nextBlock && currentTime >= xfadeStart - PREVIEW_NEXT_MOUNT_LEAD && currentTime < activeScene.scene.endTime;
               const xfadeProgress = inTransitionZone
                 ? Math.min(1, (currentTime - xfadeStart) / PREVIEW_XFADE)
                 : 0;
@@ -2866,11 +3271,20 @@ export default function VideoTimelinePage() {
               const sceneData = idx >= 0 ? scenes[idx] : null;
               const backgroundMedia = sceneData ? getSceneBackgroundMedia(sceneData) : null;
               const sceneColor = sceneData?.color ?? getScenePreviewColor(idx >= 0 ? idx : 0);
+              // No black: when scene has no media always use a visible gray so preview never shows black
+              const placeholderColor = !backgroundMedia ? "#4b5563" : (() => {
+                const hex = (sceneColor ?? "").replace(/^#/, "");
+                if (hex.length !== 6) return "#4b5563";
+                const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+                const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+                return luminance < 0.2 ? "#4b5563" : sceneColor;
+              })();
               const elements = sceneData?.elements ?? [];
 
               const nextSceneData = nextBlock ? scenes.find((s) => s.id === nextBlock.id) : null;
               const nextMedia = nextSceneData ? getSceneBackgroundMedia(nextSceneData) : null;
-              const nextColor = nextSceneData?.color ?? getScenePreviewColor(currentIdx + 1);
+              const nextColorRaw = nextSceneData?.color ?? getScenePreviewColor(currentIdx + 1);
+              const nextColor = !nextMedia ? "#4b5563" : nextColorRaw;
 
               // Transition styles: current layer moves/clips; next layer stays put (we reveal it) or fades/zooms
               const p = xfadeProgress;
@@ -2890,29 +3304,39 @@ export default function VideoTimelinePage() {
                 }
               })();
               const nextLayerStyle: React.CSSProperties = (() => {
-                // Next sits under current; for slide we don't move it (current slides off to reveal). For zoom/fade we animate next too.
-                if (sceneTransitionType === "zoom") return { transform: `scale(${0.75 + 0.25 * p})`, opacity: p };
-                if (sceneTransitionType === "fade") return { opacity: p };
+                // Next sits under current at z-index 0. For fade/zoom: keep next at opacity 1 and only fade the TOP layer
+                // (opacity: p on BOTH layers lets the preview background #374151 show through → black/gray flashes).
+                if (sceneTransitionType === "zoom") return { opacity: 1, transform: `scale(${0.75 + 0.25 * p})` };
+                if (sceneTransitionType === "fade") return { opacity: 1 };
                 return {};
               })();
 
               return (
                 <div className="absolute inset-0 w-full h-full" style={{ overflow: "hidden" }}>
-                  {/* Next scene layer: present in transition zone so it's revealed as current slides/clips off */}
-                  {inTransitionZone && nextBlock && nextSceneData && (
+                  {/* Next scene layer: mount slightly before xfade so next video/image can load; current stays fully opaque until xfade (p=0). */}
+                  {inNextLayerMountZone && nextBlock && nextSceneData && (
                     <div className="absolute inset-0 w-full h-full" style={{ zIndex: 0, ...nextLayerStyle }}>
                       {nextMedia?.type === "image" ? (
                         <img src={nextMedia.url} alt="" className="absolute inset-0 w-full h-full object-cover" />
                       ) : nextMedia?.type === "video" ? (
                         <video
+                          ref={nextSceneVideoRef}
                           src={nextMedia.url}
                           muted
                           playsInline
+                          preload="auto"
                           className="absolute inset-0 w-full h-full object-cover"
                           style={{ objectFit: "cover" }}
                         />
                       ) : (
-                        <div className="absolute inset-0 w-full h-full" style={{ backgroundColor: nextColor }} />
+                        <div
+                          className="absolute inset-0 w-full h-full bg-cover bg-center"
+                          style={{
+                            background: "linear-gradient(135deg, #1e3a5f 0%, #2d5a87 25%, #3d7ab5 50%, #5b9bd5 75%, #7eb8e8 100%)",
+                            backgroundSize: "200% 200%",
+                            animation: "video-placeholder-shift 8s ease-in-out infinite",
+                          }}
+                        />
                       )}
                     </div>
                   )}
@@ -2932,6 +3356,7 @@ export default function VideoTimelinePage() {
                       src={backgroundMedia.url}
                       muted
                       playsInline
+                      preload="auto"
                       className="absolute inset-0 w-full h-full object-cover"
                       onLoadedMetadata={(e) => {
                         const v = e.currentTarget;
@@ -2942,9 +3367,19 @@ export default function VideoTimelinePage() {
                     />
                   ) : (
                     <div
-                      className="absolute inset-0 w-full h-full"
-                      style={{ backgroundColor: sceneColor }}
-                    />
+                      className="absolute inset-0 w-full h-full bg-cover bg-center"
+                      style={{
+                        background: "linear-gradient(135deg, #1e3a5f 0%, #2d5a87 25%, #3d7ab5 50%, #5b9bd5 75%, #7eb8e8 100%)",
+                        backgroundSize: "200% 200%",
+                        animation: "video-placeholder-shift 8s ease-in-out infinite",
+                      }}
+                    >
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="text-white/40 text-xs font-medium px-3 py-1.5 rounded-full bg-black/20 backdrop-blur-sm">
+                          Add video or image
+                        </span>
+                      </div>
+                    </div>
                   )}
                   {/* Elements overlay */}
                   {elements.slice(1).map((element) => (
@@ -3002,26 +3437,13 @@ export default function VideoTimelinePage() {
               );
             })()}
             {!activeScene && (
-              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
-                {voiceoverUrl ? "Voiceover plays here" : "Select a script with voiceover"}
+              <div className="absolute inset-0 flex items-center justify-center text-zinc-300 text-sm" style={{ backgroundColor: "#4b5563" }}>
+                {voiceoverUrl ? "Voiceover plays here" : hasPerClipAudio ? "Per-clip audio plays here" : "Select a script with voiceover or use scenes with audio"}
               </div>
             )}
             {activeCaption && (
               <>
-                {/* Debug: proves activeCaption exists — remove when done testing */}
-                <div
-                  style={{
-                    position: "fixed",
-                    top: 0,
-                    left: 0,
-                    background: "lime",
-                    padding: "10px",
-                    zIndex: 99999,
-                  }}
-                >
-                  CAPTION ACTIVE: {activeCaption.text}
-                </div>
-                {/* Actual caption overlay */}
+                {/* Caption overlay */}
                 <div
                   style={{ zIndex: 9999 }}
                   className={`absolute inset-0 pointer-events-none flex items-center justify-center`}
@@ -3035,9 +3457,101 @@ export default function VideoTimelinePage() {
                           : "bottom-[10%]"
                     }`}
                   >
+                    {(captionDisplayMode === "wordByWord" || captionDisplayMode === "singleWord") ? (() => {
+                      const hasWordTimings = Array.isArray(activeCaption.wordTimings) && activeCaption.wordTimings.length > 0;
+                      let words: string[];
+                      let wordEndTimes: number[];
+                      if (hasWordTimings) {
+                        const rawWords = activeCaption.wordTimings!.map((w) => w.word);
+                        const rawEndTimes = activeCaption.wordTimings!.map((w) => w.end);
+                        const colonIndex = rawWords.findIndex((w) => w.trim() === ":");
+                        const dropCount = colonIndex >= 0 ? colonIndex + 1 : 0;
+                        words = dropCount > 0 ? rawWords.slice(dropCount) : rawWords;
+                        wordEndTimes = dropCount > 0 ? rawEndTimes.slice(dropCount) : rawEndTimes;
+                      } else {
+                        words = stripSpeakerPrefix(activeCaption.text).split(/\s+/).filter(Boolean);
+                        wordEndTimes = [];
+                      }
+                      const start = activeCaption.startTime;
+                      const end = activeCaption.endTime;
+                      const dur = Math.max(0.001, end - start);
+                      if (!hasWordTimings) {
+                        const totalChars = words.reduce((s, w) => s + Math.max(w.length, 1), 0);
+                        if (words.length === 0 || totalChars <= 0) wordEndTimes = [end];
+                        else {
+                          let t = start;
+                          for (let i = 0; i < words.length; i++) {
+                            const part = (Math.max(words[i].length, 1) / totalChars) * dur;
+                            t = t + part;
+                            wordEndTimes.push(i === words.length - 1 ? end : t);
+                          }
+                        }
+                      }
+                      let currentWordIndex = 0;
+                      for (let i = 0; i < wordEndTimes.length; i++) {
+                        if (currentTime < wordEndTimes[i]) {
+                          currentWordIndex = i;
+                          break;
+                        }
+                        currentWordIndex = i;
+                      }
+                      currentWordIndex = Math.min(currentWordIndex, words.length - 1);
+                      const currentWord = words[currentWordIndex] ?? "";
+                      const showOnlyOneWord = captionDisplayMode === "singleWord";
+                      return (
+                        <p
+                          key={activeCaption.id}
+                          className={`max-w-full font-bold text-center ${showOnlyOneWord ? "" : "inline-flex flex-wrap justify-center gap-x-1.5 gap-y-0"} ${
+                            captionBackground === "pill"
+                              ? "bg-background/80 px-4 py-2 rounded-lg"
+                              : captionBackground === "bar"
+                                ? "bg-background/80 px-4 py-2 w-full rounded-none"
+                                : "px-1 py-0.5"
+                          } ${
+                            captionAnimation === "fadeIn"
+                              ? "caption-animate-fade-in"
+                              : captionAnimation === "slideUp"
+                                ? "caption-animate-slide-up"
+                                : captionAnimation === "pop"
+                                  ? "caption-animate-pop"
+                                  : ""
+                          }`}
+                          style={{
+                            fontSize: captionFontSize === "small" ? 18 : captionFontSize === "large" ? 28 : 22,
+                            color: captionTextColor,
+                            textShadow: captionBackground === "none" ? "2px 2px 4px rgba(0,0,0,0.9)" : "1px 1px 2px rgba(0,0,0,0.6)",
+                          }}
+                        >
+                          {showOnlyOneWord ? (
+                            currentWord
+                          ) : (
+                            words.map((word, i) => (
+                              <span
+                                key={`${i}-${word}`}
+                                style={{
+                                  color: i <= currentWordIndex ? captionTextColor : undefined,
+                                  opacity: i <= currentWordIndex ? 1 : 0.4,
+                                  backgroundColor: i === currentWordIndex ? "rgba(250, 204, 21, 0.45)" : undefined,
+                                  padding: i === currentWordIndex ? "0 2px" : undefined,
+                                  borderRadius: i === currentWordIndex ? 2 : undefined,
+                                }}
+                              >
+                                {word}
+                              </span>
+                            ))
+                          )}
+                        </p>
+                      );
+                    })() : (
                     <p
                       key={activeCaption.id}
-                      className={`max-w-full bg-background/80 px-4 py-2 rounded font-bold text-center ${
+                      className={`max-w-full font-bold text-center ${
+                        captionBackground === "pill"
+                          ? "bg-background/80 px-4 py-2 rounded-lg"
+                          : captionBackground === "bar"
+                            ? "bg-background/80 px-4 py-2 w-full rounded-none"
+                            : "px-1 py-0.5"
+                      } ${
                         captionAnimation === "fadeIn"
                           ? "caption-animate-fade-in"
                           : captionAnimation === "slideUp"
@@ -3049,25 +3563,26 @@ export default function VideoTimelinePage() {
                       style={{
                         fontSize: captionFontSize === "small" ? 18 : captionFontSize === "large" ? 28 : 22,
                         color: captionTextColor,
-                        textShadow: "2px 2px 4px rgba(0,0,0,0.8)",
+                        textShadow: captionBackground === "none" ? "2px 2px 4px rgba(0,0,0,0.9)" : "1px 1px 2px rgba(0,0,0,0.6)",
                       }}
                     >
-                      {activeCaption.text}
+                      {stripSpeakerPrefix(activeCaption.text) || activeCaption.text}
                     </p>
+                    )}
                   </div>
                 </div>
               </>
             )}
-            {voiceoverUrl && (
+            {(voiceoverUrl || hasPerClipAudio) && (
               <audio
                 ref={audioRef}
-                src={voiceoverUrl}
+                src={playbackSrc}
                 onTimeUpdate={onTimeUpdate}
                 onDurationChange={onDurationChange}
                 onPlay={onPlay}
                 onPause={onPause}
                 onEnded={onPlaybackEnded}
-                preload="metadata"
+                preload="auto"
                 crossOrigin="anonymous"
                 className="hidden"
               />
@@ -3084,28 +3599,8 @@ export default function VideoTimelinePage() {
         </div>
 
         {/* Playback controls */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="rounded border border-border bg-background p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
-              onClick={undo}
-              disabled={undoStack.length === 0}
-              title="Undo"
-              aria-label="Undo"
-            >
-              <Undo2 className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="rounded border border-border bg-background p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
-              onClick={redo}
-              disabled={redoStack.length === 0}
-              title="Redo"
-              aria-label="Redo"
-            >
-              <Redo2 className="h-4 w-4" />
-            </button>
+        <div className="flex flex-col gap-2 w-full max-w-[400px]">
+          <div className="flex items-center justify-center gap-2 flex-wrap">
             <button
               type="button"
               className="rounded border border-border bg-background p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
@@ -3130,17 +3625,17 @@ export default function VideoTimelinePage() {
               type="button"
               className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
               onClick={isPlaying ? pause : play}
-              disabled={!voiceoverUrl || isExporting}
+              disabled={(!voiceoverUrl && !hasPerClipAudio) || isExporting}
             >
               {isPlaying ? "Pause" : "Play"}
             </button>
             <span className="text-sm text-muted-foreground tabular-nums">
-              {formatTime(currentTime)} / {formatTime(duration)}
+              {formatTime(currentTime)} / {formatTime(Math.max(duration, voiceoverDuration))}
             </span>
           </div>
 
           {/* Save & Export */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             {isExporting && (
               <>
                 <p className="text-sm text-muted-foreground">Exporting...</p>
@@ -3195,17 +3690,17 @@ export default function VideoTimelinePage() {
                 Test compile ({scenes.length || 0} scenes)
               </button>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
-                className="inline-flex w-fit rounded border border-input bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
+                className="inline-flex rounded border border-input bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
                 onClick={handleSaveToLibrary}
               >
                 💾 Save to Library
               </button>
               <button
                 type="button"
-                className="inline-flex w-fit rounded border border-green-600 bg-green-600/10 px-3 py-1.5 text-sm text-green-700 dark:text-green-400 hover:bg-green-600/20 disabled:opacity-50 disabled:pointer-events-none"
+                className="inline-flex rounded border border-green-600 bg-green-600/10 px-3 py-1.5 text-sm text-green-700 dark:text-green-400 hover:bg-green-600/20 disabled:opacity-50 disabled:pointer-events-none"
                 disabled={isExporting}
                 onClick={handleSchedule}
               >
@@ -3213,14 +3708,15 @@ export default function VideoTimelinePage() {
               </button>
               <button
                 type="button"
-                className="inline-flex w-fit rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:pointer-events-none"
-                disabled={!ffmpegLoaded || !scriptId || !voiceoverUrl || isExporting}
+                className="inline-flex rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:pointer-events-none"
+                disabled={!ffmpegLoaded || !scriptId || (!voiceoverUrl && !hasPerClipAudio) || isExporting}
                 onClick={() => handleExportVideo()}
               >
                 📹 Publish Now
               </button>
             </div>
           </div>
+        </div>
         </div>
 
         {/* Timeline + scene edit panel: full width when right panel closed */}
@@ -3257,7 +3753,7 @@ export default function VideoTimelinePage() {
           </div>
           <div
             ref={scrollContainerRef}
-            className={`timeline-horizontal-scroll timeline-scroll flex min-h-[280px] min-w-0 flex-1 overflow-x-auto overflow-y-hidden ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
+            className={`timeline-horizontal-scroll timeline-scroll flex min-h-[200px] min-w-0 flex-1 overflow-x-auto overflow-y-hidden ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
             style={{
               width: "100%",
               overflowX: "scroll",
@@ -3297,7 +3793,7 @@ export default function VideoTimelinePage() {
                       type="button"
                       onClick={handleCompactScenes}
                       className="px-2 py-1 rounded border border-border bg-background text-[11px] hover:bg-muted"
-                      title="Remove gaps between scenes so they sit back-to-back"
+                      title="Remove gaps between scenes (back-to-back). Tip: timelines also auto-start at 0s for TikTok/Reels."
                     >
                       Remove gaps
                     </button>
@@ -3322,7 +3818,7 @@ export default function VideoTimelinePage() {
             </div>
             <div
               ref={timelineRef}
-              className="relative shrink-0 overflow-y-hidden timeline-inner"
+              className="relative shrink-0 overflow-y-hidden timeline-inner bg-muted/40"
               style={{ minWidth: timelineWidth, width: timelineWidth }}
               onClick={handleTimelineClick}
             >
@@ -3455,7 +3951,14 @@ export default function VideoTimelinePage() {
                     </button>
                   )}
                 </div>
-                <div className="relative border-b border-border" style={{ height: TRACK_HEIGHT }}>
+                <div
+                  className="relative border-b border-border"
+                  style={{
+                    height: TRACK_HEIGHT,
+                    contain: "paint",
+                    transform: "translateZ(0)",
+                  }}
+                >
                   {effectiveDuration > 0 &&
                     sceneBlocks.map((scene, index) => {
                       const sceneColor = SCENE_COLOR_HEX[index % SCENE_COLOR_HEX.length] ?? DEFAULT_SCENE_COLOR;
@@ -3740,6 +4243,20 @@ export default function VideoTimelinePage() {
                       <option value="small">Small</option>
                       <option value="medium">Medium</option>
                       <option value="large">Large</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Background</label>
+                    <select
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                      value={captionBackground}
+                      onChange={(e) =>
+                        setCaptionBackground(e.target.value as "none" | "pill" | "bar")
+                      }
+                    >
+                      <option value="none">No box (text only)</option>
+                      <option value="pill">Pill (rounded box)</option>
+                      <option value="bar">Full bar</option>
                     </select>
                   </div>
                   <div>
@@ -4222,6 +4739,43 @@ export default function VideoTimelinePage() {
             <div className="mt-5 pt-5 border-t border-border space-y-4">
               <h3 className="text-sm font-semibold text-foreground">Caption Style</h3>
               <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Presets</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {CAPTION_PRESETS.map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs text-foreground hover:bg-muted capitalize"
+                      onClick={() => {
+                        setCaptionPosition(preset.position);
+                        setCaptionFontSize(preset.fontSize);
+                        setCaptionTextColor(preset.textColor);
+                        setCaptionAnimation(preset.animation);
+                        setCaptionBackground(preset.background);
+                        setCaptionDisplayMode(preset.displayMode);
+                      }}
+                    >
+                      {preset.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Background</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                  value={captionBackground}
+                  onChange={(e) =>
+                    setCaptionBackground(e.target.value as "none" | "pill" | "bar")
+                  }
+                  title="Remove the box for text-only captions"
+                >
+                  <option value="none">No box (text only)</option>
+                  <option value="pill">Pill (rounded box)</option>
+                  <option value="bar">Full bar</option>
+                </select>
+              </div>
+              <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1.5">Animation</label>
                 <select
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
@@ -4262,6 +4816,20 @@ export default function VideoTimelinePage() {
                   <option value="small">Small</option>
                   <option value="medium">Medium</option>
                   <option value="large">Large</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Display</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                  value={captionDisplayMode}
+                  onChange={(e) =>
+                    setCaptionDisplayMode(e.target.value as "full" | "wordByWord" | "singleWord")
+                  }
+                >
+                  <option value="full">Full line (all text at once)</option>
+                  <option value="wordByWord">Word by word (build up + highlight)</option>
+                  <option value="singleWord">Single word only (one word on screen)</option>
                 </select>
               </div>
               <div>

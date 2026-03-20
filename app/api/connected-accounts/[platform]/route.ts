@@ -14,7 +14,7 @@ const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "faceb
  * DELETE: Disconnect a platform (remove stored tokens).
  */
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ platform: string }> }
 ) {
   try {
@@ -30,12 +30,16 @@ export async function DELETE(
       );
     }
 
+    const { searchParams } = new URL(request.url);
+    const accountId = searchParams.get("accountId")?.trim() ?? "";
+
     await db
       .delete(connectedAccountsTable)
       .where(
         and(
           eq(connectedAccountsTable.userId, userId),
-          eq(connectedAccountsTable.platform, platform as ConnectedPlatform)
+          eq(connectedAccountsTable.platform, platform as ConnectedPlatform),
+          ...(accountId ? [eq(connectedAccountsTable.id, accountId)] : [])
         )
       );
 

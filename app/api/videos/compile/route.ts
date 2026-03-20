@@ -9,8 +9,8 @@
  * 2. For each scene:
  *    - If IMAGE: FFmpeg Ken Burns (zoom/pan) for scene duration → segment MP4.
  *    - If VIDEO: FFmpeg trim to scene duration, scale to 1920x1080 → segment MP4.
- * 3. Concatenate segments with xfade transitions (0.5s fade).
- * 4. Overlay voiceover as audio track.
+ * 3. Concatenate segments with the concat filter (no cross-fades; requires lib/videos/compile.ts).
+ * 4. Overlay voiceover as audio track (optional royalty-free BGM from /public/bgm, looped, low volume).
  * 5. Export single MP4 (1920x1080, 25fps, H.264 + AAC).
  * 6. Upload to Supabase Storage (timeline-media bucket).
  *
@@ -27,6 +27,8 @@ import { savedScriptsTable } from "@/db/schema/library-schema";
 import { eq, and } from "drizzle-orm";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { compileVideoToFile, concatVoiceoverUrls, cleanupWorkDir, type CompileScene } from "@/lib/videos/compile";
+import { BGM_MIX_VOLUME, BGM_REQUEST_VALUES, type BgmSelectValue } from "@/lib/bgm-tracks";
+import { resolveLocalBgmPath } from "@/lib/bgm-tracks.server";
 import { mkdir, readFile } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
@@ -60,6 +62,17 @@ export async function POST(request: NextRequest) {
     const transition = typeof (body as { transition?: string }).transition === "string"
       ? (body as { transition: string }).transition.trim()
       : undefined;
+    const bgmRaw =
+      typeof (body as { backgroundMusic?: string }).backgroundMusic === "string"
+        ? (body as { backgroundMusic: string }).backgroundMusic.trim().toLowerCase()
+        : "none";
+    if (!BGM_REQUEST_VALUES.has(bgmRaw)) {
+      return NextResponse.json(
+        { error: "Invalid backgroundMusic. Use: none, dramatic, romantic, tense, upbeat." },
+        { status: 400 }
+      );
+    }
+    const backgroundMusic = bgmRaw as BgmSelectValue;
     if (!scriptId) return NextResponse.json({ error: "scriptId required" }, { status: 400 });
 
     const [row] = await db
@@ -75,12 +88,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Script has no scenes" }, { status: 400 });
     }
 
-    type SceneRow = { duration?: number; image_url?: string | null; video_url?: string | null; voiceover_url?: string | null };
+    type SceneRow = {
+      duration?: number;
+      image_url?: string | null;
+      video_url?: string | null;
+      voiceover_url?: string | null;
+      voiceoverUrl?: string | null;
+      script_text?: string;
+      caption?: string | null;
+    };
     const sceneRows = scenesJson as SceneRow[];
-    const perSceneVoiceoverUrls = sceneRows
-      .map((s) => (typeof s.voiceover_url === "string" && s.voiceover_url.trim().startsWith("http") ? s.voiceover_url.trim() : null))
-      .filter((u): u is string => u != null);
-    const usePerSceneVoiceover = perSceneVoiceoverUrls.length === sceneRows.length && perSceneVoiceoverUrls.length > 0;
+
+    /** One URL per scene in order (snake_case or camelCase). Do not filter — length must match scene count. */
+    function sceneVoiceoverHttpUrl(s: SceneRow): string | null {
+      const raw =
+        (typeof s.voiceover_url === "string" && s.voiceover_url.trim()) ||
+        (typeof s.voiceoverUrl === "string" && s.voiceoverUrl.trim()) ||
+        "";
+      const u = raw.trim();
+      return u.startsWith("http://") || u.startsWith("https://") ? u : null;
+    }
+
+    const perSceneVoiceoverUrls = sceneRows.map(sceneVoiceoverHttpUrl);
+    const usePerSceneVoiceover =
+      sceneRows.length > 0 && perSceneVoiceoverUrls.every((u): u is string => u != null);
     const singleVoiceoverUrl = row.voiceoverUrl?.trim() ?? null;
     const hasSingleUrl = singleVoiceoverUrl && (singleVoiceoverUrl.startsWith("http://") || singleVoiceoverUrl.startsWith("https://"));
 
@@ -95,10 +126,15 @@ export async function POST(request: NextRequest) {
       const duration = typeof s.duration === "number" && s.duration > 0 ? s.duration : 5;
       const imageUrl = typeof s.image_url === "string" && s.image_url.trim() ? s.image_url.trim() : null;
       const videoUrl = typeof s.video_url === "string" && s.video_url.trim() ? s.video_url.trim() : null;
+      const scriptLine = typeof s.script_text === "string" ? s.script_text.trim() : "";
+      const capLine = typeof s.caption === "string" ? s.caption.trim() : "";
+      const rawLine = scriptLine || capLine;
+      const dialogue = rawLine ? rawLine.replace(/\r?\n/g, " ").trim() : null;
       return {
         duration,
         image_url: videoUrl ? null : imageUrl,
         video_url: videoUrl || null,
+        dialogue,
       };
     });
 
@@ -132,7 +168,18 @@ export async function POST(request: NextRequest) {
       } else {
         voiceoverInput = singleVoiceoverUrl!;
       }
-      const finalPath = await compileVideoToFile(workDir, scenes, voiceoverInput, existingVoicePath, transition);
+      const bgmPath = resolveLocalBgmPath(backgroundMusic);
+      if (backgroundMusic !== "none" && !bgmPath) {
+        return NextResponse.json(
+          { error: "Background music file missing on server. Ensure public/bgm/*.mp3 exists." },
+          { status: 503 }
+        );
+      }
+      // Final stitch + audio mux: see compileVideoToFile in lib/videos/compile.ts (filter_complex concat, not xfade).
+      const finalPath = await compileVideoToFile(workDir, scenes, voiceoverInput, existingVoicePath, transition, {
+        bgmPath,
+        bgmVolume: BGM_MIX_VOLUME,
+      });
       const buffer = await readFile(finalPath);
       const fileName = `compiled-${Date.now()}.mp4`;
       const storagePath = `${userId}/${scriptId}/${fileName}`;

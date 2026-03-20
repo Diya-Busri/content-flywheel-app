@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { checkApiRateLimit } from "@/lib/rate-limit-api";
-import { db } from "@/db/db";
-import { templateStudioSetupTable } from "@/db/schema/template-studio-setup-schema";
-import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET: Load saved Template Studio setup for the current user (mode + inputs).
+ * MVP: No database. Hardcoded mock data so Template Studio works without migrations.
+ * No Supabase/DB imports or queries.
+ */
+
+const MOCK_SCENES = [
+  { id: 1, sceneNumber: 1, dialogue: "", imagePrompt: "", imageUrl: null as string | null, motionPrompt: "" },
+  { id: 2, sceneNumber: 2, dialogue: "", imagePrompt: "", imageUrl: null as string | null, motionPrompt: "" },
+  { id: 3, sceneNumber: 3, dialogue: "", imagePrompt: "", imageUrl: null as string | null, motionPrompt: "" },
+  { id: 4, sceneNumber: 4, dialogue: "", imagePrompt: "", imageUrl: null as string | null, motionPrompt: "" },
+];
+
+/**
+ * GET: Return mock scene data (4 empty scenes) + default mode/inputs for client compatibility.
  */
 export async function GET() {
   try {
@@ -16,34 +24,19 @@ export async function GET() {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const [row] = await db
-      .select()
-      .from(templateStudioSetupTable)
-      .where(eq(templateStudioSetupTable.userId, userId))
-      .limit(1);
-
-    if (!row) {
-      return NextResponse.json({ mode: "1", inputs: {} });
-    }
-
     return NextResponse.json({
-      mode: row.mode,
-      inputs: (row.inputs as Record<string, unknown>) ?? {},
-      updatedAt: row.updatedAt?.toISOString(),
+      mode: "1",
+      inputs: {},
+      scenes: MOCK_SCENES,
     });
   } catch (e) {
-    console.error("[template-studio/setup] GET error:", e);
-    return NextResponse.json(
-      { error: "Failed to load setup" },
-      { status: 500 }
-    );
+    console.error("[template-studio/setup] GET auth error:", e);
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }
 
 /**
- * POST: Save Template Studio setup (mode + inputs). Upserts by user_id.
- * Body: { mode: "1" | "2" | "3", inputs: Record<string, unknown> }
+ * POST: No-op for MVP; no DB. Returns success so client doesn't break.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -51,34 +44,10 @@ export async function POST(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const body = await request.json().catch(() => ({}));
-    const mode = String(body.mode ?? "1").trim();
-    const validMode = ["1", "2", "3"].includes(mode) ? mode : "1";
-    const inputs = body.inputs && typeof body.inputs === "object" ? body.inputs as Record<string, unknown> : {};
-
-    await db
-      .insert(templateStudioSetupTable)
-      .values({
-        userId,
-        mode: validMode,
-        inputs,
-      })
-      .onConflictDoUpdate({
-        target: templateStudioSetupTable.userId,
-        set: {
-          mode: validMode,
-          inputs,
-          updatedAt: new Date(),
-        },
-      });
-
+    await request.json().catch(() => ({}));
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[template-studio/setup] POST error:", e);
-    return NextResponse.json(
-      { error: "Failed to save setup" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { FeaturePreviewGate } from "@/components/feature-preview-gate";
@@ -9,13 +10,21 @@ export const metadata: Metadata = {
   description: "Create and manage template packs for quotes, tips, affirmations, product promos, and tutorials",
 };
 
+/** Fallback for Suspense: avoids hydration mismatch when TemplateStudioClient uses useSearchParams(). */
+function TemplateStudioFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-[40vh] text-muted-foreground">
+      Loading Template Studio…
+    </div>
+  );
+}
+
 export default function TemplateStudioPage() {
   const { userId } = auth();
   if (!userId) redirect("/sign-in");
 
   return (
     <FeaturePreviewGate title="Template Studio">
-      {/* Full page content (revealed when unlocked) */}
       <main className="p-6 md:p-10">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
           Template Studio
@@ -23,7 +32,9 @@ export default function TemplateStudioPage() {
         <p className="text-gray-600 dark:text-gray-400 mb-8">
           Create template packs with slides and captions for quotes, tips, affirmations, product promos, and tutorials.
         </p>
-        <TemplateStudioClient />
+        <Suspense fallback={<TemplateStudioFallback />}>
+          <TemplateStudioClient />
+        </Suspense>
       </main>
     </FeaturePreviewGate>
   );
