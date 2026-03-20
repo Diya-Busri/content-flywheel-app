@@ -55,6 +55,7 @@ function buildInstagramBusinessLoginAuthUrl(callbackUrl: string, state: string):
     state,
   });
   const authUrl = `${INSTAGRAM_OAUTH_AUTHORIZE}?${params.toString()}`;
+  console.log("[Instagram OAuth redirect_uri] connect (authorize):", params.get("redirect_uri"));
   console.log("[connected-accounts/connect] Instagram Business Login:", {
     endpoint: INSTAGRAM_OAUTH_AUTHORIZE,
     client_id: instagramAppId,
@@ -85,8 +86,8 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: Next
     case "youtube": {
       const clientId = process.env.GOOGLE_CLIENT_ID;
       if (!clientId) return null;
-      const xfHost = request.headers.get("x-forwarded-host");
-      const hostHeader = request.headers.get("host");
+      const xfHost = _request.headers.get("x-forwarded-host");
+      const hostHeader = _request.headers.get("host");
       const params = new URLSearchParams({
         client_id: clientId,
         redirect_uri: callbackUrl,

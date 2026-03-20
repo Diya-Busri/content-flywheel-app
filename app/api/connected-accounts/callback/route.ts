@@ -196,18 +196,20 @@ export async function GET(request: NextRequest) {
           redirect_uri: callbackUrl,
           grant_type: "authorization_code",
         });
+        const instagramTokenExchangeBody = new URLSearchParams({
+          client_id: instagramAppId,
+          client_secret: instagramAppSecret,
+          grant_type: "authorization_code",
+          redirect_uri: callbackUrl,
+          code,
+        });
+        console.log("[Instagram OAuth redirect_uri] callback (token POST body):", instagramTokenExchangeBody.get("redirect_uri"));
         let tokenRes: Response;
         try {
           tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({
-              client_id: instagramAppId,
-              client_secret: instagramAppSecret,
-              grant_type: "authorization_code",
-              redirect_uri: callbackUrl,
-              code,
-            }),
+            body: instagramTokenExchangeBody,
           });
         } catch (e) {
           console.error("[connected-accounts/callback] Instagram short-lived token fetch threw:", e);
