@@ -2242,7 +2242,7 @@ export default function TemplateStudioClient() {
                     <div>
                       <p className="text-sm font-medium text-foreground">Social Media Pack</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Auto-generated from this episode's theme, characters, and dialogue.
+                        Auto-generated from this episode&apos;s theme, characters, and dialogue.
                       </p>
                     </div>
                     <Button
