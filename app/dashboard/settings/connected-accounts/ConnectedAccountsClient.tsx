@@ -289,7 +289,8 @@ export default function ConnectedAccountsClient() {
         <code>FACEBOOK_APP_ID</code>, <code>FACEBOOK_APP_SECRET</code>), Instagram Business Login (
         <code>INSTAGRAM_APP_ID</code> (Instagram App ID from Meta → Instagram → Business login; required for Instagram
         connect), <code>INSTAGRAM_APP_SECRET</code> or <code>FACEBOOK_APP_SECRET</code> for the token exchange). Set{" "}
-        <code>NEXT_PUBLIC_APP_URL</code> to your app URL.
+        <code>NEXT_PUBLIC_APP_URL</code> to your exact public origin (e.g. <code>https://contentflywheel.co.uk</code>
+        — do not use <code>content.flywheel.co.uk</code>, which breaks Instagram OAuth).
         Add <code>https://contentflywheel.co.uk/api/connected-accounts/callback</code> under Facebook Login → Valid
         OAuth Redirect URIs and under Instagram → API setup with Instagram login → OAuth redirect URIs.
       </p>

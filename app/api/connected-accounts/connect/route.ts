@@ -53,6 +53,10 @@ function buildInstagramBusinessLoginAuthUrl(callbackUrl: string, state: string):
     response_type: "code",
     scope: INSTAGRAM_BUSINESS_SCOPES,
     state,
+    // Show Instagram professional login / account flow instead of skipping straight to re-consent when possible.
+    // https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login
+    force_reauth: "true",
+    enable_fb_login: "false",
   });
   const authUrl = `${INSTAGRAM_OAUTH_AUTHORIZE}?${params.toString()}`;
   console.log("[Instagram OAuth redirect_uri] connect (authorize):", params.get("redirect_uri"));

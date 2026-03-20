@@ -12,8 +12,17 @@ export const CONNECTED_ACCOUNTS_OAUTH_CALLBACK_PATH = "/api/connected-accounts/c
  */
 export function getConnectedAccountsPublicOriginForOAuth(): string {
   const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (fromEnv) return fromEnv.replace(/\/$/, "");
-  return PRODUCTION_ORIGIN;
+  let origin = fromEnv ? fromEnv.replace(/\/$/, "") : PRODUCTION_ORIGIN;
+  // Common env typo: content.flywheel.co.uk breaks Meta redirect_uri vs dashboard (contentflywheel.co.uk).
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    if (host === "content.flywheel.co.uk") {
+      origin = PRODUCTION_ORIGIN;
+    }
+  } catch {
+    /* invalid URL — leave as-is */
+  }
+  return origin;
 }
 
 /**

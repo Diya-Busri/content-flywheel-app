@@ -215,7 +215,8 @@ export async function GET(request: NextRequest) {
           console.error("[connected-accounts/callback] Instagram short-lived token fetch threw:", e);
           return errorRedirect("Instagram token exchange network error.");
         }
-        const tokenJson = (await tokenRes.json().catch(() => ({}))) as {
+        const tokenRaw = await tokenRes.text();
+        let tokenJson: {
           data?:
             | Array<{ access_token?: string; user_id?: string | number; permissions?: string }>
             | { access_token?: string; user_id?: string | number; permissions?: string };
@@ -223,7 +224,31 @@ export async function GET(request: NextRequest) {
           user_id?: string | number;
           error_message?: string;
           error_type?: string;
+          code?: number;
+          error?: { message?: string; type?: string; code?: number };
         };
+        try {
+          tokenJson = tokenRaw ? (JSON.parse(tokenRaw) as typeof tokenJson) : {};
+        } catch {
+          tokenJson = {};
+          console.error("[connected-accounts/callback] Instagram access_token response not JSON:", tokenRaw.slice(0, 500));
+        }
+        const tokenRawForLog =
+          tokenRes.ok && /"access_token"\s*:/i.test(tokenRaw)
+            ? tokenRaw.replace(/"access_token"\s*:\s*"[^"]*"/gi, '"access_token":"[REDACTED]"')
+            : tokenRaw;
+        console.log("[connected-accounts/callback] Instagram oauth/access_token raw body:", tokenRawForLog);
+        const igErrCode =
+          typeof tokenJson.code === "number"
+            ? tokenJson.code
+            : typeof tokenJson.error?.code === "number"
+              ? tokenJson.error.code
+              : null;
+        console.log("[connected-accounts/callback] Instagram oauth/access_token error fields:", {
+          error_type: tokenJson.error_type ?? tokenJson.error?.type ?? null,
+          code: igErrCode,
+          error_message: tokenJson.error_message ?? tokenJson.error?.message ?? null,
+        });
         logInstagramTokenResponseBody(tokenJson as Record<string, unknown>, `short-lived status=${tokenRes.status}`);
         console.log("[connected-accounts/callback] Instagram short-lived HTTP:", tokenRes.status, tokenRes.statusText);
 
