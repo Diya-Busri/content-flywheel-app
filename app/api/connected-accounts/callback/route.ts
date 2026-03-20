@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import {
+  getConnectedAccountsOAuthRedirectUri,
   getConnectedAccountsSettingsUrl,
-  getOAuthCallbackUrl,
 } from "@/lib/connected-accounts-oauth-origin";
 import { db } from "@/db/db";
 import { connectedAccountsTable } from "@/db/schema/connected-accounts-schema";
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
     }
     if (!code) return errorRedirect("Missing authorization code.");
 
-    const callbackUrl = getOAuthCallbackUrl(request);
+    const callbackUrl = getConnectedAccountsOAuthRedirectUri();
     console.log("[connected-accounts/callback] OAuth redirect_uri for token exchange:", callbackUrl);
 
     let accessToken: string;

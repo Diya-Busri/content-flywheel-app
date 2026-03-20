@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getOAuthCallbackUrl } from "@/lib/connected-accounts-oauth-origin";
+import { getConnectedAccountsOAuthRedirectUri } from "@/lib/connected-accounts-oauth-origin";
 import type { ConnectedPlatform } from "@/db/schema/connected-accounts-schema";
 import { randomBytes } from "crypto";
 
@@ -65,8 +65,8 @@ function buildInstagramBusinessLoginAuthUrl(callbackUrl: string, state: string):
   return authUrl;
 }
 
-function buildAuthUrl(platform: ConnectedPlatform, state: string, request: NextRequest): string | null {
-  const callbackUrl = getOAuthCallbackUrl(request);
+function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: NextRequest): string | null {
+  const callbackUrl = getConnectedAccountsOAuthRedirectUri();
 
   switch (platform) {
     case "tiktok": {
@@ -102,7 +102,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string, request: NextR
         redirect_uri_in_params: params.get("redirect_uri"),
         x_forwarded_host: xfHost,
         host: hostHeader,
-        note: "callbackUrl is from Host headers via getOAuthCallbackUrl(), not NEXT_PUBLIC_APP_URL",
+        note: "callbackUrl is getConnectedAccountsOAuthRedirectUri() — NEXT_PUBLIC_APP_URL or production origin",
         NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "(unset)",
       });
       console.log("[connected-accounts/connect] YouTube redirect_uri sent to Google:", callbackUrl);
