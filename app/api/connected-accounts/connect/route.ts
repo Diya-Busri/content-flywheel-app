@@ -17,6 +17,9 @@ const INSTAGRAM_BUSINESS_SCOPES = "instagram_business_basic,instagram_business_c
 const FACEBOOK_DIALOG_OAUTH = "https://www.facebook.com/v21.0/dialog/oauth";
 const INSTAGRAM_OAUTH_AUTHORIZE = "https://www.instagram.com/oauth/authorize";
 
+/** Hardcoded redirect_uri for Instagram OAuth — must match Meta dashboard exactly. */
+const INSTAGRAM_OAUTH_REDIRECT_URI = "https://contentflywheel.co.uk/api/connected-accounts/callback";
+
 /**
  * Facebook Login: Meta dialog OAuth, Facebook App ID, page/user scopes only.
  */
@@ -44,12 +47,13 @@ function buildFacebookLoginAuthUrl(callbackUrl: string, state: string): string |
 /**
  * Instagram Business Login: Instagram authorize URL, Instagram App ID, IG business scopes only.
  */
-function buildInstagramBusinessLoginAuthUrl(callbackUrl: string, state: string): string | null {
+function buildInstagramBusinessLoginAuthUrl(state: string): string | null {
   const instagramAppId = process.env.INSTAGRAM_APP_ID?.trim() ?? "";
   if (!instagramAppId) return null;
+  console.log("CONNECT URI:", INSTAGRAM_OAUTH_REDIRECT_URI);
   const params = new URLSearchParams({
     client_id: instagramAppId,
-    redirect_uri: callbackUrl,
+    redirect_uri: INSTAGRAM_OAUTH_REDIRECT_URI,
     response_type: "code",
     scope: INSTAGRAM_BUSINESS_SCOPES,
     state,
@@ -64,7 +68,7 @@ function buildInstagramBusinessLoginAuthUrl(callbackUrl: string, state: string):
     endpoint: INSTAGRAM_OAUTH_AUTHORIZE,
     client_id: instagramAppId,
     scope: INSTAGRAM_BUSINESS_SCOPES,
-    redirect_uri: callbackUrl,
+    redirect_uri: INSTAGRAM_OAUTH_REDIRECT_URI,
     fullAuthUrl: authUrl,
   });
   return authUrl;
@@ -115,7 +119,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: Next
       return authUrl;
     }
     case "instagram": {
-      return buildInstagramBusinessLoginAuthUrl(callbackUrl, state);
+      return buildInstagramBusinessLoginAuthUrl(state);
     }
     case "facebook": {
       return buildFacebookLoginAuthUrl(callbackUrl, state);

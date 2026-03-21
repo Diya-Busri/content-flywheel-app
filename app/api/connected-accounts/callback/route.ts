@@ -13,6 +13,9 @@ export const dynamic = "force-dynamic";
 
 const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
 
+/** Hardcoded redirect_uri for Instagram OAuth — must match Meta dashboard exactly. */
+const INSTAGRAM_OAUTH_REDIRECT_URI = "https://contentflywheel.co.uk/api/connected-accounts/callback";
+
 function getRedirectUrl(): string {
   const base =
     process.env.NEXT_PUBLIC_APP_URL ||
@@ -190,17 +193,18 @@ export async function GET(request: NextRequest) {
             "Instagram OAuth not configured. Set INSTAGRAM_APP_ID (Instagram App ID from Meta → Instagram → Business login) and INSTAGRAM_APP_SECRET or FACEBOOK_APP_SECRET for token exchange."
           );
         }
+        console.log("CALLBACK URI:", INSTAGRAM_OAUTH_REDIRECT_URI);
         console.log("[connected-accounts/callback] Instagram Business Login token exchange:", {
           endpoint: "https://api.instagram.com/oauth/access_token",
           client_id: instagramAppId,
-          redirect_uri: callbackUrl,
+          redirect_uri: INSTAGRAM_OAUTH_REDIRECT_URI,
           grant_type: "authorization_code",
         });
         const instagramTokenExchangeBody = new URLSearchParams({
           client_id: instagramAppId,
           client_secret: instagramAppSecret,
           grant_type: "authorization_code",
-          redirect_uri: callbackUrl,
+          redirect_uri: INSTAGRAM_OAUTH_REDIRECT_URI,
           code,
         });
         console.log("[Instagram OAuth redirect_uri] callback (token POST body):", instagramTokenExchangeBody.get("redirect_uri"));
