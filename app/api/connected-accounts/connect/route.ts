@@ -69,9 +69,9 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: Next
 
   switch (platform) {
     case "tiktok": {
-      const clientKey = process.env.TIKTOK_CLIENT_KEY;
+      const clientKey = process.env.TIKTOK_CLIENT_KEY?.trim() ?? "";
       if (!clientKey) return null;
-      const scopes = "user.info.basic,video.list,video.upload";
+      const scopes = "user.info.profile,video.publish";
       const params = new URLSearchParams({
         client_key: clientKey,
         scope: scopes,
@@ -79,7 +79,15 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: Next
         redirect_uri: callbackUrl,
         state,
       });
-      return `https://www.tiktok.com/auth/authorize/?${params.toString()}`;
+      const authUrl = `https://www.tiktok.com/v2/auth/authorize?${params.toString()}`;
+      console.log("[connected-accounts/connect] TikTok OAuth:", {
+        endpoint: "https://www.tiktok.com/v2/auth/authorize",
+        client_key: clientKey,
+        scope: scopes,
+        redirect_uri: callbackUrl,
+        fullAuthUrl: authUrl,
+      });
+      return authUrl;
     }
     case "youtube": {
       const clientId = process.env.GOOGLE_CLIENT_ID;

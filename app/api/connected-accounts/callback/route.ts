@@ -103,11 +103,15 @@ export async function GET(request: NextRequest) {
 
     switch (platform) {
       case "tiktok": {
-        const clientKey = process.env.TIKTOK_CLIENT_KEY;
-        const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
+        const clientKey = process.env.TIKTOK_CLIENT_KEY?.trim() ?? "";
+        const clientSecret = process.env.TIKTOK_CLIENT_SECRET?.trim() ?? "";
         if (!clientKey || !clientSecret) {
           return errorRedirect("TikTok OAuth not configured.");
         }
+        console.log("[connected-accounts/callback] TikTok token exchange redirect_uri:", callbackUrl, {
+          x_forwarded_host: request.headers.get("x-forwarded-host"),
+          host: request.headers.get("host"),
+        });
         const res = await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
           method: "POST",
           headers: {
@@ -121,9 +125,29 @@ export async function GET(request: NextRequest) {
             redirect_uri: callbackUrl,
           }),
         });
-        const data = await res.json().catch(() => ({}));
+        const data = (await res.json().catch(() => ({}))) as {
+          access_token?: string;
+          refresh_token?: string;
+          expires_in?: number;
+          open_id?: string;
+          error?: string;
+          error_description?: string;
+          description?: string;
+        };
         if (!res.ok || !data.access_token) {
-          return errorRedirect(data.error?.description || "TikTok token exchange failed.");
+          const msg =
+            typeof data.error_description === "string" && data.error_description.trim().length > 0
+              ? data.error_description
+              : typeof data.description === "string"
+                ? data.description
+                : typeof data.error === "string"
+                  ? data.error
+                  : "TikTok token exchange failed.";
+          console.error("[connected-accounts/callback] TikTok token exchange failed:", {
+            status: res.status,
+            body: { ...data, access_token: data.access_token ? "[REDACTED]" : undefined },
+          });
+          return errorRedirect(msg);
         }
         accessToken = data.access_token;
         refreshToken = data.refresh_token || null;
@@ -131,6 +155,37 @@ export async function GET(request: NextRequest) {
           const d = new Date();
           d.setSeconds(d.getSeconds() + data.expires_in);
           expiresAt = d;
+        }
+        if (typeof data.open_id === "string" && data.open_id.trim().length > 0) {
+          platformUserId = data.open_id.trim();
+        }
+        try {
+          const userInfoUrl =
+            "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url";
+          const meRes = await fetch(userInfoUrl, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          const meData = (await meRes.json().catch(() => ({}))) as {
+            data?: { user?: { open_id?: string; display_name?: string; avatar_url?: string } };
+            error?: { code?: string; message?: string };
+          };
+          const u = meData.data?.user;
+          if (meRes.ok && u) {
+            if (typeof u.open_id === "string" && u.open_id.trim().length > 0) {
+              platformUserId = u.open_id.trim();
+            }
+            platformUsername =
+              typeof u.display_name === "string" && u.display_name.trim().length > 0
+                ? u.display_name.trim()
+                : null;
+          } else {
+            console.warn("[connected-accounts/callback] TikTok user/info not ok or missing user:", {
+              status: meRes.status,
+              error: meData.error,
+            });
+          }
+        } catch (e) {
+          console.warn("[connected-accounts/callback] Could not fetch TikTok user info", e);
         }
         break;
       }
@@ -495,7 +550,7 @@ export async function GET(request: NextRequest) {
     const matchedExisting =
       platform === "instagram"
         ? matchInstagramExistingRow(existing, platformUserId)
-        : platform === "youtube" && platformUserId
+        : (platform === "youtube" || platform === "tiktok") && platformUserId
           ? existing.find((r) => (r.platformUserId ?? null) === platformUserId) ?? null
           : existing[0] ?? null;
 
