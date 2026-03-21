@@ -10,7 +10,7 @@ export const scheduledPostsTable = pgTable("scheduled_posts", {
   userId: text("user_id").notNull(),
   contentType: text("content_type").notNull(), // e.g. video
   contentJson: jsonb("content_json").$type<Record<string, unknown>>().notNull(),
-  platform: text("platform").notNull(), // tiktok | instagram | both
+  platform: text("platform").notNull(), // tiktok | instagram | youtube | facebook | both | multi
   scheduledTime: timestamp("scheduled_time", { withTimezone: true }).notNull(),
   postedStatus: boolean("posted_status").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

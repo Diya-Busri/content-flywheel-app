@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import html2canvas from "html2canvas";
 import JSZip from "jszip";
 import {
@@ -12,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +36,9 @@ import {
   Save,
   Film,
   ExternalLink,
+  CalendarClock,
+  Send,
+  X,
 } from "lucide-react";
 import { getTemplateStudioPrefill, clearTemplateStudioPrefill } from "@/lib/template-studio-prefill";
 import { setVideoPrefill, getTimelineUrl } from "@/lib/video-prefill";
@@ -48,6 +53,19 @@ type TemplateType = "quotes" | "tips" | "affirmations";
 type FontStyle = "modern" | "elegant" | "bold" | "minimal";
 type SlideItem = { heading: string; body: string; bg_color?: string };
 type CaptionItem = { caption: string; hashtags: string; alt_text: string };
+type PublishPlatform = "instagram" | "facebook" | "tiktok" | "youtube";
+
+function parseHashtagsFromString(s: string): string[] {
+  return Array.from(
+    new Set(
+      s
+        .split(/[\s,]+/)
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .map((t) => (t.startsWith("#") ? t : `#${t.replace(/^#+/, "")}`))
+    )
+  );
+}
 type SocialMediaPack = {
   caption: string;
   title: string;
@@ -271,10 +289,24 @@ export default function TemplateStudioClient() {
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
   const [captions, setCaptions] = useState<CaptionItem[]>([]);
-  const [captionsLoading, setCaptionsLoading] = useState(false);
+  const [carouselCaption, setCarouselCaption] = useState("");
+  const [hashtagTags, setHashtagTags] = useState<string[]>([]);
+  const [captionGenLoading, setCaptionGenLoading] = useState(false);
+  const [hashtagGenLoading, setHashtagGenLoading] = useState(false);
+  const [connectedPlatforms, setConnectedPlatforms] = useState<Set<PublishPlatform>>(() => new Set());
+  const [publishTargets, setPublishTargets] = useState<Record<PublishPlatform, boolean>>({
+    instagram: false,
+    facebook: false,
+    tiktok: false,
+    youtube: false,
+  });
+  const [publishing, setPublishing] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState("");
   const [packName, setPackName] = useState("");
   const [savingPack, setSavingPack] = useState(false);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const publishSlideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const animationPollCountRef = useRef<Record<number, number>>({});
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -627,11 +659,11 @@ export default function TemplateStudioClient() {
     }
   }, [slides, niche, toast]);
 
-  const handleGetCaptions = useCallback(async () => {
+  const handleGenerateCaption = useCallback(async () => {
     if (slides.length === 0) return;
-    setCaptionsLoading(true);
+    setCaptionGenLoading(true);
     try {
-      const res = await fetch("/api/template-studio/generate-captions", {
+      const res = await fetch("/api/generate-caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -640,53 +672,252 @@ export default function TemplateStudioClient() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to generate captions");
-      const list = Array.isArray(data.captions) ? data.captions : [];
-      const padded = slides.map((_, i) => {
-        const c = list[i];
-        return c
-          ? { caption: c.caption ?? "", hashtags: c.hashtags ?? "", alt_text: c.alt_text ?? "" }
-          : { caption: "", hashtags: "", alt_text: "" };
-      });
-      setCaptions(padded);
-      toast({ title: "Captions generated", description: "Edit any field or copy all." });
+      if (!res.ok) throw new Error(data.error ?? "Failed to generate caption");
+      setCarouselCaption(typeof data.caption === "string" ? data.caption : "");
+      toast({ title: "Caption generated", description: "Edit the text area before publishing." });
     } catch (e) {
       toast({
-        title: "Failed to generate captions",
+        title: "Caption generation failed",
         description: e instanceof Error ? e.message : "Something went wrong",
         variant: "destructive",
       });
     } finally {
-      setCaptionsLoading(false);
+      setCaptionGenLoading(false);
     }
   }, [slides, niche, toast]);
 
-  const updateCaption = (index: number, field: keyof CaptionItem, value: string) => {
-    setCaptions((prev) => {
-      const next = [...prev];
-      if (!next[index]) next[index] = { caption: "", hashtags: "", alt_text: "" };
-      next[index] = { ...next[index], [field]: value };
-      return next;
-    });
-  };
+  const handleGenerateHashtags = useCallback(async () => {
+    if (slides.length === 0) return;
+    setHashtagGenLoading(true);
+    try {
+      const res = await fetch("/api/generate-hashtags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          niche: niche.trim(),
+          slides: slides.map((s) => ({ heading: s.heading, body: s.body })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to generate hashtags");
+      const list = Array.isArray(data.hashtags) ? data.hashtags : [];
+      const normalized = list.filter((h: unknown): h is string => typeof h === "string" && h.trim().length > 0);
+      setHashtagTags(normalized);
+      toast({ title: "Hashtags generated", description: `${normalized.length} tags — tap × to remove.` });
+    } catch (e) {
+      toast({
+        title: "Hashtag generation failed",
+        description: e instanceof Error ? e.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setHashtagGenLoading(false);
+    }
+  }, [slides, niche, toast]);
 
-  const handleCopyAllCaptions = useCallback(() => {
-    const lines: string[] = [];
-    slides.forEach((_, i) => {
-      const c = captions[i];
-      if (!c) return;
-      lines.push(`--- Slide ${i + 1} ---`);
-      lines.push(`Caption:\n${c.caption || "(none)"}`);
-      lines.push(`Hashtags: ${c.hashtags || "(none)"}`);
-      lines.push(`Alt text: ${c.alt_text || "(none)"}`);
-      lines.push("");
-    });
-    const text = lines.join("\n");
+  const handleCopyPublishBlock = useCallback(() => {
+    const hashLine = hashtagTags.join(" ");
+    const text = [carouselCaption.trim(), hashLine].filter(Boolean).join("\n\n");
+    if (!text) {
+      toast({ title: "Nothing to copy", variant: "destructive" });
+      return;
+    }
     navigator.clipboard.writeText(text).then(
-      () => toast({ title: "Copied", description: "All captions copied to clipboard." }),
+      () => toast({ title: "Copied", description: "Caption and hashtags copied." }),
       () => toast({ title: "Copy failed", variant: "destructive" })
     );
-  }, [slides, captions, toast]);
+  }, [carouselCaption, hashtagTags, toast]);
+
+  const captureSlidesAsBase64 = useCallback(async (): Promise<string[]> => {
+    const out: string[] = [];
+    for (let i = 0; i < slides.length; i++) {
+      const el = publishSlideRefs.current[i];
+      if (!el) {
+        throw new Error(`Slide ${i + 1} is not ready — wait for previews to load.`);
+      }
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: null,
+        logging: false,
+      });
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error("Could not render slide image"));
+              return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : "");
+            reader.onerror = () => reject(new Error("Read failed"));
+            reader.readAsDataURL(blob);
+          },
+          "image/png",
+          1
+        );
+      });
+      if (!dataUrl) throw new Error(`Slide ${i + 1} export failed`);
+      out.push(dataUrl);
+    }
+    return out;
+  }, [slides.length]);
+
+  const handlePublishNow = useCallback(async () => {
+    const selected = (["instagram", "facebook", "tiktok", "youtube"] as const).filter(
+      (p) => publishTargets[p] && connectedPlatforms.has(p)
+    );
+    if (selected.length === 0) {
+      toast({
+        title: "Select a connected platform",
+        description: "Choose at least one account you’ve connected in Settings.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const caption = [carouselCaption.trim(), hashtagTags.join(" ")].filter(Boolean).join("\n\n");
+    if (!caption.trim()) {
+      toast({
+        title: "Add a caption",
+        description: "Write or generate a caption before publishing.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!selected.includes("instagram")) {
+      toast({
+        title: "Instagram required for auto-publish",
+        description:
+          "In-app carousel upload is implemented for Instagram. Select Instagram, or export slides for other platforms.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setPublishing(true);
+    const skipped: string[] = [];
+    try {
+      const imagesBase64 = await captureSlidesAsBase64();
+      for (const p of selected) {
+        if (p === "instagram") {
+          const res = await fetch("/api/publish/instagram", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ caption, imagesBase64 }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(typeof data.error === "string" ? data.error : "Instagram publish failed");
+          }
+          toast({
+            title: "Published to Instagram",
+            description: data.mediaId ? `Media id: ${data.mediaId}` : "Your carousel is live.",
+          });
+        } else {
+          skipped.push(p);
+        }
+      }
+      if (skipped.length > 0) {
+        toast({
+          title: "Not published everywhere",
+          description: `Carousel auto-publish is only on Instagram for now. Skipped: ${skipped.join(", ")}.`,
+        });
+      }
+    } catch (e) {
+      toast({
+        title: "Publish failed",
+        description: e instanceof Error ? e.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setPublishing(false);
+    }
+  }, [
+    publishTargets,
+    connectedPlatforms,
+    captureSlidesAsBase64,
+    carouselCaption,
+    hashtagTags,
+    toast,
+  ]);
+
+  const handleSchedulePost = useCallback(async () => {
+    const selected = (["instagram", "facebook", "tiktok", "youtube"] as const).filter(
+      (p) => publishTargets[p] && connectedPlatforms.has(p)
+    );
+    if (selected.length === 0) {
+      toast({
+        title: "Select a connected platform",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!scheduleAt) {
+      toast({ title: "Pick a date and time", variant: "destructive" });
+      return;
+    }
+    const when = new Date(scheduleAt);
+    if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+      toast({ title: "Invalid schedule time", description: "Choose a future date and time.", variant: "destructive" });
+      return;
+    }
+    setScheduling(true);
+    try {
+      const platform = selected.length === 1 ? selected[0] : "multi";
+      const res = await fetch("/api/scheduled-posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contentType: "template_studio_carousel",
+          platform,
+          scheduledTime: when.toISOString(),
+          contentJson: {
+            source: "template-studio",
+            caption: carouselCaption.trim(),
+            hashtags: hashtagTags,
+            platforms: selected,
+            packName: packName.trim() || niche.trim() || "Template Pack",
+            slides: slides.map((s) => ({
+              heading: s.heading,
+              body: s.body,
+              bg_color: s.bg_color ?? brandPrimary,
+            })),
+            brandPrimary,
+            brandSecondary,
+            fontStyle,
+            brandName: brandName.trim() || undefined,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to schedule");
+      toast({
+        title: "Scheduled",
+        description: `Saved for ${when.toLocaleString()}. View in Content Calendar.`,
+      });
+    } catch (e) {
+      toast({
+        title: "Schedule failed",
+        description: e instanceof Error ? e.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setScheduling(false);
+    }
+  }, [
+    publishTargets,
+    connectedPlatforms,
+    scheduleAt,
+    carouselCaption,
+    hashtagTags,
+    packName,
+    niche,
+    slides,
+    brandPrimary,
+    brandSecondary,
+    fontStyle,
+    brandName,
+    toast,
+  ]);
 
   const handleSavePack = useCallback(async () => {
     const name = packName.trim() || niche.trim() || "Template Pack";
@@ -711,8 +942,16 @@ export default function TemplateStudioClient() {
             body: s.body,
             bg_color: s.bg_color ?? brandPrimary,
           })),
-          captionsJson: slides.map((_, i) => captions[i] ?? { caption: "", hashtags: "", alt_text: "" }),
-          status: captions.length > 0 ? "complete" : "draft",
+          captionsJson: slides.map((_, i) =>
+            i === 0
+              ? {
+                  caption: carouselCaption.trim(),
+                  hashtags: hashtagTags.join(" "),
+                  alt_text: captions[0]?.alt_text ?? "",
+                }
+              : (captions[i] ?? { caption: "", hashtags: "", alt_text: "" })
+          ),
+          status: carouselCaption.trim().length > 0 || hashtagTags.length > 0 ? "complete" : "draft",
         }),
       });
       const data = await res.json();
@@ -728,7 +967,19 @@ export default function TemplateStudioClient() {
     } finally {
       setSavingPack(false);
     }
-  }, [packName, niche, templateType, brandPrimary, brandSecondary, fontStyle, slides, captions, toast]);
+  }, [
+    packName,
+    niche,
+    templateType,
+    brandPrimary,
+    brandSecondary,
+    fontStyle,
+    slides,
+    captions,
+    carouselCaption,
+    hashtagTags,
+    toast,
+  ]);
 
   const handleExportPackRef = useRef(handleExportPack);
 
@@ -1101,6 +1352,28 @@ export default function TemplateStudioClient() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (step !== 3) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/connected-accounts");
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data.connected) ? data.connected : [];
+        const next = new Set<PublishPlatform>();
+        for (const row of list as { platform?: string }[]) {
+          const p = row.platform;
+          if (p === "instagram" || p === "facebook" || p === "tiktok" || p === "youtube") {
+            next.add(p);
+          }
+        }
+        setConnectedPlatforms(next);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [step]);
+
+  useEffect(() => {
     const packId = searchParams.get("packId");
     const wantDownload = searchParams.get("download") === "1";
     if (!packId) return;
@@ -1127,13 +1400,15 @@ export default function TemplateStudioClient() {
           }))
         );
         const capList = Array.isArray(pack.captionsJson) ? pack.captionsJson : [];
-        setCaptions(
-          capList.map((c: { caption?: string; hashtags?: string; alt_text?: string }) => ({
-            caption: c.caption ?? "",
-            hashtags: c.hashtags ?? "",
-            alt_text: c.alt_text ?? "",
-          }))
-        );
+        const mappedCaps = capList.map((c: { caption?: string; hashtags?: string; alt_text?: string }) => ({
+          caption: c.caption ?? "",
+          hashtags: c.hashtags ?? "",
+          alt_text: c.alt_text ?? "",
+        }));
+        setCaptions(mappedCaps);
+        const first = mappedCaps[0];
+        if (first?.caption) setCarouselCaption(first.caption);
+        if (first?.hashtags) setHashtagTags(parseHashtagsFromString(first.hashtags));
         setStep(3);
         if (wantDownload) {
           setTimeout(() => {
@@ -1277,7 +1552,7 @@ export default function TemplateStudioClient() {
         <span
           className={step === 3 ? "font-medium text-foreground" : "text-muted-foreground"}
         >
-          Step 3 — Get Captions
+          Step 3 — Get Captions & Publish
         </span>
       </div>
 
@@ -2413,12 +2688,12 @@ export default function TemplateStudioClient() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Get Captions</CardTitle>
+              <CardTitle>Get Captions & Publish</CardTitle>
               <CardDescription>
-                Generate Instagram/TikTok captions for each slide. Edit below then copy all.
+                Generate one Instagram-ready caption and hashtags from your slides, choose connected accounts, then publish or schedule.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="pack-name">Pack name</Label>
                 <Input
@@ -2429,32 +2704,176 @@ export default function TemplateStudioClient() {
                   className="max-w-sm"
                 />
               </div>
+
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Label htmlFor="carousel-caption">Caption</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void handleGenerateCaption()}
+                    disabled={captionGenLoading}
+                    className="bg-orange-500/15 text-orange-900 hover:bg-orange-500/25 dark:text-orange-100"
+                  >
+                    {captionGenLoading ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-2" />
+                    )}
+                    Generate Caption
+                  </Button>
+                </div>
+                <Textarea
+                  id="carousel-caption"
+                  value={carouselCaption}
+                  onChange={(e) => setCarouselCaption(e.target.value)}
+                  placeholder="150–300 words, cohesive story for the whole carousel…"
+                  rows={10}
+                  className="min-h-[200px] text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Label>Hashtags</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void handleGenerateHashtags()}
+                    disabled={hashtagGenLoading}
+                    className="bg-orange-500/15 text-orange-900 hover:bg-orange-500/25 dark:text-orange-100"
+                  >
+                    {hashtagGenLoading ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-2" />
+                    )}
+                    Generate Hashtags
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2 min-h-[40px] rounded-md border border-input bg-background p-2">
+                  {hashtagTags.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-1 px-1">Generate or type below to add tags.</p>
+                  ) : (
+                    hashtagTags.map((tag, idx) => (
+                      <button
+                        key={`${tag}-${idx}`}
+                        type="button"
+                        onClick={() => setHashtagTags((prev) => prev.filter((_, i) => i !== idx))}
+                        className="inline-flex items-center gap-1 rounded-full border bg-muted/60 px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors"
+                      >
+                        <span>{tag.startsWith("#") ? tag : `#${tag}`}</span>
+                        <X className="w-3 h-3 opacity-70" aria-hidden />
+                      </button>
+                    ))
+                  )}
+                </div>
+                <Input
+                  placeholder="Type a tag and press Enter"
+                  className="max-w-md"
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    const raw = (e.target as HTMLInputElement).value.trim();
+                    if (!raw) return;
+                    const t = raw.startsWith("#") ? raw : `#${raw.replace(/^#+/, "")}`;
+                    setHashtagTags((prev) => (prev.includes(t) ? prev : [...prev, t]));
+                    (e.target as HTMLInputElement).value = "";
+                  }}
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label>Platforms</Label>
+                <p className="text-xs text-muted-foreground">
+                  Only connected accounts can be selected.{" "}
+                  <Link href="/dashboard/settings/connected-accounts" className="underline underline-offset-2">
+                    Connect accounts
+                  </Link>
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(
+                    [
+                      { id: "instagram" as const, label: "Instagram" },
+                      { id: "facebook" as const, label: "Facebook" },
+                      { id: "tiktok" as const, label: "TikTok" },
+                      { id: "youtube" as const, label: "YouTube" },
+                    ] as const
+                  ).map(({ id, label }) => {
+                    const connected = connectedPlatforms.has(id);
+                    return (
+                      <div
+                        key={id}
+                        className={`flex items-center gap-3 rounded-lg border p-3 ${connected ? "" : "opacity-60 bg-muted/30"}`}
+                      >
+                        <Checkbox
+                          id={`publish-${id}`}
+                          checked={publishTargets[id]}
+                          disabled={!connected || publishing || scheduling}
+                          onCheckedChange={(c) =>
+                            setPublishTargets((prev) => ({ ...prev, [id]: c === true }))
+                          }
+                        />
+                        <div className="flex flex-col gap-0.5">
+                          <label htmlFor={`publish-${id}`} className="text-sm font-medium leading-none cursor-pointer">
+                            {label}
+                          </label>
+                          {!connected && <span className="text-xs text-muted-foreground">Not connected</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2 max-w-md">
+                <Label htmlFor="schedule-at" className="flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4" />
+                  Schedule for
+                </Label>
+                <Input
+                  id="schedule-at"
+                  type="datetime-local"
+                  value={scheduleAt}
+                  onChange={(e) => setScheduleAt(e.target.value)}
+                  disabled={scheduling || publishing}
+                />
+              </div>
+
               <div className="flex flex-wrap gap-2">
                 <Button
-                  onClick={handleGetCaptions}
-                  disabled={captionsLoading}
+                  type="button"
+                  onClick={() => void handlePublishNow()}
+                  disabled={publishing || scheduling}
                   className="bg-orange-500 hover:bg-orange-600"
                 >
-                  {captionsLoading ? (
+                  {publishing ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
-                    <Sparkles className="w-4 h-4 mr-2" />
+                    <Send className="w-4 h-4 mr-2" />
                   )}
-                  Get Captions
+                  Publish Now
                 </Button>
                 <Button
-                  variant="outline"
-                  onClick={handleCopyAllCaptions}
-                  disabled={captions.length === 0}
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void handleSchedulePost()}
+                  disabled={scheduling || publishing}
                 >
+                  {scheduling ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <CalendarClock className="w-4 h-4 mr-2" />
+                  )}
+                  Schedule
+                </Button>
+                <Button type="button" variant="outline" onClick={handleCopyPublishBlock}>
                   <Copy className="w-4 h-4 mr-2" />
-                  Copy All Captions
+                  Copy caption + tags
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleSavePack}
-                  disabled={savingPack}
-                >
+                <Button type="button" variant="outline" onClick={handleSavePack} disabled={savingPack}>
                   {savingPack ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
@@ -2462,12 +2881,7 @@ export default function TemplateStudioClient() {
                   )}
                   Save Pack
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setStep(2)}
-                  className="text-muted-foreground"
-                >
+                <Button type="button" variant="ghost" size="sm" onClick={() => setStep(2)} className="text-muted-foreground">
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Back to slides
                 </Button>
@@ -2475,13 +2889,20 @@ export default function TemplateStudioClient() {
             </CardContent>
           </Card>
 
-          <div className="overflow-x-auto pb-4">
-            <div className="flex gap-6" style={{ minWidth: "min-content" }}>
-              {slides.map((slide, index) => (
-                <Card key={index} className="shrink-0 w-[280px] flex flex-col">
-                  <CardContent className="p-3 flex flex-col gap-3">
-                    <div className="flex justify-center">
+          <Card>
+            <CardHeader>
+              <CardTitle>Slide previews</CardTitle>
+              <CardDescription>These frames are used when publishing to Instagram (same look as Export Pack).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto pb-4">
+                <div className="flex gap-6" style={{ minWidth: "min-content" }}>
+                  {slides.map((slide, index) => (
+                    <div key={index} className="flex justify-center shrink-0">
                       <SlidePreview
+                        ref={(el) => {
+                          publishSlideRefs.current[index] = el;
+                        }}
                         slide={slide}
                         brandPrimary={brandPrimary}
                         brandSecondary={brandSecondary}
@@ -2489,36 +2910,11 @@ export default function TemplateStudioClient() {
                         brandName={brandName.trim() || "Content Flywheel"}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs">Caption</Label>
-                      <Textarea
-                        value={captions[index]?.caption ?? ""}
-                        onChange={(e) => updateCaption(index, "caption", e.target.value)}
-                        placeholder="2-3 sentences + CTA"
-                        rows={3}
-                        className="resize-none text-sm"
-                      />
-                      <Label className="text-xs">Hashtags</Label>
-                      <Input
-                        value={captions[index]?.hashtags ?? ""}
-                        onChange={(e) => updateCaption(index, "hashtags", e.target.value)}
-                        placeholder="15 hashtags"
-                        className="text-sm"
-                      />
-                      <Label className="text-xs">Alt text</Label>
-                      <Textarea
-                        value={captions[index]?.alt_text ?? ""}
-                        onChange={(e) => updateCaption(index, "alt_text", e.target.value)}
-                        placeholder="1 sentence for accessibility"
-                        rows={2}
-                        className="resize-none text-sm"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

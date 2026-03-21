@@ -61,8 +61,16 @@ export async function POST(request: NextRequest) {
 
     const contentType = typeof body.contentType === "string" ? body.contentType.trim() : "video";
     const contentJson = body.contentJson && typeof body.contentJson === "object" ? body.contentJson : {};
-    const platform = ["tiktok", "instagram", "both"].includes(String(body.platform).toLowerCase())
-      ? String(body.platform).toLowerCase()
+    const platformRaw = String(body.platform ?? "both").toLowerCase();
+    const platform = [
+      "tiktok",
+      "instagram",
+      "youtube",
+      "facebook",
+      "both",
+      "multi",
+    ].includes(platformRaw)
+      ? platformRaw
       : "both";
     const scheduledTimeRaw = body.scheduledTime;
     if (typeof scheduledTimeRaw !== "string" || !scheduledTimeRaw) {

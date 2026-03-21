@@ -1,0 +1,142 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { db } from "@/db/db";
+import { connectedAccountsTable } from "@/db/schema/connected-accounts-schema";
+import { eq, and } from "drizzle-orm";
+import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { publishInstagramCarousel } from "@/lib/instagram-carousel-publish";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 120;
+
+const BUCKET = "timeline-media";
+
+function parseBase64Images(input: unknown): Buffer[] {
+  if (!Array.isArray(input)) return [];
+  const out: Buffer[] = [];
+  for (const item of input.slice(0, 10)) {
+    if (typeof item !== "string") continue;
+    const raw = item.includes(",") ? item.split(",").pop() ?? item : item;
+    try {
+      const buf = Buffer.from(raw, "base64");
+      if (buf.length > 0) out.push(buf);
+    } catch {
+      // skip
+    }
+  }
+  return out;
+}
+
+async function uploadPngToPublicUrl(userId: string, buffer: Buffer, index: number): Promise<string | null> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  const path = `${userId}/ig-carousel/${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}.png`;
+  let result = await supabase.storage.from(BUCKET).upload(path, buffer, {
+    contentType: "image/png",
+    upsert: true,
+  });
+  if (result.error) {
+    const msg = result.error.message?.toLowerCase() ?? "";
+    if (/bucket|not found|404/.test(msg)) {
+      await supabase.storage.createBucket(BUCKET, { public: true });
+      result = await supabase.storage.from(BUCKET).upload(path, buffer, {
+        contentType: "image/png",
+        upsert: true,
+      });
+    }
+  }
+  if (result.error) {
+    console.error("[publish/instagram] storage upload:", result.error.message);
+    return null;
+  }
+  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(result.data.path);
+  return urlData.publicUrl;
+}
+
+/**
+ * POST: Publish carousel to Instagram using connected_accounts token.
+ * Body: { caption: string, imagesBase64?: string[] } — PNG/JPEG base64 (data URLs ok), max 10.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rl = await checkApiRateLimit(userId);
+    if (rl) return rl;
+
+    const body = await request.json().catch(() => ({}));
+    const caption = typeof body.caption === "string" ? body.caption.trim() : "";
+    if (!caption) {
+      return NextResponse.json({ error: "caption is required" }, { status: 400 });
+    }
+
+    const buffers = parseBase64Images(body.imagesBase64);
+    if (buffers.length === 0) {
+      return NextResponse.json(
+        { error: "imagesBase64 (non-empty array) is required" },
+        { status: 400 }
+      );
+    }
+
+    const [account] = await db
+      .select()
+      .from(connectedAccountsTable)
+      .where(and(eq(connectedAccountsTable.userId, userId), eq(connectedAccountsTable.platform, "instagram")));
+
+    if (!account?.accessToken) {
+      return NextResponse.json(
+        { error: "Instagram is not connected. Connect it in Settings → Connected Accounts." },
+        { status: 403 }
+      );
+    }
+
+    const igUserId = account.platformUserId?.trim();
+    if (!igUserId) {
+      return NextResponse.json(
+        { error: "Instagram account is missing user id; reconnect Instagram." },
+        { status: 403 }
+      );
+    }
+
+    const imageUrls: string[] = [];
+    for (let i = 0; i < buffers.length; i++) {
+      const url = await uploadPngToPublicUrl(userId, buffers[i], i);
+      if (!url) {
+        return NextResponse.json(
+          {
+            error:
+              getSupabaseAdmin() == null
+                ? "Supabase storage is not configured (NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)."
+                : "Failed to upload images for Instagram. Check storage bucket timeline-media.",
+          },
+          { status: 503 }
+        );
+      }
+      imageUrls.push(url);
+    }
+
+    const result = await publishInstagramCarousel({
+      igUserId,
+      accessToken: account.accessToken,
+      imageUrls,
+      caption,
+    });
+
+    if (result.error) {
+      return NextResponse.json({ success: false, error: result.error }, { status: 502 });
+    }
+
+    return NextResponse.json({ success: true, mediaId: result.mediaId });
+  } catch (e) {
+    console.error("[publish/instagram]", e);
+    return NextResponse.json(
+      { success: false, error: e instanceof Error ? e.message : "Server error" },
+      { status: 500 }
+    );
+  }
+}
