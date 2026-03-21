@@ -20,6 +20,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { ArrowLeft, Check, Loader2, Unplug } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -59,7 +68,24 @@ export default function ConnectedAccountsClient() {
   const [connecting, setConnecting] = useState<ConnectedPlatform | null>(null);
   const [disconnectTarget, setDisconnectTarget] = useState<{ platform: ConnectedPlatform; accountId?: string } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [instagramPreConnectOpen, setInstagramPreConnectOpen] = useState(false);
+  const [igBusinessConfirmed, setIgBusinessConfirmed] = useState(false);
+  const [igFacebookLinkedConfirmed, setIgFacebookLinkedConfirmed] = useState(false);
   const { toast } = useToast();
+
+  const canStartInstagramOAuth = igBusinessConfirmed && igFacebookLinkedConfirmed;
+
+  const closeInstagramPreConnect = () => {
+    setInstagramPreConnectOpen(false);
+    setIgBusinessConfirmed(false);
+    setIgFacebookLinkedConfirmed(false);
+  };
+
+  const openInstagramPreConnect = () => {
+    setIgBusinessConfirmed(false);
+    setIgFacebookLinkedConfirmed(false);
+    setInstagramPreConnectOpen(true);
+  };
 
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
@@ -239,7 +265,11 @@ export default function ConnectedAccountsClient() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => void handleConnect(platform)}
+                            onClick={() =>
+                              platform === "instagram"
+                                ? openInstagramPreConnect()
+                                : void handleConnect(platform)
+                            }
                             disabled={isConnecting}
                           >
                             {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -250,7 +280,11 @@ export default function ConnectedAccountsClient() {
                     ) : (
                       <Button
                         size="sm"
-                        onClick={() => handleConnect(platform)}
+                        onClick={() =>
+                          platform === "instagram"
+                            ? openInstagramPreConnect()
+                            : void handleConnect(platform)
+                        }
                         disabled={isConnecting}
                         className="bg-orange-500 hover:bg-orange-600"
                       >
@@ -282,6 +316,90 @@ export default function ConnectedAccountsClient() {
           })}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={instagramPreConnectOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setInstagramPreConnectOpen(true);
+          } else {
+            closeInstagramPreConnect();
+          }
+        }}
+      >
+        <DialogContent className="border-[#E5E7EB] bg-white dark:border-[#2A2A2A] dark:bg-[#1A1A1A] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900 dark:text-white">Before connecting Instagram</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="flex gap-3 rounded-lg border border-[#E5E7EB] bg-gray-50/50 p-3 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]/50">
+              <Checkbox
+                id="ig-business-creator"
+                checked={igBusinessConfirmed}
+                onCheckedChange={(v) => setIgBusinessConfirmed(v === true)}
+                className="mt-0.5"
+              />
+              <div className="min-w-0 space-y-1">
+                <Label
+                  htmlFor="ig-business-creator"
+                  className="cursor-pointer text-sm font-normal leading-snug text-gray-900 dark:text-white"
+                >
+                  My Instagram is a Business or Creator account
+                </Label>
+                <a
+                  href="https://www.instagram.com/accounts/convert_to_professional_account"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-orange-600 hover:underline dark:text-orange-400"
+                >
+                  Switch here
+                </a>
+              </div>
+            </div>
+            <div className="flex gap-3 rounded-lg border border-[#E5E7EB] bg-gray-50/50 p-3 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]/50">
+              <Checkbox
+                id="ig-facebook-linked"
+                checked={igFacebookLinkedConfirmed}
+                onCheckedChange={(v) => setIgFacebookLinkedConfirmed(v === true)}
+                className="mt-0.5"
+              />
+              <div className="min-w-0 space-y-1">
+                <Label
+                  htmlFor="ig-facebook-linked"
+                  className="cursor-pointer text-sm font-normal leading-snug text-gray-900 dark:text-white"
+                >
+                  My Instagram is linked to a Facebook Page
+                </Label>
+                <a
+                  href="https://www.facebook.com/settings/?tab=linked_instagram"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-orange-600 hover:underline dark:text-orange-400"
+                >
+                  Link here
+                </a>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" className="border-gray-300 text-gray-700 dark:border-[#2A2A2A] dark:text-gray-300" onClick={closeInstagramPreConnect}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!canStartInstagramOAuth || connecting === "instagram"}
+              className="bg-orange-500 hover:bg-orange-600"
+              onClick={() => {
+                closeInstagramPreConnect();
+                void handleConnect("instagram");
+              }}
+            >
+              {connecting === "instagram" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Connect Instagram
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={!!disconnectTarget}

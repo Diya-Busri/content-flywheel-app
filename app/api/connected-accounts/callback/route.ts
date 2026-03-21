@@ -294,8 +294,14 @@ export async function GET(request: NextRequest) {
 
         const pages = Array.isArray(accJson.data) ? accJson.data : [];
         console.log("[connected-accounts/callback] Instagram: pages count:", pages.length);
-        let chosenPage: { id: string; name?: string; access_token: string } | null = null;
-        let igFromPage: { id?: string; username?: string } | null = null;
+
+        type ResolvedIg = {
+          accessToken: string;
+          platformUserId: string;
+          platformUsername: string | null;
+          source: "page" | "facebook_me" | "instagram_me";
+        };
+        let resolved: ResolvedIg | null = null;
 
         for (const p of pages) {
           const pageId = typeof p.id === "string" ? p.id : null;
@@ -323,30 +329,93 @@ export async function GET(request: NextRequest) {
           }
           const igId = igJson.instagram_business_account?.id;
           if (igId) {
-            chosenPage = { id: pageId, name: p.name, access_token: pageToken };
-            igFromPage = igJson.instagram_business_account;
+            resolved = {
+              accessToken: pageToken,
+              platformUserId: String(igId),
+              platformUsername:
+                igJson.instagram_business_account?.username?.trim() || p.name?.trim() || null,
+              source: "page",
+            };
             break;
           }
         }
 
-        if (!chosenPage || !igFromPage?.id) {
+        if (!resolved && pages.length === 0) {
+          const fbMeUrl =
+            `https://graph.facebook.com/v21.0/me?fields=id,name,instagram_business_account{id,username}` +
+            `&access_token=${encodeURIComponent(userAccessToken)}`;
+          const fbMeRes = await fetch(fbMeUrl);
+          const fbMeText = await fbMeRes.text();
+          console.log(
+            "[connected-accounts/callback] Instagram: fallback GET graph.facebook.com/me (empty /me/accounts):",
+            { status: fbMeRes.status, body: fbMeText.slice(0, 4000) }
+          );
+          let fbMeJson: {
+            id?: string;
+            name?: string;
+            instagram_business_account?: { id?: string; username?: string };
+            error?: { message?: string };
+          };
+          try {
+            fbMeJson = fbMeText ? (JSON.parse(fbMeText) as typeof fbMeJson) : {};
+          } catch {
+            fbMeJson = {};
+          }
+          const igBiz = fbMeJson.instagram_business_account;
+          if (igBiz?.id) {
+            resolved = {
+              accessToken: userAccessToken,
+              platformUserId: String(igBiz.id),
+              platformUsername: igBiz.username?.trim() || fbMeJson.name?.trim() || null,
+              source: "facebook_me",
+            };
+            console.log("[connected-accounts/callback] Instagram: resolved via graph.facebook.com/me");
+          }
+        }
+
+        if (!resolved) {
+          const igMeUrl =
+            `https://graph.instagram.com/v21.0/me?fields=id,username` +
+            `&access_token=${encodeURIComponent(userAccessToken)}`;
+          const igMeRes = await fetch(igMeUrl);
+          const igMeText = await igMeRes.text();
+          console.log("[connected-accounts/callback] Instagram: fallback GET graph.instagram.com/me:", {
+            status: igMeRes.status,
+            body: igMeText.slice(0, 4000),
+          });
+          let igMeJson: { id?: string; username?: string; error?: { message?: string } };
+          try {
+            igMeJson = igMeText ? (JSON.parse(igMeText) as typeof igMeJson) : {};
+          } catch {
+            igMeJson = {};
+          }
+          if (igMeJson.id) {
+            resolved = {
+              accessToken: userAccessToken,
+              platformUserId: String(igMeJson.id),
+              platformUsername: igMeJson.username?.trim() || null,
+              source: "instagram_me",
+            };
+            console.log("[connected-accounts/callback] Instagram: resolved via graph.instagram.com/me");
+          }
+        }
+
+        if (!resolved) {
           return errorRedirect(
-            "No Facebook Page with a linked Instagram Business account found. In Meta Business Suite, connect your Instagram professional account to a Facebook Page, then connect again."
+            "Could not resolve an Instagram account. Link Instagram to a Facebook Page (Meta Business Suite), or ensure your Facebook login has access to the Instagram professional account."
           );
         }
 
-        accessToken = chosenPage.access_token;
-        platformUserId = String(igFromPage.id);
-        platformUsername =
-          igFromPage.username?.trim() ||
-          chosenPage.name?.trim() ||
-          null;
+        accessToken = resolved.accessToken;
+        platformUserId = resolved.platformUserId;
+        platformUsername = resolved.platformUsername;
         refreshToken = null;
 
-        console.log("[connected-accounts/callback] Instagram: stored Page access token + IG Business id:", {
-          pageId: chosenPage.id,
-          igBusinessAccountId: platformUserId,
+        console.log("[connected-accounts/callback] Instagram: stored token + user id:", {
+          source: resolved.source,
+          platformUserId,
           username: platformUsername,
+          tokenKind: resolved.source === "page" ? "page_access_token" : "user_access_token",
         });
         break;
       }
