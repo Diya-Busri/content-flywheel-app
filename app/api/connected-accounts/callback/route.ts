@@ -229,7 +229,7 @@ export async function GET(request: NextRequest) {
 
         const accountsUrl =
           `https://graph.facebook.com/v21.0/me/accounts?` +
-          `fields=name,id,access_token,instagram_business_account{id,username}` +
+          `fields=name,id,access_token` +
           `&access_token=${encodeURIComponent(userAccessToken)}`;
         const accRes = await fetch(accountsUrl);
         const accText = await accRes.text();
@@ -238,7 +238,6 @@ export async function GET(request: NextRequest) {
             id?: string;
             name?: string;
             access_token?: string;
-            instagram_business_account?: { id?: string; username?: string };
           }>;
           error?: { message?: string };
         };
@@ -251,23 +250,57 @@ export async function GET(request: NextRequest) {
         console.log("[connected-accounts/callback] Instagram: GET /me/accounts full response:", accText.slice(0, 12000));
 
         const pages = Array.isArray(accJson.data) ? accJson.data : [];
-        const pageWithIg = pages.find((p) => p.instagram_business_account?.id && p.access_token);
-        if (!pageWithIg?.access_token || !pageWithIg.instagram_business_account?.id) {
+        let chosenPage: { id: string; name?: string; access_token: string } | null = null;
+        let igFromPage: { id?: string; username?: string } | null = null;
+
+        for (const p of pages) {
+          const pageId = typeof p.id === "string" ? p.id : null;
+          const pageToken = typeof p.access_token === "string" ? p.access_token : null;
+          if (!pageId || !pageToken) continue;
+
+          const igUrl =
+            `https://graph.facebook.com/v21.0/${encodeURIComponent(pageId)}?` +
+            `fields=instagram_business_account{id,username}` +
+            `&access_token=${encodeURIComponent(pageToken)}`;
+          const igRes = await fetch(igUrl);
+          const igText = await igRes.text();
+          console.log(
+            `[connected-accounts/callback] Instagram: GET /${pageId}?fields=instagram_business_account status=${igRes.status} body:`,
+            igText.slice(0, 4000)
+          );
+          let igJson: {
+            instagram_business_account?: { id?: string; username?: string };
+            error?: { message?: string };
+          };
+          try {
+            igJson = igText ? (JSON.parse(igText) as typeof igJson) : {};
+          } catch {
+            igJson = {};
+          }
+          const igId = igJson.instagram_business_account?.id;
+          if (igId) {
+            chosenPage = { id: pageId, name: p.name, access_token: pageToken };
+            igFromPage = igJson.instagram_business_account;
+            break;
+          }
+        }
+
+        if (!chosenPage || !igFromPage?.id) {
           return errorRedirect(
             "No Facebook Page with a linked Instagram Business account found. In Meta Business Suite, connect your Instagram professional account to a Facebook Page, then connect again."
           );
         }
 
-        accessToken = pageWithIg.access_token;
-        platformUserId = String(pageWithIg.instagram_business_account.id);
+        accessToken = chosenPage.access_token;
+        platformUserId = String(igFromPage.id);
         platformUsername =
-          pageWithIg.instagram_business_account.username?.trim() ||
-          pageWithIg.name?.trim() ||
+          igFromPage.username?.trim() ||
+          chosenPage.name?.trim() ||
           null;
         refreshToken = null;
 
         console.log("[connected-accounts/callback] Instagram: stored Page access token + IG Business id:", {
-          pageId: pageWithIg.id ?? null,
+          pageId: chosenPage.id,
           igBusinessAccountId: platformUserId,
           username: platformUsername,
         });

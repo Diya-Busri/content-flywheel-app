@@ -7,7 +7,7 @@ import { eq, and } from "drizzle-orm";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { publishInstagramCarousel } from "@/lib/instagram-carousel-publish";
 import { resolveInstagramPublishContext } from "@/lib/instagram-fb-resolve";
-import { INSTAGRAM_FACEBOOK_CONNECT_SCOPES } from "@/lib/instagram-facebook-connect-scopes";
+import { INSTAGRAM_PUBLISH_SCOPE_MARKER } from "@/lib/instagram-facebook-connect-scopes";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     const scopes = account.scopes ?? "";
     const useStoredPageToken =
       typeof scopes === "string" &&
-      scopes.includes("instagram_business_content_publish") &&
+      scopes.includes(INSTAGRAM_PUBLISH_SCOPE_MARKER) &&
       account.platformUserId?.trim() &&
       account.accessToken;
 
