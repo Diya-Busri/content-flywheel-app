@@ -38,7 +38,6 @@ import {
   ExternalLink,
   CalendarClock,
   Send,
-  X,
 } from "lucide-react";
 import { getTemplateStudioPrefill, clearTemplateStudioPrefill } from "@/lib/template-studio-prefill";
 import { setVideoPrefill, getTimelineUrl } from "@/lib/video-prefill";
@@ -54,18 +53,6 @@ type FontStyle = "modern" | "elegant" | "bold" | "minimal";
 type SlideItem = { heading: string; body: string; bg_color?: string };
 type CaptionItem = { caption: string; hashtags: string; alt_text: string };
 type PublishPlatform = "instagram" | "facebook" | "tiktok" | "youtube";
-
-function parseHashtagsFromString(s: string): string[] {
-  return Array.from(
-    new Set(
-      s
-        .split(/[\s,]+/)
-        .map((t) => t.trim())
-        .filter(Boolean)
-        .map((t) => (t.startsWith("#") ? t : `#${t.replace(/^#+/, "")}`))
-    )
-  );
-}
 type SocialMediaPack = {
   caption: string;
   title: string;
@@ -290,7 +277,8 @@ export default function TemplateStudioClient() {
   const [exporting, setExporting] = useState(false);
   const [captions, setCaptions] = useState<CaptionItem[]>([]);
   const [carouselCaption, setCarouselCaption] = useState("");
-  const [hashtagTags, setHashtagTags] = useState<string[]>([]);
+  /** Single hashtags string for the whole carousel (space-separated, #tags). */
+  const [carouselHashtags, setCarouselHashtags] = useState("");
   const [captionGenLoading, setCaptionGenLoading] = useState(false);
   const [hashtagGenLoading, setHashtagGenLoading] = useState(false);
   const [connectedPlatforms, setConnectedPlatforms] = useState<Set<PublishPlatform>>(() => new Set());
@@ -702,8 +690,8 @@ export default function TemplateStudioClient() {
       if (!res.ok) throw new Error(data.error ?? "Failed to generate hashtags");
       const list = Array.isArray(data.hashtags) ? data.hashtags : [];
       const normalized = list.filter((h: unknown): h is string => typeof h === "string" && h.trim().length > 0);
-      setHashtagTags(normalized);
-      toast({ title: "Hashtags generated", description: `${normalized.length} tags — tap × to remove.` });
+      setCarouselHashtags(normalized.join(" "));
+      toast({ title: "Hashtags generated", description: `${normalized.length} tags — edit the field as needed.` });
     } catch (e) {
       toast({
         title: "Hashtag generation failed",
@@ -716,8 +704,7 @@ export default function TemplateStudioClient() {
   }, [slides, niche, toast]);
 
   const handleCopyPublishBlock = useCallback(() => {
-    const hashLine = hashtagTags.join(" ");
-    const text = [carouselCaption.trim(), hashLine].filter(Boolean).join("\n\n");
+    const text = [carouselCaption.trim(), carouselHashtags.trim()].filter(Boolean).join("\n\n");
     if (!text) {
       toast({ title: "Nothing to copy", variant: "destructive" });
       return;
@@ -726,7 +713,7 @@ export default function TemplateStudioClient() {
       () => toast({ title: "Copied", description: "Caption and hashtags copied." }),
       () => toast({ title: "Copy failed", variant: "destructive" })
     );
-  }, [carouselCaption, hashtagTags, toast]);
+  }, [carouselCaption, carouselHashtags, toast]);
 
   const captureSlidesAsBase64 = useCallback(async (): Promise<string[]> => {
     const out: string[] = [];
@@ -775,7 +762,7 @@ export default function TemplateStudioClient() {
       });
       return;
     }
-    const caption = [carouselCaption.trim(), hashtagTags.join(" ")].filter(Boolean).join("\n\n");
+    const caption = [carouselCaption.trim(), carouselHashtags.trim()].filter(Boolean).join("\n\n");
     if (!caption.trim()) {
       toast({
         title: "Add a caption",
@@ -836,7 +823,7 @@ export default function TemplateStudioClient() {
     connectedPlatforms,
     captureSlidesAsBase64,
     carouselCaption,
-    hashtagTags,
+    carouselHashtags,
     toast,
   ]);
 
@@ -873,7 +860,7 @@ export default function TemplateStudioClient() {
           contentJson: {
             source: "template-studio",
             caption: carouselCaption.trim(),
-            hashtags: hashtagTags,
+            hashtags: carouselHashtags.trim(),
             platforms: selected,
             packName: packName.trim() || niche.trim() || "Template Pack",
             slides: slides.map((s) => ({
@@ -908,7 +895,7 @@ export default function TemplateStudioClient() {
     connectedPlatforms,
     scheduleAt,
     carouselCaption,
-    hashtagTags,
+    carouselHashtags,
     packName,
     niche,
     slides,
@@ -946,12 +933,13 @@ export default function TemplateStudioClient() {
             i === 0
               ? {
                   caption: carouselCaption.trim(),
-                  hashtags: hashtagTags.join(" "),
+                  hashtags: carouselHashtags.trim(),
                   alt_text: captions[0]?.alt_text ?? "",
                 }
               : (captions[i] ?? { caption: "", hashtags: "", alt_text: "" })
           ),
-          status: carouselCaption.trim().length > 0 || hashtagTags.length > 0 ? "complete" : "draft",
+          status:
+            carouselCaption.trim().length > 0 || carouselHashtags.trim().length > 0 ? "complete" : "draft",
         }),
       });
       const data = await res.json();
@@ -977,7 +965,7 @@ export default function TemplateStudioClient() {
     slides,
     captions,
     carouselCaption,
-    hashtagTags,
+    carouselHashtags,
     toast,
   ]);
 
@@ -1408,7 +1396,7 @@ export default function TemplateStudioClient() {
         setCaptions(mappedCaps);
         const first = mappedCaps[0];
         if (first?.caption) setCarouselCaption(first.caption);
-        if (first?.hashtags) setHashtagTags(parseHashtagsFromString(first.hashtags));
+        if (first?.hashtags) setCarouselHashtags(first.hashtags);
         setStep(3);
         if (wantDownload) {
           setTimeout(() => {
@@ -2626,7 +2614,7 @@ export default function TemplateStudioClient() {
                       onClick={() => setStep(3)}
                       className="bg-orange-500 hover:bg-orange-600"
                     >
-                      Next — Get captions
+                      Next — Caption & publish
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                   </div>
@@ -2690,7 +2678,8 @@ export default function TemplateStudioClient() {
             <CardHeader>
               <CardTitle>Get Captions & Publish</CardTitle>
               <CardDescription>
-                Generate one Instagram-ready caption and hashtags from your slides, choose connected accounts, then publish or schedule.
+                One caption and one hashtag block for the entire carousel (all slides publish as a single Instagram post). Then pick
+                accounts and publish or schedule.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -2707,7 +2696,7 @@ export default function TemplateStudioClient() {
 
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Label htmlFor="carousel-caption">Caption</Label>
+                  <Label htmlFor="carousel-caption">Caption (whole carousel)</Label>
                   <Button
                     type="button"
                     size="sm"
@@ -2728,7 +2717,7 @@ export default function TemplateStudioClient() {
                   id="carousel-caption"
                   value={carouselCaption}
                   onChange={(e) => setCarouselCaption(e.target.value)}
-                  placeholder="150–300 words, cohesive story for the whole carousel…"
+                  placeholder="One caption for the full carousel — hook, value, CTA (e.g. 150–300 words)…"
                   rows={10}
                   className="min-h-[200px] text-sm"
                 />
@@ -2736,7 +2725,7 @@ export default function TemplateStudioClient() {
 
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Label>Hashtags</Label>
+                  <Label htmlFor="carousel-hashtags">Hashtags (whole carousel)</Label>
                   <Button
                     type="button"
                     size="sm"
@@ -2753,35 +2742,13 @@ export default function TemplateStudioClient() {
                     Generate Hashtags
                   </Button>
                 </div>
-                <div className="flex flex-wrap gap-2 min-h-[40px] rounded-md border border-input bg-background p-2">
-                  {hashtagTags.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-1 px-1">Generate or type below to add tags.</p>
-                  ) : (
-                    hashtagTags.map((tag, idx) => (
-                      <button
-                        key={`${tag}-${idx}`}
-                        type="button"
-                        onClick={() => setHashtagTags((prev) => prev.filter((_, i) => i !== idx))}
-                        className="inline-flex items-center gap-1 rounded-full border bg-muted/60 px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors"
-                      >
-                        <span>{tag.startsWith("#") ? tag : `#${tag}`}</span>
-                        <X className="w-3 h-3 opacity-70" aria-hidden />
-                      </button>
-                    ))
-                  )}
-                </div>
-                <Input
-                  placeholder="Type a tag and press Enter"
-                  className="max-w-md"
-                  onKeyDown={(e) => {
-                    if (e.key !== "Enter") return;
-                    e.preventDefault();
-                    const raw = (e.target as HTMLInputElement).value.trim();
-                    if (!raw) return;
-                    const t = raw.startsWith("#") ? raw : `#${raw.replace(/^#+/, "")}`;
-                    setHashtagTags((prev) => (prev.includes(t) ? prev : [...prev, t]));
-                    (e.target as HTMLInputElement).value = "";
-                  }}
+                <Textarea
+                  id="carousel-hashtags"
+                  value={carouselHashtags}
+                  onChange={(e) => setCarouselHashtags(e.target.value)}
+                  placeholder="#yourbrand #niche #topic — space-separated tags for the whole post"
+                  rows={4}
+                  className="min-h-[100px] text-sm font-mono"
                 />
               </div>
 
@@ -2842,7 +2809,7 @@ export default function TemplateStudioClient() {
                 />
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
                 <Button
                   type="button"
                   onClick={() => void handlePublishNow()}
@@ -2869,6 +2836,7 @@ export default function TemplateStudioClient() {
                   )}
                   Schedule
                 </Button>
+                <span className="hidden sm:inline text-muted-foreground text-sm px-1">·</span>
                 <Button type="button" variant="outline" onClick={handleCopyPublishBlock}>
                   <Copy className="w-4 h-4 mr-2" />
                   Copy caption + tags
