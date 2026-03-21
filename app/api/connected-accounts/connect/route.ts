@@ -63,6 +63,7 @@ function buildInstagramBusinessLoginAuthUrl(state: string): string | null {
     enable_fb_login: "false",
   });
   const authUrl = `${INSTAGRAM_OAUTH_AUTHORIZE}?${params.toString()}`;
+  console.log("FULL AUTH URL:", authUrl);
   console.log("[Instagram OAuth redirect_uri] connect (authorize):", params.get("redirect_uri"));
   console.log("[connected-accounts/connect] Instagram Business Login:", {
     endpoint: INSTAGRAM_OAUTH_AUTHORIZE,
