@@ -35,6 +35,9 @@ const SNAP_GRID_SEC = 0.5;
 const PLAYHEAD_COLOR = "#ef4444";
 const RESIZE_HANDLE_WIDTH = 8;
 
+/** Browser FFmpeg wasm (must match @ffmpeg/ffmpeg expectations; loaded via toBlobURL, not the app chunk). */
+const FFMPEG_CORE_CDN_BASE = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+
 type WordTiming = { word: string; start: number; end: number };
 type CaptionBlock = { id: string; text: string; startTime: number; endTime: number; wordTimings?: WordTiming[] };
 
@@ -1063,6 +1066,8 @@ export default function VideoTimelinePage() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
   const fetchFileRef = useRef<((url: string) => Promise<Uint8Array>) | null>(null);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
+  /** Set when browser FFmpeg fails to load (ChunkLoadError, wasm, etc.) */
+  const [ffmpegLoadError, setFfmpegLoadError] = useState<string | null>(null);
   const [scriptId, setScriptId] = useState<string | undefined>(initialScriptId);
   const [scriptName, setScriptName] = useState("");
   const [scripts, setScripts] = useState<LibraryScript[]>([]);
@@ -1241,30 +1246,37 @@ export default function VideoTimelinePage() {
     setIsBrowser(typeof window !== "undefined");
   }, []);
 
-  const loadFFmpegLibrary = useCallback(async () => {
-    const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-    const { fetchFile } = await import("@ffmpeg/util");
-    ffmpegRef.current = new FFmpeg();
-    fetchFileRef.current = fetchFile;
-  }, []);
-
-  const loadFFmpeg = useCallback(async () => {
-    const ffmpeg = ffmpegRef.current;
-    if (!ffmpeg) return;
-    ffmpeg.on("log", ({ message }) => {
-      console.log("[ffmpeg]", message);
-    });
-    await ffmpeg.load();
-    setFfmpegLoaded(true);
+  /** Load @ffmpeg/ffmpeg + @ffmpeg/util and wasm core from CDN (avoids broken local chunks). */
+  const initBrowserFFmpeg = useCallback(async () => {
+    setFfmpegLoadError(null);
+    try {
+      const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+      const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
+      const ffmpeg = new FFmpeg();
+      ffmpeg.on("log", ({ message }) => {
+        console.log("[ffmpeg]", message);
+      });
+      const coreURL = await toBlobURL(`${FFMPEG_CORE_CDN_BASE}/ffmpeg-core.js`, "text/javascript");
+      const wasmURL = await toBlobURL(`${FFMPEG_CORE_CDN_BASE}/ffmpeg-core.wasm`, "application/wasm");
+      await ffmpeg.load({ coreURL, wasmURL });
+      ffmpegRef.current = ffmpeg;
+      fetchFileRef.current = fetchFile;
+      setFfmpegLoaded(true);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : typeof e === "string" ? e : "Failed to load video engine";
+      console.error("[ffmpeg] init failed:", e);
+      ffmpegRef.current = null;
+      fetchFileRef.current = null;
+      setFfmpegLoaded(false);
+      setFfmpegLoadError(message);
+    }
   }, []);
 
   useEffect(() => {
     if (!isBrowser) return;
-    (async () => {
-      await loadFFmpegLibrary();
-      await loadFFmpeg();
-    })();
-  }, [isBrowser, loadFFmpegLibrary, loadFFmpeg]);
+    void initBrowserFFmpeg();
+  }, [isBrowser, initBrowserFFmpeg]);
 
   // Keep music volume in sync
   useEffect(() => {
@@ -3690,7 +3702,20 @@ export default function VideoTimelinePage() {
                 Test compile ({scenes.length || 0} scenes)
               </button>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="flex flex-col items-center justify-center gap-2">
+              {ffmpegLoadError ? (
+                <p className="text-xs text-destructive text-center max-w-md">
+                  Video engine failed to load ({ffmpegLoadError}).{" "}
+                  <button
+                    type="button"
+                    className="underline font-medium"
+                    onClick={() => void initBrowserFFmpeg()}
+                  >
+                    Retry
+                  </button>
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
                 className="inline-flex rounded border border-input bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
@@ -3714,6 +3739,7 @@ export default function VideoTimelinePage() {
               >
                 📹 Publish Now
               </button>
+              </div>
             </div>
           </div>
         </div>

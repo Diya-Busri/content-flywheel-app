@@ -1,4 +1,15 @@
-export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7";
+export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8";
+
+/** Story-style Template Studio modes that share the 8-scene pipeline */
+export type TemplateStudioStoryTemplateId = "ai_story" | "satisfying_build";
+
+export const TEMPLATE_STUDIO_STORY_GENERATE_ROUTES: Record<
+  TemplateStudioStoryTemplateId,
+  string
+> = {
+  ai_story: "/api/content-studio/ai-story/generate",
+  satisfying_build: "/api/generate/satisfying-build",
+};
 export type TemplateType = "quotes" | "tips" | "affirmations";
 export type FontStyle = "modern" | "elegant" | "bold" | "minimal";
 export type SlideItem = { heading: string; body: string; bg_color?: string };
@@ -13,6 +24,7 @@ export const CREATION_MODE_OPTIONS: { value: CreationMode; label: string }[] = [
   { value: "5", label: "Viral Hook Carousel (For Growth)" },
   { value: "6", label: "Sales/Product Launch Carousel" },
   { value: "7", label: "AI Story" },
+  { value: "8", label: "Satisfying Build" },
 ];
 
 export const AI_STORY_TONE_OPTIONS = [
@@ -20,6 +32,28 @@ export const AI_STORY_TONE_OPTIONS = [
   { value: "Dramatic", label: "Dramatic" },
   { value: "Shocking", label: "Shocking" },
 ];
+
+export const SATISFYING_BUILD_CHARACTER_TYPES = [
+  { value: "Person", label: "Person" },
+  { value: "Fruit Character", label: "Fruit Character" },
+  { value: "Robot", label: "Robot" },
+  { value: "Animal", label: "Animal" },
+  { value: "Tech Gadget", label: "Tech Gadget" },
+] as const;
+
+export const SATISFYING_BUILD_STYLE_OPTIONS = [
+  { value: "Miniature Construction", label: "Miniature Construction" },
+  { value: "Giant Object Build", label: "Giant Object Build" },
+  { value: "Impossible Engineering", label: "Impossible Engineering" },
+  { value: "Cozy Cottage Build", label: "Cozy Cottage Build" },
+] as const;
+
+export const SATISFYING_BUILD_TONE_OPTIONS = [
+  { value: "Satisfying", label: "Satisfying" },
+  { value: "Dramatic", label: "Dramatic" },
+  { value: "Wholesome", label: "Wholesome" },
+  { value: "Chaotic", label: "Chaotic" },
+] as const;
 
 export const TEMPLATE_OPTIONS: { value: TemplateType; label: string }[] = [
   { value: "quotes", label: "Quotes" },

@@ -55,6 +55,15 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { cleanProductTitle, replaceProductTitleInText } from "@/lib/product-title";
+import {
+  getVideoPrefill,
+  setVideoPrefill,
+  getTimelineUrl,
+  type VideoPrefill,
+  type TimelineScenePrefill,
+} from "@/lib/video-prefill";
+import { AiStorySceneVoiceover } from "@/components/ai-story/AiStorySceneVoiceover";
+import { AiStoryAnimateSceneBlock } from "@/components/ai-story/AiStoryAnimateSceneBlock";
 
 /** Social Media Kit shape (matches API response). */
 export type SocialMediaKit = {
@@ -85,6 +94,42 @@ export type SocialMediaKit = {
 };
 
 const SOCIAL_KIT_STORAGE_KEY = "videoCreationGuideSocialKit";
+
+/** Matches Template Studio AI Story → Video Timeline prefill (`TIMELINE_SCENE_DURATION`). */
+const VIDEO_GUIDE_TIMELINE_SCENE_SEC = 5;
+
+/** Same URL resolution as Template Studio `/api/generate-image` handling. */
+function resolveGenerateImageApiUrl(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const d = data as { url?: unknown; imageUrl?: unknown; data?: unknown };
+  const rawFromUrl = typeof d.url === "string" ? d.url.trim() : "";
+  const rawFromImageUrl = typeof d.imageUrl === "string" ? d.imageUrl.trim() : "";
+  const arr = d.data;
+  const first = Array.isArray(arr) && arr[0] && typeof arr[0] === "object" && arr[0] !== null ? (arr[0] as { url?: unknown }) : null;
+  const rawFromData = typeof first?.url === "string" ? first.url.trim() : "";
+  const url = rawFromUrl || rawFromImageUrl || rawFromData;
+  if (url && (url.startsWith("data:image/") || url.startsWith("https://") || url.startsWith("http://"))) return url;
+  return null;
+}
+
+function mergeTemplateStudioTimelineScene(
+  existing: VideoPrefill | null,
+  slot: TimelineScenePrefill,
+  defaultTitle: string
+): VideoPrefill {
+  const prev =
+    existing?.source === "template-studio" && Array.isArray(existing.timelineScenes) ? [...existing.timelineScenes] : [];
+  const sn = slot.scene_number ?? 1;
+  const idx = prev.findIndex((s) => s.scene_number === sn);
+  const next = idx >= 0 ? prev.map((s, j) => (j === idx ? { ...s, ...slot } : s)) : [...prev, slot];
+  next.sort((a, b) => (a.scene_number ?? 0) - (b.scene_number ?? 0));
+  return {
+    ...(existing ?? {}),
+    source: "template-studio",
+    title: existing?.title?.trim() ? existing.title : defaultTitle,
+    timelineScenes: next,
+  };
+}
 
 type PromptPlatform = "midjourney" | "grok" | "chatgpt" | "kling" | "runway" | "pika";
 
@@ -201,6 +246,21 @@ function useAudioDuration(src: string | null): number | null {
 }
 
 type TextOverlayObj = { exactText?: string; fontStyle?: string; size?: string; position?: string; color?: string; animation?: string; timingNote?: string };
+
+function parseSceneOverlayObjs(rawOverlay: unknown): TextOverlayObj[] {
+  if (rawOverlay == null) return [];
+  if (typeof rawOverlay === "string") return [{ exactText: rawOverlay }];
+  if (Array.isArray(rawOverlay)) {
+    return rawOverlay.map((o) =>
+      typeof o === "object" && o && "exactText" in o ? (o as TextOverlayObj) : { exactText: String(o) }
+    );
+  }
+  if (typeof rawOverlay === "object" && rawOverlay && "exactText" in (rawOverlay as object)) {
+    return [rawOverlay as TextOverlayObj];
+  }
+  return [];
+}
+
 type VisualDirection = { aiPrompt?: string; cameraAngle?: string; lightingMood?: string; colorPalette?: string; mediaType?: string };
 
 export type VideoGuideData = {
@@ -377,6 +437,13 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const [copyFormatByScene, setCopyFormatByScene] = useState<Record<number, PromptPlatform>>({});
   /** Per-scene: "still" = Still Image, "video" = Video Clip (adds motion instructions). */
   const [mediaTypeByScene, setMediaTypeByScene] = useState<Record<number, "still" | "video">>({});
+  /** DALL·E scene stills for Video Timeline (same flow as Template Studio AI Story). */
+  const [guideSceneImageUrls, setGuideSceneImageUrls] = useState<Record<number, string>>({});
+  const [guideSceneVideoUrls, setGuideSceneVideoUrls] = useState<Record<number, string>>({});
+  /** `/api/ai-coach/voice-over` URLs (same as AI Story scene cards); falls back to per-scene voice tab URLs for playback/timeline. */
+  const [guideCoachVoiceoverUrls, setGuideCoachVoiceoverUrls] = useState<Record<number, string>>({});
+  const [guideSceneImageLoadingIndex, setGuideSceneImageLoadingIndex] = useState<number | null>(null);
+  const [guideBulkImagesLoading, setGuideBulkImagesLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("scenes");
   const [socialKitProofFile, setSocialKitProofFile] = useState<File | null>(null);
   const [socialKit, setSocialKit] = useState<SocialMediaKit | null>(() => {
@@ -521,6 +588,11 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     prompt: s.prompt,
     visualDescription: s.prompt,
   }));
+  const scenesRef = useRef(scenes);
+  scenesRef.current = scenes;
+  const videoGuideCharacterSeedRef = useRef("");
+  const videoGuideSeedScene1KeyRef = useRef("");
+  const videoGuideSeedChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const editingSteps = guide.editingSteps ?? { CapCut: [] };
   const subtitles = guide.subtitleRecs ?? {};
   const music = guide.musicRecs ?? {};
@@ -543,6 +615,54 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     const vd = (s as { visualDirection?: { aiPrompt?: string } }).visualDirection;
     return vd?.aiPrompt ?? (s as { prompt?: string }).prompt ?? (s as { visualDescription?: string }).visualDescription ?? s.scene;
   }, []);
+
+  const wrapVideoGuideImagePromptForDalle = useCallback((original: string, characterSeed: string): string => {
+    const o = original.trim();
+    const maxLen = 4000;
+    if (!characterSeed) return o.slice(0, maxLen);
+    const prefix = `IMPORTANT: This is the same character in every scene: ${characterSeed}. Now show them in this scene: `;
+    const suffix = `. Photorealistic, consistent character appearance, same person throughout.`;
+    const full = `${prefix}${o}${suffix}`;
+    if (full.length <= maxLen) return full;
+    const overhead = prefix.length + suffix.length;
+    const budget = Math.max(0, maxLen - overhead);
+    const trimmed = budget > 0 ? o.slice(0, budget) : "";
+    return `${prefix}${trimmed}${suffix}`;
+  }, []);
+
+  const ensureVideoGuideCharacterSeed = useCallback(async (): Promise<string> => {
+    const run = async (): Promise<string> => {
+      const fresh = scenesRef.current[0] ? getSceneFullPrompt(scenesRef.current[0]).trim() : "";
+      if (!fresh) return "";
+      if (videoGuideSeedScene1KeyRef.current === fresh && videoGuideCharacterSeedRef.current) {
+        return videoGuideCharacterSeedRef.current;
+      }
+      const res = await fetch("/api/video-guide/character-seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scene1ImagePrompt: fresh.slice(0, 12000) }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { characterSeed?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create character description");
+      }
+      const seed = typeof data.characterSeed === "string" ? data.characterSeed.trim() : "";
+      const keyAfter = scenesRef.current[0] ? getSceneFullPrompt(scenesRef.current[0]).trim() : "";
+      if (keyAfter === fresh) {
+        videoGuideCharacterSeedRef.current = seed;
+        videoGuideSeedScene1KeyRef.current = fresh;
+        return seed;
+      }
+      return "";
+    };
+
+    const p = videoGuideSeedChainRef.current.then(run, run);
+    videoGuideSeedChainRef.current = p.then(
+      () => undefined,
+      () => undefined
+    );
+    return p;
+  }, [getSceneFullPrompt]);
 
   const copyAllPrompts = useCallback(() => {
     const all = scenes.map((s, i) => `Scene ${i + 1} (${s.timing}):\n${getSceneFullPrompt(s)}`).join("\n\n");
@@ -890,6 +1010,190 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
     return chunks;
   }, [scenes, fullScriptText]);
+
+  const buildGuideSceneCaptionText = useCallback(
+    (i: number): string => {
+      const sceneTexts = getSceneTexts();
+      const voiceLine = (sceneTexts[i] ?? "").trim();
+      const scene = scenes[i];
+      if (!scene) return voiceLine;
+      const overlayObjs = parseSceneOverlayObjs((scene as { textOverlay?: unknown }).textOverlay);
+      const overlayParts = overlayObjs.map((o) => stripMarkdown(o.exactText ?? "")).filter(Boolean);
+      const overlayLine = overlayParts.length > 0 ? `On-screen: ${overlayParts.join(" · ")}` : "";
+      return [voiceLine, overlayLine].filter(Boolean).join("\n\n");
+    },
+    [getSceneTexts, scenes, stripMarkdown]
+  );
+
+  const fetchGuideSceneImageUrl = useCallback(
+    async (i: number): Promise<string | null> => {
+      const scene = scenes[i];
+      if (!scene) return null;
+      const prompt = getSceneFullPrompt(scene).trim();
+      if (!prompt) {
+        toast({
+          title: "No visual prompt",
+          description: `Scene ${i + 1} has nothing to send to the image model.`,
+          variant: "destructive",
+        });
+        return null;
+      }
+      let characterSeed = "";
+      try {
+        characterSeed = await ensureVideoGuideCharacterSeed();
+      } catch (e) {
+        toast({
+          title: "Character description unavailable",
+          description:
+            e instanceof Error ? e.message : "Continuing without a locked character; try again or check the Scene 1 visual prompt.",
+          variant: "destructive",
+        });
+      }
+      const finalPrompt = wrapVideoGuideImagePromptForDalle(prompt.slice(0, 12000), characterSeed);
+      const res = await fetch("/api/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: finalPrompt }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || "Failed to generate image");
+      }
+      const url = resolveGenerateImageApiUrl(data);
+      if (!url) {
+        toast({
+          title: "Invalid image URL",
+          description: "The server did not return a valid image URL.",
+          variant: "destructive",
+        });
+        return null;
+      }
+      return url;
+    },
+    [scenes, getSceneFullPrompt, toast, ensureVideoGuideCharacterSeed, wrapVideoGuideImagePromptForDalle]
+  );
+
+  const generateGuideSceneImage = useCallback(
+    async (i: number): Promise<string | null> => {
+      setGuideSceneImageLoadingIndex(i);
+      try {
+        const url = await fetchGuideSceneImageUrl(i);
+        if (url) {
+          setGuideSceneImageUrls((prev) => ({ ...prev, [i]: url }));
+        }
+        return url;
+      } catch (e) {
+        toast({
+          title: "Image generation failed",
+          description: e instanceof Error ? e.message : "Something went wrong",
+          variant: "destructive",
+        });
+        return null;
+      } finally {
+        setGuideSceneImageLoadingIndex((cur) => (cur === i ? null : cur));
+      }
+    },
+    [fetchGuideSceneImageUrl, toast]
+  );
+
+  const buildGuideTimelineSlot = useCallback(
+    (i: number, imageUrlOverride?: string): TimelineScenePrefill => {
+      const scene = scenes[i];
+      const img = (imageUrlOverride ?? guideSceneImageUrls[i])?.trim();
+      const cap = buildGuideSceneCaptionText(i);
+      const coach = guideCoachVoiceoverUrls[i]?.trim();
+      const legacyVo = perSceneUrls[i]?.trim();
+      const audio = coach || legacyVo || undefined;
+      const vid = guideSceneVideoUrls[i]?.trim();
+      return {
+        scene_number: i + 1,
+        duration_seconds: VIDEO_GUIDE_TIMELINE_SCENE_SEC,
+        visual: scene ? `Scene ${i + 1} · ${scene.timing}`.slice(0, 80) : `Scene ${i + 1}`,
+        imageUrl: img || undefined,
+        videoUrl: vid || undefined,
+        audioUrl: audio,
+        captionText: cap.trim() || undefined,
+      };
+    },
+    [scenes, guideSceneImageUrls, guideSceneVideoUrls, guideCoachVoiceoverUrls, buildGuideSceneCaptionText, perSceneUrls]
+  );
+
+  const handleAddGuideSceneToTimeline = useCallback(
+    (i: number) => {
+      const imageUrl = guideSceneImageUrls[i]?.trim();
+      if (!imageUrl) {
+        toast({
+          title: "Generate an image first",
+          description: "Create a scene image before adding it to the timeline.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const slot = buildGuideTimelineSlot(i, imageUrl);
+      const existing = getVideoPrefill();
+      const title = (effectiveScriptTitle?.trim() || scriptTitle?.trim() || "Video Guide").slice(0, 200);
+      setVideoPrefill(mergeTemplateStudioTimelineScene(existing, slot, title));
+      toast({ title: "Added to timeline", description: "Open Video Timeline to load prefilled scenes." });
+    },
+    [guideSceneImageUrls, buildGuideTimelineSlot, effectiveScriptTitle, scriptTitle, toast]
+  );
+
+  const handleGenerateAllGuideImagesAndOpenTimeline = useCallback(async () => {
+    if (scenes.length === 0) {
+      toast({ title: "No scenes", description: "Add a scene breakdown first.", variant: "destructive" });
+      return;
+    }
+    setGuideBulkImagesLoading(true);
+    const mergedUrls: Record<number, string> = { ...guideSceneImageUrls };
+    try {
+      for (let i = 0; i < scenes.length; i++) {
+        setGuideSceneImageLoadingIndex(i);
+        try {
+          const url = await fetchGuideSceneImageUrl(i);
+          if (url) mergedUrls[i] = url;
+        } catch (e) {
+          toast({
+            title: `Scene ${i + 1} failed`,
+            description: e instanceof Error ? e.message : "Skipped",
+            variant: "destructive",
+          });
+        }
+      }
+      setGuideSceneImageUrls((prev) => ({ ...prev, ...mergedUrls }));
+      const title = (effectiveScriptTitle?.trim() || scriptTitle?.trim() || "Video Guide").slice(0, 200);
+      const timelineScenes: TimelineScenePrefill[] = scenes.map((scene, i) => ({
+        scene_number: i + 1,
+        duration_seconds: VIDEO_GUIDE_TIMELINE_SCENE_SEC,
+        visual: `Scene ${i + 1} · ${scene.timing}`.slice(0, 80),
+        imageUrl: mergedUrls[i]?.trim() || undefined,
+        videoUrl: guideSceneVideoUrls[i]?.trim() || undefined,
+        audioUrl: guideCoachVoiceoverUrls[i]?.trim() || perSceneUrls[i]?.trim() || undefined,
+        captionText: buildGuideSceneCaptionText(i).trim() || undefined,
+      }));
+      setVideoPrefill({
+        source: "template-studio",
+        title,
+        timelineScenes,
+      });
+      router.push(getTimelineUrl());
+      toast({ title: "Opening Video Timeline", description: "Scenes are pre-loaded. Reorder, trim, and export your MP4." });
+    } finally {
+      setGuideSceneImageLoadingIndex(null);
+      setGuideBulkImagesLoading(false);
+    }
+  }, [
+    scenes,
+    guideSceneImageUrls,
+    guideSceneVideoUrls,
+    guideCoachVoiceoverUrls,
+    fetchGuideSceneImageUrl,
+    buildGuideSceneCaptionText,
+    perSceneUrls,
+    effectiveScriptTitle,
+    scriptTitle,
+    router,
+    toast,
+  ]);
 
   const generateVoiceover = useCallback(
     async (text: string, options?: { voiceIdOverride?: string }): Promise<Blob> => {
@@ -2342,6 +2646,124 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4 text-sm text-gray-600 dark:text-muted-foreground">
+                    {(() => {
+                      const ar =
+                        guide.videoFormat?.aspectRatio ??
+                        (scene as { format?: { aspect_ratio?: string } }).format?.aspect_ratio ??
+                        "9:16";
+                      const aspectCls = ar === "16:9" ? "aspect-video max-w-2xl" : "aspect-[9/16] max-w-sm";
+                      const genImageUrl = guideSceneImageUrls[i];
+                      const sceneImageBusy = guideSceneImageLoadingIndex === i || guideBulkImagesLoading;
+                      const voiceLine = getSceneTexts()[i] ?? "";
+                      const overlaySummary =
+                        overlayObjs.length > 0
+                          ? overlayObjs.map((o) => stripMarkdown(o.exactText ?? "")).filter(Boolean).join("\n\n")
+                          : "—";
+                      const sceneLabel = (scene as { scene?: string }).scene?.trim();
+                      const sceneTitleText = sceneLabel
+                        ? `${sceneLabel} · ${scene.timing}`
+                        : `Scene ${i + 1} · ${scene.timing}`;
+                      const videoPreviewClass =
+                        ar === "16:9"
+                          ? "w-full rounded-md mt-2 aspect-video object-cover"
+                          : "w-full rounded-md mt-2 aspect-[9/16] object-cover";
+                      const coachAudioUrl = guideCoachVoiceoverUrls[i] ?? perSceneUrls[i] ?? null;
+                      return (
+                        <>
+                          {!genImageUrl ? (
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="bg-orange-500 hover:bg-orange-600 text-white"
+                                disabled={sceneImageBusy}
+                                onClick={() => void generateGuideSceneImage(i)}
+                              >
+                                {guideSceneImageLoadingIndex === i ? (
+                                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                ) : null}
+                                Generate Image
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,60%)_minmax(0,40%)] md:items-start md:gap-6">
+                              <div className="space-y-2 min-w-0 w-full">
+                                <div
+                                  className={`rounded-lg overflow-hidden border border-gray-200 dark:border-border bg-gray-100 dark:bg-background ${aspectCls} w-full`}
+                                >
+                                  <img
+                                    src={genImageUrl}
+                                    alt={`Scene ${i + 1} generated still`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="bg-orange-500 hover:bg-orange-600 text-white w-full sm:w-auto"
+                                  disabled={sceneImageBusy}
+                                  onClick={() => void generateGuideSceneImage(i)}
+                                >
+                                  {guideSceneImageLoadingIndex === i ? (
+                                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                  ) : null}
+                                  Generate Image
+                                </Button>
+                              </div>
+                              <div className="space-y-3 min-w-0">
+                                <div>
+                                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">
+                                    Scene title
+                                  </p>
+                                  <p className="text-foreground font-medium">{sceneTitleText}</p>
+                                </div>
+                                <div>
+                                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">
+                                    Dialogue / text overlay
+                                  </p>
+                                  <p className="text-foreground whitespace-pre-wrap">{overlaySummary}</p>
+                                </div>
+                                <div>
+                                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">
+                                    Voiceover
+                                  </p>
+                                  <p className="text-foreground whitespace-pre-wrap mb-2">
+                                    {voiceLine.trim() || "—"}
+                                  </p>
+                                  <AiStorySceneVoiceover
+                                    voiceId={voiceId}
+                                    dialogueLine={voiceLine}
+                                    audioUrl={coachAudioUrl}
+                                    onAudioUrl={(url) =>
+                                      setGuideCoachVoiceoverUrls((prev) => ({ ...prev, [i]: url }))
+                                    }
+                                    maxDurationSeconds={VIDEO_GUIDE_TIMELINE_SCENE_SEC}
+                                  />
+                                </div>
+                                <AiStoryAnimateSceneBlock
+                                  imageUrl={genImageUrl}
+                                  motionPrompt={fullPrompt}
+                                  videoUrl={guideSceneVideoUrls[i]}
+                                  onVideoUrl={(url) =>
+                                    setGuideSceneVideoUrls((prev) => ({ ...prev, [i]: url }))
+                                  }
+                                  videoClassName={videoPreviewClass}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground"
+                                  onClick={() => handleAddGuideSceneToTimeline(i)}
+                                >
+                                  Add to Timeline
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                     <div>
                       <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Visual / AI image prompt</p>
                       <p className="text-foreground whitespace-pre-wrap">{stripMarkdown(fullPrompt ?? "")}</p>
@@ -2385,6 +2807,28 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 </Card>
               );
             })}
+
+            <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card mt-6">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-foreground">Video Timeline</p>
+                    <p className="text-sm text-gray-600 dark:text-muted-foreground mt-1">
+                      Generate stills for every scene in order, load them into the timeline with voiceover lines and overlays, then open the editor.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    className="bg-orange-500 hover:bg-orange-600 text-white shrink-0 gap-2"
+                    disabled={guideBulkImagesLoading || scenes.length === 0}
+                    onClick={() => void handleGenerateAllGuideImagesAndOpenTimeline()}
+                  >
+                    {guideBulkImagesLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Film className="w-4 h-4" />}
+                    Generate All Images + Make Video
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="editing" className="mt-6 space-y-4">

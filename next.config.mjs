@@ -65,6 +65,13 @@ const nextConfig = {
   },
   webpack: (config, { isServer }) => {
     config.cache = false; // Disable webpack cache on Windows (avoids ENOENT rename errors)
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...(config.resolve.fallback || {}),
+        fs: false,
+        path: false,
+      };
+    }
     if (isServer) {
       config.externals = [...(config.externals || []), "puppeteer"];
     }

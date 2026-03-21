@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,8 +47,15 @@ import { SlidePreview } from "./SlidePreview";
 import { parseCharacterTypes } from "@/lib/ai-story-character-style";
 import { getPrimaryCharacterTypeForScene } from "@/lib/ai-story-reference-image";
 import { BGM_SELECT_OPTIONS, type BgmSelectValue } from "@/lib/bgm-tracks";
-
-type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7";
+import { SatisfyingBuildSetup } from "@/components/templates/SatisfyingBuildSetup";
+import { AiStorySceneVoiceover } from "@/components/ai-story/AiStorySceneVoiceover";
+import { AiStoryAnimateSceneBlock } from "@/components/ai-story/AiStoryAnimateSceneBlock";
+import {
+  CREATION_MODE_OPTIONS,
+  TEMPLATE_STUDIO_STORY_GENERATE_ROUTES,
+  type CreationMode,
+  type TemplateStudioStoryTemplateId,
+} from "./template-studio-shared";
 type TemplateType = "quotes" | "tips" | "affirmations";
 type FontStyle = "modern" | "elegant" | "bold" | "minimal";
 type SlideItem = { heading: string; body: string; bg_color?: string };
@@ -59,16 +67,6 @@ type SocialMediaPack = {
   hashtags: string[];
   youtubeDescription: string;
 };
-
-const CREATION_MODE_OPTIONS: { value: CreationMode; label: string }[] = [
-  { value: "2", label: "Promote My App or Business" },
-  { value: "3", label: "Promote My Clothing Brand" },
-  { value: "1", label: "Share Knowledge/Tips" },
-  { value: "4", label: "Motivational Content" },
-  { value: "5", label: "Viral Hook Carousel (For Growth)" },
-  { value: "6", label: "Sales/Product Launch Carousel" },
-  { value: "7", label: "AI Story" },
-];
 
 const TEMPLATE_OPTIONS: { value: TemplateType; label: string }[] = [
   { value: "quotes", label: "Quotes" },
@@ -113,26 +111,6 @@ const AI_STORY_STYLE_OPTIONS = [
   { value: "Dark & Twisted", label: "Dark & Twisted" },
   { value: "Wholesome", label: "Wholesome" },
 ];
-
-const toSpeakable = (text: string) => {
-  return text
-    .replace(/\bfr fr\b/gi, "for real for real")
-    .replace(/\bfr\b/gi, "for real")
-    .replace(/\bngl\b/gi, "not gonna lie")
-    .replace(/\bidk\b/gi, "I don't know")
-    .replace(/\bomg\b/gi, "oh my god")
-    .replace(/\bnpc\b/gi, "en pee see")
-    .replace(/\blol\b/gi, "laughing out loud")
-    .replace(/\bimo\b/gi, "in my opinion")
-    .replace(/\bbtw\b/gi, "by the way")
-    .replace(/\bL \+ ratio\b/gi, "L plus ratio")
-    .replace(/\bno cap\b/gi, "no cap")
-    .replace(/\bskibidi\b/gi, "ski-biddy")
-    .replace(/\bgyatt\b/gi, "gyat")
-    .replace(/\basap\b/gi, "as soon as possible")
-    .replace(/\*[^*]+\*/g, "")
-    .trim();
-};
 
 const ELEVENLABS_DEFAULT_VOICE_FEMALE = "21m00Tcm4TlvDq8ikWAM";
 const ELEVENLABS_DEFAULT_VOICE_MALE = "TxGEqnHWrfWFTfGW9XjX";
@@ -207,6 +185,32 @@ function buildTimelineContentFromAiStory(
   return { scenes, captions, totalDuration };
 }
 
+const MAX_LIBRARY_TITLE_LEN = 120;
+
+function buildTemplateStudioLibraryTitle(params: {
+  mode: CreationMode;
+  episodeNumber: number;
+  theme: string;
+  whatBuilding: string;
+}): string {
+  const ep = params.episodeNumber >= 1 ? params.episodeNumber : 1;
+  if (params.mode === "8") {
+    const wb = params.whatBuilding.trim();
+    const base = wb
+      ? `Satisfying Build - ${wb.slice(0, 70)}${wb.length > 70 ? "…" : ""} - Episode ${ep}`
+      : `Satisfying Build - Episode ${ep}`;
+    return base.length > MAX_LIBRARY_TITLE_LEN
+      ? `${base.slice(0, MAX_LIBRARY_TITLE_LEN - 1)}…`
+      : base;
+  }
+  const storyTitle = params.theme.trim() || "Story";
+  const st = storyTitle.length > 60 ? `${storyTitle.slice(0, 59)}…` : storyTitle;
+  const base = `AI Story - ${st} - Episode ${ep}`;
+  return base.length > MAX_LIBRARY_TITLE_LEN
+    ? `${base.slice(0, MAX_LIBRARY_TITLE_LEN - 1)}…`
+    : base;
+}
+
 export default function TemplateStudioClient() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [mode, setMode] = useState<CreationMode>("1");
@@ -226,32 +230,35 @@ export default function TemplateStudioClient() {
   const [ctaGoal, setCtaGoal] = useState("Get followers");
   const [slideCountViral, setSlideCountViral] = useState<5 | 6 | 7 | 8 | 9 | 10>(10);
   const [setupLoaded, setSetupLoaded] = useState(false);
+  /** Form state: when false, scene cards hide voiceover controls (default on). */
+  const [voiceoverEnabled, setVoiceoverEnabled] = useState(true);
   const [characters, setCharacters] = useState("");
   const [characterNames, setCharacterNames] = useState("");
   const [theme, setTheme] = useState("");
   const [aiStoryTone, setAiStoryTone] = useState("Dramatic");
   const [aiStoryStyle, setAiStoryStyle] = useState("Brainrot");
   const [episodeNumber, setEpisodeNumber] = useState(1);
+  const [satisfyingCharacterType, setSatisfyingCharacterType] = useState("Person");
+  const [whatBuilding, setWhatBuilding] = useState("");
+  const [satisfyingBuildStyle, setSatisfyingBuildStyle] = useState("Miniature Construction");
+  const [satisfyingBuildTone, setSatisfyingBuildTone] = useState("Satisfying");
   const [aiStoryLoading, setAiStoryLoading] = useState(false);
   const [aiStoryScenes, setAiStoryScenes] = useState<{ sceneNumber: number; dialogue: string; imagePrompt: string; motionPrompt?: string }[]>([]);
   const [socialMediaPack, setSocialMediaPack] = useState<SocialMediaPack | null>(null);
   const [socialMediaPackLoading, setSocialMediaPackLoading] = useState(false);
   const [aiStoryCharacterStyle, setAiStoryCharacterStyle] = useState<string>("");
+  /** GPT-4o ~40-word visual lock; prepended to each scene image_prompt on the server. */
+  const [characterSeed, setCharacterSeed] = useState("");
   /** Per-character reference image URLs (FLUX text-to-image); used as img2img anchors for scenes. */
   const [characterReferenceUrls, setCharacterReferenceUrls] = useState<Record<string, string>>({});
   const [characterPreviewLoading, setCharacterPreviewLoading] = useState(false);
   const [aiStoryUiPhase, setAiStoryUiPhase] = useState<"form" | "characterPreview">("form");
   const [characterVoices, setCharacterVoices] = useState<Record<string, string>>({});
   const [elevenLabsVoices, setElevenLabsVoices] = useState<{ voice_id: string; name: string; description?: string }[]>([]);
-  const [voiceoverLoadingScene, setVoiceoverLoadingScene] = useState<number | null>(null);
   const [voiceoverUrls, setVoiceoverUrls] = useState<Record<number, string>>({});
   const [sceneImageUrls, setSceneImageUrls] = useState<Record<number, string>>({});
   const [sceneImageLoadingScene, setSceneImageLoadingScene] = useState<number | null>(null);
   const [sceneVideoUrls, setSceneVideoUrls] = useState<Record<number, string>>({});
-  const [sceneAnimateLoadingScene, setSceneAnimateLoadingScene] = useState<number | null>(null);
-  const [sceneAnimationRequestIds, setSceneAnimationRequestIds] = useState<Record<number, string>>({});
-  const [sceneAnimationStatus, setSceneAnimationStatus] = useState<Record<number, string>>({});
-  const [sceneAnimationTimedOut, setSceneAnimationTimedOut] = useState<Record<number, boolean>>({});
 
   const [storyVideoExporting, setStoryVideoExporting] = useState(false);
   const [storyVideoExportPhase, setStoryVideoExportPhase] = useState<"saving" | "compiling" | null>(null);
@@ -295,11 +302,16 @@ export default function TemplateStudioClient() {
   const [savingPack, setSavingPack] = useState(false);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const publishSlideRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const animationPollCountRef = useRef<Record<number, number>>({});
+  const aiStoryScenesSectionRef = useRef<HTMLDivElement | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
 
   const { toast } = useToast();
+
+  const selectedTemplate: TemplateStudioStoryTemplateId | undefined =
+    mode === "7" ? "ai_story" : mode === "8" ? "satisfying_build" : undefined;
+  const isStoryTemplateMode = mode === "7" || mode === "8";
+  const isAiStoryMode = mode === "7";
 
   const socialMediaPackText = useMemo(() => {
     if (!socialMediaPack) return "";
@@ -321,14 +333,16 @@ export default function TemplateStudioClient() {
 
   const canProceedStep1 =
     mode === "7"
-      ? (characters.trim().length > 0 && theme.trim().length > 0)
-      : mode === "1" || mode === "4"
-        ? niche.trim().length > 0
-        : mode === "2" || mode === "6"
-          ? brandName.trim().length > 0
-          : mode === "5"
-            ? niche.trim().length > 0
-            : (brandName.trim().length > 0);
+      ? characters.trim().length > 0 && theme.trim().length > 0
+      : mode === "8"
+        ? satisfyingCharacterType.trim().length > 0 && whatBuilding.trim().length > 0
+        : mode === "1" || mode === "4"
+          ? niche.trim().length > 0
+          : mode === "2" || mode === "6"
+            ? brandName.trim().length > 0
+            : mode === "5"
+              ? niche.trim().length > 0
+              : brandName.trim().length > 0;
 
   const useImg2ImgSceneImages = useMemo(
     () => Object.keys(characterReferenceUrls).length > 0,
@@ -341,7 +355,7 @@ export default function TemplateStudioClient() {
   );
 
   const runCharacterStylePreview = useCallback(async () => {
-    if (mode !== "7" || !canProceedStep1) return;
+    if (!isAiStoryMode || !canProceedStep1) return;
     setCharacterPreviewLoading(true);
     setCharacterReferenceUrls({});
     try {
@@ -371,36 +385,56 @@ export default function TemplateStudioClient() {
     } finally {
       setCharacterPreviewLoading(false);
     }
-  }, [mode, canProceedStep1, characters, theme, toast]);
+  }, [isAiStoryMode, canProceedStep1, characters, theme, toast]);
 
-  const runGenerateAiStory = useCallback(async () => {
-    if (mode !== "7") return;
-    setAiStoryLoading(true);
-    setAiStoryScenes([]);
-    setSocialMediaPack(null);
-    try {
-      const res = await fetch("/api/content-studio/ai-story/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          characters: characters.trim(),
-          characterNames: characterNames.trim() || undefined,
-          theme: theme.trim(),
-          tone: aiStoryTone,
-          style: aiStoryStyle,
-          episodeNumber,
-          ...(Object.keys(characterReferenceUrls).length > 0
-            ? { consistencyMode: "img2img" as const }
-            : {}),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error ?? "Request failed");
+  const executeAiStoryGenerate = useCallback(
+    async (
+      episodeForApi: number,
+      opts?: { keepPreviousScenesUntilSuccess?: boolean }
+    ): Promise<boolean> => {
+      if (!isStoryTemplateMode) return false;
+      setAiStoryLoading(true);
+      if (!opts?.keepPreviousScenesUntilSuccess) {
+        setAiStoryScenes([]);
+        setSocialMediaPack(null);
+        setCharacterSeed("");
       }
-      const scenesList = Array.isArray(data.scenes) ? data.scenes : [];
-      setAiStoryScenes(
-        scenesList.map(
+      try {
+        const generateUrl =
+          mode === "7"
+            ? TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.ai_story
+            : TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.satisfying_build;
+        const res = await fetch(generateUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            mode === "7"
+              ? {
+                  characters: characters.trim(),
+                  characterNames: characterNames.trim() || undefined,
+                  theme: theme.trim(),
+                  tone: aiStoryTone,
+                  style: aiStoryStyle,
+                  episodeNumber: episodeForApi,
+                  ...(Object.keys(characterReferenceUrls).length > 0
+                    ? { consistencyMode: "img2img" as const }
+                    : {}),
+                }
+              : {
+                  character_type: satisfyingCharacterType,
+                  what_building: whatBuilding.trim(),
+                  build_style: satisfyingBuildStyle,
+                  tone: satisfyingBuildTone,
+                  episode_number: episodeForApi,
+                }
+          ),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data?.error ?? "Request failed");
+        }
+        const scenesList = Array.isArray(data.scenes) ? data.scenes : [];
+        const nextScenes = scenesList.map(
           (
             s: { sceneNumber?: number; dialogue?: string; imagePrompt?: string; motionPrompt?: string },
             i: number
@@ -410,54 +444,142 @@ export default function TemplateStudioClient() {
             imagePrompt: typeof s.imagePrompt === "string" ? s.imagePrompt : "",
             motionPrompt: typeof s.motionPrompt === "string" ? s.motionPrompt : "",
           })
-        )
-      );
-      setAiStoryCharacterStyle(typeof data.characterStyle === "string" ? data.characterStyle : "");
-      const pack = data.socialMediaPack as {
-        caption?: string;
-        title?: string;
-        hashtags?: string[];
-        youtubeDescription?: string;
-      } | undefined;
-      setSocialMediaPack({
-        caption: typeof pack?.caption === "string" ? pack.caption : "",
-        title: typeof pack?.title === "string" ? pack.title : "",
-        hashtags: Array.isArray(pack?.hashtags) ? pack.hashtags.filter((h): h is string => typeof h === "string") : [],
-        youtubeDescription: typeof pack?.youtubeDescription === "string" ? pack.youtubeDescription : "",
-      });
-      setVoiceoverUrls({});
-      setSceneImageUrls({});
-      setSceneVideoUrls({});
-      setSceneAnimationRequestIds({});
-      setSceneAnimationStatus({});
-      setSceneAnimationTimedOut({});
-      setLibraryDraftVideoId(null);
-      try {
-        sessionStorage.removeItem(LIBRARY_DRAFT_STORAGE_KEY);
-      } catch {
-        // ignore
+        );
+
+        libraryCreateInFlightRef.current = true;
+        setAiStoryScenes(nextScenes);
+        setAiStoryCharacterStyle(typeof data.characterStyle === "string" ? data.characterStyle : "");
+        setCharacterSeed(
+          typeof data.character_seed === "string" ? data.character_seed.trim() : ""
+        );
+        const pack = data.socialMediaPack as {
+          caption?: string;
+          title?: string;
+          hashtags?: string[];
+          youtubeDescription?: string;
+        } | undefined;
+        setSocialMediaPack({
+          caption: typeof pack?.caption === "string" ? pack.caption : "",
+          title: typeof pack?.title === "string" ? pack.title : "",
+          hashtags: Array.isArray(pack?.hashtags) ? pack.hashtags.filter((h): h is string => typeof h === "string") : [],
+          youtubeDescription: typeof pack?.youtubeDescription === "string" ? pack.youtubeDescription : "",
+        });
+        setVoiceoverUrls({});
+        setSceneImageUrls({});
+        setSceneVideoUrls({});
+        setLibraryDraftVideoId(null);
+        try {
+          sessionStorage.removeItem(LIBRARY_DRAFT_STORAGE_KEY);
+        } catch {
+          // ignore
+        }
+
+        const { scenes: timelineScenes, captions: timelineCaptions, totalDuration } =
+          buildTimelineContentFromAiStory(nextScenes, {}, {}, {});
+        const libraryTitle = buildTemplateStudioLibraryTitle({
+          mode,
+          episodeNumber: episodeForApi,
+          theme,
+          whatBuilding,
+        });
+        void fetch("/api/video-timeline/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: libraryTitle,
+            content: {
+              scenes: timelineScenes,
+              captions: timelineCaptions,
+              totalDuration,
+              sourceType: mode === "8" ? "satisfying-build" : "ai-story",
+              templateStudioScenes: nextScenes,
+              libraryItemType: "Video",
+              ...(Object.keys(characterReferenceUrls).length > 0
+                ? { aiStoryCharacterReferenceUrls: characterReferenceUrls }
+                : {}),
+            },
+          }),
+        })
+          .then((r) =>
+            r.json().then((d: { id?: string; message?: string; error?: string }) => ({
+              ok: r.ok,
+              d,
+            }))
+          )
+          .then(({ ok, d }) => {
+            if (ok && d?.id && typeof d.id === "string") {
+              setLibraryDraftVideoId(d.id);
+              try {
+                sessionStorage.setItem(LIBRARY_DRAFT_STORAGE_KEY, d.id);
+              } catch {
+                // ignore
+              }
+              toast({
+                title: "Saved to My Library",
+                description:
+                  typeof d.message === "string" && d.message.trim()
+                    ? d.message
+                    : "Draft saved automatically.",
+              });
+            }
+          })
+          .catch(() => {
+            /* background save failed — useEffect may create a draft on next run */
+          })
+          .finally(() => {
+            libraryCreateInFlightRef.current = false;
+          });
+
+        toast({
+          title: mode === "8" ? "Satisfying Build generated" : "AI Story generated",
+          description: `${scenesList.length} scenes ready.`,
+        });
+        return true;
+      } catch (e) {
+        toast({
+          title: mode === "8" ? "Satisfying Build failed" : "AI Story failed",
+          description: e instanceof Error ? e.message : "Something went wrong",
+          variant: "destructive",
+        });
+        return false;
+      } finally {
+        setAiStoryLoading(false);
       }
-      toast({ title: "AI Story generated", description: `${scenesList.length} scenes ready.` });
-    } catch (e) {
-      toast({
-        title: "AI Story failed",
-        description: e instanceof Error ? e.message : "Something went wrong",
-        variant: "destructive",
+    },
+    [
+      isStoryTemplateMode,
+      mode,
+      characters,
+      characterNames,
+      theme,
+      aiStoryTone,
+      aiStoryStyle,
+      characterReferenceUrls,
+      satisfyingCharacterType,
+      whatBuilding,
+      satisfyingBuildStyle,
+      satisfyingBuildTone,
+      toast,
+    ]
+  );
+
+  const runGenerateAiStory = useCallback(async () => {
+    await executeAiStoryGenerate(episodeNumber);
+  }, [executeAiStoryGenerate, episodeNumber]);
+
+  const handleGenerateNextEpisode = useCallback(async () => {
+    if (!isStoryTemplateMode || aiStoryScenes.length === 0 || aiStoryLoading) return;
+    const nextEp = episodeNumber + 1;
+    const ok = await executeAiStoryGenerate(nextEp, { keepPreviousScenesUntilSuccess: true });
+    if (ok) {
+      setEpisodeNumber(nextEp);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          aiStoryScenesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
       });
-    } finally {
-      setAiStoryLoading(false);
     }
-  }, [
-    mode,
-    characters,
-    characterNames,
-    theme,
-    aiStoryTone,
-    aiStoryStyle,
-    episodeNumber,
-    characterReferenceUrls,
-    toast,
-  ]);
+  }, [isStoryTemplateMode, aiStoryScenes.length, episodeNumber, aiStoryLoading, executeAiStoryGenerate]);
 
   const handleCopySocialMediaPack = useCallback(() => {
     if (!socialMediaPackText.trim()) return;
@@ -468,21 +590,33 @@ export default function TemplateStudioClient() {
   }, [socialMediaPackText, toast]);
 
   const handleRegenerateSocialMediaPack = useCallback(async () => {
-    if (mode !== "7" || aiStoryScenes.length === 0) return;
+    if (!isStoryTemplateMode || aiStoryScenes.length === 0) return;
     setSocialMediaPackLoading(true);
     try {
+      const packBody =
+        mode === "7"
+          ? {
+              characters: characters.trim(),
+              characterNames: characterNames.trim(),
+              theme: theme.trim(),
+              tone: aiStoryTone,
+              style: aiStoryStyle,
+              episodeNumber,
+              scenes: aiStoryScenes.map((s) => ({ dialogue: s.dialogue })),
+            }
+          : {
+              characters: satisfyingCharacterType,
+              characterNames: "",
+              theme: whatBuilding.trim(),
+              tone: satisfyingBuildTone,
+              style: satisfyingBuildStyle,
+              episodeNumber,
+              scenes: aiStoryScenes.map((s) => ({ dialogue: s.dialogue })),
+            };
       const res = await fetch("/api/content-studio/ai-story/social-media-pack", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          characters: characters.trim(),
-          characterNames: characterNames.trim(),
-          theme: theme.trim(),
-          tone: aiStoryTone,
-          style: aiStoryStyle,
-          episodeNumber,
-          scenes: aiStoryScenes.map((s) => ({ dialogue: s.dialogue })),
-        }),
+        body: JSON.stringify(packBody),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(typeof data?.error === "string" ? data.error : "Failed to regenerate social pack");
@@ -508,7 +642,22 @@ export default function TemplateStudioClient() {
     } finally {
       setSocialMediaPackLoading(false);
     }
-  }, [mode, aiStoryScenes, characters, characterNames, theme, aiStoryTone, aiStoryStyle, episodeNumber, toast]);
+  }, [
+    isStoryTemplateMode,
+    mode,
+    aiStoryScenes,
+    characters,
+    characterNames,
+    theme,
+    aiStoryTone,
+    aiStoryStyle,
+    episodeNumber,
+    satisfyingCharacterType,
+    whatBuilding,
+    satisfyingBuildTone,
+    satisfyingBuildStyle,
+    toast,
+  ]);
 
   const generateSlides = useCallback(
     async (regenerateIndex?: number) => {
@@ -992,6 +1141,7 @@ export default function TemplateStudioClient() {
       postGoal,
       hookAngle,
       ctaGoal,
+      voiceover_enabled: voiceoverEnabled,
     };
     try {
       await fetch("/api/template-studio/setup", {
@@ -1002,11 +1152,29 @@ export default function TemplateStudioClient() {
     } catch {
       // ignore
     }
-  }, [mode, brandName, niche, templateType, slideCount, slideCountViral, brandPrimary, brandSecondary, fontStyle, productDescription, targetAudience, painPoints, brandVibe, postGoal, hookAngle, ctaGoal]);
+  }, [
+    mode,
+    brandName,
+    niche,
+    templateType,
+    slideCount,
+    slideCountViral,
+    brandPrimary,
+    brandSecondary,
+    fontStyle,
+    productDescription,
+    targetAudience,
+    painPoints,
+    brandVibe,
+    postGoal,
+    hookAngle,
+    ctaGoal,
+    voiceoverEnabled,
+  ]);
 
   /** SessionStorage prefill for /dashboard/video-timeline (must run before navigation). */
   const writeAiStoryTimelinePrefill = useCallback(() => {
-    if (mode !== "7" || aiStoryScenes.length === 0) return;
+    if (!isStoryTemplateMode || aiStoryScenes.length === 0) return;
     const timelineScenes = aiStoryScenes.map((scene) => ({
       scene_number: scene.sceneNumber,
       duration_seconds: TIMELINE_SCENE_DURATION,
@@ -1017,14 +1185,14 @@ export default function TemplateStudioClient() {
     }));
     setVideoPrefill({
       source: "template-studio",
-      title: "AI Story",
+      title: mode === "8" ? "Satisfying Build" : "AI Story",
       timelineScenes,
     });
-  }, [mode, aiStoryScenes, sceneImageUrls, sceneVideoUrls, voiceoverUrls]);
+  }, [isStoryTemplateMode, mode, aiStoryScenes, sceneImageUrls, sceneVideoUrls, voiceoverUrls]);
 
   /** Ensure My Library draft row has latest per-scene audioUrl before timeline GET (avoids race with debounced PATCH). */
   const flushAiStoryDraftToLibrary = useCallback(async (): Promise<boolean> => {
-    if (!libraryDraftVideoId || mode !== "7" || aiStoryScenes.length === 0) return true;
+    if (!libraryDraftVideoId || !isStoryTemplateMode || aiStoryScenes.length === 0) return true;
     const { scenes, captions, totalDuration } = buildTimelineContentFromAiStory(
       aiStoryScenes,
       sceneImageUrls,
@@ -1054,7 +1222,7 @@ export default function TemplateStudioClient() {
     }
   }, [
     libraryDraftVideoId,
-    mode,
+    isStoryTemplateMode,
     aiStoryScenes,
     sceneImageUrls,
     sceneVideoUrls,
@@ -1084,13 +1252,15 @@ export default function TemplateStudioClient() {
   }, [writeAiStoryTimelinePrefill, flushAiStoryDraftToLibrary, libraryDraftVideoId, router, toast]);
 
   const canExportStoryVideo = useMemo(() => {
-    if (mode !== "7" || step !== 1 || aiStoryScenes.length !== AI_STORY_SCENE_COUNT) return false;
+    if (!isStoryTemplateMode || step !== 1 || aiStoryScenes.length !== AI_STORY_SCENE_COUNT) return false;
     return aiStoryScenes.every((s) => {
       const v = sceneVideoUrls[s.sceneNumber];
       const vo = voiceoverUrls[s.sceneNumber];
-      return isHttpUrl(v) && isHttpUrl(vo);
+      const hasVideo = isHttpUrl(v);
+      if (!voiceoverEnabled) return hasVideo;
+      return hasVideo && isHttpUrl(vo);
     });
-  }, [mode, step, aiStoryScenes, sceneVideoUrls, voiceoverUrls]);
+  }, [isStoryTemplateMode, step, aiStoryScenes, sceneVideoUrls, voiceoverUrls, voiceoverEnabled]);
 
   const handleExportStoryVideo = useCallback(async () => {
     if (!canExportStoryVideo) return;
@@ -1125,7 +1295,10 @@ export default function TemplateStudioClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: `AI Story — Episode ${episodeNumber}`,
+          title:
+            mode === "8"
+              ? `Satisfying Build — Episode ${episodeNumber}`
+              : `AI Story — Episode ${episodeNumber}`,
           scenes_json,
         }),
       });
@@ -1172,6 +1345,7 @@ export default function TemplateStudioClient() {
     episodeNumber,
     flushAiStoryDraftToLibrary,
     libraryDraftVideoId,
+    mode,
     sceneImageUrls,
     sceneVideoUrls,
     storyBackgroundMusic,
@@ -1196,7 +1370,9 @@ export default function TemplateStudioClient() {
         if (!res.ok) return;
         const data = await res.json();
         setSetupLoaded(true);
-        if (data.mode && ["1", "2", "3", "4", "5", "6"].includes(data.mode)) setMode(data.mode);
+        if (data.mode && ["1", "2", "3", "4", "5", "6", "7", "8"].includes(data.mode)) {
+          setMode(data.mode as CreationMode);
+        }
         const i = data.inputs || {};
         if (Array.isArray(data.scenes) && data.scenes.length > 0) {
           setAiStoryScenes(
@@ -1223,6 +1399,7 @@ export default function TemplateStudioClient() {
         if (typeof i.postGoal === "string") setPostGoal(i.postGoal);
         if (typeof i.hookAngle === "string") setHookAngle(i.hookAngle);
         if (typeof i.ctaGoal === "string") setCtaGoal(i.ctaGoal);
+        if (typeof i.voiceover_enabled === "boolean") setVoiceoverEnabled(i.voiceover_enabled);
       } catch {
         setSetupLoaded(true);
       }
@@ -1236,7 +1413,7 @@ export default function TemplateStudioClient() {
 
   // Auto-save AI Story to My Library (draft). Create once, then PATCH on every scene/content update.
   useEffect(() => {
-    if (mode !== "7" || aiStoryScenes.length === 0) return;
+    if (!isStoryTemplateMode || aiStoryScenes.length === 0) return;
     const { scenes, captions, totalDuration } = buildTimelineContentFromAiStory(
       aiStoryScenes,
       sceneImageUrls,
@@ -1278,7 +1455,7 @@ export default function TemplateStudioClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: "AI Story (Draft)",
+          title: mode === "8" ? "Satisfying Build (Draft)" : "AI Story (Draft)",
           content: {
             scenes,
             captions,
@@ -1313,6 +1490,7 @@ export default function TemplateStudioClient() {
     };
   }, [
     mode,
+    isStoryTemplateMode,
     aiStoryScenes,
     sceneImageUrls,
     sceneVideoUrls,
@@ -1410,7 +1588,7 @@ export default function TemplateStudioClient() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (mode !== "7" || aiStoryScenes.length === 0 || elevenLabsVoices.length > 0) return;
+    if (!voiceoverEnabled || !isStoryTemplateMode || aiStoryScenes.length === 0 || elevenLabsVoices.length > 0) return;
     (async () => {
       try {
         const res = await fetch("/api/elevenlabs/voices");
@@ -1422,91 +1600,7 @@ export default function TemplateStudioClient() {
         // ignore
       }
     })();
-  }, [mode, aiStoryScenes.length, elevenLabsVoices.length]);
-
-  // Poll animation status every 5s when we have pending requestIds. Max 10 min (120 polls).
-  useEffect(() => {
-    const entries = Object.entries(sceneAnimationRequestIds);
-    if (entries.length === 0) return;
-
-    const POLL_INTERVAL_MS = 5000;
-    const MAX_POLLS = 120; // 10 min
-
-    const pollOne = async (sceneNumber: number, requestId: string) => {
-      const count = (animationPollCountRef.current[sceneNumber] ?? 0) + 1;
-      animationPollCountRef.current[sceneNumber] = count;
-      if (count > MAX_POLLS) {
-        setSceneAnimationRequestIds((prev) => {
-          const next = { ...prev };
-          delete next[sceneNumber];
-          return next;
-        });
-        setSceneAnimationStatus((prev) => ({ ...prev, [sceneNumber]: "" }));
-        setSceneAnimationTimedOut((prev) => ({ ...prev, [sceneNumber]: true }));
-        setSceneAnimateLoadingScene((s) => (s === sceneNumber ? null : s));
-        return;
-      }
-      try {
-        const res = await fetch(
-          `/api/content-studio/ai-story/animate/status?requestId=${encodeURIComponent(requestId)}`
-        );
-        const data = (await res.json()) as {
-          status?: string;
-          videoUrl?: string;
-          error?: string;
-        };
-        const status = data.status ?? "IN_QUEUE";
-        setSceneAnimationStatus((prev) => ({ ...prev, [sceneNumber]: status }));
-
-        if (status === "COMPLETED" && data.videoUrl) {
-          setSceneVideoUrls((prev) => ({ ...prev, [sceneNumber]: data.videoUrl! }));
-          setSceneAnimationRequestIds((prev) => {
-            const next = { ...prev };
-            delete next[sceneNumber];
-            return next;
-          });
-          setSceneAnimationStatus((prev) => ({ ...prev, [sceneNumber]: "" }));
-          setSceneAnimationTimedOut((prev) => ({ ...prev, [sceneNumber]: false }));
-          setSceneAnimateLoadingScene((s) => (s === sceneNumber ? null : s));
-          delete animationPollCountRef.current[sceneNumber];
-          return;
-        }
-        if (status === "FAILED") {
-          toast({
-            title: "Animation failed",
-            description: data.error ?? "Try again.",
-            variant: "destructive",
-          });
-          setSceneAnimationRequestIds((prev) => {
-            const next = { ...prev };
-            delete next[sceneNumber];
-            return next;
-          });
-          setSceneAnimationStatus((prev) => ({ ...prev, [sceneNumber]: "" }));
-          setSceneAnimateLoadingScene((s) => (s === sceneNumber ? null : s));
-          delete animationPollCountRef.current[sceneNumber];
-        }
-      } catch {
-        // Keep polling on network error
-      }
-    };
-
-    const interval = setInterval(() => {
-      entries.forEach(([sceneNumStr, requestId]) => {
-        const sceneNumber = Number(sceneNumStr);
-        if (!requestId) return;
-        pollOne(sceneNumber, requestId);
-      });
-    }, POLL_INTERVAL_MS);
-
-    // First poll immediately
-    entries.forEach(([sceneNumStr, requestId]) => {
-      const sceneNumber = Number(sceneNumStr);
-      if (requestId) pollOne(sceneNumber, requestId);
-    });
-
-    return () => clearInterval(interval);
-  }, [sceneAnimationRequestIds, toast]);
+  }, [voiceoverEnabled, isStoryTemplateMode, aiStoryScenes.length, elevenLabsVoices.length]);
 
   // Dev: expose scenes with imageUrl so you can run console.log(scenes) and verify full URLs
   useEffect(() => {
@@ -1515,11 +1609,38 @@ export default function TemplateStudioClient() {
       ...s,
       imageUrl: sceneImageUrls[s.sceneNumber] ?? undefined,
     }));
-    (window as unknown as { __templateStudioDebug?: { scenes: typeof scenesWithImageUrls; sceneImageUrls: Record<number, string> } }).__templateStudioDebug = {
+    const win = window as unknown as Record<string, unknown>;
+    win.__templateStudioDebug = {
       scenes: scenesWithImageUrls,
       sceneImageUrls: { ...sceneImageUrls },
     };
   }, [aiStoryScenes, sceneImageUrls]);
+
+  const handleCreationModeChange = useCallback(
+    (next: CreationMode) => {
+      if (
+        next !== mode &&
+        (next === "7" || next === "8" || mode === "7" || mode === "8")
+      ) {
+        setAiStoryScenes([]);
+        setSocialMediaPack(null);
+        setVoiceoverUrls({});
+        setSceneImageUrls({});
+        setSceneVideoUrls({});
+        setAiStoryUiPhase("form");
+        setCharacterReferenceUrls({});
+        setCharacterSeed("");
+        setLibraryDraftVideoId(null);
+        try {
+          sessionStorage.removeItem(LIBRARY_DRAFT_STORAGE_KEY);
+        } catch {
+          // ignore
+        }
+      }
+      setMode(next);
+    },
+    [mode]
+  );
 
   return (
     <div className="space-y-8">
@@ -1558,7 +1679,7 @@ export default function TemplateStudioClient() {
               <Label>What are you creating this for?</Label>
               <Select
                 value={mode}
-                onValueChange={(v) => setMode(v as CreationMode)}
+                onValueChange={(v) => handleCreationModeChange(v as CreationMode)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -1571,6 +1692,23 @@ export default function TemplateStudioClient() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex flex-row items-center justify-between gap-4 rounded-lg border border-border px-4 py-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="voiceover-enabled" className="text-base">
+                  Voiceover
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Turn off to hide voice generation and audio on story scene cards.
+                </p>
+              </div>
+              <Switch
+                id="voiceover-enabled"
+                checked={voiceoverEnabled}
+                onCheckedChange={setVoiceoverEnabled}
+                aria-label="Enable voiceover for story scenes"
+              />
             </div>
 
             {(mode === "1" || mode === "4") && (
@@ -1786,7 +1924,7 @@ export default function TemplateStudioClient() {
               </>
             )}
 
-            {mode === "7" && (
+            {selectedTemplate === "ai_story" && (
               <>
                 <div className="space-y-2">
                   <Label htmlFor="characters">Character Types</Label>
@@ -1865,7 +2003,22 @@ export default function TemplateStudioClient() {
               </>
             )}
 
-            {mode !== "7" && (
+            {selectedTemplate === "satisfying_build" && (
+              <SatisfyingBuildSetup
+                characterType={satisfyingCharacterType}
+                setCharacterType={setSatisfyingCharacterType}
+                whatBuilding={whatBuilding}
+                setWhatBuilding={setWhatBuilding}
+                buildStyle={satisfyingBuildStyle}
+                setBuildStyle={setSatisfyingBuildStyle}
+                tone={satisfyingBuildTone}
+                setTone={setSatisfyingBuildTone}
+                episodeNumber={episodeNumber}
+                setEpisodeNumber={setEpisodeNumber}
+              />
+            )}
+
+            {!isStoryTemplateMode && (
               <>
             <div className="space-y-2">
               <Label>Number of slides</Label>
@@ -1960,7 +2113,7 @@ export default function TemplateStudioClient() {
             )}
 
             <div className="flex flex-wrap justify-end gap-2">
-              {mode === "7" && aiStoryScenes.length === 0 && aiStoryUiPhase === "characterPreview" ? (
+              {isAiStoryMode && aiStoryScenes.length === 0 && aiStoryUiPhase === "characterPreview" ? (
                 <>
                   <Button
                     type="button"
@@ -1992,12 +2145,14 @@ export default function TemplateStudioClient() {
                 <Button
                   type="button"
                   onClick={async () => {
-                    if (mode === "7") {
+                    if (isAiStoryMode) {
                       if (aiStoryScenes.length > 0) {
                         await runGenerateAiStory();
                         return;
                       }
                       await runCharacterStylePreview();
+                    } else if (mode === "8") {
+                      await runGenerateAiStory();
                     } else {
                       await saveSetup();
                       setStep(2);
@@ -2005,15 +2160,21 @@ export default function TemplateStudioClient() {
                   }}
                   disabled={
                     !canProceedStep1 ||
-                    (mode === "7" && (aiStoryLoading || characterPreviewLoading))
+                    (isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
+                    (mode === "8" && aiStoryLoading)
                   }
                 >
-                  {mode === "7"
+                  {isAiStoryMode
                     ? aiStoryScenes.length > 0
                       ? "Regenerate story"
                       : "Continue to reference images"
-                    : "Next — Generate content"}
-                  {mode === "7" && (aiStoryLoading || characterPreviewLoading) ? (
+                    : mode === "8"
+                      ? aiStoryScenes.length > 0
+                        ? "Regenerate story"
+                        : "Generate episode"
+                      : "Next — Generate content"}
+                  {(isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
+                  (mode === "8" && aiStoryLoading) ? (
                     <Loader2 className="w-4 h-4 ml-2 animate-spin" />
                   ) : (
                     <ArrowRight className="w-4 h-4 ml-2" />
@@ -2060,8 +2221,9 @@ export default function TemplateStudioClient() {
         </>
       )}
 
-      {step === 1 && mode === "7" && aiStoryScenes.length > 0 && (
+      {step === 1 && isStoryTemplateMode && aiStoryScenes.length > 0 && (
         <>
+        {voiceoverEnabled && (
         <Card>
           <CardHeader>
             <CardTitle>Character Voices</CardTitle>
@@ -2096,11 +2258,35 @@ export default function TemplateStudioClient() {
             ))}
           </CardContent>
         </Card>
+        )}
 
+        <div ref={aiStoryScenesSectionRef} className="scroll-mt-24">
+        {characterSeed.trim().length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Locked character look</CardTitle>
+              <CardDescription>
+                ~40-word visual seed prepended to every scene&apos;s image prompt. Regenerating a scene image reuses the full prompt below (including this lock).
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                readOnly
+                value={characterSeed}
+                className="min-h-[100px] text-sm resize-none"
+                aria-label="Character visual seed"
+              />
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardHeader>
             <CardTitle>Scenes</CardTitle>
-            <CardDescription>Generated scenes for your AI Story.</CardDescription>
+            <CardDescription>
+              {mode === "8"
+                ? "Generated scenes for your Satisfying Build."
+                : "Generated scenes for your AI Story."}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -2113,7 +2299,6 @@ export default function TemplateStudioClient() {
                     ? getDefaultVoiceIdForCharacter(characterName)
                     : elevenLabsVoices[0]?.voice_id ?? "";
                 const voiceoverUrl = voiceoverUrls[scene.sceneNumber];
-                const loading = voiceoverLoadingScene === scene.sceneNumber;
                 const storedImageUrl = sceneImageUrls[scene.sceneNumber];
                 const isStoredUrlValid =
                   typeof storedImageUrl === "string" &&
@@ -2122,11 +2307,6 @@ export default function TemplateStudioClient() {
                 const sceneImageUrl = isStoredUrlValid ? storedImageUrl.trim() : "";
                 const imageLoading = sceneImageLoadingScene === scene.sceneNumber;
                 const sceneVideoUrl = sceneVideoUrls[scene.sceneNumber];
-                const animateRequestId = sceneAnimationRequestIds[scene.sceneNumber];
-                const animateStatus = sceneAnimationStatus[scene.sceneNumber];
-                const animateTimedOut = sceneAnimationTimedOut[scene.sceneNumber];
-                const animateLoading =
-                  sceneAnimateLoadingScene === scene.sceneNumber || !!animateRequestId;
                 return (
                 <Card key={scene.sceneNumber}>
                   <CardHeader className="p-4 pb-2">
@@ -2170,12 +2350,17 @@ export default function TemplateStudioClient() {
                             });
                             data = await res.json();
                           } else {
-                            const imageBody = {
+                            const hasEmbeddedSeed = characterSeed.trim().length > 0;
+                            const imageBody: Record<string, unknown> = {
                               prompt: scene.imagePrompt,
-                              ...(!useImg2ImgSceneImages && aiStoryCharacterStyle
-                                ? { characterStyle: aiStoryCharacterStyle }
-                                : {}),
                             };
+                            if (hasEmbeddedSeed) {
+                              if (mode === "7") {
+                                imageBody.aiStoryLocked = true;
+                              }
+                            } else if (!useImg2ImgSceneImages && aiStoryCharacterStyle) {
+                              imageBody.characterStyle = aiStoryCharacterStyle;
+                            }
                             console.log("[AI Story] DALL-E generate-image prompt:", scene.imagePrompt);
                             res = await fetch("/api/generate-image", {
                               method: "POST",
@@ -2216,148 +2401,29 @@ export default function TemplateStudioClient() {
                       Generate Image
                     </Button>
                     {sceneImageUrl ? (
-                      <>
-                        {animateTimedOut ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => {
-                              setSceneAnimationTimedOut((prev) => ({ ...prev, [scene.sceneNumber]: false }));
-                            }}
-                          >
-                            Try again
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            disabled={animateLoading}
-                            onClick={async () => {
-                              setSceneAnimateLoadingScene(scene.sceneNumber);
-                              setSceneAnimationTimedOut((prev) => ({ ...prev, [scene.sceneNumber]: false }));
-                              try {
-                                const res = await fetch("/api/content-studio/ai-story/animate", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    imageUrl: sceneImageUrl,
-                                    motionPrompt: scene.motionPrompt || scene.imagePrompt,
-                                  }),
-                                });
-                                const data = (await res.json()) as {
-                                  requestId?: string | null;
-                                  request_id?: string | null;
-                                  videoUrl?: string;
-                                  error?: string;
-                                };
-                                if (!res.ok) throw new Error(data?.error ?? "Failed");
-                                const requestId = data.requestId ?? data.request_id ?? null;
-                                console.log("Animation request_id:", requestId, "full response:", data);
-                                if (data.videoUrl) {
-                                  setSceneVideoUrls((prev) => ({ ...prev, [scene.sceneNumber]: data.videoUrl }));
-                                  setSceneAnimateLoadingScene(null);
-                                  return;
-                                }
-                                if (requestId) {
-                                  animationPollCountRef.current[scene.sceneNumber] = 0;
-                                  setSceneAnimationRequestIds((prev) => ({
-                                    ...prev,
-                                    [scene.sceneNumber]: requestId,
-                                  }));
-                                  setSceneAnimationStatus((prev) => ({ ...prev, [scene.sceneNumber]: "IN_QUEUE" }));
-                                } else {
-                                  setSceneAnimateLoadingScene(null);
-                                  throw new Error("No requestId or videoUrl returned");
-                                }
-                              } catch (e) {
-                                toast({
-                                  title: "Animation failed",
-                                  description: e instanceof Error ? e.message : "Something went wrong",
-                                  variant: "destructive",
-                                });
-                                setSceneAnimateLoadingScene(null);
-                              }
-                            }}
-                          >
-                            {animateLoading ? (
-                              <span className="flex items-center gap-2">
-                                <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
-                                <span>
-                                  Generating animation… (may take 2–10 mins)
-                                  {animateStatus ? ` — ${animateStatus.replace("_", " ")}` : ""}
-                                </span>
-                              </span>
-                            ) : (
-                              "Animate Scene"
-                            )}
-                          </Button>
-                        )}
-                        {sceneVideoUrl && (
-                          <video src={sceneVideoUrl} controls className="w-full rounded-md mt-2 aspect-[9/16] object-cover" />
-                        )}
-                      </>
+                      <AiStoryAnimateSceneBlock
+                        imageUrl={sceneImageUrl}
+                        motionPrompt={scene.motionPrompt || scene.imagePrompt}
+                        videoUrl={sceneVideoUrl}
+                        onVideoUrl={(url) =>
+                          setSceneVideoUrls((prev) => ({ ...prev, [scene.sceneNumber]: url }))
+                        }
+                      />
                     ) : null}
                     <p className="font-medium">Dialogue</p>
                     <p className="text-muted-foreground whitespace-pre-wrap">{scene.dialogue}</p>
                     <p className="font-medium">Image prompt</p>
                     <p className="text-muted-foreground whitespace-pre-wrap">{scene.imagePrompt}</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      disabled={!voiceId || loading}
-                      onClick={async () => {
-                        const characterNameFromDialogue = scene.dialogue.match(/^([^:]+):/)?.[1]?.trim() ?? null;
-                        const voiceIdToUse = characterNameFromDialogue && characterVoices[characterNameFromDialogue]
-                          ? characterVoices[characterNameFromDialogue]
-                          : characterNameFromDialogue
-                            ? getDefaultVoiceIdForCharacter(characterNameFromDialogue)
-                            : elevenLabsVoices[0]?.voice_id ?? "";
-                        setVoiceoverLoadingScene(scene.sceneNumber);
-                        try {
-                          const scriptText = scene.dialogue.includes(":")
-                              ? scene.dialogue.slice(scene.dialogue.indexOf(":") + 1).trim()
-                              : scene.dialogue;
-                          const speakableText = toSpeakable(scriptText);
-                          const res = await fetch("/api/ai-coach/voice-over", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              script: speakableText,
-                              voiceId: voiceIdToUse,
-                              maxDurationSeconds: TIMELINE_SCENE_DURATION,
-                            }),
-                          });
-                          const data = (await res.json()) as { url?: string; error?: string; publicUrl?: string; audioUrl?: string };
-                          if (!res.ok) throw new Error(data?.error ?? "Failed");
-                          const voUrl =
-                            typeof data.url === "string"
-                              ? data.url
-                              : typeof data.publicUrl === "string"
-                                ? data.publicUrl
-                                : typeof data.audioUrl === "string"
-                                  ? data.audioUrl
-                                  : "";
-                          if (!voUrl.trim()) throw new Error("No audio URL returned");
-                          setVoiceoverUrls((prev) => ({ ...prev, [scene.sceneNumber]: voUrl.trim() }));
-                        } catch (e) {
-                          toast({
-                            title: "Voiceover failed",
-                            description: e instanceof Error ? e.message : "Something went wrong",
-                            variant: "destructive",
-                          });
-                        } finally {
-                          setVoiceoverLoadingScene(null);
+                    {voiceoverEnabled && (
+                      <AiStorySceneVoiceover
+                        voiceId={voiceId}
+                        dialogueLine={scene.dialogue}
+                        audioUrl={voiceoverUrl}
+                        onAudioUrl={(url) =>
+                          setVoiceoverUrls((prev) => ({ ...prev, [scene.sceneNumber]: url }))
                         }
-                      }}
-                    >
-                      {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                      Generate Voiceover
-                    </Button>
-                    {voiceoverUrl && (
-                      <audio src={voiceoverUrl} controls className="w-full mt-2" />
+                        maxDurationSeconds={TIMELINE_SCENE_DURATION}
+                      />
                     )}
                   </CardContent>
                 </Card>
@@ -2414,14 +2480,32 @@ export default function TemplateStudioClient() {
                 View in Video Timeline
               </Button>
               <p className="text-sm text-muted-foreground">
-                Timeline auto-updates as you generate images, animations, and voiceovers. Open when ready to edit or export MP4.
+                Timeline auto-updates as you generate images, animations
+                {voiceoverEnabled ? ", and voiceovers" : ""}. Open when ready to edit or export MP4.
               </p>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                disabled={aiStoryLoading}
+                onClick={() => void handleGenerateNextEpisode()}
+              >
+                {aiStoryLoading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <span className="mr-1.5" aria-hidden>
+                    ▶
+                  </span>
+                )}
+                Generate Next Episode
+              </Button>
               {canExportStoryVideo && (
                 <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">Export story video</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      All {AI_STORY_SCENE_COUNT} scenes have animation and voiceover. Save a script, stitch one MP4 on the server, then download — no need to open the timeline first.
+                      All {AI_STORY_SCENE_COUNT} scenes have animation
+                      {voiceoverEnabled ? " and voiceover" : ""}. Save a script, stitch one MP4 on the server, then download — no need to open the timeline first.
                     </p>
                   </div>
                   <div className="space-y-2 max-w-xs">
@@ -2444,7 +2528,8 @@ export default function TemplateStudioClient() {
                       </SelectContent>
                     </Select>
                     <p className="text-[11px] text-muted-foreground leading-snug">
-                      Looped bed track under the voice at low volume (~18%).{" "}
+                      Looped bed track at low volume (~18%)
+                      {voiceoverEnabled ? " under the voice" : " under the mix"}.{" "}
                       <a
                         href="/bgm/ATTRIBUTION.md"
                         target="_blank"
@@ -2541,6 +2626,7 @@ export default function TemplateStudioClient() {
             </div>
           </CardContent>
         </Card>
+        </div>
         </>
       )}
 

@@ -9,6 +9,10 @@ import {
   parseCharacterTypes,
   sanitizeAiStorySceneImagePrompt,
 } from "@/lib/ai-story-character-style";
+import {
+  generateStoryCharacterSeed,
+  prependCharacterSeedToSceneImagePrompts,
+} from "@/lib/story-character-seed";
 
 export const dynamic = "force-dynamic";
 
@@ -270,12 +274,23 @@ Generate 8 scenes that tell a cohesive micro-story in this tone and style. Every
 
     const characterTypes = parseCharacterTypes(characters);
 
+    const character_seed = await generateStoryCharacterSeed(apiKey, {
+      characterTypesLine: characters.trim(),
+      themeOrBuilding: theme,
+      templateName: "AI Story",
+      flavorLine: `${style}, ${tone}`,
+    });
+    let scenesWithSeed = prependCharacterSeedToSceneImagePrompts(
+      scenes,
+      character_seed
+    );
+
     const scenesWithLocks =
       consistencyMode !== "img2img" &&
       characterStyleRegistry &&
       Object.keys(characterStyleRegistry).length > 0 &&
       characterTypes.length > 0
-        ? scenes.map((s) => ({
+        ? scenesWithSeed.map((s) => ({
             ...s,
             imagePrompt: mergeCharacterLocksIntoImagePrompt(
               s.imagePrompt,
@@ -284,12 +299,13 @@ Generate 8 scenes that tell a cohesive micro-story in this tone and style. Every
               AI_STORY_GLOBAL_VISUAL_STYLE
             ),
           }))
-        : scenes;
+        : scenesWithSeed;
 
     return NextResponse.json({
       scenes: scenesWithLocks,
       socialMediaPack,
       characterStyle: AI_STORY_GLOBAL_VISUAL_STYLE,
+      character_seed,
       ...(consistencyMode !== "img2img" && characterStyleRegistry
         ? { characterStyleRegistry }
         : {}),
