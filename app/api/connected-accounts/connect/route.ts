@@ -12,7 +12,7 @@ const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "faceb
 const FACEBOOK_LOGIN_SCOPES = "pages_show_list,pages_read_engagement,public_profile";
 
 /** Instagram Business Login only — https://www.instagram.com/oauth/authorize (never use FACEBOOK_APP_ID here). */
-const INSTAGRAM_BUSINESS_SCOPES = "instagram_business_basic,instagram_business_content_publish";
+const INSTAGRAM_BUSINESS_SCOPES = "instagram_business_basic";
 
 const FACEBOOK_DIALOG_OAUTH = "https://www.facebook.com/v21.0/dialog/oauth";
 const INSTAGRAM_OAUTH_AUTHORIZE = "https://www.instagram.com/oauth/authorize";
