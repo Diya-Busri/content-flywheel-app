@@ -1,30 +1,61 @@
 /**
- * Instagram Graph API (Instagram Login) — carousel publish.
- * @see https://developers.facebook.com/docs/instagram-platform/content-publishing
+ * Instagram Graph API (Facebook Graph) — carousel publish.
+ * Uses graph.facebook.com with Page Access Token + Instagram Business Account id from /me/accounts.
+ *
+ * @see https://developers.facebook.com/docs/instagram-api/content-publishing
  */
 
-const GRAPH = "https://graph.instagram.com/v21.0";
+const FB_GRAPH = "https://graph.facebook.com/v21.0";
 
 export type MediaStatus = "EXPIRED" | "ERROR" | "FINISHED" | "IN_PROGRESS" | "PUBLISHED" | string;
 
-async function postForm(path: string, params: Record<string, string>): Promise<{ id?: string; error?: { message?: string } }> {
+function logStep(label: string, payload: unknown) {
+  try {
+    console.log(`[instagram-carousel-publish] ${label}:`, JSON.stringify(payload, null, 2));
+  } catch {
+    console.log(`[instagram-carousel-publish] ${label}:`, payload);
+  }
+}
+
+async function postForm(
+  path: string,
+  params: Record<string, string>
+): Promise<{ id?: string; error?: { message?: string; type?: string; code?: number } }> {
   const body = new URLSearchParams(params);
-  const res = await fetch(`${GRAPH}${path}`, {
+  const url = `${FB_GRAPH}${path}`;
+  logStep("POST request", { path, params: { ...params, access_token: "[REDACTED]" } });
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
-  return res.json().catch(() => ({}));
+  const text = await res.text();
+  logStep("POST response raw", { path, status: res.status, statusText: res.statusText, body: text.slice(0, 4000) });
+  try {
+    return text ? (JSON.parse(text) as { id?: string; error?: { message?: string } }) : {};
+  } catch {
+    return { error: { message: `Invalid JSON: ${text.slice(0, 200)}` } };
+  }
 }
 
-async function getJson(path: string): Promise<{ status_code?: MediaStatus; id?: string; error?: { message?: string } }> {
-  const res = await fetch(`${GRAPH}${path}`);
-  return res.json().catch(() => ({}));
+async function getJson(
+  path: string
+): Promise<{ status_code?: MediaStatus; id?: string; error?: { message?: string } }> {
+  const url = `${FB_GRAPH}${path}`;
+  logStep("GET request", { path });
+  const res = await fetch(url);
+  const text = await res.text();
+  logStep("GET response raw", { path, status: res.status, body: text.slice(0, 4000) });
+  try {
+    return text ? (JSON.parse(text) as { status_code?: MediaStatus; error?: { message?: string } }) : {};
+  } catch {
+    return {};
+  }
 }
 
 export async function waitForMediaContainerReady(
   creationId: string,
-  accessToken: string,
+  pageAccessToken: string,
   opts?: { maxAttempts?: number; delayMs?: number }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const maxAttempts = opts?.maxAttempts ?? 45;
@@ -32,8 +63,8 @@ export async function waitForMediaContainerReady(
 
   for (let i = 0; i < maxAttempts; i++) {
     const q = new URLSearchParams({
-      fields: "status_code",
-      access_token: accessToken,
+      fields: "status_code,status",
+      access_token: pageAccessToken,
     });
     const data = await getJson(`/${creationId}?${q.toString()}`);
     const code = data.status_code;
@@ -47,15 +78,15 @@ export async function waitForMediaContainerReady(
 }
 
 /**
- * Publish one image or a carousel (2–10 images) to an Instagram professional account.
+ * Publish one image or a carousel (2–10 images) using IG Business Account id + Page access token.
  */
 export async function publishInstagramCarousel(params: {
-  igUserId: string;
-  accessToken: string;
+  igBusinessAccountId: string;
+  pageAccessToken: string;
   imageUrls: string[];
   caption: string;
 }): Promise<{ mediaId?: string; error: string | null }> {
-  const { igUserId, accessToken, caption } = params;
+  const { igBusinessAccountId, pageAccessToken, caption } = params;
   const imageUrls = params.imageUrls.filter(Boolean).slice(0, 10);
 
   if (imageUrls.length === 0) {
@@ -66,10 +97,10 @@ export async function publishInstagramCarousel(params: {
     return { error: "Caption exceeds Instagram 2200 character limit" };
   }
 
-  const tokenParam = { access_token: accessToken };
+  const tokenParam = { access_token: pageAccessToken };
 
   if (imageUrls.length === 1) {
-    const created = await postForm(`/${igUserId}/media`, {
+    const created = await postForm(`/${igBusinessAccountId}/media`, {
       ...tokenParam,
       image_url: imageUrls[0],
       caption,
@@ -77,10 +108,10 @@ export async function publishInstagramCarousel(params: {
     if (!created.id) {
       return { error: created.error?.message || "Failed to create media container" };
     }
-    const ready = await waitForMediaContainerReady(created.id, accessToken);
+    const ready = await waitForMediaContainerReady(created.id, pageAccessToken);
     if (!ready.ok) return { error: ready.error };
 
-    const pub = await postForm(`/${igUserId}/media_publish`, {
+    const pub = await postForm(`/${igBusinessAccountId}/media_publish`, {
       ...tokenParam,
       creation_id: created.id,
     });
@@ -92,7 +123,7 @@ export async function publishInstagramCarousel(params: {
 
   const childIds: string[] = [];
   for (const imageUrl of imageUrls) {
-    const child = await postForm(`/${igUserId}/media`, {
+    const child = await postForm(`/${igBusinessAccountId}/media`, {
       ...tokenParam,
       image_url: imageUrl,
       is_carousel_item: "true",
@@ -100,12 +131,12 @@ export async function publishInstagramCarousel(params: {
     if (!child.id) {
       return { error: child.error?.message || "Failed to create carousel item" };
     }
-    const ready = await waitForMediaContainerReady(child.id, accessToken);
+    const ready = await waitForMediaContainerReady(child.id, pageAccessToken);
     if (!ready.ok) return { error: ready.error };
     childIds.push(child.id);
   }
 
-  const carousel = await postForm(`/${igUserId}/media`, {
+  const carousel = await postForm(`/${igBusinessAccountId}/media`, {
     ...tokenParam,
     media_type: "CAROUSEL",
     children: childIds.join(","),
@@ -114,10 +145,10 @@ export async function publishInstagramCarousel(params: {
   if (!carousel.id) {
     return { error: carousel.error?.message || "Failed to create carousel container" };
   }
-  const carouselReady = await waitForMediaContainerReady(carousel.id, accessToken);
+  const carouselReady = await waitForMediaContainerReady(carousel.id, pageAccessToken);
   if (!carouselReady.ok) return { error: carouselReady.error };
 
-  const pub = await postForm(`/${igUserId}/media_publish`, {
+  const pub = await postForm(`/${igBusinessAccountId}/media_publish`, {
     ...tokenParam,
     creation_id: carousel.id,
   });

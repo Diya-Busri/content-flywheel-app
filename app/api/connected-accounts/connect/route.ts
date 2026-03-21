@@ -3,23 +3,16 @@ import { auth } from "@clerk/nextjs/server";
 import { getConnectedAccountsOAuthRedirectUri } from "@/lib/connected-accounts-oauth-origin";
 import type { ConnectedPlatform } from "@/db/schema/connected-accounts-schema";
 import { randomBytes } from "crypto";
+import { INSTAGRAM_FACEBOOK_CONNECT_SCOPES } from "@/lib/instagram-facebook-connect-scopes";
 
 export const dynamic = "force-dynamic";
 
 const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
 
-/** Facebook Login only — https://www.facebook.com/v21.0/dialog/oauth (never use for Instagram). */
+/** Facebook Login — basic page / profile (no Instagram publishing). */
 const FACEBOOK_LOGIN_SCOPES = "pages_show_list,pages_read_engagement,public_profile";
 
-/** Instagram Business Login only — https://www.instagram.com/oauth/authorize (never use FACEBOOK_APP_ID here). */
-/** `instagram_business_content_publish` required for carousel upload via Graph API. */
-const INSTAGRAM_BUSINESS_SCOPES = "instagram_business_basic,instagram_business_content_publish";
-
 const FACEBOOK_DIALOG_OAUTH = "https://www.facebook.com/v21.0/dialog/oauth";
-const INSTAGRAM_OAUTH_AUTHORIZE = "https://www.instagram.com/oauth/authorize";
-
-/** Hardcoded redirect_uri for Instagram OAuth — must match Meta dashboard exactly. */
-const INSTAGRAM_OAUTH_REDIRECT_URI = "https://contentflywheel.co.uk/api/connected-accounts/callback";
 
 /**
  * Facebook Login: Meta dialog OAuth, Facebook App ID, page/user scopes only.
@@ -46,32 +39,27 @@ function buildFacebookLoginAuthUrl(callbackUrl: string, state: string): string |
 }
 
 /**
- * Instagram Business Login: Instagram authorize URL, Instagram App ID, IG business scopes only.
+ * Instagram: Facebook Login dialog only (never instagram.com/oauth).
+ * client_id = FACEBOOK_APP_ID; redirect_uri = app callback; scopes for Page + Instagram Graph.
  */
-function buildInstagramBusinessLoginAuthUrl(state: string): string | null {
-  const instagramAppId = process.env.INSTAGRAM_APP_ID?.trim() ?? "";
-  if (!instagramAppId) return null;
-  console.log("CONNECT URI:", INSTAGRAM_OAUTH_REDIRECT_URI);
+const FACEBOOK_OAUTH_DIALOG_INSTAGRAM = "https://www.facebook.com/v19.0/dialog/oauth";
+
+function buildInstagramViaFacebookAuthUrl(callbackUrl: string, state: string): string | null {
+  const facebookAppId = process.env.FACEBOOK_APP_ID?.trim() ?? "";
+  if (!facebookAppId) return null;
   const params = new URLSearchParams({
-    client_id: instagramAppId,
-    redirect_uri: INSTAGRAM_OAUTH_REDIRECT_URI,
+    client_id: facebookAppId,
+    redirect_uri: callbackUrl,
     response_type: "code",
-    scope: INSTAGRAM_BUSINESS_SCOPES,
+    scope: INSTAGRAM_FACEBOOK_CONNECT_SCOPES,
     state,
-    // Show Instagram professional login / account flow instead of skipping straight to re-consent when possible.
-    // https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login
-    force_reauth: "true",
-    enable_fb_login: "false",
   });
-  const authUrl = `${INSTAGRAM_OAUTH_AUTHORIZE}?${params.toString()}`;
-  console.log("FULL AUTH URL:", authUrl);
-  console.log("[Instagram OAuth redirect_uri] connect (authorize):", params.get("redirect_uri"));
-  console.log("[connected-accounts/connect] Instagram Business Login:", {
-    endpoint: INSTAGRAM_OAUTH_AUTHORIZE,
-    client_id: instagramAppId,
-    scope: INSTAGRAM_BUSINESS_SCOPES,
-    redirect_uri: INSTAGRAM_OAUTH_REDIRECT_URI,
-    fullAuthUrl: authUrl,
+  const authUrl = `${FACEBOOK_OAUTH_DIALOG_INSTAGRAM}?${params.toString()}`;
+  console.log("[connected-accounts/connect] Instagram → Facebook dialog/oauth (v19):", {
+    endpoint: FACEBOOK_OAUTH_DIALOG_INSTAGRAM,
+    client_id: facebookAppId,
+    scope: INSTAGRAM_FACEBOOK_CONNECT_SCOPES,
+    redirect_uri: callbackUrl,
   });
   return authUrl;
 }
@@ -121,7 +109,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: Next
       return authUrl;
     }
     case "instagram": {
-      return buildInstagramBusinessLoginAuthUrl(state);
+      return buildInstagramViaFacebookAuthUrl(callbackUrl, state);
     }
     case "facebook": {
       return buildFacebookLoginAuthUrl(callbackUrl, state);

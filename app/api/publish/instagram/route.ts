@@ -6,6 +6,8 @@ import { connectedAccountsTable } from "@/db/schema/connected-accounts-schema";
 import { eq, and } from "drizzle-orm";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { publishInstagramCarousel } from "@/lib/instagram-carousel-publish";
+import { resolveInstagramPublishContext } from "@/lib/instagram-fb-resolve";
+import { INSTAGRAM_FACEBOOK_CONNECT_SCOPES } from "@/lib/instagram-facebook-connect-scopes";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -56,7 +58,8 @@ async function uploadPngToPublicUrl(userId: string, buffer: Buffer, index: numbe
 }
 
 /**
- * POST: Publish carousel to Instagram using connected_accounts token.
+ * POST: Publish carousel to Instagram using Facebook Graph API.
+ * Resolves Page access token + Instagram Business Account id via GET /me/accounts (not the IG Login user id alone).
  * Body: { caption: string, imagesBase64?: string[] } — PNG/JPEG base64 (data URLs ok), max 10.
  */
 export async function POST(request: NextRequest) {
@@ -83,6 +86,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log("[publish/instagram] request:", {
+      userIdPrefix: userId.slice(0, 12),
+      imageCount: buffers.length,
+      captionLength: caption.length,
+    });
+
     const [account] = await db
       .select()
       .from(connectedAccountsTable)
@@ -95,12 +104,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const igUserId = account.platformUserId?.trim();
-    if (!igUserId) {
-      return NextResponse.json(
-        { error: "Instagram account is missing user id; reconnect Instagram." },
-        { status: 403 }
-      );
+    const scopes = account.scopes ?? "";
+    const useStoredPageToken =
+      typeof scopes === "string" &&
+      scopes.includes("instagram_business_content_publish") &&
+      account.platformUserId?.trim() &&
+      account.accessToken;
+
+    let pageAccessToken: string;
+    let igBusinessAccountId: string;
+
+    if (useStoredPageToken) {
+      pageAccessToken = account.accessToken;
+      igBusinessAccountId = account.platformUserId!.trim();
+      console.log("[publish/instagram] using stored Page access token + IG Business id from connect (skip /me/accounts)", {
+        igBusinessAccountId,
+      });
+    } else {
+      const resolved = await resolveInstagramPublishContext({
+        accessToken: account.accessToken,
+        preferredIgBusinessAccountId: account.platformUserId?.trim() ?? null,
+      });
+      if (!resolved.ok) {
+        console.error("[publish/instagram] resolve context failed:", JSON.stringify(resolved, null, 2));
+        return NextResponse.json(
+          {
+            success: false,
+            error: resolved.error,
+            hint:
+              "Reconnect Instagram in Settings (Facebook login with Page + Instagram Business). Legacy Instagram-only tokens are not supported for publishing.",
+            details: resolved.details,
+          },
+          { status: 403 }
+        );
+      }
+      pageAccessToken = resolved.context.pageAccessToken;
+      igBusinessAccountId = resolved.context.igBusinessAccountId;
+      console.log("[publish/instagram] resolved publish context:", {
+        igBusinessAccountId,
+        pageId: resolved.context.pageId,
+      });
     }
 
     const imageUrls: string[] = [];
@@ -120,17 +163,21 @@ export async function POST(request: NextRequest) {
       imageUrls.push(url);
     }
 
+    console.log("[publish/instagram] public image URLs count:", imageUrls.length);
+
     const result = await publishInstagramCarousel({
-      igUserId,
-      accessToken: account.accessToken,
+      igBusinessAccountId,
+      pageAccessToken,
       imageUrls,
       caption,
     });
 
     if (result.error) {
+      console.error("[publish/instagram] publishInstagramCarousel error:", result.error);
       return NextResponse.json({ success: false, error: result.error }, { status: 502 });
     }
 
+    console.log("[publish/instagram] success mediaId:", result.mediaId);
     return NextResponse.json({ success: true, mediaId: result.mediaId });
   } catch (e) {
     console.error("[publish/instagram]", e);

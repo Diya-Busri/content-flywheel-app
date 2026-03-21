@@ -8,13 +8,11 @@ import { db } from "@/db/db";
 import { connectedAccountsTable } from "@/db/schema/connected-accounts-schema";
 import { eq, and } from "drizzle-orm";
 import type { ConnectedPlatform, SelectConnectedAccount } from "@/db/schema/connected-accounts-schema";
+import { INSTAGRAM_FACEBOOK_CONNECT_SCOPES } from "@/lib/instagram-facebook-connect-scopes";
 
 export const dynamic = "force-dynamic";
 
 const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
-
-/** Hardcoded redirect_uri for Instagram OAuth — must match Meta dashboard exactly. */
-const INSTAGRAM_OAUTH_REDIRECT_URI = "https://contentflywheel.co.uk/api/connected-accounts/callback";
 
 function getRedirectUrl(): string {
   const base =
@@ -28,20 +26,6 @@ function getPlatformFromState(state: string | null): ConnectedPlatform | null {
   if (!state) return null;
   const raw = state.split(":")[0];
   return PLATFORMS.includes(raw as ConnectedPlatform) ? (raw as ConnectedPlatform) : null;
-}
-
-/** Log shape of Instagram token JSON without leaking access_token. */
-function logInstagramTokenResponseBody(tokenJson: Record<string, unknown>, context: string): void {
-  const data = tokenJson.data;
-  const dataSummary =
-    Array.isArray(data) ? { kind: "array", length: data.length } : data && typeof data === "object" ? { kind: "object" } : { kind: typeof data };
-  console.log(`[connected-accounts/callback] Instagram token JSON (${context}):`, {
-    keys: Object.keys(tokenJson),
-    dataSummary,
-    hasTopLevelAccessToken: typeof tokenJson.access_token === "string",
-    hasErrorMessage: typeof tokenJson.error_message === "string",
-    error_type: tokenJson.error_type,
-  });
 }
 
 /**
@@ -181,171 +165,112 @@ export async function GET(request: NextRequest) {
         break;
       }
       case "instagram": {
-        const instagramAppId = process.env.INSTAGRAM_APP_ID?.trim() ?? "";
-        const instagramAppSecret =
-          process.env.INSTAGRAM_APP_SECRET?.trim() || process.env.FACEBOOK_APP_SECRET?.trim();
-        if (!instagramAppId || !instagramAppSecret) {
-          console.error("[connected-accounts/callback] Instagram env missing:", {
-            hasAppId: Boolean(instagramAppId),
-            hasAppSecret: Boolean(instagramAppSecret),
-          });
-          return errorRedirect(
-            "Instagram OAuth not configured. Set INSTAGRAM_APP_ID (Instagram App ID from Meta → Instagram → Business login) and INSTAGRAM_APP_SECRET or FACEBOOK_APP_SECRET for token exchange."
-          );
+        const facebookAppId = process.env.FACEBOOK_APP_ID?.trim() ?? "";
+        const facebookAppSecret = process.env.FACEBOOK_APP_SECRET?.trim() ?? "";
+        if (!facebookAppId || !facebookAppSecret) {
+          return errorRedirect("Facebook app not configured. Set FACEBOOK_APP_ID and FACEBOOK_APP_SECRET for Instagram.");
         }
-        console.log("CALLBACK URI:", INSTAGRAM_OAUTH_REDIRECT_URI);
-        console.log("[connected-accounts/callback] Instagram Business Login token exchange:", {
-          endpoint: "https://api.instagram.com/oauth/access_token",
-          client_id: instagramAppId,
-          redirect_uri: INSTAGRAM_OAUTH_REDIRECT_URI,
-          grant_type: "authorization_code",
-        });
-        const instagramTokenExchangeBody = new URLSearchParams({
-          client_id: instagramAppId,
-          client_secret: instagramAppSecret,
-          grant_type: "authorization_code",
-          redirect_uri: INSTAGRAM_OAUTH_REDIRECT_URI,
-          code,
-        });
-        console.log("[Instagram OAuth redirect_uri] callback (token POST body):", instagramTokenExchangeBody.get("redirect_uri"));
-        let tokenRes: Response;
-        try {
-          tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: instagramTokenExchangeBody,
-          });
-        } catch (e) {
-          console.error("[connected-accounts/callback] Instagram short-lived token fetch threw:", e);
-          return errorRedirect("Instagram token exchange network error.");
-        }
-        const tokenRaw = await tokenRes.text();
-        let tokenJson: {
-          data?:
-            | Array<{ access_token?: string; user_id?: string | number; permissions?: string }>
-            | { access_token?: string; user_id?: string | number; permissions?: string };
+
+        const tokenUrl =
+          `https://graph.facebook.com/v21.0/oauth/access_token?` +
+          `client_id=${encodeURIComponent(facebookAppId)}` +
+          `&client_secret=${encodeURIComponent(facebookAppSecret)}` +
+          `&redirect_uri=${encodeURIComponent(callbackUrl)}` +
+          `&code=${encodeURIComponent(code)}`;
+        const tokenRes = await fetch(tokenUrl);
+        const tokenData = (await tokenRes.json().catch(() => ({}))) as {
           access_token?: string;
-          user_id?: string | number;
-          error_message?: string;
-          error_type?: string;
-          code?: number;
-          error?: { message?: string; type?: string; code?: number };
+          expires_in?: number;
+          error?: { message?: string };
         };
-        try {
-          tokenJson = tokenRaw ? (JSON.parse(tokenRaw) as typeof tokenJson) : {};
-        } catch {
-          tokenJson = {};
-          console.error("[connected-accounts/callback] Instagram access_token response not JSON:", tokenRaw.slice(0, 500));
-        }
-        const tokenRawForLog =
-          tokenRes.ok && /"access_token"\s*:/i.test(tokenRaw)
-            ? tokenRaw.replace(/"access_token"\s*:\s*"[^"]*"/gi, '"access_token":"[REDACTED]"')
-            : tokenRaw;
-        console.log("[connected-accounts/callback] Instagram oauth/access_token raw body:", tokenRawForLog);
-        const igErrCode =
-          typeof tokenJson.code === "number"
-            ? tokenJson.code
-            : typeof tokenJson.error?.code === "number"
-              ? tokenJson.error.code
-              : null;
-        console.log("[connected-accounts/callback] Instagram oauth/access_token error fields:", {
-          error_type: tokenJson.error_type ?? tokenJson.error?.type ?? null,
-          code: igErrCode,
-          error_message: tokenJson.error_message ?? tokenJson.error?.message ?? null,
+        console.log("[connected-accounts/callback] Instagram: short-lived user token exchange:", {
+          ok: tokenRes.ok,
+          status: tokenRes.status,
+          body: { ...tokenData, access_token: tokenData.access_token ? "[REDACTED]" : undefined },
         });
-        logInstagramTokenResponseBody(tokenJson as Record<string, unknown>, `short-lived status=${tokenRes.status}`);
-        console.log("[connected-accounts/callback] Instagram short-lived HTTP:", tokenRes.status, tokenRes.statusText);
-
-        const dataBlock = tokenJson.data;
-        const firstEntry =
-          Array.isArray(dataBlock) && dataBlock.length > 0
-            ? dataBlock[0]
-            : dataBlock && typeof dataBlock === "object" && !Array.isArray(dataBlock)
-              ? dataBlock
-              : null;
-        const shortLived =
-          firstEntry?.access_token ??
-          (typeof tokenJson.access_token === "string" ? tokenJson.access_token : undefined);
-        const igUserIdRaw = firstEntry?.user_id ?? tokenJson.user_id;
-        if (!tokenRes.ok || !shortLived) {
-          const msg =
-            tokenJson.error_message ||
-            (tokenJson as { error?: { message?: string } }).error?.message ||
-            "Instagram token exchange failed.";
-          console.error("[connected-accounts/callback] Instagram short-lived token rejected:", {
-            httpStatus: tokenRes.status,
-            message: msg,
-          });
-          return errorRedirect(msg);
+        if (!tokenRes.ok || !tokenData.access_token) {
+          return errorRedirect(tokenData.error?.message || "Facebook token exchange failed.");
         }
-        platformUserId = igUserIdRaw != null ? String(igUserIdRaw) : null;
-        console.log("[connected-accounts/callback] Instagram short-lived OK:", {
-          platformUserId,
-          tokenLength: shortLived.length,
-        });
 
-        let longLivedToken = shortLived;
-        const llUrl = new URL("https://graph.instagram.com/access_token");
-        llUrl.searchParams.set("grant_type", "ig_exchange_token");
-        llUrl.searchParams.set("client_secret", instagramAppSecret);
-        llUrl.searchParams.set("access_token", shortLived);
-        let llRes: Response;
-        try {
-          llRes = await fetch(llUrl.toString());
-        } catch (e) {
-          console.error("[connected-accounts/callback] Instagram long-lived token fetch threw:", e);
-          accessToken = longLivedToken;
-          break;
+        let userAccessToken = tokenData.access_token;
+        if (tokenData.expires_in) {
+          const d = new Date();
+          d.setSeconds(d.getSeconds() + Number(tokenData.expires_in));
+          expiresAt = d;
         }
+
+        const llUrl =
+          `https://graph.facebook.com/v21.0/oauth/access_token?` +
+          `grant_type=fb_exchange_token` +
+          `&client_id=${encodeURIComponent(facebookAppId)}` +
+          `&client_secret=${encodeURIComponent(facebookAppSecret)}` +
+          `&fb_exchange_token=${encodeURIComponent(userAccessToken)}`;
+        const llRes = await fetch(llUrl);
         const llData = (await llRes.json().catch(() => ({}))) as {
           access_token?: string;
           expires_in?: number;
           error?: { message?: string };
         };
+        console.log("[connected-accounts/callback] Instagram: long-lived user token exchange:", {
+          ok: llRes.ok,
+          status: llRes.status,
+          body: { ...llData, access_token: llData.access_token ? "[REDACTED]" : undefined },
+        });
         if (llRes.ok && llData.access_token) {
-          longLivedToken = llData.access_token;
+          userAccessToken = llData.access_token;
           if (llData.expires_in) {
             const d = new Date();
-            d.setSeconds(d.getSeconds() + llData.expires_in);
+            d.setSeconds(d.getSeconds() + Number(llData.expires_in));
             expiresAt = d;
           }
-          console.log("[connected-accounts/callback] Instagram long-lived exchange OK:", {
-            expiresIn: llData.expires_in ?? null,
-          });
         } else {
-          console.warn("[connected-accounts/callback] Instagram long-lived exchange failed (using short-lived):", {
-            httpStatus: llRes.status,
-            error: llData.error?.message ?? (llData as { error_message?: string }).error_message ?? llRes.statusText,
-            bodyKeys: Object.keys(llData),
-          });
+          console.warn("[connected-accounts/callback] Instagram: long-lived exchange failed; using short-lived user token for /me/accounts");
         }
-        accessToken = longLivedToken;
 
-        try {
-          const meUrl = new URL("https://graph.instagram.com/v21.0/me");
-          meUrl.searchParams.set("fields", "id,username");
-          meUrl.searchParams.set("access_token", longLivedToken);
-          const meRes = await fetch(meUrl.toString());
-          const meData = (await meRes.json().catch(() => ({}))) as {
+        const accountsUrl =
+          `https://graph.facebook.com/v21.0/me/accounts?` +
+          `fields=name,id,access_token,instagram_business_account{id,username}` +
+          `&access_token=${encodeURIComponent(userAccessToken)}`;
+        const accRes = await fetch(accountsUrl);
+        const accText = await accRes.text();
+        let accJson: {
+          data?: Array<{
             id?: string;
-            username?: string;
-            error?: { message?: string };
-          };
-          console.log("[connected-accounts/callback] Instagram /me:", {
-            ok: meRes.ok,
-            status: meRes.status,
-            error: meData.error?.message,
-            hasUsername: Boolean(meData.username),
-          });
-          if (meRes.ok && typeof meData.username === "string" && meData.username.trim()) {
-            platformUsername = meData.username.trim();
-          }
-          if (meRes.ok && typeof meData.id === "string" && !platformUserId) {
-            platformUserId = meData.id;
-          }
-        } catch (e) {
-          console.warn("[connected-accounts/callback] Could not fetch Instagram profile", e);
+            name?: string;
+            access_token?: string;
+            instagram_business_account?: { id?: string; username?: string };
+          }>;
+          error?: { message?: string };
+        };
+        try {
+          accJson = accText ? (JSON.parse(accText) as typeof accJson) : {};
+        } catch {
+          accJson = {};
+          console.error("[connected-accounts/callback] Instagram: /me/accounts not JSON:", accText.slice(0, 500));
         }
+        console.log("[connected-accounts/callback] Instagram: GET /me/accounts full response:", accText.slice(0, 12000));
+
+        const pages = Array.isArray(accJson.data) ? accJson.data : [];
+        const pageWithIg = pages.find((p) => p.instagram_business_account?.id && p.access_token);
+        if (!pageWithIg?.access_token || !pageWithIg.instagram_business_account?.id) {
+          return errorRedirect(
+            "No Facebook Page with a linked Instagram Business account found. In Meta Business Suite, connect your Instagram professional account to a Facebook Page, then connect again."
+          );
+        }
+
+        accessToken = pageWithIg.access_token;
+        platformUserId = String(pageWithIg.instagram_business_account.id);
+        platformUsername =
+          pageWithIg.instagram_business_account.username?.trim() ||
+          pageWithIg.name?.trim() ||
+          null;
+        refreshToken = null;
+
+        console.log("[connected-accounts/callback] Instagram: stored Page access token + IG Business id:", {
+          pageId: pageWithIg.id ?? null,
+          igBusinessAccountId: platformUserId,
+          username: platformUsername,
+        });
         break;
       }
       case "facebook": {
@@ -433,6 +358,7 @@ export async function GET(request: NextRequest) {
             platformUserId: row.platformUserId ?? null,
             platformUsername: row.platformUsername ?? null,
             updatedAt: row.updatedAt,
+            ...(platform === "instagram" ? { scopes: INSTAGRAM_FACEBOOK_CONNECT_SCOPES } : {}),
           })
           .where(
             and(
@@ -451,6 +377,7 @@ export async function GET(request: NextRequest) {
           expiresAt: row.expiresAt,
           platformUserId: row.platformUserId ?? null,
           platformUsername: row.platformUsername ?? null,
+          ...(platform === "instagram" ? { scopes: INSTAGRAM_FACEBOOK_CONNECT_SCOPES } : {}),
         });
         console.log("[connected-accounts/callback] Inserted connected_accounts for platform:", platform);
       }
