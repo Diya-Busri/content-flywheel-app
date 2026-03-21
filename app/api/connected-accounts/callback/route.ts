@@ -29,6 +29,25 @@ function getPlatformFromState(state: string | null): ConnectedPlatform | null {
 }
 
 /**
+ * Match DB row for Instagram reconnect: same IG business id, or a single legacy row with null platform_user_id.
+ */
+function matchInstagramExistingRow(
+  existing: SelectConnectedAccount[],
+  igBusinessAccountId: string | null
+): SelectConnectedAccount | null {
+  if (!igBusinessAccountId) return null;
+  const byId = existing.find((r) => (r.platformUserId ?? null) === igBusinessAccountId);
+  if (byId) return byId;
+  if (existing.length === 1) {
+    const only = existing[0];
+    if (only && (only.platformUserId == null || String(only.platformUserId).trim() === "")) {
+      return only;
+    }
+  }
+  return null;
+}
+
+/**
  * GET: OAuth callback. Query: code, state.
  * Platform is resolved from state (not query params), then code is exchanged and stored.
  */
@@ -54,8 +73,11 @@ export async function GET(request: NextRequest) {
       platformFromState: platform,
       statePrefix: state?.split(":")[0] ?? null,
       stateLength: state?.length ?? 0,
+      stateSample: state ? `${state.slice(0, 48)}${state.length > 48 ? "…" : ""}` : null,
       hasCode: Boolean(code),
+      codeLength: code?.length ?? 0,
       errorParam,
+      userIdPrefix: userId.slice(0, 12),
     });
 
     if (errorParam) {
@@ -178,17 +200,27 @@ export async function GET(request: NextRequest) {
           `&redirect_uri=${encodeURIComponent(callbackUrl)}` +
           `&code=${encodeURIComponent(code)}`;
         const tokenRes = await fetch(tokenUrl);
-        const tokenData = (await tokenRes.json().catch(() => ({}))) as {
+        const tokenRawText = await tokenRes.text();
+        let tokenData: {
           access_token?: string;
           expires_in?: number;
           error?: { message?: string };
         };
+        try {
+          tokenData = tokenRawText ? (JSON.parse(tokenRawText) as typeof tokenData) : {};
+        } catch {
+          tokenData = {};
+          console.error("[connected-accounts/callback] Instagram: token exchange body not JSON:", tokenRawText.slice(0, 800));
+        }
         console.log("[connected-accounts/callback] Instagram: short-lived user token exchange:", {
           ok: tokenRes.ok,
           status: tokenRes.status,
-          body: { ...tokenData, access_token: tokenData.access_token ? "[REDACTED]" : undefined },
+          redirect_uri_used: callbackUrl,
+          body_redacted: { ...tokenData, access_token: tokenData.access_token ? "[REDACTED]" : undefined },
+          raw_length: tokenRawText.length,
         });
         if (!tokenRes.ok || !tokenData.access_token) {
+          console.error("[connected-accounts/callback] Instagram: token exchange failed full body:", tokenRawText.slice(0, 2000));
           return errorRedirect(tokenData.error?.message || "Facebook token exchange failed.");
         }
 
@@ -206,15 +238,23 @@ export async function GET(request: NextRequest) {
           `&client_secret=${encodeURIComponent(facebookAppSecret)}` +
           `&fb_exchange_token=${encodeURIComponent(userAccessToken)}`;
         const llRes = await fetch(llUrl);
-        const llData = (await llRes.json().catch(() => ({}))) as {
+        const llRawText = await llRes.text();
+        let llData: {
           access_token?: string;
           expires_in?: number;
           error?: { message?: string };
         };
+        try {
+          llData = llRawText ? (JSON.parse(llRawText) as typeof llData) : {};
+        } catch {
+          llData = {};
+          console.error("[connected-accounts/callback] Instagram: long-lived response not JSON:", llRawText.slice(0, 800));
+        }
         console.log("[connected-accounts/callback] Instagram: long-lived user token exchange:", {
           ok: llRes.ok,
           status: llRes.status,
           body: { ...llData, access_token: llData.access_token ? "[REDACTED]" : undefined },
+          raw_length: llRawText.length,
         });
         if (llRes.ok && llData.access_token) {
           userAccessToken = llData.access_token;
@@ -248,8 +288,12 @@ export async function GET(request: NextRequest) {
           console.error("[connected-accounts/callback] Instagram: /me/accounts not JSON:", accText.slice(0, 500));
         }
         console.log("[connected-accounts/callback] Instagram: GET /me/accounts full response:", accText.slice(0, 12000));
+        if (accJson.error?.message) {
+          console.error("[connected-accounts/callback] Instagram: /me/accounts Graph error:", accJson.error);
+        }
 
         const pages = Array.isArray(accJson.data) ? accJson.data : [];
+        console.log("[connected-accounts/callback] Instagram: pages count:", pages.length);
         let chosenPage: { id: string; name?: string; access_token: string } | null = null;
         let igFromPage: { id?: string; username?: string } | null = null;
 
@@ -347,10 +391,22 @@ export async function GET(request: NextRequest) {
             eq(connectedAccountsTable.platform, platform)
           )
         );
+      console.log("[connected-accounts/callback] DB select ok:", {
+        platform,
+        rowCount: existing.length,
+        existingSummaries: existing.map((r) => ({
+          id: r.id,
+          platformUserId: r.platformUserId ?? "(null)",
+          hasToken: Boolean(r.accessToken?.length),
+        })),
+        hasDatabaseUrl: Boolean(process.env.DATABASE_URL?.trim()),
+      });
     } catch (e) {
       console.error("[connected-accounts/callback] DB select connected_accounts failed:", {
         platform,
         userIdPrefix: userId.slice(0, 12),
+        message: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined,
         err: e,
       });
       throw e;
@@ -368,9 +424,11 @@ export async function GET(request: NextRequest) {
     };
 
     const matchedExisting =
-      (platform === "youtube" || platform === "instagram") && platformUserId
-        ? existing.find((r) => (r.platformUserId ?? null) === platformUserId) ?? null
-        : existing[0] ?? null;
+      platform === "instagram"
+        ? matchInstagramExistingRow(existing, platformUserId)
+        : platform === "youtube" && platformUserId
+          ? existing.find((r) => (r.platformUserId ?? null) === platformUserId) ?? null
+          : existing[0] ?? null;
 
     console.log("[connected-accounts/callback] Persisting connected_accounts:", {
       platform,
@@ -378,11 +436,12 @@ export async function GET(request: NextRequest) {
       matchedExistingId: matchedExisting?.id ?? null,
       platformUserId: row.platformUserId ?? null,
       willUpdate: Boolean(matchedExisting),
+      willInsert: !matchedExisting,
     });
 
     try {
       if (matchedExisting) {
-        await db
+        const updated = await db
           .update(connectedAccountsTable)
           .set({
             accessToken: row.accessToken,
@@ -399,26 +458,36 @@ export async function GET(request: NextRequest) {
               eq(connectedAccountsTable.platform, platform),
               eq(connectedAccountsTable.id, matchedExisting.id)
             )
-          );
-        console.log("[connected-accounts/callback] Updated connected_accounts row:", matchedExisting.id);
-      } else {
-        await db.insert(connectedAccountsTable).values({
-          userId: row.userId,
-          platform: row.platform,
-          accessToken: row.accessToken,
-          refreshToken: row.refreshToken ?? null,
-          expiresAt: row.expiresAt,
-          platformUserId: row.platformUserId ?? null,
-          platformUsername: row.platformUsername ?? null,
-          ...(platform === "instagram" ? { scopes: INSTAGRAM_FACEBOOK_CONNECT_SCOPES } : {}),
+          )
+          .returning({ id: connectedAccountsTable.id });
+        console.log("[connected-accounts/callback] Updated connected_accounts:", {
+          id: matchedExisting.id,
+          returning: updated,
         });
-        console.log("[connected-accounts/callback] Inserted connected_accounts for platform:", platform);
+      } else {
+        const inserted = await db
+          .insert(connectedAccountsTable)
+          .values({
+            userId: row.userId,
+            platform: row.platform,
+            accessToken: row.accessToken,
+            refreshToken: row.refreshToken ?? null,
+            expiresAt: row.expiresAt,
+            platformUserId: row.platformUserId ?? null,
+            platformUsername: row.platformUsername ?? null,
+            ...(platform === "instagram" ? { scopes: INSTAGRAM_FACEBOOK_CONNECT_SCOPES } : {}),
+          })
+          .returning({ id: connectedAccountsTable.id });
+        console.log("[connected-accounts/callback] Inserted connected_accounts:", { platform, returning: inserted });
       }
     } catch (e) {
       console.error("[connected-accounts/callback] DB insert/update connected_accounts failed:", {
         platform,
         userIdPrefix: userId.slice(0, 12),
         matchedExistingId: matchedExisting?.id ?? null,
+        message: e instanceof Error ? e.message : String(e),
+        code: e && typeof e === "object" && "code" in e ? (e as { code?: string }).code : undefined,
+        stack: e instanceof Error ? e.stack : undefined,
         err: e,
       });
       throw e;
