@@ -6,6 +6,7 @@
     "node": "20.x"
   },
   "scripts": {
+    "postinstall": "node scripts/copy-ffmpeg-core.mjs",
     "dev": "next dev",
     "dev:clean": "node -e \"try { require('fs').rmSync('.next', { recursive: true, force: true }); } catch (e) {}\" && next dev",
     "build": "next build",
@@ -30,6 +31,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@fal-ai/client": "^1.9.4",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@ffmpeg/core": "0.12.9",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@hookform/resolvers": "^3.9.0",

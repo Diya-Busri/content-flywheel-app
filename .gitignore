@@ -34,3 +34,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# copied ffmpeg assets (see scripts/copy-ffmpeg-core.mjs)
+public/ffmpeg-core/*
+!public/ffmpeg-core/README.md
+public/ffmpeg-wasm/*
+!public/ffmpeg-wasm/README.md

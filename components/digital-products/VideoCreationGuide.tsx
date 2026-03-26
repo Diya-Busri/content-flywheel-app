@@ -18,6 +18,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { mapScriptToSceneOverlays } from "@/lib/video-guide-scene-overlays";
+import { animateAiStorySceneFromImage } from "@/lib/ai-story-animate-client";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -267,6 +268,8 @@ export type VideoGuideData = {
   script: { hook: string; body: string; cta: string };
   scenePrompts: Array<{ scene: string; timing: string; prompt: string }>;
   productName?: string;
+  niche?: string;
+  productDescription?: string;
   overview?: string;
   scenes?: Array<{
     scene: string;
@@ -444,6 +447,13 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const [guideCoachVoiceoverUrls, setGuideCoachVoiceoverUrls] = useState<Record<number, string>>({});
   const [guideSceneImageLoadingIndex, setGuideSceneImageLoadingIndex] = useState<number | null>(null);
   const [guideBulkImagesLoading, setGuideBulkImagesLoading] = useState(false);
+  /** Server-side FFmpeg compile (whole MP4) in progress. */
+  const [guideFullVideoLoading, setGuideFullVideoLoading] = useState(false);
+  /** Track which scene "Animate Scene" jobs are currently running so we can show export CTA. */
+  const [animatingByScene, setAnimatingByScene] = useState<Record<number, boolean>>({});
+  /** When true, we auto-export once all animated scene videos + voiceovers are ready. */
+  const [autoExportWhenAnimationsReady, setAutoExportWhenAnimationsReady] = useState(false);
+  const autoExportStartedRef = useRef(false);
   const [activeTab, setActiveTab] = useState("scenes");
   const [socialKitProofFile, setSocialKitProofFile] = useState<File | null>(null);
   const [socialKit, setSocialKit] = useState<SocialMediaKit | null>(() => {
@@ -467,6 +477,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const [editedScript, setEditedScript] = useState<{ hook: string; body: string; cta: string } | null>(null);
 
   const effectiveProductName = (guide.productName?.trim() || "") || (userProductName?.trim() || "");
+  const productNiche = String(guide.niche || guide.productDescription || "").trim();
   const PLACEHOLDER_NAMES = ["your product", "the product", "untitled", "product", ""];
   const isPlaceholderName = PLACEHOLDER_NAMES.includes(effectiveProductName.toLowerCase().trim());
   const hasProductName = effectiveProductName.length > 0 && !isPlaceholderName;
@@ -588,11 +599,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     prompt: s.prompt,
     visualDescription: s.prompt,
   }));
-  const scenesRef = useRef(scenes);
-  scenesRef.current = scenes;
-  const videoGuideCharacterSeedRef = useRef("");
-  const videoGuideSeedScene1KeyRef = useRef("");
-  const videoGuideSeedChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const editingSteps = guide.editingSteps ?? { CapCut: [] };
   const subtitles = guide.subtitleRecs ?? {};
   const music = guide.musicRecs ?? {};
@@ -616,53 +622,24 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     return vd?.aiPrompt ?? (s as { prompt?: string }).prompt ?? (s as { visualDescription?: string }).visualDescription ?? s.scene;
   }, []);
 
-  const wrapVideoGuideImagePromptForDalle = useCallback((original: string, characterSeed: string): string => {
+  const wrapVideoGuideImagePromptForDalle = useCallback((original: string): string => {
     const o = original.trim();
     const maxLen = 4000;
-    if (!characterSeed) return o.slice(0, maxLen);
-    const prefix = `IMPORTANT: This is the same character in every scene: ${characterSeed}. Now show them in this scene: `;
-    const suffix = `. Photorealistic, consistent character appearance, same person throughout.`;
-    const full = `${prefix}${o}${suffix}`;
-    if (full.length <= maxLen) return full;
-    const overhead = prefix.length + suffix.length;
-    const budget = Math.max(0, maxLen - overhead);
+    const CHARACTER_CONSISTENCY_PREFIX =
+      "Same woman: early 20s, brown hair, medium skin tone, wearing a beige knit sweater. Consistent appearance across all scenes.";
+    const SINGLE_SCENE_ONLY = "Single scene only. No split screen. No collage. No before and after compositions.";
+    const productNameForPrompt = effectiveProductName?.trim() || "Product";
+    const nicheForPrompt = productNiche?.trim();
+    const productRelevance = nicheForPrompt
+      ? `Product relevance: show "${productNameForPrompt}" for the "${nicheForPrompt}" audience. Make the scene visually reflect the product (e.g. laptop/phone showing a course/lesson/dashboard-style interface if it's digital training), with clear UI structure but no readable text.`
+      : `Product relevance: show "${productNameForPrompt}" in a visually relevant on-screen interface (e.g. laptop/phone UI elements), with clear structure but no readable text.`;
+
+    const prefix = `${CHARACTER_CONSISTENCY_PREFIX} ${SINGLE_SCENE_ONLY} ${productRelevance} `;
+    if (prefix.length >= maxLen) return prefix.slice(0, maxLen);
+    const budget = Math.max(0, maxLen - prefix.length);
     const trimmed = budget > 0 ? o.slice(0, budget) : "";
-    return `${prefix}${trimmed}${suffix}`;
-  }, []);
-
-  const ensureVideoGuideCharacterSeed = useCallback(async (): Promise<string> => {
-    const run = async (): Promise<string> => {
-      const fresh = scenesRef.current[0] ? getSceneFullPrompt(scenesRef.current[0]).trim() : "";
-      if (!fresh) return "";
-      if (videoGuideSeedScene1KeyRef.current === fresh && videoGuideCharacterSeedRef.current) {
-        return videoGuideCharacterSeedRef.current;
-      }
-      const res = await fetch("/api/video-guide/character-seed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scene1ImagePrompt: fresh.slice(0, 12000) }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { characterSeed?: string; error?: string };
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to create character description");
-      }
-      const seed = typeof data.characterSeed === "string" ? data.characterSeed.trim() : "";
-      const keyAfter = scenesRef.current[0] ? getSceneFullPrompt(scenesRef.current[0]).trim() : "";
-      if (keyAfter === fresh) {
-        videoGuideCharacterSeedRef.current = seed;
-        videoGuideSeedScene1KeyRef.current = fresh;
-        return seed;
-      }
-      return "";
-    };
-
-    const p = videoGuideSeedChainRef.current.then(run, run);
-    videoGuideSeedChainRef.current = p.then(
-      () => undefined,
-      () => undefined
-    );
-    return p;
-  }, [getSceneFullPrompt]);
+    return `${prefix}${trimmed}`;
+  }, [effectiveProductName, productNiche]);
 
   const copyAllPrompts = useCallback(() => {
     const all = scenes.map((s, i) => `Scene ${i + 1} (${s.timing}):\n${getSceneFullPrompt(s)}`).join("\n\n");
@@ -726,7 +703,11 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       if (kit) {
         setSocialKit(kit);
         setSocialKitProofFile(null);
-        sessionStorage.setItem(SOCIAL_KIT_STORAGE_KEY, JSON.stringify(kit));
+        try {
+          sessionStorage.setItem(SOCIAL_KIT_STORAGE_KEY, JSON.stringify(kit));
+        } catch (e) {
+          console.warn("[video-guide] Failed to persist social kit to sessionStorage:", e);
+        }
         toast({ title: "Social Media Kit ready", description: "Your kit has been generated." });
       }
     } catch (e) {
@@ -760,7 +741,11 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       const kit = (data as { kit?: SocialMediaKit }).kit;
       if (kit) {
         setSocialKit(kit);
-        sessionStorage.setItem(SOCIAL_KIT_STORAGE_KEY, JSON.stringify(kit));
+        try {
+          sessionStorage.setItem(SOCIAL_KIT_STORAGE_KEY, JSON.stringify(kit));
+        } catch (e) {
+          console.warn("[video-guide] Failed to persist social kit to sessionStorage:", e);
+        }
         toast({ title: "Social Media Kit ready", description: "Your kit has been generated." });
       }
     } catch (e) {
@@ -1038,18 +1023,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         });
         return null;
       }
-      let characterSeed = "";
-      try {
-        characterSeed = await ensureVideoGuideCharacterSeed();
-      } catch (e) {
-        toast({
-          title: "Character description unavailable",
-          description:
-            e instanceof Error ? e.message : "Continuing without a locked character; try again or check the Scene 1 visual prompt.",
-          variant: "destructive",
-        });
-      }
-      const finalPrompt = wrapVideoGuideImagePromptForDalle(prompt.slice(0, 12000), characterSeed);
+      const finalPrompt = wrapVideoGuideImagePromptForDalle(prompt.slice(0, 12000));
       const res = await fetch("/api/generate-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1070,8 +1044,24 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       }
       return url;
     },
-    [scenes, getSceneFullPrompt, toast, ensureVideoGuideCharacterSeed, wrapVideoGuideImagePromptForDalle]
+    [scenes, getSceneFullPrompt, toast, wrapVideoGuideImagePromptForDalle]
   );
+
+  const allAnimatedVideosReady = scenes.length > 0 && scenes.every((_, i) => !!guideSceneVideoUrls[i]?.trim());
+  const allVoiceoversReady = scenes.length > 0 && scenes.every(
+    (_, i) => !!(guideCoachVoiceoverUrls[i]?.trim() || perSceneUrls[i]?.trim())
+  );
+  /** Server compile only accepts http(s) voiceover URLs (library uploads), not blob: previews. */
+  const canCompileServerSideVoice = useMemo(() => {
+    if (scenes.length === 0) return false;
+    const isHttp = (s: string | null | undefined) => {
+      const t = (s ?? "").trim();
+      return t.startsWith("http://") || t.startsWith("https://");
+    };
+    const perSceneAllHttp = scenes.every((_, i) => isHttp(guideCoachVoiceoverUrls[i]) || isHttp(perSceneUrls[i]));
+    return perSceneAllHttp || isHttp(fullVoiceoverUrl);
+  }, [scenes.length, guideCoachVoiceoverUrls, perSceneUrls, fullVoiceoverUrl]);
+  const isAnySceneAnimating = Object.values(animatingByScene).some(Boolean);
 
   const generateGuideSceneImage = useCallback(
     async (i: number): Promise<string | null> => {
@@ -1096,6 +1086,55 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     [fetchGuideSceneImageUrl, toast]
   );
 
+  const runBulkGuideMediaGeneration = useCallback(async (): Promise<{
+    mergedUrls: Record<number, string>;
+    mergedVideoUrls: Record<number, string>;
+  }> => {
+    const mergedUrls: Record<number, string> = { ...guideSceneImageUrls };
+    const mergedVideoUrls: Record<number, string> = { ...guideSceneVideoUrls };
+    for (let i = 0; i < scenes.length; i++) {
+      setGuideSceneImageLoadingIndex(i);
+      const scene = scenes[i];
+      try {
+        const url = await fetchGuideSceneImageUrl(i);
+        if (url) mergedUrls[i] = url;
+        const img = mergedUrls[i]?.trim();
+        if (img && scene) {
+          toast({
+            title: `Animating scene ${i + 1} of ${scenes.length}`,
+            description: "Motion generation often takes a few minutes per scene. You can leave this tab open.",
+          });
+          try {
+            const vurl = await animateAiStorySceneFromImage(img, getSceneFullPrompt(scene));
+            mergedVideoUrls[i] = vurl;
+          } catch (animErr) {
+            toast({
+              title: `Scene ${i + 1} animation skipped`,
+              description: animErr instanceof Error ? animErr.message : "Export will use the still image.",
+              variant: "destructive",
+            });
+          }
+        }
+      } catch (e) {
+        toast({
+          title: `Scene ${i + 1} failed`,
+          description: e instanceof Error ? e.message : "Skipped",
+          variant: "destructive",
+        });
+      }
+    }
+    setGuideSceneImageUrls((prev) => ({ ...prev, ...mergedUrls }));
+    setGuideSceneVideoUrls((prev) => ({ ...prev, ...mergedVideoUrls }));
+    return { mergedUrls, mergedVideoUrls };
+  }, [
+    scenes,
+    guideSceneImageUrls,
+    guideSceneVideoUrls,
+    fetchGuideSceneImageUrl,
+    getSceneFullPrompt,
+    toast,
+  ]);
+
   const buildGuideTimelineSlot = useCallback(
     (i: number, imageUrlOverride?: string): TimelineScenePrefill => {
       const scene = scenes[i];
@@ -1117,6 +1156,62 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     },
     [scenes, guideSceneImageUrls, guideSceneVideoUrls, guideCoachVoiceoverUrls, buildGuideSceneCaptionText, perSceneUrls]
   );
+
+  const handleAutoExportFromAnimatedScenes = useCallback(() => {
+    if (!scenes.length) return;
+    if (!allAnimatedVideosReady) {
+      toast({ title: "Animations not ready", description: "Finish animating all scenes first.", variant: "destructive" });
+      return;
+    }
+    if (!allVoiceoversReady) {
+      toast({
+        title: "Missing voiceovers",
+        description: "Generate scene voiceovers so the exported video includes them.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const title = (effectiveScriptTitle?.trim() || scriptTitle?.trim() || "Video Guide").slice(0, 200);
+    const timelineScenes: TimelineScenePrefill[] = scenes.map((_, i) => buildGuideTimelineSlot(i));
+    setVideoPrefill({
+      source: "template-studio",
+      title,
+      ...(libraryScriptId?.trim() ? { scriptId: libraryScriptId.trim() } : {}),
+      timelineScenes,
+    });
+    const qs = new URLSearchParams({ autoExport: "1", videoGuidePrefill: "1" });
+    if (libraryScriptId?.trim()) qs.set("libraryScriptId", libraryScriptId.trim());
+    try {
+      router.push(`/dashboard/video-timeline?${qs.toString()}`);
+    } catch (e) {
+      toast({
+        title: "Could not open timeline",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [
+    scenes.length,
+    allAnimatedVideosReady,
+    allVoiceoversReady,
+    toast,
+    effectiveScriptTitle,
+    scriptTitle,
+    libraryScriptId,
+    buildGuideTimelineSlot,
+    router,
+  ]);
+
+  useEffect(() => {
+    if (!autoExportWhenAnimationsReady) return;
+    if (autoExportStartedRef.current) return;
+    if (!scenes.length) return;
+    if (!allAnimatedVideosReady) return;
+    if (!allVoiceoversReady) return;
+    autoExportStartedRef.current = true;
+    setAutoExportWhenAnimationsReady(false);
+    handleAutoExportFromAnimatedScenes();
+  }, [autoExportWhenAnimationsReady, scenes.length, allAnimatedVideosReady, allVoiceoversReady, handleAutoExportFromAnimatedScenes]);
 
   const handleAddGuideSceneToTimeline = useCallback(
     (i: number) => {
@@ -1144,54 +1239,159 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       return;
     }
     setGuideBulkImagesLoading(true);
-    const mergedUrls: Record<number, string> = { ...guideSceneImageUrls };
     try {
-      for (let i = 0; i < scenes.length; i++) {
-        setGuideSceneImageLoadingIndex(i);
-        try {
-          const url = await fetchGuideSceneImageUrl(i);
-          if (url) mergedUrls[i] = url;
-        } catch (e) {
-          toast({
-            title: `Scene ${i + 1} failed`,
-            description: e instanceof Error ? e.message : "Skipped",
-            variant: "destructive",
-          });
-        }
-      }
-      setGuideSceneImageUrls((prev) => ({ ...prev, ...mergedUrls }));
+      const { mergedUrls, mergedVideoUrls } = await runBulkGuideMediaGeneration();
       const title = (effectiveScriptTitle?.trim() || scriptTitle?.trim() || "Video Guide").slice(0, 200);
       const timelineScenes: TimelineScenePrefill[] = scenes.map((scene, i) => ({
         scene_number: i + 1,
         duration_seconds: VIDEO_GUIDE_TIMELINE_SCENE_SEC,
         visual: `Scene ${i + 1} · ${scene.timing}`.slice(0, 80),
         imageUrl: mergedUrls[i]?.trim() || undefined,
-        videoUrl: guideSceneVideoUrls[i]?.trim() || undefined,
+        videoUrl: mergedVideoUrls[i]?.trim() || undefined,
         audioUrl: guideCoachVoiceoverUrls[i]?.trim() || perSceneUrls[i]?.trim() || undefined,
         captionText: buildGuideSceneCaptionText(i).trim() || undefined,
       }));
+      const sid = libraryScriptId?.trim();
       setVideoPrefill({
         source: "template-studio",
         title,
+        ...(sid ? { scriptId: sid } : {}),
         timelineScenes,
       });
-      router.push(getTimelineUrl());
-      toast({ title: "Opening Video Timeline", description: "Scenes are pre-loaded. Reorder, trim, and export your MP4." });
+      router.push(getTimelineUrl(sid, { videoGuidePrefill: true }));
+      toast({
+        title: "Opening Video Timeline",
+        description:
+          "Scenes are pre-loaded with motion clips where animation succeeded; otherwise stills. Reorder, trim, and export.",
+      });
     } finally {
       setGuideSceneImageLoadingIndex(null);
       setGuideBulkImagesLoading(false);
     }
   }, [
     scenes,
-    guideSceneImageUrls,
-    guideSceneVideoUrls,
+    runBulkGuideMediaGeneration,
     guideCoachVoiceoverUrls,
-    fetchGuideSceneImageUrl,
     buildGuideSceneCaptionText,
     perSceneUrls,
     effectiveScriptTitle,
     scriptTitle,
+    libraryScriptId,
     router,
+    toast,
+  ]);
+
+  const handleMakeFullVideoMp4 = useCallback(async () => {
+    if (scenes.length === 0) {
+      toast({ title: "No scenes", description: "Add a scene breakdown first.", variant: "destructive" });
+      return;
+    }
+    if (!canCompileServerSideVoice) {
+      if (typeof window !== "undefined") {
+        window.alert(
+          "Make full MP4 needs voiceover first.\n\nGenerate Scene Voiceovers (or a full-script voiceover) so the audio is uploaded and has a public https URL, then click Make full MP4 again."
+        );
+      }
+      toast({
+        title: "Public voiceover URLs required",
+        description:
+          "Save this guide to My Library and generate voiceovers so audio uploads to storage, or use a full-script voiceover with a library script. Blob previews only work in the browser timeline.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setGuideFullVideoLoading(true);
+    try {
+      const { mergedUrls, mergedVideoUrls } = await runBulkGuideMediaGeneration();
+      const httpMediaOk = scenes.every((_, i) => {
+        const vid = mergedVideoUrls[i]?.trim();
+        const img = mergedUrls[i]?.trim();
+        const u = vid || img || "";
+        return u.startsWith("http://") || u.startsWith("https://");
+      });
+      if (!httpMediaOk) {
+        toast({
+          title: "Missing scene media",
+          description: "Every scene needs a generated image or video with a public URL.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const isHttp = (s: string | null | undefined) => {
+        const t = (s ?? "").trim();
+        return t.startsWith("http://") || t.startsWith("https://");
+      };
+      const perSceneAllHttp = scenes.every((_, i) => isHttp(guideCoachVoiceoverUrls[i]) || isHttp(perSceneUrls[i]));
+      const globalVoRaw = fullVoiceoverUrl?.trim() ?? "";
+      const globalVo =
+        globalVoRaw.startsWith("http://") || globalVoRaw.startsWith("https://") ? globalVoRaw : undefined;
+
+      const guideScenes = scenes.map((_, i) => {
+        const video_url = mergedVideoUrls[i]?.trim() || null;
+        const image_url = video_url ? null : mergedUrls[i]?.trim() ?? null;
+        const vo = guideCoachVoiceoverUrls[i]?.trim() || perSceneUrls[i]?.trim() || "";
+        const caption = buildGuideSceneCaptionText(i).trim();
+        const row: {
+          duration: number;
+          image_url: string | null;
+          video_url: string | null;
+          script_text?: string;
+          caption?: string;
+          voiceover_url?: string;
+        } = {
+          duration: VIDEO_GUIDE_TIMELINE_SCENE_SEC,
+          image_url,
+          video_url,
+        };
+        if (caption) {
+          row.script_text = caption;
+          row.caption = caption;
+        }
+        if (perSceneAllHttp && vo) row.voiceover_url = vo;
+        return row;
+      });
+
+      const res = await fetch("/api/videos/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guideScenes,
+          backgroundMusic: "none",
+          ...(globalVo && !perSceneAllHttp ? { voiceoverUrl: globalVo } : {}),
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error || "Compile failed");
+      const url = data.url?.trim();
+      if (!url) throw new Error("No video URL returned");
+      toast({
+        title: "Full video ready",
+        description: "Opening your MP4. You can download it from the new tab.",
+        action: (
+          <ToastAction altText="Open download" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
+            Open
+          </ToastAction>
+        ),
+      });
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      toast({
+        title: "Could not make full video",
+        description: e instanceof Error ? e.message : "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setGuideSceneImageLoadingIndex(null);
+      setGuideFullVideoLoading(false);
+    }
+  }, [
+    scenes,
+    canCompileServerSideVoice,
+    runBulkGuideMediaGeneration,
+    guideCoachVoiceoverUrls,
+    perSceneUrls,
+    fullVoiceoverUrl,
+    buildGuideSceneCaptionText,
     toast,
   ]);
 
@@ -2747,6 +2947,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   onVideoUrl={(url) =>
                                     setGuideSceneVideoUrls((prev) => ({ ...prev, [i]: url }))
                                   }
+                                  onAnimationStateChange={(isAnimating) => {
+                                    setAnimatingByScene((prev) => ({ ...prev, [i]: isAnimating }));
+                                  }}
                                   videoClassName={videoPreviewClass}
                                 />
                                 <Button
@@ -2814,18 +3017,62 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   <div>
                     <p className="font-medium text-foreground">Video Timeline</p>
                     <p className="text-sm text-gray-600 dark:text-muted-foreground mt-1">
-                      Generate stills for every scene in order, load them into the timeline with voiceover lines and overlays, then open the editor.
+                      For each scene: generate the still, run automatic motion (same engine as Animate Scene), then open the timeline with clips, voiceovers, and overlays. Motion can take several minutes per scene.
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-muted-foreground mt-2">
+                      <strong className="font-medium text-foreground">Make full MP4</strong> stitches everything on the server into one downloadable file. You need voiceovers uploaded as public URLs (save the guide to My Library and generate audio there, or use per-scene voice with a library script).
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    className="bg-orange-500 hover:bg-orange-600 text-white shrink-0 gap-2"
-                    disabled={guideBulkImagesLoading || scenes.length === 0}
-                    onClick={() => void handleGenerateAllGuideImagesAndOpenTimeline()}
-                  >
-                    {guideBulkImagesLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Film className="w-4 h-4" />}
-                    Generate All Images + Make Video
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2 justify-end">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="shrink-0 gap-2 border-orange-200 dark:border-orange-900/50"
+                      disabled={guideBulkImagesLoading || guideFullVideoLoading || scenes.length === 0}
+                      onClick={() => void handleMakeFullVideoMp4()}
+                    >
+                      {guideFullVideoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      Make full MP4
+                    </Button>
+                    <Button
+                      type="button"
+                      className="bg-orange-500 hover:bg-orange-600 text-white shrink-0 gap-2"
+                      disabled={guideBulkImagesLoading || guideFullVideoLoading || scenes.length === 0}
+                      onClick={() => void handleGenerateAllGuideImagesAndOpenTimeline()}
+                    >
+                      {guideBulkImagesLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Film className="w-4 h-4" />}
+                      Animate scenes & open Video Timeline
+                    </Button>
+                    {isAnySceneAnimating || autoExportWhenAnimationsReady ? (
+                      <Button
+                        type="button"
+                        className="bg-green-600 hover:bg-green-700 text-white shrink-0 gap-2"
+                        disabled={!allVoiceoversReady || !scenes.length}
+                        onClick={() => {
+                          if (!allVoiceoversReady) {
+                            toast({
+                              title: "Generate voiceovers first",
+                              description: "Export needs voiceovers so the final video includes them.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          setAutoExportWhenAnimationsReady(true);
+                          if (allAnimatedVideosReady && allVoiceoversReady && !autoExportStartedRef.current) {
+                            autoExportStartedRef.current = true;
+                            setAutoExportWhenAnimationsReady(false);
+                            handleAutoExportFromAnimatedScenes();
+                          }
+                        }}
+                      >
+                        {autoExportWhenAnimationsReady || !allAnimatedVideosReady ? (
+                          "Export when animations finish"
+                        ) : (
+                          "Export now"
+                        )}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
               </CardContent>
             </Card>

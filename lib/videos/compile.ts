@@ -25,6 +25,23 @@ const FPS = 25;
 const WIDTH = 1920;
 const HEIGHT = 1080;
 
+function resolveDrawtextFontFile(): string | null {
+  const env = process.env.FFMPEG_DRAWTEXT_FONTFILE?.trim();
+  if (env && existsSync(env)) return env;
+  // Common paths across macOS + Linux server images (Vercel often has DejaVu).
+  const candidates = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/System/Library/Fonts/Supplemental/Helvetica.ttf",
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
+
 export type CompileScene = {
   duration: number;
   /** Image URL (for Ken Burns) or null if video_url is set */
@@ -153,9 +170,11 @@ async function renderImageSegment(
   let filterComplex = zoom;
   let mapLabel = "vz";
   if (dialogueLine?.trim()) {
+    const fontFile = resolveDrawtextFontFile();
     const cap = buildViralCaptionDrawtextChain("vz", "vout", {
       videoWidth: WIDTH,
       dialogueLine: dialogueLine.trim(),
+      fontFile: fontFile ?? undefined,
       fontSize: VIRAL_CAPTION_FONT_SIZES.medium,
       midLabel: "capimg",
     });
@@ -187,7 +206,13 @@ async function renderVideoSegment(
   const scale = `scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=decrease,pad=${WIDTH}:${HEIGHT}:(ow-iw)/2:(oh-ih)/2`;
   let vf = scale;
   if (dialogueLine?.trim()) {
-    const cap = buildViralCaptionDrawtextFlatVf(dialogueLine.trim(), WIDTH, VIRAL_CAPTION_FONT_SIZES.medium);
+    const fontFile = resolveDrawtextFontFile();
+    const cap = buildViralCaptionDrawtextFlatVf(
+      dialogueLine.trim(),
+      WIDTH,
+      VIRAL_CAPTION_FONT_SIZES.medium,
+      fontFile ?? undefined
+    );
     vf = `${scale},${cap}`;
   }
   const args = [

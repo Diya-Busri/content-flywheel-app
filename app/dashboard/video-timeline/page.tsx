@@ -3,7 +3,16 @@
 import "./timeline-scroll.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { getVideoPrefill, clearVideoPrefill } from "@/lib/video-prefill";
+import { getVideoPrefill, clearVideoPrefill, type VideoPrefill } from "@/lib/video-prefill";
+
+/**
+ * React 18 Strict Mode double-mounts in dev: the prefill effect clears sessionStorage on the first
+ * mount, then the remounted instance reads empty storage and never selects a template. Keep a
+ * one-shot backup until the second mount consumes it.
+ */
+let videoTimelinePrefillStrictModeBackup: VideoPrefill | null = null;
+/** Set when template-studio prefill applies; blocks library/saved_script load from replacing those scenes until scriptId changes. */
+let skipLibraryTimelineHydrationForScriptId: string | null = null;
 import {
   buildViralCaptionDrawtextChain,
   VIRAL_CAPTION_BOTTOM_PAD,
@@ -35,8 +44,13 @@ const SNAP_GRID_SEC = 0.5;
 const PLAYHEAD_COLOR = "#ef4444";
 const RESIZE_HANDLE_WIDTH = 8;
 
-/** Browser FFmpeg wasm (must match @ffmpeg/ffmpeg expectations; loaded via toBlobURL, not the app chunk). */
-const FFMPEG_CORE_CDN_BASE = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+/**
+ * `public/ffmpeg-core/*` = wasm core from postinstall.
+ * `public/ffmpeg-wasm/*` = unbundled `worker.js` + deps — required so Next/webpack does not rewrite
+ * the worker’s dynamic `import()` (both http and blob core URLs then fail with “Cannot find module”).
+ */
+const FFMPEG_CORE_PUBLIC_PATH = "/ffmpeg-core";
+const FFMPEG_WORKER_PUBLIC_PATH = "/ffmpeg-wasm/worker.js";
 
 type WordTiming = { word: string; start: number; end: number };
 type CaptionBlock = { id: string; text: string; startTime: number; endTime: number; wordTimings?: WordTiming[] };
@@ -1246,19 +1260,29 @@ export default function VideoTimelinePage() {
     setIsBrowser(typeof window !== "undefined");
   }, []);
 
-  /** Load @ffmpeg/ffmpeg + @ffmpeg/util and wasm core from CDN (avoids broken local chunks). */
+  /** Load ffmpeg with a static worker (see postinstall copy to /public/ffmpeg-wasm/). */
   const initBrowserFFmpeg = useCallback(async () => {
     setFfmpegLoadError(null);
     try {
       const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-      const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
+      const { fetchFile } = await import("@ffmpeg/util");
       const ffmpeg = new FFmpeg();
       ffmpeg.on("log", ({ message }) => {
         console.log("[ffmpeg]", message);
       });
-      const coreURL = await toBlobURL(`${FFMPEG_CORE_CDN_BASE}/ffmpeg-core.js`, "text/javascript");
-      const wasmURL = await toBlobURL(`${FFMPEG_CORE_CDN_BASE}/ffmpeg-core.wasm`, "application/wasm");
-      await ffmpeg.load({ coreURL, wasmURL });
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const classWorkerURL = `${origin}${FFMPEG_WORKER_PUBLIC_PATH}`;
+      const coreURL = `${origin}${FFMPEG_CORE_PUBLIC_PATH}/ffmpeg-core.js`;
+      const wasmURL = `${origin}${FFMPEG_CORE_PUBLIC_PATH}/ffmpeg-core.wasm`;
+
+      const head = await fetch(coreURL, { method: "HEAD" }).catch(() => null);
+      if (!head?.ok) {
+        throw new Error(
+          "Missing ffmpeg assets under /ffmpeg-core. Run: npm install (postinstall copies files)."
+        );
+      }
+
+      await ffmpeg.load({ classWorkerURL, coreURL, wasmURL });
       ffmpegRef.current = ffmpeg;
       fetchFileRef.current = fetchFile;
       setFfmpegLoaded(true);
@@ -1399,6 +1423,7 @@ export default function VideoTimelinePage() {
   // When projectId is in URL, skip so we don't overwrite project's scenes with script's (loadProject handles state).
   useEffect(() => {
     if (!scriptId) {
+      skipLibraryTimelineHydrationForScriptId = null;
       setScriptName("");
       setVoiceoverUrl(null);
       setVoiceoverFileName(null);
@@ -1409,6 +1434,9 @@ export default function VideoTimelinePage() {
       return;
     }
     if (searchParams.get("projectId")) return;
+    /** Read lock inside fetch `.then` (not here): prefill effect runs after this effect starts and sets the lock before the response returns. */
+    const shouldSkipReplacingScenesFromScriptLoad = () =>
+      skipLibraryTimelineHydrationForScriptId != null && skipLibraryTimelineHydrationForScriptId === scriptId;
     let cancelled = false;
 
     const loadSavedScript = () =>
@@ -1472,75 +1500,77 @@ export default function VideoTimelinePage() {
             runStart += dur;
             return scene;
           });
-          setVoiceoverDuration(totalDur);
-          setScenes(sceneList);
-          let start = 0;
-          const caps: CaptionBlock[] = scenesJson.map((s, i) => {
-            const dur = typeof s.duration === "number" && s.duration > 0 ? s.duration : 5;
-            /** Prefer script_text (full dialogue); legacy caption rows were sometimes truncated. */
-            const text =
-              (typeof s.script_text === "string" && s.script_text.trim() && s.script_text) ||
-              (typeof s.caption === "string" ? s.caption : "") ||
-              "";
-            const block: CaptionBlock = { id: `cap-${i}`, text: text.trim(), startTime: start, endTime: start + dur };
-            start += dur;
-            return block;
-          });
-          setCaptions(caps);
-          setSelectedSceneIndex(null);
-          const sceneCountFromScript = sceneList.length;
-          if (scriptId && typeof window !== "undefined" && sceneCountFromScript > 0) {
-            try {
-              const raw = localStorage.getItem(`cf-video-timeline-draft-${scriptId}`);
-              if (raw) {
-                const draft = JSON.parse(raw) as { scriptId?: string; scenes?: unknown[]; captions?: unknown[]; voiceoverUrl?: string | null; musicUrl?: string | null; musicVolume?: number; captionPosition?: string; captionFontSize?: string; captionTextColor?: string; captionAnimation?: string; captionBackground?: string; captionDisplayMode?: string; sceneTransition?: string; aspectRatio?: string; voiceoverDuration?: number; scriptName?: string };
-                const draftSceneCount = Array.isArray(draft.scenes) ? draft.scenes.length : 0;
-                if (draft?.scriptId === scriptId && draftSceneCount >= sceneCountFromScript) {
-                  const draftScenes = draft.scenes as Scene[];
-                  const totalDuration = typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0 ? draft.voiceoverDuration : 0;
-                  const draftSceneTotal = draftScenes.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 0), 0);
-                  const needNormalize = totalDuration > 0 && draftScenes.length >= 2 && draftSceneTotal < totalDuration * 0.9;
-                  const scenesToSet = needNormalize
-                    ? draftScenes.map((s, i) => ({
-                        ...s,
-                        startTime: i * (totalDuration / draftScenes.length),
-                        duration: totalDuration / draftScenes.length,
-                      }))
-                    : draftScenes;
-                  setScenes(scenesToSet);
-                  if (Array.isArray(draft.captions)) {
-                    setCaptions(
-                      draft.captions.map((c: { id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }, i: number) => ({
-                        id: typeof c.id === "string" ? c.id : `cap-${i}`,
-                        text: typeof c.text === "string" ? c.text : "",
-                        startTime: typeof c.startTime === "number" ? c.startTime : 0,
-                        endTime: typeof c.endTime === "number" ? c.endTime : 0,
-                        wordTimings: Array.isArray(c.wordTimings)
-                          ? c.wordTimings.filter(
-                              (w): w is WordTiming =>
-                                typeof w?.word === "string" && typeof w?.start === "number" && typeof w?.end === "number"
-                            )
-                          : undefined,
-                      }))
-                    );
+          if (!shouldSkipReplacingScenesFromScriptLoad()) {
+            setVoiceoverDuration(totalDur);
+            setScenes(sceneList);
+            let start = 0;
+            const caps: CaptionBlock[] = scenesJson.map((s, i) => {
+              const dur = typeof s.duration === "number" && s.duration > 0 ? s.duration : 5;
+              /** Prefer script_text (full dialogue); legacy caption rows were sometimes truncated. */
+              const text =
+                (typeof s.script_text === "string" && s.script_text.trim() && s.script_text) ||
+                (typeof s.caption === "string" ? s.caption : "") ||
+                "";
+              const block: CaptionBlock = { id: `cap-${i}`, text: text.trim(), startTime: start, endTime: start + dur };
+              start += dur;
+              return block;
+            });
+            setCaptions(caps);
+            setSelectedSceneIndex(null);
+            const sceneCountFromScript = sceneList.length;
+            if (scriptId && typeof window !== "undefined" && sceneCountFromScript > 0) {
+              try {
+                const raw = localStorage.getItem(`cf-video-timeline-draft-${scriptId}`);
+                if (raw) {
+                  const draft = JSON.parse(raw) as { scriptId?: string; scenes?: unknown[]; captions?: unknown[]; voiceoverUrl?: string | null; musicUrl?: string | null; musicVolume?: number; captionPosition?: string; captionFontSize?: string; captionTextColor?: string; captionAnimation?: string; captionBackground?: string; captionDisplayMode?: string; sceneTransition?: string; aspectRatio?: string; voiceoverDuration?: number; scriptName?: string };
+                  const draftSceneCount = Array.isArray(draft.scenes) ? draft.scenes.length : 0;
+                  if (draft?.scriptId === scriptId && draftSceneCount >= sceneCountFromScript) {
+                    const draftScenes = draft.scenes as Scene[];
+                    const totalDuration = typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0 ? draft.voiceoverDuration : 0;
+                    const draftSceneTotal = draftScenes.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 0), 0);
+                    const needNormalize = totalDuration > 0 && draftScenes.length >= 2 && draftSceneTotal < totalDuration * 0.9;
+                    const scenesToSet = needNormalize
+                      ? draftScenes.map((s, i) => ({
+                          ...s,
+                          startTime: i * (totalDuration / draftScenes.length),
+                          duration: totalDuration / draftScenes.length,
+                        }))
+                      : draftScenes;
+                    setScenes(scenesToSet);
+                    if (Array.isArray(draft.captions)) {
+                      setCaptions(
+                        draft.captions.map((c: { id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }, i: number) => ({
+                          id: typeof c.id === "string" ? c.id : `cap-${i}`,
+                          text: typeof c.text === "string" ? c.text : "",
+                          startTime: typeof c.startTime === "number" ? c.startTime : 0,
+                          endTime: typeof c.endTime === "number" ? c.endTime : 0,
+                          wordTimings: Array.isArray(c.wordTimings)
+                            ? c.wordTimings.filter(
+                                (w): w is WordTiming =>
+                                  typeof w?.word === "string" && typeof w?.start === "number" && typeof w?.end === "number"
+                              )
+                            : undefined,
+                        }))
+                      );
+                    }
+                    if (typeof draft.voiceoverUrl === "string" && draft.voiceoverUrl.startsWith("http")) setVoiceoverUrl(draft.voiceoverUrl);
+                    if (typeof draft.musicUrl === "string" && draft.musicUrl.startsWith("http")) setMusicUrl(draft.musicUrl);
+                    if (typeof draft.musicVolume === "number") setMusicVolume(draft.musicVolume);
+                    if (draft.captionPosition === "top" || draft.captionPosition === "middle" || draft.captionPosition === "bottom") setCaptionPosition(draft.captionPosition);
+                    if (draft.captionFontSize === "small" || draft.captionFontSize === "medium" || draft.captionFontSize === "large") setCaptionFontSize(draft.captionFontSize);
+                    if (typeof draft.captionTextColor === "string") setCaptionTextColor(draft.captionTextColor);
+                    if (draft.captionAnimation === "none" || draft.captionAnimation === "fadeIn" || draft.captionAnimation === "slideUp" || draft.captionAnimation === "pop") setCaptionAnimation(draft.captionAnimation);
+                    if (draft.captionBackground === "none" || draft.captionBackground === "pill" || draft.captionBackground === "bar") setCaptionBackground(draft.captionBackground);
+                    if (draft.captionDisplayMode === "full" || draft.captionDisplayMode === "wordByWord" || draft.captionDisplayMode === "singleWord") setCaptionDisplayMode(draft.captionDisplayMode);
+                    if (draft.sceneTransition === "fade" || draft.sceneTransition === "slideLeft" || draft.sceneTransition === "slideRight" || draft.sceneTransition === "wipe" || draft.sceneTransition === "zoom") setSceneTransitionType(draft.sceneTransition);
+                    if (typeof draft.aspectRatio === "string") setAspectRatio(draft.aspectRatio);
+                    if (typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0) setVoiceoverDuration(draft.voiceoverDuration);
+                    if (typeof draft.scriptName === "string" && draft.scriptName.trim()) setScriptName(draft.scriptName.trim());
                   }
-                  if (typeof draft.voiceoverUrl === "string" && draft.voiceoverUrl.startsWith("http")) setVoiceoverUrl(draft.voiceoverUrl);
-                  if (typeof draft.musicUrl === "string" && draft.musicUrl.startsWith("http")) setMusicUrl(draft.musicUrl);
-                  if (typeof draft.musicVolume === "number") setMusicVolume(draft.musicVolume);
-                  if (draft.captionPosition === "top" || draft.captionPosition === "middle" || draft.captionPosition === "bottom") setCaptionPosition(draft.captionPosition);
-                  if (draft.captionFontSize === "small" || draft.captionFontSize === "medium" || draft.captionFontSize === "large") setCaptionFontSize(draft.captionFontSize);
-                  if (typeof draft.captionTextColor === "string") setCaptionTextColor(draft.captionTextColor);
-                  if (draft.captionAnimation === "none" || draft.captionAnimation === "fadeIn" || draft.captionAnimation === "slideUp" || draft.captionAnimation === "pop") setCaptionAnimation(draft.captionAnimation);
-                  if (draft.captionBackground === "none" || draft.captionBackground === "pill" || draft.captionBackground === "bar") setCaptionBackground(draft.captionBackground);
-                  if (draft.captionDisplayMode === "full" || draft.captionDisplayMode === "wordByWord" || draft.captionDisplayMode === "singleWord") setCaptionDisplayMode(draft.captionDisplayMode);
-                  if (draft.sceneTransition === "fade" || draft.sceneTransition === "slideLeft" || draft.sceneTransition === "slideRight" || draft.sceneTransition === "wipe" || draft.sceneTransition === "zoom") setSceneTransitionType(draft.sceneTransition);
-                  if (typeof draft.aspectRatio === "string") setAspectRatio(draft.aspectRatio);
-                  if (typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0) setVoiceoverDuration(draft.voiceoverDuration);
-                  if (typeof draft.scriptName === "string" && draft.scriptName.trim()) setScriptName(draft.scriptName.trim());
                 }
+              } catch {
+                // ignore
               }
-            } catch {
-              // ignore
             }
           }
         });
@@ -1580,82 +1610,84 @@ export default function VideoTimelinePage() {
           setVoiceoverUrl(url);
           setVoiceoverFileName(null);
           const dur = typeof content.timelineVoiceoverDuration === "number" ? content.timelineVoiceoverDuration : 0;
-          setVoiceoverDuration(dur);
           const caps = getCaptions(content);
-          setCaptions(caps);
           const fullTexts = getSceneFullTexts(content);
-          const perSceneDuration = fullTexts.length > 0 && dur > 0 ? dur / fullTexts.length : 5;
-          if (fullTexts.length > 0) {
-            setScenes(
-              fullTexts.map((title, i) =>
-                createScene(`scene_${i + 1}`, title, perSceneDuration, SCENE_COLORS[i % SCENE_COLORS.length])
-              )
-            );
-          } else if (caps.length > 0) {
-            const captionDuration = Math.max(dur, ...caps.map((c) => c.endTime).filter(Number.isFinite));
-            const singleSceneDuration = captionDuration > 0 ? captionDuration : 5;
-            setScenes([
-              createScene("scene_1", caps[0]?.text?.slice(0, 50) || "Scene 1", singleSceneDuration, SCENE_COLORS[0]),
-            ]);
-            if (dur <= 0 && captionDuration > 0) setVoiceoverDuration(captionDuration);
-          } else {
-            setScenes([]);
-          }
-          setSelectedSceneIndex(null);
-          // Restore draft only if it has at least as many scenes as the script (so 5-scene script isn't overwritten by a 3-scene draft)
-          const sceneCountFromScript = fullTexts.length || (caps.length > 0 ? 1 : 0);
-          if (scriptId && typeof window !== "undefined" && sceneCountFromScript > 0) {
-            try {
-              const raw = localStorage.getItem(`cf-video-timeline-draft-${scriptId}`);
-              if (raw) {
-                const draft = JSON.parse(raw) as { scriptId?: string; scenes?: unknown[]; captions?: unknown[]; voiceoverUrl?: string | null; musicUrl?: string | null; musicVolume?: number; captionPosition?: string; captionFontSize?: string; captionTextColor?: string; captionAnimation?: string; captionBackground?: string; captionDisplayMode?: string; sceneTransition?: string; aspectRatio?: string; voiceoverDuration?: number; scriptName?: string };
-                const draftSceneCount = Array.isArray(draft.scenes) ? draft.scenes.length : 0;
-                if (draft?.scriptId === scriptId && draftSceneCount >= sceneCountFromScript) {
-                  const draftScenes = draft.scenes as Scene[];
-                  const totalDuration = typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0 ? draft.voiceoverDuration : 0;
-                  const draftSceneTotal = draftScenes.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 0), 0);
-                  const needNormalize = totalDuration > 0 && draftScenes.length >= 2 && draftSceneTotal < totalDuration * 0.9;
-                  const scenesToSet = needNormalize
-                    ? draftScenes.map((s, i) => ({
-                        ...s,
-                        startTime: i * (totalDuration / draftScenes.length),
-                        duration: totalDuration / draftScenes.length,
-                      }))
-                    : draftScenes;
-                  setScenes(scenesToSet);
-                  if (Array.isArray(draft.captions)) {
-                    setCaptions(
-                      draft.captions.map((c: { id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }, i: number) => ({
-                        id: typeof c.id === "string" ? c.id : `cap-${i}`,
-                        text: typeof c.text === "string" ? c.text : "",
-                        startTime: typeof c.startTime === "number" ? c.startTime : 0,
-                        endTime: typeof c.endTime === "number" ? c.endTime : 0,
-                        wordTimings: Array.isArray(c.wordTimings)
-                          ? c.wordTimings.filter(
-                              (w): w is WordTiming =>
-                                typeof w?.word === "string" && typeof w?.start === "number" && typeof w?.end === "number"
-                            )
-                          : undefined,
-                      }))
-                    );
+          if (!shouldSkipReplacingScenesFromScriptLoad()) {
+            setVoiceoverDuration(dur);
+            setCaptions(caps);
+            const perSceneDuration = fullTexts.length > 0 && dur > 0 ? dur / fullTexts.length : 5;
+            if (fullTexts.length > 0) {
+              setScenes(
+                fullTexts.map((title, i) =>
+                  createScene(`scene_${i + 1}`, title, perSceneDuration, SCENE_COLORS[i % SCENE_COLORS.length])
+                )
+              );
+            } else if (caps.length > 0) {
+              const captionDuration = Math.max(dur, ...caps.map((c) => c.endTime).filter(Number.isFinite));
+              const singleSceneDuration = captionDuration > 0 ? captionDuration : 5;
+              setScenes([
+                createScene("scene_1", caps[0]?.text?.slice(0, 50) || "Scene 1", singleSceneDuration, SCENE_COLORS[0]),
+              ]);
+              if (dur <= 0 && captionDuration > 0) setVoiceoverDuration(captionDuration);
+            } else {
+              setScenes([]);
+            }
+            setSelectedSceneIndex(null);
+            // Restore draft only if it has at least as many scenes as the script (so 5-scene script isn't overwritten by a 3-scene draft)
+            const sceneCountFromScript = fullTexts.length || (caps.length > 0 ? 1 : 0);
+            if (scriptId && typeof window !== "undefined" && sceneCountFromScript > 0) {
+              try {
+                const raw = localStorage.getItem(`cf-video-timeline-draft-${scriptId}`);
+                if (raw) {
+                  const draft = JSON.parse(raw) as { scriptId?: string; scenes?: unknown[]; captions?: unknown[]; voiceoverUrl?: string | null; musicUrl?: string | null; musicVolume?: number; captionPosition?: string; captionFontSize?: string; captionTextColor?: string; captionAnimation?: string; captionBackground?: string; captionDisplayMode?: string; sceneTransition?: string; aspectRatio?: string; voiceoverDuration?: number; scriptName?: string };
+                  const draftSceneCount = Array.isArray(draft.scenes) ? draft.scenes.length : 0;
+                  if (draft?.scriptId === scriptId && draftSceneCount >= sceneCountFromScript) {
+                    const draftScenes = draft.scenes as Scene[];
+                    const totalDuration = typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0 ? draft.voiceoverDuration : 0;
+                    const draftSceneTotal = draftScenes.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 0), 0);
+                    const needNormalize = totalDuration > 0 && draftScenes.length >= 2 && draftSceneTotal < totalDuration * 0.9;
+                    const scenesToSet = needNormalize
+                      ? draftScenes.map((s, i) => ({
+                          ...s,
+                          startTime: i * (totalDuration / draftScenes.length),
+                          duration: totalDuration / draftScenes.length,
+                        }))
+                      : draftScenes;
+                    setScenes(scenesToSet);
+                    if (Array.isArray(draft.captions)) {
+                      setCaptions(
+                        draft.captions.map((c: { id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }, i: number) => ({
+                          id: typeof c.id === "string" ? c.id : `cap-${i}`,
+                          text: typeof c.text === "string" ? c.text : "",
+                          startTime: typeof c.startTime === "number" ? c.startTime : 0,
+                          endTime: typeof c.endTime === "number" ? c.endTime : 0,
+                          wordTimings: Array.isArray(c.wordTimings)
+                            ? c.wordTimings.filter(
+                                (w): w is WordTiming =>
+                                  typeof w?.word === "string" && typeof w?.start === "number" && typeof w?.end === "number"
+                              )
+                            : undefined,
+                        }))
+                      );
+                    }
+                    if (typeof draft.voiceoverUrl === "string" && draft.voiceoverUrl.startsWith("http")) setVoiceoverUrl(draft.voiceoverUrl);
+                    if (typeof draft.musicUrl === "string" && draft.musicUrl.startsWith("http")) setMusicUrl(draft.musicUrl);
+                    if (typeof draft.musicVolume === "number") setMusicVolume(draft.musicVolume);
+                    if (draft.captionPosition === "top" || draft.captionPosition === "middle" || draft.captionPosition === "bottom") setCaptionPosition(draft.captionPosition);
+                    if (draft.captionFontSize === "small" || draft.captionFontSize === "medium" || draft.captionFontSize === "large") setCaptionFontSize(draft.captionFontSize);
+                    if (typeof draft.captionTextColor === "string") setCaptionTextColor(draft.captionTextColor);
+                    if (draft.captionAnimation === "none" || draft.captionAnimation === "fadeIn" || draft.captionAnimation === "slideUp" || draft.captionAnimation === "pop") setCaptionAnimation(draft.captionAnimation);
+                    if (draft.captionBackground === "none" || draft.captionBackground === "pill" || draft.captionBackground === "bar") setCaptionBackground(draft.captionBackground);
+                    if (draft.captionDisplayMode === "full" || draft.captionDisplayMode === "wordByWord" || draft.captionDisplayMode === "singleWord") setCaptionDisplayMode(draft.captionDisplayMode);
+                    if (draft.sceneTransition === "fade" || draft.sceneTransition === "slideLeft" || draft.sceneTransition === "slideRight" || draft.sceneTransition === "wipe" || draft.sceneTransition === "zoom") setSceneTransitionType(draft.sceneTransition);
+                    if (typeof draft.aspectRatio === "string") setAspectRatio(draft.aspectRatio);
+                    if (typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0) setVoiceoverDuration(draft.voiceoverDuration);
+                    if (typeof draft.scriptName === "string" && draft.scriptName.trim()) setScriptName(draft.scriptName.trim());
                   }
-                  if (typeof draft.voiceoverUrl === "string" && draft.voiceoverUrl.startsWith("http")) setVoiceoverUrl(draft.voiceoverUrl);
-                  if (typeof draft.musicUrl === "string" && draft.musicUrl.startsWith("http")) setMusicUrl(draft.musicUrl);
-                  if (typeof draft.musicVolume === "number") setMusicVolume(draft.musicVolume);
-                  if (draft.captionPosition === "top" || draft.captionPosition === "middle" || draft.captionPosition === "bottom") setCaptionPosition(draft.captionPosition);
-                  if (draft.captionFontSize === "small" || draft.captionFontSize === "medium" || draft.captionFontSize === "large") setCaptionFontSize(draft.captionFontSize);
-                  if (typeof draft.captionTextColor === "string") setCaptionTextColor(draft.captionTextColor);
-                  if (draft.captionAnimation === "none" || draft.captionAnimation === "fadeIn" || draft.captionAnimation === "slideUp" || draft.captionAnimation === "pop") setCaptionAnimation(draft.captionAnimation);
-                  if (draft.captionBackground === "none" || draft.captionBackground === "pill" || draft.captionBackground === "bar") setCaptionBackground(draft.captionBackground);
-                  if (draft.captionDisplayMode === "full" || draft.captionDisplayMode === "wordByWord" || draft.captionDisplayMode === "singleWord") setCaptionDisplayMode(draft.captionDisplayMode);
-                  if (draft.sceneTransition === "fade" || draft.sceneTransition === "slideLeft" || draft.sceneTransition === "slideRight" || draft.sceneTransition === "wipe" || draft.sceneTransition === "zoom") setSceneTransitionType(draft.sceneTransition);
-                  if (typeof draft.aspectRatio === "string") setAspectRatio(draft.aspectRatio);
-                  if (typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0) setVoiceoverDuration(draft.voiceoverDuration);
-                  if (typeof draft.scriptName === "string" && draft.scriptName.trim()) setScriptName(draft.scriptName.trim());
                 }
+              } catch {
+                // ignore invalid draft
               }
-            } catch {
-              // ignore invalid draft
             }
           }
         });
@@ -1686,8 +1718,15 @@ export default function VideoTimelinePage() {
 
   // Smart linking: apply prefill from planning pages (Script Generator, Thumbnails, Copy Writer, SEO, Calendar, Campaign Mode)
   useEffect(() => {
-    const prefill = getVideoPrefill();
-    if (!prefill) return;
+    const fromSession = getVideoPrefill();
+    const prefill = fromSession ?? videoTimelinePrefillStrictModeBackup;
+    if (!prefill) {
+      skipLibraryTimelineHydrationForScriptId = null;
+      return;
+    }
+    if (fromSession) {
+      videoTimelinePrefillStrictModeBackup = fromSession;
+    }
     if (prefill.scriptId) setScriptId(prefill.scriptId);
     if (prefill.title?.trim()) setScriptName(prefill.title.trim());
     if (prefill.thumbnailUrl?.trim()) setPrefillThumbnailUrl(prefill.thumbnailUrl.trim());
@@ -1745,6 +1784,14 @@ export default function VideoTimelinePage() {
       const totalDuration = templateScenes.reduce((sum, sc) => sum + sc.duration, 0);
       if (totalDuration > 0) setVoiceoverDuration(totalDuration);
       setSelectedTemplate(VIDEO_TEMPLATES[4]);
+      const lockSid =
+        prefill.scriptId?.trim() ||
+        (typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("libraryScriptId") ||
+            new URLSearchParams(window.location.search).get("scriptId")
+          : null)?.trim() ||
+        null;
+      if (lockSid) skipLibraryTimelineHydrationForScriptId = lockSid;
     }
     if (prefill.voiceoverText?.trim()) {
       try {
@@ -1754,6 +1801,15 @@ export default function VideoTimelinePage() {
       }
     }
     clearVideoPrefill();
+    if (fromSession) {
+      // Dev Strict Mode remount runs another effect pass before this macrotask; keep backup until then.
+      // Single mount (prod): clear backup on the next tick so a later visit without prefill does not reuse stale data.
+      window.setTimeout(() => {
+        videoTimelinePrefillStrictModeBackup = null;
+      }, 0);
+    } else {
+      videoTimelinePrefillStrictModeBackup = null;
+    }
   }, []);
 
   // When scriptId or projectId is in URL, set a template so the timeline layout shows and script/project can load.
@@ -2572,6 +2628,36 @@ export default function VideoTimelinePage() {
       setCompileLoading(false);
     }
   }, [scriptId, sceneTransitionType]);
+
+  // Optional: auto-export when navigated from Video Creation Guide after animations finish.
+  // Uses voiceovers already present on the timeline scenes (per-clip audio) for template-studio flows.
+  const autoExportStartedRef = useRef(false);
+  useEffect(() => {
+    const shouldAutoExport = searchParams.get("autoExport") === "1";
+    if (!shouldAutoExport) return;
+    if (autoExportStartedRef.current) return;
+    if (scenes.length === 0) return;
+    if (!hasPerClipAudio && !voiceoverUrl?.trim()) return;
+    if (scriptId?.trim()) {
+      autoExportStartedRef.current = true;
+      void handleExportVideoServer();
+      return;
+    }
+    // Fallback: browser export (requires ffmpeg loaded). This path may still work without scriptId.
+    if (!ffmpegLoaded) return;
+    if (!ffmpegRef.current || !fetchFileRef.current) return;
+    autoExportStartedRef.current = true;
+    void handleExportVideo();
+  }, [
+    searchParams,
+    scenes.length,
+    scriptId,
+    hasPerClipAudio,
+    voiceoverUrl,
+    ffmpegLoaded,
+    handleExportVideoServer,
+    handleExportVideo,
+  ]);
 
   /** Test compile: creates 2-scene script, compiles, returns URL (no scriptId needed). */
   const handleTestCompile = useCallback(async () => {
@@ -3967,6 +4053,13 @@ export default function VideoTimelinePage() {
                         </button>
                       </div>
                     </>
+                  ) : hasPerClipAudio ? (
+                    <span
+                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 text-xs text-muted-foreground max-w-[min(280px,85%)] truncate"
+                      title="Each scene clip has its own audio from Video Guide / Template Studio"
+                    >
+                      Per-scene audio on clips (no single master file)
+                    </span>
                   ) : (
                     <button
                       type="button"

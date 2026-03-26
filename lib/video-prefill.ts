@@ -5,6 +5,13 @@
 
 const STORAGE_KEY = "content-flywheel-video-prefill";
 
+/**
+ * In-memory fallback (dev + Safari private mode + quota issues).
+ * Some environments throw on sessionStorage.setItem/getItem even inside try/catch flows,
+ * or may clear storage between navigations. This keeps smart-linking reliable.
+ */
+let memoryPrefill: VideoPrefill | null = null;
+
 export type TimelineScenePrefill = {
   scene_number?: number;
   duration_seconds?: number;
@@ -82,12 +89,13 @@ export function getVideoPrefill(): VideoPrefill | null {
       timelineScenes,
     };
   } catch {
-    return null;
+    return memoryPrefill;
   }
 }
 
 export function setVideoPrefill(prefill: VideoPrefill): void {
   if (typeof window === "undefined") return;
+  memoryPrefill = prefill;
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(prefill));
   } catch {
@@ -97,6 +105,7 @@ export function setVideoPrefill(prefill: VideoPrefill): void {
 
 export function clearVideoPrefill(): void {
   if (typeof window === "undefined") return;
+  memoryPrefill = null;
   try {
     sessionStorage.removeItem(STORAGE_KEY);
   } catch {
@@ -105,8 +114,14 @@ export function clearVideoPrefill(): void {
 }
 
 /** Build timeline URL with optional scriptId; prefill should already be set. */
-export function getTimelineUrl(scriptId?: string): string {
+export function getTimelineUrl(
+  scriptId?: string,
+  opts?: { videoGuidePrefill?: boolean }
+): string {
   const base = "/dashboard/video-timeline";
-  if (scriptId) return `${base}?scriptId=${encodeURIComponent(scriptId)}`;
-  return base;
+  const qs = new URLSearchParams();
+  if (scriptId) qs.set("scriptId", scriptId);
+  if (opts?.videoGuidePrefill) qs.set("videoGuidePrefill", "1");
+  const q = qs.toString();
+  return q ? `${base}?${q}` : base;
 }

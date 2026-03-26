@@ -16,12 +16,14 @@ export function AiStoryAnimateSceneBlock({
   motionPrompt,
   videoUrl,
   onVideoUrl,
+  onAnimationStateChange,
   videoClassName = "w-full rounded-md mt-2 aspect-[9/16] object-cover",
 }: {
   imageUrl: string;
   motionPrompt: string;
   videoUrl?: string | null;
   onVideoUrl: (url: string) => void;
+  onAnimationStateChange?: (isAnimating: boolean) => void;
   /** Class for the preview video element (e.g. 16:9 in Video Guide). */
   videoClassName?: string;
 }) {
@@ -33,8 +35,14 @@ export function AiStoryAnimateSceneBlock({
   const pollCountRef = useRef(0);
   const onVideoUrlRef = useRef(onVideoUrl);
   onVideoUrlRef.current = onVideoUrl;
+  const onAnimationStateChangeRef = useRef(onAnimationStateChange);
+  onAnimationStateChangeRef.current = onAnimationStateChange;
 
   const animateLoading = loading || !!requestId;
+
+  useEffect(() => {
+    onAnimationStateChangeRef.current?.(animateLoading);
+  }, [animateLoading]);
 
   useEffect(() => {
     if (!requestId) return;

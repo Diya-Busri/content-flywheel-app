@@ -13,7 +13,11 @@ export const VIRAL_CAPTION_BOTTOM_PAD = 24;
 export function escapeDrawtextForFfmpeg(s: string): string {
   return s
     .replace(/\\/g, "\\\\")
-    .replace(/'/g, "'\\''")
+    /**
+     * FFmpeg filtergraph escaping (NOT shell escaping):
+     * within drawtext text='...', a literal apostrophe should be escaped as \'
+     */
+    .replace(/'/g, "\\'")
     .replace(/,/g, "\\,")
     .replace(/:/g, "\\:")
     .replace(/%/g, "\\%");
@@ -59,6 +63,8 @@ export function getTextWidthPx(text: string, fontSize: number): number {
 export type ViralCaptionDrawtextOpts = {
   videoWidth: number;
   dialogueLine: string;
+  /** Absolute font file path for FFmpeg drawtext (server-side). Optional for environments with fontconfig. */
+  fontFile?: string;
   fontSize?: number;
   /** Default bottom padding when yExpr not set. */
   bottomPadPx?: number;
@@ -92,6 +98,10 @@ export function buildViralCaptionDrawtextChain(
   const enableOpt = enable ? `:enable='${enable}'` : "";
   const alphaOpt =
     opts.alphaExpr != null && String(opts.alphaExpr).trim() !== "" ? `:alpha='${opts.alphaExpr}'` : "";
+  const fontOpt =
+    opts.fontFile && opts.fontFile.trim()
+      ? `:fontfile='${opts.fontFile.trim().replace(/\\/g, "/").replace(/'/g, "'\\''")}'`
+      : "";
 
   if (!line) {
     throw new Error("buildViralCaptionDrawtextChain: empty dialogueLine");
@@ -100,7 +110,7 @@ export function buildViralCaptionDrawtextChain(
   const split = splitDialogueLine(line);
   if (!split) {
     const t = escapeDrawtextForFfmpeg(line);
-    return `[${fromLabel}]drawtext=text='${t}':fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`;
+    return `[${fromLabel}]drawtext=text='${t}'${fontOpt}:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`;
   }
 
   const nameP = `${split.speaker}: `;
@@ -121,7 +131,7 @@ export function buildViralCaptionDrawtextChain(
   /** If still too wide, fall back to one centered white line (full dialogue; avoids clipping). */
   if (w1 + w2 > maxW) {
     const t = escapeDrawtextForFfmpeg(line);
-    return `[${fromLabel}]drawtext=text='${t}':fontsize=${minFs}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`;
+    return `[${fromLabel}]drawtext=text='${t}'${fontOpt}:fontsize=${minFs}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`;
   }
 
   const total = w1 + w2;
@@ -131,25 +141,34 @@ export function buildViralCaptionDrawtextChain(
   const e2 = escapeDrawtextForFfmpeg(bodyP);
   const mid = opts.midLabel ?? `vcap_${fromLabel}_${toLabel}`;
   return (
-    `[${fromLabel}]drawtext=text='${e1}':fontsize=${fs}:fontcolor=yellow:borderw=2:bordercolor=black:x=${x1}:y=${y}${enableOpt}${alphaOpt}[${mid}];` +
-    `[${mid}]drawtext=text='${e2}':fontsize=${fs}:fontcolor=white:borderw=2:bordercolor=black:x=${x2}:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`
+    `[${fromLabel}]drawtext=text='${e1}'${fontOpt}:fontsize=${fs}:fontcolor=yellow:borderw=2:bordercolor=black:x=${x1}:y=${y}${enableOpt}${alphaOpt}[${mid}];` +
+    `[${mid}]drawtext=text='${e2}'${fontOpt}:fontsize=${fs}:fontcolor=white:borderw=2:bordercolor=black:x=${x2}:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`
   );
 }
 
 /**
  * Comma-separated drawtext chain for -vf (no stream labels). Use after scale/pad on video segments.
  */
-export function buildViralCaptionDrawtextFlatVf(dialogueLine: string, videoWidth: number, fontSize: number): string {
+export function buildViralCaptionDrawtextFlatVf(
+  dialogueLine: string,
+  videoWidth: number,
+  fontSize: number,
+  fontFile?: string
+): string {
   const line = dialogueLine.replace(/\r?\n/g, " ").trim();
   if (!line) return "";
   const y = `h-text_h-${VIRAL_CAPTION_BOTTOM_PAD}`;
   const margin = 12;
   const minFs = 18;
   const maxW = Math.max(32, videoWidth - 2 * margin);
+  const fontOpt =
+    fontFile && fontFile.trim()
+      ? `:fontfile='${fontFile.trim().replace(/\\/g, "/").replace(/'/g, "'\\''")}'`
+      : "";
   const split = splitDialogueLine(line);
   if (!split) {
     const t = escapeDrawtextForFfmpeg(line);
-    return `drawtext=text='${t}':fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}`;
+    return `drawtext=text='${t}'${fontOpt}:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}`;
   }
   const nameP = `${split.speaker}: `;
   const bodyP = split.dialogue;
@@ -163,12 +182,12 @@ export function buildViralCaptionDrawtextFlatVf(dialogueLine: string, videoWidth
   }
   if (w1 + w2 > maxW) {
     const t = escapeDrawtextForFfmpeg(line);
-    return `drawtext=text='${t}':fontsize=${minFs}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}`;
+    return `drawtext=text='${t}'${fontOpt}:fontsize=${minFs}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}`;
   }
   const total = w1 + w2;
   const x1 = Math.max(margin, Math.round((videoWidth - total) / 2));
   const x2 = Math.round(x1 + w1);
   const e1 = escapeDrawtextForFfmpeg(nameP);
   const e2 = escapeDrawtextForFfmpeg(bodyP);
-  return `drawtext=text='${e1}':fontsize=${fs}:fontcolor=yellow:borderw=2:bordercolor=black:x=${x1}:y=${y},drawtext=text='${e2}':fontsize=${fs}:fontcolor=white:borderw=2:bordercolor=black:x=${x2}:y=${y}`;
+  return `drawtext=text='${e1}'${fontOpt}:fontsize=${fs}:fontcolor=yellow:borderw=2:bordercolor=black:x=${x1}:y=${y},drawtext=text='${e2}'${fontOpt}:fontsize=${fs}:fontcolor=white:borderw=2:bordercolor=black:x=${x2}:y=${y}`;
 }

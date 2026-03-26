@@ -389,6 +389,7 @@ export async function POST(request: NextRequest) {
     const rawProductName = typeof productName === "string" ? productName.trim() : "";
     let productNameRes = cleanProductTitle(rawProductName) || rawProductName || "the product";
     let productDesc = productDescription || "";
+    let productNicheRes = "";
     let stockImages: string[] = Array.isArray(stockImageUrls) ? stockImageUrls : [];
 
     if (productId && userId) {
@@ -411,6 +412,7 @@ export async function POST(request: NextRequest) {
         const ma = product.marketingAssets as { thumbnailUrl?: string; galleryUrls?: string[] } | null;
         if (ma?.thumbnailUrl) stockImages = [ma.thumbnailUrl];
         if (Array.isArray(ma?.galleryUrls)) stockImages = [...stockImages, ...ma.galleryUrls];
+        productNicheRes = String(product.niche ?? "").trim();
       }
     }
 
@@ -758,6 +760,8 @@ export async function POST(request: NextRequest) {
       musicRecs,
       exportSettings,
       productName: productNameRes,
+      niche: productNicheRes,
+      productDescription: productDesc,
       storytellingFramework: creativeBrief?.storytellingFramework ?? "Pain Point Angle",
       frameworkRationale: creativeBrief?.frameworkRationale ?? "Problem-solution structure converts well for digital products.",
       scenes: scenesWithFormat,
