@@ -147,6 +147,8 @@ export function Step6Timeline({ wizardData, onNext, onBack }: Props) {
 
   const currentHelper = sceneHelpers[selectedSceneIndex];
   const totalDuration = initialScenes.reduce((acc, s) => acc + s.duration, 0);
+  const rawPromptsForScene = rawPrompts[selectedSceneIndex];
+  const isAiGenerated = !!(currentHelper?.ai_video_prompt?.trim() || rawPromptsForScene?.ai_video_prompt?.trim());
 
   const handleSaveAndContinue = () => {
     const existing = wizardData.script_strategy ?? (wizardData as { scriptStrategy?: Record<string, unknown> }).scriptStrategy ?? {};

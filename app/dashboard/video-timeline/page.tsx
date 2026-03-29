@@ -1975,6 +1975,30 @@ export default function VideoTimelinePage() {
     setIsPlaying(false);
   }, []);
 
+  /** Keyboard shortcuts: Space = play/pause, Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z = redo */
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement).isContentEditable) return;
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (isPlaying) {
+          pause();
+        } else if (voiceoverUrl?.trim() || hasPerClipAudio) {
+          play();
+        }
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((e.metaKey || e.ctrlKey) && (e.key === "Z" || (e.key === "z" && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isPlaying, play, pause, undo, redo, voiceoverUrl, hasPerClipAudio]);
+
   const onPlaybackEnded = useCallback(() => {
     const el = audioRef.current;
     let voiceEnd = Number(el?.duration) ? el.duration : (voiceoverDuration > 0 ? voiceoverDuration : 0);
