@@ -40,3 +40,8 @@ public/ffmpeg-core/*
 !public/ffmpeg-core/README.md
 public/ffmpeg-wasm/*
 !public/ffmpeg-wasm/README.md
+
+# Claude Code internal config
+.claude/launch.json
+.claude/settings.local.json
+.claude/worktrees/
