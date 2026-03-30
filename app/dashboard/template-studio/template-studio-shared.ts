@@ -1,4 +1,4 @@
-export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8";
+export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 
 /** Story-style Template Studio modes that share the 8-scene pipeline */
 export type TemplateStudioStoryTemplateId = "ai_story" | "satisfying_build";
@@ -25,6 +25,7 @@ export const CREATION_MODE_OPTIONS: { value: CreationMode; label: string }[] = [
   { value: "6", label: "Sales/Product Launch Carousel" },
   { value: "7", label: "AI Story" },
   { value: "8", label: "Satisfying Build" },
+  { value: "9", label: "🖊️ Stickman Whiteboard Video" },
 ];
 
 export const AI_STORY_TONE_OPTIONS = [
