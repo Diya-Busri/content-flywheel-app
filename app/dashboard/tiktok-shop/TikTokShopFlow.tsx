@@ -40,7 +40,9 @@ const STEPS = [
   { id: 1, label: "Product", short: "Product" },
   { id: 2, label: "AI Breakdown", short: "Breakdown" },
   { id: 3, label: "Script", short: "Script" },
-  { id: 4, label: "Video Creation Guides", short: "Guides" },
+  { id: 4, label: "Pick Script", short: "Guides" },
+  { id: 5, label: "Customize Video", short: "Customize", external: true },
+  { id: 6, label: "Build Video", short: "Build", external: true },
 ] as const;
 
 const MAX_IMAGE_SIZE_MB = 5;
@@ -284,28 +286,41 @@ export default function TikTokShopFlow() {
         TikTok Affiliate Control Center
       </h1>
       <p className="text-gray-600 dark:text-gray-400 mb-8">
-        Product → AI Breakdown → Script → Video Creation Guide. No rendering—get a step-by-step guide to create your video.
+        Product → AI Breakdown → Script → Pick Script → Customize → Build. 6 steps to your finished TikTok video.
       </p>
 
       {/* Stepper */}
       <div className="flex items-center gap-1 mb-10 overflow-x-auto pb-2">
         {STEPS.map((s, i) => (
           <div key={s.id} className="flex items-center shrink-0">
-            <button
-              type="button"
-              onClick={() => setStep(s.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                step === s.id
-                  ? "bg-orange-500 text-white"
-                  : "bg-gray-200 dark:bg-[#2A2A2A] text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-[#3A3A3A] dark:hover:text-white"
-              }`}
-            >
-              <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs bg-white/20">
-                {s.id}
+            {"external" in s && s.external ? (
+              <span
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-[#1A1A1A] text-gray-400 dark:text-gray-600 border border-dashed border-gray-300 dark:border-[#3A3A3A] cursor-default"
+                title="Reached by clicking 'Build This Video' above"
+              >
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs bg-white/10">
+                  {s.id}
+                </span>
+                <span className="hidden sm:inline">{s.label}</span>
+                <span className="sm:hidden">{s.short}</span>
               </span>
-              <span className="hidden sm:inline">{s.label}</span>
-              <span className="sm:hidden">{s.short}</span>
-            </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setStep(s.id as 1 | 2 | 3 | 4)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  step === s.id
+                    ? "bg-orange-500 text-white"
+                    : "bg-gray-200 dark:bg-[#2A2A2A] text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-[#3A3A3A] dark:hover:text-white"
+                }`}
+              >
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs bg-white/20">
+                  {s.id}
+                </span>
+                <span className="hidden sm:inline">{s.label}</span>
+                <span className="sm:hidden">{s.short}</span>
+              </button>
+            )}
             {i < STEPS.length - 1 && (
               <ChevronRight className="w-4 h-4 text-gray-600 mx-0.5" />
             )}
@@ -534,7 +549,7 @@ export default function TikTokShopFlow() {
                     className="w-full gap-2 bg-orange-500 hover:bg-orange-600"
                   >
                     <FileText className="w-4 h-4" />
-                    Create Video Guide
+                    Build This Video → Step 5
                   </Button>
                 </div>
               );

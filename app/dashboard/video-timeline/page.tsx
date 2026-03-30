@@ -18,7 +18,7 @@ import {
   VIRAL_CAPTION_BOTTOM_PAD,
   VIRAL_CAPTION_FONT_SIZES,
 } from "@/lib/video-caption-ffmpeg";
-import { Loader2, Menu, PanelLeftClose, ZoomIn, ZoomOut, Maximize2, PanelRightOpen, Undo2, Redo2 } from "lucide-react";
+import { Loader2, Menu, PanelLeftClose, ZoomIn, ZoomOut, Maximize2, PanelRightOpen, Undo2, Redo2, SkipBack, SkipForward, Play, Pause, Film, Mic, Type, Music2 } from "lucide-react";
 import { useSidebar } from "@/components/sidebar-context";
 import type { FFmpeg } from "@ffmpeg/ffmpeg";
 import {
@@ -38,6 +38,10 @@ import { CSS } from "@dnd-kit/utilities";
 
 const PIXELS_PER_SECOND = 200;
 const TRACK_HEIGHT = 44;
+const TRANSITION_LABELS: Record<string, string> = {
+  fade: "Fade", slideLeft: "◀", slideRight: "▶", wipe: "Wipe",
+  zoom: "Zoom", pushUp: "▲", pushDown: "▼", blur: "Blur", spin: "↻", flip: "⇄",
+};
 const RULER_HEIGHT = 24;
 const SCENE_BLOCK_MIN_WIDTH = 88;
 const SNAP_GRID_SEC = 0.5;
@@ -802,6 +806,8 @@ type EditableSceneBlockProps = {
   updateSceneTiming: (id: string, u: { startTime?: number; duration?: number }) => void;
   onTimingChangeComplete?: () => void;
   otherBlocks: SceneBlock[];
+  onDropFile?: (file: File) => void;
+  onSetMedia?: (url: string, type: "image" | "video") => void;
 };
 
 function EditableSceneBlock({
@@ -819,9 +825,12 @@ function EditableSceneBlock({
   updateSceneTiming,
   onTimingChangeComplete,
   otherBlocks,
+  onDropFile,
+  onSetMedia,
 }: EditableSceneBlockProps) {
   const [dragState, setDragState] = useState<"move" | "resize-left" | "resize-right" | null>(null);
   const [dragTime, setDragTime] = useState<number | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   const startXRef = useRef(0);
   const startStartRef = useRef(0);
   const startDurationRef = useRef(0);
@@ -885,10 +894,13 @@ function EditableSceneBlock({
         data-sortable-scene
         role="button"
         tabIndex={0}
-        className={`absolute top-1 bottom-1 rounded overflow-hidden text-xs text-white select-none flex flex-col items-center justify-center min-h-[2rem] ${block.colorClass} ${
-          isSelected ? "ring-2 ring-white ring-offset-1 ring-offset-card z-10" : "z-0"
-        } hover:brightness-110 transition-[filter] ${expanded ? "min-h-[5rem] py-2" : "py-1.5 gap-0.5"} ${dragState ? "opacity-95" : ""}`}
-        style={{ left: leftPx, width: widthPx, minWidth: SCENE_BLOCK_MIN_WIDTH }}
+        className={`absolute top-1 bottom-1 rounded-md shadow-sm overflow-hidden text-xs text-white select-none flex flex-col items-center justify-center min-h-[2rem] ${thumbnailUrl ? "" : block.colorClass} ${
+          isSelected ? "ring-2 ring-white ring-offset-1 ring-offset-[#111111] z-10" : "z-0"
+        } hover:brightness-110 transition-[filter] ${expanded ? "min-h-[5rem] py-2" : "py-1.5 gap-0.5"} ${dragState ? "opacity-95" : ""} ${isDragOver ? "ring-2 ring-[#f97316] brightness-125" : ""}`}
+        style={thumbnailUrl
+          ? { left: leftPx, width: widthPx, minWidth: SCENE_BLOCK_MIN_WIDTH, backgroundImage: `url(${thumbnailUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
+          : { left: leftPx, width: widthPx, minWidth: SCENE_BLOCK_MIN_WIDTH }
+        }
         onClick={(e) => {
           e.stopPropagation();
           onSelect();
@@ -901,7 +913,21 @@ function EditableSceneBlock({
             onToggleExpand();
           }
         }}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault(); e.stopPropagation(); setIsDragOver(false);
+          // Check left-panel drag first
+          const mediaUrl = e.dataTransfer.getData("application/x-media-url");
+          const mediaType = e.dataTransfer.getData("application/x-media-type") as "image" | "video";
+          if (mediaUrl && onSetMedia) { onSetMedia(mediaUrl, mediaType); return; }
+          // Then check file drop
+          const file = e.dataTransfer.files?.[0];
+          if (file && onDropFile && (file.type.startsWith('image/') || file.type.startsWith('video/'))) onDropFile(file);
+        }}
       >
+        {/* Dark overlay when thumbnail is shown */}
+        {thumbnailUrl && <div className="absolute inset-0 bg-black/40 pointer-events-none" />}
         {/* Left resize handle */}
         <div
           className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize shrink-0 z-20 hover:bg-white/20"
@@ -910,7 +936,7 @@ function EditableSceneBlock({
         />
         {/* Body: drag to move */}
         <div
-          className="absolute inset-0 cursor-grab active:cursor-grabbing flex flex-col items-center justify-center px-2 overflow-hidden"
+          className="absolute inset-0 cursor-grab active:cursor-grabbing flex flex-col items-center justify-center px-2 overflow-hidden relative z-10"
           style={{ left: RESIZE_HANDLE_WIDTH, right: RESIZE_HANDLE_WIDTH, minWidth: 0 }}
           onPointerDown={(e) => {
             if ((e.target as HTMLElement).closest("[data-resize-handle]")) return;
@@ -921,16 +947,17 @@ function EditableSceneBlock({
           {expanded ? (
             <>
               <span className="truncate w-full text-center text-white/90 text-[10px] leading-tight">{block.text}</span>
-              <span className="text-[10px] text-white/80 tabular-nums mt-0.5">{durationSec.toFixed(1)}s</span>
-              {thumbnailUrl ? (
-                <img src={thumbnailUrl} alt="" className="mt-1 w-full h-8 object-cover rounded shrink-0" />
-              ) : (
-                <div className="mt-1 w-full h-8 rounded bg-black/20 shrink-0 flex items-center justify-center text-[10px] text-white/60">No image</div>
+              {!thumbnailUrl && (
+                <div className="mt-1 w-full h-8 rounded-md bg-black/20 shrink-0 flex items-center justify-center text-[10px] text-white/60">No image</div>
               )}
             </>
           ) : (
-            <span className="truncate w-full text-center text-white/90 text-[10px] leading-tight min-w-0">{block.text || "\u00A0"}</span>
+            <>
+              <span className="truncate w-full text-center text-white/90 text-[10px] leading-tight min-w-0">{block.text || "\u00A0"}</span>
+              {!thumbnailUrl && <span className="text-white/30 text-[10px]">+ Drop media</span>}
+            </>
           )}
+          <span className="absolute bottom-1 right-2 text-[9px] text-white/60 tabular-nums">{durationSec.toFixed(1)}s</span>
         </div>
         {/* Right resize handle */}
         <div
@@ -1000,8 +1027,8 @@ function SortableSceneBlock({
           onToggleExpand();
         }
       }}
-      className={`flex-shrink-0 flex-grow-0 rounded overflow-hidden text-xs text-white cursor-grab active:cursor-grabbing select-none flex flex-col items-center justify-center min-h-[2rem] ${scene.colorClass} ${
-        isSelected ? "ring-2 ring-white ring-offset-1 ring-offset-card" : ""
+      className={`relative flex-shrink-0 flex-grow-0 rounded-md shadow-sm overflow-hidden text-xs text-white cursor-grab active:cursor-grabbing select-none flex flex-col items-center justify-center min-h-[2rem] ${scene.colorClass} ${
+        isSelected ? "ring-2 ring-white ring-offset-1 ring-offset-[#111111]" : ""
       } ${isDragging ? "opacity-90 z-50 shadow-lg cursor-grabbing" : ""} ${expanded ? "min-h-[5rem] py-2" : "py-1.5 px-2 gap-0.5"}`}
       title={scene.text}
       {...attributes}
@@ -1011,20 +1038,20 @@ function SortableSceneBlock({
       {expanded ? (
         <>
           <span className="truncate w-full text-center text-white/90 text-[10px] leading-tight px-1">{scene.text}</span>
-          <span className="text-[10px] text-white/80 tabular-nums mt-0.5">{durationSec.toFixed(1)}s</span>
           {thumbnailUrl ? (
             <img
               src={thumbnailUrl}
               alt=""
-              className="mt-1 w-full h-8 object-cover rounded shrink-0"
+              className="mt-1 w-full h-8 object-cover rounded-md shrink-0"
             />
           ) : (
-            <div className="mt-1 w-full h-8 rounded bg-black/20 shrink-0 flex items-center justify-center text-[10px] text-white/60">No image</div>
+            <div className="mt-1 w-full h-8 rounded-md bg-black/20 shrink-0 flex items-center justify-center text-[10px] text-white/60">No image</div>
           )}
         </>
       ) : (
         <span className="truncate w-full text-center text-white/90 text-[10px] leading-tight px-1">{scene.text}</span>
       )}
+      <span className="absolute bottom-1 right-2 text-[9px] text-white/60 tabular-nums">{durationSec.toFixed(1)}s</span>
     </div>
   );
 }
@@ -1107,7 +1134,7 @@ export default function VideoTimelinePage() {
   const [captionDisplayMode, setCaptionDisplayMode] = useState<"full" | "wordByWord" | "singleWord">("full");
 
   /** Transition between scenes (preview + server export). */
-  type SceneTransitionType = "fade" | "slideLeft" | "slideRight" | "wipe" | "zoom";
+  type SceneTransitionType = "fade" | "slideLeft" | "slideRight" | "wipe" | "zoom" | "pushUp" | "pushDown" | "blur" | "spin" | "flip";
   const [sceneTransitionType, setSceneTransitionType] = useState<SceneTransitionType>("fade");
 
   const [musicUrl, setMusicUrl] = useState<string | null>(null);
@@ -1152,6 +1179,14 @@ export default function VideoTimelinePage() {
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [expandedSceneIndex, setExpandedSceneIndex] = useState<number | null>(null);
   const [scrollState, setScrollState] = useState({ scrollLeft: 0, scrollWidth: 1, clientWidth: 1 });
+
+  const [leftPanelTab, setLeftPanelTab] = useState<"media" | "audio">("media");
+  const [mediaLibrary, setMediaLibrary] = useState<Array<{ id: string; url: string; type: "image" | "video"; name: string }>>([]);
+  const leftMediaInputRef = useRef<HTMLInputElement>(null);
+  const leftAudioInputRef = useRef<HTMLInputElement>(null);
+  /** Index of scene whose trailing transition badge popover is open (i.e. transition between scene[i] and scene[i+1]) */
+  const [transitionBadgeOpen, setTransitionBadgeOpen] = useState<number | null>(null);
+  const [transitionBadgePos, setTransitionBadgePos] = useState<{ x: number; y: number } | null>(null);
 
   const MAX_UNDO = 50;
   type UndoSnapshot = { scenes: Scene[]; captions: CaptionBlock[] };
@@ -1562,7 +1597,7 @@ export default function VideoTimelinePage() {
                     if (draft.captionAnimation === "none" || draft.captionAnimation === "fadeIn" || draft.captionAnimation === "slideUp" || draft.captionAnimation === "pop") setCaptionAnimation(draft.captionAnimation);
                     if (draft.captionBackground === "none" || draft.captionBackground === "pill" || draft.captionBackground === "bar") setCaptionBackground(draft.captionBackground);
                     if (draft.captionDisplayMode === "full" || draft.captionDisplayMode === "wordByWord" || draft.captionDisplayMode === "singleWord") setCaptionDisplayMode(draft.captionDisplayMode);
-                    if (draft.sceneTransition === "fade" || draft.sceneTransition === "slideLeft" || draft.sceneTransition === "slideRight" || draft.sceneTransition === "wipe" || draft.sceneTransition === "zoom") setSceneTransitionType(draft.sceneTransition);
+                    if (["fade","slideLeft","slideRight","wipe","zoom","pushUp","pushDown","blur","spin","flip"].includes(draft.sceneTransition)) setSceneTransitionType(draft.sceneTransition as SceneTransitionType);
                     if (typeof draft.aspectRatio === "string") setAspectRatio(draft.aspectRatio);
                     if (typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0) setVoiceoverDuration(draft.voiceoverDuration);
                     if (typeof draft.scriptName === "string" && draft.scriptName.trim()) setScriptName(draft.scriptName.trim());
@@ -1679,7 +1714,7 @@ export default function VideoTimelinePage() {
                     if (draft.captionAnimation === "none" || draft.captionAnimation === "fadeIn" || draft.captionAnimation === "slideUp" || draft.captionAnimation === "pop") setCaptionAnimation(draft.captionAnimation);
                     if (draft.captionBackground === "none" || draft.captionBackground === "pill" || draft.captionBackground === "bar") setCaptionBackground(draft.captionBackground);
                     if (draft.captionDisplayMode === "full" || draft.captionDisplayMode === "wordByWord" || draft.captionDisplayMode === "singleWord") setCaptionDisplayMode(draft.captionDisplayMode);
-                    if (draft.sceneTransition === "fade" || draft.sceneTransition === "slideLeft" || draft.sceneTransition === "slideRight" || draft.sceneTransition === "wipe" || draft.sceneTransition === "zoom") setSceneTransitionType(draft.sceneTransition);
+                    if (["fade","slideLeft","slideRight","wipe","zoom","pushUp","pushDown","blur","spin","flip"].includes(draft.sceneTransition)) setSceneTransitionType(draft.sceneTransition as SceneTransitionType);
                     if (typeof draft.aspectRatio === "string") setAspectRatio(draft.aspectRatio);
                     if (typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0) setVoiceoverDuration(draft.voiceoverDuration);
                     if (typeof draft.scriptName === "string" && draft.scriptName.trim()) setScriptName(draft.scriptName.trim());
@@ -1876,7 +1911,7 @@ export default function VideoTimelinePage() {
       if (style.background === "none" || style.background === "pill" || style.background === "bar") setCaptionBackground(style.background);
       if (style.displayMode === "full" || style.displayMode === "wordByWord" || style.displayMode === "singleWord") setCaptionDisplayMode(style.displayMode);
       const transition = meta.sceneTransition;
-      if (transition === "fade" || transition === "slideLeft" || transition === "slideRight" || transition === "wipe" || transition === "zoom") setSceneTransitionType(transition);
+      if (["fade","slideLeft","slideRight","wipe","zoom","pushUp","pushDown","blur","spin","flip"].includes(transition)) setSceneTransitionType(transition as SceneTransitionType);
       if (typeof meta.aspectRatio === "string") setAspectRatio(meta.aspectRatio);
       const t = meta.template;
       if (t != null && typeof t === "object" && "id" in t) {
@@ -3200,66 +3235,78 @@ export default function VideoTimelinePage() {
     <>
       <div className="min-w-0 max-w-full overflow-hidden" style={{ height: "100vh" }}>
         <div
-          className={`fixed top-0 right-0 bottom-0 z-50 flex min-w-0 flex-col overflow-x-hidden overflow-y-hidden bg-background text-foreground transition-[left] duration-200 ease-out ${sidebar && !sidebar.isCollapsed ? "left-[60px] md:left-[220px]" : "left-0"}`}
+          className={`fixed top-0 right-0 bottom-0 z-50 flex min-w-0 flex-col overflow-x-hidden overflow-y-hidden bg-[#0f0f0f] text-white transition-[left] duration-200 ease-out ${sidebar && !sidebar.isCollapsed ? "left-[60px] md:left-[220px]" : "left-0"}`}
         >
-      <header className="shrink-0 border-b border-border px-4 py-3">
-        <div className="flex flex-wrap items-center gap-4">
+      <header className="shrink-0 border-b border-[#2a2a2a] bg-[#0f0f0f] px-3 h-12 flex items-center">
+        <div className="flex items-center gap-2 w-full">
           {sidebar && (
             <button
               type="button"
               onClick={sidebar.toggleCollapsed}
-              className="flex-shrink-0 p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="flex-shrink-0 p-1.5 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white transition-colors"
               aria-label={sidebar.isCollapsed ? "Show sidebar" : "Hide sidebar"}
             >
               {sidebar.isCollapsed ? (
-                <Menu size={20} />
+                <Menu size={18} />
               ) : (
-                <PanelLeftClose size={20} />
+                <PanelLeftClose size={18} />
               )}
             </button>
           )}
-          <label className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Script</span>
-            <select
-              className="rounded border border-input bg-card text-foreground px-3 py-1.5 text-sm"
-              value={scriptId ?? ""}
-              onChange={(e) => setScriptId(e.target.value || undefined)}
-            >
-              <option value="">Select a script</option>
-              {savedScripts.length > 0 && (
-                <optgroup label="From Coach">
-                  {savedScripts.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.title}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {scripts.length > 0 && (
-                <optgroup label="Library">
-                  {scripts.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.title}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          </label>
-          {scriptName && <span className="text-sm text-muted-foreground">{scriptName}</span>}
-          {!scriptName && savedScripts.length === 0 && scripts.length === 0 && (
-            <span className="text-xs text-muted-foreground">No scripts yet — use a template below or create one in AI Coach</span>
-          )}
+          <input
+            type="text"
+            className="bg-transparent text-white font-semibold text-sm border-none outline-none focus:ring-1 focus:ring-[#2a2a2a] rounded px-1 py-0.5 min-w-0 max-w-[200px]"
+            value={scriptName ?? "Untitled Project"}
+            readOnly
+            aria-label="Project name"
+          />
+          <div className="flex-1" />
+          <button
+            type="button"
+            className="p-1.5 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 disabled:pointer-events-none transition-colors"
+            onClick={undo}
+            disabled={undoStack.length === 0}
+            title="Undo (Cmd+Z)"
+            aria-label="Undo"
+          >
+            <Undo2 className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="p-1.5 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 disabled:pointer-events-none transition-colors"
+            onClick={redo}
+            disabled={redoStack.length === 0}
+            title="Redo (Cmd+Shift+Z)"
+            aria-label="Redo"
+          >
+            <Redo2 className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white border border-[#2a2a2a] transition-colors"
+            onClick={handleSaveToLibrary}
+          >
+            💾 Save
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-white bg-[#f97316] hover:bg-orange-600 font-medium disabled:opacity-50 disabled:pointer-events-none transition-colors"
+            disabled={compileLoading || !scriptId?.trim()}
+            onClick={handleExportVideoServer}
+          >
+            {compileLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Export Video
+          </button>
         </div>
       </header>
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden p-4 bg-muted/20">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#0f0f0f]">
         {/* Template picker when no scenes */}
         {sceneBlocks.length === 0 ? (
           <>
             <div className="flex flex-col items-center justify-center gap-6 py-12">
-              <h2 className="text-lg font-semibold text-foreground">Start from a template</h2>
-              <p className="text-sm text-muted-foreground">Choose a structure or select a script above to load its scenes.</p>
+              <h2 className="text-lg font-semibold text-white">Start from a template</h2>
+              <p className="text-sm text-[#a0a0a0]">Choose a structure or select a script to load its scenes.</p>
               <div className="flex flex-wrap justify-center gap-4">
                 {(Object.keys(TEMPLATES) as (keyof typeof TEMPLATES)[]).map((key) => {
                   const t = TEMPLATES[key];
@@ -3362,12 +3409,167 @@ export default function VideoTimelinePage() {
           </>
         ) : (
           <>
-        {/* Player: preview + controls in one card */}
-        <div className="flex flex-col items-center gap-2 shrink-0">
-          <div className="flex justify-center w-full">
+        {/* MIDDLE ROW: left panel + preview + properties panel */}
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+
+          {/* LEFT PANEL: media / audio library */}
+          <div className="w-44 shrink-0 border-r border-[#2a2a2a] bg-[#1a1a1a] flex flex-col">
+            {/* Tabs */}
+            <div className="flex border-b border-[#2a2a2a] shrink-0">
+              {(["media", "audio"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setLeftPanelTab(tab)}
+                  className={`flex-1 py-2 text-[11px] font-medium capitalize transition-colors ${leftPanelTab === tab ? "text-white border-b-2 border-[#f97316]" : "text-[#a0a0a0] hover:text-white"}`}
+                >
+                  {tab === "media" ? "Media" : "Audio"}
+                </button>
+              ))}
+            </div>
+
+            {/* Hidden file inputs */}
+            <input ref={leftMediaInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={(e) => {
+              Array.from(e.target.files ?? []).forEach((file) => {
+                const url = URL.createObjectURL(file);
+                const type = file.type.startsWith("video/") ? "video" : "image";
+                setMediaLibrary((prev) => [...prev, { id: `media-${Date.now()}-${Math.random()}`, url, type, name: file.name }]);
+              });
+              e.target.value = "";
+            }} />
+            <input ref={leftAudioInputRef} type="file" accept="audio/*" className="hidden" onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const objUrl = URL.createObjectURL(file);
+              if (!voiceoverUrl) {
+                setVoiceoverUrl(objUrl);
+                setVoiceoverFileName(file.name);
+                const a = new Audio(objUrl);
+                a.addEventListener('loadedmetadata', () => setVoiceoverDuration(a.duration), { once: true });
+                setCaptions([]);
+              } else {
+                const prev2 = musicUrl;
+                if (prev2) URL.revokeObjectURL(prev2);
+                setMusicUrl(objUrl);
+              }
+              e.target.value = "";
+            }} />
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-2">
+              {leftPanelTab === "media" ? (
+                <>
+                  {/* Drop zone / add button */}
+                  <div
+                    className="w-full aspect-video rounded border-2 border-dashed border-[#2a2a2a] flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-[#f97316]/50 hover:bg-[#f97316]/5 transition-colors mb-2"
+                    onClick={() => leftMediaInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-[#f97316]'); }}
+                    onDragLeave={(e) => { e.currentTarget.classList.remove('border-[#f97316]'); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove('border-[#f97316]');
+                      Array.from(e.dataTransfer.files).forEach((file) => {
+                        if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+                          const url = URL.createObjectURL(file);
+                          const type = file.type.startsWith("video/") ? "video" : "image";
+                          setMediaLibrary((prev) => [...prev, { id: `media-${Date.now()}-${Math.random()}`, url, type, name: file.name }]);
+                        }
+                      });
+                    }}
+                  >
+                    <span className="text-[#a0a0a0] text-xl">+</span>
+                    <span className="text-[10px] text-[#a0a0a0] text-center leading-tight">Drop or click<br/>to add media</span>
+                  </div>
+                  {/* Thumbnails grid */}
+                  <div className="grid grid-cols-2 gap-1">
+                    {mediaLibrary.map((item) => (
+                      <div
+                        key={item.id}
+                        className="relative aspect-video rounded overflow-hidden bg-[#0f0f0f] cursor-grab border border-[#2a2a2a] hover:border-[#f97316]/50 group"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("application/x-media-url", item.url);
+                          e.dataTransfer.setData("application/x-media-type", item.type);
+                          e.dataTransfer.setData("application/x-media-name", item.name);
+                        }}
+                        title={item.name}
+                      >
+                        {item.type === "image" ? (
+                          <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <video src={item.url} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                        )}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                        {selectedSceneIndex !== null && (
+                          <button
+                            type="button"
+                            className="absolute bottom-0 left-0 right-0 bg-[#f97316] text-white text-[9px] py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => {
+                              if (selectedSceneIndex === null) return;
+                              setScenes((prev) => prev.map((s, si) => si !== selectedSceneIndex ? s : {
+                                ...s,
+                                elements: s.elements.map((el, ei) => ei === 0 ? { ...el, media: { url: item.url, type: item.type } } : el),
+                              }));
+                            }}
+                            title="Add to selected scene"
+                          >
+                            Use in scene {(selectedSceneIndex ?? 0) + 1}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {mediaLibrary.length === 0 && (
+                    <p className="text-[10px] text-[#a0a0a0]/50 text-center mt-2">Your media appears here</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Audio drop zone */}
+                  <div
+                    className="w-full rounded border-2 border-dashed border-[#2a2a2a] flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-[#f97316]/50 hover:bg-[#f97316]/5 transition-colors p-3 mb-2"
+                    onClick={() => leftAudioInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-[#f97316]'); }}
+                    onDragLeave={(e) => { e.currentTarget.classList.remove('border-[#f97316]'); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove('border-[#f97316]');
+                      const file = e.dataTransfer.files?.[0];
+                      if (!file || !file.type.startsWith('audio/')) return;
+                      const objUrl = URL.createObjectURL(file);
+                      if (!voiceoverUrl) {
+                        setVoiceoverUrl(objUrl); setVoiceoverFileName(file.name);
+                        const a = new Audio(objUrl);
+                        a.addEventListener('loadedmetadata', () => setVoiceoverDuration(a.duration), { once: true });
+                        setCaptions([]);
+                      } else {
+                        const prev2 = musicUrl; if (prev2) URL.revokeObjectURL(prev2); setMusicUrl(objUrl);
+                      }
+                    }}
+                  >
+                    <span className="text-[#a0a0a0] text-xl">🎵</span>
+                    <span className="text-[10px] text-[#a0a0a0] text-center leading-tight">Drop audio here<br/>(voice or music)</span>
+                  </div>
+                  {voiceoverUrl && (
+                    <div className="flex items-center gap-1 p-1.5 rounded bg-[#2a2a2a] mb-1">
+                      <span className="text-[9px] text-white truncate flex-1">🎙 {voiceoverFileName ?? "Voiceover"}</span>
+                    </div>
+                  )}
+                  {musicUrl && (
+                    <div className="flex items-center gap-1 p-1.5 rounded bg-[#2a2a2a]">
+                      <span className="text-[9px] text-white truncate flex-1">🎵 Music</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Preview area: centered in dark bg */}
+          <div className="flex-1 flex items-center justify-center bg-[#111111]">
             <div
               ref={previewRef}
-              className="relative overflow-hidden rounded-lg border border-border shadow-sm"
+              className="relative overflow-hidden rounded-lg border border-[#2a2a2a] shadow-sm"
               style={{
                 aspectRatio: aspectRatio.replace(":", "/"),
                 width: aspectRatio === "16:9" ? 400 : 280,
@@ -3410,27 +3612,45 @@ export default function VideoTimelinePage() {
 
               // Transition styles: current layer moves/clips; next layer stays put (we reveal it) or fades/zooms
               const p = xfadeProgress;
+              // Easing: smooth ease-in-out curve for more cinematic transitions
+              const ep = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
               const currentLayerStyle: React.CSSProperties = (() => {
                 const base = { zIndex: 1, willChange: "transform" as const };
                 switch (sceneTransitionType) {
                   case "slideLeft":
-                    return { ...base, transform: `translateX(${-100 * p}%)` };
+                    return { ...base, transform: `translateX(${-100 * ep}%)` };
                   case "slideRight":
-                    return { ...base, transform: `translateX(${100 * p}%)` };
+                    return { ...base, transform: `translateX(${100 * ep}%)` };
                   case "wipe":
-                    return { zIndex: 1, clipPath: `inset(0 ${100 * p}% 0 0)` };
+                    return { zIndex: 1, clipPath: `inset(0 ${100 * ep}% 0 0)` };
                   case "zoom":
-                    return { ...base, transform: `scale(${1 + 0.25 * p})`, opacity: 1 - p };
+                    return { ...base, transform: `scale(${1 + 0.3 * ep})`, opacity: 1 - ep };
+                  case "pushUp":
+                    return { ...base, transform: `translateY(${-100 * ep}%)` };
+                  case "pushDown":
+                    return { ...base, transform: `translateY(${100 * ep}%)` };
+                  case "blur":
+                    return { zIndex: 1, filter: `blur(${ep * 20}px)`, opacity: 1 - ep * 0.5, willChange: "filter" as const };
+                  case "spin":
+                    return { ...base, transform: `rotate(${90 * ep}deg) scale(${1 - 0.3 * ep})`, opacity: 1 - ep };
+                  case "flip":
+                    return { zIndex: 1, transform: `perspective(600px) rotateY(${90 * ep}deg)`, willChange: "transform" as const };
                   default:
-                    return { zIndex: 1, opacity: 1 - p };
+                    return { zIndex: 1, opacity: 1 - ep };
                 }
               })();
               const nextLayerStyle: React.CSSProperties = (() => {
                 // Next sits under current at z-index 0. For fade/zoom: keep next at opacity 1 and only fade the TOP layer
                 // (opacity: p on BOTH layers lets the preview background #374151 show through → black/gray flashes).
-                if (sceneTransitionType === "zoom") return { opacity: 1, transform: `scale(${0.75 + 0.25 * p})` };
-                if (sceneTransitionType === "fade") return { opacity: 1 };
-                return {};
+                switch (sceneTransitionType) {
+                  case "zoom": return { opacity: 1, transform: `scale(${0.7 + 0.3 * ep})` };
+                  case "pushUp": return { transform: `translateY(${100 * (1 - ep)}%)` };
+                  case "pushDown": return { transform: `translateY(${-100 * (1 - ep)}%)` };
+                  case "blur": return { opacity: ep * 0.5 + 0.5 };
+                  case "spin": return { opacity: ep, transform: `scale(${0.7 + 0.3 * ep})` };
+                  case "flip": return { transform: `perspective(600px) rotateY(${-90 * (1 - ep)}deg)` };
+                  default: return { opacity: 1 };
+                }
               })();
 
               return (
@@ -3718,175 +3938,933 @@ export default function VideoTimelinePage() {
               />
             )}
           </div>
-        </div>
-
-        {/* Playback controls */}
-        <div className="flex flex-col gap-2 w-full max-w-[400px]">
-          <div className="flex items-center justify-center gap-2 flex-wrap">
-            <button
-              type="button"
-              className="rounded border border-border bg-background p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
-              onClick={undo}
-              disabled={undoStack.length === 0}
-              title="Undo"
-              aria-label="Undo"
-            >
-              <Undo2 className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="rounded border border-border bg-background p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
-              onClick={redo}
-              disabled={redoStack.length === 0}
-              title="Redo"
-              aria-label="Redo"
-            >
-              <Redo2 className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
-              onClick={isPlaying ? pause : play}
-              disabled={(!voiceoverUrl && !hasPerClipAudio) || isExporting}
-            >
-              {isPlaying ? "Pause" : "Play"}
-            </button>
-            <span className="text-sm text-muted-foreground tabular-nums">
-              {formatTime(currentTime)} / {formatTime(Math.max(duration, voiceoverDuration))}
-            </span>
           </div>
 
-          {/* Save & Export */}
-          <div className="flex flex-col gap-1.5">
-            {isExporting && (
-              <>
-                <p className="text-sm text-muted-foreground">Exporting...</p>
-                <div className="h-2 w-full max-w-xs rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-[width] duration-300"
-                    style={{ width: `${exportProgress}%` }}
-                  />
-                </div>
-              </>
+          {/* Properties panel: inline, always visible */}
+          <div className="w-72 shrink-0 border-l border-[#2a2a2a] bg-[#1a1a1a] overflow-y-auto flex flex-col">
+            {/* Script selector at top of properties panel */}
+            <div className="px-4 pt-4 pb-3 border-b border-[#2a2a2a]">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-[#a0a0a0]">Script</span>
+                <select
+                  className="rounded border border-[#2a2a2a] bg-[#0f0f0f] text-white px-3 py-1.5 text-sm"
+                  value={scriptId ?? ""}
+                  onChange={(e) => setScriptId(e.target.value || undefined)}
+                >
+                  <option value="">Select a script</option>
+                  {savedScripts.length > 0 && (
+                    <optgroup label="From Coach">
+                      {savedScripts.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.title}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {scripts.length > 0 && (
+                    <optgroup label="Library">
+                      {scripts.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.title}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              </label>
+              {!scriptName && savedScripts.length === 0 && scripts.length === 0 && (
+                <p className="text-xs text-[#a0a0a0] mt-2">No scripts yet — use a template below or create one in AI Coach</p>
+              )}
+            </div>
+
+            {/* Export status */}
+            {(isExporting || compileLoading) && (
+              <div className="px-4 py-3 border-b border-[#2a2a2a]">
+                {isExporting && (
+                  <>
+                    <p className="text-sm text-[#a0a0a0] mb-1">Exporting...</p>
+                    <div className="h-1.5 w-full rounded-full bg-[#2a2a2a] overflow-hidden">
+                      <div
+                        className="h-full bg-[#f97316] transition-[width] duration-300"
+                        style={{ width: `${exportProgress}%` }}
+                      />
+                    </div>
+                  </>
+                )}
+                {compileLoading && (
+                  <p className="text-sm text-[#a0a0a0] flex items-center gap-2" role="status">
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                    Compiling… (images + voiceover → 1080p MP4)
+                  </p>
+                )}
+              </div>
             )}
-            {/* Server-side compile (Phase 4): Ken Burns + voiceover → MP4 → Supabase */}
-            <div className="flex flex-col gap-1.5 rounded border border-border bg-muted/30 p-2">
-              <p className="text-xs font-medium text-foreground">
-                Export Video (server){scenes.length > 0 ? ` · ${scenes.length} scene${scenes.length === 1 ? "" : "s"}` : ""}
-              </p>
-              {compileLoading && (
-                <p className="text-sm text-muted-foreground flex items-center gap-2" role="status">
-                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                  Compiling… (images + voiceover → 1080p MP4)
-                </p>
-              )}
-              {compileError && !compileLoading && (
-                <p className="text-xs text-destructive">{compileError}</p>
-              )}
-              {compileDownloadUrl && !compileLoading && (
+            {compileError && !compileLoading && (
+              <div className="px-4 py-2 border-b border-[#2a2a2a]">
+                <p className="text-xs text-red-400">{compileError}</p>
+              </div>
+            )}
+            {compileDownloadUrl && !compileLoading && (
+              <div className="px-4 py-2 border-b border-[#2a2a2a]">
                 <a
                   href={compileDownloadUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-primary hover:underline"
+                  className="text-sm text-[#f97316] hover:underline"
                 >
                   Download MP4
                 </a>
-              )}
-              <button
-                type="button"
-                className="inline-flex w-fit items-center gap-1.5 rounded bg-orange-500 px-3 py-1.5 text-sm text-white hover:bg-orange-600 disabled:opacity-50 disabled:pointer-events-none"
-                disabled={compileLoading || !scriptId?.trim()}
-                onClick={handleExportVideoServer}
-              >
-                {compileLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Export Video
-              </button>
-              <button
-                type="button"
-                className="inline-flex w-fit items-center gap-1.5 rounded border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
-                disabled={compileLoading || compileTestLoading}
-                onClick={handleTestCompile}
-              >
-                {compileTestLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Test compile ({scenes.length || 0} scenes)
-              </button>
-            </div>
-            <div className="flex flex-col items-center justify-center gap-2">
-              {ffmpegLoadError ? (
-                <p className="text-xs text-destructive text-center max-w-md">
-                  Video engine failed to load ({ffmpegLoadError}).{" "}
+              </div>
+            )}
+
+            {/* Scene / Caption edit panel content */}
+            <div className="flex flex-col flex-1 p-4">
+            {selectedCaptionId !== null && selectedCaption ? (
+              <>
+                <h2 className="text-base font-semibold text-white mb-4">Edit Caption</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Text</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
+                      value={selectedCaption.text}
+                      onChange={(e) => updateCaption(selectedCaption.id, { text: e.target.value })}
+                      placeholder="Enter caption text..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Start time (seconds)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white tabular-nums"
+                      value={selectedCaption.startTime.toFixed(1)}
+                      onChange={(e) => {
+                        const start = parseFloat(e.target.value);
+                        if (!Number.isFinite(start) || start < 0) return;
+                        const dur = selectedCaption.endTime - selectedCaption.startTime;
+                        updateCaption(selectedCaption.id, { startTime: start, endTime: start + dur });
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">
+                      Duration {(selectedCaption.endTime - selectedCaption.startTime).toFixed(1)}s
+                    </label>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={10}
+                      step={0.1}
+                      className="w-full h-2 rounded-lg appearance-none bg-[#2a2a2a] accent-[#f97316]"
+                      value={selectedCaption.endTime - selectedCaption.startTime}
+                      onChange={(e) => {
+                        const dur = parseFloat(e.target.value);
+                        updateCaption(selectedCaption.id, { endTime: selectedCaption.startTime + dur });
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Position</label>
+                    <select
+                      className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
+                      value={captionPosition}
+                      onChange={(e) =>
+                        setCaptionPosition(e.target.value as "bottom" | "middle" | "top")
+                      }
+                    >
+                      <option value="bottom">Bottom</option>
+                      <option value="middle">Middle</option>
+                      <option value="top">Top</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Font size</label>
+                    <select
+                      className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
+                      value={captionFontSize}
+                      onChange={(e) =>
+                        setCaptionFontSize(e.target.value as "small" | "medium" | "large")
+                      }
+                    >
+                      <option value="small">Small</option>
+                      <option value="medium">Medium</option>
+                      <option value="large">Large</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Background</label>
+                    <select
+                      className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
+                      value={captionBackground}
+                      onChange={(e) =>
+                        setCaptionBackground(e.target.value as "none" | "pill" | "bar")
+                      }
+                    >
+                      <option value="none">No box (text only)</option>
+                      <option value="pill">Pill (rounded box)</option>
+                      <option value="bar">Full bar</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Text colour</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        className="h-9 w-14 cursor-pointer rounded border border-[#2a2a2a] bg-[#0f0f0f] p-1"
+                        value={captionTextColor}
+                        onChange={(e) => setCaptionTextColor(e.target.value)}
+                      />
+                      <span className="text-xs text-[#a0a0a0] tabular-nums">{captionTextColor}</span>
+                    </div>
+                  </div>
                   <button
                     type="button"
-                    className="underline font-medium"
-                    onClick={() => void initBrowserFFmpeg()}
+                    className="w-full rounded border border-red-800/50 bg-red-900/20 px-3 py-2 text-sm text-red-400 hover:bg-red-900/30"
+                    onClick={() => deleteCaption(selectedCaption.id)}
                   >
-                    Retry
+                    Delete caption
                   </button>
-                </p>
-              ) : null}
-              <div className="flex flex-wrap items-center justify-center gap-2">
-              <button
-                type="button"
-                className="inline-flex rounded border border-input bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
-                onClick={handleSaveToLibrary}
-              >
-                💾 Save to Library
-              </button>
-              <button
-                type="button"
-                className="inline-flex rounded border border-green-600 bg-green-600/10 px-3 py-1.5 text-sm text-green-700 dark:text-green-400 hover:bg-green-600/20 disabled:opacity-50 disabled:pointer-events-none"
-                disabled={isExporting}
-                onClick={handleSchedule}
-              >
-                📅 Schedule
-              </button>
-              <button
-                type="button"
-                className="inline-flex rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:pointer-events-none"
-                disabled={!ffmpegLoaded || !scriptId || (!voiceoverUrl && !hasPerClipAudio) || isExporting}
-                onClick={() => handleExportVideo()}
-              >
-                📹 Publish Now
-              </button>
+                </div>
+              </>
+            ) : selectedSceneIndex !== null ? (
+              <>
+                <input
+                  ref={sceneElementFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    const target = imageUploadTargetRef.current;
+                    e.target.value = "";
+                    if (!file || !target) return;
+                    const { sceneIndex, elementIndex } = target;
+                    imageUploadTargetRef.current = null;
+                    const scene = scenes[sceneIndex];
+                    const el = scene?.elements[elementIndex];
+                    if (isImageEl(el)) {
+                      const prev = el.media?.url;
+                      if (prev) URL.revokeObjectURL(prev);
+                      updateSceneElement(sceneIndex, elementIndex, { media: { url: URL.createObjectURL(file) } });
+                    } else if (isStickerEl(el)) {
+                      const prev = el.media?.url;
+                      if (prev) URL.revokeObjectURL(prev);
+                      updateSceneElement(sceneIndex, elementIndex, { media: { url: URL.createObjectURL(file) } });
+                    }
+                  }}
+                />
+                <div className="flex items-center justify-between gap-2 mb-4">
+                  <h2 className="text-base font-semibold text-white break-words">
+                    {scenes[selectedSceneIndex]?.title ?? "—"}
+                  </h2>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded border border-red-800/50 bg-red-900/20 px-2 py-1 text-xs text-red-400 hover:bg-red-900/30"
+                    onClick={() => selectedSceneIndex !== null && deleteScene(selectedSceneIndex)}
+                  >
+                    Delete
+                  </button>
+                </div>
+
+                <div className="mb-4">
+                  <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Transition between scenes</label>
+                  <select
+                    className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
+                    value={sceneTransitionType}
+                    onChange={(e) => setSceneTransitionType(e.target.value as SceneTransitionType)}
+                  >
+                    <optgroup label="Basic">
+                      <option value="fade">Fade</option>
+                      <option value="wipe">Wipe</option>
+                    </optgroup>
+                    <optgroup label="Slide">
+                      <option value="slideLeft">Slide Left</option>
+                      <option value="slideRight">Slide Right</option>
+                      <option value="pushUp">Push Up</option>
+                      <option value="pushDown">Push Down</option>
+                    </optgroup>
+                    <optgroup label="Dynamic">
+                      <option value="zoom">Zoom</option>
+                      <option value="blur">Blur</option>
+                      <option value="spin">Spin</option>
+                      <option value="flip">Flip</option>
+                    </optgroup>
+                  </select>
+                </div>
+
+                {selectedSceneIndex !== null && (
+                  <div className="mb-4">
+                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Duration (seconds)</label>
+                    <input
+                      type="number"
+                      min={0.5}
+                      max={600}
+                      step={0.1}
+                      className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white tabular-nums"
+                      value={editingDurationInput}
+                      onChange={(e) => setEditingDurationInput(e.target.value)}
+                      onBlur={() => {
+                        const v = parseFloat(editingDurationInput);
+                        if (Number.isFinite(v) && v >= 0.5) {
+                          updateSceneDuration(selectedSceneIndex, v);
+                          setEditingDurationInput(String(v));
+                        } else if (selectedSceneDuration !== null) {
+                          setEditingDurationInput(String(selectedSceneDuration));
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      placeholder="e.g. 3.5, 7, 10"
+                    />
+                  </div>
+                )}
+
+                {selectedSceneIndex !== null && scenes[selectedSceneIndex]?.animationType && (
+                  <div className="mb-4">
+                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Animation</label>
+                    <p className="text-sm text-white">{scenes[selectedSceneIndex].animationType}</p>
+                  </div>
+                )}
+
+                <div className="mb-4">
+                  <span className="text-xs font-medium text-[#a0a0a0] block mb-2">Background media</span>
+                  <input
+                    ref={sceneMediaInputRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file && selectedSceneIndex !== null) handleSceneMediaFile(file, selectedSceneIndex);
+                      e.target.value = "";
+                    }}
+                  />
+                  {(() => {
+                  const bgMedia = selectedSceneIndex !== null ? getSceneBackgroundMedia(scenes[selectedSceneIndex]) : null;
+                  return bgMedia ? (
+                    <div className="relative rounded-lg border border-[#2a2a2a] overflow-hidden bg-[#0f0f0f] aspect-video">
+                      {bgMedia.type === "image" ? (
+                        <img
+                          src={bgMedia.url}
+                          alt="Scene background"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <video
+                          src={bgMedia.url}
+                          className="w-full h-full object-contain"
+                          muted
+                          playsInline
+                          preload="metadata"
+                        />
+                      )}
+                      <button
+                        type="button"
+                        className="absolute bottom-2 right-2 rounded bg-[#0f0f0f]/90 px-2 py-1 text-xs text-white border border-[#2a2a2a] hover:bg-[#1a1a1a]"
+                        onClick={() => {
+                          const scene = scenes[selectedSceneIndex!];
+                          const first = scene?.elements[0];
+                          if (first && isBackgroundEl(first) && first.media?.url) {
+                            URL.revokeObjectURL(first.media.url);
+                            updateSceneElement(selectedSceneIndex!, 0, { media: null });
+                          }
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      className="rounded-lg border-2 border-dashed border-[#2a2a2a] bg-[#0f0f0f] aspect-video flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-[#1a1a1a] transition-colors min-h-[120px]"
+                      onClick={() => sceneMediaInputRef.current?.click()}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.currentTarget.classList.add("border-[#f97316]/50");
+                      }}
+                      onDragLeave={(e) => {
+                        e.currentTarget.classList.remove("border-[#f97316]/50");
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.currentTarget.classList.remove("border-[#f97316]/50");
+                        const file = e.dataTransfer.files?.[0];
+                        if (file && selectedSceneIndex !== null && (file.type.startsWith("image/") || file.type.startsWith("video/"))) {
+                          handleSceneMediaFile(file, selectedSceneIndex);
+                        }
+                      }}
+                    >
+                      <span className="text-sm text-[#a0a0a0]">Drop image or video here</span>
+                      <button
+                        type="button"
+                        className="rounded bg-[#f97316] px-3 py-1.5 text-sm text-white hover:bg-orange-600"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sceneMediaInputRef.current?.click();
+                        }}
+                      >
+                        Browse
+                      </button>
+                    </div>
+                  );
+                  })()}
+                </div>
+
+                <div className="mb-4">
+                  <label className="text-xs font-medium text-[#a0a0a0] block mb-2">Scene text</label>
+                  <textarea
+                    className="w-full min-h-[100px] rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-3 text-sm text-white placeholder:text-[#a0a0a0] focus:outline-none focus:ring-1 focus:ring-[#f97316] leading-relaxed resize-y"
+                    value={scenes[selectedSceneIndex]?.title ?? ""}
+                    onChange={(e) => {
+                      const i = selectedSceneIndex;
+                      if (i === null) return;
+                      const value = e.target.value;
+                      setScenes((prev) =>
+                        prev.map((s, idx) => (idx === i ? { ...s, title: value } : s))
+                      );
+                    }}
+                    placeholder="Enter scene text..."
+                  />
+                </div>
+
+                <div className="mt-3 border-t border-[#2a2a2a] pt-3 mb-4">
+                  <h3 className="font-bold text-white mb-2 text-sm">Overlays</h3>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => addElement("text")}
+                      className="rounded border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-1.5 text-sm text-white hover:bg-[#2a2a2a]"
+                    >
+                      Add Text
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addElement("image")}
+                      className="rounded border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-1.5 text-sm text-white hover:bg-[#2a2a2a]"
+                    >
+                      Add Image
+                    </button>
+                  </div>
+                  <div className="space-y-3 max-h-[200px] overflow-y-auto">
+                    {(scenes[selectedSceneIndex]?.elements ?? []).map((el, elementIndex) => {
+                      const positionY = "position" in el && el.position ? el.position.y : 50;
+                      const verticalPreset = positionY <= 25 ? "top" : positionY >= 75 ? "bottom" : "middle";
+                      const setVertical = (preset: "top" | "middle" | "bottom") => {
+                        const y = preset === "top" ? 15 : preset === "bottom" ? 85 : 50;
+                        updateSceneElement(selectedSceneIndex!, elementIndex, {
+                          position: { ...("position" in el ? el.position : { x: 50, y: 50 }), y },
+                        });
+                      };
+                      return (
+                      <div key={el.id} className="rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] p-2 text-xs space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-white capitalize">{el.type}</span>
+                          <div className="flex items-center gap-1">
+                            {elementIndex > 1 && (
+                              <button
+                                type="button"
+                                className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white"
+                                onClick={() => moveSceneElement(selectedSceneIndex!, elementIndex, "back")}
+                              >
+                                Back
+                              </button>
+                            )}
+                            {elementIndex < (scenes[selectedSceneIndex]?.elements?.length ?? 0) - 1 && (
+                              <button
+                                type="button"
+                                className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white"
+                                onClick={() => moveSceneElement(selectedSceneIndex!, elementIndex, "front")}
+                              >
+                                Front
+                              </button>
+                            )}
+                            {!isBackgroundEl(el) && (
+                              <button
+                                type="button"
+                                className="rounded border border-red-800/50 text-red-400 px-1.5 py-0.5 hover:bg-red-900/20"
+                                onClick={() => removeElement(elementIndex)}
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {isTextEl(el) && (
+                          <>
+                            <input
+                              type="text"
+                              className="w-full mt-2 rounded border border-[#2a2a2a] bg-[#1a1a1a] px-2 py-1 text-sm text-white"
+                              value={el.content}
+                              onChange={(e) => updateElement(elementIndex, { content: e.target.value })}
+                              placeholder="Enter text"
+                            />
+                            <div>
+                              <span className="text-[#a0a0a0] block mb-1">Position</span>
+                              <div className="flex gap-1">
+                                {(["top", "middle", "bottom"] as const).map((p) => (
+                                  <button
+                                    key={p}
+                                    type="button"
+                                    className={`rounded border px-2 py-1 capitalize ${verticalPreset === p ? "bg-[#f97316] text-white border-[#f97316]" : "border-[#2a2a2a] bg-[#0f0f0f] text-[#a0a0a0] hover:bg-[#2a2a2a]"}`}
+                                    onClick={() => setVertical(p)}
+                                  >
+                                    {p}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <label className="flex items-center gap-1 text-[#a0a0a0]">
+                                <span>Size</span>
+                                <input
+                                  type="number"
+                                  className="w-14 rounded border border-[#2a2a2a] bg-[#1a1a1a] text-white px-1 py-0.5 tabular-nums"
+                                  value={el.fontSize}
+                                  onChange={(e) =>
+                                    updateSceneElement(selectedSceneIndex!, elementIndex, {
+                                      fontSize: Number(e.target.value),
+                                    })
+                                  }
+                                />
+                              </label>
+                              <div className="flex items-center gap-1 text-[#a0a0a0]">
+                                <span>Color</span>
+                                <input
+                                  type="color"
+                                  className="h-6 w-8 cursor-pointer rounded border border-[#2a2a2a]"
+                                  value={el.color}
+                                  onChange={(e) =>
+                                    updateSceneElement(selectedSceneIndex!, elementIndex, { color: e.target.value })
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
+                        {isImageEl(el) && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              {el.media?.url && (
+                                <img src={el.media.url} alt="" className="h-10 w-10 rounded border border-[#2a2a2a] object-cover" />
+                              )}
+                              <button
+                                type="button"
+                                className="rounded border border-[#2a2a2a] bg-[#0f0f0f] text-white px-2 py-1 text-xs hover:bg-[#2a2a2a]"
+                                onClick={() => {
+                                  imageUploadTargetRef.current = { sceneIndex: selectedSceneIndex!, elementIndex };
+                                  sceneElementFileInputRef.current?.click();
+                                }}
+                              >
+                                {el.media?.url ? "Replace image" : "Upload image"}
+                              </button>
+                            </div>
+                            <div>
+                              <span className="text-[#a0a0a0] block mb-1">Position</span>
+                              <div className="flex gap-1">
+                                {(["top", "middle", "bottom"] as const).map((p) => (
+                                  <button
+                                    key={p}
+                                    type="button"
+                                    className={`rounded border px-2 py-1 capitalize ${verticalPreset === p ? "bg-[#f97316] text-white border-[#f97316]" : "border-[#2a2a2a] bg-[#0f0f0f] text-[#a0a0a0] hover:bg-[#2a2a2a]"}`}
+                                    onClick={() => setVertical(p)}
+                                  >
+                                    {p}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                type="number"
+                                className="w-14 rounded border border-[#2a2a2a] bg-[#1a1a1a] text-white px-1 py-0.5 tabular-nums"
+                                placeholder="W"
+                                value={el.size.w}
+                                onChange={(e) =>
+                                  updateSceneElement(selectedSceneIndex!, elementIndex, {
+                                    size: { ...el.size, w: Number(e.target.value) },
+                                  })
+                                }
+                              />
+                              <input
+                                type="number"
+                                className="w-14 rounded border border-[#2a2a2a] bg-[#1a1a1a] text-white px-1 py-0.5 tabular-nums"
+                                placeholder="H"
+                                value={el.size.h}
+                                onChange={(e) =>
+                                  updateSceneElement(selectedSceneIndex!, elementIndex, {
+                                    size: { ...el.size, h: Number(e.target.value) },
+                                  })
+                                }
+                              />
+                            </div>
+                          </div>
+                        )}
+                        {isGraphicEl(el) && (
+                          <p className="text-[#a0a0a0] text-xs">Graphic. Use Delete to remove.</p>
+                        )}
+                        {isStickerEl(el) && (
+                          <p className="text-[#a0a0a0] text-xs">Sticker. Use Delete to remove.</p>
+                        )}
+                      </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {selectedSceneDuration !== null && (
+                  <div className="mt-auto pt-3 border-t border-[#2a2a2a]">
+                    <span className="text-xs font-medium text-[#a0a0a0] block mb-1">Duration</span>
+                    <p className="text-sm text-white tabular-nums">
+                      {selectedSceneDuration.toFixed(1)}s
+                    </p>
+                  </div>
+                )}
+
+                {/* Music - always visible */}
+                <div className="mt-4 pt-4 border-t border-[#2a2a2a] space-y-3">
+                  <h3 className="text-sm font-semibold text-white">Music</h3>
+                  <div>
+                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">
+                      Volume {musicUrl ? `${musicVolume}%` : ""}
+                    </label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={musicVolume}
+                      onChange={(e) => setMusicVolume(Number(e.target.value))}
+                      className="w-full h-2 rounded-lg appearance-none bg-[#2a2a2a] accent-[#f97316]"
+                      disabled={!musicUrl}
+                      title="Music volume"
+                    />
+                  </div>
+                </div>
+
+                {/* Subtitles */}
+                <div className="mt-4 pt-4 border-t border-[#2a2a2a] space-y-3">
+                  <h3 className="text-sm font-semibold text-white">Subtitles</h3>
+                  <p className="text-xs text-[#a0a0a0]">
+                    Generate timed captions from voiceover or export as SRT.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      className="w-full rounded-md border border-[#f97316]/40 bg-[#f97316]/10 px-3 py-2 text-sm font-medium text-white hover:bg-[#f97316]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={handleGenerateSubtitlesFromVoiceover}
+                      disabled={transcribeLoading || !voiceoverUrl}
+                      title={voiceoverUrl ? "Generate subtitles from voiceover (Whisper)" : "Add a voiceover first"}
+                    >
+                      {transcribeLoading ? "Generating…" : "Generate from voiceover"}
+                    </button>
+                    {transcribeError && (
+                      <p className="text-xs text-red-400" title={transcribeError}>
+                        {transcribeError}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white hover:bg-[#2a2a2a] disabled:opacity-50"
+                      onClick={handleExportSrt}
+                      disabled={captions.length === 0}
+                    >
+                      Export SRT ({captions.length} caption{captions.length !== 1 ? "s" : ""})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Additional actions */}
+                <div className="mt-4 pt-4 border-t border-[#2a2a2a] space-y-2">
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      className="w-full rounded border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-1.5 text-sm text-white hover:bg-[#2a2a2a] disabled:opacity-50"
+                      disabled={compileLoading || compileTestLoading}
+                      onClick={handleTestCompile}
+                    >
+                      {compileTestLoading ? <Loader2 className="inline h-4 w-4 animate-spin mr-1" /> : null}
+                      Test compile ({scenes.length || 0} scenes)
+                    </button>
+                    {ffmpegLoadError && (
+                      <p className="text-xs text-red-400 text-center">
+                        Video engine failed to load ({ffmpegLoadError}).{" "}
+                        <button
+                          type="button"
+                          className="underline font-medium"
+                          onClick={() => void initBrowserFFmpeg()}
+                        >
+                          Retry
+                        </button>
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      className="w-full rounded border border-green-800/50 bg-green-900/20 px-3 py-1.5 text-sm text-green-400 hover:bg-green-900/30 disabled:opacity-50"
+                      disabled={isExporting}
+                      onClick={handleSchedule}
+                    >
+                      📅 Schedule
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                      disabled={!ffmpegLoaded || !scriptId || (!voiceoverUrl && !hasPerClipAudio) || isExporting}
+                      onClick={() => handleExportVideo()}
+                    >
+                      📹 Publish Now
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Music - always visible when no scene/caption selected */}
+                <div className="mb-4 space-y-3">
+                  <h3 className="text-sm font-semibold text-white">Music</h3>
+                  <div>
+                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">
+                      Volume {musicUrl ? `${musicVolume}%` : ""}
+                    </label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={musicVolume}
+                      onChange={(e) => setMusicVolume(Number(e.target.value))}
+                      className="w-full h-2 rounded-lg appearance-none bg-[#2a2a2a] accent-[#f97316]"
+                      disabled={!musicUrl}
+                      title="Music volume"
+                    />
+                  </div>
+                </div>
+                <p className="text-sm text-[#a0a0a0]">Click a scene or caption to edit it.</p>
+              </>
+            )}
+
+            {/* Caption Style - always visible */}
+            <div className="mt-4 pt-4 border-t border-[#2a2a2a] space-y-3">
+              <h3 className="text-sm font-semibold text-white">Caption Style</h3>
+              <div>
+                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Presets</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {CAPTION_PRESETS.map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      className="rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-2.5 py-1.5 text-xs text-white hover:bg-[#2a2a2a] capitalize"
+                      onClick={() => {
+                        setCaptionPosition(preset.position);
+                        setCaptionFontSize(preset.fontSize);
+                        setCaptionTextColor(preset.textColor);
+                        setCaptionAnimation(preset.animation);
+                        setCaptionBackground(preset.background);
+                        setCaptionDisplayMode(preset.displayMode);
+                      }}
+                    >
+                      {preset.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Background</label>
+                <select
+                  className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
+                  value={captionBackground}
+                  onChange={(e) =>
+                    setCaptionBackground(e.target.value as "none" | "pill" | "bar")
+                  }
+                >
+                  <option value="none">No box (text only)</option>
+                  <option value="pill">Pill (rounded box)</option>
+                  <option value="bar">Full bar</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Animation</label>
+                <select
+                  className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
+                  value={captionAnimation}
+                  onChange={(e) =>
+                    setCaptionAnimation(e.target.value as "none" | "fadeIn" | "slideUp" | "pop")
+                  }
+                >
+                  <option value="none">None</option>
+                  <option value="fadeIn">Fade In</option>
+                  <option value="slideUp">Slide Up</option>
+                  <option value="pop">Pop (scale in)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Position</label>
+                <select
+                  className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
+                  value={captionPosition}
+                  onChange={(e) =>
+                    setCaptionPosition(e.target.value as "bottom" | "middle" | "top")
+                  }
+                >
+                  <option value="bottom">Bottom</option>
+                  <option value="middle">Middle</option>
+                  <option value="top">Top</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Font size</label>
+                <select
+                  className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
+                  value={captionFontSize}
+                  onChange={(e) =>
+                    setCaptionFontSize(e.target.value as "small" | "medium" | "large")
+                  }
+                >
+                  <option value="small">Small</option>
+                  <option value="medium">Medium</option>
+                  <option value="large">Large</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Display</label>
+                <select
+                  className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
+                  value={captionDisplayMode}
+                  onChange={(e) =>
+                    setCaptionDisplayMode(e.target.value as "full" | "wordByWord" | "singleWord")
+                  }
+                >
+                  <option value="full">Full line (all text at once)</option>
+                  <option value="wordByWord">Word by word (build up + highlight)</option>
+                  <option value="singleWord">Single word only (one word on screen)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Text colour</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    className="h-9 w-14 cursor-pointer rounded border border-[#2a2a2a] bg-[#0f0f0f] p-1"
+                    value={captionTextColor}
+                    onChange={(e) => setCaptionTextColor(e.target.value)}
+                    title="Caption text colour"
+                  />
+                  <span className="text-xs text-[#a0a0a0] tabular-nums">{captionTextColor}</span>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-        </div>
+            </div>
 
-        {/* Timeline + scene edit panel: full width when right panel closed */}
-        <div className={`flex min-h-0 min-w-0 flex-1 gap-0 overflow-hidden transition-[padding] duration-200 ${rightPanelOpen ? "pr-96" : ""}`}>
-        <div className="min-h-0 min-w-0 shrink-0 flex-1 overflow-hidden rounded-lg border border-border bg-card flex flex-col">
-          {/* Zoom + Fit toolbar */}
-          <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border bg-muted/30 shrink-0">
+          </div>{/* end properties panel */}
+        </div>{/* end middle row */}
+
+        {/* BOTTOM: playback controls + timeline */}
+        <div className="shrink-0 border-t border-[#2a2a2a] bg-[#111111] flex flex-col">
+          {/* Playback controls row */}
+          <div className="flex items-center gap-2 px-3 h-10 border-b border-[#2a2a2a] shrink-0">
             <button
               type="button"
-              className="p-1.5 rounded border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground"
+              className="p-1 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 transition-colors"
+              onClick={() => { if (audioRef.current) { audioRef.current.currentTime = 0; } }}
+              title="Skip to start"
+              aria-label="Skip to start"
+            >
+              <SkipBack className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="p-1.5 rounded bg-white/10 hover:bg-white/20 text-white disabled:opacity-50 transition-colors"
+              onClick={isPlaying ? pause : play}
+              disabled={(!voiceoverUrl && !hasPerClipAudio) || isExporting}
+              title={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            </button>
+            <button
+              type="button"
+              className="p-1 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 transition-colors"
+              onClick={() => { if (audioRef.current) { audioRef.current.currentTime = audioRef.current.duration || 0; } }}
+              title="Skip to end"
+              aria-label="Skip to end"
+            >
+              <SkipForward className="h-4 w-4" />
+            </button>
+            <span className="text-xs text-[#a0a0a0] tabular-nums ml-1">
+              {formatTime(currentTime)} / {formatTime(Math.max(duration, voiceoverDuration))}
+            </span>
+            <div className="w-px h-4 bg-[#2a2a2a] mx-1" />
+            <button
+              type="button"
+              className="p-1 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white"
               onClick={handleZoomOut}
               title="Zoom out"
             >
-              <ZoomOut className="h-4 w-4" />
+              <ZoomOut className="h-3.5 w-3.5" />
             </button>
+            <span className="text-xs text-[#a0a0a0] tabular-nums w-10 text-center">{Math.round(zoomLevel * 100)}%</span>
             <button
               type="button"
-              className="p-1.5 rounded border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground"
+              className="p-1 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white"
               onClick={handleZoomIn}
               title="Zoom in"
             >
-              <ZoomIn className="h-4 w-4" />
+              <ZoomIn className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
-              className="p-1.5 rounded border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground"
+              className="p-1 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white"
               onClick={handleFitToScreen}
               title="Fit to screen"
             >
-              <Maximize2 className="h-4 w-4" />
+              <Maximize2 className="h-3.5 w-3.5" />
             </button>
-            <span className="text-xs text-muted-foreground tabular-nums ml-1">{Math.round(zoomLevel * 100)}%</span>
-            <span className="text-xs text-muted-foreground ml-2">Scroll to pan · Ctrl+scroll to zoom</span>
+            <div className="w-px h-4 bg-[#2a2a2a] mx-1" />
+            <button
+              type="button"
+              onClick={addScene}
+              className="px-2 py-0.5 text-[#a0a0a0] hover:text-white text-xs rounded hover:bg-[#2a2a2a] transition-colors"
+              title="Add scene"
+            >
+              + Scene
+            </button>
+            <button
+              type="button"
+              onClick={handleAutoSyncToVoiceover}
+              className="px-2 py-0.5 text-[#a0a0a0] hover:text-white text-xs rounded hover:bg-[#2a2a2a] transition-colors"
+              title="Snap scene blocks to equal voiceover segments"
+            >
+              Sync
+            </button>
+            <button
+              type="button"
+              onClick={handleCompactScenes}
+              className="px-2 py-0.5 text-[#a0a0a0] hover:text-white text-xs rounded hover:bg-[#2a2a2a] transition-colors"
+              title="Remove gaps between scenes"
+            >
+              Remove gaps
+            </button>
+            <button
+              type="button"
+              onClick={handleSplitScene}
+              disabled={selectedSceneIndex == null || (() => {
+                const b = selectedSceneIndex != null ? sceneBlocks.find((x) => scenes[selectedSceneIndex]?.id === x.id) : null;
+                return !b || currentTime <= b.startTime || currentTime >= b.endTime || b.endTime - currentTime < 0.5 || currentTime - b.startTime < 0.5;
+              })()}
+              className="px-2 py-0.5 text-[#a0a0a0] hover:text-white text-xs rounded hover:bg-[#2a2a2a] disabled:opacity-40 transition-colors"
+              title="Split selected scene at playhead"
+            >
+              Split
+            </button>
+            <div className="flex-1" />
+            <span className="text-[10px] text-[#a0a0a0]/60 hidden sm:block">Space · Cmd+Z · Cmd+Shift+Z</span>
           </div>
+
+          {/* Timeline tracks */}
+          <div className="flex min-h-0 overflow-hidden" style={{ height: 176 }}>
           <div
             ref={scrollContainerRef}
             className={`timeline-horizontal-scroll timeline-scroll flex min-h-[200px] min-w-0 flex-1 overflow-x-auto overflow-y-hidden ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
@@ -3904,63 +4882,36 @@ export default function VideoTimelinePage() {
               if (el) setScrollState({ scrollLeft: el.scrollLeft, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth });
             }}
           >
-            <div className="shrink-0 w-28 border-r border-border bg-muted/80 flex flex-col text-xs text-muted-foreground">
-              <div className="shrink-0 border-b border-border" style={{ height: RULER_HEIGHT }} />
+            <div className="shrink-0 w-28 border-r border-[#2a2a2a] bg-[#1a1a1a] flex flex-col text-xs text-[#a0a0a0]">
+              <div className="shrink-0 border-b border-[#2a2a2a]" style={{ height: RULER_HEIGHT }} />
               <div className="flex-1 flex flex-col">
-                <div className="flex flex-col justify-center gap-1 p-2 bg-muted/50 border-b border-border shrink-0" style={{ height: TRACK_HEIGHT }}>
-                  <span className="font-medium text-foreground shrink-0 leading-tight">Scenes</span>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={addScene}
-                      className="px-2.5 py-1 bg-green-500 text-white rounded text-xs font-medium hover:bg-green-600"
-                    >
-                      + Add
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleAutoSyncToVoiceover}
-                      className="px-2 py-1 rounded border border-border bg-background text-[11px] hover:bg-muted"
-                      title="Snap scene blocks to equal voiceover segments"
-                    >
-                      Sync to voiceover
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCompactScenes}
-                      className="px-2 py-1 rounded border border-border bg-background text-[11px] hover:bg-muted"
-                      title="Remove gaps between scenes (back-to-back). Tip: timelines also auto-start at 0s for TikTok/Reels."
-                    >
-                      Remove gaps
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSplitScene}
-                      disabled={selectedSceneIndex == null || (() => {
-                        const b = selectedSceneIndex != null ? sceneBlocks.find((x) => scenes[selectedSceneIndex]?.id === x.id) : null;
-                        return !b || currentTime <= b.startTime || currentTime >= b.endTime || b.endTime - currentTime < 0.5 || currentTime - b.startTime < 0.5;
-                      })()}
-                      className="px-2 py-1 rounded border border-border bg-background text-[11px] hover:bg-muted disabled:opacity-50"
-                      title="Split selected scene at playhead"
-                    >
-                      Split
-                    </button>
-                  </div>
+                <div className="flex items-center gap-1.5 px-2 border-b border-[#2a2a2a] shrink-0" style={{ height: 64 }}>
+                  <Film className="h-3 w-3 shrink-0 text-[#a0a0a0]" />
+                  <span className="font-medium text-white shrink-0 leading-tight text-[11px]">Scenes</span>
                 </div>
-                <div className="shrink-0 px-3 py-2 flex items-center border-b border-border font-medium text-foreground/90" style={{ height: TRACK_HEIGHT }}>Voiceover</div>
-                <div className="shrink-0 px-3 py-2 flex items-center border-b border-border font-medium text-foreground/90" style={{ height: TRACK_HEIGHT }}>Captions</div>
-                <div className="shrink-0 px-3 py-2 flex items-center font-medium text-foreground/90" style={{ height: TRACK_HEIGHT }}>Music</div>
+                <div className="shrink-0 px-2 flex items-center gap-1.5 border-b border-[#2a2a2a]" style={{ height: TRACK_HEIGHT }}>
+                  <Mic className="h-3 w-3 shrink-0 text-[#a0a0a0]" />
+                  <span className="font-medium text-white text-[11px]">Voice</span>
+                </div>
+                <div className="shrink-0 px-2 flex items-center gap-1.5 border-b border-[#2a2a2a]" style={{ height: TRACK_HEIGHT }}>
+                  <Type className="h-3 w-3 shrink-0 text-[#a0a0a0]" />
+                  <span className="font-medium text-white text-[11px]">Captions</span>
+                </div>
+                <div className="shrink-0 px-2 flex items-center gap-1.5" style={{ height: TRACK_HEIGHT }}>
+                  <Music2 className="h-3 w-3 shrink-0 text-[#a0a0a0]" />
+                  <span className="font-medium text-white text-[11px]">Music</span>
+                </div>
               </div>
             </div>
             <div
               ref={timelineRef}
-              className="relative shrink-0 overflow-y-hidden timeline-inner bg-muted/40"
+              className="relative shrink-0 overflow-y-hidden timeline-inner bg-[#111111]"
               style={{ minWidth: timelineWidth, width: timelineWidth }}
-              onClick={handleTimelineClick}
+              onClick={(e) => { setTransitionBadgeOpen(null); handleTimelineClick(e); }}
             >
               {/* Ruler: every 1s for videos under 30s, every 5s for longer */}
               <div
-                className="sticky top-0 z-10 border-b border-border bg-muted text-xs text-muted-foreground"
+                className="sticky top-0 z-10 border-b border-[#2a2a2a] bg-[#1a1a1a] text-xs text-[#a0a0a0]"
                 style={{ height: RULER_HEIGHT, width: timelineWidth }}
               >
                 {(() => {
@@ -3971,7 +4922,7 @@ export default function VideoTimelinePage() {
                     return (
                       <div
                         key={i}
-                        className="absolute border-l border-border pl-1.5 min-w-[2rem]"
+                        className="absolute border-l border-[#2a2a2a] pl-1.5 min-w-[2rem]"
                         style={{ left: timeToX(sec) }}
                       >
                         {sec}s
@@ -3984,10 +4935,10 @@ export default function VideoTimelinePage() {
               {/* Tracks content */}
               <div style={{ width: timelineWidth, minWidth: timelineWidth }}>
                 <div
-                  className="relative border-b border-border"
+                  className="relative border-b border-[#2a2a2a]"
                   style={{
-                    minHeight: expandedSceneIndex !== null ? 88 : TRACK_HEIGHT,
-                    height: expandedSceneIndex !== null ? 88 : TRACK_HEIGHT,
+                    minHeight: expandedSceneIndex !== null ? 96 : 64,
+                    height: expandedSceneIndex !== null ? 96 : 64,
                     width: timelineWidth,
                   }}
                 >
@@ -4016,11 +4967,87 @@ export default function VideoTimelinePage() {
                         updateSceneTiming={updateSceneTiming}
                         onTimingChangeComplete={pushUndoSnapshot}
                         otherBlocks={sceneBlocks.filter((b) => b.id !== block.id)}
+                        onDropFile={(file) => {
+                          if (sceneIndex >= 0) handleSceneMediaFile(file, sceneIndex);
+                        }}
+                        onSetMedia={(url, type) => {
+                          if (sceneIndex >= 0) {
+                            setScenes((prev) => prev.map((s, si) => si !== sceneIndex ? s : {
+                              ...s,
+                              elements: s.elements.map((el, ei) => ei === 0 ? { ...el, media: { url, type } } : el),
+                            }));
+                          }
+                        }}
                       />
                     );
                   })}
+                  {/* Transition badges between clips */}
+                  {(() => {
+                    const sorted = [...sceneBlocks].sort((a, b) => a.startTime - b.startTime);
+                    return sorted.slice(0, -1).map((block, i) => {
+                      const x = timeToX(block.endTime);
+                      const label = TRANSITION_LABELS[sceneTransitionType] ?? sceneTransitionType;
+                      const isOpen = transitionBadgeOpen === i;
+                      const TRANSITION_OPTIONS: Array<{ value: string; label: string }> = [
+                        { value: "fade", label: "Fade" },
+                        { value: "slideLeft", label: "◀ Slide Left" },
+                        { value: "slideRight", label: "▶ Slide Right" },
+                        { value: "wipe", label: "Wipe" },
+                        { value: "pushUp", label: "▲ Push Up" },
+                        { value: "pushDown", label: "▼ Push Down" },
+                        { value: "zoom", label: "Zoom" },
+                        { value: "blur", label: "Blur" },
+                        { value: "spin", label: "↻ Spin" },
+                        { value: "flip", label: "⇄ Flip" },
+                      ];
+                      return (
+                        <div
+                          key={`tx-${block.id}`}
+                          className="absolute z-30"
+                          style={{ left: x - 14, top: "50%", transform: "translateY(-50%)" }}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isOpen) {
+                                setTransitionBadgeOpen(null);
+                                setTransitionBadgePos(null);
+                              } else {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setTransitionBadgePos({ x: rect.left + rect.width / 2, y: rect.top });
+                                setTransitionBadgeOpen(i);
+                              }
+                            }}
+                            className="w-7 h-7 rounded-full bg-[#1a1a1a] border-2 border-[#f97316] text-[9px] font-bold text-[#f97316] flex items-center justify-center shadow-lg hover:bg-[#f97316] hover:text-white transition-colors"
+                            title={`Transition: ${sceneTransitionType}`}
+                          >
+                            {label.length <= 2 ? label : label.slice(0, 1).toUpperCase()}
+                          </button>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
-                <div className="relative border-b border-border" style={{ height: TRACK_HEIGHT }}>
+                <div
+                  className="relative border-b border-[#2a2a2a]"
+                  style={{ height: TRACK_HEIGHT }}
+                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('ring-1', 'ring-[#f97316]'); }}
+                  onDragLeave={(e) => { e.currentTarget.classList.remove('ring-1', 'ring-[#f97316]'); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('ring-1', 'ring-[#f97316]');
+                    const file = e.dataTransfer.files?.[0];
+                    if (!file || !file.type.startsWith('audio/')) return;
+                    const prevUrl = voiceoverUrl;
+                    if (prevUrl && voiceoverFileName) URL.revokeObjectURL(prevUrl);
+                    setVoiceoverUrl(URL.createObjectURL(file));
+                    setVoiceoverFileName(file.name);
+                    const audio = new Audio(URL.createObjectURL(file));
+                    audio.addEventListener('loadedmetadata', () => setVoiceoverDuration(audio.duration), { once: true });
+                    setCaptions([]);
+                  }}
+                >
                   <input
                     ref={voiceoverInputRef}
                     type="file"
@@ -4052,25 +5079,25 @@ export default function VideoTimelinePage() {
                             </div>
                           );
                         })}
-                      <div className="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center gap-2 text-xs text-foreground">
+                      <div className="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center gap-2 text-xs text-white">
                         <span className="truncate max-w-[140px]" title={voiceoverFileName ?? undefined}>
                           {voiceoverFileName ?? "Voiceover"}
                         </span>
                         {duration > 0 && (
-                          <span className="text-muted-foreground tabular-nums shrink-0">
+                          <span className="text-[#a0a0a0] tabular-nums shrink-0">
                             {formatTime(duration)}
                           </span>
                         )}
                         <button
                           type="button"
-                          className="shrink-0 rounded border border-border bg-muted/50 px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          className="shrink-0 rounded border border-[#2a2a2a] bg-[#1a1a1a] px-1.5 py-0.5 text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white"
                           onClick={() => voiceoverInputRef.current?.click()}
                         >
                           Replace
                         </button>
                         <button
                           type="button"
-                          className="shrink-0 rounded border border-destructive/50 text-destructive px-1.5 py-0.5 hover:bg-destructive/10"
+                          className="shrink-0 rounded border border-red-800/50 text-red-400 px-1.5 py-0.5 hover:bg-red-900/20"
                           onClick={removeVoiceover}
                         >
                           Remove
@@ -4079,7 +5106,7 @@ export default function VideoTimelinePage() {
                     </>
                   ) : hasPerClipAudio ? (
                     <span
-                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 text-xs text-muted-foreground max-w-[min(280px,85%)] truncate"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 text-xs text-[#a0a0a0] max-w-[min(280px,85%)] truncate"
                       title="Each scene clip has its own audio from Video Guide / Template Studio"
                     >
                       Per-scene audio on clips (no single master file)
@@ -4087,15 +5114,16 @@ export default function VideoTimelinePage() {
                   ) : (
                     <button
                       type="button"
-                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 rounded border border-dashed border-border bg-muted/30 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 rounded border border-dashed border-[#2a2a2a] bg-[#1a1a1a] px-2 py-1 text-xs text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white"
+                      style={{ minWidth: 200 }}
                       onClick={() => voiceoverInputRef.current?.click()}
                     >
-                      Upload Voiceover
+                      🎙 Drop or click to add voiceover
                     </button>
                   )}
                 </div>
                 <div
-                  className="relative border-b border-border"
+                  className="relative border-b border-[#2a2a2a]"
                   style={{
                     height: TRACK_HEIGHT,
                     contain: "paint",
@@ -4124,14 +5152,14 @@ export default function VideoTimelinePage() {
                   <div className="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center gap-2">
                     <button
                       type="button"
-                      className="rounded border border-dashed border-border bg-muted/30 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      className="rounded border border-dashed border-[#2a2a2a] bg-[#1a1a1a] px-2 py-1 text-xs text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white"
                       onClick={handleAddCaption}
                     >
                       Add Caption
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-primary/50 bg-primary/10 px-2 py-1 text-xs text-foreground hover:bg-primary/20 disabled:opacity-50"
+                      className="rounded border border-[#f97316]/40 bg-[#f97316]/10 px-2 py-1 text-xs text-white hover:bg-[#f97316]/20 disabled:opacity-50"
                       onClick={handleGenerateSubtitlesFromVoiceover}
                       disabled={transcribeLoading || !voiceoverUrl}
                       title={voiceoverUrl ? "Generate subtitles from voiceover (speech-to-text)" : "Add a voiceover first"}
@@ -4169,7 +5197,21 @@ export default function VideoTimelinePage() {
                     </div>
                   ))}
                 </div>
-                <div className="relative" style={{ height: TRACK_HEIGHT }}>
+                <div
+                  className="relative"
+                  style={{ height: TRACK_HEIGHT }}
+                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('ring-1', 'ring-[#f97316]'); }}
+                  onDragLeave={(e) => { e.currentTarget.classList.remove('ring-1', 'ring-[#f97316]'); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('ring-1', 'ring-[#f97316]');
+                    const file = e.dataTransfer.files?.[0];
+                    if (!file || !file.type.startsWith('audio/')) return;
+                    const prev = musicUrl;
+                    if (prev) URL.revokeObjectURL(prev);
+                    setMusicUrl(URL.createObjectURL(file));
+                  }}
+                >
                   <input
                     ref={musicInputRef}
                     type="file"
@@ -4193,7 +5235,7 @@ export default function VideoTimelinePage() {
                   ) : (
                     <button
                       type="button"
-                      className="absolute left-2 top-1/2 -translate-y-1/2 rounded border border-dashed border-border bg-muted/30 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 rounded border border-dashed border-[#2a2a2a] bg-[#1a1a1a] px-2 py-1 text-xs text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white"
                       onClick={() => musicInputRef.current?.click()}
                     >
                       Add music
@@ -4203,17 +5245,17 @@ export default function VideoTimelinePage() {
 
                 {/* Add scene at bottom of timeline: 5s, next color, drag to reorder / click to edit duration */}
                 <div
-                  className="flex items-center justify-center gap-4 border-t border-border bg-muted/30 py-2"
+                  className="flex items-center justify-center gap-4 border-t border-[#2a2a2a] bg-[#1a1a1a] py-2"
                   style={{ height: TRACK_HEIGHT }}
                 >
                   <button
                     type="button"
                     onClick={addScene}
-                    className="px-3 py-1.5 bg-green-500 text-white rounded-md text-sm font-medium hover:bg-green-600 transition-colors"
+                    className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors"
                   >
                     + Add Scene
                   </button>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-[#a0a0a0]">
                     New scene: 5s · Drag to reorder · Click to edit duration
                   </span>
                 </div>
@@ -4240,13 +5282,13 @@ export default function VideoTimelinePage() {
               )}
             </div>
           </div>
+          </div>{/* end height:176 timeline tracks */}
 
           {/* Minimap: full timeline overview + viewport + playhead */}
           {timelineWidth > 0 && effectiveDuration > 0 && sceneBlocks.length > 0 && (
-            <div className="shrink-0 border-t-2 border-border bg-muted/50 px-3 py-3 mt-1">
-              <div className="text-[10px] font-medium text-muted-foreground mb-1.5">Timeline overview</div>
+            <div className="shrink-0 border-t border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2">
               <div
-                className="relative h-10 rounded overflow-hidden cursor-pointer border border-border"
+                className="relative h-8 rounded overflow-hidden cursor-pointer border border-[#2a2a2a]"
                 role="button"
                 tabIndex={0}
                 onClick={(e) => {
@@ -4294,703 +5336,55 @@ export default function VideoTimelinePage() {
               </div>
             </div>
           )}
-        </div>
-        </div>
+        </div>{/* end bottom section */}
         </> )}
 
-        {/* Scene / Caption edit panel - fixed, collapsible, hidden by default */}
-        <button
-          type="button"
-          className="fixed top-20 right-0 z-50 w-8 h-12 flex items-center justify-center rounded-l-lg border border-r-0 border-border bg-card shadow hover:bg-muted text-muted-foreground hover:text-foreground"
-          onClick={() => setRightPanelOpen((o) => !o)}
-          title={rightPanelOpen ? "Hide panel" : "Show edit panel"}
-        >
-          {rightPanelOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
-        </button>
-        <div
-          className={`fixed top-0 right-0 h-screen bg-card border-l border-border shadow-lg overflow-y-auto z-40 p-6 transition-[transform,width] duration-200 ease-out ${
-            rightPanelOpen ? "w-96 translate-x-0" : "w-0 translate-x-full overflow-hidden"
-          }`}
-        >
-          <div className="flex flex-col">
-            {selectedCaptionId !== null && selectedCaption ? (
-              <>
-                <h2 className="text-xl font-semibold text-foreground mb-5">Edit Caption</h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Text</label>
-                    <input
-                      type="text"
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                      value={selectedCaption.text}
-                      onChange={(e) => updateCaption(selectedCaption.id, { text: e.target.value })}
-                      placeholder="Enter caption text..."
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Start time (seconds)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground tabular-nums"
-                      value={selectedCaption.startTime.toFixed(1)}
-                      onChange={(e) => {
-                        const start = parseFloat(e.target.value);
-                        if (!Number.isFinite(start) || start < 0) return;
-                        const dur = selectedCaption.endTime - selectedCaption.startTime;
-                        updateCaption(selectedCaption.id, { startTime: start, endTime: start + dur });
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-                      Duration {(selectedCaption.endTime - selectedCaption.startTime).toFixed(1)}s
-                    </label>
-                    <input
-                      type="range"
-                      min={0.5}
-                      max={10}
-                      step={0.1}
-                      className="w-full h-2 rounded-lg appearance-none bg-muted accent-primary"
-                      value={selectedCaption.endTime - selectedCaption.startTime}
-                      onChange={(e) => {
-                        const dur = parseFloat(e.target.value);
-                        updateCaption(selectedCaption.id, { endTime: selectedCaption.startTime + dur });
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Position</label>
-                    <select
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                      value={captionPosition}
-                      onChange={(e) =>
-                        setCaptionPosition(e.target.value as "bottom" | "middle" | "top")
-                      }
-                    >
-                      <option value="bottom">Bottom</option>
-                      <option value="middle">Middle</option>
-                      <option value="top">Top</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Font size</label>
-                    <select
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                      value={captionFontSize}
-                      onChange={(e) =>
-                        setCaptionFontSize(e.target.value as "small" | "medium" | "large")
-                      }
-                    >
-                      <option value="small">Small</option>
-                      <option value="medium">Medium</option>
-                      <option value="large">Large</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Background</label>
-                    <select
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                      value={captionBackground}
-                      onChange={(e) =>
-                        setCaptionBackground(e.target.value as "none" | "pill" | "bar")
-                      }
-                    >
-                      <option value="none">No box (text only)</option>
-                      <option value="pill">Pill (rounded box)</option>
-                      <option value="bar">Full bar</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Text colour</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        className="h-9 w-14 cursor-pointer rounded border border-input bg-background p-1"
-                        value={captionTextColor}
-                        onChange={(e) => setCaptionTextColor(e.target.value)}
-                      />
-                      <span className="text-xs text-muted-foreground tabular-nums">{captionTextColor}</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="w-full rounded border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive hover:bg-destructive/20"
-                    onClick={() => deleteCaption(selectedCaption.id)}
-                  >
-                    Delete caption
-                  </button>
-                </div>
-              </>
-            ) : selectedSceneIndex !== null ? (
-              <>
-                <input
-                  ref={sceneElementFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    const target = imageUploadTargetRef.current;
-                    e.target.value = "";
-                    if (!file || !target) return;
-                    const { sceneIndex, elementIndex } = target;
-                    imageUploadTargetRef.current = null;
-                    const scene = scenes[sceneIndex];
-                    const el = scene?.elements[elementIndex];
-                    if (isImageEl(el)) {
-                      const prev = el.media?.url;
-                      if (prev) URL.revokeObjectURL(prev);
-                      updateSceneElement(sceneIndex, elementIndex, { media: { url: URL.createObjectURL(file) } });
-                    } else if (isStickerEl(el)) {
-                      const prev = el.media?.url;
-                      if (prev) URL.revokeObjectURL(prev);
-                      updateSceneElement(sceneIndex, elementIndex, { media: { url: URL.createObjectURL(file) } });
-                    }
+      {/* Transition badge popover — fixed overlay so it is never clipped by timeline overflow */}
+      {transitionBadgeOpen !== null && transitionBadgePos && (() => {
+        const TRANSITION_OPTIONS: Array<{ value: string; label: string }> = [
+          { value: "fade", label: "Fade" },
+          { value: "slideLeft", label: "◀ Slide Left" },
+          { value: "slideRight", label: "▶ Slide Right" },
+          { value: "wipe", label: "Wipe" },
+          { value: "pushUp", label: "▲ Push Up" },
+          { value: "pushDown", label: "▼ Push Down" },
+          { value: "zoom", label: "⊕ Zoom" },
+          { value: "blur", label: "◎ Blur" },
+          { value: "spin", label: "↻ Spin" },
+          { value: "flip", label: "⇄ Flip" },
+        ];
+        return (
+          <>
+            {/* backdrop to close on outside click */}
+            <div
+              className="fixed inset-0 z-[998]"
+              onClick={() => { setTransitionBadgeOpen(null); setTransitionBadgePos(null); }}
+            />
+            <div
+              className="fixed z-[999] bg-[#1a1a1a] border border-[#3a3a3a] rounded-xl shadow-2xl py-1.5 min-w-[160px]"
+              style={{ left: transitionBadgePos.x, top: transitionBadgePos.y - 8, transform: "translate(-50%, -100%)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-[9px] text-[#606060] px-3 py-1 font-semibold uppercase tracking-widest">Transition</p>
+              {TRANSITION_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-[#2a2a2a] transition-colors flex items-center gap-2 ${sceneTransitionType === opt.value ? "text-[#f97316] font-semibold" : "text-[#d0d0d0]"}`}
+                  onClick={() => {
+                    setSceneTransitionType(opt.value as Parameters<typeof setSceneTransitionType>[0]);
+                    setTransitionBadgeOpen(null);
+                    setTransitionBadgePos(null);
                   }}
-                />
-                <div className="flex items-center justify-between gap-2 mb-5">
-                  <h2 className="text-xl font-semibold text-foreground break-words">
-                    {scenes[selectedSceneIndex]?.title ?? "—"}
-                  </h2>
-                  <button
-                    type="button"
-                    className="shrink-0 rounded border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/20"
-                    onClick={() => selectedSceneIndex !== null && deleteScene(selectedSceneIndex)}
-                  >
-                    Delete Scene
-                  </button>
-                </div>
-
-                {/* Transition between scenes (applies to all scene boundaries; preview + server export) */}
-                <div className="mb-5">
-                  <label className="text-xs font-medium text-muted-foreground block mb-1.5">Transition between scenes</label>
-                  <select
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                    value={sceneTransitionType}
-                    onChange={(e) => setSceneTransitionType(e.target.value as SceneTransitionType)}
-                  >
-                    <option value="fade">Fade</option>
-                    <option value="slideLeft">Slide left</option>
-                    <option value="slideRight">Slide right</option>
-                    <option value="wipe">Wipe</option>
-                    <option value="zoom">Zoom</option>
-                  </select>
-                </div>
-
-                {/* Duration: type custom value (e.g. 3.5s, 7s, 10s); timeline width auto-updates */}
-                {selectedSceneIndex !== null && (
-                  <div className="mb-5">
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Duration (seconds)</label>
-                    <input
-                      type="number"
-                      min={0.5}
-                      max={600}
-                      step={0.1}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground tabular-nums"
-                      value={editingDurationInput}
-                      onChange={(e) => setEditingDurationInput(e.target.value)}
-                      onBlur={() => {
-                        const v = parseFloat(editingDurationInput);
-                        if (Number.isFinite(v) && v >= 0.5) {
-                          updateSceneDuration(selectedSceneIndex, v);
-                          setEditingDurationInput(String(v));
-                        } else if (selectedSceneDuration !== null) {
-                          setEditingDurationInput(String(selectedSceneDuration));
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.currentTarget.blur();
-                        }
-                      }}
-                      placeholder="e.g. 3.5, 7, 10"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Timeline width auto-updates. Min 0.5s. Drag blocks to reorder.
-                    </p>
-                  </div>
-                )}
-
-                {/* Animation type (from AI Coach) */}
-                {selectedSceneIndex !== null && scenes[selectedSceneIndex]?.animationType && (
-                  <div className="mb-5">
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Animation</label>
-                    <p className="text-sm text-foreground">{scenes[selectedSceneIndex].animationType}</p>
-                  </div>
-                )}
-
-                {/* Background media */}
-                <div className="mb-5">
-                  <span className="text-xs font-medium text-muted-foreground block mb-2">Background media</span>
-                  <input
-                    ref={sceneMediaInputRef}
-                    type="file"
-                    accept="image/*,video/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file && selectedSceneIndex !== null) handleSceneMediaFile(file, selectedSceneIndex);
-                      e.target.value = "";
-                    }}
-                  />
-                  {(() => {
-                  const bgMedia = selectedSceneIndex !== null ? getSceneBackgroundMedia(scenes[selectedSceneIndex]) : null;
-                  return bgMedia ? (
-                    <div className="relative rounded-lg border border-border overflow-hidden bg-muted/30 aspect-video">
-                      {bgMedia.type === "image" ? (
-                        <img
-                          src={bgMedia.url}
-                          alt="Scene background"
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <video
-                          src={bgMedia.url}
-                          className="w-full h-full object-contain"
-                          muted
-                          playsInline
-                          preload="metadata"
-                        />
-                      )}
-                      <button
-                        type="button"
-                        className="absolute bottom-2 right-2 rounded bg-background/90 px-2 py-1 text-xs text-foreground border border-border hover:bg-background"
-                        onClick={() => {
-                          const scene = scenes[selectedSceneIndex!];
-                          const first = scene?.elements[0];
-                          if (first && isBackgroundEl(first) && first.media?.url) {
-                            URL.revokeObjectURL(first.media.url);
-                            updateSceneElement(selectedSceneIndex!, 0, { media: null });
-                          }
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <div
-                      className="rounded-lg border-2 border-dashed border-border bg-muted/20 aspect-video flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-muted/30 transition-colors min-h-[140px]"
-                      onClick={() => sceneMediaInputRef.current?.click()}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        e.currentTarget.classList.add("border-primary/50", "bg-muted/40");
-                      }}
-                      onDragLeave={(e) => {
-                        e.currentTarget.classList.remove("border-primary/50", "bg-muted/40");
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        e.currentTarget.classList.remove("border-primary/50", "bg-muted/40");
-                        const file = e.dataTransfer.files?.[0];
-                        if (file && selectedSceneIndex !== null && (file.type.startsWith("image/") || file.type.startsWith("video/"))) {
-                          handleSceneMediaFile(file, selectedSceneIndex);
-                        }
-                      }}
-                    >
-                      <span className="text-sm text-muted-foreground">Drop image or video here</span>
-                      <button
-                        type="button"
-                        className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          sceneMediaInputRef.current?.click();
-                        }}
-                      >
-                        Browse
-                      </button>
-                    </div>
-                  );
-                  })()}
-                </div>
-
-                {/* Scene text */}
-                <div className="mb-5">
-                  <label className="text-xs font-medium text-muted-foreground block mb-2">Scene text</label>
-                  <textarea
-                    className="w-full min-h-[140px] rounded-lg border border-input bg-background px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 leading-relaxed resize-y"
-                    value={scenes[selectedSceneIndex]?.title ?? ""}
-                    onChange={(e) => {
-                      const i = selectedSceneIndex;
-                      if (i === null) return;
-                      const value = e.target.value;
-                      setScenes((prev) =>
-                        prev.map((s, idx) => (idx === i ? { ...s, title: value } : s))
-                      );
-                    }}
-                    placeholder="Enter scene text..."
-                  />
-                </div>
-
-                {/* Scene elements: text + image only (preview renders on top of background) */}
-                <div className="mt-4 border-t border-border pt-4 mb-5">
-                  <h3 className="font-bold text-foreground mb-2">Overlays</h3>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    <button
-                      type="button"
-                      onClick={() => addElement("text")}
-                      className="rounded border border-input bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted"
-                    >
-                      Add Text
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => addElement("image")}
-                      className="rounded border border-input bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted"
-                    >
-                      Add Image
-                    </button>
-                  </div>
-                  <div className="space-y-3 max-h-[280px] overflow-y-auto">
-                    {(scenes[selectedSceneIndex]?.elements ?? []).map((el, elementIndex) => {
-                      const positionY = "position" in el && el.position ? el.position.y : 50;
-                      const verticalPreset = positionY <= 25 ? "top" : positionY >= 75 ? "bottom" : "middle";
-                      const setVertical = (preset: "top" | "middle" | "bottom") => {
-                        const y = preset === "top" ? 15 : preset === "bottom" ? 85 : 50;
-                        updateSceneElement(selectedSceneIndex!, elementIndex, {
-                          position: { ...("position" in el ? el.position : { x: 50, y: 50 }), y },
-                        });
-                      };
-                      return (
-                      <div key={el.id} className="rounded-lg border border-border bg-muted/30 p-2 text-xs space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium text-foreground capitalize">{el.type}</span>
-                          <div className="flex items-center gap-1">
-                            {elementIndex > 1 && (
-                              <button
-                                type="button"
-                                className="rounded border border-border px-1.5 py-0.5 hover:bg-muted"
-                                onClick={() => moveSceneElement(selectedSceneIndex!, elementIndex, "back")}
-                              >
-                                Back
-                              </button>
-                            )}
-                            {elementIndex < (scenes[selectedSceneIndex]?.elements?.length ?? 0) - 1 && (
-                              <button
-                                type="button"
-                                className="rounded border border-border px-1.5 py-0.5 hover:bg-muted"
-                                onClick={() => moveSceneElement(selectedSceneIndex!, elementIndex, "front")}
-                              >
-                                Front
-                              </button>
-                            )}
-                            {!isBackgroundEl(el) && (
-                              <button
-                                type="button"
-                                className="rounded border border-destructive/50 text-destructive px-1.5 py-0.5 hover:bg-destructive/10"
-                                onClick={() => removeElement(elementIndex)}
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        {isTextEl(el) && (
-                          <>
-                            <input
-                              type="text"
-                              className="w-full mt-2 rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
-                              value={el.content}
-                              onChange={(e) => updateElement(elementIndex, { content: e.target.value })}
-                              placeholder="Enter text"
-                            />
-                            <div>
-                              <span className="text-muted-foreground block mb-1">Position</span>
-                              <div className="flex gap-1">
-                                {(["top", "middle", "bottom"] as const).map((p) => (
-                                  <button
-                                    key={p}
-                                    type="button"
-                                    className={`rounded border px-2 py-1 capitalize ${verticalPreset === p ? "bg-primary text-primary-foreground border-primary" : "border-input bg-background hover:bg-muted"}`}
-                                    onClick={() => setVertical(p)}
-                                  >
-                                    {p}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <label className="flex items-center gap-1">
-                                <span>Size</span>
-                                <input
-                                  type="number"
-                                  className="w-14 rounded border border-input bg-background px-1 py-0.5 tabular-nums"
-                                  value={el.fontSize}
-                                  onChange={(e) =>
-                                    updateSceneElement(selectedSceneIndex!, elementIndex, {
-                                      fontSize: Number(e.target.value),
-                                    })
-                                  }
-                                />
-                              </label>
-                              <div className="flex items-center gap-1">
-                                <span>Color</span>
-                                <input
-                                  type="color"
-                                  className="h-6 w-8 cursor-pointer rounded border border-input"
-                                  value={el.color}
-                                  onChange={(e) =>
-                                    updateSceneElement(selectedSceneIndex!, elementIndex, { color: e.target.value })
-                                  }
-                                />
-                              </div>
-                            </div>
-                          </>
-                        )}
-                        {isImageEl(el) && (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              {el.media?.url && (
-                                <img src={el.media.url} alt="" className="h-10 w-10 rounded border border-border object-cover" />
-                              )}
-                              <button
-                                type="button"
-                                className="rounded border border-input bg-background px-2 py-1 text-xs hover:bg-muted"
-                                onClick={() => {
-                                  imageUploadTargetRef.current = { sceneIndex: selectedSceneIndex!, elementIndex };
-                                  sceneElementFileInputRef.current?.click();
-                                }}
-                              >
-                                {el.media?.url ? "Replace image" : "Upload image"}
-                              </button>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground block mb-1">Position</span>
-                              <div className="flex gap-1">
-                                {(["top", "middle", "bottom"] as const).map((p) => (
-                                  <button
-                                    key={p}
-                                    type="button"
-                                    className={`rounded border px-2 py-1 capitalize ${verticalPreset === p ? "bg-primary text-primary-foreground border-primary" : "border-input bg-background hover:bg-muted"}`}
-                                    onClick={() => setVertical(p)}
-                                  >
-                                    {p}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <input
-                                type="number"
-                                className="w-14 rounded border border-input bg-background px-1 py-0.5 tabular-nums"
-                                placeholder="W"
-                                value={el.size.w}
-                                onChange={(e) =>
-                                  updateSceneElement(selectedSceneIndex!, elementIndex, {
-                                    size: { ...el.size, w: Number(e.target.value) },
-                                  })
-                                }
-                              />
-                              <input
-                                type="number"
-                                className="w-14 rounded border border-input bg-background px-1 py-0.5 tabular-nums"
-                                placeholder="H"
-                                value={el.size.h}
-                                onChange={(e) =>
-                                  updateSceneElement(selectedSceneIndex!, elementIndex, {
-                                    size: { ...el.size, h: Number(e.target.value) },
-                                  })
-                                }
-                              />
-                            </div>
-                          </div>
-                        )}
-                        {/* Legacy: graphic/sticker — delete only (no new ones added) */}
-                        {isGraphicEl(el) && (
-                          <p className="text-muted-foreground text-xs">Graphic. Use Delete to remove.</p>
-                        )}
-                        {isStickerEl(el) && (
-                          <p className="text-muted-foreground text-xs">Sticker. Use Delete to remove.</p>
-                        )}
-                      </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Duration */}
-                {selectedSceneDuration !== null && (
-                  <div className="mt-auto pt-3 border-t border-border">
-                    <span className="text-xs font-medium text-muted-foreground block mb-1">Duration</span>
-                    <p className="text-sm text-foreground tabular-nums">
-                      {selectedSceneDuration.toFixed(1)}s
-                    </p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">Click a scene or caption to edit it.</p>
-            )}
-
-            {/* Music - always visible */}
-            <div className="mt-5 pt-5 border-t border-border space-y-4">
-              <h3 className="text-sm font-semibold text-foreground">Music</h3>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  Volume {musicUrl ? `${musicVolume}%` : ""}
-                </label>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={musicVolume}
-                  onChange={(e) => setMusicVolume(Number(e.target.value))}
-                  className="w-full h-2 rounded-lg appearance-none bg-muted accent-primary"
-                  disabled={!musicUrl}
-                  title="Music volume"
-                />
-              </div>
-            </div>
-
-            {/* Subtitles - generate from voiceover or export SRT */}
-            <div className="mt-5 pt-5 border-t border-border space-y-3">
-              <h3 className="text-sm font-semibold text-foreground">Subtitles</h3>
-              <p className="text-xs text-muted-foreground">
-                Generate timed captions from your voiceover (speech-to-text) or export existing captions as SRT.
-              </p>
-              <div className="flex flex-col gap-2">
-                <button
-                  type="button"
-                  className="w-full rounded-md border border-primary bg-primary/10 px-3 py-2 text-sm font-medium text-foreground hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={handleGenerateSubtitlesFromVoiceover}
-                  disabled={transcribeLoading || !voiceoverUrl}
-                  title={voiceoverUrl ? "Generate subtitles from voiceover (Whisper)" : "Add a voiceover first"}
                 >
-                  {transcribeLoading ? "Generating…" : "Generate from voiceover"}
+                  {sceneTransitionType === opt.value ? <span className="text-[#f97316] text-[10px]">●</span> : <span className="w-2.5 inline-block" />}
+                  {opt.label}
                 </button>
-                {transcribeError && (
-                  <p className="text-xs text-destructive" title={transcribeError}>
-                    {transcribeError}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={handleExportSrt}
-                  disabled={captions.length === 0}
-                  title={captions.length > 0 ? "Download captions as .srt file" : "Add or generate captions first"}
-                >
-                  Export SRT ({captions.length} caption{captions.length !== 1 ? "s" : ""})
-                </button>
-              </div>
+              ))}
             </div>
-
-            {/* Caption Style - always visible */}
-            <div className="mt-5 pt-5 border-t border-border space-y-4">
-              <h3 className="text-sm font-semibold text-foreground">Caption Style</h3>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Presets</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {CAPTION_PRESETS.map((preset) => (
-                    <button
-                      key={preset.name}
-                      type="button"
-                      className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs text-foreground hover:bg-muted capitalize"
-                      onClick={() => {
-                        setCaptionPosition(preset.position);
-                        setCaptionFontSize(preset.fontSize);
-                        setCaptionTextColor(preset.textColor);
-                        setCaptionAnimation(preset.animation);
-                        setCaptionBackground(preset.background);
-                        setCaptionDisplayMode(preset.displayMode);
-                      }}
-                    >
-                      {preset.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Background</label>
-                <select
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                  value={captionBackground}
-                  onChange={(e) =>
-                    setCaptionBackground(e.target.value as "none" | "pill" | "bar")
-                  }
-                  title="Remove the box for text-only captions"
-                >
-                  <option value="none">No box (text only)</option>
-                  <option value="pill">Pill (rounded box)</option>
-                  <option value="bar">Full bar</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Animation</label>
-                <select
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                  value={captionAnimation}
-                  onChange={(e) =>
-                    setCaptionAnimation(e.target.value as "none" | "fadeIn" | "slideUp" | "pop")
-                  }
-                >
-                  <option value="none">None</option>
-                  <option value="fadeIn">Fade In</option>
-                  <option value="slideUp">Slide Up</option>
-                  <option value="pop">Pop (scale in)</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Position</label>
-                <select
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                  value={captionPosition}
-                  onChange={(e) =>
-                    setCaptionPosition(e.target.value as "bottom" | "middle" | "top")
-                  }
-                >
-                  <option value="bottom">Bottom</option>
-                  <option value="middle">Middle</option>
-                  <option value="top">Top</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Font size</label>
-                <select
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                  value={captionFontSize}
-                  onChange={(e) =>
-                    setCaptionFontSize(e.target.value as "small" | "medium" | "large")
-                  }
-                >
-                  <option value="small">Small</option>
-                  <option value="medium">Medium</option>
-                  <option value="large">Large</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Display</label>
-                <select
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                  value={captionDisplayMode}
-                  onChange={(e) =>
-                    setCaptionDisplayMode(e.target.value as "full" | "wordByWord" | "singleWord")
-                  }
-                >
-                  <option value="full">Full line (all text at once)</option>
-                  <option value="wordByWord">Word by word (build up + highlight)</option>
-                  <option value="singleWord">Single word only (one word on screen)</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Text colour</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    className="h-9 w-14 cursor-pointer rounded border border-input bg-background p-1"
-                    value={captionTextColor}
-                    onChange={(e) => setCaptionTextColor(e.target.value)}
-                    title="Caption text colour"
-                  />
-                  <span className="text-xs text-muted-foreground tabular-nums">{captionTextColor}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          </>
+        );
+      })()}
       </main>
         </div>
       </div>

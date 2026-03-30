@@ -41,13 +41,7 @@ export async function POST(request: Request) {
     }
 
     let resolvedImageUrl: string | undefined;
-    if (productImageBase64 && typeof productImageBase64 === "string") {
-      if (!process.env.BLOB_READ_WRITE_TOKEN) {
-        return NextResponse.json(
-          { error: "BLOB_READ_WRITE_TOKEN required for image upload." },
-          { status: 503 }
-        );
-      }
+    if (productImageBase64 && typeof productImageBase64 === "string" && process.env.BLOB_READ_WRITE_TOKEN) {
       try {
         const base64Data = productImageBase64.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
@@ -57,8 +51,9 @@ export async function POST(request: Request) {
             ? "image/webp"
             : "image/jpeg";
         resolvedImageUrl = await uploadProductImageToBlob(buffer, contentType);
-      } catch {
-        return NextResponse.json({ error: "Failed to upload product image." }, { status: 500 });
+      } catch (uploadErr) {
+        // Non-fatal: log and continue without blob URL; base64 is passed directly to AI below
+        console.warn("[product-breakdown] Blob upload failed, continuing without image URL:", uploadErr);
       }
     }
 
