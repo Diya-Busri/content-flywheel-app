@@ -2290,6 +2290,8 @@ export default function VideoTimelinePage() {
       const sceneBlocks = buildSceneBlocksFromScenes(scenes);
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
+        // Skip scenes that already have background media (e.g. product image)
+        if (getSceneBackgroundMedia(scene) !== null) continue;
         // Use caption text that falls within this scene's time range
         const sceneBlock = sceneBlocks[i];
         const sceneCaptions = sceneBlock
@@ -2335,20 +2337,51 @@ export default function VideoTimelinePage() {
     }
   }, [selectedSceneIndex, selectedSceneDuration]);
 
-  // Auto-fill stock photos when arriving from TikTok Shop / video guide prefill
+  // Auto-split + auto-fill when arriving from TikTok Shop / video guide prefill
+  const autoSplitTriggeredRef = useRef(false);
   const autoFillTriggeredRef = useRef(false);
   useEffect(() => {
-    if (autoFillTriggeredRef.current) return;
     if (searchParams.get("videoGuidePrefill") !== "1") return;
     if (scenes.length === 0) return;
-    // Only auto-fill if none of the scenes already have background media
-    const anyHasMedia = scenes.some((s) => getSceneBackgroundMedia(s) !== null);
-    if (anyHasMedia) return;
-    // Wait until captions are loaded too so queries include caption text
+
+    // Step 1: If there is only 1 long scene, split it into ~5-second segments first.
+    // This handles the case where the script has no content.scenes / content.scenePrompts
+    // so only a single scene was created from captions.
+    if (!autoSplitTriggeredRef.current) {
+      const totalDur =
+        voiceoverDuration > 0
+          ? voiceoverDuration
+          : scenes.reduce((sum, s) => sum + (s.duration ?? 0), 0);
+      if (scenes.length === 1 && totalDur > 8) {
+        autoSplitTriggeredRef.current = true;
+        const targetCount = Math.max(3, Math.min(8, Math.round(totalDur / 5)));
+        const segDur = totalDur / targetCount;
+        const newScenes: Scene[] = Array.from({ length: targetCount }, (_, i) => {
+          const segStart = i * segDur;
+          const segEnd = segStart + segDur;
+          const segCaps = captions.filter((c) => c.startTime >= segStart && c.startTime < segEnd);
+          const title = segCaps.map((c) => c.text).join(" ").trim().slice(0, 50) || `Scene ${i + 1}`;
+          if (i === 0) {
+            // Preserve existing scene (may have product image as background)
+            return { ...scenes[0], id: "scene_1", title, duration: segDur, startTime: 0 };
+          }
+          return createScene(`scene_${i + 1}`, title, segDur, SCENE_COLORS[i % SCENE_COLORS.length], segStart);
+        });
+        setScenes(newScenes);
+        return; // Effect re-fires after setScenes with the new scene list
+      }
+      autoSplitTriggeredRef.current = true; // already multiple scenes, no split needed
+    }
+
+    // Step 2: Auto-fill empty scenes with stock photos.
+    // Wait for captions so photo queries include caption text.
     if (captions.length === 0 && voiceoverUrl) return;
+    const allHaveMedia = scenes.every((s) => getSceneBackgroundMedia(s) !== null);
+    if (allHaveMedia) return;
+    if (autoFillTriggeredRef.current) return;
     autoFillTriggeredRef.current = true;
     autoFillScenes();
-  }, [scenes, captions, voiceoverUrl, searchParams, autoFillScenes]);
+  }, [scenes, captions, voiceoverUrl, voiceoverDuration, searchParams, autoFillScenes]);
 
   const addElementToScene = useCallback(
     (sceneIndex: number, kind: "text" | "image" | "graphic" | "sticker") => {
