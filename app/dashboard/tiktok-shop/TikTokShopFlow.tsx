@@ -38,11 +38,11 @@ const TIKTOK_PREFS_KEY = "tiktok-shop-preferences";
 
 const STEPS = [
   { id: 1, label: "Product", short: "Product" },
-  { id: 2, label: "AI Breakdown", short: "Breakdown" },
+  { id: 2, label: "Breakdown", short: "Breakdown" },
   { id: 3, label: "Script", short: "Script" },
-  { id: 4, label: "Pick Script", short: "Guides" },
-  { id: 5, label: "Customize Video", short: "Customize", external: true },
-  { id: 6, label: "Build Video", short: "Build", external: true },
+  { id: 4, label: "Pick Script", short: "Pick" },
+  { id: 5, label: "Customize", short: "Customize", external: true },
+  { id: 6, label: "Build", short: "Build", external: true },
 ] as const;
 
 const MAX_IMAGE_SIZE_MB = 5;
@@ -290,39 +290,37 @@ export default function TikTokShopFlow() {
       </p>
 
       {/* Stepper */}
-      <div className="flex items-center gap-1 mb-10 overflow-x-auto pb-2">
+      <div className="flex items-center gap-0.5 mb-10 flex-wrap gap-y-2">
         {STEPS.map((s, i) => (
-          <div key={s.id} className="flex items-center shrink-0">
+          <div key={s.id} className="flex items-center">
             {"external" in s && s.external ? (
               <span
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-[#1A1A1A] text-gray-400 dark:text-gray-600 border border-dashed border-gray-300 dark:border-[#3A3A3A] cursor-default"
-                title="Reached by clicking 'Build This Video' above"
+                className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium bg-gray-200 dark:bg-[#2A2A2A] text-gray-600 dark:text-gray-400 cursor-default"
+                title="Reached by clicking 'Build This Video' below"
               >
-                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs bg-white/10">
+                <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] bg-white/20">
                   {s.id}
                 </span>
-                <span className="hidden sm:inline">{s.label}</span>
-                <span className="sm:hidden">{s.short}</span>
+                {s.label}
               </span>
             ) : (
               <button
                 type="button"
                 onClick={() => setStep(s.id as 1 | 2 | 3 | 4)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
                   step === s.id
                     ? "bg-orange-500 text-white"
                     : "bg-gray-200 dark:bg-[#2A2A2A] text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-[#3A3A3A] dark:hover:text-white"
                 }`}
               >
-                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs bg-white/20">
+                <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] bg-white/20">
                   {s.id}
                 </span>
-                <span className="hidden sm:inline">{s.label}</span>
-                <span className="sm:hidden">{s.short}</span>
+                {s.label}
               </button>
             )}
             {i < STEPS.length - 1 && (
-              <ChevronRight className="w-4 h-4 text-gray-600 mx-0.5" />
+              <ChevronRight className="w-3 h-3 text-gray-400 mx-0.5 shrink-0" />
             )}
           </div>
         ))}

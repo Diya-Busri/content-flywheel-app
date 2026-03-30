@@ -1184,6 +1184,10 @@ export default function VideoTimelinePage() {
   const [mediaLibrary, setMediaLibrary] = useState<Array<{ id: string; url: string; type: "image" | "video"; name: string }>>([]);
   const leftMediaInputRef = useRef<HTMLInputElement>(null);
   const leftAudioInputRef = useRef<HTMLInputElement>(null);
+  const [stockQuery, setStockQuery] = useState("");
+  const [stockPhotos, setStockPhotos] = useState<Array<{ id: string; url: string; thumb: string }>>([]);
+  const [stockLoading, setStockLoading] = useState(false);
+  const [autoFillLoading, setAutoFillLoading] = useState(false);
   /** Index of scene whose trailing transition badge popover is open (i.e. transition between scene[i] and scene[i+1]) */
   const [transitionBadgeOpen, setTransitionBadgeOpen] = useState<number | null>(null);
   const [transitionBadgePos, setTransitionBadgePos] = useState<{ x: number; y: number } | null>(null);
@@ -2259,6 +2263,64 @@ export default function VideoTimelinePage() {
     []
   );
 
+  const searchStockPhotos = useCallback(async (query: string) => {
+    if (!query.trim()) return;
+    setStockLoading(true);
+    try {
+      const res = await fetch(`/api/stock-photos?query=${encodeURIComponent(query)}&per_page=12`);
+      const data = await res.json() as { photos?: Array<{ id: string; url: string; thumb: string }> };
+      setStockPhotos(data.photos ?? []);
+    } catch {
+      setStockPhotos([]);
+    } finally {
+      setStockLoading(false);
+    }
+  }, []);
+
+  const autoFillScenes = useCallback(async () => {
+    if (scenes.length === 0) return;
+    setAutoFillLoading(true);
+    // Extract a product/topic keyword from the script name (strip "Video Guide:", "Script:" prefixes)
+    const productContext = scriptName
+      .replace(/^(video guide|script|guide)\s*[:\-–]\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 40);
+    try {
+      const sceneBlocks = buildSceneBlocksFromScenes(scenes);
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i];
+        // Use caption text that falls within this scene's time range
+        const sceneBlock = sceneBlocks[i];
+        const sceneCaptions = sceneBlock
+          ? captions.filter((c) => c.startTime >= sceneBlock.startTime && c.startTime < sceneBlock.endTime)
+          : [];
+        const captionText = sceneCaptions.map((c) => c.text).join(" ").trim().slice(0, 80);
+        // Build query: product context + caption snippet (or clean scene title)
+        const cleanTitle = (scene.title ?? "")
+          .replace(/^scene\s*\d+\s*[-–:]\s*/i, "")
+          .trim();
+        const query = productContext
+          ? `${productContext} ${captionText || cleanTitle}`.trim().slice(0, 100)
+          : captionText || cleanTitle || "lifestyle wellness";
+        const res = await fetch(`/api/stock-photos?query=${encodeURIComponent(query)}&per_page=3`);
+        const data = await res.json() as { photos?: Array<{ id: string; url: string; fullUrl?: string; thumb: string }> };
+        const photo = data.photos?.[0];
+        if (!photo) continue;
+        const imgUrl = photo.url ?? photo.thumb;
+        setScenes((prev) => prev.map((s, si) => {
+          if (si !== i) return s;
+          const first = s.elements[0];
+          if (!first || !isBackgroundEl(first)) return s;
+          return { ...s, elements: [{ ...first, media: { url: imgUrl, type: "image" as const } }, ...s.elements.slice(1)] };
+        }));
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    } finally {
+      setAutoFillLoading(false);
+    }
+  }, [scenes, scriptName, captions]);
+
   const selectedSceneDuration =
     selectedSceneIndex !== null && scenes[selectedSceneIndex]
       ? scenes[selectedSceneIndex].duration
@@ -2272,6 +2334,21 @@ export default function VideoTimelinePage() {
       setEditingDurationInput("");
     }
   }, [selectedSceneIndex, selectedSceneDuration]);
+
+  // Auto-fill stock photos when arriving from TikTok Shop / video guide prefill
+  const autoFillTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (autoFillTriggeredRef.current) return;
+    if (searchParams.get("videoGuidePrefill") !== "1") return;
+    if (scenes.length === 0) return;
+    // Only auto-fill if none of the scenes already have background media
+    const anyHasMedia = scenes.some((s) => getSceneBackgroundMedia(s) !== null);
+    if (anyHasMedia) return;
+    // Wait until captions are loaded too so queries include caption text
+    if (captions.length === 0 && voiceoverUrl) return;
+    autoFillTriggeredRef.current = true;
+    autoFillScenes();
+  }, [scenes, captions, voiceoverUrl, searchParams, autoFillScenes]);
 
   const addElementToScene = useCallback(
     (sceneIndex: number, kind: "text" | "image" | "graphic" | "sticker") => {
@@ -3459,6 +3536,82 @@ export default function VideoTimelinePage() {
             <div className="flex-1 overflow-y-auto p-2">
               {leftPanelTab === "media" ? (
                 <>
+                  {/* Auto-fill button */}
+                  <button
+                    type="button"
+                    onClick={autoFillScenes}
+                    disabled={autoFillLoading || scenes.length === 0}
+                    className="w-full mb-2 py-1.5 rounded-md bg-[#f97316] hover:bg-[#ea6b10] disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                    title="Auto-fill all scenes with relevant stock photos from Pexels"
+                  >
+                    {autoFillLoading ? (
+                      <><span className="animate-spin">⟳</span> Filling scenes…</>
+                    ) : (
+                      <><span>✦</span> Auto-fill with stock photos</>
+                    )}
+                  </button>
+
+                  {/* Stock photo search */}
+                  <div className="flex gap-1 mb-2">
+                    <input
+                      type="text"
+                      value={stockQuery}
+                      onChange={(e) => setStockQuery(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") searchStockPhotos(stockQuery); }}
+                      placeholder="Search stock photos…"
+                      className="flex-1 min-w-0 px-2 py-1 rounded bg-[#0f0f0f] border border-[#2a2a2a] text-white text-[10px] placeholder-[#606060] focus:outline-none focus:border-[#f97316]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => searchStockPhotos(stockQuery)}
+                      disabled={stockLoading}
+                      className="px-2 py-1 rounded bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#a0a0a0] text-[10px] shrink-0 transition-colors"
+                    >
+                      {stockLoading ? "…" : "Go"}
+                    </button>
+                  </div>
+
+                  {/* Stock photo results */}
+                  {stockPhotos.length > 0 && (
+                    <div className="grid grid-cols-2 gap-1 mb-2">
+                      {stockPhotos.map((photo) => (
+                        <div
+                          key={photo.id}
+                          className="relative aspect-video rounded overflow-hidden bg-[#0f0f0f] cursor-grab border border-[#2a2a2a] hover:border-[#f97316]/50 group"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("application/x-media-url", photo.url);
+                            e.dataTransfer.setData("application/x-media-type", "image");
+                            e.dataTransfer.setData("application/x-media-name", `stock-${photo.id}`);
+                          }}
+                          title="Drag to a scene or click to apply to selected scene"
+                        >
+                          <img src={photo.thumb} alt="" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                          {selectedSceneIndex !== null && (
+                            <button
+                              type="button"
+                              className="absolute bottom-0 left-0 right-0 bg-[#f97316] text-white text-[9px] py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => {
+                                setScenes((prev) => prev.map((s, si) => si !== selectedSceneIndex ? s : {
+                                  ...s,
+                                  elements: s.elements.map((el, ei) => ei === 0 ? { ...el, media: { url: photo.url, type: "image" as const } } : el),
+                                }));
+                              }}
+                            >
+                              Use in scene {(selectedSceneIndex ?? 0) + 1}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Divider */}
+                  {(stockPhotos.length > 0 || mediaLibrary.length > 0) && (
+                    <p className="text-[9px] text-[#404040] uppercase tracking-wide mb-1 mt-1">Your uploads</p>
+                  )}
+
                   {/* Drop zone / add button */}
                   <div
                     className="w-full aspect-video rounded border-2 border-dashed border-[#2a2a2a] flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-[#f97316]/50 hover:bg-[#f97316]/5 transition-colors mb-2"
