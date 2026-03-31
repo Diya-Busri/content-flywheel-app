@@ -1589,27 +1589,84 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
   const scene    = scenes[currentIndex];
   if (!scene) return null;
   const progress = scenes.length > 1 ? (currentIndex / (scenes.length - 1)) * 100 : 100;
-  const shotTemplate: StickmanShotTemplate = scene.shotTemplate ?? "stand-explain";
-  const layout: StickmanLayout = scene.layout ?? (scene.pose === "sitting" ? "desk-scene" : "left-presenter");
   const keyObject: StickmanKeyObject = scene.keyObject ?? "idea";
-  const camera: StickmanCamera = scene.camera ?? "medium";
-  const effectiveLayout: StickmanLayout =
-    shotTemplate === "desk-explain"
-      ? "desk-scene"
-      : shotTemplate === "walk-and-talk"
-        ? "left-presenter"
-        : shotTemplate === "point-to-board"
-          ? "left-presenter"
-          : layout;
-  const stickmanLayoutStyle: React.CSSProperties =
-    effectiveLayout === "center-presenter"
-      ? { position: "absolute", bottom: "2%", left: "29%", width: "42%", top: "58%" }
-      : effectiveLayout === "right-presenter"
-        ? { position: "absolute", bottom: "2%", left: "52%", width: "42%", top: "58%" }
-        : effectiveLayout === "desk-scene"
-          ? { position: "absolute", bottom: "2%", left: "18%", width: "45%", top: "58%" }
-          : { position: "absolute", bottom: "2%", left: "5%", width: "42%", top: "58%" };
-  const captionRight = camera === "wide" ? "34%" : "28%";
+
+  // ── Per-scene visual theme ─────────────────────────────────────────────────
+  // Cycle through 5 distinct compositions so every scene feels different
+  const THEMES = [
+    {
+      // Theme 0: classic — text top-left, icon top-right, stickman bottom-left
+      bg: "#FFFEF8",
+      accentBg: "rgba(234,88,12,0.09)",
+      captionPos: { top:"10%", left:"5%", right:"28%", bottom:"42%" },
+      highlightPos: { top:"11%", left:"4%", right:"28%", height:"17%" },
+      iconPos: { top:"9%", right:"2%", width:"22%", height:"47%" },
+      stickmanPos: { bottom:"2%", left:"5%", width:"42%", top:"58%" },
+      dividerTop: "58%",
+      iconFlip: false,
+    },
+    {
+      // Theme 1: full-width caption, icon bottom-right, stickman bottom-center
+      bg: "#FFFBF0",
+      accentBg: "rgba(251,191,36,0.10)",
+      captionPos: { top:"8%", left:"5%", right:"5%", bottom:"46%" },
+      highlightPos: { top:"9%", left:"4%", right:"4%", height:"16%" },
+      iconPos: { bottom:"5%", right:"3%", width:"20%", top:"56%" },
+      stickmanPos: { bottom:"2%", left:"28%", width:"44%", top:"56%" },
+      dividerTop: "56%",
+      iconFlip: false,
+    },
+    {
+      // Theme 2: text right, icon left (flipped), stickman bottom-right
+      bg: "#FFFDF5",
+      accentBg: "rgba(234,88,12,0.07)",
+      captionPos: { top:"10%", left:"28%", right:"5%", bottom:"42%" },
+      highlightPos: { top:"11%", left:"28%", right:"4%", height:"17%" },
+      iconPos: { top:"9%", left:"2%", width:"22%", height:"47%" },
+      stickmanPos: { bottom:"2%", right:"5%", width:"42%", top:"58%", left: "auto" },
+      dividerTop: "58%",
+      iconFlip: true,
+    },
+    {
+      // Theme 3: large caption top-center, stickman left, icon mid-right
+      bg: "#FEFEF8",
+      accentBg: "rgba(234,88,12,0.08)",
+      captionPos: { top:"8%", left:"5%", right:"30%", bottom:"44%" },
+      highlightPos: { top:"9%", left:"4%", right:"30%", height:"18%" },
+      iconPos: { top:"12%", right:"2%", width:"24%", height:"43%" },
+      stickmanPos: { bottom:"2%", left:"5%", width:"38%", top:"56%" },
+      dividerTop: "56%",
+      iconFlip: false,
+    },
+    {
+      // Theme 4: minimal — text fills left 60%, no top-right icon (icon becomes bg watermark)
+      bg: "#FFFCF2",
+      accentBg: "rgba(251,191,36,0.08)",
+      captionPos: { top:"9%", left:"5%", right:"38%", bottom:"42%" },
+      highlightPos: { top:"10%", left:"4%", right:"38%", height:"17%" },
+      iconPos: { top:"5%", right:"1%", width:"32%", height:"52%", opacity: "0.18" },
+      stickmanPos: { bottom:"2%", left:"50%", width:"44%", top:"58%" },
+      dividerTop: "58%",
+      iconFlip: false,
+    },
+  ] as const;
+
+  const theme = THEMES[currentIndex % THEMES.length]!;
+
+  // Accent bar gradient also rotates
+  const ACCENT_GRADIENTS = [
+    "linear-gradient(90deg, #c2410c, #ea580c, #f97316, #fbbf24)",
+    "linear-gradient(90deg, #92400e, #b45309, #d97706, #fbbf24)",
+    "linear-gradient(90deg, #9a3412, #c2410c, #ea580c, #fb923c)",
+    "linear-gradient(90deg, #7c2d12, #c2410c, #f97316, #fbbf24)",
+    "linear-gradient(90deg, #a16207, #ca8a04, #eab308, #fde047)",
+  ];
+  const accentGradient = ACCENT_GRADIENTS[currentIndex % ACCENT_GRADIENTS.length]!;
+
+  // Stickman pose override: sitting always uses desk layout
+  const effectiveStickmanPos = scene.pose === "sitting"
+    ? { bottom:"2%", left:"12%", width:"48%", top: theme.dividerTop }
+    : theme.stickmanPos;
 
   return (
     <div className="flex flex-col gap-3 w-full select-none">
@@ -1646,9 +1703,10 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
         className="relative rounded-2xl overflow-hidden w-full"
         style={{
           aspectRatio: "16/9",
-          background: "#FFFEF8",
+          background: theme.bg,
           border: "2px solid #E6DFC8",
           boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06)",
+          transition: "background 0.4s ease",
         }}
       >
         {/* Dot grid */}
@@ -1660,59 +1718,62 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
           )}
         </svg>
 
-        {/* Orange top bar */}
+        {/* Accent top bar — rotates gradient per scene */}
         <div className="absolute top-0 left-0 right-0 h-[7px]"
-          style={{ background: "linear-gradient(90deg, #c2410c, #ea580c, #f97316, #fbbf24)" }} />
+          style={{ background: accentGradient, transition: "background 0.5s ease" }} />
 
-        {/* Horizontal separator between text area and stickman row */}
-        <div className="absolute left-[5%] right-[5%]" style={{ top: "58%", height: "1px", background: "linear-gradient(90deg, transparent, #d4c9a8 20%, #d4c9a8 80%, transparent)" }} />
+        {/* Horizontal separator */}
+        <div className="absolute left-[5%] right-[5%]"
+          style={{ top: theme.dividerTop, height: "1px", background: "linear-gradient(90deg, transparent, #d4c9a8 20%, #d4c9a8 80%, transparent)" }} />
 
         {/* Scene fade-in wrapper */}
         <div key={currentIndex} className="cf-scene-fade absolute inset-0">
 
-          {/* ── TOP AREA: caption (left) + doodle (right) ── */}
-
-          {/* Highlight bar behind first line */}
+          {/* Highlight bar behind caption */}
           <div
             className="cf-highlight-bar"
             style={{
               position: "absolute",
-              top: "11%", left: "4%", right: captionRight, height: "17%",
-              background: "rgba(234,88,12,0.10)",
+              top: theme.highlightPos.top,
+              left: theme.highlightPos.left,
+              right: theme.highlightPos.right,
+              height: theme.highlightPos.height,
+              background: theme.accentBg,
               borderRadius: 6,
               animationDelay: "60ms",
             }}
           />
 
           {/* Caption text */}
-          <div style={{ position: "absolute", top: "10%", left: "5%", right: captionRight, bottom: "42%", overflow: "hidden" }}>
+          <div style={{ position: "absolute", ...theme.captionPos, overflow: "hidden" }}>
             <AnimatedCaption text={scene.caption} sceneKey={currentIndex} />
           </div>
 
-          {/* Scene key object — top right */}
-          <div className="cf-doodle-pop" style={{ position: "absolute", top: "9%", right: "2%", width: "22%", height: "47%" }}>
+          {/* Scene key object — position varies by theme */}
+          <div
+            className="cf-doodle-pop"
+            style={{
+              position: "absolute",
+              ...theme.iconPos,
+              ...(theme.iconFlip ? { transform: "scaleX(-1)" } : {}),
+            }}
+          >
             <KeyObjectDoodle kind={keyObject} />
           </div>
 
-          {/* Shot template composition layer */}
-          <SceneShotTemplateLayer shotTemplate={shotTemplate} />
-
-          {/* Caption-aware scene doodles (main content illustration) */}
+          {/* Caption-aware scene doodles */}
           <SceneContextDoodles caption={scene.caption} animKey={currentIndex} />
 
-          {/* Mid-density supporting accents to avoid empty feel */}
-          <SceneSupportAccents kind={keyObject} layout={effectiveLayout} animKey={currentIndex} />
-
-          {/* ── BOTTOM ROW: storyboard-driven stickman position ── */}
-          <div style={stickmanLayoutStyle}>
+          {/* Stickman — position driven by theme */}
+          <div style={{ position: "absolute", ...effectiveStickmanPos }}>
             <StickmanSvg pose={scene.pose} animKey={currentIndex} />
           </div>
 
           {/* Scene badge — bottom right */}
           <div style={{
-            position: "absolute", bottom: "6%", right: "4%",
+            position: "absolute", bottom: "4%", right: "4%",
             fontFamily: "'Caveat', cursive", fontWeight: 700,
-            fontSize: "clamp(12px, 1.4vw, 18px)", color: "#a8956a",
+            fontSize: "clamp(11px, 1.3vw, 16px)", color: "#a8956a",
           }}>
             {currentIndex + 1} / {scenes.length}
           </div>
