@@ -2623,7 +2623,7 @@ export default function TemplateStudioClient() {
                     !canProceedStep1 ||
                     (isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
                     ((mode === "8" || mode === "9") && aiStoryLoading) ||
-                    (mode === "10" && brandStoryVideoLoading)
+                    (mode === "10" && brandStoryVideoLoading) ||
                     (isStickmanMode && stickmanLoading)
                   }
                 >

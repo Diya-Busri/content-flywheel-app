@@ -754,94 +754,312 @@ function PoseDoodle({ pose }: { pose: StickmanPose }) {
 }
 
 // ─── Scatter doodles ─────────────────────────────────────────────────────────
+// Caption keyword → topic detection → scene-relevant illustration cluster
 
-function ScatterDoodles({ pose, animKey }: { pose: StickmanPose; animKey: number }) {
-  // viewBox 160×90 (16:9). Canvas zones:
-  //   Text area: x=8–115, y=8–55  |  Doodle icon: x=118–158, y=8–52
-  //   Stickman: x=8–72, y=54–88   |  OPEN: x=73–158 y=54–88, margins, bottom strip
+type ScatterTopic =
+  | "money" | "growth" | "social" | "mindset" | "tech" | "time"
+  | "health" | "learning" | "brand" | "success" | "problem" | "default";
+
+function detectTopic(caption: string): ScatterTopic {
+  const t = caption.toLowerCase();
+  if (/\b(money|cash|income|revenue|earn|profit|invest|financ|wealth|dollar|price|pay|sale|cost)\b/.test(t)) return "money";
+  if (/\b(grow|growth|scale|expand|audience|follower|reach|viral|trend|traffic|views|engagement)\b/.test(t)) return "growth";
+  if (/\b(social|post|content|brand|instagram|tiktok|youtube|facebook|platform|channel|creator|face)\b/.test(t)) return "social";
+  if (/\b(mind|mindset|think|believe|fear|confidence|habit|routine|morning|mental|focus|discipline)\b/.test(t)) return "mindset";
+  if (/\b(tech|tool|app|software|ai|automat|system|workflow|build|product|digital|online|website)\b/.test(t)) return "tech";
+  if (/\b(time|daily|schedule|hour|minutes|week|month|year|consistent|every day|deadline|procrastinat)\b/.test(t)) return "time";
+  if (/\b(health|energy|sleep|exercise|diet|stress|burnout|wellbeing|balance|rest|body|workout)\b/.test(t)) return "health";
+  if (/\b(learn|study|skill|knowledge|course|book|read|educate|practice|improve|master|expert)\b/.test(t)) return "learning";
+  if (/\b(brand|niche|identity|logo|story|trust|audience|authentic|personal|unique|message|value)\b/.test(t)) return "brand";
+  if (/\b(success|win|goal|achieve|result|outcome|celebrat|breakthrough|unlock|accomplish|dream)\b/.test(t)) return "success";
+  if (/\b(problem|struggle|hard|difficult|challeng|fail|mistake|wrong|obstacle|barrier|stuck|lost)\b/.test(t)) return "problem";
+  return "default";
+}
+
+function ScatterDoodles({ pose, caption, animKey }: { pose: StickmanPose; caption: string; animKey: number }) {
+  const topic = detectTopic(caption);
 
   const sc: React.CSSProperties = { strokeLinecap:"round" as const, strokeLinejoin:"round" as const };
-
-  // stroke-dashoffset draw-on helper
   const sd = (delay: number, da: number, stroke="#c4b89a", sw=1.4): React.CSSProperties => ({
     ...sc, fill:"none", stroke, strokeWidth:sw,
     strokeDasharray:da, strokeDashoffset:da,
-    animation:"cf-draw 0.38s ease-out forwards", animationDelay:`${delay}ms`,
+    animation:"cf-draw 0.4s ease-out forwards", animationDelay:`${delay}ms`,
   });
-  // filled pop-in helper
   const pd = (delay: number, fill="#c4b89a"): React.CSSProperties => ({
     fill, opacity:0, transformBox:"fill-box" as const, transformOrigin:"center",
-    animation:"cf-pop 0.25s ease-out forwards", animationDelay:`${delay}ms`,
+    animation:"cf-pop 0.28s ease-out forwards", animationDelay:`${delay}ms`,
   });
 
-  // ── element builders ──
-  const dot   = (cx:number,cy:number,r:number,d:number,c="#ea580c") =>
-    <circle cx={cx} cy={cy} r={r} style={pd(d,c)} />;
-
-  const ring  = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
-    <circle cx={cx} cy={cy} r={r} style={sd(d,r*7,c)} />;
-
-  const cross = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => (<g>
-    <line x1={cx-r} y1={cy-r} x2={cx+r} y2={cy+r} style={sd(d,r*4,c)} />
-    <line x1={cx+r} y1={cy-r} x2={cx-r} y2={cy+r} style={sd(d+40,r*4,c)} />
-  </g>);
-
-  const plus  = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => (<g>
-    <line x1={cx-r} y1={cy} x2={cx+r} y2={cy} style={sd(d,r*3,c)} />
-    <line x1={cx} y1={cy-r} x2={cx} y2={cy+r} style={sd(d+30,r*3,c)} />
-  </g>);
-
-  const asterisk6 = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => (<g>
-    {[0,60,120].map((deg,i) => {
-      const a=deg*Math.PI/180;
-      return <line key={i} x1={cx-r*Math.cos(a)} y1={cy-r*Math.sin(a)} x2={cx+r*Math.cos(a)} y2={cy+r*Math.sin(a)} style={sd(d+i*40,r*3,c)} />;
-    })}
-  </g>);
-
-  const arrow = (x1:number,y1:number,x2:number,y2:number,d:number,c="#c4b89a") => {
+  // ── primitive helpers ──
+  const dot  = (cx:number,cy:number,r:number,d:number,c="#ea580c") => <circle cx={cx} cy={cy} r={r} style={pd(d,c)} />;
+  const ring = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => <circle cx={cx} cy={cy} r={r} style={sd(d,r*7,c)} />;
+  const ln   = (x1:number,y1:number,x2:number,y2:number,d:number,c="#c4b89a",sw=1.4) => {
+    const len = Math.sqrt((x2-x1)**2+(y2-y1)**2);
+    return <line x1={x1} y1={y1} x2={x2} y2={y2} style={sd(d,len+2,c,sw)} />;
+  };
+  const arw = (x1:number,y1:number,x2:number,y2:number,d:number,c="#ea580c") => {
     const dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy),nx=dx/len,ny=dy/len;
-    const ax=nx*0.7,ay=ny*0.7,px=-ny*0.5,py=nx*0.5;
+    const px=-ny*0.5,py=nx*0.5;
     return (<g>
-      <line x1={x1} y1={y1} x2={x2} y2={y2} style={sd(d,len+4,c,1.4)} />
-      <line x1={x2} y1={y2} x2={x2-ax*3+px*2} y2={y2-ay*3+py*2} style={sd(d+80,6,c,1.4)} />
-      <line x1={x2} y1={y2} x2={x2-ax*3-px*2} y2={y2-ay*3-py*2} style={sd(d+100,6,c,1.4)} />
+      {ln(x1,y1,x2,y2,d,c,1.5)}
+      <line x1={x2} y1={y2} x2={x2-nx*4+px*2.5} y2={y2-ny*4+py*2.5} style={sd(d+90,6,c,1.5)} />
+      <line x1={x2} y1={y2} x2={x2-nx*4-px*2.5} y2={y2-ny*4-py*2.5} style={sd(d+110,6,c,1.5)} />
     </g>);
   };
+  const sqg = (x:number,y:number,d:number,c="#d4c9a8") =>
+    <path d={`M${x},${y} Q${x+4},${y-3} ${x+8},${y} Q${x+12},${y+3} ${x+16},${y}`} style={sd(d,30,c,1.3)} />;
+  const chk = (cx:number,cy:number,r:number,d:number,c="#22c55e") =>
+    <polyline points={`${cx-r},${cy} ${cx-r*0.3},${cy+r} ${cx+r},${cy-r*0.6}`} style={sd(d,r*6,c,1.8)} />;
+  const zap = (cx:number,cy:number,r:number,d:number,c="#fbbf24") =>
+    <polyline points={`${cx+r*0.4},${cy-r} ${cx-r*0.2},${cy-r*0.1} ${cx+r*0.3},${cy} ${cx-r*0.4},${cy+r}`} style={sd(d,r*6,c,1.8)} />;
 
-  const diamond = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
-    <polygon points={`${cx},${cy-r} ${cx+r},${cy} ${cx},${cy+r} ${cx-r},${cy}`}
-      style={sd(d,r*8,c)} />;
+  // ── TOPIC ILLUSTRATION clusters (bottom-right open zone: x=73–155, y=55–78) ──
 
-  const triangle = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
-    <polygon points={`${cx},${cy-r} ${cx+r*0.866},${cy+r*0.5} ${cx-r*0.866},${cy+r*0.5}`}
-      style={sd(d,r*7,c)} />;
+  // 💰 Money: coin stack, upward arrow, dollar sign
+  const moneyCluster = (<>
+    {/* coin stack */}
+    {ring(88,74,5,500,"#fbbf24")}
+    {ring(88,70,5,560,"#fbbf24")}
+    {ring(88,66,5,620,"#fbbf24")}
+    {dot(88,66,2,680,"#fbbf24")}
+    {/* $ sign */}
+    <path d={`M110,58 Q105,56 105,61 Q105,66 115,66 Q125,66 125,72 Q125,77 118,76`} style={sd(700,40,"#ea580c",2)} />
+    {ln(118,54,118,78,640,"#ea580c",1.6)}
+    {/* upward trend */}
+    {arw(130,76,152,58,780,"#22c55e")}
+    {dot(130,76,1.8,880,"#22c55e")}
+    {dot(138,71,1.8,920,"#22c55e")}
+    {dot(146,64,1.8,960,"#22c55e")}
+    {/* sparkle dots */}
+    {dot(102,60,1.5,750,"#fbbf24")}
+    {dot(125,57,1.4,800,"#ea580c")}
+  </>);
 
-  const check = (cx:number,cy:number,r:number,d:number,c="#ea580c") =>
-    <polyline points={`${cx-r},${cy} ${cx-r*0.3},${cy+r} ${cx+r},${cy-r*0.6}`}
-      style={sd(d,r*6,c,1.6)} />;
+  // 📈 Growth: bar chart + rocket
+  const growthCluster = (<>
+    {/* bar chart */}
+    {ln(78,78,78,55,500,"#c4b89a",1.4)}
+    {ln(78,78,110,78,540,"#c4b89a",1.4)}
+    <rect x="82" y="68" width="6" height="10" style={sd(600,30,"#c4b89a",1.4)} />
+    <rect x="91" y="61" width="6" height="17" style={sd(650,40,"#ea580c",1.6)} />
+    <rect x="100" y="57" width="6" height="21" style={sd(700,50,"#ea580c",1.8)} />
+    {arw(108,76,118,58,780,"#22c55e")}
+    {/* rocket */}
+    <path d={`M140,74 Q144,62 148,57 Q152,62 148,74 Z`} style={sd(820,30,"#ea580c",1.8)} />
+    {ln(143,73,140,78,870,"#ea580c",1.4)}
+    {ln(148,73,151,78,890,"#ea580c",1.4)}
+    {dot(148,56,2,950,"#fbbf24")}
+    {dot(138,60,1.5,990,"#fbbf24")}
+    {dot(152,63,1.4,1020,"#c4b89a")}
+  </>);
 
-  const squiggle = (x:number,y:number,d:number,c="#d4c9a8") =>
-    <path d={`M${x},${y} Q${x+4},${y-3} ${x+8},${y} Q${x+12},${y+3} ${x+16},${y}`}
-      style={sd(d,30,c,1.3)} />;
+  // 📱 Social media: phone + like + speech bubble
+  const socialCluster = (<>
+    {/* phone outline */}
+    <rect x="80" y="57" width="14" height="22" rx="2" style={sd(500,60,"#c4b89a",1.6)} />
+    {ln(82,62,92,62,580,"#c4b89a",1.2)}
+    {dot(87,75,1.5,620,"#c4b89a")}
+    {/* heart */}
+    <path d={`M108,65 C108,62 112,62 112,65 C112,62 116,62 116,65 C116,68 112,73 112,73 C112,73 108,68 108,65`} style={sd(660,30,"#ea580c",1.8)} />
+    {/* speech bubble */}
+    <rect x="123" y="57" width="22" height="14" rx="3" style={sd(740,60,"#c4b89a",1.6)} />
+    {ln(126,71,123,75,810,"#c4b89a",1.4)}
+    {ln(123,61,139,61,850,"#c4b89a",1.1)}
+    {ln(123,65,135,65,880,"#c4b89a",1.1)}
+    {ln(123,69,131,69,910,"#c4b89a",1.1)}
+    {/* likes count */}
+    {dot(104,62,1.5,960,"#fbbf24")}
+    {dot(119,68,1.5,1000,"#ea580c")}
+  </>);
 
-  const lightning = (cx:number,cy:number,r:number,d:number,c="#fbbf24") =>
-    <polyline points={`${cx+r*0.4},${cy-r} ${cx-r*0.2},${cy-r*0.1} ${cx+r*0.3},${cy} ${cx-r*0.4},${cy+r}`}
-      style={sd(d,r*6,c,1.6)} />;
+  // 🧠 Mindset: brain waves + light bulb glow + upward path
+  const mindsetCluster = (<>
+    {/* brain squiggles */}
+    {sqg(78,64,500,"#a8956a")}
+    {sqg(78,69,560,"#a8956a")}
+    {sqg(78,74,620,"#a8956a")}
+    {/* step path upward */}
+    {ln(104,78,104,70,680,"#ea580c",1.6)}
+    {ln(104,70,114,70,720,"#ea580c",1.6)}
+    {ln(114,70,114,62,760,"#ea580c",1.6)}
+    {ln(114,62,124,62,800,"#ea580c",1.6)}
+    {ln(124,62,124,57,840,"#ea580c",1.6)}
+    {/* infinity */}
+    <path d={`M136,67 C136,63 140,63 142,67 C144,63 148,63 148,67 C148,71 144,71 142,67 C140,71 136,71 136,67`} style={sd(880,40,"#c4b89a",1.4)} />
+    {dot(142,67,1.8,960,"#fbbf24")}
+    {dot(128,57,1.5,1000,"#ea580c")}
+    {dot(150,63,1.4,1030,"#c4b89a")}
+  </>);
 
-  const hashtag = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => (<g>
-    <line x1={cx-r*0.6} y1={cy-r*0.4} x2={cx+r*0.6} y2={cy-r*0.4} style={sd(d,r*2,c)} />
-    <line x1={cx-r*0.6} y1={cy+r*0.4} x2={cx+r*0.6} y2={cy+r*0.4} style={sd(d+40,r*2,c)} />
-    <line x1={cx-r*0.2} y1={cy-r*0.8} x2={cx-r*0.4} y2={cy+r*0.8} style={sd(d+70,r*2,c)} />
-    <line x1={cx+r*0.2} y1={cy-r*0.8} x2={cx+r*0.0} y2={cy+r*0.8} style={sd(d+100,r*2,c)} />
-  </g>);
+  // 💻 Tech: code brackets + gear + binary
+  const techCluster = (<>
+    {/* < > brackets */}
+    <polyline points="83,64 78,68 83,72" style={sd(500,14,"#ea580c",2)} />
+    <polyline points="97,64 102,68 97,72" style={sd(560,14,"#ea580c",2)} />
+    {ln(87,78,93,58,620,"#c4b89a",1.2)}
+    {/* gear */}
+    {ring(118,67,8,680,"#c4b89a")}
+    {ring(118,67,4,740,"#c4b89a")}
+    {[0,45,90,135,180,225,270,315].map((deg,i)=>{
+      const a=deg*Math.PI/180;
+      return <line key={i} x1={118+9*Math.cos(a)} y1={67+9*Math.sin(a)} x2={118+11.5*Math.cos(a)} y2={67+11.5*Math.sin(a)} style={sd(780+i*20,3,"#c4b89a",1.4)} />;
+    })}
+    {/* binary dots */}
+    {dot(136,60,1.6,920,"#ea580c")}
+    {dot(140,60,1.6,940,"#c4b89a")}
+    {dot(144,60,1.6,960,"#ea580c")}
+    {dot(148,60,1.6,980,"#c4b89a")}
+    {dot(136,65,1.6,1000,"#c4b89a")}
+    {dot(140,65,1.6,1020,"#ea580c")}
+    {dot(144,65,1.6,1040,"#c4b89a")}
+    {dot(148,65,1.6,1060,"#ea580c")}
+  </>);
 
-  const infinity = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
-    <path d={`M${cx},${cy} C${cx-r},${cy-r} ${cx-r*2},${cy-r} ${cx-r*1.5},${cy} C${cx-r},${cy+r} ${cx},${cy+r*0.5} ${cx},${cy} C${cx},${cy-r*0.5} ${cx+r},${cy-r} ${cx+r*1.5},${cy} C${cx+r*2},${cy+r} ${cx+r},${cy+r} ${cx},${cy}`}
-      style={sd(d,r*12,c)} />;
+  // ⏰ Time: clock + calendar + hourglass
+  const timeCluster = (<>
+    {/* clock */}
+    {ring(90,66,11,500,"#c4b89a")}
+    {ln(90,60,90,66,580,"#ea580c",1.8)}
+    {ln(90,66,96,70,610,"#c4b89a",1.6)}
+    {dot(90,66,1.5,660,"#ea580c")}
+    {/* calendar */}
+    <rect x="108" y="58" width="18" height="16" rx="1" style={sd(700,60,"#c4b89a",1.6)} />
+    {ln(108,62,126,62,760,"#c4b89a",1.2)}
+    {ln(113,58,113,56,780,"#c4b89a",1.4)}
+    {ln(121,58,121,56,800,"#c4b89a",1.4)}
+    {dot(112,67,1.4,840,"#ea580c")}
+    {dot(117,67,1.4,860,"#c4b89a")}
+    {dot(122,67,1.4,880,"#ea580c")}
+    {dot(112,71,1.4,900,"#c4b89a")}
+    {dot(117,71,1.4,920,"#ea580c")}
+    {/* hourglass */}
+    <polyline points="135,57 149,57 142,67 149,77 135,77 142,67 135,57" style={sd(960,60,"#fbbf24",1.6)} />
+    {dot(142,67,2,1040,"#fbbf24")}
+  </>);
 
-  const spiral = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
-    <path d={`M${cx+r},${cy} A${r},${r} 0 1 0 ${cx-r*0.3},${cy-r*0.95} A${r*0.5},${r*0.5} 0 0 1 ${cx+r*0.3},${cy+r*0.3}`}
-      style={sd(d,r*10,c)} />;
+  // 💪 Health: heartbeat line + dumbbell + leaf
+  const healthCluster = (<>
+    {/* heartbeat ECG */}
+    <polyline points="78,68 86,68 89,60 92,76 95,63 98,68 108,68" style={sd(500,60,"#ea580c",1.8)} />
+    {/* leaf */}
+    <path d={`M118,76 C118,62 130,58 134,58 C134,62 130,74 118,76`} style={sd(680,30,"#22c55e",1.6)} />
+    {ln(118,76,126,64,740,"#22c55e",1.2)}
+    {/* dumbbell */}
+    {ring(143,62,4,780,"#c4b89a")}
+    {ring(155,62,4,820,"#c4b89a")}
+    {ln(147,62,151,62,860,"#c4b89a",2)}
+    {dot(126,72,1.5,900,"#22c55e")}
+    {dot(136,68,1.5,930,"#fbbf24")}
+    {dot(152,72,1.4,960,"#c4b89a")}
+  </>);
+
+  // 📚 Learning: open book + pencil + stars
+  const learningCluster = (<>
+    {/* open book */}
+    {ln(80,78,80,60,500,"#c4b89a",1.6)}
+    <path d={`M80,60 C86,57 96,58 102,60`} style={sd(560,30,"#c4b89a",1.4)} />
+    <path d={`M80,78 C86,75 96,76 102,78`} style={sd(590,30,"#c4b89a",1.4)} />
+    {ln(102,60,102,78,620,"#c4b89a",1.6)}
+    {ln(82,65,100,65,660,"#c4b89a",1.1)}
+    {ln(82,69,98,69,690,"#c4b89a",1.1)}
+    {ln(82,73,96,73,720,"#c4b89a",1.1)}
+    {/* pencil */}
+    <polygon points="115,57 122,57 122,74 118.5,78 115,74" style={sd(760,50,"#fbbf24",1.6)} />
+    {ln(115,74,122,74,820,"#fbbf24",1.4)}
+    {dot(118.5,77,1.5,860,"#ea580c")}
+    {/* stars */}
+    {[[133,60],[142,58],[151,61],[147,70],[135,68]].map(([x,y],i)=>(
+      <path key={i} d={`M${x},${y-3} L${x+1},${y-1} L${x+3},${y-1} L${x+1.5},${y+0.5} L${x+2},${y+3} L${x},${y+1.5} L${x-2},${y+3} L${x-1.5},${y+0.5} L${x-3},${y-1} L${x-1},${y-1} Z`}
+        style={sd(900+i*60,20,i%2===0?"#fbbf24":"#ea580c",1.2)} />
+    ))}
+  </>);
+
+  // 🎯 Brand: target + crown + megaphone
+  const brandCluster = (<>
+    {/* target */}
+    {ring(88,67,11,500,"#ea580c")}
+    {ring(88,67,6.5,560,"#ea580c")}
+    {dot(88,67,2.5,640,"#ea580c")}
+    {/* crown */}
+    <polyline points="112,74 112,62 116,67 120,60 124,67 128,62 128,74" style={sd(700,50,"#fbbf24",2)} />
+    {ln(112,74,128,74,760,"#fbbf24",2)}
+    {/* megaphone */}
+    <polygon points="136,62 136,72 144,76 144,58" style={sd(800,44,"#c4b89a",1.6)} />
+    <rect x="131" y="64" width="5" height="8" rx="1" style={sd(860,26,"#c4b89a",1.6)} />
+    {ln(144,66,150,62,900,"#c4b89a",1.4)}
+    {ln(144,69,152,69,930,"#c4b89a",1.4)}
+    {ln(144,72,150,76,960,"#c4b89a",1.4)}
+    {dot(100,60,1.5,980,"#fbbf24")}
+  </>);
+
+  // 🏆 Success: trophy + star burst + checkmarks
+  const successCluster = (<>
+    {/* trophy cup */}
+    <path d={`M88,58 h18 v14 a9 9 0 0 1-18 0 Z`} style={sd(500,60,"#fbbf24",2)} />
+    {ln(91,72,89,78,580,"#fbbf24",1.6)}
+    {ln(103,72,105,78,600,"#fbbf24",1.6)}
+    {ln(87,78,107,78,640,"#fbbf24",2)}
+    {/* handles */}
+    <path d={`M88,62 Q82,65 82,69 Q82,73 88,75`} style={sd(680,20,"#c4b89a",1.4)} />
+    <path d={`M106,62 Q112,65 112,69 Q112,73 106,75`} style={sd(710,20,"#c4b89a",1.4)} />
+    {/* burst rays */}
+    {[0,30,60,90,120,150,180,210,240,270,300,330].map((deg,i)=>{
+      const a=deg*Math.PI/180, x1=97+17*Math.cos(a), y1=67+17*Math.sin(a), x2=97+22*Math.cos(a), y2=67+22*Math.sin(a);
+      return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} style={sd(760+i*25,5,"#fbbf24",1.2)} />;
+    })}
+    {/* checkmarks */}
+    {chk(128,65,4,1080,"#22c55e")}
+    {chk(140,65,4,1120,"#22c55e")}
+    {dot(134,74,2,1160,"#fbbf24")}
+    {dot(148,72,1.6,1180,"#ea580c")}
+  </>);
+
+  // ❌ Problem: cracked X + question marks + storm cloud
+  const problemCluster = (<>
+    {/* big X */}
+    {ln(78,58,98,76,500,"#ea580c",2.2)}
+    {ln(98,58,78,76,540,"#ea580c",2.2)}
+    {/* cracks */}
+    <path d={`M88,67 l-5,3 l4,2 l-3,4`} style={sd(620,14,"#c4b89a",1.2)} />
+    {/* question marks */}
+    <path d={`M112,60 Q112,56 116,56 Q120,56 120,60 Q120,63 116,64 L116,66`} style={sd(700,24,"#c4b89a",1.6)} />
+    {dot(116,69,1.6,780,"#c4b89a")}
+    <path d={`M128,62 Q128,59 131,59 Q134,59 134,62 Q134,64 131,65 L131,66`} style={sd(820,18,"#a8956a",1.4)} />
+    {dot(131,68,1.4,880,"#a8956a")}
+    {/* storm cloud */}
+    <ellipse cx="142" cy="65" rx="9" ry="6" style={sd(900,30,"#94a3b8",1.6)} />
+    <ellipse cx="148" cy="62" rx="6" ry="5" style={sd(940,22,"#94a3b8",1.4)} />
+    {zap(145,73,5,980,"#fbbf24")}
+    {dot(136,60,1.5,1040,"#94a3b8")}
+  </>);
+
+  // 🔵 Default: abstract shapes — calm and non-distracting
+  const defaultCluster = (<>
+    {ring(88,67,8,500)}
+    {ring(108,65,5,580,"#ea580c")}
+    {ln(78,78,108,58,640,"#d4c9a8",1.3)}
+    {arw(120,75,148,62,700,"#c4b89a")}
+    {dot(118,60,1.8,780,"#fbbf24")}
+    {dot(134,70,1.5,820,"#ea580c")}
+    {dot(148,75,1.4,860,"#c4b89a")}
+    {chk(130,63,4.5,900)}
+    {dot(148,58,1.4,960,"#fbbf24")}
+  </>);
+
+  const topicCluster = {
+    money:    moneyCluster,
+    growth:   growthCluster,
+    social:   socialCluster,
+    mindset:  mindsetCluster,
+    tech:     techCluster,
+    time:     timeCluster,
+    health:   healthCluster,
+    learning: learningCluster,
+    brand:    brandCluster,
+    success:  successCluster,
+    problem:  problemCluster,
+    default:  defaultCluster,
+  }[topic];
 
   return (
     <svg key={animKey} viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
@@ -850,81 +1068,40 @@ function ScatterDoodles({ pose, animKey }: { pose: StickmanPose; animKey: number
         @keyframes cf-pop  { 0%{opacity:0;transform:scale(0.2)} 60%{opacity:1;transform:scale(1.3)} 100%{opacity:1;transform:scale(1)} }
       `}</style>
 
-      {/* ── LEFT MARGIN strip (x=2–8) ── */}
-      {dot(3,6,1.6,280,"#ea580c")}
-      {dot(5,15,1.3,340,"#fbbf24")}
-      {cross(4,26,2.2,400)}
-      {dot(3,35,1.5,460,"#ea580c")}
-      {plus(5,45,2.5,520)}
-      {cross(4,56,2.2,580)}
-      {dot(3,65,1.6,640,"#fbbf24")}
-      {ring(5,74,2.2,700)}
-      {dot(4,83,1.4,760,"#ea580c")}
+      {/* ── LEFT MARGIN strip ── */}
+      {dot(3,8,1.6,280,"#ea580c")}
+      {dot(4,20,1.3,340,"#fbbf24")}
+      {dot(3,32,1.5,400,"#ea580c")}
+      {dot(4,44,1.4,460,"#fbbf24")}
+      {dot(3,56,1.6,520,"#ea580c")}
+      {dot(4,68,1.3,580,"#fbbf24")}
+      {dot(3,80,1.5,640,"#ea580c")}
 
-      {/* ── RIGHT MARGIN strip (x=152–158) ── */}
-      {dot(157,6,1.6,300,"#fbbf24")}
-      {dot(155,15,1.3,360,"#ea580c")}
-      {cross(156,26,2.2,420)}
-      {dot(157,35,1.5,480,"#fbbf24")}
-      {plus(155,45,2.5,540)}
-      {cross(156,56,2.2,600)}
-      {dot(157,65,1.6,660,"#ea580c")}
-      {ring(155,74,2.2,720)}
-      {dot(156,83,1.4,780,"#fbbf24")}
+      {/* ── RIGHT MARGIN strip ── */}
+      {dot(157,8,1.5,300,"#fbbf24")}
+      {dot(156,20,1.4,360,"#ea580c")}
+      {dot(157,32,1.6,420,"#fbbf24")}
+      {dot(156,44,1.3,480,"#ea580c")}
+      {dot(157,56,1.5,540,"#fbbf24")}
+      {dot(156,68,1.4,600,"#ea580c")}
+      {dot(157,80,1.6,660,"#fbbf24")}
 
-      {/* ── BOTTOM STRIP (y=78–88, all x) — fills the narrow footer ── */}
-      {squiggle(10,84,650)}
-      {squiggle(35,86,690)}
-      {squiggle(60,83,730)}
-      {squiggle(88,85,770)}
-      {squiggle(112,84,810)}
-      {squiggle(136,86,850)}
-      {dot(22,87,1.4,880,"#ea580c")}
-      {dot(48,85,1.3,910,"#fbbf24")}
-      {dot(75,88,1.5,940,"#ea580c")}
-      {dot(104,86,1.3,970,"#fbbf24")}
-      {dot(130,87,1.4,1000,"#ea580c")}
-      {dot(148,85,1.3,1030,"#fbbf24")}
+      {/* ── BOTTOM STRIP (footer squiggles) ── */}
+      {sqg(10,84,650)}
+      {sqg(36,86,690)}
+      {sqg(62,84,730)}
+      {sqg(90,85,770)}
+      {sqg(116,84,810)}
+      {sqg(140,86,850)}
 
-      {/* ── BOTTOM-RIGHT OPEN AREA (x=73–155, y=54–78) — main doodle zone ── */}
-      {asterisk6(82,62,4,550,"#c4b89a")}
-      {arrow(92,58,104,58,600)}
-      {diamond(115,60,4,650)}
-      {lightning(130,57,5,700,"#fbbf24")}
-      {triangle(145,60,4,750)}
-      {check(86,72,4.5,800)}
-      {hashtag(100,70,5,840)}
-      {infinity(117,71,4,890)}
-      {asterisk6(133,68,3.5,930,"#ea580c")}
-      {spiral(148,70,4,970)}
-      {plus(78,76,3.5,820,"#ea580c")}
-      {ring(95,78,3,870)}
-      {cross(110,77,2.8,910)}
-      {arrow(122,80,134,75,950)}
-      {diamond(143,77,3.5,990)}
-      {dot(80,69,1.5,680,"#fbbf24")}
-      {dot(153,63,1.4,720,"#ea580c")}
+      {/* ── TOPIC ILLUSTRATION — bottom-right open area ── */}
+      {topicCluster}
 
-      {/* ── BOTTOM-CENTER (x=40–72, y=60–78) beside stickman ── */}
-      {asterisk6(48,64,3.5,560,"#d4c9a8")}
-      {plus(60,68,2.8,610)}
-      {ring(50,74,2.5,660)}
-      {cross(65,72,2.2,710)}
-      {dot(55,80,1.4,760,"#ea580c")}
-      {dot(68,76,1.3,800,"#fbbf24")}
-
-      {/* ── Pose-specific accents ── */}
-      {pose==="pointing"   && arrow(40,87,110,87,1050,"#ea580c")}
-      {pose==="celebrating"&& [28,44,60,76,92,108].map((x,i)=>(
-        <line key={i} x1={x} y1={84} x2={x+5} y2={90}
-          style={sd(1000+i*55,10,i%2===0?"#ea580c":"#fbbf24",1.6)} />
+      {/* ── Pose accent ── */}
+      {pose==="celebrating" && [30,48,66,84,102,120].map((x,i)=>(
+        <line key={i} x1={x} y1={83} x2={x+4} y2={90}
+          style={sd(1000+i*50,10,i%2===0?"#ea580c":"#fbbf24",1.8)} />
       ))}
-      {pose==="thinking"   && <>{ring(88,65,3.5,950,"#a8956a")}{ring(92,60,2,1020,"#a8956a")}</>}
-      {pose==="arms-raised"&& [80,95,110,125,140].map((x,i)=>(
-        dot(x,i%2===0?60:66,1.6,900+i*60,i%2===0?"#ea580c":"#fbbf24")
-      ))}
-      {pose==="walking"    && arrow(80,65,98,60,900,"#ea580c")}
-      {pose==="defeated"   && cross(95,62,3,900,"#ea580c")}
     </svg>
   );
 }
@@ -1092,7 +1269,7 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
         <div className="absolute left-[5%] right-[5%]" style={{ top: "58%", height: "1px", background: "linear-gradient(90deg, transparent, #d4c9a8 20%, #d4c9a8 80%, transparent)" }} />
 
         {/* Scatter doodles — ambient layer across full canvas */}
-        <ScatterDoodles pose={scene.pose} animKey={currentIndex} />
+        <ScatterDoodles pose={scene.pose} caption={scene.caption} animKey={currentIndex} />
 
         {/* Scene fade-in wrapper */}
         <div key={currentIndex} className="cf-scene-fade absolute inset-0">
