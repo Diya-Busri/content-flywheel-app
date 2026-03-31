@@ -581,37 +581,40 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
 
   return (
     <div className="flex flex-col gap-4 w-full select-none">
-      {/* Whiteboard */}
+      {/* Whiteboard — 16:9 landscape for YouTube */}
       <div
-        className="relative rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
-        style={{ aspectRatio: "9/16", width: "100%", maxWidth: 360, margin: "0 auto" }}
+        className="relative rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden w-full"
+        style={{ aspectRatio: "16/9" }}
       >
-        {/* Very faint horizontal ruled lines — like a notepad */}
+        {/* Very faint horizontal ruled lines */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
-          viewBox="0 0 100 160" preserveAspectRatio="none"
+          viewBox="0 0 160 90" preserveAspectRatio="none"
           style={{ opacity: 0.03 }}
         >
-          {Array.from({ length: 16 }, (_, i) => (
-            <line key={i} x1="0" y1={i * 10} x2="100" y2={i * 10} stroke="#000" strokeWidth="0.6" />
+          {Array.from({ length: 18 }, (_, i) => (
+            <line key={i} x1="0" y1={i * 5} x2="160" y2={i * 5} stroke="#000" strokeWidth="0.4" />
           ))}
         </svg>
+
+        {/* Vertical divider between stickman and caption */}
+        <div className="absolute top-[8%] bottom-[8%] left-[52%] w-px bg-slate-200" />
 
         {/* Scene counter */}
         <div className="absolute top-3 right-3 z-10 text-[10px] font-mono text-slate-400 bg-white/80 px-2 py-0.5 rounded-full border border-slate-200">
           {currentIndex + 1} / {scenes.length}
         </div>
 
-        {/* Stickman — top 62% of canvas */}
-        <div className="absolute inset-x-0 top-0 h-[62%] flex items-end justify-center pb-2 pt-3 px-4">
+        {/* Stickman — left 52% */}
+        <div className="absolute inset-y-0 left-0 w-[52%] flex items-center justify-center p-4">
           <StickmanSvg pose={scene.pose} animKey={currentIndex} />
         </div>
 
-        {/* Caption — bottom 38% */}
-        <div className="absolute inset-x-0 bottom-0 h-[38%] flex items-start justify-center px-5 pt-2">
+        {/* Caption — right 48% */}
+        <div className="absolute inset-y-0 right-0 w-[48%] flex items-center justify-start px-6 pr-8">
           <p
-            className="text-center text-slate-800 font-semibold leading-snug tracking-tight"
-            style={{ fontSize: "clamp(12px, 3.2vw, 16px)" }}
+            className="text-slate-800 font-semibold leading-snug tracking-tight"
+            style={{ fontSize: "clamp(13px, 1.6vw, 22px)" }}
           >
             {scene.caption}
           </p>
@@ -634,12 +637,12 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
       {error && <p className="text-center text-sm text-red-500">{error}</p>}
 
       {/* Progress */}
-      <div className="w-full max-w-[360px] mx-auto h-1 rounded-full bg-slate-100 overflow-hidden">
+      <div className="w-full h-1 rounded-full bg-slate-100 overflow-hidden">
         <div className="h-full bg-orange-400 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
       </div>
 
       {/* Controls */}
-      <div className="flex items-center justify-center gap-3 max-w-[360px] mx-auto">
+      <div className="flex items-center justify-center gap-3">
         <button type="button" onClick={handlePrev} disabled={currentIndex === 0}
           className="p-2 rounded-full hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="Previous">
@@ -666,7 +669,7 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
       </div>
 
       {/* Scene dots */}
-      <div className="flex items-center justify-center gap-2 max-w-[360px] mx-auto flex-wrap">
+      <div className="flex items-center justify-center gap-2 flex-wrap">
         {scenes.map((s, i) => (
           <button
             key={s.sceneIndex}
