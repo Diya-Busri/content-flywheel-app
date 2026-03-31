@@ -505,137 +505,296 @@ function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number })
 
 // ─── Pose doodle (top-right decorative icon) ──────────────────────────────────
 
-function PoseDoodle({ pose }: { pose: StickmanPose }) {
-  const strokeStyle = (delay: number, sw = 2.5): React.CSSProperties => ({
-    fill: "none", stroke: "#1e1b12", strokeWidth: sw, strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
-    strokeDasharray: 300, strokeDashoffset: 300,
-    animation: "cf-draw 0.5s ease-out forwards",
-    animationDelay: `${delay}ms`,
-  });
-  const dotStyle = (delay: number): React.CSSProperties => ({
-    fill: "#1e1b12", opacity: 0,
-    animation: "cf-pop 0.25s ease-out forwards",
-    animationDelay: `${delay}ms`,
-  });
-  const oStyle = (delay: number, sw = 2.5): React.CSSProperties => ({ ...strokeStyle(delay, sw), strokeDasharray: 200 });
+// shared style helpers (used by PoseDoodle + ScatterDoodles)
+const _ss = (delay: number, sw = 2.5, da = 300): React.CSSProperties => ({
+  fill: "none", stroke: "#1e1b12", strokeWidth: sw,
+  strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
+  strokeDasharray: da, strokeDashoffset: da,
+  animation: "cf-draw 0.5s ease-out forwards", animationDelay: `${delay}ms`,
+});
+const _ds = (delay: number, color = "#1e1b12"): React.CSSProperties => ({
+  fill: color, opacity: 0,
+  animation: "cf-pop 0.25s ease-out forwards", animationDelay: `${delay}ms`,
+  transformBox: "fill-box" as const, transformOrigin: "center",
+});
+// 3D face fills (orange-tinted)
+const TOP3D  = "rgba(234,88,12,0.18)";
+const SIDE3D = "rgba(234,88,12,0.09)";
+const DARK3D = "rgba(30,27,18,0.06)";
 
+// ─── Pose doodle ─────────────────────────────────────────────────────────────
+
+function PoseDoodle({ pose }: { pose: StickmanPose }) {
   const icons: Record<StickmanPose, React.ReactNode> = {
-    thinking: (
-      <>
-        {/* Lightbulb */}
-        <circle cx="50" cy="32" r="18" style={oStyle(200)} />
-        <line x1="38" y1="46" x2="43" y2="54" style={strokeStyle(600)} />
-        <line x1="50" y1="48" x2="50" y2="56" style={strokeStyle(650)} />
-        <line x1="62" y1="46" x2="57" y2="54" style={strokeStyle(700)} />
-        <line x1="43" y1="57" x2="57" y2="57" style={strokeStyle(750)} />
-        <line x1="44" y1="62" x2="56" y2="62" style={strokeStyle(800)} />
-        {/* Rays */}
-        <line x1="50" y1="8"  x2="50" y2="2"  style={strokeStyle(400, 2)} />
-        <line x1="70" y1="18" x2="74" y2="14" style={strokeStyle(440, 2)} />
-        <line x1="30" y1="18" x2="26" y2="14" style={strokeStyle(480, 2)} />
-        <line x1="76" y1="34" x2="82" y2="34" style={strokeStyle(520, 2)} />
-        <line x1="24" y1="34" x2="18" y2="34" style={strokeStyle(560, 2)} />
-      </>
-    ),
-    pointing: (
-      <>
-        {/* Bar chart */}
-        <line x1="14" y1="72" x2="86" y2="72" style={strokeStyle(200, 2.5)} />
-        <line x1="14" y1="72" x2="14" y2="14" style={strokeStyle(350, 2.5)} />
-        <rect x="20" y="52" width="12" height="20" style={{ ...strokeStyle(500), fill: "rgba(234,88,12,0.15)" }} />
-        <rect x="38" y="40" width="12" height="32" style={{ ...strokeStyle(600), fill: "rgba(234,88,12,0.15)" }} />
-        <rect x="56" y="26" width="12" height="46" style={{ ...strokeStyle(700), fill: "rgba(234,88,12,0.15)" }} />
-        {/* Up arrow */}
-        <line x1="78" y1="30" x2="78" y2="10" style={strokeStyle(850, 2.5)} />
-        <line x1="70" y1="18" x2="78" y2="10" style={strokeStyle(900, 2.5)} />
-        <line x1="86" y1="18" x2="78" y2="10" style={strokeStyle(950, 2.5)} />
-      </>
-    ),
-    celebrating: (
-      <>
-        {/* Trophy */}
-        <path d="M34 14 h32 v24 a16 16 0 0 1-32 0 Z" style={strokeStyle(200)} />
-        <line x1="50" y1="54" x2="50" y2="68" style={strokeStyle(600)} />
-        <line x1="34" y1="68" x2="66" y2="68" style={strokeStyle(700)} />
-        <line x1="20" y1="18" x2="34" y2="18" style={strokeStyle(350)} />
-        <line x1="80" y1="18" x2="66" y2="18" style={strokeStyle(450)} />
-        {/* Stars */}
-        <circle cx="18" cy="36" r="3" style={dotStyle(750)} />
-        <circle cx="82" cy="36" r="3" style={dotStyle(800)} />
-        <circle cx="26" cy="60" r="2" style={dotStyle(850)} />
-        <circle cx="74" cy="60" r="2" style={dotStyle(900)} />
-        <circle cx="50" cy="8"  r="3" style={dotStyle(950)} />
-      </>
-    ),
-    standing: (
-      <>
-        {/* Giant ? */}
-        <path d="M34 28 a16 16 0 1 1 20 15 c0 4-4 8-4 14" style={strokeStyle(200, 3.5)} />
-        <circle cx="50" cy="70" r="3.5" style={dotStyle(750)} />
-      </>
-    ),
-    sitting: (
-      <>
-        {/* Laptop */}
-        <rect x="16" y="20" width="68" height="44" rx="4" style={strokeStyle(200)} />
-        <line x1="24" y1="30" x2="52" y2="30" style={strokeStyle(500, 1.8)} />
-        <line x1="24" y1="38" x2="44" y2="38" style={strokeStyle(560, 1.8)} />
-        <line x1="24" y1="46" x2="56" y2="46" style={strokeStyle(620, 1.8)} />
-        <line x1="8"  y1="68" x2="92" y2="68" style={strokeStyle(750)} />
-        {/* Code cursor */}
-        <rect x="57" y="34" width="2" height="8" style={dotStyle(800)} />
-      </>
-    ),
-    defeated: (
-      <>
-        {/* Storm cloud */}
-        <path d="M24 44 a14 14 0 0 1 14-14 a10 10 0 0 1 20 0 a12 12 0 0 1 8 22 H24 Z" style={strokeStyle(200)} />
-        {/* Rain */}
-        <line x1="30" y1="56" x2="26" y2="70" style={strokeStyle(600, 2)} />
-        <line x1="42" y1="56" x2="38" y2="72" style={strokeStyle(650, 2)} />
-        <line x1="54" y1="56" x2="50" y2="70" style={strokeStyle(700, 2)} />
-        <line x1="66" y1="56" x2="62" y2="72" style={strokeStyle(750, 2)} />
-        <line x1="38" y1="76" x2="34" y2="84" style={strokeStyle(800, 2)} />
-        <line x1="52" y1="74" x2="48" y2="82" style={strokeStyle(840, 2)} />
-      </>
-    ),
-    "arms-raised": (
-      <>
-        {/* Firework burst */}
-        {[0,30,60,90,120,150,180,210,240,270,300,330].map((deg, idx) => {
-          const rad = (deg * Math.PI) / 180;
-          const x1 = 50 + 14 * Math.cos(rad), y1 = 42 + 14 * Math.sin(rad);
-          const x2 = 50 + 34 * Math.cos(rad), y2 = 42 + 34 * Math.sin(rad);
-          return <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2} style={strokeStyle(300 + idx * 50, 2)} />;
-        })}
-        <circle cx="50" cy="42" r="10" style={oStyle(200)} />
-        <circle cx="50" cy="42" r="4"  style={dotStyle(900)} />
-      </>
-    ),
-    walking: (
-      <>
-        {/* Winding path + arrow */}
-        <path d="M10 72 Q30 50 50 60 Q70 70 90 42" style={strokeStyle(200, 2.5)} />
-        <line x1="82" y1="34" x2="90" y2="42" style={strokeStyle(700, 2.5)} />
-        <line x1="90" y1="42" x2="82" y2="50" style={strokeStyle(750, 2.5)} />
-        {/* Footprints */}
-        <ellipse cx="22" cy="74" rx="3" ry="5" style={oStyle(450, 1.5)} />
-        <ellipse cx="34" cy="66" rx="3" ry="5" style={oStyle(520, 1.5)} />
-        <ellipse cx="46" cy="62" rx="3" ry="5" style={oStyle(590, 1.5)} />
-        <ellipse cx="58" cy="66" rx="3" ry="5" style={oStyle(660, 1.5)} />
-        {/* Destination star */}
-        <circle cx="90" cy="34" r="5" style={dotStyle(850)} />
-      </>
-    ),
+
+    // 3D Lightbulb globe (sphere + meridians + rays + socket)
+    thinking: (<>
+      {/* 3D sphere base */}
+      <circle cx="50" cy="36" r="24" style={{ fill: "rgba(251,191,36,0.08)", ..._ss(200, 2, 200) }} />
+      {/* latitude lines */}
+      <ellipse cx="50" cy="26" rx="16" ry="5"  style={_ss(380, 1.5, 150)} />
+      <ellipse cx="50" cy="36" rx="24" ry="7"  style={_ss(440, 1.5, 200)} />
+      <ellipse cx="50" cy="46" rx="16" ry="5"  style={_ss(500, 1.5, 150)} />
+      {/* meridian */}
+      <ellipse cx="50" cy="36" rx="6"  ry="24" style={_ss(560, 1.5, 200)} />
+      {/* socket */}
+      <line x1="43" y1="60" x2="43" y2="66" style={_ss(650, 2)} />
+      <line x1="57" y1="60" x2="57" y2="66" style={_ss(680, 2)} />
+      <line x1="42" y1="66" x2="58" y2="66" style={_ss(720, 2)} />
+      <line x1="43" y1="71" x2="57" y2="71" style={_ss(760, 2)} />
+      {/* rays */}
+      {[0,45,90,135,180,225,270,315].map((d,i) => {
+        const r = d*Math.PI/180, x1=50+26*Math.cos(r), y1=36+26*Math.sin(r), x2=50+34*Math.cos(r), y2=36+34*Math.sin(r);
+        return <line key={d} x1={x1} y1={y1} x2={x2} y2={y2} style={_ss(850+i*40, 1.8)} />;
+      })}
+      {/* inner glow dot */}
+      <circle cx="50" cy="36" r="5" style={_ds(950, "rgba(251,191,36,0.6)")} />
+    </>),
+
+    // 3D isometric bar chart
+    pointing: (<>
+      {/* floor */}
+      <line x1="6" y1="78" x2="94" y2="78" style={_ss(200, 2)} />
+      <line x1="6" y1="78" x2="6"  y2="16" style={_ss(300, 2)} />
+      {/* iso bar 1 — short */}
+      <polygon points="12,78 26,78 26,62 12,62" style={{ fill: SIDE3D, ..._ss(400, 1.8) }} />
+      <polygon points="26,62 36,56 36,72 26,78" style={{ fill: DARK3D, ..._ss(460, 1.8) }} />
+      <polygon points="12,62 26,62 36,56 22,50" style={{ fill: TOP3D,  ..._ss(520, 1.8) }} />
+      {/* iso bar 2 — medium */}
+      <polygon points="38,78 52,78 52,48 38,48" style={{ fill: SIDE3D, ..._ss(560, 1.8) }} />
+      <polygon points="52,48 62,42 62,72 52,78" style={{ fill: DARK3D, ..._ss(620, 1.8) }} />
+      <polygon points="38,48 52,48 62,42 48,36" style={{ fill: TOP3D,  ..._ss(680, 1.8) }} />
+      {/* iso bar 3 — tall */}
+      <polygon points="64,78 78,78 78,28 64,28" style={{ fill: SIDE3D, ..._ss(720, 1.8) }} />
+      <polygon points="78,28 88,22 88,72 78,78" style={{ fill: DARK3D, ..._ss(780, 1.8) }} />
+      <polygon points="64,28 78,28 88,22 74,16" style={{ fill: TOP3D,  ..._ss(840, 1.8) }} />
+      {/* arrow up */}
+      <line x1="92" y1="30" x2="92" y2="8"  style={_ss(920, 2.5)} />
+      <line x1="84" y1="16" x2="92" y2="8"  style={_ss(970, 2.5)} />
+      <line x1="100" y1="16" x2="92" y2="8" style={_ss(1010, 2.5)} />
+    </>),
+
+    // 3D trophy with star-burst
+    celebrating: (<>
+      {/* 3D cube base */}
+      <polygon points="28,80 50,80 50,70 28,70" style={{ fill: SIDE3D, ..._ss(900, 1.8) }} />
+      <polygon points="50,70 50,80 62,74 62,64" style={{ fill: DARK3D, ..._ss(950, 1.8) }} />
+      <polygon points="28,70 50,70 62,64 40,64" style={{ fill: TOP3D,  ..._ss(980, 1.8) }} />
+      {/* stem */}
+      <line x1="45" y1="54" x2="43" y2="64" style={_ss(700, 2)} />
+      <line x1="55" y1="54" x2="57" y2="64" style={_ss(730, 2)} />
+      {/* cup body */}
+      <path d="M28 14 h44 v26 a22 22 0 0 1-44 0 Z" style={{ fill:"rgba(251,191,36,0.10)", ..._ss(200, 2.5) }} />
+      {/* handles */}
+      <path d="M28 18 Q12 22 12 32 Q12 42 28 46" style={_ss(420, 2)} />
+      <path d="M72 18 Q88 22 88 32 Q88 42 72 46" style={_ss(500, 2)} />
+      {/* star dots */}
+      {[[10,8],[90,8],[6,55],[94,55],[50,6]].map(([x,y],i) => (
+        <circle key={i} cx={x} cy={y} r="3.5" style={_ds(1050+i*60, "#f97316")} />
+      ))}
+      {/* shine lines on cup */}
+      <line x1="38" y1="22" x2="36" y2="38" style={_ss(650, 1.5)} />
+      <line x1="44" y1="20" x2="42" y2="36" style={_ss(680, 1.5)} />
+    </>),
+
+    // 3D extruded question mark
+    standing: (<>
+      {/* 3D cube behind ? */}
+      <polygon points="12,82 38,82 38,70 12,70" style={{ fill: SIDE3D, ..._ss(900, 1.5) }} />
+      <polygon points="38,70 38,82 50,76 50,64" style={{ fill: DARK3D, ..._ss(950, 1.5) }} />
+      <polygon points="12,70 38,70 50,64 24,64" style={{ fill: TOP3D,  ..._ss(1000,1.5) }} />
+      {/* giant ? front */}
+      <path d="M32 22 a18 18 0 1 1 22 17 c0 5-4 9-4 17" style={_ss(200, 3.5, 400)} />
+      <circle cx="50" cy="72" r="4" style={_ds(750)} />
+      {/* shadow/depth lines on ? */}
+      <path d="M36 22 a14 14 0 1 1 18 13 c0 4-3 7-3 14" style={{ ..._ss(350, 1.2, 350), stroke:"rgba(234,88,12,0.4)" }} />
+      {/* small scatter */}
+      <circle cx="16" cy="20" r="2.5" style={_ds(850, "#ea580c")} />
+      <circle cx="84" cy="20" r="2.5" style={_ds(900, "#ea580c")} />
+      <circle cx="16" cy="65" r="2"   style={_ds(950, "#ea580c")} />
+    </>),
+
+    // 3D perspective laptop
+    sitting: (<>
+      {/* keyboard base — 3D box */}
+      <polygon points="8,78 68,78 68,68 8,68"  style={{ fill: SIDE3D, ..._ss(700, 1.8) }} />
+      <polygon points="68,68 68,78 80,70 80,60" style={{ fill: DARK3D, ..._ss(750, 1.8) }} />
+      <polygon points="8,68 68,68 80,60 20,60"  style={{ fill: TOP3D,  ..._ss(800, 1.8) }} />
+      {/* screen panel */}
+      <rect x="14" y="10" width="60" height="42" rx="3" style={{ fill:"rgba(59,130,246,0.06)", ..._ss(200, 2) }} />
+      {/* code lines */}
+      <line x1="22" y1="20" x2="50" y2="20" style={_ss(400, 1.8)} />
+      <line x1="22" y1="27" x2="42" y2="27" style={_ss(450, 1.8)} />
+      <line x1="26" y1="34" x2="58" y2="34" style={_ss(500, 1.8)} />
+      <line x1="22" y1="41" x2="46" y2="41" style={_ss(550, 1.8)} />
+      {/* cursor */}
+      <rect x="51" y="23" width="2.5" height="9" style={_ds(850, "#ea580c")} />
+      {/* screen bezel glow */}
+      <line x1="14" y1="52" x2="74" y2="52" style={{ ..._ss(600, 1), stroke:"rgba(234,88,12,0.5)" }} />
+      {/* wifi dots */}
+      <circle cx="82" cy="20" r="2" style={_ds(900, "#ea580c")} />
+      <circle cx="82" cy="30" r="2" style={_ds(940)} />
+      <circle cx="82" cy="40" r="2" style={_ds(980)} />
+    </>),
+
+    // 3D storm with cracked floor
+    defeated: (<>
+      {/* 3D cracked floor tiles */}
+      <polygon points="10,82 40,82 46,74 16,74" style={{ fill: DARK3D, ..._ss(900, 1.5) }} />
+      <polygon points="40,82 70,82 76,74 46,74" style={{ fill: SIDE3D, ..._ss(950, 1.5) }} />
+      <line x1="10" y1="82" x2="70" y2="82" style={_ss(1000, 1.5)} />
+      <line x1="46" y1="74" x2="46" y2="82" style={_ss(1020, 1.5)} />
+      {/* crack */}
+      <path d="M46,74 l-4,4 l6,2 l-5,2" style={_ss(1060, 1.2)} />
+      {/* 3D cloud */}
+      <ellipse cx="26" cy="36" rx="16" ry="11" style={{ fill:"rgba(100,116,139,0.12)", ..._ss(200, 2, 200) }} />
+      <ellipse cx="46" cy="28" rx="18" ry="13" style={{ fill:"rgba(100,116,139,0.10)", ..._ss(300, 2, 200) }} />
+      <ellipse cx="64" cy="34" rx="14" ry="10" style={{ fill:"rgba(100,116,139,0.12)", ..._ss(380, 2, 200) }} />
+      {/* cloud bottom */}
+      <line x1="12" y1="44" x2="76" y2="44" style={_ss(460, 1.5)} />
+      {/* 3D rain drops */}
+      {[[24,54],[34,50],[44,56],[54,52],[64,54],[30,64],[46,66],[60,62]].map(([x,y],i)=>(
+        <ellipse key={i} cx={x} cy={y} rx="1.5" ry="4" style={{ fill:"rgba(59,130,246,0.5)", ..._ss(550+i*50,1,100) }} />
+      ))}
+      {/* lightning bolt */}
+      <path d="M54,28 l-8,14 h6 l-6,14" style={_ss(700, 2.5, 200)} />
+    </>),
+
+    // 3D firework sphere explosion
+    "arms-raised": (<>
+      {/* 3D sphere */}
+      <circle cx="50" cy="38" r="18" style={{ fill:"rgba(234,88,12,0.08)", ..._ss(200, 2, 200) }} />
+      <ellipse cx="50" cy="38" rx="18" ry="6"  style={_ss(320, 1.5, 150)} />
+      <ellipse cx="50" cy="30" rx="12" ry="4"  style={_ss(380, 1.5, 100)} />
+      <ellipse cx="50" cy="46" rx="12" ry="4"  style={_ss(420, 1.5, 100)} />
+      <ellipse cx="50" cy="38" rx="5"  ry="18" style={_ss(460, 1.5, 150)} />
+      {/* burst rays — 16 directions */}
+      {Array.from({length:16},(_,i)=>{
+        const a=i*(Math.PI/8), x1=50+20*Math.cos(a), y1=38+20*Math.sin(a), x2=50+36*Math.cos(a), y2=38+36*Math.sin(a);
+        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} style={_ss(520+i*35, 2)} />;
+      })}
+      {/* star tips */}
+      {[[50,2],[86,20],[94,56],[68,82],[32,82],[6,56],[14,20]].map(([x,y],i)=>(
+        <circle key={i} cx={x} cy={y} r="2.5" style={_ds(1050+i*50, i%2===0?"#ea580c":"#fbbf24")} />
+      ))}
+    </>),
+
+    // 3D perspective road to horizon
+    walking: (<>
+      {/* sky/horizon */}
+      <line x1="4" y1="38" x2="96" y2="38" style={{ ..._ss(200,1), stroke:"#c4b89a" }} />
+      {/* road surface — perspective trapezoid */}
+      <polygon points="50,38 38,82 62,82" style={{ fill:"rgba(234,88,12,0.08)", ..._ss(300,1.8,400) }} />
+      {/* road edges */}
+      <line x1="50" y1="38" x2="20" y2="82" style={_ss(350, 2)} />
+      <line x1="50" y1="38" x2="80" y2="82" style={_ss(400, 2)} />
+      {/* lane dashes */}
+      {[48,56,64,72,80].map((y,i)=>(
+        <line key={i} x1={50-(y-38)*0.28} y1={y} x2={50+(y-38)*0.28} y2={y} style={_ss(500+i*60,1.5)} />
+      ))}
+      {/* trees left */}
+      <line x1="18" y1="58" x2="18" y2="80" style={_ss(700,2)} />
+      <ellipse cx="18" cy="50" rx="8" ry="10" style={{ fill:"rgba(34,197,94,0.12)", ..._ss(740,1.8,150) }} />
+      {/* trees right */}
+      <line x1="82" y1="58" x2="82" y2="80" style={_ss(780,2)} />
+      <ellipse cx="82" cy="50" rx="8" ry="10" style={{ fill:"rgba(34,197,94,0.12)", ..._ss(820,1.8,150) }} />
+      {/* sun / destination */}
+      <circle cx="50" cy="22" r="10" style={{ fill:"rgba(251,191,36,0.15)", ..._ss(220,2,100) }} />
+      {[0,45,90,135,180,225,270,315].map((d,i)=>{
+        const r=d*Math.PI/180, x1=50+13*Math.cos(r), y1=22+13*Math.sin(r), x2=50+18*Math.cos(r), y2=22+18*Math.sin(r);
+        return <line key={d} x1={x1} y1={y1} x2={x2} y2={y2} style={_ss(900+i*30,1.5)} />;
+      })}
+    </>),
   };
 
   return (
     <svg viewBox="0 0 100 88" className="w-full h-full">
       <style>{`
         @keyframes cf-draw { to { stroke-dashoffset: 0; } }
-        @keyframes cf-pop  { 0%{opacity:0;transform:scale(0.3)} 60%{opacity:1;transform:scale(1.2)} 100%{opacity:1;transform:scale(1)} }
+        @keyframes cf-pop  {
+          0%  { opacity:0; transform:scale(0.2); }
+          60% { opacity:1; transform:scale(1.25); }
+          100%{ opacity:1; transform:scale(1); }
+        }
       `}</style>
       {icons[pose]}
+    </svg>
+  );
+}
+
+// ─── Scatter doodles (ambient decorative layer across the whole canvas) ───────
+
+function ScatterDoodles({ pose, animKey }: { pose: StickmanPose; animKey: number }) {
+  // Static positions — these fill the empty areas of the canvas
+  const stars: [number, number, number, number][] = [
+    [88,6,4,300],[93,14,2.5,380],[4,8,3,420],[8,16,2,480],
+    [96,42,3,700],[2,48,2.5,750],[90,68,3,800],[4,72,2,840],
+  ];
+  // Small ✕ marks
+  const crosses: [number, number, number][] = [[85,24,300],[7,30,400],[88,52,500],[5,56,550]];
+  // Squiggly accent lines near caption area
+  const squigs: [string,number][] = [
+    ["M4,32 Q8,29 12,32 Q16,35 20,32", 600],
+    ["M80,78 Q84,75 88,78 Q92,81 96,78", 700],
+  ];
+  // Small circles (unfilled)
+  const rings: [number,number,number,number][] = [[6,42,2.5,850],[94,30,2.5,900],[50,85,2,950]];
+
+  return (
+    <svg key={animKey} viewBox="0 0 100 100" className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+      <style>{`
+        @keyframes cf-draw { to { stroke-dashoffset: 0; } }
+        @keyframes cf-pop  {
+          0%  { opacity:0; transform:scale(0.2); }
+          60% { opacity:1; transform:scale(1.3); }
+          100%{ opacity:1; transform:scale(1); }
+        }
+      `}</style>
+      {/* filled star dots */}
+      {stars.map(([cx,cy,r,d],i) => (
+        <circle key={i} cx={cx} cy={cy} r={r}
+          style={{ fill: i%2===0 ? "#ea580c" : "#fbbf24", opacity:0,
+            animation:"cf-pop 0.3s ease-out forwards", animationDelay:`${d}ms`,
+            transformBox:"fill-box", transformOrigin:"center" }} />
+      ))}
+      {/* ✕ crosses */}
+      {crosses.map(([cx,cy,d],i) => (
+        <g key={i}>
+          <line x1={cx-3} y1={cy-3} x2={cx+3} y2={cy+3}
+            style={{ stroke:"#c4b89a", strokeWidth:1.5, strokeLinecap:"round",
+              strokeDasharray:20, strokeDashoffset:20,
+              animation:"cf-draw 0.3s ease-out forwards", animationDelay:`${d}ms` }} />
+          <line x1={cx+3} y1={cy-3} x2={cx-3} y2={cy+3}
+            style={{ stroke:"#c4b89a", strokeWidth:1.5, strokeLinecap:"round",
+              strokeDasharray:20, strokeDashoffset:20,
+              animation:"cf-draw 0.3s ease-out forwards", animationDelay:`${d+40}ms` }} />
+        </g>
+      ))}
+      {/* squiggles */}
+      {squigs.map(([p,d],i) => (
+        <path key={i} d={p}
+          style={{ fill:"none", stroke:"#d4c9a8", strokeWidth:1.5, strokeLinecap:"round",
+            strokeDasharray:50, strokeDashoffset:50,
+            animation:"cf-draw 0.4s ease-out forwards", animationDelay:`${d}ms` }} />
+      ))}
+      {/* small rings */}
+      {rings.map(([cx,cy,r,d],i) => (
+        <circle key={i} cx={cx} cy={cy} r={r}
+          style={{ fill:"none", stroke:"#c4b89a", strokeWidth:1.5,
+            strokeDasharray:30, strokeDashoffset:30,
+            animation:"cf-draw 0.3s ease-out forwards", animationDelay:`${d}ms` }} />
+      ))}
+      {/* pose-specific accent line */}
+      {pose === "pointing" && <line x1="28" y1="95" x2="70" y2="95"
+        style={{ stroke:"#ea580c", strokeWidth:2, strokeLinecap:"round",
+          strokeDasharray:80, strokeDashoffset:80,
+          animation:"cf-draw 0.5s ease-out forwards", animationDelay:"1100ms" }} />}
+      {pose === "celebrating" && [20,30,40,60,70,80].map((x,i) => (
+        <line key={i} x1={x} y1={90} x2={x+4} y2={96}
+          style={{ stroke:i%2===0?"#ea580c":"#fbbf24", strokeWidth:1.5,
+            strokeDasharray:15, strokeDashoffset:15,
+            animation:"cf-draw 0.2s ease-out forwards", animationDelay:`${1000+i*60}ms` }} />
+      ))}
     </svg>
   );
 }
@@ -801,6 +960,9 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
 
         {/* Horizontal separator between text area and stickman row */}
         <div className="absolute left-[5%] right-[5%]" style={{ top: "58%", height: "1px", background: "linear-gradient(90deg, transparent, #d4c9a8 20%, #d4c9a8 80%, transparent)" }} />
+
+        {/* Scatter doodles — ambient layer across full canvas */}
+        <ScatterDoodles pose={scene.pose} animKey={currentIndex} />
 
         {/* Scene fade-in wrapper */}
         <div key={currentIndex} className="cf-scene-fade absolute inset-0">
