@@ -753,85 +753,178 @@ function PoseDoodle({ pose }: { pose: StickmanPose }) {
   );
 }
 
-// ─── Scatter doodles (ambient decorative layer across the whole canvas) ───────
+// ─── Scatter doodles ─────────────────────────────────────────────────────────
 
 function ScatterDoodles({ pose, animKey }: { pose: StickmanPose; animKey: number }) {
-  // viewBox 160×90 = 16:9 — dots stay round, not stretched
-  // Positions chosen to avoid the caption text area (top 5%–58%, left 5%–72%)
-  // and the doodle area (top 9%–56%, right 78%–98%)
-  // Safe zones: far left strip (x<8), far right strip (x>155), bottom row (y>75)
-  const stars: [number, number, number, number][] = [
-    [4,5,1.8,300],[6,14,1.4,370],[3,22,1.6,430],
-    [156,5,1.8,320],[158,13,1.3,390],[154,22,1.5,460],
-    [4,68,1.8,680],[7,76,1.4,730],[3,84,1.6,780],
-    [156,68,1.8,700],[158,76,1.3,750],[154,84,1.5,800],
-    [80,80,1.6,850],[100,83,1.4,890],[60,85,1.5,920],
-  ];
-  // Small ✕ — stay in far margins
-  const crosses: [number, number, number][] = [[5,40,400],[5,55,460],[155,40,500],[155,55,560]];
-  // Squiggly accent lines — bottom strip only
-  const squigs: [string,number][] = [
-    ["M10,87 Q14,84 18,87 Q22,90 26,87", 650],
-    ["M134,87 Q138,84 142,87 Q146,90 150,87", 720],
-  ];
-  // Small rings
-  const rings: [number,number,number,number][] = [[5,62,2,860],[155,62,2,910],[80,87,1.8,960]];
+  // viewBox 160×90 (16:9). Canvas zones:
+  //   Text area: x=8–115, y=8–55  |  Doodle icon: x=118–158, y=8–52
+  //   Stickman: x=8–72, y=54–88   |  OPEN: x=73–158 y=54–88, margins, bottom strip
+
+  const sc: React.CSSProperties = { strokeLinecap:"round" as const, strokeLinejoin:"round" as const };
+
+  // stroke-dashoffset draw-on helper
+  const sd = (delay: number, da: number, stroke="#c4b89a", sw=1.4): React.CSSProperties => ({
+    ...sc, fill:"none", stroke, strokeWidth:sw,
+    strokeDasharray:da, strokeDashoffset:da,
+    animation:"cf-draw 0.38s ease-out forwards", animationDelay:`${delay}ms`,
+  });
+  // filled pop-in helper
+  const pd = (delay: number, fill="#c4b89a"): React.CSSProperties => ({
+    fill, opacity:0, transformBox:"fill-box" as const, transformOrigin:"center",
+    animation:"cf-pop 0.25s ease-out forwards", animationDelay:`${delay}ms`,
+  });
+
+  // ── element builders ──
+  const dot   = (cx:number,cy:number,r:number,d:number,c="#ea580c") =>
+    <circle cx={cx} cy={cy} r={r} style={pd(d,c)} />;
+
+  const ring  = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
+    <circle cx={cx} cy={cy} r={r} style={sd(d,r*7,c)} />;
+
+  const cross = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => (<g>
+    <line x1={cx-r} y1={cy-r} x2={cx+r} y2={cy+r} style={sd(d,r*4,c)} />
+    <line x1={cx+r} y1={cy-r} x2={cx-r} y2={cy+r} style={sd(d+40,r*4,c)} />
+  </g>);
+
+  const plus  = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => (<g>
+    <line x1={cx-r} y1={cy} x2={cx+r} y2={cy} style={sd(d,r*3,c)} />
+    <line x1={cx} y1={cy-r} x2={cx} y2={cy+r} style={sd(d+30,r*3,c)} />
+  </g>);
+
+  const asterisk6 = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => (<g>
+    {[0,60,120].map((deg,i) => {
+      const a=deg*Math.PI/180;
+      return <line key={i} x1={cx-r*Math.cos(a)} y1={cy-r*Math.sin(a)} x2={cx+r*Math.cos(a)} y2={cy+r*Math.sin(a)} style={sd(d+i*40,r*3,c)} />;
+    })}
+  </g>);
+
+  const arrow = (x1:number,y1:number,x2:number,y2:number,d:number,c="#c4b89a") => {
+    const dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy),nx=dx/len,ny=dy/len;
+    const ax=nx*0.7,ay=ny*0.7,px=-ny*0.5,py=nx*0.5;
+    return (<g>
+      <line x1={x1} y1={y1} x2={x2} y2={y2} style={sd(d,len+4,c,1.4)} />
+      <line x1={x2} y1={y2} x2={x2-ax*3+px*2} y2={y2-ay*3+py*2} style={sd(d+80,6,c,1.4)} />
+      <line x1={x2} y1={y2} x2={x2-ax*3-px*2} y2={y2-ay*3-py*2} style={sd(d+100,6,c,1.4)} />
+    </g>);
+  };
+
+  const diamond = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
+    <polygon points={`${cx},${cy-r} ${cx+r},${cy} ${cx},${cy+r} ${cx-r},${cy}`}
+      style={sd(d,r*8,c)} />;
+
+  const triangle = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
+    <polygon points={`${cx},${cy-r} ${cx+r*0.866},${cy+r*0.5} ${cx-r*0.866},${cy+r*0.5}`}
+      style={sd(d,r*7,c)} />;
+
+  const check = (cx:number,cy:number,r:number,d:number,c="#ea580c") =>
+    <polyline points={`${cx-r},${cy} ${cx-r*0.3},${cy+r} ${cx+r},${cy-r*0.6}`}
+      style={sd(d,r*6,c,1.6)} />;
+
+  const squiggle = (x:number,y:number,d:number,c="#d4c9a8") =>
+    <path d={`M${x},${y} Q${x+4},${y-3} ${x+8},${y} Q${x+12},${y+3} ${x+16},${y}`}
+      style={sd(d,30,c,1.3)} />;
+
+  const lightning = (cx:number,cy:number,r:number,d:number,c="#fbbf24") =>
+    <polyline points={`${cx+r*0.4},${cy-r} ${cx-r*0.2},${cy-r*0.1} ${cx+r*0.3},${cy} ${cx-r*0.4},${cy+r}`}
+      style={sd(d,r*6,c,1.6)} />;
+
+  const hashtag = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => (<g>
+    <line x1={cx-r*0.6} y1={cy-r*0.4} x2={cx+r*0.6} y2={cy-r*0.4} style={sd(d,r*2,c)} />
+    <line x1={cx-r*0.6} y1={cy+r*0.4} x2={cx+r*0.6} y2={cy+r*0.4} style={sd(d+40,r*2,c)} />
+    <line x1={cx-r*0.2} y1={cy-r*0.8} x2={cx-r*0.4} y2={cy+r*0.8} style={sd(d+70,r*2,c)} />
+    <line x1={cx+r*0.2} y1={cy-r*0.8} x2={cx+r*0.0} y2={cy+r*0.8} style={sd(d+100,r*2,c)} />
+  </g>);
+
+  const infinity = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
+    <path d={`M${cx},${cy} C${cx-r},${cy-r} ${cx-r*2},${cy-r} ${cx-r*1.5},${cy} C${cx-r},${cy+r} ${cx},${cy+r*0.5} ${cx},${cy} C${cx},${cy-r*0.5} ${cx+r},${cy-r} ${cx+r*1.5},${cy} C${cx+r*2},${cy+r} ${cx+r},${cy+r} ${cx},${cy}`}
+      style={sd(d,r*12,c)} />;
+
+  const spiral = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
+    <path d={`M${cx+r},${cy} A${r},${r} 0 1 0 ${cx-r*0.3},${cy-r*0.95} A${r*0.5},${r*0.5} 0 0 1 ${cx+r*0.3},${cy+r*0.3}`}
+      style={sd(d,r*10,c)} />;
 
   return (
     <svg key={animKey} viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
       <style>{`
         @keyframes cf-draw { to { stroke-dashoffset: 0; } }
-        @keyframes cf-pop  {
-          0%  { opacity:0; transform:scale(0.2); }
-          60% { opacity:1; transform:scale(1.3); }
-          100%{ opacity:1; transform:scale(1); }
-        }
+        @keyframes cf-pop  { 0%{opacity:0;transform:scale(0.2)} 60%{opacity:1;transform:scale(1.3)} 100%{opacity:1;transform:scale(1)} }
       `}</style>
-      {/* filled star dots */}
-      {stars.map(([cx,cy,r,d],i) => (
-        <circle key={i} cx={cx} cy={cy} r={r}
-          style={{ fill: i%2===0 ? "#ea580c" : "#fbbf24", opacity:0,
-            animation:"cf-pop 0.3s ease-out forwards", animationDelay:`${d}ms`,
-            transformBox:"fill-box", transformOrigin:"center" }} />
+
+      {/* ── LEFT MARGIN strip (x=2–8) ── */}
+      {dot(3,6,1.6,280,"#ea580c")}
+      {dot(5,15,1.3,340,"#fbbf24")}
+      {cross(4,26,2.2,400)}
+      {dot(3,35,1.5,460,"#ea580c")}
+      {plus(5,45,2.5,520)}
+      {cross(4,56,2.2,580)}
+      {dot(3,65,1.6,640,"#fbbf24")}
+      {ring(5,74,2.2,700)}
+      {dot(4,83,1.4,760,"#ea580c")}
+
+      {/* ── RIGHT MARGIN strip (x=152–158) ── */}
+      {dot(157,6,1.6,300,"#fbbf24")}
+      {dot(155,15,1.3,360,"#ea580c")}
+      {cross(156,26,2.2,420)}
+      {dot(157,35,1.5,480,"#fbbf24")}
+      {plus(155,45,2.5,540)}
+      {cross(156,56,2.2,600)}
+      {dot(157,65,1.6,660,"#ea580c")}
+      {ring(155,74,2.2,720)}
+      {dot(156,83,1.4,780,"#fbbf24")}
+
+      {/* ── BOTTOM STRIP (y=78–88, all x) — fills the narrow footer ── */}
+      {squiggle(10,84,650)}
+      {squiggle(35,86,690)}
+      {squiggle(60,83,730)}
+      {squiggle(88,85,770)}
+      {squiggle(112,84,810)}
+      {squiggle(136,86,850)}
+      {dot(22,87,1.4,880,"#ea580c")}
+      {dot(48,85,1.3,910,"#fbbf24")}
+      {dot(75,88,1.5,940,"#ea580c")}
+      {dot(104,86,1.3,970,"#fbbf24")}
+      {dot(130,87,1.4,1000,"#ea580c")}
+      {dot(148,85,1.3,1030,"#fbbf24")}
+
+      {/* ── BOTTOM-RIGHT OPEN AREA (x=73–155, y=54–78) — main doodle zone ── */}
+      {asterisk6(82,62,4,550,"#c4b89a")}
+      {arrow(92,58,104,58,600)}
+      {diamond(115,60,4,650)}
+      {lightning(130,57,5,700,"#fbbf24")}
+      {triangle(145,60,4,750)}
+      {check(86,72,4.5,800)}
+      {hashtag(100,70,5,840)}
+      {infinity(117,71,4,890)}
+      {asterisk6(133,68,3.5,930,"#ea580c")}
+      {spiral(148,70,4,970)}
+      {plus(78,76,3.5,820,"#ea580c")}
+      {ring(95,78,3,870)}
+      {cross(110,77,2.8,910)}
+      {arrow(122,80,134,75,950)}
+      {diamond(143,77,3.5,990)}
+      {dot(80,69,1.5,680,"#fbbf24")}
+      {dot(153,63,1.4,720,"#ea580c")}
+
+      {/* ── BOTTOM-CENTER (x=40–72, y=60–78) beside stickman ── */}
+      {asterisk6(48,64,3.5,560,"#d4c9a8")}
+      {plus(60,68,2.8,610)}
+      {ring(50,74,2.5,660)}
+      {cross(65,72,2.2,710)}
+      {dot(55,80,1.4,760,"#ea580c")}
+      {dot(68,76,1.3,800,"#fbbf24")}
+
+      {/* ── Pose-specific accents ── */}
+      {pose==="pointing"   && arrow(40,87,110,87,1050,"#ea580c")}
+      {pose==="celebrating"&& [28,44,60,76,92,108].map((x,i)=>(
+        <line key={i} x1={x} y1={84} x2={x+5} y2={90}
+          style={sd(1000+i*55,10,i%2===0?"#ea580c":"#fbbf24",1.6)} />
       ))}
-      {/* ✕ crosses */}
-      {crosses.map(([cx,cy,d],i) => (
-        <g key={i}>
-          <line x1={cx-3} y1={cy-3} x2={cx+3} y2={cy+3}
-            style={{ stroke:"#c4b89a", strokeWidth:1.5, strokeLinecap:"round",
-              strokeDasharray:20, strokeDashoffset:20,
-              animation:"cf-draw 0.3s ease-out forwards", animationDelay:`${d}ms` }} />
-          <line x1={cx+3} y1={cy-3} x2={cx-3} y2={cy+3}
-            style={{ stroke:"#c4b89a", strokeWidth:1.5, strokeLinecap:"round",
-              strokeDasharray:20, strokeDashoffset:20,
-              animation:"cf-draw 0.3s ease-out forwards", animationDelay:`${d+40}ms` }} />
-        </g>
+      {pose==="thinking"   && <>{ring(88,65,3.5,950,"#a8956a")}{ring(92,60,2,1020,"#a8956a")}</>}
+      {pose==="arms-raised"&& [80,95,110,125,140].map((x,i)=>(
+        dot(x,i%2===0?60:66,1.6,900+i*60,i%2===0?"#ea580c":"#fbbf24")
       ))}
-      {/* squiggles */}
-      {squigs.map(([p,d],i) => (
-        <path key={i} d={p}
-          style={{ fill:"none", stroke:"#d4c9a8", strokeWidth:1.5, strokeLinecap:"round",
-            strokeDasharray:50, strokeDashoffset:50,
-            animation:"cf-draw 0.4s ease-out forwards", animationDelay:`${d}ms` }} />
-      ))}
-      {/* small rings */}
-      {rings.map(([cx,cy,r,d],i) => (
-        <circle key={i} cx={cx} cy={cy} r={r}
-          style={{ fill:"none", stroke:"#c4b89a", strokeWidth:1.5,
-            strokeDasharray:30, strokeDashoffset:30,
-            animation:"cf-draw 0.3s ease-out forwards", animationDelay:`${d}ms` }} />
-      ))}
-      {/* pose-specific accent — bottom strip, 160×90 coords */}
-      {pose === "pointing" && <line x1="45" y1="88" x2="115" y2="88"
-        style={{ stroke:"#ea580c", strokeWidth:1.5, strokeLinecap:"round",
-          strokeDasharray:80, strokeDashoffset:80,
-          animation:"cf-draw 0.5s ease-out forwards", animationDelay:"1100ms" }} />}
-      {pose === "celebrating" && [30,46,62,78,94,110].map((x,i) => (
-        <line key={i} x1={x} y1={85} x2={x+5} y2={90}
-          style={{ stroke:i%2===0?"#ea580c":"#fbbf24", strokeWidth:1.5,
-            strokeDasharray:12, strokeDashoffset:12,
-            animation:"cf-draw 0.2s ease-out forwards", animationDelay:`${1000+i*60}ms` }} />
-      ))}
+      {pose==="walking"    && arrow(80,65,98,60,900,"#ea580c")}
+      {pose==="defeated"   && cross(95,62,3,900,"#ea580c")}
     </svg>
   );
 }
