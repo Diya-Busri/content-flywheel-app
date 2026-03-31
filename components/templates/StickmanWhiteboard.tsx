@@ -14,10 +14,24 @@ export type StickmanPose =
   | "arms-raised"
   | "walking";
 
+export type StickmanLayout = "left-presenter" | "center-presenter" | "right-presenter" | "desk-scene";
+export type StickmanKeyObject = "chart" | "clock" | "money" | "warning" | "audience" | "idea" | "brand";
+export type StickmanCamera = "wide" | "medium";
+export type StickmanShotTemplate =
+  | "desk-explain"
+  | "stand-explain"
+  | "point-to-board"
+  | "walk-and-talk"
+  | "result-moment";
+
 export interface StickmanScene {
   sceneIndex: number;
   caption: string;
   pose: StickmanPose;
+  layout?: StickmanLayout;
+  keyObject?: StickmanKeyObject;
+  camera?: StickmanCamera;
+  shotTemplate?: StickmanShotTemplate;
 }
 
 interface Props {
@@ -386,6 +400,8 @@ const POSES: Record<StickmanPose, El[]> = {
 
 function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number }) {
   const elements = POSES[pose] ?? POSES.standing;
+  const depthDx = 1.8;
+  const depthDy = 1.8;
 
   // Perpendicular highlight for 3D tube effect on a line segment
   const tubeHighlight = (x1: number, y1: number, x2: number, y2: number, delay: number): React.ReactNode => {
@@ -439,6 +455,93 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
       <ellipse cx="83" cy="168" rx="38" ry="7"
         style={{ fill: "rgba(0,0,0,0.07)", opacity: 0,
           animation: "cf-shadow-in 0.4s ease-out 0.15s forwards" }} />
+
+      {/* Depth pass: slight offset/extrusion behind main ink lines */}
+      {elements.map((el, i) => {
+        const sw = ((el as { sw?: number }).sw ?? SW) + 0.3;
+        if (el.k === "D") {
+          return (
+            <circle
+              key={`depth-dot-${i}`}
+              cx={el.cx + depthDx}
+              cy={el.cy + depthDy}
+              r={el.r}
+              style={{
+                fill: "rgba(0,0,0,0.18)",
+                opacity: 0,
+                transformBox: "fill-box",
+                transformOrigin: "center",
+                animation: "cf-pop 0.2s ease-out forwards",
+                animationDelay: `${el.delay + 30}ms`,
+              }}
+            />
+          );
+        }
+
+        if (el.k === "L") {
+          return (
+            <line
+              key={`depth-line-${i}`}
+              x1={el.x1 + depthDx}
+              y1={el.y1 + depthDy}
+              x2={el.x2 + depthDx}
+              y2={el.y2 + depthDy}
+              style={{
+                fill: "none",
+                stroke: "rgba(0,0,0,0.18)",
+                strokeWidth: sw,
+                strokeLinecap: "round",
+                strokeLinejoin: "round",
+                strokeDasharray: 600,
+                strokeDashoffset: 600,
+                animation: "cf-draw 0.55s ease-out forwards",
+                animationDelay: `${el.delay + 25}ms`,
+              }}
+            />
+          );
+        }
+
+        if (el.k === "C") {
+          return (
+            <circle
+              key={`depth-circle-${i}`}
+              cx={el.cx + depthDx}
+              cy={el.cy + depthDy}
+              r={el.r}
+              style={{
+                fill: "none",
+                stroke: "rgba(0,0,0,0.18)",
+                strokeWidth: sw,
+                strokeLinecap: "round",
+                strokeLinejoin: "round",
+                strokeDasharray: 600,
+                strokeDashoffset: 600,
+                animation: "cf-draw 0.55s ease-out forwards",
+                animationDelay: `${el.delay + 25}ms`,
+              }}
+            />
+          );
+        }
+
+        return (
+          <path
+            key={`depth-path-${i}`}
+            d={el.p}
+            style={{
+              fill: "none",
+              stroke: "rgba(0,0,0,0.18)",
+              strokeWidth: sw,
+              strokeLinecap: "round",
+              strokeLinejoin: "round",
+              strokeDasharray: 600,
+              strokeDashoffset: 600,
+              animation: "cf-draw 0.55s ease-out forwards",
+              animationDelay: `${el.delay + 25}ms`,
+            }}
+            transform={`translate(${depthDx} ${depthDy})`}
+          />
+        );
+      })}
 
       {elements.map((el, i) => {
         if (el.k === "D") {
@@ -507,9 +610,23 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
 // ─── Caption lines (4 words per line, first line orange) ─────────────────────
 
 function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number }) {
-  const words = text.split(/\s+/);
+  const words = text.split(/\s+/).filter(Boolean);
+  const wordsPerLine = words.length > 64 ? 9 : words.length > 48 ? 8 : words.length > 36 ? 7 : words.length > 24 ? 6 : 5;
   const lines: string[] = [];
-  for (let i = 0; i < words.length; i += 4) lines.push(words.slice(i, i + 4).join(" "));
+  for (let i = 0; i < words.length; i += wordsPerLine) {
+    lines.push(words.slice(i, i + wordsPerLine).join(" "));
+  }
+  const lineCount = Math.max(lines.length, 1);
+  const titleSize =
+    lineCount > 9 ? "clamp(15px, 1.9vw, 24px)" :
+    lineCount > 7 ? "clamp(16px, 2.1vw, 28px)" :
+    "clamp(18px, 2.4vw, 34px)";
+  const bodySize =
+    lineCount > 9 ? "clamp(12px, 1.35vw, 18px)" :
+    lineCount > 7 ? "clamp(13px, 1.5vw, 20px)" :
+    "clamp(14px, 1.7vw, 24px)";
+  const lineHeight = lineCount > 8 ? 1.08 : 1.12;
+
   return (
     <div key={sceneKey} style={{ position: "relative" }}>
       {lines.map((line, i) => (
@@ -520,8 +637,8 @@ function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number })
             animationDelay: `${100 + i * 260}ms`,
             fontFamily: "'Caveat', cursive",
             fontWeight: i === 0 ? 700 : 600,
-            fontSize: i === 0 ? "clamp(22px, 3.2vw, 46px)" : "clamp(16px, 2.2vw, 32px)",
-            lineHeight: 1.25,
+            fontSize: i === 0 ? titleSize : bodySize,
+            lineHeight,
             color: i === 0 ? "#ea580c" : "#1e1b12",
             marginBottom: i === 0 ? "0.18em" : "0.1em",
             letterSpacing: i === 0 ? "0.01em" : "0",
@@ -749,6 +866,445 @@ function PoseDoodle({ pose }: { pose: StickmanPose }) {
         }
       `}</style>
       {icons[pose]}
+    </svg>
+  );
+}
+
+function KeyObjectDoodle({ kind }: { kind: StickmanKeyObject }) {
+  // draw-on animated versions of each key object
+  const dr = (delay: number, da = 300): React.CSSProperties => ({
+    fill: "none", stroke: "#1e1b12", strokeWidth: 2.6,
+    strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
+    strokeDasharray: da, strokeDashoffset: da,
+    animation: "cf-draw 0.55s ease-out forwards",
+    animationDelay: `${delay}ms`,
+  });
+  const dp = (delay: number, fill = "#ea580c"): React.CSSProperties => ({
+    fill, opacity: 0, transformBox: "fill-box" as const, transformOrigin: "center",
+    animation: "cf-pop 0.28s ease-out forwards", animationDelay: `${delay}ms`,
+  });
+
+  switch (kind) {
+    case "clock":
+      return (
+        <svg viewBox="0 0 100 88" className="w-full h-full">
+          <style>{`@keyframes cf-draw{to{stroke-dashoffset:0}}@keyframes cf-pop{0%{opacity:0;transform:scale(0.2)}60%{opacity:1;transform:scale(1.25)}100%{opacity:1;transform:scale(1)}}`}</style>
+          <circle cx="50" cy="44" r="26" style={dr(200, 164)} />
+          <line x1="50" y1="44" x2="50" y2="25" style={dr(500, 20)} />
+          <line x1="50" y1="44" x2="66" y2="52" style={dr(560, 18)} />
+          <circle cx="50" cy="44" r="2.5" style={dp(640)} />
+          {[0,60,120,180,240,300].map((deg,i) => {
+            const a=deg*Math.PI/180;
+            return <line key={i} x1={50+22*Math.cos(a)} y1={44+22*Math.sin(a)} x2={50+26*Math.cos(a)} y2={44+26*Math.sin(a)} style={dr(700+i*40, 5)} />;
+          })}
+          <circle cx="76" cy="22" r="3.5" style={dp(1000)} />
+        </svg>
+      );
+    case "money":
+      return (
+        <svg viewBox="0 0 100 88" className="w-full h-full">
+          <style>{`@keyframes cf-draw{to{stroke-dashoffset:0}}@keyframes cf-pop{0%{opacity:0;transform:scale(0.2)}60%{opacity:1;transform:scale(1.25)}100%{opacity:1;transform:scale(1)}}`}</style>
+          {/* coin stack */}
+          <ellipse cx="50" cy="62" rx="20" ry="6" style={dr(200, 80)} />
+          <ellipse cx="50" cy="54" rx="20" ry="6" style={dr(290, 80)} />
+          <ellipse cx="50" cy="46" rx="20" ry="6" style={dr(380, 80)} />
+          <line x1="30" y1="62" x2="30" y2="46" style={dr(460, 16)} />
+          <line x1="70" y1="62" x2="70" y2="46" style={dr(490, 16)} />
+          {/* $ sign */}
+          <path d="M44 34 Q44 26 50 26 Q56 26 56 32 Q56 38 50 38 Q56 38 56 44 Q56 50 50 50 Q44 50 44 42" style={dr(560, 60)} />
+          <line x1="50" y1="22" x2="50" y2="54" style={dr(700, 32)} />
+          <circle cx="78" cy="22" r="3" style={dp(800)} />
+        </svg>
+      );
+    case "warning":
+      // Instead of the boring static triangle, draw an exclamation in a circle
+      return (
+        <svg viewBox="0 0 100 88" className="w-full h-full">
+          <style>{`@keyframes cf-draw{to{stroke-dashoffset:0}}@keyframes cf-pop{0%{opacity:0;transform:scale(0.2)}60%{opacity:1;transform:scale(1.25)}100%{opacity:1;transform:scale(1)}}`}</style>
+          {/* outer circle */}
+          <circle cx="50" cy="44" r="28" style={dr(200, 176)} />
+          {/* exclamation body */}
+          <line x1="50" y1="26" x2="50" y2="52" style={dr(560, 28)} />
+          <circle cx="50" cy="60" r="3.5" style={dp(720)} />
+          {/* 4 notch marks on the circle like a warning dial */}
+          {[270, 330, 30, 90].map((deg, i) => {
+            const a = deg * Math.PI / 180;
+            return <line key={i} x1={50+24*Math.cos(a)} y1={44+24*Math.sin(a)} x2={50+28*Math.cos(a)} y2={44+28*Math.sin(a)} style={dr(800+i*50, 5)} />;
+          })}
+          <circle cx="76" cy="20" r="3" style={dp(1000)} />
+        </svg>
+      );
+    case "audience":
+      return (
+        <svg viewBox="0 0 100 88" className="w-full h-full">
+          <style>{`@keyframes cf-draw{to{stroke-dashoffset:0}}@keyframes cf-pop{0%{opacity:0;transform:scale(0.2)}60%{opacity:1;transform:scale(1.25)}100%{opacity:1;transform:scale(1)}}`}</style>
+          <circle cx="50" cy="28" r="9" style={dr(200, 57)} />
+          <circle cx="28" cy="38" r="7" style={dr(320, 44)} />
+          <circle cx="72" cy="38" r="7" style={dr(380, 44)} />
+          <path d="M34 60 Q42 50 50 60 Q58 50 66 60" style={dr(500, 50)} />
+          <path d="M16 68 Q22 58 28 68" style={dr(580, 30)} />
+          <path d="M72 68 Q78 58 84 68" style={dr(630, 30)} />
+          {/* speech bubble */}
+          <path d="M40 14 h20 a4 4 0 0 1 4 4 v8 a4 4 0 0 1-4 4 l-4 4 -4-4 h-12 a4 4 0 0 1-4-4 v-8 a4 4 0 0 1 4-4 z" style={dr(720, 80)} />
+          <circle cx="76" cy="22" r="3" style={dp(900)} />
+        </svg>
+      );
+    case "brand":
+      return (
+        <svg viewBox="0 0 100 88" className="w-full h-full">
+          <style>{`@keyframes cf-draw{to{stroke-dashoffset:0}}@keyframes cf-pop{0%{opacity:0;transform:scale(0.2)}60%{opacity:1;transform:scale(1.25)}100%{opacity:1;transform:scale(1)}}`}</style>
+          {/* megaphone */}
+          <polygon points="22,34 40,34 62,20 62,68 40,54 22,54" style={dr(200, 140)} />
+          <rect x="12" y="36" width="10" height="16" rx="2" style={dr(500, 52)} />
+          {/* sound waves */}
+          <path d="M66 32 Q76 44 66 56" style={dr(620, 30)} />
+          <path d="M70 24 Q86 44 70 64" style={dr(700, 50)} />
+          {/* star accent */}
+          {[0,72,144,216,288].map((deg,i)=>{
+            const a=deg*Math.PI/180, r1=4, r2=8;
+            const pts=`${22+r2*Math.cos(a)},${74+r2*Math.sin(a)} ${22+r1*Math.cos(a+Math.PI/5)},${74+r1*Math.sin(a+Math.PI/5)}`;
+            return null; // skip complex star, use dots
+          })}
+          <circle cx="78" cy="22" r="3.2" style={dp(850)} />
+          <circle cx="84" cy="32" r="2.2" style={dp(900)} />
+          <circle cx="88" cy="44" r="2.5" style={dp(940)} />
+        </svg>
+      );
+    case "idea":
+      return (
+        <svg viewBox="0 0 100 88" className="w-full h-full">
+          <style>{`@keyframes cf-draw{to{stroke-dashoffset:0}}@keyframes cf-pop{0%{opacity:0;transform:scale(0.2)}60%{opacity:1;transform:scale(1.25)}100%{opacity:1;transform:scale(1)}}`}</style>
+          {/* lightbulb */}
+          <path d="M34 38 Q34 20 50 20 Q66 20 66 38 Q66 50 58 56 L42 56 Q34 50 34 38 Z" style={dr(200, 130)} />
+          <line x1="42" y1="60" x2="58" y2="60" style={dr(560, 16)} />
+          <line x1="43" y1="66" x2="57" y2="66" style={dr(600, 14)} />
+          <line x1="45" y1="72" x2="55" y2="72" style={dr(640, 10)} />
+          {/* rays */}
+          {[0,45,90,135,180,225,270,315].map((deg,i)=>{
+            const a=deg*Math.PI/180, x1=50+30*Math.cos(a), y1=38+30*Math.sin(a), x2=50+38*Math.cos(a), y2=38+38*Math.sin(a);
+            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} style={dr(700+i*40, 9)} />;
+          })}
+          <circle cx="50" cy="38" r="4" style={dp(1080, "rgba(251,191,36,0.8)")} />
+          <circle cx="76" cy="20" r="3" style={dp(1120)} />
+        </svg>
+      );
+    case "chart":
+    default:
+      return (
+        <svg viewBox="0 0 100 88" className="w-full h-full">
+          <style>{`@keyframes cf-draw{to{stroke-dashoffset:0}}@keyframes cf-pop{0%{opacity:0;transform:scale(0.2)}60%{opacity:1;transform:scale(1.25)}100%{opacity:1;transform:scale(1)}}`}</style>
+          {/* axes */}
+          <line x1="14" y1="72" x2="88" y2="72" style={dr(200, 74)} />
+          <line x1="14" y1="72" x2="14" y2="14" style={dr(300, 58)} />
+          {/* arrow tip */}
+          <polyline points="8,20 14,14 20,20" style={dr(390, 17)} />
+          {/* bars */}
+          <rect x="22" y="52" width="12" height="20" style={{ ...dr(460, 64), fill: "rgba(234,88,12,0.08)" }} />
+          <rect x="40" y="40" width="12" height="32" style={{ ...dr(530, 88), fill: "rgba(234,88,12,0.10)" }} />
+          <rect x="58" y="26" width="12" height="46" style={{ ...dr(600, 104), fill: "rgba(234,88,12,0.14)" }} />
+          {/* trend arrow */}
+          <polyline points="24,50 42,38 60,24 74,16" style={dr(720, 80)} />
+          <polyline points="66,16 74,16 74,24" style={dr(820, 16)} />
+          <circle cx="78" cy="22" r="3.2" style={dp(900)} />
+          {/* axis tick dots */}
+          {[28,46,64].map((x,i) => <circle key={i} cx={x} cy="72" r="1.8" style={dp(960+i*40, "#c4b89a")} />)}
+        </svg>
+      );
+  }
+}
+
+function SceneShotTemplateLayer({
+  shotTemplate,
+}: {
+  shotTemplate: StickmanShotTemplate;
+}) {
+  const s: React.CSSProperties = {
+    fill: "none",
+    stroke: "rgba(30,27,18,0.34)",
+    strokeWidth: 1.8,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+  };
+  if (shotTemplate === "desk-explain") {
+    return (
+      <svg viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
+        <line x1="18" y1="74" x2="76" y2="74" style={s} />
+        <line x1="22" y1="74" x2="22" y2="82" style={s} />
+        <line x1="72" y1="74" x2="72" y2="82" style={s} />
+      </svg>
+    );
+  }
+  if (shotTemplate === "point-to-board") {
+    return (
+      <svg viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
+        <rect x="90" y="54" width="44" height="20" rx="2" style={s} />
+        <line x1="94" y1="60" x2="124" y2="60" style={s} />
+        <line x1="94" y1="65" x2="116" y2="65" style={s} />
+        <line x1="99" y1="74" x2="95" y2="82" style={s} />
+        <line x1="125" y1="74" x2="129" y2="82" style={s} />
+      </svg>
+    );
+  }
+  if (shotTemplate === "walk-and-talk") {
+    return (
+      <svg viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
+        <path d="M8 78 Q 38 74 68 78 Q 98 82 128 78 Q 144 76 156 78" style={s} />
+        <line x1="26" y1="70" x2="34" y2="70" style={s} />
+        <line x1="40" y1="68" x2="49" y2="68" style={s} />
+      </svg>
+    );
+  }
+  if (shotTemplate === "result-moment") {
+    return (
+      <svg viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
+        <circle cx="80" cy="68" r="13" style={s} />
+        <line x1="80" y1="52" x2="80" y2="56" style={s} />
+        <line x1="64" y1="68" x2="68" y2="68" style={s} />
+        <line x1="96" y1="68" x2="92" y2="68" style={s} />
+      </svg>
+    );
+  }
+  // stand-explain
+  return (
+    <svg viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
+      <line x1="10" y1="78" x2="150" y2="78" style={s} />
+    </svg>
+  );
+}
+
+function SceneSupportAccents({
+  kind,
+  layout,
+  animKey,
+}: {
+  kind: StickmanKeyObject;
+  layout: StickmanLayout;
+  animKey: number;
+}) {
+  const ink = "rgba(30,27,18,0.35)";
+  const accent = "#ea580c";
+  const draw = (delay: number, w = 1.4): React.CSSProperties => ({
+    fill: "none",
+    stroke: ink,
+    strokeWidth: w,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    strokeDasharray: 120,
+    strokeDashoffset: 120,
+    animation: "cf-draw 0.35s ease-out forwards",
+    animationDelay: `${delay}ms`,
+  });
+  const pop = (delay: number): React.CSSProperties => ({
+    fill: accent,
+    opacity: 0,
+    transformBox: "fill-box",
+    transformOrigin: "center",
+    animation: "cf-pop 0.22s ease-out forwards",
+    animationDelay: `${delay}ms`,
+  });
+
+  const leftX = layout === "right-presenter" ? 70 : 86;
+  const midY = 68;
+  const variant = Math.abs(animKey) % 3;
+
+  return (
+    <svg viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
+      <style>{`
+        @keyframes cf-draw { to { stroke-dashoffset: 0; } }
+        @keyframes cf-pop  { 0%{opacity:0;transform:scale(0.3)} 100%{opacity:1;transform:scale(1)} }
+      `}</style>
+
+      {/* light guide line to connect scene composition */}
+      <line x1={leftX} y1={74} x2={108} y2={74} style={draw(360, 1.2)} />
+
+      {kind === "chart" && (
+        <>
+          <line x1={leftX + 2} y1={70} x2={leftX + 7} y2={66} style={draw(430)} />
+          <line x1={leftX + 8} y1={69} x2={leftX + 14} y2={63} style={draw(470)} />
+          <circle cx={leftX + 16} cy={62} r={1.8} style={pop(520)} />
+        </>
+      )}
+      {kind === "clock" && (
+        <>
+          <path d={`M ${leftX + 4} 68 q 6 -6 12 0`} style={draw(430)} />
+          <circle cx={leftX + 20} cy={65} r={2} style={pop(500)} />
+        </>
+      )}
+      {kind === "money" && (
+        <>
+          <rect x={leftX + 2} y={63} width={10} height={6} rx={1.5} style={draw(430)} />
+          <circle cx={leftX + 22} cy={66} r={2} style={pop(500)} />
+        </>
+      )}
+      {kind === "warning" && (
+        <>
+          <line x1={leftX + 5} y1={62} x2={leftX + 5} y2={68} style={draw(430)} />
+          <circle cx={leftX + 5} cy={70} r={1.6} style={pop(500)} />
+        </>
+      )}
+      {kind === "audience" && (
+        <>
+          <circle cx={leftX + 4} cy={66} r={1.8} style={draw(430)} />
+          <circle cx={leftX + 10} cy={64} r={1.8} style={draw(460)} />
+          <circle cx={leftX + 16} cy={66} r={1.8} style={draw(490)} />
+        </>
+      )}
+      {kind === "brand" && (
+        <>
+          <line x1={leftX + 3} y1={64} x2={leftX + 14} y2={64} style={draw(430)} />
+          <line x1={leftX + 3} y1={68} x2={leftX + 10} y2={68} style={draw(470)} />
+          <circle cx={leftX + 17} cy={63} r={1.7} style={pop(520)} />
+        </>
+      )}
+      {kind === "idea" && (
+        <>
+          <circle cx={leftX + 8} cy={65} r={3.2} style={draw(430)} />
+          <circle cx={leftX + 18} cy={62} r={1.7} style={pop(500)} />
+        </>
+      )}
+
+      {/* subtle scene variation */}
+      {variant === 1 && <circle cx="136" cy={midY + 8} r="1.8" style={pop(560)} />}
+      {variant === 2 && <line x1="132" y1={midY + 7} x2="142" y2={midY + 7} style={draw(560, 1.1)} />}
+    </svg>
+  );
+}
+
+// ─── Scene-aware doodles (caption-driven, not random) ────────────────────────
+function SceneContextDoodles({
+  caption,
+  animKey,
+}: {
+  caption: string;
+  animKey: number;
+}) {
+  const text = caption.toLowerCase();
+  const has = (words: string[]) => words.some((w) => text.includes(w));
+  type Kind = "brand" | "money" | "growth" | "time" | "warning" | "idea" | "social";
+  let primary: Kind = "idea";
+  if (has(["problem", "mistake", "wrong", "fail", "risk", "avoid"])) primary = "warning";
+  else if (has(["money", "sales", "revenue", "profit", "income", "price"])) primary = "money";
+  else if (has(["grow", "growth", "scale", "increase", "improve", "results"])) primary = "growth";
+  else if (has(["time", "fast", "quick", "minutes", "today", "now"])) primary = "time";
+  else if (has(["audience", "people", "customers", "community", "social", "followers"])) primary = "social";
+  else if (has(["brand", "business", "startup", "company", "founder"])) primary = "brand";
+
+  const sceneCycle: Kind[] = ["idea", "growth", "brand", "social", "time", "money", "warning", "growth"];
+  const secondary = sceneCycle[Math.abs(animKey) % sceneCycle.length]!;
+
+  const ink = "#1e1b12";
+  const softInk = "rgba(30,27,18,0.55)";
+  const accent = "#ea580c";
+  const style = (
+    delay: number,
+    width = 2,
+    stroke: string = ink
+  ): React.CSSProperties => ({
+    fill: "none",
+    stroke,
+    strokeWidth: width,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    strokeDasharray: 180,
+    strokeDashoffset: 180,
+    animation: "cf-draw 0.42s ease-out forwards",
+    animationDelay: `${delay}ms`,
+  });
+  const pop = (delay: number): React.CSSProperties => ({
+    fill: accent,
+    opacity: 0,
+    transformBox: "fill-box",
+    transformOrigin: "center",
+    animation: "cf-pop 0.24s ease-out forwards",
+    animationDelay: `${delay}ms`,
+  });
+
+  const drawIcon = (kind: Kind, x: number, y: number, delay: number, compact = false) => {
+    const k = compact ? 0.8 : 1;
+    switch (kind) {
+      case "money":
+        return (
+          <g>
+            <rect x={x - 10 * k} y={y - 6 * k} width={20 * k} height={12 * k} rx={2} style={style(delay, 1.8, ink)} />
+            <circle cx={x} cy={y} r={2.6 * k} style={style(delay + 60, 1.5, ink)} />
+          </g>
+        );
+      case "growth":
+        return (
+          <g>
+            <line x1={x - 10 * k} y1={y + 8 * k} x2={x - 10 * k} y2={y - 8 * k} style={style(delay, 1.8, ink)} />
+            <line x1={x - 10 * k} y1={y + 8 * k} x2={x + 10 * k} y2={y + 8 * k} style={style(delay + 50, 1.8, ink)} />
+            <polyline points={`${x - 7 * k},${y + 4 * k} ${x - 1 * k},${y} ${x + 3 * k},${y - 4 * k} ${x + 8 * k},${y - 8 * k}`} style={style(delay + 110, 1.8, ink)} />
+          </g>
+        );
+      case "time":
+        return (
+          <g>
+            <circle cx={x} cy={y} r={8 * k} style={style(delay, 1.8, ink)} />
+            <line x1={x} y1={y} x2={x} y2={y - 4 * k} style={style(delay + 60, 1.6, ink)} />
+            <line x1={x} y1={y} x2={x + 3 * k} y2={y + 2 * k} style={style(delay + 90, 1.6, ink)} />
+          </g>
+        );
+      case "warning":
+        return (
+          <g>
+            <polygon points={`${x},${y - 9 * k} ${x + 9 * k},${y + 8 * k} ${x - 9 * k},${y + 8 * k}`} style={style(delay, 1.8, ink)} />
+            <line x1={x} y1={y - 2 * k} x2={x} y2={y + 3 * k} style={style(delay + 60, 1.6, ink)} />
+            <circle cx={x} cy={y + 6 * k} r={1.4 * k} style={pop(delay + 110)} />
+          </g>
+        );
+      case "brand":
+        return (
+          <g>
+            <rect x={x - 9 * k} y={y - 7 * k} width={18 * k} height={14 * k} rx={2} style={style(delay, 1.8, ink)} />
+            <path d={`M ${x - 3 * k} ${y - 9 * k} h ${6 * k}`} style={style(delay + 60, 1.6, ink)} />
+          </g>
+        );
+      case "social":
+        return (
+          <g>
+            <circle cx={x - 6 * k} cy={y - 1 * k} r={2.8 * k} style={style(delay, 1.5, ink)} />
+            <circle cx={x + 6 * k} cy={y - 1 * k} r={2.8 * k} style={style(delay + 40, 1.5, ink)} />
+            <circle cx={x} cy={y + 5 * k} r={2.8 * k} style={style(delay + 80, 1.5, ink)} />
+            <line x1={x - 3 * k} y1={y} x2={x - 1 * k} y2={y + 3 * k} style={style(delay + 110, 1.4, ink)} />
+            <line x1={x + 3 * k} y1={y} x2={x + 1 * k} y2={y + 3 * k} style={style(delay + 140, 1.4, ink)} />
+          </g>
+        );
+      default:
+        return (
+          <g>
+            <circle cx={x} cy={y} r={7 * k} style={style(delay, 1.8, ink)} />
+            <line x1={x - 3 * k} y1={y + 7 * k} x2={x + 3 * k} y2={y + 7 * k} style={style(delay + 60, 1.6, ink)} />
+          </g>
+        );
+    }
+  };
+
+  return (
+    <svg key={animKey} viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
+      <style>{`
+        @keyframes cf-draw { to { stroke-dashoffset: 0; } }
+        @keyframes cf-pop  { 0%{opacity:0;transform:scale(0.2)} 60%{opacity:1;transform:scale(1.2)} 100%{opacity:1;transform:scale(1)} }
+      `}</style>
+      {/* Clean layout: one primary + one secondary marker */}
+      {/* Primary icon (ink) */}
+      {drawIcon(primary, 118, 68, 420, false)}
+      {/* Secondary icon (lighter ink) */}
+      <g opacity={0.85}>
+        {/* we keep geometry identical but soften via opacity + stroke color */}
+        {(() => {
+          const original = (kind: Kind) => drawIcon(kind, 145, 62, 560, true);
+          // Wrap secondary in a <g> where all strokes are softened by CSS currentColor.
+          // Simpler: re-render with softInk via the style() stroke argument.
+          const drawSoft = (kind: Kind) => {
+            const k = true ? 0.8 : 1;
+            // Reuse drawIcon by duplicating compact shapes with softInk.
+            // For maintainability, keep secondary as a minimal dot marker if not directly supported.
+            return drawIcon(kind, 145, 62, 560, true);
+          };
+          return drawSoft(secondary);
+        })()}
+      </g>
     </svg>
   );
 }
@@ -1034,6 +1590,27 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
   const scene    = scenes[currentIndex];
   if (!scene) return null;
   const progress = scenes.length > 1 ? (currentIndex / (scenes.length - 1)) * 100 : 100;
+  const shotTemplate: StickmanShotTemplate = scene.shotTemplate ?? "stand-explain";
+  const layout: StickmanLayout = scene.layout ?? (scene.pose === "sitting" ? "desk-scene" : "left-presenter");
+  const keyObject: StickmanKeyObject = scene.keyObject ?? "idea";
+  const camera: StickmanCamera = scene.camera ?? "medium";
+  const effectiveLayout: StickmanLayout =
+    shotTemplate === "desk-explain"
+      ? "desk-scene"
+      : shotTemplate === "walk-and-talk"
+        ? "left-presenter"
+        : shotTemplate === "point-to-board"
+          ? "left-presenter"
+          : layout;
+  const stickmanLayoutStyle: React.CSSProperties =
+    effectiveLayout === "center-presenter"
+      ? { position: "absolute", bottom: "2%", left: "29%", width: "42%", top: "58%" }
+      : effectiveLayout === "right-presenter"
+        ? { position: "absolute", bottom: "2%", left: "52%", width: "42%", top: "58%" }
+        : effectiveLayout === "desk-scene"
+          ? { position: "absolute", bottom: "2%", left: "18%", width: "45%", top: "58%" }
+          : { position: "absolute", bottom: "2%", left: "5%", width: "42%", top: "58%" };
+  const captionRight = camera === "wide" ? "34%" : "28%";
 
   return (
     <div className="flex flex-col gap-3 w-full select-none">
@@ -1091,9 +1668,6 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
         {/* Horizontal separator between text area and stickman row */}
         <div className="absolute left-[5%] right-[5%]" style={{ top: "58%", height: "1px", background: "linear-gradient(90deg, transparent, #d4c9a8 20%, #d4c9a8 80%, transparent)" }} />
 
-        {/* Scatter doodles — ambient layer across full canvas */}
-        <ScatterDoodles pose={scene.pose} animKey={currentIndex} />
-
         {/* Scene fade-in wrapper */}
         <div key={currentIndex} className="cf-scene-fade absolute inset-0">
 
@@ -1104,7 +1678,7 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
             className="cf-highlight-bar"
             style={{
               position: "absolute",
-              top: "11%", left: "4%", right: "30%", height: "17%",
+              top: "11%", left: "4%", right: captionRight, height: "17%",
               background: "rgba(234,88,12,0.10)",
               borderRadius: 6,
               animationDelay: "60ms",
@@ -1112,17 +1686,26 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
           />
 
           {/* Caption text */}
-          <div style={{ position: "absolute", top: "10%", left: "5%", right: "28%", bottom: "42%" }}>
+          <div style={{ position: "absolute", top: "10%", left: "5%", right: captionRight, bottom: "42%", overflow: "hidden" }}>
             <AnimatedCaption text={scene.caption} sceneKey={currentIndex} />
           </div>
 
-          {/* Pose doodle — top right */}
+          {/* Scene key object — top right */}
           <div className="cf-doodle-pop" style={{ position: "absolute", top: "9%", right: "2%", width: "22%", height: "47%" }}>
-            <PoseDoodle pose={scene.pose} />
+            <KeyObjectDoodle kind={keyObject} />
           </div>
 
-          {/* ── BOTTOM ROW: stickman (left-centre) ── */}
-          <div style={{ position: "absolute", bottom: "2%", left: "5%", width: "42%", top: "58%" }}>
+          {/* Shot template composition layer */}
+          <SceneShotTemplateLayer shotTemplate={shotTemplate} />
+
+          {/* Caption-aware scene doodles (main content illustration) */}
+          <SceneContextDoodles caption={scene.caption} animKey={currentIndex} />
+
+          {/* Mid-density supporting accents to avoid empty feel */}
+          <SceneSupportAccents kind={keyObject} layout={effectiveLayout} animKey={currentIndex} />
+
+          {/* ── BOTTOM ROW: storyboard-driven stickman position ── */}
+          <div style={stickmanLayoutStyle}>
             <StickmanSvg pose={scene.pose} animKey={currentIndex} />
           </div>
 

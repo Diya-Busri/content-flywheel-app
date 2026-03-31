@@ -15,11 +15,16 @@ interface Props {
   setTopic: (v: string) => void;
   sceneCount: number;
   setSceneCount: (v: number) => void;
+  longMode: boolean;
+  setLongMode: (v: boolean) => void;
+  targetMinutes: number;
+  setTargetMinutes: (v: number) => void;
   voiceId: string;
   setVoiceId: (v: string) => void;
 }
 
 export const STICKMAN_SCENE_COUNT_OPTIONS = [4, 5, 6, 7, 8] as const;
+export const STICKMAN_LONG_DURATION_OPTIONS = [10, 15, 20, 25, 30, 35] as const;
 
 /** Curated ElevenLabs voices that work well for explainer narration. */
 export const STICKMAN_VOICE_OPTIONS = [
@@ -35,11 +40,28 @@ export function StickmanWhiteboardSetup({
   setTopic,
   sceneCount,
   setSceneCount,
+  longMode,
+  setLongMode,
+  targetMinutes,
+  setTargetMinutes,
   voiceId,
   setVoiceId,
 }: Props) {
   return (
     <>
+      <div className="space-y-2">
+        <Label>Video mode</Label>
+        <Select value={longMode ? "long" : "short"} onValueChange={(v) => setLongMode(v === "long")}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="short">Short explainer (preview mode)</SelectItem>
+            <SelectItem value="long">Long YouTube mode (10–35 min)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="stickman-topic">Topic / Script idea</Label>
         <Input
@@ -49,28 +71,51 @@ export function StickmanWhiteboardSetup({
           onChange={(e) => setTopic(e.target.value)}
         />
         <p className="text-xs text-muted-foreground">
-          AI will split this into scenes with captions and matching stickman poses.
+          {longMode
+            ? "AI will create a long-form storyboard (chapter flow + many scenes) targeting your selected runtime."
+            : "AI will split this into scenes with captions and matching stickman poses."}
         </p>
       </div>
 
-      <div className="space-y-2">
-        <Label>Number of scenes</Label>
-        <Select
-          value={String(sceneCount)}
-          onValueChange={(v) => setSceneCount(Number(v))}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {STICKMAN_SCENE_COUNT_OPTIONS.map((n) => (
-              <SelectItem key={n} value={String(n)}>
-                {n} scenes
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {longMode ? (
+        <div className="space-y-2">
+          <Label>Target video length</Label>
+          <Select
+            value={String(targetMinutes)}
+            onValueChange={(v) => setTargetMinutes(Number(v))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STICKMAN_LONG_DURATION_OPTIONS.map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n} minutes
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Label>Number of scenes</Label>
+          <Select
+            value={String(sceneCount)}
+            onValueChange={(v) => setSceneCount(Number(v))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STICKMAN_SCENE_COUNT_OPTIONS.map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n} scenes
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label>Narrator voice</Label>
