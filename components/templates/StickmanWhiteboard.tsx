@@ -584,7 +584,7 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
       {/* Whiteboard */}
       <div
         className="relative rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
-        style={{ aspectRatio: "9/16", maxWidth: 360, margin: "0 auto" }}
+        style={{ aspectRatio: "9/16", width: "100%", maxWidth: 360, margin: "0 auto" }}
       >
         {/* Very faint horizontal ruled lines — like a notepad */}
         <svg
