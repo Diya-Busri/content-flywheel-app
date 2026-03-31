@@ -473,39 +473,170 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
   );
 }
 
-// ─── Animated caption ────────────────────────────────────────────────────────
+// ─── Caption lines (4 words per line, first line orange) ─────────────────────
 
 function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number }) {
   const words = text.split(/\s+/);
-  // Highlight every Nth word in orange for visual rhythm
-  const accentEvery = Math.max(3, Math.floor(words.length / 3));
+  const lines: string[] = [];
+  for (let i = 0; i < words.length; i += 4) lines.push(words.slice(i, i + 4).join(" "));
   return (
-    <p
-      key={sceneKey}
-      style={{
-        fontFamily: "'Caveat', cursive",
-        fontSize: "clamp(18px, 2.6vw, 34px)",
-        fontWeight: 700,
-        lineHeight: 1.35,
-        color: "#1a1a2e",
-        letterSpacing: "0.01em",
-      }}
-    >
-      {words.map((word, i) => (
-        <span
+    <div key={sceneKey} style={{ position: "relative" }}>
+      {lines.map((line, i) => (
+        <div
           key={i}
-          className="cf-word"
+          className="cf-line"
           style={{
-            display: "inline-block",
-            marginRight: "0.28em",
-            animationDelay: `${300 + i * 75}ms`,
-            color: i > 0 && i % accentEvery === 0 ? "#ea580c" : undefined,
+            animationDelay: `${100 + i * 260}ms`,
+            fontFamily: "'Caveat', cursive",
+            fontWeight: i === 0 ? 700 : 600,
+            fontSize: i === 0 ? "clamp(22px, 3.2vw, 46px)" : "clamp(16px, 2.2vw, 32px)",
+            lineHeight: 1.25,
+            color: i === 0 ? "#ea580c" : "#1e1b12",
+            marginBottom: i === 0 ? "0.18em" : "0.1em",
+            letterSpacing: i === 0 ? "0.01em" : "0",
           }}
         >
-          {word}
-        </span>
+          {line}
+        </div>
       ))}
-    </p>
+    </div>
+  );
+}
+
+// ─── Pose doodle (top-right decorative icon) ──────────────────────────────────
+
+function PoseDoodle({ pose }: { pose: StickmanPose }) {
+  const strokeStyle = (delay: number, sw = 2.5): React.CSSProperties => ({
+    fill: "none", stroke: "#1e1b12", strokeWidth: sw, strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
+    strokeDasharray: 300, strokeDashoffset: 300,
+    animation: "cf-draw 0.5s ease-out forwards",
+    animationDelay: `${delay}ms`,
+  });
+  const dotStyle = (delay: number): React.CSSProperties => ({
+    fill: "#1e1b12", opacity: 0,
+    animation: "cf-pop 0.25s ease-out forwards",
+    animationDelay: `${delay}ms`,
+  });
+  const oStyle = (delay: number, sw = 2.5): React.CSSProperties => ({ ...strokeStyle(delay, sw), strokeDasharray: 200 });
+
+  const icons: Record<StickmanPose, React.ReactNode> = {
+    thinking: (
+      <>
+        {/* Lightbulb */}
+        <circle cx="50" cy="32" r="18" style={oStyle(200)} />
+        <line x1="38" y1="46" x2="43" y2="54" style={strokeStyle(600)} />
+        <line x1="50" y1="48" x2="50" y2="56" style={strokeStyle(650)} />
+        <line x1="62" y1="46" x2="57" y2="54" style={strokeStyle(700)} />
+        <line x1="43" y1="57" x2="57" y2="57" style={strokeStyle(750)} />
+        <line x1="44" y1="62" x2="56" y2="62" style={strokeStyle(800)} />
+        {/* Rays */}
+        <line x1="50" y1="8"  x2="50" y2="2"  style={strokeStyle(400, 2)} />
+        <line x1="70" y1="18" x2="74" y2="14" style={strokeStyle(440, 2)} />
+        <line x1="30" y1="18" x2="26" y2="14" style={strokeStyle(480, 2)} />
+        <line x1="76" y1="34" x2="82" y2="34" style={strokeStyle(520, 2)} />
+        <line x1="24" y1="34" x2="18" y2="34" style={strokeStyle(560, 2)} />
+      </>
+    ),
+    pointing: (
+      <>
+        {/* Bar chart */}
+        <line x1="14" y1="72" x2="86" y2="72" style={strokeStyle(200, 2.5)} />
+        <line x1="14" y1="72" x2="14" y2="14" style={strokeStyle(350, 2.5)} />
+        <rect x="20" y="52" width="12" height="20" style={{ ...strokeStyle(500), fill: "rgba(234,88,12,0.15)" }} />
+        <rect x="38" y="40" width="12" height="32" style={{ ...strokeStyle(600), fill: "rgba(234,88,12,0.15)" }} />
+        <rect x="56" y="26" width="12" height="46" style={{ ...strokeStyle(700), fill: "rgba(234,88,12,0.15)" }} />
+        {/* Up arrow */}
+        <line x1="78" y1="30" x2="78" y2="10" style={strokeStyle(850, 2.5)} />
+        <line x1="70" y1="18" x2="78" y2="10" style={strokeStyle(900, 2.5)} />
+        <line x1="86" y1="18" x2="78" y2="10" style={strokeStyle(950, 2.5)} />
+      </>
+    ),
+    celebrating: (
+      <>
+        {/* Trophy */}
+        <path d="M34 14 h32 v24 a16 16 0 0 1-32 0 Z" style={strokeStyle(200)} />
+        <line x1="50" y1="54" x2="50" y2="68" style={strokeStyle(600)} />
+        <line x1="34" y1="68" x2="66" y2="68" style={strokeStyle(700)} />
+        <line x1="20" y1="18" x2="34" y2="18" style={strokeStyle(350)} />
+        <line x1="80" y1="18" x2="66" y2="18" style={strokeStyle(450)} />
+        {/* Stars */}
+        <circle cx="18" cy="36" r="3" style={dotStyle(750)} />
+        <circle cx="82" cy="36" r="3" style={dotStyle(800)} />
+        <circle cx="26" cy="60" r="2" style={dotStyle(850)} />
+        <circle cx="74" cy="60" r="2" style={dotStyle(900)} />
+        <circle cx="50" cy="8"  r="3" style={dotStyle(950)} />
+      </>
+    ),
+    standing: (
+      <>
+        {/* Giant ? */}
+        <path d="M34 28 a16 16 0 1 1 20 15 c0 4-4 8-4 14" style={strokeStyle(200, 3.5)} />
+        <circle cx="50" cy="70" r="3.5" style={dotStyle(750)} />
+      </>
+    ),
+    sitting: (
+      <>
+        {/* Laptop */}
+        <rect x="16" y="20" width="68" height="44" rx="4" style={strokeStyle(200)} />
+        <line x1="24" y1="30" x2="52" y2="30" style={strokeStyle(500, 1.8)} />
+        <line x1="24" y1="38" x2="44" y2="38" style={strokeStyle(560, 1.8)} />
+        <line x1="24" y1="46" x2="56" y2="46" style={strokeStyle(620, 1.8)} />
+        <line x1="8"  y1="68" x2="92" y2="68" style={strokeStyle(750)} />
+        {/* Code cursor */}
+        <rect x="57" y="34" width="2" height="8" style={dotStyle(800)} />
+      </>
+    ),
+    defeated: (
+      <>
+        {/* Storm cloud */}
+        <path d="M24 44 a14 14 0 0 1 14-14 a10 10 0 0 1 20 0 a12 12 0 0 1 8 22 H24 Z" style={strokeStyle(200)} />
+        {/* Rain */}
+        <line x1="30" y1="56" x2="26" y2="70" style={strokeStyle(600, 2)} />
+        <line x1="42" y1="56" x2="38" y2="72" style={strokeStyle(650, 2)} />
+        <line x1="54" y1="56" x2="50" y2="70" style={strokeStyle(700, 2)} />
+        <line x1="66" y1="56" x2="62" y2="72" style={strokeStyle(750, 2)} />
+        <line x1="38" y1="76" x2="34" y2="84" style={strokeStyle(800, 2)} />
+        <line x1="52" y1="74" x2="48" y2="82" style={strokeStyle(840, 2)} />
+      </>
+    ),
+    "arms-raised": (
+      <>
+        {/* Firework burst */}
+        {[0,30,60,90,120,150,180,210,240,270,300,330].map((deg, idx) => {
+          const rad = (deg * Math.PI) / 180;
+          const x1 = 50 + 14 * Math.cos(rad), y1 = 42 + 14 * Math.sin(rad);
+          const x2 = 50 + 34 * Math.cos(rad), y2 = 42 + 34 * Math.sin(rad);
+          return <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2} style={strokeStyle(300 + idx * 50, 2)} />;
+        })}
+        <circle cx="50" cy="42" r="10" style={oStyle(200)} />
+        <circle cx="50" cy="42" r="4"  style={dotStyle(900)} />
+      </>
+    ),
+    walking: (
+      <>
+        {/* Winding path + arrow */}
+        <path d="M10 72 Q30 50 50 60 Q70 70 90 42" style={strokeStyle(200, 2.5)} />
+        <line x1="82" y1="34" x2="90" y2="42" style={strokeStyle(700, 2.5)} />
+        <line x1="90" y1="42" x2="82" y2="50" style={strokeStyle(750, 2.5)} />
+        {/* Footprints */}
+        <ellipse cx="22" cy="74" rx="3" ry="5" style={oStyle(450, 1.5)} />
+        <ellipse cx="34" cy="66" rx="3" ry="5" style={oStyle(520, 1.5)} />
+        <ellipse cx="46" cy="62" rx="3" ry="5" style={oStyle(590, 1.5)} />
+        <ellipse cx="58" cy="66" rx="3" ry="5" style={oStyle(660, 1.5)} />
+        {/* Destination star */}
+        <circle cx="90" cy="34" r="5" style={dotStyle(850)} />
+      </>
+    ),
+  };
+
+  return (
+    <svg viewBox="0 0 100 88" className="w-full h-full">
+      <style>{`
+        @keyframes cf-draw { to { stroke-dashoffset: 0; } }
+        @keyframes cf-pop  { 0%{opacity:0;transform:scale(0.3)} 60%{opacity:1;transform:scale(1.2)} 100%{opacity:1;transform:scale(1)} }
+      `}</style>
+      {icons[pose]}
+    </svg>
   );
 }
 
@@ -617,88 +748,112 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
 
   return (
     <div className="flex flex-col gap-3 w-full select-none">
-      {/* Fonts + word animation */}
+      {/* Global styles */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap');
-        @keyframes cf-word {
-          from { opacity: 0; transform: translateY(10px) rotate(-1deg); }
-          to   { opacity: 1; transform: translateY(0)   rotate(0deg); }
+        @keyframes cf-line {
+          from { opacity: 0; transform: translateX(-18px); }
+          to   { opacity: 1; transform: translateX(0); }
         }
-        .cf-word {
-          opacity: 0;
-          animation: cf-word 0.3s ease-out forwards;
+        .cf-line { opacity: 0; animation: cf-line 0.42s ease-out forwards; }
+        @keyframes cf-highlight-bar {
+          from { transform: scaleX(0); }
+          to   { transform: scaleX(1); }
         }
-        @keyframes cf-scene-in {
-          from { opacity: 0; transform: scale(0.98); }
-          to   { opacity: 1; transform: scale(1); }
+        .cf-highlight-bar {
+          transform-origin: left center;
+          animation: cf-highlight-bar 0.5s cubic-bezier(.22,1,.36,1) forwards;
         }
-        .cf-scene-in {
-          animation: cf-scene-in 0.4s ease-out forwards;
+        @keyframes cf-scene-fade {
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
+        .cf-scene-fade { animation: cf-scene-fade 0.35s ease-out forwards; }
+        @keyframes cf-doodle-pop {
+          from { opacity: 0; transform: scale(0.75) rotate(-6deg); }
+          to   { opacity: 1; transform: scale(1)    rotate(0deg);  }
+        }
+        .cf-doodle-pop { opacity: 0; animation: cf-doodle-pop 0.5s cubic-bezier(.34,1.56,.64,1) 0.2s forwards; }
       `}</style>
 
-      {/* Whiteboard — 16:9 landscape for YouTube */}
+      {/* ── Whiteboard canvas 16:9 ── */}
       <div
         className="relative rounded-2xl overflow-hidden w-full"
         style={{
           aspectRatio: "16/9",
           background: "#FFFEF8",
-          border: "2px solid #E8E2CF",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06)",
+          border: "2px solid #E6DFC8",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06)",
         }}
       >
-        {/* Dot grid background */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 160 90" preserveAspectRatio="none" style={{ opacity: 0.18 }}>
+        {/* Dot grid */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 160 90" preserveAspectRatio="none" style={{ opacity: 0.16 }}>
           {Array.from({ length: 15 }, (_, row) =>
             Array.from({ length: 27 }, (_, col) => (
-              <circle key={`${row}-${col}`} cx={col * 6 + 3} cy={row * 6 + 3} r="0.5" fill="#c4b89a" />
+              <circle key={`${row}-${col}`} cx={col * 6 + 3} cy={row * 6 + 3} r="0.55" fill="#b8a882" />
             ))
           )}
         </svg>
 
-        {/* Orange top accent bar */}
-        <div className="absolute top-0 left-0 right-0 h-[6px]" style={{ background: "linear-gradient(90deg, #ea580c, #f97316, #fbbf24)" }} />
+        {/* Orange top bar */}
+        <div className="absolute top-0 left-0 right-0 h-[7px]"
+          style={{ background: "linear-gradient(90deg, #c2410c, #ea580c, #f97316, #fbbf24)" }} />
 
-        {/* Scene label — top left */}
-        <div className="absolute top-4 left-5 flex items-center gap-2 z-10">
-          <span
-            style={{ fontFamily: "'Caveat', cursive", fontSize: "clamp(13px, 1.4vw, 18px)", fontWeight: 700, color: "#ea580c" }}
-          >
-            Scene {currentIndex + 1}
-          </span>
-          <span style={{ fontFamily: "'Caveat', cursive", fontSize: "clamp(11px, 1.1vw, 14px)", color: "#a8956a" }}>
-            / {scenes.length}
-          </span>
-        </div>
+        {/* Horizontal separator between text area and stickman row */}
+        <div className="absolute left-[5%] right-[5%]" style={{ top: "58%", height: "1px", background: "linear-gradient(90deg, transparent, #d4c9a8 20%, #d4c9a8 80%, transparent)" }} />
 
-        {/* Vertical divider — gradient so it fades at edges */}
-        <div
-          className="absolute top-[14%] bottom-[6%] left-[50%] w-px"
-          style={{ background: "linear-gradient(to bottom, transparent, #d4c9a8 20%, #d4c9a8 80%, transparent)" }}
-        />
+        {/* Scene fade-in wrapper */}
+        <div key={currentIndex} className="cf-scene-fade absolute inset-0">
 
-        {/* Scene fade container */}
-        <div key={currentIndex} className="cf-scene-in absolute inset-0">
-          {/* Stickman — left 50% */}
-          <div className="absolute inset-y-0 left-0 w-[50%] flex items-center justify-center" style={{ paddingTop: "8%", paddingBottom: "4%", paddingLeft: "4%", paddingRight: "2%" }}>
+          {/* ── TOP AREA: caption (left) + doodle (right) ── */}
+
+          {/* Highlight bar behind first line */}
+          <div
+            className="cf-highlight-bar"
+            style={{
+              position: "absolute",
+              top: "11%", left: "4%", right: "30%", height: "17%",
+              background: "rgba(234,88,12,0.10)",
+              borderRadius: 6,
+              animationDelay: "60ms",
+            }}
+          />
+
+          {/* Caption text */}
+          <div style={{ position: "absolute", top: "10%", left: "5%", right: "28%", bottom: "42%" }}>
+            <AnimatedCaption text={scene.caption} sceneKey={currentIndex} />
+          </div>
+
+          {/* Pose doodle — top right */}
+          <div className="cf-doodle-pop" style={{ position: "absolute", top: "9%", right: "2%", width: "22%", height: "47%" }}>
+            <PoseDoodle pose={scene.pose} />
+          </div>
+
+          {/* ── BOTTOM ROW: stickman (left-centre) ── */}
+          <div style={{ position: "absolute", bottom: "2%", left: "5%", width: "42%", top: "58%" }}>
             <StickmanSvg pose={scene.pose} animKey={currentIndex} />
           </div>
 
-          {/* Caption — right 50% */}
-          <div className="absolute inset-y-0 right-0 w-[50%] flex items-center" style={{ paddingTop: "10%", paddingBottom: "6%", paddingLeft: "5%", paddingRight: "7%" }}>
-            <AnimatedCaption text={scene.caption} sceneKey={currentIndex} />
+          {/* Scene badge — bottom right */}
+          <div style={{
+            position: "absolute", bottom: "6%", right: "4%",
+            fontFamily: "'Caveat', cursive", fontWeight: 700,
+            fontSize: "clamp(12px, 1.4vw, 18px)", color: "#a8956a",
+          }}>
+            {currentIndex + 1} / {scenes.length}
           </div>
         </div>
 
-        {/* Loading spinner */}
+        {/* Loading overlay */}
         {loadingVO && (
-          <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: "rgba(255,254,248,0.80)", backdropFilter: "blur(4px)" }}>
+          <div className="absolute inset-0 flex items-center justify-center z-20"
+            style={{ background: "rgba(255,254,248,0.82)", backdropFilter: "blur(4px)" }}>
             <div className="flex flex-col items-center gap-2" style={{ color: "#a8956a" }}>
               <svg className="w-7 h-7 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
               </svg>
-              <span style={{ fontFamily: "'Caveat', cursive", fontSize: 16 }}>Generating voice…</span>
+              <span style={{ fontFamily: "'Caveat', cursive", fontSize: 17 }}>Generating voice…</span>
             </div>
           </div>
         )}
@@ -708,59 +863,44 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
 
       {/* Progress bar */}
       <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "#EDE8D9" }}>
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${progress}%`, background: "linear-gradient(90deg, #ea580c, #f97316)" }}
-        />
+        <div className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${progress}%`, background: "linear-gradient(90deg, #c2410c, #f97316)" }} />
       </div>
 
-      {/* Controls + dots */}
+      {/* Controls */}
       <div className="flex items-center justify-center gap-4">
         <button type="button" onClick={handlePrev} disabled={currentIndex === 0}
           className="p-2 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          style={{ background: "#F5F0E4" }}
-          aria-label="Previous">
+          style={{ background: "#F0EAD8" }} aria-label="Previous">
           <svg className="w-5 h-5" style={{ color: "#7a6a50" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6" /></svg>
         </button>
 
-        {/* Scene dots */}
+        {/* Pill dots */}
         <div className="flex items-center gap-1.5 flex-wrap justify-center">
           {scenes.map((s, i) => (
-            <button
-              key={s.sceneIndex}
-              type="button"
+            <button key={s.sceneIndex} type="button"
               onClick={() => { setCurrentIndex(i); if (!isPlaying) handlePlay(); }}
               className="rounded-full transition-all duration-300"
-              style={{
-                width: i === currentIndex ? 20 : 8,
-                height: 8,
-                background: i === currentIndex ? "#ea580c" : "#D4C9A8",
-              }}
-              aria-label={`Scene ${i + 1}`}
-            />
+              style={{ width: i === currentIndex ? 22 : 8, height: 8, background: i === currentIndex ? "#ea580c" : "#CFC5A8" }}
+              aria-label={`Scene ${i + 1}`} />
           ))}
         </div>
 
         {isPlaying ? (
           <button type="button" onClick={handlePause}
-            className="p-3 rounded-full text-white shadow-md transition-colors"
-            style={{ background: "#ea580c" }}
-            aria-label="Pause">
+            className="p-3 rounded-full text-white shadow-md" style={{ background: "#ea580c" }} aria-label="Pause">
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
           </button>
         ) : (
           <button type="button" onClick={handlePlay}
-            className="p-3 rounded-full text-white shadow-md transition-colors"
-            style={{ background: "#ea580c" }}
-            aria-label="Play">
+            className="p-3 rounded-full text-white shadow-md" style={{ background: "#ea580c" }} aria-label="Play">
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
           </button>
         )}
 
         <button type="button" onClick={handleNext} disabled={currentIndex === scenes.length - 1}
           className="p-2 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          style={{ background: "#F5F0E4" }}
-          aria-label="Next">
+          style={{ background: "#F0EAD8" }} aria-label="Next">
           <svg className="w-5 h-5" style={{ color: "#7a6a50" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
