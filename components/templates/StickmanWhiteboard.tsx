@@ -387,6 +387,26 @@ const POSES: Record<StickmanPose, El[]> = {
 function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number }) {
   const elements = POSES[pose] ?? POSES.standing;
 
+  // Perpendicular highlight for 3D tube effect on a line segment
+  const tubeHighlight = (x1: number, y1: number, x2: number, y2: number, delay: number): React.ReactNode => {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1) return null;
+    const nx = (-dy / len) * 2.0, ny = (dx / len) * 2.0;
+    return (
+      <line
+        x1={x1 + nx} y1={y1 + ny} x2={x2 + nx} y2={y2 + ny}
+        style={{
+          stroke: "rgba(255,255,255,0.72)", strokeWidth: 1.6,
+          strokeLinecap: "round",
+          strokeDasharray: 600, strokeDashoffset: 600,
+          animation: "cf-draw 0.55s ease-out forwards",
+          animationDelay: `${delay + 20}ms`,
+        }}
+      />
+    );
+  };
+
   return (
     <svg
       key={animKey}
@@ -395,78 +415,89 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
       aria-label={`Stickman: ${pose}`}
     >
       <style>{`
-        @keyframes cf-draw {
-          to { stroke-dashoffset: 0; }
-        }
+        @keyframes cf-draw { to { stroke-dashoffset: 0; } }
         @keyframes cf-pop {
           0%   { opacity: 0; transform: scale(0.3); }
           60%  { opacity: 1; transform: scale(1.15); }
           100% { opacity: 1; transform: scale(1); }
         }
+        @keyframes cf-shadow-in { to { opacity: 1; } }
         .cf-stroke {
-          fill: none;
-          stroke: #111827;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-          stroke-dasharray: 600;
-          stroke-dashoffset: 600;
+          fill: none; stroke: #1a1512;
+          stroke-linecap: round; stroke-linejoin: round;
+          stroke-dasharray: 600; stroke-dashoffset: 600;
           animation: cf-draw 0.55s ease-out forwards;
         }
         .cf-dot {
-          opacity: 0;
-          fill: #111827;
-          transform-box: fill-box;
-          transform-origin: center;
+          opacity: 0; fill: #1a1512;
+          transform-box: fill-box; transform-origin: center;
           animation: cf-pop 0.2s ease-out forwards;
         }
       `}</style>
 
+      {/* Ground shadow — gives 3D grounded feel */}
+      <ellipse cx="83" cy="168" rx="38" ry="7"
+        style={{ fill: "rgba(0,0,0,0.07)", opacity: 0,
+          animation: "cf-shadow-in 0.4s ease-out 0.15s forwards" }} />
+
       {elements.map((el, i) => {
         if (el.k === "D") {
           return (
-            <circle
-              key={i}
-              className="cf-dot"
-              cx={el.cx}
-              cy={el.cy}
-              r={el.r}
-              style={{ animationDelay: `${el.delay}ms` }}
-            />
+            <circle key={i} className="cf-dot"
+              cx={el.cx} cy={el.cy} r={el.r}
+              style={{ animationDelay: `${el.delay}ms` }} />
           );
         }
         const style: React.CSSProperties = { animationDelay: `${el.delay}ms` };
         const sw = el.sw ?? SW;
+
         if (el.k === "L") {
           return (
-            <line
-              key={i}
-              className="cf-stroke"
-              x1={el.x1} y1={el.y1} x2={el.x2} y2={el.y2}
-              strokeWidth={sw}
-              style={style}
-            />
+            <g key={i}>
+              {/* main limb stroke */}
+              <line className="cf-stroke"
+                x1={el.x1} y1={el.y1} x2={el.x2} y2={el.y2}
+                strokeWidth={sw} style={style} />
+              {/* 3D tube highlight — white sheen on upper-left edge */}
+              {sw >= 3 && tubeHighlight(el.x1, el.y1, el.x2, el.y2, el.delay)}
+            </g>
           );
         }
+
         if (el.k === "C") {
+          const hr = el.r * 0.28; // highlight radius
           return (
-            <circle
-              key={i}
-              className="cf-stroke"
-              cx={el.cx} cy={el.cy} r={el.r}
-              strokeWidth={sw}
-              style={style}
-            />
+            <g key={i}>
+              {/* main circle */}
+              <circle className="cf-stroke"
+                cx={el.cx} cy={el.cy} r={el.r}
+                strokeWidth={sw} style={style} />
+              {/* 3D sphere highlight dot — top-left */}
+              <circle
+                cx={el.cx - el.r * 0.3} cy={el.cy - el.r * 0.3} r={hr}
+                style={{
+                  fill: "rgba(255,255,255,0.78)", opacity: 0,
+                  animation: "cf-pop 0.2s ease-out forwards",
+                  animationDelay: `${el.delay + 80}ms`,
+                  transformBox: "fill-box", transformOrigin: "center",
+                }} />
+              {/* subtle shadow arc bottom-right */}
+              <circle
+                cx={el.cx + el.r * 0.22} cy={el.cy + el.r * 0.28} r={el.r * 0.18}
+                style={{
+                  fill: "rgba(0,0,0,0.10)", opacity: 0,
+                  animation: "cf-pop 0.2s ease-out forwards",
+                  animationDelay: `${el.delay + 100}ms`,
+                  transformBox: "fill-box", transformOrigin: "center",
+                }} />
+            </g>
           );
         }
-        // k === "P"
+
+        // k === "P" — paths (face features, props)
         return (
-          <path
-            key={i}
-            className="cf-stroke"
-            d={el.p}
-            strokeWidth={sw}
-            style={style}
-          />
+          <path key={i} className="cf-stroke"
+            d={el.p} strokeWidth={sw} style={style} />
         );
       })}
     </svg>
@@ -725,23 +756,29 @@ function PoseDoodle({ pose }: { pose: StickmanPose }) {
 // ─── Scatter doodles (ambient decorative layer across the whole canvas) ───────
 
 function ScatterDoodles({ pose, animKey }: { pose: StickmanPose; animKey: number }) {
-  // Static positions — these fill the empty areas of the canvas
+  // viewBox 160×90 = 16:9 — dots stay round, not stretched
+  // Positions chosen to avoid the caption text area (top 5%–58%, left 5%–72%)
+  // and the doodle area (top 9%–56%, right 78%–98%)
+  // Safe zones: far left strip (x<8), far right strip (x>155), bottom row (y>75)
   const stars: [number, number, number, number][] = [
-    [88,6,4,300],[93,14,2.5,380],[4,8,3,420],[8,16,2,480],
-    [96,42,3,700],[2,48,2.5,750],[90,68,3,800],[4,72,2,840],
+    [4,5,1.8,300],[6,14,1.4,370],[3,22,1.6,430],
+    [156,5,1.8,320],[158,13,1.3,390],[154,22,1.5,460],
+    [4,68,1.8,680],[7,76,1.4,730],[3,84,1.6,780],
+    [156,68,1.8,700],[158,76,1.3,750],[154,84,1.5,800],
+    [80,80,1.6,850],[100,83,1.4,890],[60,85,1.5,920],
   ];
-  // Small ✕ marks
-  const crosses: [number, number, number][] = [[85,24,300],[7,30,400],[88,52,500],[5,56,550]];
-  // Squiggly accent lines near caption area
+  // Small ✕ — stay in far margins
+  const crosses: [number, number, number][] = [[5,40,400],[5,55,460],[155,40,500],[155,55,560]];
+  // Squiggly accent lines — bottom strip only
   const squigs: [string,number][] = [
-    ["M4,32 Q8,29 12,32 Q16,35 20,32", 600],
-    ["M80,78 Q84,75 88,78 Q92,81 96,78", 700],
+    ["M10,87 Q14,84 18,87 Q22,90 26,87", 650],
+    ["M134,87 Q138,84 142,87 Q146,90 150,87", 720],
   ];
-  // Small circles (unfilled)
-  const rings: [number,number,number,number][] = [[6,42,2.5,850],[94,30,2.5,900],[50,85,2,950]];
+  // Small rings
+  const rings: [number,number,number,number][] = [[5,62,2,860],[155,62,2,910],[80,87,1.8,960]];
 
   return (
-    <svg key={animKey} viewBox="0 0 100 100" className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+    <svg key={animKey} viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
       <style>{`
         @keyframes cf-draw { to { stroke-dashoffset: 0; } }
         @keyframes cf-pop  {
@@ -784,15 +821,15 @@ function ScatterDoodles({ pose, animKey }: { pose: StickmanPose; animKey: number
             strokeDasharray:30, strokeDashoffset:30,
             animation:"cf-draw 0.3s ease-out forwards", animationDelay:`${d}ms` }} />
       ))}
-      {/* pose-specific accent line */}
-      {pose === "pointing" && <line x1="28" y1="95" x2="70" y2="95"
-        style={{ stroke:"#ea580c", strokeWidth:2, strokeLinecap:"round",
+      {/* pose-specific accent — bottom strip, 160×90 coords */}
+      {pose === "pointing" && <line x1="45" y1="88" x2="115" y2="88"
+        style={{ stroke:"#ea580c", strokeWidth:1.5, strokeLinecap:"round",
           strokeDasharray:80, strokeDashoffset:80,
           animation:"cf-draw 0.5s ease-out forwards", animationDelay:"1100ms" }} />}
-      {pose === "celebrating" && [20,30,40,60,70,80].map((x,i) => (
-        <line key={i} x1={x} y1={90} x2={x+4} y2={96}
+      {pose === "celebrating" && [30,46,62,78,94,110].map((x,i) => (
+        <line key={i} x1={x} y1={85} x2={x+5} y2={90}
           style={{ stroke:i%2===0?"#ea580c":"#fbbf24", strokeWidth:1.5,
-            strokeDasharray:15, strokeDashoffset:15,
+            strokeDasharray:12, strokeDashoffset:12,
             animation:"cf-draw 0.2s ease-out forwards", animationDelay:`${1000+i*60}ms` }} />
       ))}
     </svg>
