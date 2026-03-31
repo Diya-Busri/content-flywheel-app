@@ -410,7 +410,7 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
           stroke-linejoin: round;
           stroke-dasharray: 600;
           stroke-dashoffset: 600;
-          animation: cf-draw 0.42s ease-out forwards;
+          animation: cf-draw 0.55s ease-out forwards;
         }
         .cf-dot {
           opacity: 0;
@@ -470,6 +470,42 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
         );
       })}
     </svg>
+  );
+}
+
+// ─── Animated caption ────────────────────────────────────────────────────────
+
+function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number }) {
+  const words = text.split(/\s+/);
+  // Highlight every Nth word in orange for visual rhythm
+  const accentEvery = Math.max(3, Math.floor(words.length / 3));
+  return (
+    <p
+      key={sceneKey}
+      style={{
+        fontFamily: "'Caveat', cursive",
+        fontSize: "clamp(18px, 2.6vw, 34px)",
+        fontWeight: 700,
+        lineHeight: 1.35,
+        color: "#1a1a2e",
+        letterSpacing: "0.01em",
+      }}
+    >
+      {words.map((word, i) => (
+        <span
+          key={i}
+          className="cf-word"
+          style={{
+            display: "inline-block",
+            marginRight: "0.28em",
+            animationDelay: `${300 + i * 75}ms`,
+            color: i > 0 && i % accentEvery === 0 ? "#ea580c" : undefined,
+          }}
+        >
+          {word}
+        </span>
+      ))}
+    </p>
   );
 }
 
@@ -580,55 +616,89 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
   const progress = scenes.length > 1 ? (currentIndex / (scenes.length - 1)) * 100 : 100;
 
   return (
-    <div className="flex flex-col gap-4 w-full select-none">
+    <div className="flex flex-col gap-3 w-full select-none">
+      {/* Fonts + word animation */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap');
+        @keyframes cf-word {
+          from { opacity: 0; transform: translateY(10px) rotate(-1deg); }
+          to   { opacity: 1; transform: translateY(0)   rotate(0deg); }
+        }
+        .cf-word {
+          opacity: 0;
+          animation: cf-word 0.3s ease-out forwards;
+        }
+        @keyframes cf-scene-in {
+          from { opacity: 0; transform: scale(0.98); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+        .cf-scene-in {
+          animation: cf-scene-in 0.4s ease-out forwards;
+        }
+      `}</style>
+
       {/* Whiteboard — 16:9 landscape for YouTube */}
       <div
-        className="relative rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden w-full"
-        style={{ aspectRatio: "16/9" }}
+        className="relative rounded-2xl overflow-hidden w-full"
+        style={{
+          aspectRatio: "16/9",
+          background: "#FFFEF8",
+          border: "2px solid #E8E2CF",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06)",
+        }}
       >
-        {/* Very faint horizontal ruled lines */}
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none"
-          viewBox="0 0 160 90" preserveAspectRatio="none"
-          style={{ opacity: 0.03 }}
-        >
-          {Array.from({ length: 18 }, (_, i) => (
-            <line key={i} x1="0" y1={i * 5} x2="160" y2={i * 5} stroke="#000" strokeWidth="0.4" />
-          ))}
+        {/* Dot grid background */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 160 90" preserveAspectRatio="none" style={{ opacity: 0.18 }}>
+          {Array.from({ length: 15 }, (_, row) =>
+            Array.from({ length: 27 }, (_, col) => (
+              <circle key={`${row}-${col}`} cx={col * 6 + 3} cy={row * 6 + 3} r="0.5" fill="#c4b89a" />
+            ))
+          )}
         </svg>
 
-        {/* Vertical divider between stickman and caption */}
-        <div className="absolute top-[8%] bottom-[8%] left-[52%] w-px bg-slate-200" />
+        {/* Orange top accent bar */}
+        <div className="absolute top-0 left-0 right-0 h-[6px]" style={{ background: "linear-gradient(90deg, #ea580c, #f97316, #fbbf24)" }} />
 
-        {/* Scene counter */}
-        <div className="absolute top-3 right-3 z-10 text-[10px] font-mono text-slate-400 bg-white/80 px-2 py-0.5 rounded-full border border-slate-200">
-          {currentIndex + 1} / {scenes.length}
-        </div>
-
-        {/* Stickman — left 52% */}
-        <div className="absolute inset-y-0 left-0 w-[52%] flex items-center justify-center p-4">
-          <StickmanSvg pose={scene.pose} animKey={currentIndex} />
-        </div>
-
-        {/* Caption — right 48% */}
-        <div className="absolute inset-y-0 right-0 w-[48%] flex items-center justify-start px-6 pr-8">
-          <p
-            className="text-slate-800 font-semibold leading-snug tracking-tight"
-            style={{ fontSize: "clamp(13px, 1.6vw, 22px)" }}
+        {/* Scene label — top left */}
+        <div className="absolute top-4 left-5 flex items-center gap-2 z-10">
+          <span
+            style={{ fontFamily: "'Caveat', cursive", fontSize: "clamp(13px, 1.4vw, 18px)", fontWeight: 700, color: "#ea580c" }}
           >
-            {scene.caption}
-          </p>
+            Scene {currentIndex + 1}
+          </span>
+          <span style={{ fontFamily: "'Caveat', cursive", fontSize: "clamp(11px, 1.1vw, 14px)", color: "#a8956a" }}>
+            / {scenes.length}
+          </span>
+        </div>
+
+        {/* Vertical divider — gradient so it fades at edges */}
+        <div
+          className="absolute top-[14%] bottom-[6%] left-[50%] w-px"
+          style={{ background: "linear-gradient(to bottom, transparent, #d4c9a8 20%, #d4c9a8 80%, transparent)" }}
+        />
+
+        {/* Scene fade container */}
+        <div key={currentIndex} className="cf-scene-in absolute inset-0">
+          {/* Stickman — left 50% */}
+          <div className="absolute inset-y-0 left-0 w-[50%] flex items-center justify-center" style={{ paddingTop: "8%", paddingBottom: "4%", paddingLeft: "4%", paddingRight: "2%" }}>
+            <StickmanSvg pose={scene.pose} animKey={currentIndex} />
+          </div>
+
+          {/* Caption — right 50% */}
+          <div className="absolute inset-y-0 right-0 w-[50%] flex items-center" style={{ paddingTop: "10%", paddingBottom: "6%", paddingLeft: "5%", paddingRight: "7%" }}>
+            <AnimatedCaption text={scene.caption} sceneKey={currentIndex} />
+          </div>
         </div>
 
         {/* Loading spinner */}
         {loadingVO && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-20">
-            <div className="flex flex-col items-center gap-2 text-slate-500">
+          <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: "rgba(255,254,248,0.80)", backdropFilter: "blur(4px)" }}>
+            <div className="flex flex-col items-center gap-2" style={{ color: "#a8956a" }}>
               <svg className="w-7 h-7 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
               </svg>
-              <span className="text-xs">Generating voice…</span>
+              <span style={{ fontFamily: "'Caveat', cursive", fontSize: 16 }}>Generating voice…</span>
             </div>
           </div>
         )}
@@ -636,49 +706,63 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
 
       {error && <p className="text-center text-sm text-red-500">{error}</p>}
 
-      {/* Progress */}
-      <div className="w-full h-1 rounded-full bg-slate-100 overflow-hidden">
-        <div className="h-full bg-orange-400 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+      {/* Progress bar */}
+      <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "#EDE8D9" }}>
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${progress}%`, background: "linear-gradient(90deg, #ea580c, #f97316)" }}
+        />
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center justify-center gap-3">
+      {/* Controls + dots */}
+      <div className="flex items-center justify-center gap-4">
         <button type="button" onClick={handlePrev} disabled={currentIndex === 0}
-          className="p-2 rounded-full hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="p-2 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          style={{ background: "#F5F0E4" }}
           aria-label="Previous">
-          <svg className="w-5 h-5 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6" /></svg>
+          <svg className="w-5 h-5" style={{ color: "#7a6a50" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6" /></svg>
         </button>
+
+        {/* Scene dots */}
+        <div className="flex items-center gap-1.5 flex-wrap justify-center">
+          {scenes.map((s, i) => (
+            <button
+              key={s.sceneIndex}
+              type="button"
+              onClick={() => { setCurrentIndex(i); if (!isPlaying) handlePlay(); }}
+              className="rounded-full transition-all duration-300"
+              style={{
+                width: i === currentIndex ? 20 : 8,
+                height: 8,
+                background: i === currentIndex ? "#ea580c" : "#D4C9A8",
+              }}
+              aria-label={`Scene ${i + 1}`}
+            />
+          ))}
+        </div>
 
         {isPlaying ? (
           <button type="button" onClick={handlePause}
-            className="p-3 rounded-full bg-orange-500 hover:bg-orange-600 text-white shadow transition-colors" aria-label="Pause">
+            className="p-3 rounded-full text-white shadow-md transition-colors"
+            style={{ background: "#ea580c" }}
+            aria-label="Pause">
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
           </button>
         ) : (
           <button type="button" onClick={handlePlay}
-            className="p-3 rounded-full bg-orange-500 hover:bg-orange-600 text-white shadow transition-colors" aria-label="Play">
+            className="p-3 rounded-full text-white shadow-md transition-colors"
+            style={{ background: "#ea580c" }}
+            aria-label="Play">
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
           </button>
         )}
 
         <button type="button" onClick={handleNext} disabled={currentIndex === scenes.length - 1}
-          className="p-2 rounded-full hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="p-2 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          style={{ background: "#F5F0E4" }}
           aria-label="Next">
-          <svg className="w-5 h-5 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="9 18 15 12 9 6"/></svg>
+          <svg className="w-5 h-5" style={{ color: "#7a6a50" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
-      </div>
-
-      {/* Scene dots */}
-      <div className="flex items-center justify-center gap-2 flex-wrap">
-        {scenes.map((s, i) => (
-          <button
-            key={s.sceneIndex}
-            type="button"
-            onClick={() => { setCurrentIndex(i); if (!isPlaying) handlePlay(); }}
-            className={`w-2 h-2 rounded-full transition-all ${i === currentIndex ? "bg-orange-500 scale-125" : "bg-slate-300 hover:bg-slate-400"}`}
-            aria-label={`Scene ${i + 1}`}
-          />
-        ))}
       </div>
     </div>
   );
