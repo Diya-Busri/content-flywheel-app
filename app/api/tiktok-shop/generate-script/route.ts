@@ -5,7 +5,7 @@ import { cleanProductTitle } from "@/lib/product-title";
 import type { VideoStyle, HookStyle, ScriptTone } from "@/lib/tiktok-shop/types";
 import { extractProductDetails } from "@/lib/tiktok-shop/extract-product";
 import { generateVideoScript } from "@/lib/tiktok-shop/generate-script";
-import { uploadProductImageToBlob } from "@/lib/tiktok-shop/upload-product-image-blob";
+import { uploadProductImageToPublicUrl } from "@/lib/tiktok-shop/upload-product-image-public";
 
 const VIDEO_STYLES: VideoStyle[] = ["unboxing", "demo", "before-after"];
 
@@ -69,12 +69,16 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      if (productImageBase64 && typeof productImageBase64 === "string" && process.env.BLOB_READ_WRITE_TOKEN) {
+      if (productImageBase64 && typeof productImageBase64 === "string") {
         try {
           const base64Data = productImageBase64.replace(/^data:image\/\w+;base64,/, "");
           const buffer = Buffer.from(base64Data, "base64");
-          const contentType = productImageBase64.startsWith("data:image/png") ? "image/png" : productImageBase64.startsWith("data:image/webp") ? "image/webp" : "image/jpeg";
-          resolvedImageUrl = await uploadProductImageToBlob(buffer, contentType);
+          const contentType = productImageBase64.startsWith("data:image/png")
+            ? "image/png"
+            : productImageBase64.startsWith("data:image/webp")
+              ? "image/webp"
+              : "image/jpeg";
+          resolvedImageUrl = await uploadProductImageToPublicUrl(buffer, contentType, userId);
         } catch {
           // continue without image
         }
@@ -86,6 +90,20 @@ export async function POST(request: Request) {
       const raw = productName!.trim();
       name = cleanProductTitle(raw) || raw;
       description = productDescription!.trim();
+      if (productImageBase64 && typeof productImageBase64 === "string") {
+        try {
+          const base64Data = productImageBase64.replace(/^data:image\/\w+;base64,/, "");
+          const buffer = Buffer.from(base64Data, "base64");
+          const contentType = productImageBase64.startsWith("data:image/png")
+            ? "image/png"
+            : productImageBase64.startsWith("data:image/webp")
+              ? "image/webp"
+              : "image/jpeg";
+          resolvedImageUrl = await uploadProductImageToPublicUrl(buffer, contentType, userId);
+        } catch {
+          // continue without image
+        }
+      }
     }
 
     const style = VIDEO_STYLES.includes(videoStyle as VideoStyle) ? (videoStyle as VideoStyle) : "demo";
@@ -106,6 +124,7 @@ export async function POST(request: Request) {
       fullScript: scriptResult.fullScript,
       scenes: scriptResult.scenes,
       productName: name,
+      ...(resolvedImageUrl ? { productImageUrl: resolvedImageUrl } : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Script generation failed";

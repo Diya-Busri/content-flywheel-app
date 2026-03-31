@@ -1,7 +1,7 @@
-export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11";
 
 /** Story-style Template Studio modes that share the 8-scene pipeline */
-export type TemplateStudioStoryTemplateId = "ai_story" | "satisfying_build";
+export type TemplateStudioStoryTemplateId = "ai_story" | "satisfying_build" | "ai_cooking_video";
 
 export const TEMPLATE_STUDIO_STORY_GENERATE_ROUTES: Record<
   TemplateStudioStoryTemplateId,
@@ -9,6 +9,7 @@ export const TEMPLATE_STUDIO_STORY_GENERATE_ROUTES: Record<
 > = {
   ai_story: "/api/content-studio/ai-story/generate",
   satisfying_build: "/api/generate/satisfying-build",
+  ai_cooking_video: "/api/generate/ai-cooking-video",
 };
 export type TemplateType = "quotes" | "tips" | "affirmations";
 export type FontStyle = "modern" | "elegant" | "bold" | "minimal";
@@ -16,17 +17,41 @@ export type SlideItem = { heading: string; body: string; bg_color?: string };
 export type CaptionItem = { caption: string; hashtags: string; alt_text: string };
 export type AiStoryScene = { sceneNumber: number; dialogue: string; imagePrompt: string; motionPrompt: string };
 
-export const CREATION_MODE_OPTIONS: { value: CreationMode; label: string }[] = [
-  { value: "2", label: "Promote My App or Business" },
-  { value: "3", label: "Promote My Clothing Brand" },
-  { value: "1", label: "Share Knowledge/Tips" },
-  { value: "4", label: "Motivational Content" },
-  { value: "5", label: "Viral Hook Carousel (For Growth)" },
-  { value: "6", label: "Sales/Product Launch Carousel" },
-  { value: "7", label: "AI Story" },
-  { value: "8", label: "Satisfying Build" },
-  { value: "9", label: "🖊️ Stickman Whiteboard Video" },
+/** Preset groups for Template Studio setup (values must stay stable for saved drafts / API). */
+export const CREATION_MODE_OPTION_GROUPS: {
+  label: string;
+  options: { value: CreationMode; label: string }[];
+}[] = [
+  {
+    label: "Content Type",
+    options: [
+      { value: "1", label: "Share Knowledge/Tips" },
+      { value: "4", label: "Motivational Content" },
+      { value: "5", label: "Viral Hook Carousel" },
+    ],
+  },
+  {
+    label: "Promote Something",
+    options: [
+      { value: "2", label: "Promote My App or Business" },
+      { value: "3", label: "Promote My Clothing Brand" },
+      { value: "6", label: "Sales/Product Launch Carousel" },
+    ],
+  },
+  {
+    label: "AI Templates",
+    options: [
+      { value: "7", label: "AI Story" },
+      { value: "8", label: "Satisfying Build" },
+      { value: "9", label: "AI Cooking Video" },
+      { value: "10", label: "Brand Story Video" },
+      { value: "11", label: "🖊️ Stickman Whiteboard Video" },
+    ],
+  },
 ];
+
+export const CREATION_MODE_OPTIONS: { value: CreationMode; label: string }[] =
+  CREATION_MODE_OPTION_GROUPS.flatMap((g) => g.options);
 
 export const AI_STORY_TONE_OPTIONS = [
   { value: "Sad", label: "Sad" },
@@ -40,6 +65,11 @@ export const SATISFYING_BUILD_CHARACTER_TYPES = [
   { value: "Robot", label: "Robot" },
   { value: "Animal", label: "Animal" },
   { value: "Tech Gadget", label: "Tech Gadget" },
+  { value: "Toy Figure", label: "Toy Figure" },
+  { value: "Monster", label: "Monster" },
+  { value: "Alien", label: "Alien" },
+  { value: "Fantasy Creature", label: "Fantasy Creature" },
+  { value: "Construction Crew", label: "Construction Crew" },
 ] as const;
 
 export const SATISFYING_BUILD_STYLE_OPTIONS = [
@@ -47,6 +77,10 @@ export const SATISFYING_BUILD_STYLE_OPTIONS = [
   { value: "Giant Object Build", label: "Giant Object Build" },
   { value: "Impossible Engineering", label: "Impossible Engineering" },
   { value: "Cozy Cottage Build", label: "Cozy Cottage Build" },
+  { value: "Lego-Style Build", label: "Lego-Style Build" },
+  { value: "Futuristic Sci-Fi Build", label: "Futuristic Sci-Fi Build" },
+  { value: "Nature Survival Build", label: "Nature Survival Build" },
+  { value: "Luxury Architecture Build", label: "Luxury Architecture Build" },
 ] as const;
 
 export const SATISFYING_BUILD_TONE_OPTIONS = [
@@ -54,6 +88,89 @@ export const SATISFYING_BUILD_TONE_OPTIONS = [
   { value: "Dramatic", label: "Dramatic" },
   { value: "Wholesome", label: "Wholesome" },
   { value: "Chaotic", label: "Chaotic" },
+  { value: "Epic", label: "Epic" },
+  { value: "Comedic", label: "Comedic" },
+  { value: "ASMR", label: "ASMR" },
+] as const;
+
+export const AI_COOKING_VIDEO_CHEF_TYPES = [
+  { value: "Home Cook", label: "Home Cook" },
+  { value: "Pro Chef", label: "Pro Chef" },
+  { value: "Grandma Style", label: "Grandma Style" },
+  { value: "Street Food Vendor", label: "Street Food Vendor" },
+  { value: "Anime Chef", label: "Anime Chef" },
+  { value: "Meal Prep Coach", label: "Meal Prep Coach" },
+  { value: "BBQ Pitmaster", label: "BBQ Pitmaster" },
+  { value: "Pastry Chef", label: "Pastry Chef" },
+  { value: "Vegan Chef", label: "Vegan Chef" },
+  { value: "Food Scientist", label: "Food Scientist" },
+] as const;
+
+export const AI_COOKING_VIDEO_STYLE_OPTIONS = [
+  { value: "Cozy Home Kitchen", label: "Cozy Home Kitchen" },
+  { value: "Fast TikTok Recipe", label: "Fast TikTok Recipe" },
+  { value: "Luxury Fine Dining", label: "Luxury Fine Dining" },
+  { value: "Street Food Energy", label: "Street Food Energy" },
+  { value: "ASMR Close-Up", label: "ASMR Close-Up" },
+  { value: "Rustic Farmhouse", label: "Rustic Farmhouse" },
+  { value: "Outdoor Campfire Cooking", label: "Outdoor Campfire Cooking" },
+  { value: "Minimalist Meal Prep", label: "Minimalist Meal Prep" },
+  { value: "Late-Night Neon Bites", label: "Late-Night Neon Bites" },
+  { value: "Documentary Slow TV", label: "Documentary Slow TV" },
+  { value: "Handheld Street Stall", label: "Handheld Street Stall" },
+  { value: "Crisp Daylight Counter", label: "Crisp Daylight Counter" },
+  { value: "Studio Macro Hero", label: "Studio Macro Hero" },
+  { value: "Steam & Backlight Drama", label: "Steam & Backlight Drama" },
+  { value: "Single-Pan Weeknight", label: "Single-Pan Weeknight" },
+  { value: "Open-Air Garden Table", label: "Open-Air Garden Table" },
+  { value: "Pro Chef Expo Line", label: "Pro Chef Expo Line" },
+] as const;
+
+export const AI_COOKING_VIDEO_TONE_OPTIONS = [
+  { value: "Satisfying", label: "Satisfying" },
+  { value: "Wholesome", label: "Wholesome" },
+  { value: "Hyped", label: "Hyped" },
+  { value: "Calm ASMR", label: "Calm ASMR" },
+  { value: "Educational", label: "Educational" },
+  { value: "Comedic", label: "Comedic" },
+  { value: "Luxury", label: "Luxury" },
+  { value: "Deadpan Fast", label: "Deadpan Fast" },
+  { value: "Warm Confessional", label: "Warm Confessional" },
+  { value: "Play-by-Play Sportscaster", label: "Play-by-Play Sportscaster" },
+  { value: "Understated Pro", label: "Understated Pro" },
+  { value: "Chaos Fun", label: "Chaos Fun" },
+] as const;
+
+/** AI Cooking Video: how many Template Studio scenes to generate (full recipe beats). */
+export const AI_COOKING_VIDEO_SCENE_COUNT_OPTIONS = [8, 10, 12, 14, 16] as const;
+
+export type AiCookingVideoSceneCountChoice =
+  | "auto"
+  | (typeof AI_COOKING_VIDEO_SCENE_COUNT_OPTIONS)[number];
+
+/** UI: default "auto" lets the API pick 8–16 scenes based on recipe complexity. */
+export const AI_COOKING_VIDEO_SCENE_COUNT_SELECT: { value: string; label: string }[] = [
+  { value: "auto", label: "Auto — 8–16 scenes from recipe complexity" },
+  ...AI_COOKING_VIDEO_SCENE_COUNT_OPTIONS.map((n) => ({
+    value: String(n),
+    label: `${n} scenes (fixed)`,
+  })),
+];
+
+export const OPENING_HOOK_STYLE_PRESETS = [
+  { value: "Stop scrolling: this changes everything.", label: "Pattern interrupt" },
+  { value: "You are making this wrong - here is the fix.", label: "Contrarian take" },
+  { value: "I tested this so you do not waste time.", label: "Tested-for-you" },
+  { value: "Watch this transformation in under 30 seconds.", label: "Transformation" },
+  { value: "Do this before your next build.", label: "Action command" },
+  { value: "One tiny tweak made this look 10x better.", label: "Curiosity gap" },
+  { value: "Most people skip this step. Do not.", label: "Mistake warning" },
+  { value: "If you want premium results, start here.", label: "Premium result promise" },
+  { value: "This smells illegal until you taste it.", label: "Bold sensory tease" },
+  { value: "I almost gave up on this dish—then I fixed one thing.", label: "Honest struggle hook" },
+  { value: "No viral music, just the sound of this working.", label: "Anti-trend calm" },
+  { value: "Save this before the algorithm hides it.", label: "FOMO soft" },
+  { value: "Restaurant trick, home kitchen budget.", label: "Value flip" },
 ] as const;
 
 export const TEMPLATE_OPTIONS: { value: TemplateType; label: string }[] = [

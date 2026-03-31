@@ -14,7 +14,7 @@ const FLUX_IMG2IMG = "fal-ai/flux/dev/image-to-image";
 
 /**
  * POST: Scene still using img2img (fal.ai). Body:
- * { referenceImageUrl: string, prompt: string, strength?: number }
+ * { referenceImageUrl: string, prompt: string, strength?: number, cookingScene?: boolean }
  * Returns { url: string }
  */
 export async function POST(request: NextRequest) {
@@ -34,10 +34,13 @@ export async function POST(request: NextRequest) {
     let prompt = sanitizeAiStorySceneImagePrompt(
       typeof body.prompt === "string" ? body.prompt.trim() : ""
     );
+    const cookingScene = body.cookingScene === true;
     const strength =
       typeof body.strength === "number" && body.strength > 0 && body.strength <= 1
         ? body.strength
-        : 0.88;
+        : cookingScene
+          ? 0.9
+          : 0.88;
 
     if (!referenceImageUrl || !prompt) {
       return NextResponse.json(
@@ -56,15 +59,24 @@ export async function POST(request: NextRequest) {
 
     fal.config({ credentials: apiKey });
 
-    const actionPrefix =
+    const storyPrefix =
       "Use the reference image as an identity anchor (same character design, colors, proportions — like IP-Adapter). " +
       "Output ONE cohesive cinematic scene still — single composition, single moment in time. " +
       "No character sheet, sprite sheet, grid, panels, or tiled layout. " +
       "Scene and action only: ";
-    prompt = actionPrefix + prompt;
+
+    const cookingPrefix =
+      "COOKING VIDEO — The reference is a portrait ONLY for identity: reuse the same chef (face, hair, skin tone, outfit) when they appear. " +
+      "Do NOT reproduce a head-and-shoulders portrait or plain gray backdrop. " +
+      "Compose a NEW cinematic food scene: dish, ingredients, cutting board, pan/pot, steam, sizzle, utensils, hands cooking, cozy kitchen environment. " +
+      "Food and cooking action are the primary subjects; the chef may be partial (hands, side profile, over-shoulder) or soft background. " +
+      "Single frame, one moment, no collage. Scene and action: ";
+
+    prompt = (cookingScene ? cookingPrefix : storyPrefix) + prompt;
 
     console.log(
-      "[scene-image] fal img2img strength=%s promptLen=%s ref=%s",
+      "[scene-image] fal img2img cooking=%s strength=%s promptLen=%s ref=%s",
+      String(cookingScene),
       String(strength),
       String(prompt.length),
       referenceImageUrl.slice(0, 80)

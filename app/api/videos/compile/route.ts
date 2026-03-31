@@ -13,7 +13,7 @@
  *    - If VIDEO: FFmpeg trim to scene duration, scale to 1920x1080 → segment MP4.
  * 3. Concatenate segments with the concat filter (no cross-fades; requires lib/videos/compile.ts).
  * 4. Overlay voiceover as audio track (optional royalty-free BGM from /public/bgm, looped, low volume).
- * 5. Export single MP4 (1920x1080, 25fps, H.264 + AAC).
+ * 5. Export single MP4 (default 1920x1080, or 1080x1920 when body.outputAspect is "9:16", 25fps, H.264 + AAC).
  * 6. Upload to Supabase Storage (timeline-media bucket).
  *
  * Returns: { url: string } (public download URL) or { error: string }.
@@ -95,6 +95,17 @@ export async function POST(request: NextRequest) {
       );
     }
     const backgroundMusic = bgmRaw as BgmSelectValue;
+
+    const outputAspectRaw =
+      typeof (body as { outputAspect?: string }).outputAspect === "string"
+        ? (body as { outputAspect: string }).outputAspect.trim().toLowerCase()
+        : "";
+    const outputAspect: "16:9" | "9:16" | undefined =
+      outputAspectRaw === "9:16" || outputAspectRaw === "portrait" || outputAspectRaw === "vertical"
+        ? "9:16"
+        : outputAspectRaw === "16:9" || outputAspectRaw === "landscape"
+          ? "16:9"
+          : undefined;
 
     const guideRaw = (body as { guideScenes?: unknown }).guideScenes;
     let sceneRows: SceneRow[];
@@ -199,7 +210,20 @@ export async function POST(request: NextRequest) {
       let voiceoverInput: string;
       let existingVoicePath: string | undefined;
       if (usePerSceneVoiceover) {
-        existingVoicePath = await concatVoiceoverUrls(workDir, perSceneVoiceoverUrls);
+        const concatenated = await concatVoiceoverUrls(workDir, perSceneVoiceoverUrls);
+        existingVoicePath = concatenated.path;
+        // Keep scene pacing synced to real TTS lengths to avoid silent visual tail.
+        // Add a tiny hold so cuts don't feel too abrupt.
+        const HOLD_SEC = 0.15;
+        for (let i = 0; i < scenes.length; i++) {
+          const measured = concatenated.sceneDurationsSec[i] ?? 0;
+          if (measured > 0.2) {
+            scenes[i] = {
+              ...scenes[i],
+              duration: Math.max(1, Number((measured + HOLD_SEC).toFixed(2))),
+            };
+          }
+        }
         voiceoverInput = "";
       } else {
         voiceoverInput = singleVoiceoverUrl!;
@@ -214,6 +238,7 @@ export async function POST(request: NextRequest) {
       const finalPath = await compileVideoToFile(workDir, scenes, voiceoverInput, existingVoicePath, transition, {
         bgmPath,
         bgmVolume: BGM_MIX_VOLUME,
+        ...(outputAspect ? { outputAspect } : {}),
       });
       const buffer = await readFile(finalPath);
       const fileName = `compiled-${Date.now()}.mp4`;

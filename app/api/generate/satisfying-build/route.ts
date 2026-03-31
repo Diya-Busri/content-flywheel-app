@@ -27,6 +27,25 @@ const BUILD_STYLES = [
 ] as const;
 const TONES = ["Satisfying", "Dramatic", "Wholesome", "Chaotic"] as const;
 
+function applyOpeningHookToScenes(
+  scenes: SatisfyingBuildScene[],
+  openingHook: string
+): SatisfyingBuildScene[] {
+  const hook = openingHook.trim();
+  if (!hook || scenes.length === 0) return scenes;
+  return scenes.map((scene, i) => {
+    if (i !== 0) return scene;
+    const dialogue = scene.dialogue.trim();
+    if (!dialogue) {
+      return { ...scene, dialogue: hook };
+    }
+    if (dialogue.toLowerCase().startsWith(hook.toLowerCase())) {
+      return scene;
+    }
+    return { ...scene, dialogue: `${hook} ${dialogue}`.trim() };
+  });
+}
+
 function normalizeScenesFromParsed(parsed: unknown): SatisfyingBuildScene[] {
   let raw: unknown[] = [];
   if (Array.isArray(parsed)) {
@@ -111,6 +130,12 @@ export async function POST(request: NextRequest) {
         : typeof body.episodeNumber === "number" && body.episodeNumber >= 1
           ? Math.floor(body.episodeNumber)
           : 1;
+    const openingHook =
+      typeof body.opening_hook === "string"
+        ? body.opening_hook.trim()
+        : typeof body.openingHook === "string"
+          ? body.openingHook.trim()
+          : "";
 
     if (!whatBuilding) {
       return NextResponse.json(
@@ -149,10 +174,12 @@ Apply these inputs consistently across all scenes:
 - build_style
 - tone
 - episode_number
+- opening_hook (optional)
 
 Rules:
 - voiceover should be the main narration; if dialogue is used, it should complement voiceover, not contradict it.
 - image_prompt must describe one single cinematic still (no panels, grids, or multi-frame layouts).
+- If opening_hook is provided, scene 1 voiceover/dialogue must start with that exact hook text.
 
 Return ONLY valid JSON. Prefer shape: { "scenes": [ ... 8 objects ... ] }. If you return a bare array, it will also be accepted by the parser.`;
 
@@ -161,6 +188,7 @@ what_building: ${whatBuilding}
 build_style: ${buildStyle}
 tone: ${tone}
 episode_number: ${episodeNumber}
+opening_hook: ${openingHook || "(none)"}
 
 Generate the 8-scene satisfying build episode now.`;
 
@@ -209,6 +237,7 @@ Generate the 8-scene satisfying build episode now.`;
     }
 
     let scenes = normalizeScenesFromParsed(parsed);
+    scenes = applyOpeningHookToScenes(scenes, openingHook);
 
     const character_seed = await generateStoryCharacterSeed(apiKey, {
       characterTypesLine: characterType,

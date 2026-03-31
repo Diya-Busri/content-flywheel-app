@@ -13,11 +13,8 @@ export const VIRAL_CAPTION_BOTTOM_PAD = 24;
 export function escapeDrawtextForFfmpeg(s: string): string {
   return s
     .replace(/\\/g, "\\\\")
-    /**
-     * FFmpeg filtergraph escaping (NOT shell escaping):
-     * within drawtext text='...', a literal apostrophe should be escaped as \'
-     */
-    .replace(/'/g, "\\'")
+    // We quote drawtext text with double quotes, so escape " instead of apostrophe.
+    .replace(/"/g, '\\"')
     .replace(/,/g, "\\,")
     .replace(/:/g, "\\:")
     .replace(/%/g, "\\%");
@@ -98,9 +95,19 @@ export function buildViralCaptionDrawtextChain(
   const enableOpt = enable ? `:enable='${enable}'` : "";
   const alphaOpt =
     opts.alphaExpr != null && String(opts.alphaExpr).trim() !== "" ? `:alpha='${opts.alphaExpr}'` : "";
+  // FFmpeg drawtext is sensitive to quoting for fontfile; pass it unquoted.
   const fontOpt =
     opts.fontFile && opts.fontFile.trim()
-      ? `:fontfile='${opts.fontFile.trim().replace(/\\/g, "/").replace(/'/g, "'\\''")}'`
+      ? (() => {
+          const p = opts.fontFile.trim().replace(/\\/g, "/");
+          const safe = p
+            .replace(/:/g, "\\:")
+            .replace(/,/g, "\\,")
+            .replace(/%/g, "\\%")
+            // Avoid splitting the path token when spaces exist.
+            .replace(/ /g, "\\ ");
+          return `:fontfile=${safe}`;
+        })()
       : "";
 
   if (!line) {
@@ -110,7 +117,13 @@ export function buildViralCaptionDrawtextChain(
   const split = splitDialogueLine(line);
   if (!split) {
     const t = escapeDrawtextForFfmpeg(line);
-    return `[${fromLabel}]drawtext=text='${t}'${fontOpt}:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`;
+    return `[${fromLabel}]drawtext=text="${t}"${fontOpt}:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`;
+  }
+
+  /** Two drawtext filters with empty body break some FFmpeg builds (no output pad). */
+  if (!split.dialogue.trim()) {
+    const t = escapeDrawtextForFfmpeg(line);
+    return `[${fromLabel}]drawtext=text="${t}"${fontOpt}:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`;
   }
 
   const nameP = `${split.speaker}: `;
@@ -131,7 +144,7 @@ export function buildViralCaptionDrawtextChain(
   /** If still too wide, fall back to one centered white line (full dialogue; avoids clipping). */
   if (w1 + w2 > maxW) {
     const t = escapeDrawtextForFfmpeg(line);
-    return `[${fromLabel}]drawtext=text='${t}'${fontOpt}:fontsize=${minFs}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`;
+    return `[${fromLabel}]drawtext=text="${t}"${fontOpt}:fontsize=${minFs}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`;
   }
 
   const total = w1 + w2;
@@ -139,10 +152,10 @@ export function buildViralCaptionDrawtextChain(
   const x2 = Math.round(x1 + w1);
   const e1 = escapeDrawtextForFfmpeg(nameP);
   const e2 = escapeDrawtextForFfmpeg(bodyP);
-  const mid = opts.midLabel ?? `vcap_${fromLabel}_${toLabel}`;
+  const mid = opts.midLabel ?? "vcapmid";
   return (
-    `[${fromLabel}]drawtext=text='${e1}'${fontOpt}:fontsize=${fs}:fontcolor=yellow:borderw=2:bordercolor=black:x=${x1}:y=${y}${enableOpt}${alphaOpt}[${mid}];` +
-    `[${mid}]drawtext=text='${e2}'${fontOpt}:fontsize=${fs}:fontcolor=white:borderw=2:bordercolor=black:x=${x2}:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`
+    `[${fromLabel}]drawtext=text="${e1}"${fontOpt}:fontsize=${fs}:fontcolor=yellow:borderw=2:bordercolor=black:x=${x1}:y=${y}${enableOpt}${alphaOpt}[${mid}];` +
+    `[${mid}]drawtext=text="${e2}"${fontOpt}:fontsize=${fs}:fontcolor=white:borderw=2:bordercolor=black:x=${x2}:y=${y}${enableOpt}${alphaOpt}[${toLabel}]`
   );
 }
 
@@ -161,14 +174,28 @@ export function buildViralCaptionDrawtextFlatVf(
   const margin = 12;
   const minFs = 18;
   const maxW = Math.max(32, videoWidth - 2 * margin);
+  // FFmpeg drawtext is sensitive to quoting for fontfile; pass it unquoted.
   const fontOpt =
     fontFile && fontFile.trim()
-      ? `:fontfile='${fontFile.trim().replace(/\\/g, "/").replace(/'/g, "'\\''")}'`
+      ? (() => {
+          const p = fontFile.trim().replace(/\\/g, "/");
+          const safe = p
+            .replace(/:/g, "\\:")
+            .replace(/,/g, "\\,")
+            .replace(/%/g, "\\%")
+            // Avoid splitting the path token when spaces exist.
+            .replace(/ /g, "\\ ");
+          return `:fontfile=${safe}`;
+        })()
       : "";
   const split = splitDialogueLine(line);
   if (!split) {
     const t = escapeDrawtextForFfmpeg(line);
-    return `drawtext=text='${t}'${fontOpt}:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}`;
+    return `drawtext=text="${t}"${fontOpt}:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}`;
+  }
+  if (!split.dialogue.trim()) {
+    const t = escapeDrawtextForFfmpeg(line);
+    return `drawtext=text="${t}"${fontOpt}:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}`;
   }
   const nameP = `${split.speaker}: `;
   const bodyP = split.dialogue;
@@ -182,12 +209,12 @@ export function buildViralCaptionDrawtextFlatVf(
   }
   if (w1 + w2 > maxW) {
     const t = escapeDrawtextForFfmpeg(line);
-    return `drawtext=text='${t}'${fontOpt}:fontsize=${minFs}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}`;
+    return `drawtext=text="${t}"${fontOpt}:fontsize=${minFs}:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=${y}`;
   }
   const total = w1 + w2;
   const x1 = Math.max(margin, Math.round((videoWidth - total) / 2));
   const x2 = Math.round(x1 + w1);
   const e1 = escapeDrawtextForFfmpeg(nameP);
   const e2 = escapeDrawtextForFfmpeg(bodyP);
-  return `drawtext=text='${e1}'${fontOpt}:fontsize=${fs}:fontcolor=yellow:borderw=2:bordercolor=black:x=${x1}:y=${y},drawtext=text='${e2}'${fontOpt}:fontsize=${fs}:fontcolor=white:borderw=2:bordercolor=black:x=${x2}:y=${y}`;
+  return `drawtext=text="${e1}"${fontOpt}:fontsize=${fs}:fontcolor=yellow:borderw=2:bordercolor=black:x=${x1}:y=${y},drawtext=text="${e2}"${fontOpt}:fontsize=${fs}:fontcolor=white:borderw=2:bordercolor=black:x=${x2}:y=${y}`;
 }
