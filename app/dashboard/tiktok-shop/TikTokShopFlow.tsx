@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -22,8 +22,8 @@ import {
   RefreshCw,
   Sparkles,
   FileText,
-  ChevronRight,
   Info,
+  Clapperboard,
 } from "lucide-react";
 import {
   Tooltip,
@@ -33,15 +33,21 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/use-toast";
 import { VIDEO_LENGTH_OPTIONS, DEFAULT_VIDEO_LENGTH_SEC } from "@/lib/video-length-options";
+import { toSpeakable } from "@/lib/to-speakable";
 
 const TIKTOK_PREFS_KEY = "tiktok-shop-preferences";
 
 const STEPS = [
-  { id: 1, label: "Product", short: "Product" },
-  { id: 2, label: "AI Breakdown", short: "Breakdown" },
-  { id: 3, label: "Script", short: "Script" },
-  { id: 4, label: "Video Creation Guides", short: "Guides" },
+  { id: 1, label: "Product" },
+  { id: 2, label: "Breakdown" },
+  { id: 3, label: "Script" },
+  { id: 4, label: "Video" },
+  { id: 5, label: "Guides" },
 ] as const;
+
+const DEFAULT_VOICE_ID = "pNInz6obpgDQGcFmaJgB";
+
+type ElevenLabsVoiceOption = { voice_id: string; name: string; description?: string };
 
 const MAX_IMAGE_SIZE_MB = 5;
 const MAX_IMAGE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
@@ -102,6 +108,13 @@ export default function TikTokShopFlow() {
   const [hookStyle, setHookStyle] = useState("tiktok-made-me-buy");
   const [tone, setTone] = useState("ugc-style");
   const [targetDurationSec, setTargetDurationSec] = useState(DEFAULT_VIDEO_LENGTH_SEC);
+  const [affiliateProductImageUrl, setAffiliateProductImageUrl] = useState<string | null>(null);
+  const [selectedScriptIndex, setSelectedScriptIndex] = useState(0);
+  const [elevenLabsVoices, setElevenLabsVoices] = useState<ElevenLabsVoiceOption[]>([]);
+  const [selectedVoiceId, setSelectedVoiceId] = useState(DEFAULT_VOICE_ID);
+  const [affiliateVideoGenerating, setAffiliateVideoGenerating] = useState(false);
+  const [affiliateVideoUrl, setAffiliateVideoUrl] = useState<string | null>(null);
+  const [affiliateVideoError, setAffiliateVideoError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -125,6 +138,25 @@ export default function TikTokShopFlow() {
       // ignore
     }
   }, [targetDurationSec, hookStyle, tone]);
+
+  useEffect(() => {
+    if (step !== 4 || elevenLabsVoices.length > 0) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/elevenlabs/voices");
+        const data = (await res.json().catch(() => ({}))) as {
+          voices?: ElevenLabsVoiceOption[];
+          error?: string;
+        };
+        if (res.ok && Array.isArray(data.voices) && data.voices.length > 0) {
+          setElevenLabsVoices(data.voices);
+          setSelectedVoiceId(data.voices[0]!.voice_id);
+        }
+      } catch {
+        // keep DEFAULT_VOICE_ID
+      }
+    })();
+  }, [step, elevenLabsVoices.length]);
 
   const getProductImageBase64 = (): Promise<string | undefined> => {
     if (!productImage) return Promise.resolve(undefined);
@@ -154,7 +186,48 @@ export default function TikTokShopFlow() {
   const canProceedStep1 = productLink.trim() || productName.trim() || productDescription.trim() || productImage;
   const canProceedStep2 = !!breakdown;
   const canProceedStep3 = scriptResults.length >= 4;
-  const canProceedStep4 = true;
+
+  /**
+   * Steps 4–5 need product metadata. Prefer API breakdown, then Step 1 description; if those are
+   * empty but four scripts exist (e.g. tab jump or trimmed fields), derive minimal context from the
+   * first variation so Video / Guides still mount and actions have copy to use.
+   */
+  const affiliateProductContext = useMemo((): ProductBreakdown | null => {
+    if (breakdown) return breakdown;
+    const empties = {
+      category: "",
+      targetAudience: "",
+      corePainPoints: [] as string[],
+      buyingObjections: [] as string[],
+      emotionalTriggers: [] as string[],
+      whyBuy: [] as string[],
+    };
+    const desc = productDescription.trim();
+    if (desc) {
+      return {
+        productName: productName.trim() || "Product",
+        productDescription: desc,
+        ...empties,
+      };
+    }
+    if (scriptResults.length >= 4) {
+      const first = scriptResults[0];
+      const fromScript =
+        (typeof first?.fullScript === "string" && first.fullScript.trim()) ||
+        [first?.scenes?.hook, first?.scenes?.pain, first?.scenes?.solution].filter(Boolean).join("\n\n").trim();
+      if (fromScript) {
+        return {
+          productName: productName.trim() || "Product",
+          productDescription: fromScript.slice(0, 2000),
+          ...empties,
+        };
+      }
+    }
+    return null;
+  }, [breakdown, productName, productDescription, scriptResults]);
+
+  const canShowAffiliateLateSteps =
+    scriptResults.length >= 4 && affiliateProductContext != null;
 
   const runProductBreakdown = async () => {
     if (!canProceedStep1) return;
@@ -175,7 +248,11 @@ export default function TikTokShopFlow() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Breakdown failed");
-      setBreakdown(data);
+      const raw = data as ProductBreakdown & { productImageUrl?: string };
+      const { productImageUrl: fromBreakdown, ...breakdownPayload } = raw;
+      const imgUrl = typeof fromBreakdown === "string" ? fromBreakdown.trim() : "";
+      setAffiliateProductImageUrl(imgUrl.startsWith("http") ? imgUrl : null);
+      setBreakdown(breakdownPayload);
       setStep(2);
       toast({ title: "AI Breakdown ready", description: "Review and continue to script." });
     } catch (err) {
@@ -215,14 +292,22 @@ export default function TikTokShopFlow() {
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error ?? "Script generation failed");
+          const img =
+            typeof (data as { productImageUrl?: string }).productImageUrl === "string"
+              ? (data as { productImageUrl: string }).productImageUrl.trim()
+              : "";
           return {
             fullScript: data.fullScript as string,
             scenes: data.scenes as ScriptResult["scenes"],
             title: SCRIPT_VARIATION_LABELS[i],
+            productImageUrl: img.startsWith("http") ? img : undefined,
           };
         })
       );
-      setScriptResults(results);
+      const firstImg = results.find((r) => r.productImageUrl)?.productImageUrl;
+      if (firstImg) setAffiliateProductImageUrl(firstImg);
+      const cleaned = results.map(({ productImageUrl: _p, ...rest }) => rest);
+      setScriptResults(cleaned);
       setStep(3);
       toast({ title: "4 scripts ready", description: "Continue to create a video guide for each." });
     } catch (err) {
@@ -243,9 +328,110 @@ export default function TikTokShopFlow() {
     };
   };
 
-  /** Go to video customization page (step 4). User completes customization there before generating the guide. */
+  const resolveProductImagePublicUrl = async (): Promise<string> => {
+    if (affiliateProductImageUrl?.startsWith("http")) return affiliateProductImageUrl;
+    const b64 = await getProductImageBase64();
+    if (!b64) throw new Error("Add a product image in Step 1, or run AI Breakdown after uploading one.");
+    const upRes = await fetch("/api/tiktok-shop/upload-product-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productImageBase64: b64 }),
+    });
+    const upData = (await upRes.json().catch(() => ({}))) as { url?: string; error?: string };
+    if (!upRes.ok) throw new Error(upData.error ?? "Could not upload product image.");
+    const url = typeof upData.url === "string" ? upData.url.trim() : "";
+    if (!url.startsWith("http")) throw new Error("No public image URL returned.");
+    setAffiliateProductImageUrl(url);
+    return url;
+  };
+
+  const runGenerateAffiliateVideo = async () => {
+    const ctx = affiliateProductContext;
+    if (!ctx || scriptResults.length < 4) return;
+    const script = scriptResults[selectedScriptIndex];
+    if (!script?.fullScript?.trim()) {
+      toast({ title: "Missing script", description: "Select a script variation.", variant: "destructive" });
+      return;
+    }
+    setAffiliateVideoGenerating(true);
+    setAffiliateVideoError(null);
+    setAffiliateVideoUrl(null);
+    try {
+      const imageUrl = await resolveProductImagePublicUrl();
+      const fullScript = script.fullScript.trim();
+      const speakable = toSpeakable(fullScript);
+      const voRes = await fetch("/api/ai-coach/voice-over", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          script: speakable,
+          voiceId: selectedVoiceId || DEFAULT_VOICE_ID,
+        }),
+      });
+      const voData = (await voRes.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!voRes.ok) throw new Error(voData.error ?? "Voiceover failed");
+      const voiceoverUrl = typeof voData.url === "string" ? voData.url.trim() : "";
+      if (!voiceoverUrl.startsWith("http")) throw new Error("No voiceover URL returned.");
+
+      const captionLine = fullScript.replace(/\r?\n/g, " ").trim();
+      const scenes_json = [
+        {
+          scene_number: 1,
+          duration: Math.max(10, targetDurationSec || 30),
+          script_text: captionLine,
+          image_url: imageUrl,
+          video_url: null,
+          caption: captionLine,
+          animation_type: "image",
+          voiceover_url: null,
+          section_label: "Affiliate clip",
+        },
+      ];
+      const variation =
+        (script as ScriptResult & { title?: string }).title ?? `Script ${selectedScriptIndex + 1}`;
+      const saveRes = await fetch("/api/saved-scripts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `TikTok Affiliate — ${ctx.productName} — ${variation}`,
+          scenes_json,
+          voiceover_url: voiceoverUrl,
+        }),
+      });
+      const saveData = (await saveRes.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!saveRes.ok) throw new Error(saveData.error ?? "Failed to save script for export");
+      const scriptId = typeof saveData.id === "string" ? saveData.id : "";
+      if (!scriptId) throw new Error("No script id returned");
+
+      const compileRes = await fetch("/api/videos/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scriptId,
+          transition: "fade",
+          backgroundMusic: "none",
+          outputAspect: "9:16",
+        }),
+      });
+      const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!compileRes.ok) throw new Error(compileData.error ?? "Video compile failed");
+      const mp4 = typeof compileData.url === "string" ? compileData.url.trim() : "";
+      if (!mp4.startsWith("http")) throw new Error("No MP4 URL returned");
+      setAffiliateVideoUrl(mp4);
+      toast({ title: "Video ready", description: "Your vertical MP4 is ready to download." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Generation failed";
+      setAffiliateVideoError(msg);
+      toast({ title: "Video failed", description: msg, variant: "destructive" });
+    } finally {
+      setAffiliateVideoGenerating(false);
+    }
+  };
+
+  /** Go to video customization page (guides flow). User completes customization there before generating the guide. */
   const goToVideoCustomization = (script: ScriptResult) => {
-    if (!breakdown) return;
+    const ctx = affiliateProductContext;
+    if (!ctx) return;
     const { hook, body, cta } = scenesToHookBodyCta(script.scenes);
     const title = (script as ScriptResult & { title?: string }).title ?? "TikTok Shop Script";
     const scriptForVideo = {
@@ -260,8 +446,8 @@ export default function TikTokShopFlow() {
       sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify([scriptForVideo]));
       sessionStorage.setItem("productContextForVideos", JSON.stringify({ productId: undefined }));
       sessionStorage.setItem("digitalProductForm", JSON.stringify({
-        productName: breakdown.productName,
-        productDescription: breakdown.productDescription,
+        productName: ctx.productName,
+        productDescription: ctx.productDescription,
       }));
     } catch {
       // ignore
@@ -284,37 +470,43 @@ export default function TikTokShopFlow() {
         TikTok Affiliate Control Center
       </h1>
       <p className="text-gray-600 dark:text-gray-400 mb-8">
-        Product → AI Breakdown → Script → Video Creation Guide. No rendering—get a step-by-step guide to create your video.
+        Product → AI Breakdown → Script → Video Creator (optional MP4) → Video Creation Guides. Export a vertical voiceover video with captions, or follow step-by-step guides.
       </p>
 
-      {/* Stepper */}
-      <div className="flex items-center gap-1 mb-10 overflow-x-auto pb-2">
-        {STEPS.map((s, i) => (
-          <div key={s.id} className="flex items-center shrink-0">
-            <button
-              type="button"
-              onClick={() => setStep(s.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                step === s.id
-                  ? "bg-orange-500 text-white"
-                  : "bg-gray-200 dark:bg-[#2A2A2A] text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-[#3A3A3A] dark:hover:text-white"
-              }`}
-            >
-              <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs bg-white/20">
-                {s.id}
-              </span>
-              <span className="hidden sm:inline">{s.label}</span>
-              <span className="sm:hidden">{s.short}</span>
-            </button>
-            {i < STEPS.length - 1 && (
-              <ChevronRight className="w-4 h-4 text-gray-600 mx-0.5" />
-            )}
-          </div>
+      {/* Stepper: compact 5-column row — no scroll; step index + label stacked to save width */}
+      <div className="mb-10 grid w-full grid-cols-5 gap-1 sm:gap-1.5">
+        {STEPS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setStep(s.id)}
+            className={`flex min-h-[2.625rem] flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-1 text-[10px] font-medium leading-none transition-colors sm:min-h-0 sm:gap-1 sm:px-1 sm:py-1.5 sm:text-xs ${
+              step === s.id
+                ? "bg-orange-500 text-white"
+                : "bg-gray-200 dark:bg-[#2A2A2A] text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-[#3A3A3A] dark:hover:text-white"
+            }`}
+          >
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/20 text-[9px] sm:h-5 sm:w-5 sm:text-[10px]">
+              {s.id}
+            </span>
+            <span className="max-w-full text-center">{s.label}</span>
+          </button>
         ))}
       </div>
 
       {/* Step 1: Product Intelligence */}
       {step === 1 && (
+        <>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50/90 dark:bg-[#141414]/90 px-3 py-2">
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Need product ideas? Browse trending products on Kalodata
+            </p>
+            <Button variant="outline" size="sm" className="h-7 shrink-0 px-2.5 text-xs" asChild>
+              <a href="https://www.kalodata.com" target="_blank" rel="noopener noreferrer">
+                Find Trending Products
+              </a>
+            </Button>
+          </div>
         <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
@@ -382,6 +574,7 @@ export default function TikTokShopFlow() {
             </Button>
           </CardContent>
         </Card>
+        </>
       )}
 
       {/* Step 2: AI Breakdown */}
@@ -439,7 +632,7 @@ export default function TikTokShopFlow() {
               <span className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm">3</span>
               Script Builder
             </CardTitle>
-            <CardDescription className="text-gray-600 dark:text-gray-400">Generate 4 script variations (Story, Problem/Solution, Social proof, Curiosity). Then create a video guide for any of them.</CardDescription>
+            <CardDescription className="text-gray-600 dark:text-gray-400">Generate 4 script variations (Story, Problem/Solution, Social proof, Curiosity). Then render an MP4 in Video Creator or create a video guide for any of them.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
@@ -486,7 +679,7 @@ export default function TikTokShopFlow() {
               </Button>
             ) : (
               <>
-                <p className="text-sm text-gray-600 dark:text-gray-400">4 script variations ready. Continue to create a video guide for each.</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">4 script variations ready. Continue to render a video or open video creation guides.</p>
                 <div className="space-y-2">
                   {scriptResults.map((s, i) => (
                     <div key={i} className="rounded-lg border border-[#E5E7EB] dark:border-[#2A2A2A] p-3">
@@ -498,7 +691,7 @@ export default function TikTokShopFlow() {
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" onClick={() => setStep(2)}>Back</Button>
                   <Button onClick={() => setStep(4)} className="flex-1 gap-2">
-                    Continue to Video Creation Guides
+                    Continue to Video Creator
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </div>
@@ -508,12 +701,139 @@ export default function TikTokShopFlow() {
         </Card>
       )}
 
-      {/* Step 4: Video Creation Guides */}
-      {step === 4 && scriptResults.length >= 4 && breakdown && (
+      {(step === 4 || step === 5) && scriptResults.length < 4 && (
+        <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+          <CardHeader>
+            <CardTitle className="text-gray-900 dark:text-white">Scripts required</CardTitle>
+            <CardDescription className="text-gray-600 dark:text-gray-400">
+              Generate all four script variations in Step 3 first, then return to {step === 4 ? "Video" : "Guides"}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => setStep(3)}>Go to Script</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {(step === 4 || step === 5) && scriptResults.length >= 4 && !affiliateProductContext && (
+        <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+          <CardHeader>
+            <CardTitle className="text-gray-900 dark:text-white">Product details needed</CardTitle>
+            <CardDescription className="text-gray-600 dark:text-gray-400">
+              Add a product description in Step 1 (or run Get AI Breakdown in Step 2), then open this step again so Video Creator and Guides have your product name and description.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => setStep(1)}>Go to Step 1</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 4: Video Creator */}
+      {step === 4 && canShowAffiliateLateSteps && (
         <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <span className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm">4</span>
+              Video Creator
+            </CardTitle>
+            <CardDescription className="text-gray-600 dark:text-gray-400">
+              Pick a script variation, choose a voice, and generate a vertical 9:16 MP4: ElevenLabs voiceover, your product image, and burned-in captions—same export pipeline as Template Studio.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <Label className="mb-2 block">Script variation</Label>
+              <div className="space-y-2">
+                {scriptResults.map((s, i) => {
+                  const title = (s as ScriptResult & { title?: string }).title ?? `Script ${i + 1}`;
+                  const selected = selectedScriptIndex === i;
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setSelectedScriptIndex(i);
+                        setAffiliateVideoUrl(null);
+                        setAffiliateVideoError(null);
+                      }}
+                      className={`w-full rounded-lg border-2 p-3 text-left transition-all ${
+                        selected
+                          ? "border-orange-500 bg-orange-500/15"
+                          : "border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F] hover:border-gray-300 dark:hover:border-[#3A3A3A]"
+                      }`}
+                    >
+                      <p className="text-xs font-medium text-orange-400">{title}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 mt-1">{s.scenes.hook}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="affiliate-voice">Voice (ElevenLabs)</Label>
+              <select
+                id="affiliate-voice"
+                value={selectedVoiceId}
+                onChange={(e) => setSelectedVoiceId(e.target.value)}
+                className="w-full max-w-md h-10 rounded-md border border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F] text-gray-900 dark:text-white px-3 text-sm mt-1"
+              >
+                {elevenLabsVoices.length === 0 ? (
+                  <option value={DEFAULT_VOICE_ID}>Default voice</option>
+                ) : (
+                  elevenLabsVoices.map((v) => (
+                    <option key={v.voice_id} value={v.voice_id}>
+                      {v.name}
+                      {v.description ? ` — ${v.description.slice(0, 60)}` : ""}
+                    </option>
+                  ))
+                )}
+              </select>
+              {elevenLabsVoices.length === 0 ? (
+                <p className="text-xs text-gray-600 dark:text-gray-500 mt-1">
+                  Uses your workspace default when the voice list has not loaded yet.
+                </p>
+              ) : null}
+            </div>
+            {affiliateVideoError ? (
+              <p className="text-sm text-red-600 dark:text-red-400">{affiliateVideoError}</p>
+            ) : null}
+            {affiliateVideoUrl ? (
+              <div className="rounded-lg border border-[#E5E7EB] dark:border-[#2A2A2A] p-4 space-y-2">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Your video</p>
+                <video src={affiliateVideoUrl} controls className="w-full max-w-xs rounded-md bg-black aspect-[9/16] mx-auto" />
+                <Button asChild variant="outline" className="w-full">
+                  <a href={affiliateVideoUrl} download target="_blank" rel="noopener noreferrer">
+                    Download MP4
+                  </a>
+                </Button>
+              </div>
+            ) : null}
+            <Button
+              onClick={runGenerateAffiliateVideo}
+              disabled={affiliateVideoGenerating}
+              className="w-full gap-2 bg-orange-500 hover:bg-orange-600"
+            >
+              {affiliateVideoGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clapperboard className="w-4 h-4" />}
+              {affiliateVideoGenerating ? "Generating video…" : "Generate Video"}
+            </Button>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" onClick={() => setStep(3)}>Back</Button>
+              <Button variant="outline" onClick={() => setStep(5)} className="flex-1 gap-2">
+                Continue to Video Creation Guides
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 5: Video Creation Guides */}
+      {step === 5 && canShowAffiliateLateSteps && (
+        <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm">5</span>
               Video Creation Guides
             </CardTitle>
             <CardDescription className="text-gray-600 dark:text-gray-400">Get a step-by-step video creation guide for each script—scene breakdowns, AI image prompts (product demos, unboxing, lifestyle), and export settings for TikTok.</CardDescription>
@@ -540,8 +860,8 @@ export default function TikTokShopFlow() {
               );
             })}
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" onClick={() => setStep(3)}>Back</Button>
-              <Button variant="outline" onClick={() => { setStep(1); setBreakdown(null); setScriptResults([]); }}>
+              <Button variant="outline" onClick={() => setStep(4)}>Back</Button>
+              <Button variant="outline" onClick={() => { setStep(1); setBreakdown(null); setScriptResults([]); setAffiliateProductImageUrl(null); }}>
                 New video
               </Button>
             </div>

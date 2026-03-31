@@ -25,6 +25,13 @@ export async function generateStoryCharacterSeed(
   const context = ctx.themeOrBuilding.trim();
   if (!types && !context) return "";
 
+  const photorealTemplate =
+    ctx.templateName === "AI Cooking Video" || ctx.templateName === "Satisfying Build";
+
+  const photorealRule = photorealTemplate
+    ? `- Render the character as a photorealistic, cinematic human (or creature): natural skin texture, realistic eyes, realistic facial proportions, realistic lighting/materials. Do NOT describe cartoon, 3D animated, Pixar, or illustration styles.`
+    : "";
+
   const systemPrompt = `You write locked visual character descriptions for AI image generation.
 
 Output a JSON object with exactly one key "character_seed" whose value is a single string.
@@ -35,6 +42,7 @@ Rules for character_seed:
 - Tie the look to the given character type(s) and the project context (build/theme).
 - No dialogue, no scene action, no camera — only the character(s) as subjects.
 - No text to appear in images.
+${photorealRule}
 
 Output only valid JSON, no markdown.`;
 
@@ -89,7 +97,7 @@ export function prependCharacterSeedToSceneImagePrompts<
 >(scenes: T[], characterSeed: string): T[] {
   const seed = characterSeed.trim();
   if (!seed) return scenes;
-  const prefix = `${seed}\n\n`;
+  const prefix = `CHARACTER SEED (locked identity; reproduce EXACTLY in every image):\n${seed}\n\n`;
   return scenes.map((s) => ({
     ...s,
     imagePrompt: sanitizeAiStorySceneImagePrompt(`${prefix}${s.imagePrompt.trim()}`),

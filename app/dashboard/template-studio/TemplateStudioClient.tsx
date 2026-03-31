@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { Fragment, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import html2canvas from "html2canvas";
@@ -21,7 +21,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -48,10 +51,13 @@ import { parseCharacterTypes } from "@/lib/ai-story-character-style";
 import { getPrimaryCharacterTypeForScene } from "@/lib/ai-story-reference-image";
 import { BGM_SELECT_OPTIONS, type BgmSelectValue } from "@/lib/bgm-tracks";
 import { SatisfyingBuildSetup } from "@/components/templates/SatisfyingBuildSetup";
+import { AiCookingVideoSetup } from "@/components/templates/AiCookingVideoSetup";
+import { CreatableSelectField } from "@/components/templates/CreatableSelectField";
 import { AiStorySceneVoiceover } from "@/components/ai-story/AiStorySceneVoiceover";
 import { AiStoryAnimateSceneBlock } from "@/components/ai-story/AiStoryAnimateSceneBlock";
 import {
-  CREATION_MODE_OPTIONS,
+  CREATION_MODE_OPTION_GROUPS,
+  type AiCookingVideoSceneCountChoice,
   TEMPLATE_STUDIO_STORY_GENERATE_ROUTES,
   type CreationMode,
   type TemplateStudioStoryTemplateId,
@@ -192,8 +198,18 @@ function buildTemplateStudioLibraryTitle(params: {
   episodeNumber: number;
   theme: string;
   whatBuilding: string;
+  dishName: string;
 }): string {
   const ep = params.episodeNumber >= 1 ? params.episodeNumber : 1;
+  if (params.mode === "9") {
+    const dish = params.dishName.trim();
+    const base = dish
+      ? `AI Cooking Video - ${dish.slice(0, 70)}${dish.length > 70 ? "…" : ""} - Episode ${ep}`
+      : `AI Cooking Video - Episode ${ep}`;
+    return base.length > MAX_LIBRARY_TITLE_LEN
+      ? `${base.slice(0, MAX_LIBRARY_TITLE_LEN - 1)}…`
+      : base;
+  }
   if (params.mode === "8") {
     const wb = params.whatBuilding.trim();
     const base = wb
@@ -216,6 +232,7 @@ export default function TemplateStudioClient() {
   const [mode, setMode] = useState<CreationMode>("1");
   const [brandName, setBrandName] = useState("");
   const [niche, setNiche] = useState("");
+  const [customCreationTopic, setCustomCreationTopic] = useState("");
   const [templateType, setTemplateType] = useState<TemplateType>("quotes");
   const [slideCount, setSlideCount] = useState<5 | 10 | 20>(5);
   const [brandPrimary, setBrandPrimary] = useState("#FF6B35");
@@ -242,6 +259,21 @@ export default function TemplateStudioClient() {
   const [whatBuilding, setWhatBuilding] = useState("");
   const [satisfyingBuildStyle, setSatisfyingBuildStyle] = useState("Miniature Construction");
   const [satisfyingBuildTone, setSatisfyingBuildTone] = useState("Satisfying");
+  const [satisfyingOpeningHook, setSatisfyingOpeningHook] = useState("");
+  const [cookingChefType, setCookingChefType] = useState("Home Cook");
+  const [cookingDishName, setCookingDishName] = useState("");
+  const [cookingStyle, setCookingStyle] = useState("Cozy Home Kitchen");
+  const [cookingTone, setCookingTone] = useState("Satisfying");
+  const [cookingOpeningHook, setCookingOpeningHook] = useState("");
+  const [cookingSceneCount, setCookingSceneCount] =
+    useState<AiCookingVideoSceneCountChoice>("auto");
+  const [brandStoryDayLabel, setBrandStoryDayLabel] = useState("Day 1");
+  const [brandStoryBrandField, setBrandStoryBrandField] = useState("");
+  const [brandStoryThemeLine, setBrandStoryThemeLine] = useState("");
+  const [brandStoryVoiceId, setBrandStoryVoiceId] = useState("pNInz6obpgDQGcFmaJgB");
+  const [brandStoryVideoLoading, setBrandStoryVideoLoading] = useState(false);
+  const [brandStoryVideoUrl, setBrandStoryVideoUrl] = useState<string | null>(null);
+  const [brandStoryVideoError, setBrandStoryVideoError] = useState<string | null>(null);
   const [aiStoryLoading, setAiStoryLoading] = useState(false);
   const [aiStoryScenes, setAiStoryScenes] = useState<{ sceneNumber: number; dialogue: string; imagePrompt: string; motionPrompt?: string }[]>([]);
   const [socialMediaPack, setSocialMediaPack] = useState<SocialMediaPack | null>(null);
@@ -259,6 +291,10 @@ export default function TemplateStudioClient() {
   const [sceneImageUrls, setSceneImageUrls] = useState<Record<number, string>>({});
   const [sceneImageLoadingScene, setSceneImageLoadingScene] = useState<number | null>(null);
   const [sceneVideoUrls, setSceneVideoUrls] = useState<Record<number, string>>({});
+
+  /** Mode 9: single photoreal chef reference portrait for identity anchoring (FLUX img2img). */
+  const [cookingChefReferenceUrl, setCookingChefReferenceUrl] = useState<string>("");
+  const [cookingChefReferenceLoading, setCookingChefReferenceLoading] = useState(false);
 
   const [storyVideoExporting, setStoryVideoExporting] = useState(false);
   const [storyVideoExportPhase, setStoryVideoExportPhase] = useState<"saving" | "compiling" | null>(null);
@@ -309,8 +345,8 @@ export default function TemplateStudioClient() {
   const { toast } = useToast();
 
   const selectedTemplate: TemplateStudioStoryTemplateId | undefined =
-    mode === "7" ? "ai_story" : mode === "8" ? "satisfying_build" : undefined;
-  const isStoryTemplateMode = mode === "7" || mode === "8";
+    mode === "7" ? "ai_story" : mode === "8" ? "satisfying_build" : mode === "9" ? "ai_cooking_video" : undefined;
+  const isStoryTemplateMode = mode === "7" || mode === "8" || mode === "9";
   const isAiStoryMode = mode === "7";
 
   const socialMediaPackText = useMemo(() => {
@@ -336,6 +372,12 @@ export default function TemplateStudioClient() {
       ? characters.trim().length > 0 && theme.trim().length > 0
       : mode === "8"
         ? satisfyingCharacterType.trim().length > 0 && whatBuilding.trim().length > 0
+        : mode === "9"
+          ? cookingChefType.trim().length > 0 && cookingDishName.trim().length > 0
+          : mode === "10"
+            ? brandStoryDayLabel.trim().length > 0 &&
+              brandStoryBrandField.trim().length > 0 &&
+              brandStoryThemeLine.trim().length > 0
         : mode === "1" || mode === "4"
           ? niche.trim().length > 0
           : mode === "2" || mode === "6"
@@ -352,6 +394,10 @@ export default function TemplateStudioClient() {
   const characterReferenceUrlsSerializeKey = useMemo(
     () => JSON.stringify(characterReferenceUrls),
     [characterReferenceUrls]
+  );
+  const effectiveVoiceoverUrls = useMemo(
+    () => (voiceoverEnabled ? voiceoverUrls : {}),
+    [voiceoverEnabled, voiceoverUrls]
   );
 
   const runCharacterStylePreview = useCallback(async () => {
@@ -387,6 +433,48 @@ export default function TemplateStudioClient() {
     }
   }, [isAiStoryMode, canProceedStep1, characters, theme, toast]);
 
+  const runBrandStoryVideo = useCallback(async () => {
+    if (mode !== "10" || !canProceedStep1) return;
+    setBrandStoryVideoLoading(true);
+    setBrandStoryVideoError(null);
+    setBrandStoryVideoUrl(null);
+    try {
+      const res = await fetch("/api/template-studio/brand-story-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dayLabel: brandStoryDayLabel.trim(),
+          brandName: brandStoryBrandField.trim(),
+          themeLine: brandStoryThemeLine.trim(),
+          voiceId: brandStoryVoiceId.trim() || "pNInz6obpgDQGcFmaJgB",
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Brand story video failed");
+      const url = typeof data.url === "string" ? data.url.trim() : "";
+      if (!url.startsWith("http")) throw new Error("No video URL returned.");
+      setBrandStoryVideoUrl(url);
+      toast({
+        title: "Vertical video ready",
+        description: "Your 9:16 Brand Story MP4 is ready to download.",
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Generation failed";
+      setBrandStoryVideoError(msg);
+      toast({ title: "Video failed", description: msg, variant: "destructive" });
+    } finally {
+      setBrandStoryVideoLoading(false);
+    }
+  }, [
+    mode,
+    canProceedStep1,
+    brandStoryDayLabel,
+    brandStoryBrandField,
+    brandStoryThemeLine,
+    brandStoryVoiceId,
+    toast,
+  ]);
+
   const executeAiStoryGenerate = useCallback(
     async (
       episodeForApi: number,
@@ -403,7 +491,9 @@ export default function TemplateStudioClient() {
         const generateUrl =
           mode === "7"
             ? TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.ai_story
-            : TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.satisfying_build;
+            : mode === "8"
+              ? TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.satisfying_build
+              : TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.ai_cooking_video;
         const res = await fetch(generateUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -421,11 +511,29 @@ export default function TemplateStudioClient() {
                     : {}),
                 }
               : {
-                  character_type: satisfyingCharacterType,
-                  what_building: whatBuilding.trim(),
-                  build_style: satisfyingBuildStyle,
-                  tone: satisfyingBuildTone,
-                  episode_number: episodeForApi,
+                  ...(mode === "8"
+                    ? {
+                        character_type: satisfyingCharacterType,
+                        what_building: whatBuilding.trim(),
+                        build_style: satisfyingBuildStyle,
+                        tone: satisfyingBuildTone,
+                        episode_number: episodeForApi,
+                        ...(satisfyingOpeningHook.trim()
+                          ? { opening_hook: satisfyingOpeningHook.trim() }
+                          : {}),
+                      }
+                    : {
+                        chef_type: cookingChefType,
+                        dish_name: cookingDishName.trim(),
+                        cooking_style: cookingStyle,
+                        tone: cookingTone,
+                        episode_number: episodeForApi,
+                        scene_count:
+                          cookingSceneCount === "auto" ? "auto" : cookingSceneCount,
+                        ...(cookingOpeningHook.trim()
+                          ? { opening_hook: cookingOpeningHook.trim() }
+                          : {}),
+                      }),
                 }
           ),
         });
@@ -468,6 +576,40 @@ export default function TemplateStudioClient() {
         setSceneImageUrls({});
         setSceneVideoUrls({});
         setLibraryDraftVideoId(null);
+        // Mode 9: generate a single chef reference portrait for consistent identity.
+        if (mode === "9") {
+          const locked = typeof data.character_seed === "string" ? data.character_seed.trim() : "";
+          if (!locked) {
+            // If for some reason character_seed is missing, fall back to using chef_type as identity.
+            // (Still better than DALL-E-only locking.)
+          }
+          try {
+            setCookingChefReferenceLoading(true);
+            const refRes = await fetch("/api/content-studio/ai-cooking-video/reference-image", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chefType: cookingChefType,
+                cookingStyle,
+                tone: cookingTone,
+                lockedIdentitySeed: locked || characterSeed.trim() || undefined,
+              }),
+            });
+            const refData = await refRes.json();
+            if (!refRes.ok) throw new Error(typeof refData?.error === "string" ? refData.error : "Reference image failed");
+            setCookingChefReferenceUrl(typeof refData?.referenceUrl === "string" ? refData.referenceUrl.trim() : "");
+          } catch (e) {
+            setCookingChefReferenceUrl("");
+            toast({
+              title: "Chef reference image failed",
+              description: e instanceof Error ? e.message : "Something went wrong",
+              variant: "destructive",
+            });
+          } finally {
+            setCookingChefReferenceLoading(false);
+          }
+        }
+
         try {
           sessionStorage.removeItem(LIBRARY_DRAFT_STORAGE_KEY);
         } catch {
@@ -481,6 +623,7 @@ export default function TemplateStudioClient() {
           episodeNumber: episodeForApi,
           theme,
           whatBuilding,
+          dishName: cookingDishName,
         });
         void fetch("/api/video-timeline/save", {
           method: "POST",
@@ -491,7 +634,7 @@ export default function TemplateStudioClient() {
               scenes: timelineScenes,
               captions: timelineCaptions,
               totalDuration,
-              sourceType: mode === "8" ? "satisfying-build" : "ai-story",
+              sourceType: mode === "8" ? "satisfying-build" : mode === "9" ? "ai-cooking-video" : "ai-story",
               templateStudioScenes: nextScenes,
               libraryItemType: "Video",
               ...(Object.keys(characterReferenceUrls).length > 0
@@ -531,13 +674,23 @@ export default function TemplateStudioClient() {
           });
 
         toast({
-          title: mode === "8" ? "Satisfying Build generated" : "AI Story generated",
+          title:
+            mode === "8"
+              ? "Satisfying Build generated"
+              : mode === "9"
+                ? "AI Cooking Video generated"
+                : "AI Story generated",
           description: `${scenesList.length} scenes ready.`,
         });
         return true;
       } catch (e) {
         toast({
-          title: mode === "8" ? "Satisfying Build failed" : "AI Story failed",
+          title:
+            mode === "8"
+              ? "Satisfying Build failed"
+              : mode === "9"
+                ? "AI Cooking Video failed"
+                : "AI Story failed",
           description: e instanceof Error ? e.message : "Something went wrong",
           variant: "destructive",
         });
@@ -559,6 +712,13 @@ export default function TemplateStudioClient() {
       whatBuilding,
       satisfyingBuildStyle,
       satisfyingBuildTone,
+      satisfyingOpeningHook,
+      cookingChefType,
+      cookingDishName,
+      cookingStyle,
+      cookingTone,
+      cookingOpeningHook,
+      cookingSceneCount,
       toast,
     ]
   );
@@ -589,6 +749,96 @@ export default function TemplateStudioClient() {
     );
   }, [socialMediaPackText, toast]);
 
+  const applyCharacterLookToScenes = useCallback(async () => {
+    const seed = characterSeed.trim();
+    if (!seed) {
+      toast({
+        title: "Character look is empty",
+        description: "Add a look description first, then apply it to scenes.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const LOCK_WORD_TARGET = 40;
+    const seedHeader = "CHARACTER SEED (locked identity; reproduce EXACTLY in every image):";
+    setAiStoryScenes((prev) =>
+      prev.map((scene) => {
+        const prompt = scene.imagePrompt.trim();
+        // Remove any existing locked seed block from the beginning of the prompt.
+        // In practice, prompts are often whitespace-sanitized (newlines collapsed),
+        // so we can't rely on "\n\n" splitting alone.
+        let scenePromptOnly = prompt;
+        const headerMatch = prompt.match(/^CHARACTER SEED.*?:\s*/);
+        if (headerMatch) {
+          const afterHeader = prompt.slice(headerMatch[0].length).trim();
+          const words = afterHeader.split(/\s+/).filter(Boolean);
+          if (words.length > LOCK_WORD_TARGET) {
+            scenePromptOnly = words.slice(LOCK_WORD_TARGET).join(" ").trim();
+          } else {
+            scenePromptOnly = "";
+          }
+        } else {
+          // Fallback for older prompts without the header: try to split by double-newline.
+          const splitAt = prompt.indexOf("\n\n");
+          scenePromptOnly = splitAt >= 0 ? prompt.slice(splitAt + 2).trim() : prompt;
+        }
+        return {
+          ...scene,
+          imagePrompt: `${seedHeader}\n${seed}\n\n${scenePromptOnly}`.trim(),
+        };
+      })
+    );
+    // Existing generated images no longer match the updated look.
+    setSceneImageUrls({});
+    setSceneVideoUrls({});
+    toast({
+      title: "Character look applied",
+      description: "Scene prompts were updated. Regenerate images to use the new look.",
+    });
+    // Mode 9: regenerate the single identity reference portrait so img2img anchors to the updated look.
+    if (mode === "9") {
+      try {
+        setCookingChefReferenceLoading(true);
+        const refRes = await fetch("/api/content-studio/ai-cooking-video/reference-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chefType: cookingChefType,
+            cookingStyle,
+            tone: cookingTone,
+            lockedIdentitySeed: seed,
+          }),
+        });
+        const refData = await refRes.json();
+        if (!refRes.ok) {
+          throw new Error(typeof refData?.error === "string" ? refData.error : "Reference image failed");
+        }
+        setCookingChefReferenceUrl(typeof refData?.referenceUrl === "string" ? refData.referenceUrl.trim() : "");
+      } catch (e) {
+        setCookingChefReferenceUrl("");
+        toast({
+          title: "Chef reference image failed",
+          description: e instanceof Error ? e.message : "Something went wrong",
+          variant: "destructive",
+        });
+      } finally {
+        setCookingChefReferenceLoading(false);
+      }
+    }
+  }, [characterSeed, toast, mode, cookingChefType, cookingStyle, cookingTone]);
+
+  const stripLockedCharacterSeedFromPrompt = useCallback((prompt: string) => {
+    const LOCK_WORD_TARGET = 40;
+    const s = prompt.trim();
+    if (!s.startsWith("CHARACTER SEED")) return s;
+    const m = s.match(/^CHARACTER SEED.*?:\s*/);
+    if (!m) return s;
+    const afterHeader = s.slice(m[0].length).trim();
+    const words = afterHeader.split(/\s+/).filter(Boolean);
+    if (words.length <= LOCK_WORD_TARGET) return "";
+    return words.slice(LOCK_WORD_TARGET).join(" ").trim();
+  }, []);
+
   const handleRegenerateSocialMediaPack = useCallback(async () => {
     if (!isStoryTemplateMode || aiStoryScenes.length === 0) return;
     setSocialMediaPackLoading(true);
@@ -605,11 +855,11 @@ export default function TemplateStudioClient() {
               scenes: aiStoryScenes.map((s) => ({ dialogue: s.dialogue })),
             }
           : {
-              characters: satisfyingCharacterType,
+              characters: mode === "8" ? satisfyingCharacterType : cookingChefType,
               characterNames: "",
-              theme: whatBuilding.trim(),
-              tone: satisfyingBuildTone,
-              style: satisfyingBuildStyle,
+              theme: mode === "8" ? whatBuilding.trim() : cookingDishName.trim(),
+              tone: mode === "8" ? satisfyingBuildTone : cookingTone,
+              style: mode === "8" ? satisfyingBuildStyle : cookingStyle,
               episodeNumber,
               scenes: aiStoryScenes.map((s) => ({ dialogue: s.dialogue })),
             };
@@ -656,6 +906,10 @@ export default function TemplateStudioClient() {
     whatBuilding,
     satisfyingBuildTone,
     satisfyingBuildStyle,
+    cookingChefType,
+    cookingDishName,
+    cookingTone,
+    cookingStyle,
     toast,
   ]);
 
@@ -680,6 +934,7 @@ export default function TemplateStudioClient() {
         payload.brandName = brandName.trim();
         payload.brandVibe = brandVibe.trim();
         payload.postGoal = postGoal.trim();
+        payload.brandTopic = niche.trim();
       } else if (mode === "5") {
         payload.niche = niche.trim();
         payload.hookAngle = hookAngle.trim();
@@ -1128,6 +1383,7 @@ export default function TemplateStudioClient() {
     const inputs: Record<string, unknown> = {
       brandName,
       niche,
+      customCreationTopic,
       templateType,
       slideCount,
       slideCountViral,
@@ -1156,6 +1412,7 @@ export default function TemplateStudioClient() {
     mode,
     brandName,
     niche,
+    customCreationTopic,
     templateType,
     slideCount,
     slideCountViral,
@@ -1180,15 +1437,15 @@ export default function TemplateStudioClient() {
       duration_seconds: TIMELINE_SCENE_DURATION,
       imageUrl: sceneImageUrls[scene.sceneNumber] ?? undefined,
       videoUrl: sceneVideoUrls[scene.sceneNumber] ?? undefined,
-      audioUrl: voiceoverUrls[scene.sceneNumber] ?? undefined,
+      audioUrl: effectiveVoiceoverUrls[scene.sceneNumber] ?? undefined,
       captionText: scene.dialogue?.trim() || undefined,
     }));
     setVideoPrefill({
       source: "template-studio",
-      title: mode === "8" ? "Satisfying Build" : "AI Story",
+      title: mode === "8" ? "Satisfying Build" : mode === "9" ? "AI Cooking Video" : "AI Story",
       timelineScenes,
     });
-  }, [isStoryTemplateMode, mode, aiStoryScenes, sceneImageUrls, sceneVideoUrls, voiceoverUrls]);
+  }, [isStoryTemplateMode, mode, aiStoryScenes, sceneImageUrls, sceneVideoUrls, effectiveVoiceoverUrls]);
 
   /** Ensure My Library draft row has latest per-scene audioUrl before timeline GET (avoids race with debounced PATCH). */
   const flushAiStoryDraftToLibrary = useCallback(async (): Promise<boolean> => {
@@ -1197,7 +1454,7 @@ export default function TemplateStudioClient() {
       aiStoryScenes,
       sceneImageUrls,
       sceneVideoUrls,
-      voiceoverUrls
+      effectiveVoiceoverUrls
     );
     try {
       const res = await fetch(`/api/video-timeline/videos/${encodeURIComponent(libraryDraftVideoId)}`, {
@@ -1226,7 +1483,7 @@ export default function TemplateStudioClient() {
     aiStoryScenes,
     sceneImageUrls,
     sceneVideoUrls,
-    voiceoverUrls,
+    effectiveVoiceoverUrls,
     characterReferenceUrlsSerializeKey,
   ]);
 
@@ -1252,15 +1509,18 @@ export default function TemplateStudioClient() {
   }, [writeAiStoryTimelinePrefill, flushAiStoryDraftToLibrary, libraryDraftVideoId, router, toast]);
 
   const canExportStoryVideo = useMemo(() => {
-    if (!isStoryTemplateMode || step !== 1 || aiStoryScenes.length !== AI_STORY_SCENE_COUNT) return false;
+    if (!isStoryTemplateMode || step !== 1 || aiStoryScenes.length === 0) return false;
+    if (mode === "7" || mode === "8") {
+      if (aiStoryScenes.length !== AI_STORY_SCENE_COUNT) return false;
+    }
     return aiStoryScenes.every((s) => {
       const v = sceneVideoUrls[s.sceneNumber];
-      const vo = voiceoverUrls[s.sceneNumber];
+      const vo = effectiveVoiceoverUrls[s.sceneNumber];
       const hasVideo = isHttpUrl(v);
       if (!voiceoverEnabled) return hasVideo;
       return hasVideo && isHttpUrl(vo);
     });
-  }, [isStoryTemplateMode, step, aiStoryScenes, sceneVideoUrls, voiceoverUrls, voiceoverEnabled]);
+  }, [isStoryTemplateMode, step, mode, aiStoryScenes, sceneVideoUrls, effectiveVoiceoverUrls, voiceoverEnabled]);
 
   const handleExportStoryVideo = useCallback(async () => {
     if (!canExportStoryVideo) return;
@@ -1277,7 +1537,7 @@ export default function TemplateStudioClient() {
       const scenes_json = ordered.map((scene) => {
         const video_url = sceneVideoUrls[scene.sceneNumber]?.trim() ?? null;
         const image_url = sceneImageUrls[scene.sceneNumber]?.trim() ?? null;
-        const voiceover_url = voiceoverUrls[scene.sceneNumber]?.trim() ?? null;
+        const voiceover_url = effectiveVoiceoverUrls[scene.sceneNumber]?.trim() ?? null;
         const dialogue = scene.dialogue?.trim() ?? "";
         return {
           scene_number: scene.sceneNumber,
@@ -1298,6 +1558,8 @@ export default function TemplateStudioClient() {
           title:
             mode === "8"
               ? `Satisfying Build — Episode ${episodeNumber}`
+              : mode === "9"
+                ? `AI Cooking Video — Episode ${episodeNumber}`
               : `AI Story — Episode ${episodeNumber}`,
           scenes_json,
         }),
@@ -1350,7 +1612,7 @@ export default function TemplateStudioClient() {
     sceneVideoUrls,
     storyBackgroundMusic,
     toast,
-    voiceoverUrls,
+    effectiveVoiceoverUrls,
     writeAiStoryTimelinePrefill,
   ]);
 
@@ -1370,7 +1632,7 @@ export default function TemplateStudioClient() {
         if (!res.ok) return;
         const data = await res.json();
         setSetupLoaded(true);
-        if (data.mode && ["1", "2", "3", "4", "5", "6", "7", "8"].includes(data.mode)) {
+        if (data.mode && ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"].includes(data.mode)) {
           setMode(data.mode as CreationMode);
         }
         const i = data.inputs || {};
@@ -1386,6 +1648,7 @@ export default function TemplateStudioClient() {
         }
         if (typeof i.brandName === "string") setBrandName(i.brandName);
         if (typeof i.niche === "string") setNiche(i.niche);
+        if (typeof i.customCreationTopic === "string") setCustomCreationTopic(i.customCreationTopic);
         if (["quotes", "tips", "affirmations"].includes(i.templateType)) setTemplateType(i.templateType);
         if ([5, 10, 20].includes(Number(i.slideCount))) setSlideCount(Number(i.slideCount) as 5 | 10 | 20);
         if ([5, 6, 7, 8, 9, 10].includes(Number(i.slideCountViral))) setSlideCountViral(Number(i.slideCountViral) as 5 | 6 | 7 | 8 | 9 | 10);
@@ -1455,7 +1718,7 @@ export default function TemplateStudioClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: mode === "8" ? "Satisfying Build (Draft)" : "AI Story (Draft)",
+          title: mode === "8" ? "Satisfying Build (Draft)" : mode === "9" ? "AI Cooking Video (Draft)" : "AI Story (Draft)",
           content: {
             scenes,
             captions,
@@ -1587,8 +1850,11 @@ export default function TemplateStudioClient() {
     })();
   }, [searchParams]);
 
+  const needElevenLabsVoiceList =
+    (voiceoverEnabled && isStoryTemplateMode && aiStoryScenes.length > 0) || mode === "10";
+
   useEffect(() => {
-    if (!voiceoverEnabled || !isStoryTemplateMode || aiStoryScenes.length === 0 || elevenLabsVoices.length > 0) return;
+    if (!needElevenLabsVoiceList || elevenLabsVoices.length > 0) return;
     (async () => {
       try {
         const res = await fetch("/api/elevenlabs/voices");
@@ -1600,7 +1866,12 @@ export default function TemplateStudioClient() {
         // ignore
       }
     })();
-  }, [voiceoverEnabled, isStoryTemplateMode, aiStoryScenes.length, elevenLabsVoices.length]);
+  }, [needElevenLabsVoiceList, elevenLabsVoices.length, mode]);
+
+  useEffect(() => {
+    if (voiceoverEnabled) return;
+    setVoiceoverUrls({});
+  }, [voiceoverEnabled]);
 
   // Dev: expose scenes with imageUrl so you can run console.log(scenes) and verify full URLs
   useEffect(() => {
@@ -1618,23 +1889,30 @@ export default function TemplateStudioClient() {
 
   const handleCreationModeChange = useCallback(
     (next: CreationMode) => {
-      if (
-        next !== mode &&
-        (next === "7" || next === "8" || mode === "7" || mode === "8")
-      ) {
-        setAiStoryScenes([]);
-        setSocialMediaPack(null);
-        setVoiceoverUrls({});
-        setSceneImageUrls({});
-        setSceneVideoUrls({});
-        setAiStoryUiPhase("form");
-        setCharacterReferenceUrls({});
-        setCharacterSeed("");
-        setLibraryDraftVideoId(null);
-        try {
-          sessionStorage.removeItem(LIBRARY_DRAFT_STORAGE_KEY);
-        } catch {
-          // ignore
+      if (next !== mode) {
+        const storyM = mode === "7" || mode === "8" || mode === "9";
+        const storyN = next === "7" || next === "8" || next === "9";
+        const brandM = mode === "10";
+        const brandN = next === "10";
+        if (storyM || storyN || brandM || brandN) {
+          setAiStoryScenes([]);
+          setSocialMediaPack(null);
+          setVoiceoverUrls({});
+          setSceneImageUrls({});
+          setSceneVideoUrls({});
+          setAiStoryUiPhase("form");
+          setCharacterReferenceUrls({});
+          setCharacterSeed("");
+          setLibraryDraftVideoId(null);
+          try {
+            sessionStorage.removeItem(LIBRARY_DRAFT_STORAGE_KEY);
+          } catch {
+            // ignore
+          }
+        }
+        if (brandM && !brandN) {
+          setBrandStoryVideoUrl(null);
+          setBrandStoryVideoError(null);
         }
       }
       setMode(next);
@@ -1678,38 +1956,79 @@ export default function TemplateStudioClient() {
             <div className="space-y-2">
               <Label>What are you creating this for?</Label>
               <Select
-                value={mode}
-                onValueChange={(v) => handleCreationModeChange(v as CreationMode)}
+                value={customCreationTopic.trim() ? undefined : mode}
+                onValueChange={(v) => {
+                  // Picking a predefined mode should clear custom-topic override.
+                  if (customCreationTopic.trim()) setCustomCreationTopic("");
+                  handleCreationModeChange(v as CreationMode);
+                }}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select from presets (optional if using custom topic)" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CREATION_MODE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
+                  {CREATION_MODE_OPTION_GROUPS.map((group, gi) => (
+                    <Fragment key={group.label}>
+                      <SelectGroup>
+                        <SelectLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {group.label}
+                        </SelectLabel>
+                        {group.options.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                      {gi < CREATION_MODE_OPTION_GROUPS.length - 1 ? (
+                        <SelectSeparator className="my-2 bg-border" />
+                      ) : null}
+                    </Fragment>
                   ))}
                 </SelectContent>
               </Select>
+              <div className="pt-1">
+                <CreatableSelectField
+                  label="Or add your own topic (saved)"
+                  value={customCreationTopic}
+                  onValueChange={(v) => {
+                    setCustomCreationTopic(v);
+                    setNiche(v);
+                    // Keep non-story form fields visible for custom topics.
+                    handleCreationModeChange("1");
+                  }}
+                  options={[]}
+                  storageKey="template-studio/custom-creation-topics"
+                  addPlaceholder="Type your topic and save it"
+                />
+                {customCreationTopic.trim() ? (
+                  <p className="text-xs text-muted-foreground pt-1">
+                    Using custom topic: preset mode is intentionally unselected.
+                  </p>
+                ) : null}
+              </div>
             </div>
 
-            <div className="flex flex-row items-center justify-between gap-4 rounded-lg border border-border px-4 py-3">
-              <div className="space-y-0.5">
-                <Label htmlFor="voiceover-enabled" className="text-base">
-                  Voiceover
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Turn off to hide voice generation and audio on story scene cards.
-                </p>
+            {mode !== "10" ? (
+              <div className="flex flex-row items-center justify-between gap-4 rounded-lg border border-border px-4 py-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="voiceover-enabled" className="text-base">
+                    Voiceover
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Turn off to hide voice generation and audio on story scene cards.
+                  </p>
+                </div>
+                <Switch
+                  id="voiceover-enabled"
+                  checked={voiceoverEnabled}
+                  onCheckedChange={(checked) => {
+                    setVoiceoverEnabled(checked);
+                    if (!checked) setVoiceoverUrls({});
+                  }}
+                  aria-label="Enable voiceover for story scenes"
+                />
               </div>
-              <Switch
-                id="voiceover-enabled"
-                checked={voiceoverEnabled}
-                onCheckedChange={setVoiceoverEnabled}
-                aria-label="Enable voiceover for story scenes"
-              />
-            </div>
+            ) : null}
 
             {(mode === "1" || mode === "4") && (
               <>
@@ -1924,6 +2243,78 @@ export default function TemplateStudioClient() {
               </>
             )}
 
+            {mode === "10" && (
+              <>
+                <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-3 space-y-1">
+                  <p className="text-sm font-medium">Brand Story Video</p>
+                  <p className="text-xs text-muted-foreground">
+                    Five scenes, ElevenLabs narration per scene, dark cinematic backgrounds, and a 9:16 MP4 with burned-in captions—same export pipeline as TikTok Shop video.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="brand-story-day">Day label</Label>
+                  <Input
+                    id="brand-story-day"
+                    placeholder='e.g. "Day 1", "Day 12"'
+                    value={brandStoryDayLabel}
+                    onChange={(e) => setBrandStoryDayLabel(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="brand-story-brand">Brand name</Label>
+                  <Input
+                    id="brand-story-brand"
+                    placeholder="e.g. Void Hours"
+                    value={brandStoryBrandField}
+                    onChange={(e) => setBrandStoryBrandField(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="brand-story-theme">One-line theme</Label>
+                  <Input
+                    id="brand-story-theme"
+                    placeholder='e.g. building in silence'
+                    value={brandStoryThemeLine}
+                    onChange={(e) => setBrandStoryThemeLine(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="brand-story-voice">Voice (ElevenLabs)</Label>
+                  <Select value={brandStoryVoiceId} onValueChange={setBrandStoryVoiceId}>
+                    <SelectTrigger id="brand-story-voice">
+                      <SelectValue placeholder="Select a voice" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {elevenLabsVoices.length === 0 ? (
+                        <SelectItem value={brandStoryVoiceId}>Default voice</SelectItem>
+                      ) : (
+                        elevenLabsVoices.map((v) => (
+                          <SelectItem key={v.voice_id} value={v.voice_id}>
+                            {v.name}
+                            {v.description ? ` — ${v.description.slice(0, 80)}` : ""}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {brandStoryVideoError ? (
+                  <p className="text-sm text-destructive">{brandStoryVideoError}</p>
+                ) : null}
+                {brandStoryVideoUrl ? (
+                  <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
+                    <p className="text-sm font-medium">Your video is ready.</p>
+                    <Button type="button" variant="secondary" size="sm" asChild>
+                      <a href={brandStoryVideoUrl} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Open / download MP4
+                      </a>
+                    </Button>
+                  </div>
+                ) : null}
+              </>
+            )}
+
             {selectedTemplate === "ai_story" && (
               <>
                 <div className="space-y-2">
@@ -2015,10 +2406,31 @@ export default function TemplateStudioClient() {
                 setTone={setSatisfyingBuildTone}
                 episodeNumber={episodeNumber}
                 setEpisodeNumber={setEpisodeNumber}
+                openingHook={satisfyingOpeningHook}
+                setOpeningHook={setSatisfyingOpeningHook}
               />
             )}
 
-            {!isStoryTemplateMode && (
+            {selectedTemplate === "ai_cooking_video" && (
+              <AiCookingVideoSetup
+                chefType={cookingChefType}
+                setChefType={setCookingChefType}
+                dishName={cookingDishName}
+                setDishName={setCookingDishName}
+                cookingStyle={cookingStyle}
+                setCookingStyle={setCookingStyle}
+                tone={cookingTone}
+                setTone={setCookingTone}
+                episodeNumber={episodeNumber}
+                setEpisodeNumber={setEpisodeNumber}
+                openingHook={cookingOpeningHook}
+                setOpeningHook={setCookingOpeningHook}
+                sceneCount={cookingSceneCount}
+                setSceneCount={setCookingSceneCount}
+              />
+            )}
+
+            {!isStoryTemplateMode && mode !== "10" && (
               <>
             <div className="space-y-2">
               <Label>Number of slides</Label>
@@ -2151,8 +2563,10 @@ export default function TemplateStudioClient() {
                         return;
                       }
                       await runCharacterStylePreview();
-                    } else if (mode === "8") {
+                    } else if (mode === "8" || mode === "9") {
                       await runGenerateAiStory();
+                    } else if (mode === "10") {
+                      await runBrandStoryVideo();
                     } else {
                       await saveSetup();
                       setStep(2);
@@ -2161,7 +2575,8 @@ export default function TemplateStudioClient() {
                   disabled={
                     !canProceedStep1 ||
                     (isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
-                    (mode === "8" && aiStoryLoading)
+                    ((mode === "8" || mode === "9") && aiStoryLoading) ||
+                    (mode === "10" && brandStoryVideoLoading)
                   }
                 >
                   {isAiStoryMode
@@ -2172,9 +2587,16 @@ export default function TemplateStudioClient() {
                       ? aiStoryScenes.length > 0
                         ? "Regenerate story"
                         : "Generate episode"
+                      : mode === "9"
+                        ? aiStoryScenes.length > 0
+                          ? "Regenerate story"
+                          : "Generate episode"
+                        : mode === "10"
+                          ? "Generate 9:16 Brand Story video"
                       : "Next — Generate content"}
                   {(isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
-                  (mode === "8" && aiStoryLoading) ? (
+                  ((mode === "8" || mode === "9") && aiStoryLoading) ||
+                  (mode === "10" && brandStoryVideoLoading) ? (
                     <Loader2 className="w-4 h-4 ml-2 animate-spin" />
                   ) : (
                     <ArrowRight className="w-4 h-4 ml-2" />
@@ -2266,16 +2688,21 @@ export default function TemplateStudioClient() {
             <CardHeader>
               <CardTitle>Locked character look</CardTitle>
               <CardDescription>
-                ~40-word visual seed prepended to every scene&apos;s image prompt. Regenerating a scene image reuses the full prompt below (including this lock).
+                Edit this look, then apply it to all scene prompts. Regenerating scene images will use your updated look.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <Textarea
-                readOnly
                 value={characterSeed}
+                onChange={(e) => setCharacterSeed(e.target.value)}
                 className="min-h-[100px] text-sm resize-none"
                 aria-label="Character visual seed"
               />
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={applyCharacterLookToScenes}>
+                  Apply look to all scenes
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -2285,6 +2712,8 @@ export default function TemplateStudioClient() {
             <CardDescription>
               {mode === "8"
                 ? "Generated scenes for your Satisfying Build."
+                : mode === "9"
+                  ? "Generated scenes for your AI Cooking Video."
                 : "Generated scenes for your AI Story."}
             </CardDescription>
           </CardHeader>
@@ -2307,6 +2736,12 @@ export default function TemplateStudioClient() {
                 const sceneImageUrl = isStoredUrlValid ? storedImageUrl.trim() : "";
                 const imageLoading = sceneImageLoadingScene === scene.sceneNumber;
                 const sceneVideoUrl = sceneVideoUrls[scene.sceneNumber];
+                const trimmedSeed = characterSeed.trim();
+                const trimmedPrompt = scene.imagePrompt.trim();
+                const displayImagePrompt =
+                  trimmedSeed && trimmedPrompt.startsWith(trimmedSeed)
+                    ? trimmedPrompt.slice(trimmedSeed.length).replace(/^\s+/, "")
+                    : trimmedPrompt;
                 return (
                 <Card key={scene.sceneNumber}>
                   <CardHeader className="p-4 pb-2">
@@ -2337,7 +2772,27 @@ export default function TemplateStudioClient() {
                           let res: Response;
                           let data: { url?: string; error?: string };
 
-                          if (useImg2ImgSceneImages && refUrl) {
+                          // AI Cooking Video: FLUX text-to-image so each scene shows food/action (portrait img2img was locking to headshots).
+                          if (mode === "9") {
+                            const rawPrompt = scene.imagePrompt;
+                            const sceneComposition =
+                              stripLockedCharacterSeedFromPrompt(rawPrompt) || rawPrompt;
+                            console.log("[AI Cooking Video] fal text-to-image scene:", {
+                              scene: scene.sceneNumber,
+                              dialogueLen: scene.dialogue.length,
+                              compositionLen: sceneComposition.length,
+                            });
+                            res = await fetch("/api/content-studio/ai-cooking-video/scene-image", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                sceneComposition,
+                                characterSeed: characterSeed.trim(),
+                                dialogue: scene.dialogue.trim(),
+                              }),
+                            });
+                            data = await res.json();
+                          } else if (useImg2ImgSceneImages && refUrl) {
                             const sceneBody = {
                               referenceImageUrl: refUrl,
                               prompt: scene.imagePrompt,
@@ -2357,6 +2812,13 @@ export default function TemplateStudioClient() {
                             if (hasEmbeddedSeed) {
                               if (mode === "7") {
                                 imageBody.aiStoryLocked = true;
+                              } else if (mode === "8" || mode === "9") {
+                                // Story templates with locked seed should request stronger realism + identity lock.
+                                imageBody.photoreal = true;
+                                imageBody.identityLock = true;
+                                if (mode === "9") {
+                                  imageBody.cookingFocus = true;
+                                }
                               }
                             } else if (!useImg2ImgSceneImages && aiStoryCharacterStyle) {
                               imageBody.characterStyle = aiStoryCharacterStyle;
@@ -2413,7 +2875,7 @@ export default function TemplateStudioClient() {
                     <p className="font-medium">Dialogue</p>
                     <p className="text-muted-foreground whitespace-pre-wrap">{scene.dialogue}</p>
                     <p className="font-medium">Image prompt</p>
-                    <p className="text-muted-foreground whitespace-pre-wrap">{scene.imagePrompt}</p>
+                    <p className="text-muted-foreground whitespace-pre-wrap">{displayImagePrompt}</p>
                     {voiceoverEnabled && (
                       <AiStorySceneVoiceover
                         voiceId={voiceId}
@@ -2504,7 +2966,7 @@ export default function TemplateStudioClient() {
                   <div>
                     <p className="text-sm font-medium text-foreground">Export story video</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      All {AI_STORY_SCENE_COUNT} scenes have animation
+                      All {aiStoryScenes.length} scenes have animation
                       {voiceoverEnabled ? " and voiceover" : ""}. Save a script, stitch one MP4 on the server, then download — no need to open the timeline first.
                     </p>
                   </div>

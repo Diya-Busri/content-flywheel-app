@@ -4,7 +4,7 @@ import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { cleanProductTitle } from "@/lib/product-title";
 import { extractProductDetails } from "@/lib/tiktok-shop/extract-product";
 import { generateProductBreakdown } from "@/lib/tiktok-shop/product-breakdown";
-import { uploadProductImageToBlob } from "@/lib/tiktok-shop/upload-product-image-blob";
+import { uploadProductImageToPublicUrl } from "@/lib/tiktok-shop/upload-product-image-public";
 
 /**
  * POST: Generate AI product breakdown (category, audience, pain points, etc.)
@@ -40,14 +40,9 @@ export async function POST(request: Request) {
       );
     }
 
+    /** Public URL for downstream video compile (optional). Breakdown still uses base64 when upload fails. */
     let resolvedImageUrl: string | undefined;
     if (productImageBase64 && typeof productImageBase64 === "string") {
-      if (!process.env.BLOB_READ_WRITE_TOKEN) {
-        return NextResponse.json(
-          { error: "BLOB_READ_WRITE_TOKEN required for image upload." },
-          { status: 503 }
-        );
-      }
       try {
         const base64Data = productImageBase64.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
@@ -56,9 +51,9 @@ export async function POST(request: Request) {
           : productImageBase64.startsWith("data:image/webp")
             ? "image/webp"
             : "image/jpeg";
-        resolvedImageUrl = await uploadProductImageToBlob(buffer, contentType);
-      } catch {
-        return NextResponse.json({ error: "Failed to upload product image." }, { status: 500 });
+        resolvedImageUrl = await uploadProductImageToPublicUrl(buffer, contentType, userId);
+      } catch (err) {
+        console.error("[product-breakdown] Public image upload failed; continuing with base64 only:", err);
       }
     }
 
@@ -84,7 +79,10 @@ export async function POST(request: Request) {
       productImageBase64: hasImage ? productImageBase64 : undefined,
     });
 
-    return NextResponse.json(breakdown);
+    return NextResponse.json({
+      ...breakdown,
+      ...(resolvedImageUrl ? { productImageUrl: resolvedImageUrl } : {}),
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Product breakdown failed";
     console.error("[product-breakdown] Error:", err);

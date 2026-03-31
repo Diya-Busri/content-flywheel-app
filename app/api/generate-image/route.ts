@@ -27,6 +27,9 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     let prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
     const aiStoryLocked = body.aiStoryLocked === true;
+    const photoreal = body.photoreal === true;
+    const identityLock = body.identityLock === true;
+    const cookingFocus = body.cookingFocus === true;
     const characterStyle = typeof body.characterStyle === "string" ? body.characterStyle.trim() : "";
     if (!aiStoryLocked && characterStyle) {
       prompt = `${characterStyle} ${prompt} Do not include any humans or realistic elements.`;
@@ -39,7 +42,16 @@ export async function POST(request: Request) {
       ? `${prompt}
 
 Cartoon / stylized 3D illustration only. No photorealistic humans. No text, letters, watermarks, or labels in the image.`
-      : `High-quality, professional image: ${prompt}. Clean, modern, suitable for digital content. No text in image.`;
+      : photoreal
+        ? `${prompt}
+
+Ultra-realistic cinematic photograph look. Natural skin texture, realistic hands, realistic anatomy, subtle lens depth of field, physically plausible lighting, high-detail materials, and true-to-life color grading.
+${identityLock ? "IDENTITY LOCK: The character identity is defined by the 'CHARACTER SEED' / locked identity section in this prompt. Reproduce the same person EXACTLY across scenes: facial features, eye shape, hairstyle, outfit, accessories, skin tone, and proportions. Do not switch characters or vary identity." : ""}
+${identityLock ? "IGNORE any cartoon/3D/illustration/Pixar style cues found in the prompt. Render as a real photorealistic cinematic photograph while keeping the locked identity unchanged." : ""}
+${cookingFocus ? "Food-first framing: show ingredients, pan/pot, utensils, texture, steam, sizzling action, and plated dish as primary subjects. Keep people secondary, but if the chef appears, keep the same chef identity (eyes/hair/outfit) consistently. Avoid portrait-style face-centric framing that would encourage a different person." : ""}
+Avoid CGI/plastic look, uncanny features, extra fingers, warped anatomy, duplicate people, collage layouts, and heavy over-stylization.
+No text, letters, watermarks, logos, or labels in the image.`
+        : `High-quality, professional image: ${prompt}. Clean, modern, suitable for digital content. No text in image.`;
 
     console.log(
       "[generate-image] aiStoryLocked=%s full DALL-E prompt (%d chars):\n%s",
@@ -64,7 +76,7 @@ Cartoon / stylized 3D illustration only. No photorealistic humans. No text, lett
       prompt: dallE3Prompt,
       n: 1,
       size: "1024x1024",
-      quality: "standard",
+      quality: photoreal ? "hd" : "standard",
       style: "natural",
       response_format: "b64_json",
     });

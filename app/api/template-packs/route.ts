@@ -5,6 +5,12 @@ import { db } from "@/db/db";
 import { templatePacksTable } from "@/db/schema/template-packs-schema";
 import { eq, desc } from "drizzle-orm";
 
+function isMissingTemplatePacksTable(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const code = (err as { code?: unknown }).code;
+  return code === "42P01";
+}
+
 /**
  * GET: List all template packs for the current user.
  */
@@ -41,6 +47,11 @@ export async function GET() {
       }))
     );
   } catch (e) {
+    if (isMissingTemplatePacksTable(e)) {
+      // Graceful fallback for environments where this optional table/migration
+      // has not been applied yet.
+      return NextResponse.json([]);
+    }
     console.error("[template-packs] GET error:", e);
     return NextResponse.json(
       { error: "Failed to load template packs" },
@@ -102,6 +113,12 @@ export async function POST(request: NextRequest) {
       createdAt: row.createdAt?.toISOString(),
     });
   } catch (e) {
+    if (isMissingTemplatePacksTable(e)) {
+      return NextResponse.json(
+        { error: "Template Packs table is not set up yet. Run DB migrations first." },
+        { status: 503 }
+      );
+    }
     console.error("[template-packs] POST error:", e);
     return NextResponse.json(
       { error: "Failed to save template pack" },

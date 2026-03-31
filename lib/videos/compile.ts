@@ -5,7 +5,7 @@
  * - Scene stitching with concat filter
  * - Voiceover as main audio; optional looped BGM mixed under voice (low volume)
  * - Burned-in captions (drawtext): dialogue per scene from script_text when provided
- * - Output: MP4 (1920x1080, 25fps)
+ * - Output: MP4 (default 1920x1080 or 1080x1920 when outputAspect is 9:16, 25fps)
  *
  * FFmpeg path: tries @ffmpeg-installer/ffmpeg, then ffmpeg-static, then system "ffmpeg".
  */
@@ -14,16 +14,15 @@ import { writeFile, rm, copyFile, access } from "fs/promises";
 import { join } from "path";
 import { existsSync } from "fs";
 import { spawn } from "child_process";
-import {
-  buildViralCaptionDrawtextChain,
-  buildViralCaptionDrawtextFlatVf,
-  VIRAL_CAPTION_FONT_SIZES,
-} from "@/lib/video-caption-ffmpeg";
+import { buildViralCaptionDrawtextFlatVf, VIRAL_CAPTION_FONT_SIZES } from "@/lib/video-caption-ffmpeg";
 import { BGM_MIX_VOLUME } from "@/lib/bgm-tracks";
 
 const FPS = 25;
-const WIDTH = 1920;
-const HEIGHT = 1080;
+
+function compileDimensions(outputAspect: "16:9" | "9:16" | undefined): { width: number; height: number } {
+  if (outputAspect === "9:16") return { width: 1080, height: 1920 };
+  return { width: 1920, height: 1080 };
+}
 
 function resolveDrawtextFontFile(): string | null {
   const env = process.env.FFMPEG_DRAWTEXT_FONTFILE?.trim();
@@ -127,17 +126,50 @@ export function runFfmpeg(args: string[], cwd?: string): Promise<void> {
   });
 }
 
+async function probeAudioDurationSeconds(filePath: string): Promise<number | null> {
+  const ffmpeg = getFfmpegPath();
+  return await new Promise((resolve) => {
+    const proc = spawn(ffmpeg, ["-i", filePath, "-f", "null", "-"], {
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let stderr = "";
+    proc.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    proc.on("close", () => {
+      const m = stderr.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i);
+      if (!m) return resolve(null);
+      const hh = Number(m[1] ?? 0);
+      const mm = Number(m[2] ?? 0);
+      const ss = Number(m[3] ?? 0);
+      if (!Number.isFinite(hh) || !Number.isFinite(mm) || !Number.isFinite(ss)) {
+        return resolve(null);
+      }
+      const seconds = hh * 3600 + mm * 60 + ss;
+      resolve(seconds > 0 ? seconds : null);
+    });
+    proc.on("error", () => resolve(null));
+  });
+}
+
 /**
  * Download per-scene voiceover URLs and concatenate into a single MP3 in workDir.
- * Returns path to workDir/voiceover.mp3.
+ * Returns path + per-scene measured durations (seconds).
  */
-export async function concatVoiceoverUrls(workDir: string, urls: string[]): Promise<string> {
+export async function concatVoiceoverUrls(
+  workDir: string,
+  urls: string[]
+): Promise<{ path: string; sceneDurationsSec: number[] }> {
   if (urls.length === 0) throw new Error("At least one voiceover URL required");
   const paths: string[] = [];
+  const sceneDurationsSec: number[] = [];
   for (let i = 0; i < urls.length; i++) {
     const p = join(workDir, `vo_${i}.mp3`);
     await downloadToFile(urls[i], p);
     paths.push(p);
+    // Probe each scene VO so callers can align scene video duration to narration length.
+    const d = await probeAudioDurationSeconds(p);
+    sceneDurationsSec.push(d ?? 0);
   }
   const listPath = join(workDir, "vo_list.txt");
   const listContent = paths.map((p) => `file '${p.replace(/\\/g, "/").replace(/'/g, "'\\''")}'`).join("\n");
@@ -153,7 +185,7 @@ export async function concatVoiceoverUrls(workDir: string, urls: string[]): Prom
     "-b:a", "192k",
     outPath,
   ]);
-  return outPath;
+  return { path: outPath, sceneDurationsSec };
 }
 
 /** Ken Burns: zoompan from image for duration seconds. Output segPath, no audio. */
@@ -161,32 +193,39 @@ async function renderImageSegment(
   imagePath: string,
   duration: number,
   segPath: string,
+  width: number,
+  height: number,
   dialogueLine?: string | null
 ): Promise<void> {
   const dFrames = Math.max(1, Math.round(FPS * duration));
-  const zoom =
-    `[0:v]scale=${WIDTH}:-2,setsar=1:1,crop=${WIDTH}:${HEIGHT},` +
-    `scale=8000:-1,zoompan=z='min(zoom+0.001,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${dFrames}:s=${WIDTH}x${HEIGHT}:fps=${FPS}[vz]`;
-  let filterComplex = zoom;
-  let mapLabel = "vz";
+  /** Cover WxH: scale up with aspect preserved until both dimensions meet target, then center-crop.
+   * The old scale=W:-2,crop=WxH breaks for 9:16 on wide images (height after scale is below 1920). */
+  const coverCrop =
+    `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2`;
+  /**
+   * Single-input chain via -vf (no stream labels). Avoids -filter_complex + -map [label] failures when
+   * the graph is misparsed or pads are missing on some FFmpeg builds.
+   */
+  const kenBurnsToYuv =
+    `${coverCrop},setsar=1:1,` +
+    `scale=8000:-1,zoompan=z='min(zoom+0.001,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${dFrames}:s=${width}x${height}:fps=${FPS},format=yuv420p`;
+  let vf = kenBurnsToYuv;
   if (dialogueLine?.trim()) {
     const fontFile = resolveDrawtextFontFile();
-    const cap = buildViralCaptionDrawtextChain("vz", "vout", {
-      videoWidth: WIDTH,
-      dialogueLine: dialogueLine.trim(),
-      fontFile: fontFile ?? undefined,
-      fontSize: VIRAL_CAPTION_FONT_SIZES.medium,
-      midLabel: "capimg",
-    });
-    filterComplex += `;${cap}`;
-    mapLabel = "vout";
+    const flatCaps = buildViralCaptionDrawtextFlatVf(
+      dialogueLine.trim(),
+      width,
+      VIRAL_CAPTION_FONT_SIZES.medium,
+      fontFile ?? undefined
+    );
+    if (flatCaps) vf = `${kenBurnsToYuv},${flatCaps}`;
   }
   const args = [
     "-y",
     "-loop", "1",
     "-i", imagePath,
-    "-filter_complex", filterComplex,
-    "-map", `[${mapLabel}]`,
+    "-vf",
+    vf,
     "-an",
     "-t", String(duration),
     "-pix_fmt", "yuv420p",
@@ -201,15 +240,17 @@ async function renderVideoSegment(
   videoPath: string,
   duration: number,
   segPath: string,
+  width: number,
+  height: number,
   dialogueLine?: string | null
 ): Promise<void> {
-  const scale = `scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=decrease,pad=${WIDTH}:${HEIGHT}:(ow-iw)/2:(oh-ih)/2`;
+  const scale = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`;
   let vf = scale;
   if (dialogueLine?.trim()) {
     const fontFile = resolveDrawtextFontFile();
     const cap = buildViralCaptionDrawtextFlatVf(
       dialogueLine.trim(),
-      WIDTH,
+      width,
       VIRAL_CAPTION_FONT_SIZES.medium,
       fontFile ?? undefined
     );
@@ -234,6 +275,8 @@ export type CompileVideoOptions = {
   bgmPath?: string | null;
   /** BGM linear volume 0–1; default BGM_MIX_VOLUME */
   bgmVolume?: number;
+  /** Landscape 1920×1080 (default) or vertical 1080×1920 for TikTok-style MP4. */
+  outputAspect?: "16:9" | "9:16";
 };
 
 /**
@@ -252,6 +295,7 @@ export async function compileVideoToFile(
   compileOpts?: CompileVideoOptions
 ): Promise<string> {
   void transition;
+  const { width, height } = compileDimensions(compileOpts?.outputAspect);
   const voicePath = join(workDir, "voiceover.mp3");
   if (existingVoicePath) {
     try {
@@ -267,6 +311,17 @@ export async function compileVideoToFile(
   }
   if (scenes.length === 0) throw new Error("At least one scene required");
 
+  if (scenes.length === 1) {
+    const audioDur = await probeAudioDurationSeconds(voicePath);
+    if (audioDur != null && audioDur > 0.25) {
+      const hold = 0.2;
+      scenes[0] = {
+        ...scenes[0],
+        duration: Math.max(1, Number((audioDur + hold).toFixed(2))),
+      };
+    }
+  }
+
   // 2) Download each scene asset and render segment (video-only, no audio)
   for (let i = 0; i < scenes.length; i++) {
     const s = scenes[i];
@@ -278,12 +333,12 @@ export async function compileVideoToFile(
       if (!isHttpUrl(imageUrl)) throw new Error(`Scene ${i + 1} image_url must be http(s)`);
       const inputPath = await downloadAsset(imageUrl, workDir, i, true);
       const segPath = join(workDir, `seg_${i}.mp4`);
-      await renderImageSegment(inputPath, dur, segPath, s.dialogue);
+      await renderImageSegment(inputPath, dur, segPath, width, height, s.dialogue);
     } else if (videoUrl) {
       if (!isHttpUrl(videoUrl)) throw new Error(`Scene ${i + 1} video_url must be http(s)`);
       const inputPath = await downloadAsset(videoUrl, workDir, i, false);
       const segPath = join(workDir, `seg_${i}.mp4`);
-      await renderVideoSegment(inputPath, dur, segPath, s.dialogue);
+      await renderVideoSegment(inputPath, dur, segPath, width, height, s.dialogue);
     } else {
       throw new Error(`Scene ${i + 1} must have image_url or video_url`);
     }

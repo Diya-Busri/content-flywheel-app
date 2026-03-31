@@ -5,6 +5,12 @@ import { db } from "@/db/db";
 import { templatePacksTable } from "@/db/schema/template-packs-schema";
 import { eq, and } from "drizzle-orm";
 
+function isMissingTemplatePacksTable(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const code = (err as { code?: unknown }).code;
+  return code === "42P01";
+}
+
 /**
  * GET: Fetch a single template pack by id (full data including slides_json and captions_json).
  */
@@ -51,6 +57,9 @@ export async function GET(
       createdAt: row.createdAt?.toISOString(),
     });
   } catch (e) {
+    if (isMissingTemplatePacksTable(e)) {
+      return NextResponse.json({ error: "Pack not found" }, { status: 404 });
+    }
     console.error("[template-packs] GET [id] error:", e);
     return NextResponse.json(
       { error: "Failed to load pack" },

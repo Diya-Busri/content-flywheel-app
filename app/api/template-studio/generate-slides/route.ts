@@ -109,15 +109,49 @@ Each slide = one benefit / pain point / feature. Heading max 6 words. Body max 2
       const brandName = typeof body.brandName === "string" ? body.brandName.trim() : "";
       const vibe = typeof body.brandVibe === "string" ? body.brandVibe.trim() : "";
       const postGoal = typeof body.postGoal === "string" ? body.postGoal.trim() : "";
+      const brandTopic = typeof body.brandTopic === "string" ? body.brandTopic.trim() : "";
       const goalLabel = postGoal || "aesthetic content";
-      systemPrompt = `You are a social media copywriter creating carousel content for a clothing brand.
+      systemPrompt = `You are a high-end fashion brand copywriter creating minimalist carousel slides.
 
-Create ${slideCount} carousel slides for a clothing brand called ${brandName || "the brand"}.
-Aesthetic: ${vibe || "(not specified)"}
+Create ${slideCount} slides for clothing brand "${brandName || "the brand"}".
+Brand world / concept: ${brandTopic || "(not specified)"}
+Aesthetic tags: ${vibe || "(not specified)"}
 Goal: ${goalLabel}
 
-Make it feel intentional, minimal and like it belongs on an aesthetic Instagram page. No generic quotes. Each slide should feel like it belongs to this brand. Heading max 6 words. Body max 20 words. Return a JSON object with a key "slides" that is an array of objects, each with "heading" and "body" strings. Output only valid JSON, no markdown, no explanation.`;
-      userPrompt = `Generate ${slideCount} slide(s).`;
+Creative direction (very important):
+- Tone = raw, quiet, disciplined, minimal.
+- Voice = short manifesto lines, almost like captions on dark editorial posters.
+- Do NOT sound corporate, polished, inspirational-speaker, or generic "aesthetic brand" copy.
+- Keep lines specific to identity, silence, focus, discipline, build-in-private energy.
+- Prefer concrete, hard words over soft decorative words.
+- Prioritize negative-space style writing (short, intentional, high signal).
+
+Hard bans (never use these words/phrases):
+- embrace, crafted, timeless, resonance, subtle statements, whisper elegance, art of minimalism
+- elevate, premium quality, discover, unlock, transform your style
+- "for the modern", "where style meets", "step into", "curated"
+
+Reference style (for tone only; do not copy verbatim):
+- Offline is a boundary.
+- Build in silence.
+- Quiet work. Loud results.
+- Let the fabric speak.
+- Not for everyone.
+
+Sequence:
+- Slide 1: hard opener / identity stance
+- Middle slides: discipline, process, texture, restraint, belonging
+- Final slide: soft close + tribe signal (no hard-sell CTA)
+
+Format rules:
+- heading: 2-5 words (punchy, memorable, not salesy).
+- body: 4-12 words (supporting line, sharp and minimal).
+- No hashtags, no emojis, no quotation marks, no exclamation spam.
+- Do not repeat the same wording across slides.
+- At least half of the slides should include one of these energy cues: silence, offline, focus, build, discipline, texture, form, uniform.
+
+Return only valid JSON: { "slides": [{ "heading": "...", "body": "..." }] }`;
+      userPrompt = `Generate ${slideCount} on-brand fashion slides now.`;
     }
 
     const response = await fetchOpenAIWithRetry(
@@ -135,7 +169,7 @@ Make it feel intentional, minimal and like it belongs on an aesthetic Instagram 
             { role: "user", content: userPrompt },
           ],
           response_format: { type: "json_object" },
-          temperature: 0.7,
+          temperature: mode === "3" ? 0.9 : 0.7,
         }),
       }
     );
