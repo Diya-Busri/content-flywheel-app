@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const perPage = Math.min(30, Math.max(1, parseInt(searchParams.get("per_page") || "24", 10)));
 
-  const apiKey = process.env.PEXELS_API_KEY;
+  const apiKey = process.env.PEXELS_API_KEY ?? process.env.NEXT_PUBLIC_PEXELS_API_KEY;
   if (!apiKey) {
     return Response.json(
       { error: "PEXELS_API_KEY is not configured. Get a free key at https://www.pexels.com/api/" },

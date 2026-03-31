@@ -1,4 +1,4 @@
-export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10";
+export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11";
 
 /** Story-style Template Studio modes that share the 8-scene pipeline */
 export type TemplateStudioStoryTemplateId = "ai_story" | "satisfying_build" | "ai_cooking_video";
@@ -45,6 +45,7 @@ export const CREATION_MODE_OPTION_GROUPS: {
       { value: "8", label: "Satisfying Build" },
       { value: "9", label: "AI Cooking Video" },
       { value: "10", label: "Brand Story Video" },
+      { value: "11", label: "🖊️ Stickman Whiteboard Video" },
     ],
   },
 ];

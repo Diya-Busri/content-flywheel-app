@@ -53,6 +53,9 @@ import { BGM_SELECT_OPTIONS, type BgmSelectValue } from "@/lib/bgm-tracks";
 import { SatisfyingBuildSetup } from "@/components/templates/SatisfyingBuildSetup";
 import { AiCookingVideoSetup } from "@/components/templates/AiCookingVideoSetup";
 import { CreatableSelectField } from "@/components/templates/CreatableSelectField";
+import { StickmanWhiteboardSetup } from "@/components/templates/StickmanWhiteboardSetup";
+import { StickmanWhiteboard } from "@/components/templates/StickmanWhiteboard";
+import type { StickmanScene } from "@/components/templates/StickmanWhiteboard";
 import { AiStorySceneVoiceover } from "@/components/ai-story/AiStorySceneVoiceover";
 import { AiStoryAnimateSceneBlock } from "@/components/ai-story/AiStoryAnimateSceneBlock";
 import {
@@ -295,6 +298,12 @@ export default function TemplateStudioClient() {
   /** Mode 9: single photoreal chef reference portrait for identity anchoring (FLUX img2img). */
   const [cookingChefReferenceUrl, setCookingChefReferenceUrl] = useState<string>("");
   const [cookingChefReferenceLoading, setCookingChefReferenceLoading] = useState(false);
+  // ── Stickman Whiteboard state (mode 11) ──────────────────────────────────────
+  const [stickmanTopic, setStickmanTopic] = useState("");
+  const [stickmanSceneCount, setStickmanSceneCount] = useState(6);
+  const [stickmanVoiceId, setStickmanVoiceId] = useState("EXAVITQu4vr4xnSDxMaL");
+  const [stickmanScenes, setStickmanScenes] = useState<StickmanScene[]>([]);
+  const [stickmanLoading, setStickmanLoading] = useState(false);
 
   const [storyVideoExporting, setStoryVideoExporting] = useState(false);
   const [storyVideoExportPhase, setStoryVideoExportPhase] = useState<"saving" | "compiling" | null>(null);
@@ -348,6 +357,7 @@ export default function TemplateStudioClient() {
     mode === "7" ? "ai_story" : mode === "8" ? "satisfying_build" : mode === "9" ? "ai_cooking_video" : undefined;
   const isStoryTemplateMode = mode === "7" || mode === "8" || mode === "9";
   const isAiStoryMode = mode === "7";
+  const isStickmanMode = mode === "11";
 
   const socialMediaPackText = useMemo(() => {
     if (!socialMediaPack) return "";
@@ -378,13 +388,15 @@ export default function TemplateStudioClient() {
             ? brandStoryDayLabel.trim().length > 0 &&
               brandStoryBrandField.trim().length > 0 &&
               brandStoryThemeLine.trim().length > 0
-        : mode === "1" || mode === "4"
-          ? niche.trim().length > 0
-          : mode === "2" || mode === "6"
-            ? brandName.trim().length > 0
-            : mode === "5"
-              ? niche.trim().length > 0
-              : brandName.trim().length > 0;
+            : mode === "11"
+              ? stickmanTopic.trim().length > 0
+              : mode === "1" || mode === "4"
+                ? niche.trim().length > 0
+                : mode === "2" || mode === "6"
+                  ? brandName.trim().length > 0
+                  : mode === "5"
+                    ? niche.trim().length > 0
+                    : brandName.trim().length > 0;
 
   const useImg2ImgSceneImages = useMemo(
     () => Object.keys(characterReferenceUrls).length > 0,
@@ -1914,6 +1926,12 @@ export default function TemplateStudioClient() {
           setBrandStoryVideoUrl(null);
           setBrandStoryVideoError(null);
         }
+
+        const stickM = mode === "11";
+        const stickN = next === "11";
+        if (stickM || stickN) {
+          setStickmanScenes([]);
+        }
       }
       setMode(next);
     },
@@ -2430,7 +2448,18 @@ export default function TemplateStudioClient() {
               />
             )}
 
-            {!isStoryTemplateMode && mode !== "10" && (
+            {isStickmanMode && (
+              <StickmanWhiteboardSetup
+                topic={stickmanTopic}
+                setTopic={setStickmanTopic}
+                sceneCount={stickmanSceneCount}
+                setSceneCount={setStickmanSceneCount}
+                voiceId={stickmanVoiceId}
+                setVoiceId={setStickmanVoiceId}
+              />
+            )}
+
+            {!isStoryTemplateMode && mode !== "10" && !isStickmanMode && (
               <>
             <div className="space-y-2">
               <Label>Number of slides</Label>
@@ -2565,6 +2594,24 @@ export default function TemplateStudioClient() {
                       await runCharacterStylePreview();
                     } else if (mode === "8" || mode === "9") {
                       await runGenerateAiStory();
+                    } else if (isStickmanMode) {
+                      setStickmanLoading(true);
+                      setStickmanScenes([]);
+                      try {
+                        const res = await fetch("/api/templates/stickman/generate", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ topic: stickmanTopic, sceneCount: stickmanSceneCount }),
+                        });
+                        const data = await res.json() as { scenes?: StickmanScene[]; error?: string };
+                        if (!res.ok || data.error) throw new Error(data.error ?? "Generation failed");
+                        setStickmanScenes(data.scenes ?? []);
+                        toast({ title: "Stickman scenes ready!", description: `${data.scenes?.length ?? 0} scenes generated.` });
+                      } catch (e) {
+                        toast({ title: "Generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+                      } finally {
+                        setStickmanLoading(false);
+                      }
                     } else if (mode === "10") {
                       await runBrandStoryVideo();
                     } else {
@@ -2577,6 +2624,7 @@ export default function TemplateStudioClient() {
                     (isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
                     ((mode === "8" || mode === "9") && aiStoryLoading) ||
                     (mode === "10" && brandStoryVideoLoading)
+                    (isStickmanMode && stickmanLoading)
                   }
                 >
                   {isAiStoryMode
@@ -2593,10 +2641,15 @@ export default function TemplateStudioClient() {
                           : "Generate episode"
                         : mode === "10"
                           ? "Generate 9:16 Brand Story video"
-                      : "Next — Generate content"}
+                          : isStickmanMode
+                            ? stickmanScenes.length > 0
+                              ? "Regenerate scenes"
+                              : "Generate whiteboard video"
+                            : "Next — Generate content"}
                   {(isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
                   ((mode === "8" || mode === "9") && aiStoryLoading) ||
-                  (mode === "10" && brandStoryVideoLoading) ? (
+                  (mode === "10" && brandStoryVideoLoading) ||
+                  (isStickmanMode && stickmanLoading) ? (
                     <Loader2 className="w-4 h-4 ml-2 animate-spin" />
                   ) : (
                     <ArrowRight className="w-4 h-4 ml-2" />
@@ -2641,6 +2694,52 @@ export default function TemplateStudioClient() {
         )}
 
         </>
+      )}
+
+      {/* ── Stickman Whiteboard Preview ──────────────────────────────────── */}
+      {step === 1 && isStickmanMode && stickmanScenes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>🖊️ Whiteboard Preview</CardTitle>
+            <CardDescription>
+              Press play to watch the stickman draw scene-by-scene with AI voiceover. Each scene auto-advances when the voiceover finishes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <StickmanWhiteboard
+              scenes={stickmanScenes}
+              voiceId={stickmanVoiceId}
+              autoPlay={false}
+              onComplete={() =>
+                toast({ title: "Playback complete!", description: "Your whiteboard video is ready." })
+              }
+            />
+
+            {/* Scene list */}
+            <div className="border-t pt-4 space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">All scenes</p>
+              <div className="space-y-2">
+                {stickmanScenes.map((s) => (
+                  <div key={s.sceneIndex} className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-orange-100 text-orange-600 text-xs font-bold flex items-center justify-center">
+                      {s.sceneIndex + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-foreground">{s.caption}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Pose: {s.pose}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Export note */}
+            <div className="rounded-lg bg-muted/60 border p-3 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground mb-1">Next steps</p>
+              <p>Once you&apos;re happy with the scenes, click <strong>Regenerate scenes</strong> to tweak, or use the Video Timeline to combine your stickman frames with captions and music for a full MP4 export.</p>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {step === 1 && isStoryTemplateMode && aiStoryScenes.length > 0 && (

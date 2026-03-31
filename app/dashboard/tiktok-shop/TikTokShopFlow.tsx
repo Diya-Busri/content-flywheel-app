@@ -854,7 +854,7 @@ export default function TikTokShopFlow() {
                     className="w-full gap-2 bg-orange-500 hover:bg-orange-600"
                   >
                     <FileText className="w-4 h-4" />
-                    Create Video Guide
+                    Build This Video → Step 5
                   </Button>
                 </div>
               );
