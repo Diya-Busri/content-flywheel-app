@@ -190,6 +190,28 @@ export async function POST(request: NextRequest) {
       ? "caption: string (20-38 words, natural narration for long-form YouTube, include connective transitions between ideas)"
       : "caption: string (15-25 words, clear and conversational, directly explaining the topic)";
 
+    // Build a required pose sequence that guarantees visual variety
+    const ALL_POSES = ["pointing","standing","thinking","sitting","walking","celebrating","defeated","arms-raised"] as const;
+    // For short videos, build an explicit per-scene pose assignment so no two consecutive scenes share a pose
+    const poseSequence: string[] = [];
+    if (!longMode) {
+      const pool = [...ALL_POSES];
+      for (let i = 0; i < sceneCount; i++) {
+        const last = poseSequence[i - 1];
+        const available = pool.filter(p => p !== last);
+        // pick contextually: first scene = pointing, last = arms-raised or celebrating, middle variety
+        let pick: string;
+        if (i === 0) pick = "pointing";
+        else if (i === sceneCount - 1) pick = "arms-raised";
+        else if (i === Math.floor(sceneCount / 2)) pick = "sitting";
+        else pick = available[i % available.length] ?? "standing";
+        poseSequence.push(pick);
+      }
+    }
+    const poseHint = !longMode
+      ? `\nCRITICAL: Use EXACTLY this pose for each scene in order: ${poseSequence.map((p,i)=>`scene ${i}=${p}`).join(", ")}. Do NOT deviate.`
+      : `\nPose variety rules: NEVER use the same pose twice in a row. Cycle through all 8 poses. Every 3rd scene must differ from the previous 2.`;
+
     const prompt = `Create a ${sceneCount}-scene whiteboard explainer video script about: "${topic}".
 
 ${runtimeLine}
@@ -197,39 +219,33 @@ ${runtimeLine}
 Return ONLY a JSON object with a "scenes" array. Each scene object must have exactly these keys:
 - sceneIndex: number (0-based, 0 through ${sceneCount - 1})
 - ${captionGuide}
-- pose: exactly one of these string values: "standing" | "thinking" | "sitting" | "celebrating" | "pointing" | "defeated" | "arms-raised" | "walking"
+- pose: exactly one of: "standing" | "thinking" | "sitting" | "celebrating" | "pointing" | "defeated" | "arms-raised" | "walking"
 - layout: exactly one of: "left-presenter" | "center-presenter" | "right-presenter" | "desk-scene"
 - keyObject: exactly one of: "chart" | "clock" | "money" | "warning" | "audience" | "idea" | "brand"
 - camera: exactly one of: "wide" | "medium"
 - shotTemplate: exactly one of: "desk-explain" | "stand-explain" | "point-to-board" | "walk-and-talk" | "result-moment"
-
-Pose selection guide:
-- Scene 0 (hook/intro): "pointing" or "standing"
-- Problem/challenge scenes: "thinking" or "defeated"
-- Key facts/main points: "pointing" or "standing"
-- Reflection/consideration: "sitting" or "thinking"
-- Solutions/steps: "walking" or "pointing"
-- Breakthroughs/wins: "celebrating" or "arms-raised"
-- Final summary/CTA: "arms-raised" or "celebrating"
+${poseHint}
 
 Layout rules:
-- Use "desk-scene" when pose is "sitting"
-- Alternate other scenes across left/center/right presenter layouts for visual variety
+- Use "desk-scene" + "desk-explain" when pose is "sitting"
+- Rotate through left/center/right presenter for all other layouts — never the same layout twice in a row
+- Use "wide" camera for opening and closing scenes, "medium" for everything else
 
 Object rules:
-- Pick the keyObject that best matches each caption meaning (example: growth -> chart, urgency -> clock, trust/risk -> warning, marketing/community -> audience)
+- Pick keyObject that best matches the caption meaning: growth/numbers → chart, urgency/routine → clock, money/business → money, risk/warning → warning, community/followers → audience, creativity/ideas → idea, brand/business identity → brand
+- Vary the keyObject — never the same object more than twice in a row
 
 Shot template rules:
-- "desk-explain" for calm explanatory beats
-- "point-to-board" for teaching/facts
-- "walk-and-talk" for step/process scenes
-- "result-moment" for wins/summary/cta
-- "stand-explain" for default presenter scenes
+- "point-to-board" for teaching, stats, facts
+- "walk-and-talk" for step-by-step or process scenes
+- "desk-explain" for calm/reflective beats
+- "result-moment" for wins, revelations, summary
+- "stand-explain" as fallback
 
-Additional long-form rules (very important):
-- Spread content across beginning, middle, and end (clear arc).
-- Every 4-6 scenes, introduce a mini-shift (example, story beat, myth-vs-fact, or practical step).
-- Keep captions coherent from scene to scene (avoid repetitive sentence starts).
+Additional long-form rules:
+- Spread content across beginning, middle, and end (clear arc)
+- Every 4-6 scenes introduce a mini-shift (story beat, myth-vs-fact, or practical step)
+- Keep captions coherent, avoid repetitive sentence starts
 
 Return ONLY valid JSON, no markdown, no explanation.`;
 

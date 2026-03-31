@@ -1192,12 +1192,11 @@ function SceneContextDoodles({
   const sceneCycle: Kind[] = ["idea", "growth", "brand", "social", "time", "money", "warning", "growth"];
   const secondary = sceneCycle[Math.abs(animKey) % sceneCycle.length]!;
 
-  const ink = "#1e1b12";
-  const softInk = "rgba(30,27,18,0.55)";
+  const ink = "rgba(30,27,18,0.32)";
   const accent = "#ea580c";
   const style = (
     delay: number,
-    width = 2,
+    width = 1.4,
     stroke: string = ink
   ): React.CSSProperties => ({
     fill: "none",

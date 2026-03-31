@@ -50,19 +50,6 @@ export function StickmanWhiteboardSetup({
   return (
     <>
       <div className="space-y-2">
-        <Label>Video mode</Label>
-        <Select value={longMode ? "long" : "short"} onValueChange={(v) => setLongMode(v === "long")}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="short">Short explainer (preview mode)</SelectItem>
-            <SelectItem value="long">Long YouTube mode (10–35 min)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
         <Label htmlFor="stickman-topic">Topic / Script idea</Label>
         <Input
           id="stickman-topic"
@@ -77,26 +64,7 @@ export function StickmanWhiteboardSetup({
         </p>
       </div>
 
-      {longMode ? (
-        <div className="space-y-2">
-          <Label>Target video length</Label>
-          <Select
-            value={String(targetMinutes)}
-            onValueChange={(v) => setTargetMinutes(Number(v))}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STICKMAN_LONG_DURATION_OPTIONS.map((n) => (
-                <SelectItem key={n} value={String(n)}>
-                  {n} minutes
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : (
+      {!longMode && (
         <div className="space-y-2">
           <Label>Number of scenes</Label>
           <Select
@@ -116,6 +84,44 @@ export function StickmanWhiteboardSetup({
           </Select>
         </div>
       )}
+
+      {/* Advanced: long YouTube mode */}
+      <details className="group">
+        <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors list-none flex items-center gap-1">
+          <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
+          Advanced — Long YouTube mode
+        </summary>
+        <div className="mt-3 space-y-3 pl-1">
+          <div className="space-y-2">
+            <Label>Video mode</Label>
+            <Select value={longMode ? "long" : "short"} onValueChange={(v) => setLongMode(v === "long")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="short">Short explainer (preview)</SelectItem>
+                <SelectItem value="long">Long YouTube (10–35 min, 20+ scenes)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {longMode && (
+            <div className="space-y-2">
+              <Label>Target length</Label>
+              <Select
+                value={String(targetMinutes)}
+                onValueChange={(v) => setTargetMinutes(Number(v))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {STICKMAN_LONG_DURATION_OPTIONS.map((n) => (
+                    <SelectItem key={n} value={String(n)}>{n} minutes</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      </details>
 
       <div className="space-y-2">
         <Label>Narrator voice</Label>
