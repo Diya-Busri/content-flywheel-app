@@ -42,7 +42,7 @@ function buildFacebookLoginAuthUrl(callbackUrl: string, state: string): string |
  * Instagram: Facebook Login dialog only (never instagram.com/oauth).
  * client_id = FACEBOOK_APP_ID; redirect_uri = app callback; scopes for Page + Instagram Graph.
  */
-const FACEBOOK_OAUTH_DIALOG_INSTAGRAM = "https://www.facebook.com/v19.0/dialog/oauth";
+const FACEBOOK_OAUTH_DIALOG_INSTAGRAM = "https://www.facebook.com/v21.0/dialog/oauth";
 
 function buildInstagramViaFacebookAuthUrl(callbackUrl: string, state: string): string | null {
   const facebookAppId = process.env.FACEBOOK_APP_ID?.trim() ?? "";

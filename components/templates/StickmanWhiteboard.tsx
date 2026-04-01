@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -609,45 +609,66 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
 
 // ─── Caption lines (4 words per line, first line orange) ─────────────────────
 
+/** TikTok-style caption: one line (≤4 words) at a time, cycling with a fade. */
 function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number }) {
-  const words = text.split(/\s+/).filter(Boolean);
-  const wordsPerLine = words.length > 64 ? 9 : words.length > 48 ? 8 : words.length > 36 ? 7 : words.length > 24 ? 6 : 5;
-  const lines: string[] = [];
-  for (let i = 0; i < words.length; i += wordsPerLine) {
-    lines.push(words.slice(i, i + wordsPerLine).join(" "));
-  }
-  const lineCount = Math.max(lines.length, 1);
-  const titleSize =
-    lineCount > 9 ? "clamp(15px, 1.9vw, 24px)" :
-    lineCount > 7 ? "clamp(16px, 2.1vw, 28px)" :
-    "clamp(18px, 2.4vw, 34px)";
-  const bodySize =
-    lineCount > 9 ? "clamp(12px, 1.35vw, 18px)" :
-    lineCount > 7 ? "clamp(13px, 1.5vw, 20px)" :
-    "clamp(14px, 1.7vw, 24px)";
-  const lineHeight = lineCount > 8 ? 1.08 : 1.12;
+  const lines = useMemo(() => {
+    const words = text.split(/\s+/).filter(Boolean);
+    const chunks: string[] = [];
+    for (let i = 0; i < words.length; i += 4) {
+      chunks.push(words.slice(i, i + 4).join(" "));
+    }
+    return chunks.length > 0 ? chunks : [text];
+  }, [text]);
+
+  const [lineIdx, setLineIdx] = useState(0);
+  const [visible, setVisible] = useState(true);
+
+  // Reset to first line on scene change
+  useEffect(() => {
+    setLineIdx(0);
+    setVisible(true);
+  }, [sceneKey]);
+
+  // Cycle through lines: hold 1.8 s → fade out → next line
+  useEffect(() => {
+    if (lines.length <= 1) return;
+    const HOLD_MS = 1800;
+    const FADE_MS = 180;
+    const t = setTimeout(() => {
+      if (lineIdx < lines.length - 1) {
+        setVisible(false);
+        setTimeout(() => {
+          setLineIdx(idx => idx + 1);
+          setVisible(true);
+        }, FADE_MS);
+      }
+      // Last line stays visible until next scene
+    }, HOLD_MS);
+    return () => clearTimeout(t);
+  }, [lineIdx, lines.length, sceneKey]);
 
   return (
-    <div key={sceneKey} style={{ position: "relative" }}>
-      {lines.map((line, i) => (
-        <div
-          key={i}
-          className="cf-line"
-          style={{
-            animationDelay: `${100 + i * 260}ms`,
-            fontFamily: "'Caveat', cursive",
-            fontWeight: i === 0 ? 700 : 600,
-            fontSize: i === 0 ? titleSize : bodySize,
-            lineHeight,
-            color: i === 0 ? "#ea580c" : "#1e1b12",
-            marginBottom: i === 0 ? "0.18em" : "0.1em",
-            letterSpacing: i === 0 ? "0.01em" : "0",
-          }}
-        >
-          {line}
-        </div>
-      ))}
-    </div>
+    <span
+      style={{
+        display: "inline-block",
+        background: "rgba(0,0,0,0.62)",
+        borderRadius: "clamp(5px, 0.7vw, 9px)",
+        padding: "0.18em 0.6em 0.22em",
+        fontFamily: "'Caveat', cursive",
+        fontWeight: 700,
+        fontSize: "clamp(17px, 2.8vw, 40px)",
+        color: "#ffffff",
+        textShadow: "0 1px 5px rgba(0,0,0,0.95), 0 0 20px rgba(0,0,0,0.45)",
+        letterSpacing: "0.015em",
+        lineHeight: 1.15,
+        whiteSpace: "nowrap",
+        opacity: visible ? 1 : 0,
+        transition: "opacity 0.18s ease",
+        userSelect: "none",
+      }}
+    >
+      {lines[lineIdx] ?? ""}
+    </span>
   );
 }
 
@@ -1625,27 +1646,12 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
   // Divider height — mod 13 mapped to 3 heights
   const dividerPct = i % 13 < 5 ? "55%" : i % 13 < 9 ? "58%" : "61%";
 
-  // Highlight accent colour — mod 3
-  const accentBgColor = [
-    "rgba(234,88,12,0.09)",
-    "rgba(251,191,36,0.10)",
-    "rgba(234,88,12,0.07)",
-  ][i % 3]!;
 
-  // Build caption position from captionOnLeft + iconTier
+  // Icon layout (caption now lives at bottom-center, icon alternates sides via captionOnLeft)
   const iconWidth = iconTier === 1 ? "26%" : iconTier === 3 ? "30%" : iconTier === 4 ? "34%" : "22%";
   const iconOpacity = iconTier === 4 ? "0.15" : "1";
-  const captionGap = iconTier === 4 ? "40%" : `calc(${iconWidth} + 6%)`;
 
-  const captionPos = captionOnLeft
-    ? { top:"9%", left:"5%", right:captionGap, bottom: dividerPct === "55%" ? "46%" : "42%" }
-    : { top:"9%", left:captionGap, right:"5%", bottom: dividerPct === "55%" ? "46%" : "42%" };
-
-  const highlightPos = captionOnLeft
-    ? { top:"10%", left:"4%", right:captionGap, height:"17%" }
-    : { top:"10%", left:captionGap, right:"4%", height:"17%" };
-
-  // Icon position — opposite side of caption, height varies by tier
+  // Icon position — alternates sides each scene, height varies by tier
   const iconHeight = iconTier === 1 ? "52%" : iconTier === 2 ? "38%" : iconTier === 3 ? "50%" : "46%";
   const iconTop    = iconTier === 2 ? "6%"  : iconTier === 1 ? "7%"  : "9%";
   const iconPos = captionOnLeft
@@ -1664,19 +1670,6 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
       {/* Global styles */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap');
-        @keyframes cf-line {
-          from { opacity: 0; transform: translateX(-18px); }
-          to   { opacity: 1; transform: translateX(0); }
-        }
-        .cf-line { opacity: 0; animation: cf-line 0.42s ease-out forwards; }
-        @keyframes cf-highlight-bar {
-          from { transform: scaleX(0); }
-          to   { transform: scaleX(1); }
-        }
-        .cf-highlight-bar {
-          transform-origin: left center;
-          animation: cf-highlight-bar 0.5s cubic-bezier(.22,1,.36,1) forwards;
-        }
         @keyframes cf-scene-fade {
           from { opacity: 0; }
           to   { opacity: 1; }
@@ -1720,23 +1713,18 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
         {/* Scene fade-in wrapper */}
         <div key={currentIndex} className="cf-scene-fade absolute inset-0">
 
-          {/* Highlight bar behind caption */}
-          <div
-            className="cf-highlight-bar"
-            style={{
-              position: "absolute",
-              top: highlightPos.top,
-              left: highlightPos.left,
-              right: highlightPos.right,
-              height: highlightPos.height,
-              background: accentBgColor,
-              borderRadius: 6,
-              animationDelay: "60ms",
-            }}
-          />
-
-          {/* Caption text */}
-          <div style={{ position: "absolute", ...captionPos, overflow: "hidden" }}>
+          {/* TikTok-style caption — bottom third, centred */}
+          <div style={{
+            position: "absolute",
+            bottom: "11%",
+            left: 0,
+            right: 0,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            pointerEvents: "none",
+            zIndex: 10,
+          }}>
             <AnimatedCaption text={scene.caption} sceneKey={currentIndex} />
           </div>
 

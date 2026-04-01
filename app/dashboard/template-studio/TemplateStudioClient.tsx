@@ -139,6 +139,7 @@ const FONT_OPTIONS: { value: FontStyle; label: string }[] = [
 ];
 
 const LIBRARY_DRAFT_STORAGE_KEY = "content-flywheel-template-studio-library-draft-id";
+const STICKMAN_LIBRARY_DRAFT_STORAGE_KEY = "content-flywheel-stickman-library-draft-id";
 const TIMELINE_SCENE_DURATION = 5;
 /** AI Story generate route returns exactly 8 scenes. */
 const AI_STORY_SCENE_COUNT = 8;
@@ -301,9 +302,22 @@ export default function TemplateStudioClient() {
   // ── Stickman Whiteboard state (mode 11) ──────────────────────────────────────
   const [stickmanTopic, setStickmanTopic] = useState("");
   const [stickmanSceneCount, setStickmanSceneCount] = useState(6);
+  const [stickmanLongMode, setStickmanLongMode] = useState(false);
+  const [stickmanTargetMinutes, setStickmanTargetMinutes] = useState(15);
   const [stickmanVoiceId, setStickmanVoiceId] = useState("EXAVITQu4vr4xnSDxMaL");
   const [stickmanScenes, setStickmanScenes] = useState<StickmanScene[]>([]);
   const [stickmanLoading, setStickmanLoading] = useState(false);
+  const [stickmanLibrarySaving, setStickmanLibrarySaving] = useState(false);
+  const [stickmanExporting, setStickmanExporting] = useState(false);
+  const [stickmanTikTokPosting, setStickmanTikTokPosting] = useState(false);
+  const [stickmanLibraryVideoId, setStickmanLibraryVideoId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return sessionStorage.getItem(STICKMAN_LIBRARY_DRAFT_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
 
   const [storyVideoExporting, setStoryVideoExporting] = useState(false);
   const [storyVideoExportPhase, setStoryVideoExportPhase] = useState<"saving" | "compiling" | null>(null);
@@ -358,6 +372,304 @@ export default function TemplateStudioClient() {
   const isStoryTemplateMode = mode === "7" || mode === "8" || mode === "9";
   const isAiStoryMode = mode === "7";
   const isStickmanMode = mode === "11";
+
+  const persistStickmanDraft = useCallback(async (silent = false): Promise<string | null> => {
+    if (!isStickmanMode || stickmanScenes.length === 0) return null;
+    if (!silent) setStickmanLibrarySaving(true);
+    try {
+      const baseTopic = stickmanTopic.trim() || "Stickman Whiteboard";
+      const draftTitle = `Stickman: ${baseTopic.slice(0, 72)} (Draft)`;
+      const estimatedSceneDuration = stickmanLongMode ? 28 : 12;
+      let runStart = 0;
+      const timelineScenes = stickmanScenes.map((scene, idx) => {
+        const id = `stickman-${idx + 1}`;
+        const startTime = runStart;
+        runStart += estimatedSceneDuration;
+        return {
+          id,
+          title: scene.caption.slice(0, 80),
+          duration: estimatedSceneDuration,
+          color: SCENE_COLOR_HEX[idx % SCENE_COLOR_HEX.length] ?? "#3B82F6",
+          startTime,
+          elements: [{ id: `${id}-bg`, type: "background", media: null }],
+          pose: scene.pose,
+          layout: scene.layout ?? "left-presenter",
+          keyObject: scene.keyObject ?? "idea",
+          camera: scene.camera ?? "medium",
+          shotTemplate: scene.shotTemplate ?? "stand-explain",
+        };
+      });
+      const totalDuration = timelineScenes.reduce((acc, s) => acc + s.duration, 0);
+      const timedCaptions = timelineScenes.map((s, i) => ({
+        id: `cap-stickman-${i + 1}`,
+        text: stickmanScenes[i]?.caption ?? "",
+        startTime: s.startTime,
+        endTime: s.startTime + s.duration,
+      }));
+      const payloadContent = {
+        scenes: timelineScenes,
+        captions: timedCaptions,
+        totalDuration,
+        aspectRatio: "16:9",
+        sourceType: "stickman-whiteboard",
+        stickmanScenes,
+      };
+
+      if (stickmanLibraryVideoId) {
+        const patchRes = await fetch(`/api/video-timeline/videos/${encodeURIComponent(stickmanLibraryVideoId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: draftTitle,
+            metadata: payloadContent,
+          }),
+        });
+        const patchData = await patchRes.json().catch(() => ({}));
+        if (!patchRes.ok) {
+          throw new Error(typeof patchData?.error === "string" ? patchData.error : "Failed to update stickman draft");
+        }
+        if (!silent) {
+          toast({ title: "Saved to My Library", description: "Your stickman draft is now in My Library." });
+        }
+        return stickmanLibraryVideoId;
+      } else {
+        const res = await fetch("/api/video-timeline/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: draftTitle,
+            content: payloadContent,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.id) {
+          throw new Error(typeof data?.error === "string" ? data.error : "Failed to save stickman draft");
+        }
+        setStickmanLibraryVideoId(data.id as string);
+        try {
+          sessionStorage.setItem(STICKMAN_LIBRARY_DRAFT_STORAGE_KEY, data.id as string);
+        } catch {
+          // ignore
+        }
+        if (!silent) {
+          toast({ title: "Saved to My Library", description: "Your stickman draft is now in My Library." });
+        }
+        return data.id as string;
+      }
+    } catch (e) {
+      if (!silent) {
+        toast({
+          title: "Could not save",
+          description: e instanceof Error ? e.message : "Failed to save stickman draft",
+          variant: "destructive",
+        });
+      }
+      return null;
+    } finally {
+      if (!silent) setStickmanLibrarySaving(false);
+    }
+  }, [isStickmanMode, stickmanLibraryVideoId, stickmanLongMode, stickmanScenes, stickmanTopic, toast]);
+
+  const saveStickmanToLibrary = useCallback(async () => {
+    setStickmanLibrarySaving(true);
+    await persistStickmanDraft(false);
+  }, [persistStickmanDraft]);
+
+  const quickScheduleStickmanYouTube = useCallback(async () => {
+    try {
+      const accRes = await fetch("/api/connected-accounts");
+      const accData = await accRes.json().catch(() => ({}));
+      const connected = Array.isArray(accData.connected) ? accData.connected : [];
+      const yt = connected.find((a: { platform?: string }) => a.platform === "youtube");
+      if (!yt?.id) {
+        toast({
+          title: "No YouTube account connected",
+          description: "Connect YouTube in Settings > Connected accounts first.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const scheduleDate = new Date(Date.now() + 5 * 60 * 1000);
+      const title = `${stickmanTopic.trim() || "Faceless Brand"} | Stickman Whiteboard`;
+      const description =
+        `${stickmanTopic.trim()}\n\n` +
+        `Stickman whiteboard explainer created in Content Flywheel.\n\n` +
+        `#facelessbrand #youtubegrowth #contentstrategy`;
+
+      const res = await fetch("/api/scheduled-posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contentType: "youtube-video-post",
+          platform: "youtube",
+          scheduledTime: scheduleDate.toISOString(),
+          contentJson: {
+            source: "template-studio-stickman",
+            youtubeAccountId: yt.id,
+            title,
+            description,
+            keywords: ["faceless brand", "personal brand", "youtube growth", "content strategy"],
+            sceneCount: stickmanScenes.length,
+            topic: stickmanTopic.trim(),
+          },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data?.error === "string" ? data.error : "Failed to queue YouTube post");
+      }
+      toast({
+        title: "Saved to YouTube queue",
+        description: "Post metadata is scheduled and ready for YouTube publishing flow.",
+      });
+    } catch (e) {
+      toast({
+        title: "Could not save to YouTube queue",
+        description: e instanceof Error ? e.message : "Failed",
+        variant: "destructive",
+      });
+    }
+  }, [stickmanScenes.length, stickmanTopic, toast]);
+
+  const exportStickmanFromHere = useCallback(async () => {
+    if (stickmanScenes.length === 0) {
+      toast({ title: "Nothing to export", description: "Generate stickman scenes first.", variant: "destructive" });
+      return;
+    }
+    setStickmanExporting(true);
+    try {
+      // Direct export — bypasses Video Timeline entirely.
+      const res = await fetch("/api/templates/stickman/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: stickmanTopic.trim(),
+          longMode: stickmanLongMode,
+          voiceId: stickmanVoiceId,
+          scenes: stickmanScenes,
+        }),
+      });
+      const data = await res.json().catch(() => ({} as { url?: string; error?: string }));
+      if (!res.ok || !data?.url) {
+        throw new Error(typeof data?.error === "string" ? data.error : "Export failed — please try again");
+      }
+
+      // fetch → blob so the browser saves with the right filename regardless of CORS headers.
+      const fileName = `${(stickmanTopic.trim() || "stickman-video").slice(0, 64)}.mp4`;
+      try {
+        const fileRes = await fetch(data.url);
+        if (!fileRes.ok) throw new Error(`Fetch ${fileRes.status}`);
+        const blob = await fileRes.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = fileName;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
+      } catch {
+        // Fallback: open in new tab if blob download fails
+        window.open(data.url, "_blank", "noopener,noreferrer");
+      }
+
+      toast({
+        title: "MP4 downloading",
+        description: "Check your Downloads folder. In Chrome: ⌘⇧J · In Finder: Go → Downloads.",
+      });
+    } catch (e) {
+      toast({
+        title: "Export failed",
+        description: e instanceof Error ? e.message : "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setStickmanExporting(false);
+    }
+  }, [stickmanLongMode, stickmanScenes, stickmanTopic, stickmanVoiceId, toast]);
+
+  /** Export the video then post it directly to TikTok via the Content Posting API. */
+  const postStickmanToTikTok = useCallback(async () => {
+    if (stickmanScenes.length === 0) {
+      toast({ title: "Nothing to post", description: "Generate scenes first.", variant: "destructive" });
+      return;
+    }
+    setStickmanTikTokPosting(true);
+    try {
+      // Step 1 — check TikTok is connected
+      const accRes = await fetch("/api/connected-accounts");
+      const accData = await accRes.json().catch(() => ({}));
+      const connected = Array.isArray(accData.connected) ? accData.connected : [];
+      const tiktokAccount = connected.find((a: { platform?: string }) => a.platform === "tiktok");
+      if (!tiktokAccount?.id) {
+        toast({
+          title: "No TikTok account connected",
+          description: "Go to Settings → Connected accounts to link your TikTok.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Step 2 — export video to get a public URL
+      toast({ title: "Exporting video…", description: "Rendering your stickman video for TikTok." });
+      const exportRes = await fetch("/api/templates/stickman/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: stickmanTopic.trim(),
+          longMode: stickmanLongMode,
+          voiceId: stickmanVoiceId,
+          scenes: stickmanScenes,
+        }),
+      });
+      const exportData = (await exportRes.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!exportRes.ok || !exportData.url) {
+        throw new Error(exportData.error ?? "Video export failed — please try again.");
+      }
+
+      // Step 3 — post to TikTok
+      const title = (stickmanTopic.trim() || "Stickman Whiteboard").slice(0, 150);
+      const postRes = await fetch("/api/tiktok/post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoUrl: exportData.url,
+          title,
+          privacyLevel: "SELF_ONLY", // saved as draft — user publishes from TikTok
+          accountId: tiktokAccount.id,
+        }),
+      });
+      const postData = (await postRes.json().catch(() => ({}))) as {
+        publishId?: string;
+        ok?: boolean;
+        error?: string;
+      };
+      if (!postRes.ok || !postData.ok) {
+        throw new Error(postData.error ?? "TikTok upload failed.");
+      }
+
+      toast({
+        title: "Posted to TikTok",
+        description: `Saved as a draft on @${tiktokAccount.platformUsername ?? "your account"}. Open TikTok to review and publish.`,
+      });
+    } catch (e) {
+      toast({
+        title: "TikTok post failed",
+        description: e instanceof Error ? e.message : "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setStickmanTikTokPosting(false);
+    }
+  }, [stickmanLongMode, stickmanScenes, stickmanTopic, stickmanVoiceId, toast]);
+
+  // Auto-save stickman drafts once scenes are generated.
+  useEffect(() => {
+    if (!isStickmanMode || stickmanScenes.length === 0) return;
+    void persistStickmanDraft(true);
+  }, [isStickmanMode, stickmanScenes, stickmanTopic, persistStickmanDraft]);
 
   const socialMediaPackText = useMemo(() => {
     if (!socialMediaPack) return "";
@@ -1885,6 +2197,16 @@ export default function TemplateStudioClient() {
     setVoiceoverUrls({});
   }, [voiceoverEnabled]);
 
+  useEffect(() => {
+    const value = stickmanTopic.trim();
+    if (!value) return;
+    try {
+      localStorage.setItem("cf:lastThumbnailTopic", value);
+    } catch {
+      // ignore
+    }
+  }, [stickmanTopic]);
+
   // Dev: expose scenes with imageUrl so you can run console.log(scenes) and verify full URLs
   useEffect(() => {
     if (typeof window === "undefined" || process.env.NODE_ENV !== "development") return;
@@ -2454,6 +2776,10 @@ export default function TemplateStudioClient() {
                 setTopic={setStickmanTopic}
                 sceneCount={stickmanSceneCount}
                 setSceneCount={setStickmanSceneCount}
+                longMode={stickmanLongMode}
+                setLongMode={setStickmanLongMode}
+                targetMinutes={stickmanTargetMinutes}
+                setTargetMinutes={setStickmanTargetMinutes}
                 voiceId={stickmanVoiceId}
                 setVoiceId={setStickmanVoiceId}
               />
@@ -2601,12 +2927,105 @@ export default function TemplateStudioClient() {
                         const res = await fetch("/api/templates/stickman/generate", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ topic: stickmanTopic, sceneCount: stickmanSceneCount }),
+                          body: JSON.stringify({
+                            topic: stickmanTopic,
+                            sceneCount: stickmanSceneCount,
+                            longMode: stickmanLongMode,
+                            targetMinutes: stickmanTargetMinutes,
+                          }),
                         });
-                        const data = await res.json() as { scenes?: StickmanScene[]; error?: string };
+                        const data = await res.json() as { scenes?: StickmanScene[]; error?: string; savedDraftId?: string };
                         if (!res.ok || data.error) throw new Error(data.error ?? "Generation failed");
-                        setStickmanScenes(data.scenes ?? []);
-                        toast({ title: "Stickman scenes ready!", description: `${data.scenes?.length ?? 0} scenes generated.` });
+                        const generatedScenes = data.scenes ?? [];
+                        setStickmanScenes(generatedScenes);
+                        if (typeof data.savedDraftId === "string" && data.savedDraftId) {
+                          setStickmanLibraryVideoId(data.savedDraftId);
+                          try {
+                            sessionStorage.setItem(STICKMAN_LIBRARY_DRAFT_STORAGE_KEY, data.savedDraftId);
+                          } catch {
+                            // ignore
+                          }
+                        }
+                        // Save immediately when scenes are generated so it shows in My Library.
+                        try {
+                          const estimatedSceneDuration = stickmanLongMode ? 28 : 12;
+                          let runStart = 0;
+                          const timelineScenes = generatedScenes.map((scene, idx) => {
+                            const id = `stickman-${idx + 1}`;
+                            const startTime = runStart;
+                            runStart += estimatedSceneDuration;
+                            return {
+                              id,
+                              title: scene.caption.slice(0, 80),
+                              duration: estimatedSceneDuration,
+                              color: SCENE_COLOR_HEX[idx % SCENE_COLOR_HEX.length] ?? "#3B82F6",
+                              startTime,
+                              elements: [{ id: `${id}-bg`, type: "background", media: null }],
+                              pose: scene.pose,
+                              layout: scene.layout ?? "left-presenter",
+                              keyObject: scene.keyObject ?? "idea",
+                              camera: scene.camera ?? "medium",
+                              shotTemplate: scene.shotTemplate ?? "stand-explain",
+                            };
+                          });
+                          const totalDuration = timelineScenes.reduce((acc, s) => acc + s.duration, 0);
+                          const timedCaptions = timelineScenes.map((s, i) => ({
+                            id: `cap-stickman-${i + 1}`,
+                            text: generatedScenes[i]?.caption ?? "",
+                            startTime: s.startTime,
+                            endTime: s.startTime + s.duration,
+                          }));
+                          const payloadContent = {
+                            scenes: timelineScenes,
+                            captions: timedCaptions,
+                            totalDuration,
+                            aspectRatio: "16:9",
+                            sourceType: "stickman-whiteboard",
+                            stickmanScenes: generatedScenes,
+                          };
+                          const baseTopic = stickmanTopic.trim() || "Stickman Whiteboard";
+                          const draftTitle = `Stickman: ${baseTopic.slice(0, 72)} (Draft)`;
+                          if (stickmanLibraryVideoId) {
+                            const patchRes = await fetch(`/api/video-timeline/videos/${encodeURIComponent(stickmanLibraryVideoId)}`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ title: draftTitle, metadata: payloadContent }),
+                            });
+                            const patchData = await patchRes.json().catch(() => ({}));
+                            if (!patchRes.ok) {
+                              throw new Error(
+                                typeof patchData?.error === "string" ? patchData.error : "Failed to update stickman draft"
+                              );
+                            }
+                          } else {
+                            const saveRes = await fetch("/api/video-timeline/save", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ title: draftTitle, content: payloadContent }),
+                            });
+                            const saveData = await saveRes.json().catch(() => ({}));
+                            if (!saveRes.ok || !saveData?.id) {
+                              throw new Error(
+                                typeof saveData?.error === "string" ? saveData.error : "Failed to save stickman draft"
+                              );
+                            }
+                            setStickmanLibraryVideoId(saveData.id as string);
+                            try {
+                              sessionStorage.setItem(STICKMAN_LIBRARY_DRAFT_STORAGE_KEY, saveData.id as string);
+                            } catch {
+                              // ignore
+                            }
+                          }
+                          toast({ title: "Saved to My Library", description: "Stickman draft saved." });
+                        } catch (saveErr) {
+                          console.error("[stickman auto-save]", saveErr);
+                          toast({
+                            title: "Could not save to library",
+                            description: saveErr instanceof Error ? saveErr.message : "Auto-save failed",
+                            variant: "destructive",
+                          });
+                        }
+                        toast({ title: "Stickman scenes ready!", description: `${generatedScenes.length} scenes generated.` });
                       } catch (e) {
                         toast({ title: "Generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
                       } finally {
@@ -2623,7 +3042,7 @@ export default function TemplateStudioClient() {
                     !canProceedStep1 ||
                     (isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
                     ((mode === "8" || mode === "9") && aiStoryLoading) ||
-                    (mode === "10" && brandStoryVideoLoading)
+                    (mode === "10" && brandStoryVideoLoading) ||
                     (isStickmanMode && stickmanLoading)
                   }
                 >
@@ -2644,7 +3063,9 @@ export default function TemplateStudioClient() {
                           : isStickmanMode
                             ? stickmanScenes.length > 0
                               ? "Regenerate scenes"
-                              : "Generate whiteboard video"
+                              : stickmanLongMode
+                                ? "Generate long YouTube storyboard"
+                                : "Generate whiteboard video"
                             : "Next — Generate content"}
                   {(isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
                   ((mode === "8" || mode === "9") && aiStoryLoading) ||
@@ -2726,7 +3147,9 @@ export default function TemplateStudioClient() {
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="text-foreground">{s.caption}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Pose: {s.pose}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Pose: {s.pose} · Layout: {s.layout ?? "left-presenter"} · Object: {s.keyObject ?? "idea"} · Camera: {s.camera ?? "medium"} · Shot: {s.shotTemplate ?? "stand-explain"}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -2736,7 +3159,52 @@ export default function TemplateStudioClient() {
             {/* Export note */}
             <div className="rounded-lg bg-muted/60 border p-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">Next steps</p>
-              <p>Once you&apos;re happy with the scenes, click <strong>Regenerate scenes</strong> to tweak, or use the Video Timeline to combine your stickman frames with captions and music for a full MP4 export.</p>
+              <p>Once you&apos;re happy with the scenes, export your video as MP4, save it to your library, or click <strong>Regenerate scenes</strong> to tweak the content.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void exportStickmanFromHere()}
+                  disabled={stickmanExporting}
+                >
+                  {stickmanExporting ? "Starting export..." : "Export MP4 now"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={saveStickmanToLibrary}
+                  disabled={stickmanLibrarySaving}
+                >
+                  {stickmanLibrarySaving ? "Saving..." : "Save to My Library"}
+                </Button>
+                {stickmanLibraryVideoId ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push("/dashboard/library")}
+                  >
+                    View in Library
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void quickScheduleStickmanYouTube()}
+                >
+                  Save to YouTube queue
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void postStickmanToTikTok()}
+                  disabled={stickmanTikTokPosting || stickmanExporting}
+                >
+                  {stickmanTikTokPosting ? "Posting to TikTok…" : "Post to TikTok"}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

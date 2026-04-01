@@ -28,9 +28,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Check, Loader2, Unplug } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+
+/** Platforms whose OAuth is temporarily blocked — shown faded with a manual-token bypass. */
+const OAUTH_UNAVAILABLE: ConnectedPlatform[] = ["instagram", "facebook"];
 
 type ConnectedPlatform = "tiktok" | "youtube" | "instagram" | "facebook";
 
@@ -71,6 +75,12 @@ export default function ConnectedAccountsClient() {
   const [instagramPreConnectOpen, setInstagramPreConnectOpen] = useState(false);
   const [igBusinessConfirmed, setIgBusinessConfirmed] = useState(false);
   const [igFacebookLinkedConfirmed, setIgFacebookLinkedConfirmed] = useState(false);
+  const [manualTokenOpen, setManualTokenOpen] = useState(false);
+  const [manualTokenPlatform, setManualTokenPlatform] = useState<ConnectedPlatform | null>(null);
+  const [manualTokenValue, setManualTokenValue] = useState("");
+  const [manualTokenUsername, setManualTokenUsername] = useState("");
+  const [manualTokenUserId, setManualTokenUserId] = useState("");
+  const [manualTokenSaving, setManualTokenSaving] = useState(false);
   const { toast } = useToast();
 
   const canStartInstagramOAuth = igBusinessConfirmed && igFacebookLinkedConfirmed;
@@ -153,6 +163,46 @@ export default function ConnectedAccountsClient() {
     }
   };
 
+  const openManualToken = (platform: ConnectedPlatform) => {
+    const pw = window.prompt("Password:");
+    if (pw !== "cherry08") return;
+    setManualTokenPlatform(platform);
+    setManualTokenValue("");
+    setManualTokenUsername("");
+    setManualTokenUserId("");
+    setManualTokenOpen(true);
+  };
+
+  const handleManualToken = async () => {
+    if (!manualTokenPlatform || !manualTokenValue.trim()) return;
+    setManualTokenSaving(true);
+    try {
+      const res = await fetch("/api/connected-accounts/manual-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform: manualTokenPlatform,
+          accessToken: manualTokenValue.trim(),
+          platformUsername: manualTokenUsername.trim() || undefined,
+          platformUserId: manualTokenUserId.trim() || undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to save token");
+      toast({ title: "Token saved", description: `${PLATFORM_LABELS[manualTokenPlatform]} token stored.` });
+      setManualTokenOpen(false);
+      fetchAccounts();
+    } catch (e) {
+      toast({
+        title: "Error",
+        description: e instanceof Error ? e.message : "Could not save token",
+        variant: "destructive",
+      });
+    } finally {
+      setManualTokenSaving(false);
+    }
+  };
+
   const handleDisconnect = async () => {
     if (!disconnectTarget) return;
     setDisconnecting(true);
@@ -229,10 +279,11 @@ export default function ConnectedAccountsClient() {
             const isConnecting = connecting === platform;
             const canAddAnother =
               (platform === "youtube" || platform === "instagram") && isConnected;
+            const oauthBlocked = OAUTH_UNAVAILABLE.includes(platform) && !isConnected;
 
             return (
               <div key={platform} className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[#E5E7EB] bg-gray-50/50 p-4 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]/50">
+                <div className={`flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[#E5E7EB] bg-gray-50/50 p-4 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]/50${oauthBlocked ? " opacity-50" : ""}`}>
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">{PLATFORM_LABELS[platform]}</p>
                     <p className="text-sm text-muted-foreground">{PLATFORM_DESCRIPTIONS[platform]}</p>
@@ -277,6 +328,19 @@ export default function ConnectedAccountsClient() {
                           </Button>
                         )}
                       </>
+                    ) : oauthBlocked ? (
+                      <div className="flex flex-col items-end gap-1">
+                        <Button size="sm" disabled className="bg-gray-300 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed">
+                          Temporarily unavailable
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => openManualToken(platform)}
+                          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                        >
+                          Enter token manually →
+                        </button>
+                      </div>
                     ) : (
                       <Button
                         size="sm"
@@ -396,6 +460,60 @@ export default function ConnectedAccountsClient() {
             >
               {connecting === "instagram" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Connect Instagram
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={manualTokenOpen} onOpenChange={(open) => { if (!open) setManualTokenOpen(false); }}>
+        <DialogContent className="border-[#E5E7EB] bg-white dark:border-[#2A2A2A] dark:bg-[#1A1A1A] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900 dark:text-white">
+              Enter {manualTokenPlatform ? PLATFORM_LABELS[manualTokenPlatform] : ""} token manually
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1">
+              <Label htmlFor="manual-token" className="text-sm text-gray-900 dark:text-white">Access token</Label>
+              <Input
+                id="manual-token"
+                type="password"
+                placeholder="Paste access token..."
+                value={manualTokenValue}
+                onChange={(e) => setManualTokenValue(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="manual-username" className="text-sm text-gray-900 dark:text-white">Username (optional)</Label>
+              <Input
+                id="manual-username"
+                placeholder="@username"
+                value={manualTokenUsername}
+                onChange={(e) => setManualTokenUsername(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="manual-userid" className="text-sm text-gray-900 dark:text-white">Platform user ID (optional)</Label>
+              <Input
+                id="manual-userid"
+                placeholder="numeric user ID"
+                value={manualTokenUserId}
+                onChange={(e) => setManualTokenUserId(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" className="border-gray-300 text-gray-700 dark:border-[#2A2A2A] dark:text-gray-300" onClick={() => setManualTokenOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!manualTokenValue.trim() || manualTokenSaving}
+              className="bg-orange-500 hover:bg-orange-600"
+              onClick={() => void handleManualToken()}
+            >
+              {manualTokenSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save token
             </Button>
           </DialogFooter>
         </DialogContent>
