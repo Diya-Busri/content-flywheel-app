@@ -2923,7 +2923,7 @@ export default function TemplateStudioClient() {
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={kineticPreviewVoiceover} onChange={(e) => setKineticPreviewVoiceover(e.target.checked)} className="accent-orange-500 w-4 h-4" />
-                  <span className="text-sm">🔊 Preview voiceover <span className="text-muted-foreground">(browser voice — export uses ElevenLabs)</span></span>
+                  <span className="text-sm">🔊 Preview voiceover (ElevenLabs)</span>
                 </label>
               </div>
             )}
@@ -3475,7 +3475,7 @@ export default function TemplateStudioClient() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <KineticTypographyPreview data={kineticData} voiceover={kineticPreviewVoiceover} aspectRatio={kineticFormLength === "long" ? "16:9" : "9:16"} />
+            <KineticTypographyPreview data={kineticData} voiceover={kineticPreviewVoiceover} aspectRatio={kineticFormLength === "long" ? "16:9" : "9:16"} voiceId={kineticVoiceId} />
             <div className="rounded-lg bg-muted/60 border p-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-2">Export options</p>
               <div className="flex flex-wrap gap-2">

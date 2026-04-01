@@ -144,17 +144,22 @@ export const KINETIC_VOICE_OPTIONS = [
   { value: "onwK4e9ZLuTAKqWW03F9", label: "Daniel (professional)" },
 ];
 
-export function KineticTypographyPreview({ data, voiceover = false, aspectRatio = "9:16" }: { data: KineticData; voiceover?: boolean; aspectRatio?: "9:16" | "16:9" }) {
+export function KineticTypographyPreview({ data, voiceover = false, aspectRatio = "9:16", voiceId }: { data: KineticData; voiceover?: boolean; aspectRatio?: "9:16" | "16:9"; voiceId?: string }) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const scheme = SCHEMES[data.colorScheme];
   const total = data.scenes.length;
 
+  const stopAudio = () => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+  };
+
   const goTo = (idx: number) => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (voiceover && typeof window !== "undefined") window.speechSynthesis?.cancel();
+    stopAudio();
     setCurrentIdx(idx);
   };
 
@@ -174,25 +179,30 @@ export function KineticTypographyPreview({ data, voiceover = false, aspectRatio 
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [playing, currentIdx, total, data.scenes]);
 
-  // Voiceover: speak each scene's text when playing
+  // Voiceover: use ElevenLabs via preview-tts route
   useEffect(() => {
     if (!voiceover || !playing) return;
     const text = data.scenes[currentIdx]?.text;
-    if (!text || typeof window === "undefined" || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1.05;
-    u.pitch = 1;
-    // Try to use a female English voice for the preview
-    const voices = window.speechSynthesis.getVoices();
-    const femaleVoice = voices.find(v =>
-      v.lang.startsWith("en") &&
-      /samantha|zira|victoria|karen|moira|fiona|tessa|veena|hazel|google uk english female/i.test(v.name)
-    ) ?? voices.find(v => v.lang.startsWith("en") && /female/i.test(v.name));
-    if (femaleVoice) u.voice = femaleVoice;
-    window.speechSynthesis.speak(u);
-    return () => { window.speechSynthesis.cancel(); };
-  }, [currentIdx, playing, voiceover, data.scenes]);
+    if (!text) return;
+    let cancelled = false;
+    stopAudio();
+    fetch("/api/templates/preview-tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, voiceId: voiceId ?? data.voiceId }),
+    })
+      .then(r => r.ok ? r.blob() : Promise.reject())
+      .then(blob => {
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.play().catch(() => {});
+        audio.onended = () => URL.revokeObjectURL(url);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; stopAudio(); };
+  }, [currentIdx, playing, voiceover, voiceId, data.voiceId, data.scenes]);
 
   const scene = data.scenes[currentIdx];
   if (!scene) return null;
@@ -225,7 +235,7 @@ export function KineticTypographyPreview({ data, voiceover = false, aspectRatio 
           className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 disabled:opacity-30 transition"
         >←</button>
         <button
-          onClick={() => { if (playing) { window.speechSynthesis?.cancel(); } setPlaying(p => !p); }}
+          onClick={() => { if (playing) { stopAudio(); } setPlaying(p => !p); }}
           className="px-5 py-1.5 rounded-lg text-sm font-semibold bg-orange-500 hover:bg-orange-600 text-white transition"
         >{playing ? "⏸ Pause" : "▶ Play"}</button>
         <button
