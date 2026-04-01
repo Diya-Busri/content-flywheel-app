@@ -3409,6 +3409,7 @@ export default function TemplateStudioClient() {
               data={viralData}
               settings={{
                 slideDuration: viralFormLength === "long" ? VIRAL_LONG_DURATION : VIRAL_SHORT_DURATION,
+                aspectRatio: viralFormLength === "long" ? "16:9" : "9:16",
                 showTimer: viralShowTimer,
                 voiceover: viralVoiceover,
               } satisfies ViralSettings}
@@ -3422,7 +3423,7 @@ export default function TemplateStudioClient() {
                     const res = await fetch("/api/templates/viral/export", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ ...viralData, slideDuration: viralFormLength === "long" ? VIRAL_LONG_DURATION : VIRAL_SHORT_DURATION }),
+                      body: JSON.stringify({ ...viralData, slideDuration: viralFormLength === "long" ? VIRAL_LONG_DURATION : VIRAL_SHORT_DURATION, aspectRatio: viralFormLength === "long" ? "16:9" : "9:16" }),
                     });
                     if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error((j as {error?:string}).error ?? "Export failed"); }
                     const blob = await res.blob();
