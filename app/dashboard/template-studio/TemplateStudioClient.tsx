@@ -56,6 +56,10 @@ import { CreatableSelectField } from "@/components/templates/CreatableSelectFiel
 import { StickmanWhiteboardSetup } from "@/components/templates/StickmanWhiteboardSetup";
 import { StickmanWhiteboard } from "@/components/templates/StickmanWhiteboard";
 import type { StickmanScene } from "@/components/templates/StickmanWhiteboard";
+import { ViralTemplatePreview } from "@/components/templates/ViralTemplatePreview";
+import type { ViralTemplateData } from "@/components/templates/ViralTemplatePreview";
+import { KineticTypographyPreview, KINETIC_COLOR_OPTIONS, KINETIC_VOICE_OPTIONS } from "@/components/templates/KineticTypographyPreview";
+import type { KineticData } from "@/components/templates/KineticTypographyPreview";
 import { AiStorySceneVoiceover } from "@/components/ai-story/AiStorySceneVoiceover";
 import { AiStoryAnimateSceneBlock } from "@/components/ai-story/AiStoryAnimateSceneBlock";
 import {
@@ -319,6 +323,23 @@ export default function TemplateStudioClient() {
     }
   });
 
+  // ── Viral Template state (mode 12) ──────────────────────────────────────────
+  const [viralTopic, setViralTopic] = useState("");
+  const [viralType, setViralType] = useState<"would-you-rather" | "quiz">("would-you-rather");
+  const [viralRoundCount, setViralRoundCount] = useState(7);
+  const [viralData, setViralData] = useState<import("@/components/templates/ViralTemplatePreview").ViralTemplateData | null>(null);
+  const [viralLoading, setViralLoading] = useState(false);
+  const [viralExporting, setViralExporting] = useState(false);
+
+  // ── Kinetic Typography state (mode 13) ───────────────────────────────────────
+  const [kineticTopic, setKineticTopic] = useState("");
+  const [kineticSceneCount, setKineticSceneCount] = useState(12);
+  const [kineticColorScheme, setKineticColorScheme] = useState<import("@/components/templates/KineticTypographyPreview").KineticData["colorScheme"]>("dark-orange");
+  const [kineticVoiceId, setKineticVoiceId] = useState("EXAVITQu4vr4xnSDxMaL");
+  const [kineticData, setKineticData] = useState<import("@/components/templates/KineticTypographyPreview").KineticData | null>(null);
+  const [kineticLoading, setKineticLoading] = useState(false);
+  const [kineticExporting, setKineticExporting] = useState(false);
+
   const [storyVideoExporting, setStoryVideoExporting] = useState(false);
   const [storyVideoExportPhase, setStoryVideoExportPhase] = useState<"saving" | "compiling" | null>(null);
   const [storyVideoExportUrl, setStoryVideoExportUrl] = useState<string | null>(null);
@@ -372,6 +393,8 @@ export default function TemplateStudioClient() {
   const isStoryTemplateMode = mode === "7" || mode === "8" || mode === "9";
   const isAiStoryMode = mode === "7";
   const isStickmanMode = mode === "11";
+  const isViralMode = mode === "12";
+  const isKineticMode = mode === "13";
 
   const persistStickmanDraft = useCallback(async (silent = false): Promise<string | null> => {
     if (!isStickmanMode || stickmanScenes.length === 0) return null;
@@ -702,7 +725,11 @@ export default function TemplateStudioClient() {
               brandStoryThemeLine.trim().length > 0
             : mode === "11"
               ? stickmanTopic.trim().length > 0
-              : mode === "1" || mode === "4"
+              : mode === "12"
+                ? viralTopic.trim().length > 0
+                : mode === "13"
+                  ? kineticTopic.trim().length > 0
+                  : mode === "1" || mode === "4"
                 ? niche.trim().length > 0
                 : mode === "2" || mode === "6"
                   ? brandName.trim().length > 0
@@ -2770,6 +2797,82 @@ export default function TemplateStudioClient() {
               />
             )}
 
+            {isViralMode && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Format</Label>
+                  <Select value={viralType} onValueChange={(v) => setViralType(v as typeof viralType)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="would-you-rather">🎯 Would You Rather</SelectItem>
+                      <SelectItem value="quiz">🧠 Quiz / Trivia</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Topic or niche</Label>
+                  <Input
+                    placeholder={viralType === "would-you-rather" ? "e.g. Food, Money, Travel, Relationships…" : "e.g. Football, Science, UK History…"}
+                    value={viralTopic}
+                    onChange={(e) => setViralTopic(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Number of rounds ({viralRoundCount})</Label>
+                  <input
+                    type="range" min={3} max={15} value={viralRoundCount}
+                    onChange={(e) => setViralRoundCount(Number(e.target.value))}
+                    className="w-full accent-orange-500"
+                  />
+                  <p className="text-xs text-muted-foreground">{viralRoundCount} rounds — approx. {Math.round(viralRoundCount * 6)}s of content</p>
+                </div>
+              </div>
+            )}
+
+            {isKineticMode && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Topic</Label>
+                  <Input
+                    placeholder="e.g. How to start a clothing brand, 5 money rules…"
+                    value={kineticTopic}
+                    onChange={(e) => setKineticTopic(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Number of scenes ({kineticSceneCount})</Label>
+                  <input
+                    type="range" min={6} max={30} value={kineticSceneCount}
+                    onChange={(e) => setKineticSceneCount(Number(e.target.value))}
+                    className="w-full accent-orange-500"
+                  />
+                  <p className="text-xs text-muted-foreground">{kineticSceneCount} scenes — approx. {Math.round(kineticSceneCount * 3.5)}s video</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Colour scheme</Label>
+                  <Select value={kineticColorScheme} onValueChange={(v) => setKineticColorScheme(v as typeof kineticColorScheme)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {KINETIC_COLOR_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Voice</Label>
+                  <Select value={kineticVoiceId} onValueChange={setKineticVoiceId}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {KINETIC_VOICE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
             {isStickmanMode && (
               <StickmanWhiteboardSetup
                 topic={stickmanTopic}
@@ -2920,6 +3023,42 @@ export default function TemplateStudioClient() {
                       await runCharacterStylePreview();
                     } else if (mode === "8" || mode === "9") {
                       await runGenerateAiStory();
+                    } else if (isViralMode) {
+                      setViralLoading(true);
+                      setViralData(null);
+                      try {
+                        const res = await fetch("/api/templates/viral/generate", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ type: viralType, topic: viralTopic, roundCount: viralRoundCount }),
+                        });
+                        const json = await res.json() as ViralTemplateData & { error?: string };
+                        if (!res.ok || json.error) throw new Error(json.error ?? "Generation failed");
+                        setViralData(json);
+                        toast({ title: "Rounds ready!", description: `${(json.rounds ?? []).length} ${viralType === "quiz" ? "quiz questions" : "dilemmas"} generated.` });
+                      } catch (e) {
+                        toast({ title: "Generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+                      } finally {
+                        setViralLoading(false);
+                      }
+                    } else if (isKineticMode) {
+                      setKineticLoading(true);
+                      setKineticData(null);
+                      try {
+                        const res = await fetch("/api/templates/kinetic/generate", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ topic: kineticTopic, sceneCount: kineticSceneCount, colorScheme: kineticColorScheme }),
+                        });
+                        const json = await res.json() as KineticData & { error?: string };
+                        if (!res.ok || json.error) throw new Error(json.error ?? "Generation failed");
+                        setKineticData({ ...json, voiceId: kineticVoiceId, colorScheme: kineticColorScheme });
+                        toast({ title: "Scenes ready!", description: `${(json.scenes ?? []).length} kinetic scenes generated.` });
+                      } catch (e) {
+                        toast({ title: "Generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+                      } finally {
+                        setKineticLoading(false);
+                      }
                     } else if (isStickmanMode) {
                       setStickmanLoading(true);
                       setStickmanScenes([]);
@@ -3043,7 +3182,9 @@ export default function TemplateStudioClient() {
                     (isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
                     ((mode === "8" || mode === "9") && aiStoryLoading) ||
                     (mode === "10" && brandStoryVideoLoading) ||
-                    (isStickmanMode && stickmanLoading)
+                    (isStickmanMode && stickmanLoading) ||
+                    (isViralMode && viralLoading) ||
+                    (isKineticMode && kineticLoading)
                   }
                 >
                   {isAiStoryMode
@@ -3060,17 +3201,23 @@ export default function TemplateStudioClient() {
                           : "Generate episode"
                         : mode === "10"
                           ? "Generate 9:16 Brand Story video"
-                          : isStickmanMode
-                            ? stickmanScenes.length > 0
-                              ? "Regenerate scenes"
-                              : stickmanLongMode
-                                ? "Generate long YouTube storyboard"
-                                : "Generate whiteboard video"
-                            : "Next — Generate content"}
+                          : isViralMode
+                            ? viralData ? "Regenerate" : viralType === "quiz" ? "Generate quiz" : "Generate Would You Rather"
+                            : isKineticMode
+                              ? kineticData ? "Regenerate scenes" : "Generate kinetic video"
+                              : isStickmanMode
+                                ? stickmanScenes.length > 0
+                                  ? "Regenerate scenes"
+                                  : stickmanLongMode
+                                    ? "Generate long YouTube storyboard"
+                                    : "Generate whiteboard video"
+                                : "Next — Generate content"}
                   {(isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
                   ((mode === "8" || mode === "9") && aiStoryLoading) ||
                   (mode === "10" && brandStoryVideoLoading) ||
-                  (isStickmanMode && stickmanLoading) ? (
+                  (isStickmanMode && stickmanLoading) ||
+                  (isViralMode && viralLoading) ||
+                  (isKineticMode && kineticLoading) ? (
                     <Loader2 className="w-4 h-4 ml-2 animate-spin" />
                   ) : (
                     <ArrowRight className="w-4 h-4 ml-2" />
@@ -3203,6 +3350,94 @@ export default function TemplateStudioClient() {
                   disabled={stickmanTikTokPosting || stickmanExporting}
                 >
                   {stickmanTikTokPosting ? "Posting to TikTok…" : "Post to TikTok"}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Viral Template Preview ────────────────────────────────────────── */}
+      {step === 1 && isViralMode && viralData && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{viralData.type === "quiz" ? "🧠 Quiz Preview" : "🎯 Would You Rather Preview"}</CardTitle>
+            <CardDescription>
+              {viralData.type === "quiz"
+                ? "Click Reveal to show the answer, or press Play to auto-advance."
+                : "Press Play to auto-cycle through rounds. Export as MP4 or post directly to TikTok."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ViralTemplatePreview data={viralData} />
+            <div className="rounded-lg bg-muted/60 border p-3 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground mb-2">Export options</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" disabled={viralExporting} onClick={async () => {
+                  setViralExporting(true);
+                  try {
+                    const res = await fetch("/api/templates/viral/export", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(viralData),
+                    });
+                    if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error((j as {error?:string}).error ?? "Export failed"); }
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${(viralData.topic || "viral").slice(0, 40)}.mp4`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast({ title: "MP4 downloading", description: "Check your Downloads folder." });
+                  } catch (e) {
+                    toast({ title: "Export failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+                  } finally { setViralExporting(false); }
+                }}>
+                  {viralExporting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Exporting…</> : <><Download className="mr-2 h-4 w-4" />Export MP4</>}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Kinetic Typography Preview ────────────────────────────────────── */}
+      {step === 1 && isKineticMode && kineticData && (
+        <Card>
+          <CardHeader>
+            <CardTitle>⚡ Kinetic Typography Preview</CardTitle>
+            <CardDescription>
+              Bold text on dark background — clean, modern, high-quality faceless format.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <KineticTypographyPreview data={kineticData} />
+            <div className="rounded-lg bg-muted/60 border p-3 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground mb-2">Export options</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" disabled={kineticExporting} onClick={async () => {
+                  setKineticExporting(true);
+                  try {
+                    const res = await fetch("/api/templates/kinetic/export", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(kineticData),
+                    });
+                    if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error((j as {error?:string}).error ?? "Export failed"); }
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${(kineticData.topic || "kinetic").slice(0, 40)}.mp4`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast({ title: "MP4 downloading", description: "Check your Downloads folder." });
+                  } catch (e) {
+                    toast({ title: "Export failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+                  } finally { setKineticExporting(false); }
+                }}>
+                  {kineticExporting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Exporting…</> : <><Download className="mr-2 h-4 w-4" />Export MP4</>}
                 </Button>
               </div>
             </div>
