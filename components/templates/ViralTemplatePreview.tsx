@@ -1,19 +1,22 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
 export type WouldYouRatherRound = {
   optionA: string;
   optionB: string;
+  emojiA?: string;
+  emojiB?: string;
 };
 
 export type QuizRound = {
   question: string;
   options: [string, string, string, string];
-  correctIndex: number; // 0-3
+  correctIndex: number;
   explanation?: string;
+  emoji?: string;
 };
 
 export type ViralTemplateType = "would-you-rather" | "quiz";
@@ -22,105 +25,118 @@ export type ViralTemplateData =
   | { type: "would-you-rather"; topic: string; rounds: WouldYouRatherRound[] }
   | { type: "quiz"; topic: string; rounds: QuizRound[] };
 
+export type ViralSettings = {
+  slideDuration: number;   // seconds per slide
+  showTimer: boolean;
+  voiceover: boolean;
+};
+
+export const VIRAL_SHORT_DURATION = 5;
+export const VIRAL_LONG_DURATION = 10;
+
+// ─── Circular countdown timer ─────────────────────────────────────────────────
+
+function CountdownTimer({ total, remaining, size = 56 }: { total: number; remaining: number; size?: number }) {
+  const r = (size - 8) / 2;
+  const circ = 2 * Math.PI * r;
+  const progress = remaining / total;
+  const dashOffset = circ * (1 - progress);
+  const colour = progress > 0.5 ? "#00C49A" : progress > 0.25 ? "#FF6B35" : "#FF416C";
+
+  return (
+    <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.1)" strokeWidth={4} />
+      <circle
+        cx={size / 2} cy={size / 2} r={r}
+        fill="none" stroke={colour} strokeWidth={4}
+        strokeDasharray={circ} strokeDashoffset={dashOffset}
+        strokeLinecap="round"
+        style={{ transition: "stroke-dashoffset 0.25s linear, stroke 0.4s ease" }}
+      />
+      <text
+        x={size / 2} y={size / 2}
+        textAnchor="middle" dominantBaseline="central"
+        fill="#fff" fontSize={size * 0.32} fontWeight={800}
+        style={{ transform: `rotate(90deg)`, transformBox: "fill-box", transformOrigin: "center", fontFamily: "system-ui" }}
+      >
+        {Math.ceil(remaining)}
+      </text>
+    </svg>
+  );
+}
+
 // ─── Would You Rather slide ───────────────────────────────────────────────────
 
-function WYRSlide({ round, index, total }: { round: WouldYouRatherRound; index: number; total: number }) {
+function WYRSlide({ round, index, total, timeLeft, totalTime, showTimer }: {
+  round: WouldYouRatherRound; index: number; total: number;
+  timeLeft: number; totalTime: number; showTimer: boolean;
+}) {
   return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        background: "#0A0A0F",
-        fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      {/* Background texture */}
+    <div style={{
+      width: "100%", height: "100%",
+      display: "flex", flexDirection: "column",
+      background: "#0A0A0F",
+      fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+      position: "relative", overflow: "hidden",
+    }}>
+      {/* Background glow */}
       <div style={{
         position: "absolute", inset: 0,
         background: "radial-gradient(ellipse at 20% 50%, rgba(255,65,108,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, rgba(71,118,230,0.08) 0%, transparent 60%)",
       }} />
 
-      {/* Round counter */}
+      {/* Round counter + timer row */}
       <div style={{
-        position: "absolute", top: "5%", left: 0, right: 0,
-        display: "flex", justifyContent: "center", zIndex: 2,
+        position: "absolute", top: "4%", left: 0, right: 0,
+        display: "flex", justifyContent: "center", alignItems: "center",
+        gap: "clamp(8px,2vw,16px)", zIndex: 2,
       }}>
         <span style={{
-          background: "rgba(255,255,255,0.1)",
-          color: "rgba(255,255,255,0.7)",
-          fontSize: "clamp(11px, 1.8vw, 16px)",
-          fontWeight: 600,
-          letterSpacing: "0.15em",
-          textTransform: "uppercase",
-          padding: "0.4em 1.2em",
-          borderRadius: "999px",
-          border: "1px solid rgba(255,255,255,0.12)",
-        }}>
-          {index + 1} / {total}
-        </span>
+          background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.7)",
+          fontSize: "clamp(10px,1.6vw,14px)", fontWeight: 600, letterSpacing: "0.15em",
+          textTransform: "uppercase", padding: "0.35em 1em",
+          borderRadius: "999px", border: "1px solid rgba(255,255,255,0.12)",
+        }}>{index + 1} / {total}</span>
+        {showTimer && <CountdownTimer total={totalTime} remaining={timeLeft} size={46} />}
       </div>
 
       {/* Header */}
       <div style={{
-        position: "absolute", top: "11%", left: 0, right: 0,
+        position: "absolute", top: "10.5%", left: 0, right: 0,
         display: "flex", justifyContent: "center", zIndex: 2,
       }}>
         <p style={{
-          color: "rgba(255,255,255,0.9)",
-          fontSize: "clamp(13px, 2vw, 20px)",
-          fontWeight: 800,
-          letterSpacing: "0.25em",
-          textTransform: "uppercase",
-          margin: 0,
+          color: "rgba(255,255,255,0.9)", fontSize: "clamp(12px,1.8vw,18px)",
+          fontWeight: 800, letterSpacing: "0.25em", textTransform: "uppercase", margin: 0,
         }}>Would You Rather</p>
       </div>
 
       {/* Split panels */}
       <div style={{
-        position: "absolute", top: "18%", bottom: "18%", left: "4%", right: "4%",
+        position: "absolute", top: "17%", bottom: "14%", left: "4%", right: "4%",
         display: "flex", flexDirection: "column", gap: "3%", zIndex: 2,
       }}>
         {/* Option A */}
         <div style={{
-          flex: 1,
-          background: "linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%)",
-          borderRadius: "clamp(12px, 1.8vw, 20px)",
+          flex: 1, background: "linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%)",
+          borderRadius: "clamp(10px,1.6vw,18px)",
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
-          padding: "6% 8%",
-          boxShadow: "0 8px 32px rgba(255,65,108,0.35)",
+          padding: "5% 8%", boxShadow: "0 8px 32px rgba(255,65,108,0.35)",
           position: "relative", overflow: "hidden",
         }}>
-          <div style={{
-            position: "absolute", top: "-20%", right: "-10%",
-            width: "50%", height: "140%",
-            background: "rgba(255,255,255,0.06)", borderRadius: "50%",
-          }} />
-          <span style={{
-            fontSize: "clamp(9px, 1.4vw, 13px)", fontWeight: 700,
-            color: "rgba(255,255,255,0.7)", letterSpacing: "0.2em",
-            textTransform: "uppercase", marginBottom: "0.5em",
-          }}>A</span>
-          <p style={{
-            fontSize: "clamp(14px, 2.2vw, 28px)", fontWeight: 800,
-            color: "#fff", textAlign: "center", margin: 0,
-            lineHeight: 1.25, textShadow: "0 2px 8px rgba(0,0,0,0.2)",
-          }}>{round.optionA}</p>
+          <div style={{ position: "absolute", top: "-20%", right: "-10%", width: "50%", height: "140%", background: "rgba(255,255,255,0.06)", borderRadius: "50%" }} />
+          {round.emojiA && <span style={{ fontSize: "clamp(24px,4vw,48px)", marginBottom: "0.2em" }}>{round.emojiA}</span>}
+          <span style={{ fontSize: "clamp(8px,1.2vw,12px)", fontWeight: 700, color: "rgba(255,255,255,0.65)", letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: "0.4em" }}>A</span>
+          <p style={{ fontSize: "clamp(13px,2vw,26px)", fontWeight: 800, color: "#fff", textAlign: "center", margin: 0, lineHeight: 1.25 }}>{round.optionA}</p>
         </div>
 
         {/* OR badge */}
-        <div style={{
-          display: "flex", justifyContent: "center", alignItems: "center",
-          height: "10%", flexShrink: 0,
-        }}>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "9%", flexShrink: 0 }}>
           <div style={{
-            background: "#fff", color: "#0A0A0F",
-            fontWeight: 900, fontSize: "clamp(11px, 1.6vw, 16px)",
-            width: "clamp(36px, 5vw, 52px)", height: "clamp(36px, 5vw, 52px)",
+            background: "#fff", color: "#0A0A0F", fontWeight: 900,
+            fontSize: "clamp(10px,1.5vw,15px)",
+            width: "clamp(32px,4.5vw,48px)", height: "clamp(32px,4.5vw,48px)",
             borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
             letterSpacing: "0.05em", boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
           }}>OR</div>
@@ -128,42 +144,28 @@ function WYRSlide({ round, index, total }: { round: WouldYouRatherRound; index: 
 
         {/* Option B */}
         <div style={{
-          flex: 1,
-          background: "linear-gradient(135deg, #4776E6 0%, #8E54E9 100%)",
-          borderRadius: "clamp(12px, 1.8vw, 20px)",
+          flex: 1, background: "linear-gradient(135deg, #4776E6 0%, #8E54E9 100%)",
+          borderRadius: "clamp(10px,1.6vw,18px)",
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
-          padding: "6% 8%",
-          boxShadow: "0 8px 32px rgba(71,118,230,0.35)",
+          padding: "5% 8%", boxShadow: "0 8px 32px rgba(71,118,230,0.35)",
           position: "relative", overflow: "hidden",
         }}>
-          <div style={{
-            position: "absolute", bottom: "-20%", left: "-10%",
-            width: "50%", height: "140%",
-            background: "rgba(255,255,255,0.06)", borderRadius: "50%",
-          }} />
-          <span style={{
-            fontSize: "clamp(9px, 1.4vw, 13px)", fontWeight: 700,
-            color: "rgba(255,255,255,0.7)", letterSpacing: "0.2em",
-            textTransform: "uppercase", marginBottom: "0.5em",
-          }}>B</span>
-          <p style={{
-            fontSize: "clamp(14px, 2.2vw, 28px)", fontWeight: 800,
-            color: "#fff", textAlign: "center", margin: 0,
-            lineHeight: 1.25, textShadow: "0 2px 8px rgba(0,0,0,0.2)",
-          }}>{round.optionB}</p>
+          <div style={{ position: "absolute", bottom: "-20%", left: "-10%", width: "50%", height: "140%", background: "rgba(255,255,255,0.06)", borderRadius: "50%" }} />
+          {round.emojiB && <span style={{ fontSize: "clamp(24px,4vw,48px)", marginBottom: "0.2em" }}>{round.emojiB}</span>}
+          <span style={{ fontSize: "clamp(8px,1.2vw,12px)", fontWeight: 700, color: "rgba(255,255,255,0.65)", letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: "0.4em" }}>B</span>
+          <p style={{ fontSize: "clamp(13px,2vw,26px)", fontWeight: 800, color: "#fff", textAlign: "center", margin: 0, lineHeight: 1.25 }}>{round.optionB}</p>
         </div>
       </div>
 
-      {/* Comment CTA */}
+      {/* CTA */}
       <div style={{
-        position: "absolute", bottom: "5%", left: 0, right: 0,
+        position: "absolute", bottom: "4%", left: 0, right: 0,
         display: "flex", justifyContent: "center", zIndex: 2,
       }}>
-        <p style={{
-          color: "rgba(255,255,255,0.5)", fontSize: "clamp(10px, 1.5vw, 14px)",
-          fontWeight: 500, margin: 0, letterSpacing: "0.05em",
-        }}>💬 Comment A or B below!</p>
+        <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "clamp(9px,1.4vw,13px)", fontWeight: 500, margin: 0 }}>
+          💬 Comment A or B below!
+        </p>
       </div>
     </div>
   );
@@ -174,10 +176,9 @@ function WYRSlide({ round, index, total }: { round: WouldYouRatherRound; index: 
 const OPTION_LABELS = ["A", "B", "C", "D"] as const;
 const OPTION_COLORS = ["#FF6B35", "#4776E6", "#00C49A", "#FF416C"] as const;
 
-function QuizSlide({
-  round, index, total, revealed,
-}: {
+function QuizSlide({ round, index, total, revealed, timeLeft, totalTime, showTimer }: {
   round: QuizRound; index: number; total: number; revealed: boolean;
+  timeLeft: number; totalTime: number; showTimer: boolean;
 }) {
   return (
     <div style={{
@@ -187,108 +188,82 @@ function QuizSlide({
       fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
       position: "relative", overflow: "hidden",
     }}>
-      {/* Subtle grid bg */}
-      <div style={{
-        position: "absolute", inset: 0,
-        backgroundImage: "linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)",
-        backgroundSize: "40px 40px",
-      }} />
+      <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, background: "linear-gradient(90deg,#FF6B35,#FF416C)", height: "0.4%", minHeight: 3 }} />
 
-      {/* Header strip */}
+      {/* Top row: badge + timer */}
       <div style={{
-        position: "absolute", top: 0, left: 0, right: 0,
-        background: "linear-gradient(90deg, #FF6B35, #FF416C)",
-        height: "0.5%", minHeight: 3,
-      }} />
-
-      {/* Round counter */}
-      <div style={{
-        position: "absolute", top: "5%", left: 0, right: 0,
-        display: "flex", justifyContent: "center", zIndex: 2,
+        position: "absolute", top: "4%", left: 0, right: 0,
+        display: "flex", justifyContent: "center", alignItems: "center",
+        gap: "clamp(8px,2vw,16px)", zIndex: 2,
       }}>
         <span style={{
           background: "rgba(255,107,53,0.15)", color: "#FF6B35",
-          fontSize: "clamp(10px, 1.6vw, 14px)", fontWeight: 700,
-          letterSpacing: "0.15em", textTransform: "uppercase",
-          padding: "0.4em 1.2em", borderRadius: "999px",
+          fontSize: "clamp(9px,1.4vw,13px)", fontWeight: 700,
+          letterSpacing: "0.12em", textTransform: "uppercase",
+          padding: "0.35em 1em", borderRadius: "999px",
           border: "1px solid rgba(255,107,53,0.3)",
-        }}>Question {index + 1}/{total}</span>
+        }}>Q{index + 1}/{total}</span>
+        {showTimer && !revealed && <CountdownTimer total={totalTime} remaining={timeLeft} size={46} />}
+        {revealed && <span style={{ fontSize: "clamp(10px,1.5vw,14px)", color: "#00C49A", fontWeight: 700 }}>✓ Answer</span>}
       </div>
+
+      {/* Emoji */}
+      {round.emoji && (
+        <div style={{ position: "absolute", top: "10%", left: 0, right: 0, display: "flex", justifyContent: "center", zIndex: 2 }}>
+          <span style={{ fontSize: "clamp(28px,5vw,56px)" }}>{round.emoji}</span>
+        </div>
+      )}
 
       {/* Question */}
       <div style={{
-        position: "absolute", top: "12%", left: "5%", right: "5%",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        height: "28%", zIndex: 2,
+        position: "absolute",
+        top: round.emoji ? "18%" : "12%",
+        left: "5%", right: "5%", height: "26%",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2,
       }}>
-        <p style={{
-          color: "#fff", fontSize: "clamp(15px, 2.4vw, 32px)",
-          fontWeight: 800, textAlign: "center", margin: 0,
-          lineHeight: 1.3,
-        }}>{round.question}</p>
+        <p style={{ color: "#fff", fontSize: "clamp(14px,2.2vw,30px)", fontWeight: 800, textAlign: "center", margin: 0, lineHeight: 1.3 }}>
+          {round.question}
+        </p>
       </div>
 
       {/* Options */}
       <div style={{
-        position: "absolute", top: "43%", bottom: "8%", left: "5%", right: "5%",
+        position: "absolute", top: "46%", bottom: "7%", left: "5%", right: "5%",
         display: "flex", flexDirection: "column", gap: "3%", zIndex: 2,
       }}>
         {round.options.map((opt, i) => {
           const isCorrect = i === round.correctIndex;
           const color = OPTION_COLORS[i]!;
-          const bgColor = revealed
-            ? isCorrect ? "rgba(0,196,154,0.15)" : "rgba(255,255,255,0.03)"
-            : "rgba(255,255,255,0.05)";
-          const borderColor = revealed
-            ? isCorrect ? "#00C49A" : "rgba(255,255,255,0.08)"
-            : "rgba(255,255,255,0.1)";
-          const textColor = revealed
-            ? isCorrect ? "#00C49A" : "rgba(255,255,255,0.35)"
-            : "#fff";
-
+          const bgColor = revealed ? (isCorrect ? "rgba(0,196,154,0.15)" : "rgba(255,255,255,0.03)") : "rgba(255,255,255,0.05)";
+          const borderColor = revealed ? (isCorrect ? "#00C49A" : "rgba(255,255,255,0.07)") : "rgba(255,255,255,0.1)";
+          const textColor = revealed ? (isCorrect ? "#00C49A" : "rgba(255,255,255,0.3)") : "#fff";
           return (
             <div key={i} style={{
-              flex: 1,
-              background: bgColor,
+              flex: 1, background: bgColor,
               border: `1px solid ${borderColor}`,
-              borderRadius: "clamp(8px, 1.2vw, 14px)",
-              display: "flex", alignItems: "center",
-              padding: "0 5%",
-              transition: "all 0.4s ease",
+              borderRadius: "clamp(7px,1vw,12px)",
+              display: "flex", alignItems: "center", padding: "0 5%",
+              transition: "all 0.35s ease",
             }}>
               <div style={{
-                width: "clamp(24px, 3.5vw, 36px)", height: "clamp(24px, 3.5vw, 36px)",
+                width: "clamp(22px,3.2vw,34px)", height: "clamp(22px,3.2vw,34px)",
                 borderRadius: "50%", flexShrink: 0, marginRight: "4%",
-                background: revealed
-                  ? isCorrect ? "#00C49A" : "rgba(255,255,255,0.08)"
-                  : color,
+                background: revealed ? (isCorrect ? "#00C49A" : "rgba(255,255,255,0.07)") : color,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "clamp(9px, 1.3vw, 13px)", fontWeight: 800,
-                color: revealed && !isCorrect ? "rgba(255,255,255,0.3)" : "#fff",
+                fontSize: "clamp(8px,1.2vw,12px)", fontWeight: 800,
+                color: revealed && !isCorrect ? "rgba(255,255,255,0.25)" : "#fff",
               }}>{OPTION_LABELS[i]}</div>
-              <p style={{
-                color: textColor, fontSize: "clamp(12px, 1.8vw, 22px)",
-                fontWeight: 600, margin: 0, lineHeight: 1.25, flex: 1,
-                transition: "color 0.4s ease",
-              }}>{opt}</p>
-              {revealed && isCorrect && (
-                <span style={{ fontSize: "clamp(14px, 2vw, 22px)", marginLeft: "2%" }}>✓</span>
-              )}
+              <p style={{ color: textColor, fontSize: "clamp(11px,1.7vw,20px)", fontWeight: 600, margin: 0, lineHeight: 1.25, flex: 1 }}>{opt}</p>
+              {revealed && isCorrect && <span style={{ fontSize: "clamp(13px,1.8vw,20px)", marginLeft: "2%" }}>✓</span>}
             </div>
           );
         })}
       </div>
 
-      {/* Explanation */}
       {revealed && round.explanation && (
-        <div style={{
-          position: "absolute", bottom: "2%", left: "5%", right: "5%",
-          zIndex: 2, textAlign: "center",
-        }}>
-          <p style={{
-            color: "rgba(255,255,255,0.5)", fontSize: "clamp(9px, 1.3vw, 14px)",
-            margin: 0, fontStyle: "italic",
-          }}>{round.explanation}</p>
+        <div style={{ position: "absolute", bottom: "1%", left: "5%", right: "5%", zIndex: 2, textAlign: "center" }}>
+          <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "clamp(8px,1.2vw,13px)", margin: 0, fontStyle: "italic" }}>{round.explanation}</p>
         </div>
       )}
     </div>
@@ -297,43 +272,117 @@ function QuizSlide({
 
 // ─── Main preview player ──────────────────────────────────────────────────────
 
-const SLIDE_HOLD_MS = 4000;
-const REVEAL_AFTER_MS = 2500;
+const REVEAL_FRAC = 0.5; // quiz: reveal answer at this fraction of slide duration
 
-export function ViralTemplatePreview({ data, autoPlay = false }: { data: ViralTemplateData; autoPlay?: boolean }) {
+function speakText(text: string) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.05;
+  u.pitch = 1;
+  window.speechSynthesis.speak(u);
+}
+
+export function ViralTemplatePreview({
+  data,
+  settings,
+}: {
+  data: ViralTemplateData;
+  settings: ViralSettings;
+}) {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [playing, setPlaying] = useState(autoPlay);
+  const [playing, setPlaying] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const revealRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [timeLeft, setTimeLeft] = useState(settings.slideDuration);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const rounds = data.rounds as (WouldYouRatherRound | QuizRound)[];
   const total = rounds.length;
 
-  const goTo = (idx: number) => {
+  const stopTick = useCallback(() => {
+    if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+  }, []);
+
+  const goTo = useCallback((idx: number) => {
+    stopTick();
+    if (settings.voiceover) window.speechSynthesis?.cancel();
     setCurrentIdx(idx);
     setRevealed(false);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (revealRef.current) clearTimeout(revealRef.current);
-  };
+    setTimeLeft(settings.slideDuration);
+  }, [settings.slideDuration, settings.voiceover, stopTick]);
 
+  // Reset timer when settings change
+  useEffect(() => { setTimeLeft(settings.slideDuration); }, [settings.slideDuration]);
+
+  // Tick
   useEffect(() => {
-    if (!playing) return;
-    if (data.type === "quiz") {
-      revealRef.current = setTimeout(() => setRevealed(true), REVEAL_AFTER_MS);
+    if (!playing) { stopTick(); return; }
+    const TICK = 0.25;
+    tickRef.current = setInterval(() => {
+      setTimeLeft((t) => {
+        const next = t - TICK;
+        if (next <= 0) {
+          stopTick();
+          // advance
+          setCurrentIdx((i) => {
+            const nextIdx = i < total - 1 ? i + 1 : i;
+            if (i < total - 1) {
+              setRevealed(false);
+              setTimeLeft(settings.slideDuration);
+              // restart tick
+              setTimeout(() => {
+                if (tickRef.current) clearInterval(tickRef.current);
+                tickRef.current = setInterval(() => {
+                  setTimeLeft((tt) => {
+                    const nn = tt - TICK;
+                    if (nn <= 0) { stopTick(); return 0; }
+                    return nn;
+                  });
+                }, TICK * 1000);
+              }, 50);
+            } else {
+              setPlaying(false);
+            }
+            return nextIdx;
+          });
+          return 0;
+        }
+        // Quiz: reveal at halfway
+        if (data.type === "quiz" && t > settings.slideDuration * REVEAL_FRAC && next <= settings.slideDuration * REVEAL_FRAC) {
+          setRevealed(true);
+        }
+        return next;
+      });
+    }, TICK * 1000);
+    return stopTick;
+  }, [playing, total, settings.slideDuration, data.type, stopTick]);
+
+  // Voiceover on slide change
+  useEffect(() => {
+    if (!settings.voiceover || !playing) return;
+    const round = rounds[currentIdx];
+    if (!round) return;
+    let text = "";
+    if (data.type === "would-you-rather") {
+      const r = round as WouldYouRatherRound;
+      text = `Would you rather... ${r.optionA}... or ${r.optionB}?`;
+    } else {
+      const r = round as QuizRound;
+      text = r.question;
     }
-    timerRef.current = setTimeout(() => {
-      if (currentIdx < total - 1) {
-        goTo(currentIdx + 1);
-      } else {
-        setPlaying(false);
-      }
-    }, SLIDE_HOLD_MS);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (revealRef.current) clearTimeout(revealRef.current);
-    };
-  }, [playing, currentIdx, total, data.type]);
+    speakText(text);
+    return () => { window.speechSynthesis?.cancel(); };
+  }, [currentIdx, playing, settings.voiceover]);
+
+  const handlePlayPause = () => {
+    if (playing) {
+      stopTick();
+      window.speechSynthesis?.cancel();
+      setPlaying(false);
+    } else {
+      setPlaying(true);
+    }
+  };
 
   const round = rounds[currentIdx];
   if (!round) return null;
@@ -344,22 +393,33 @@ export function ViralTemplatePreview({ data, autoPlay = false }: { data: ViralTe
       <div className="relative mx-auto w-full" style={{ maxWidth: 380, aspectRatio: "9/16" }}>
         <div className="absolute inset-0 rounded-2xl overflow-hidden shadow-2xl">
           {data.type === "would-you-rather" ? (
-            <WYRSlide round={round as WouldYouRatherRound} index={currentIdx} total={total} />
+            <WYRSlide
+              round={round as WouldYouRatherRound}
+              index={currentIdx} total={total}
+              timeLeft={timeLeft} totalTime={settings.slideDuration}
+              showTimer={settings.showTimer}
+            />
           ) : (
-            <QuizSlide round={round as QuizRound} index={currentIdx} total={total} revealed={revealed} />
+            <QuizSlide
+              round={round as QuizRound}
+              index={currentIdx} total={total}
+              revealed={revealed}
+              timeLeft={timeLeft} totalTime={settings.slideDuration}
+              showTimer={settings.showTimer}
+            />
           )}
         </div>
       </div>
 
       {/* Controls */}
-      <div className="flex items-center justify-center gap-3 mt-1">
+      <div className="flex items-center justify-center gap-2 mt-1 flex-wrap">
         <button
-          onClick={() => goTo(Math.max(0, currentIdx - 1))}
+          onClick={() => { goTo(Math.max(0, currentIdx - 1)); }}
           disabled={currentIdx === 0}
           className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 disabled:opacity-30 transition"
         >←</button>
         <button
-          onClick={() => { setPlaying(!playing); if (!playing) setRevealed(false); }}
+          onClick={handlePlayPause}
           className="px-5 py-1.5 rounded-lg text-sm font-semibold bg-orange-500 hover:bg-orange-600 text-white transition"
         >{playing ? "⏸ Pause" : "▶ Play"}</button>
         {data.type === "quiz" && !revealed && (
@@ -369,14 +429,14 @@ export function ViralTemplatePreview({ data, autoPlay = false }: { data: ViralTe
           >Reveal</button>
         )}
         <button
-          onClick={() => goTo(Math.min(total - 1, currentIdx + 1))}
+          onClick={() => { goTo(Math.min(total - 1, currentIdx + 1)); }}
           disabled={currentIdx === total - 1}
           className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 disabled:opacity-30 transition"
         >→</button>
       </div>
 
       {/* Dot indicators */}
-      <div className="flex justify-center gap-1.5">
+      <div className="flex justify-center gap-1.5 flex-wrap">
         {rounds.map((_, i) => (
           <button
             key={i}
@@ -392,9 +452,9 @@ export function ViralTemplatePreview({ data, autoPlay = false }: { data: ViralTe
           <button
             key={i}
             onClick={() => goTo(i)}
-            className={`w-full text-left rounded-lg border p-3 text-sm transition ${i === currentIdx ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30" : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"}`}
+            className={`w-full text-left rounded-lg border p-3 text-sm transition ${i === currentIdx ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30" : "border-gray-200 dark:border-gray-700 hover:border-gray-300"}`}
           >
-            <span className="font-semibold text-gray-500 dark:text-gray-400 mr-2">#{i + 1}</span>
+            <span className="font-semibold text-gray-400 mr-2">#{i + 1}</span>
             {data.type === "would-you-rather"
               ? `${(r as WouldYouRatherRound).optionA} vs ${(r as WouldYouRatherRound).optionB}`
               : (r as QuizRound).question}

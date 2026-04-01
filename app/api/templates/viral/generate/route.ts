@@ -40,13 +40,15 @@ export async function POST(request: NextRequest) {
     const userPrompt =
       type === "would-you-rather"
         ? `Generate exactly ${roundCount} Would You Rather dilemmas about: "${topic}".
+For each option, include a relevant single emoji that represents it visually.
 Return ONLY valid JSON in this exact format:
 {
   "rounds": [
-    { "optionA": "...", "optionB": "..." }
+    { "optionA": "...", "optionB": "...", "emojiA": "🍕", "emojiB": "🍣" }
   ]
 }`
         : `Generate exactly ${roundCount} trivia quiz questions about: "${topic}".
+Include a relevant single emoji for the question topic.
 Return ONLY valid JSON in this exact format:
 {
   "rounds": [
@@ -54,7 +56,8 @@ Return ONLY valid JSON in this exact format:
       "question": "...",
       "options": ["option A", "option B", "option C", "option D"],
       "correctIndex": 0,
-      "explanation": "..."
+      "explanation": "...",
+      "emoji": "⚽"
     }
   ]
 }`;

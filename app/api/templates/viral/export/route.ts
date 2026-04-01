@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const DEFAULT_VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
-const SLIDE_DURATION = 5; // seconds per round
+const DEFAULT_slideDuration = 5; // seconds per round
 
 // ─── HTML renderers ───────────────────────────────────────────────────────────
 
@@ -193,11 +193,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({})) as {
       type?: string;
       topic?: string;
+      slideDuration?: number;
       rounds?: { optionA?: string; optionB?: string; question?: string; options?: string[]; correctIndex?: number; explanation?: string }[];
     };
 
     const type = body.type === "quiz" ? "quiz" : "would-you-rather";
     const rounds = Array.isArray(body.rounds) ? body.rounds : [];
+    const slideDuration = typeof body.slideDuration === "number" && body.slideDuration > 0 ? body.slideDuration : DEFAULT_slideDuration;
     if (rounds.length === 0) return NextResponse.json({ error: "No rounds provided" }, { status: 400 });
 
     const apiKey = getElevenLabsApiKey();
@@ -253,7 +255,7 @@ export async function POST(request: NextRequest) {
         await page.screenshot({ path: imgPath as `${string}.png`, type: "png" });
         await page.close();
 
-        compileScenes.push({ duration: SLIDE_DURATION, image_url: null, video_url: null, localImagePath: imgPath });
+        compileScenes.push({ duration: slideDuration, image_url: null, video_url: null, localImagePath: imgPath });
 
         // For quiz: also render revealed version at half duration
         if (type === "quiz") {
@@ -264,8 +266,8 @@ export async function POST(request: NextRequest) {
           const revealedPath = join(workDir, `slide_${i}_revealed.png`);
           await revealedPage.screenshot({ path: revealedPath as `${string}.png`, type: "png" });
           await revealedPage.close();
-          compileScenes[compileScenes.length - 1] = { duration: Math.round(SLIDE_DURATION / 2), image_url: null, video_url: null, localImagePath: imgPath };
-          compileScenes.push({ duration: Math.round(SLIDE_DURATION / 2), image_url: null, video_url: null, localImagePath: revealedPath });
+          compileScenes[compileScenes.length - 1] = { duration: Math.round(slideDuration / 2), image_url: null, video_url: null, localImagePath: imgPath };
+          compileScenes.push({ duration: Math.round(slideDuration / 2), image_url: null, video_url: null, localImagePath: revealedPath });
         }
       }
 

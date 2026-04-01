@@ -56,8 +56,8 @@ import { CreatableSelectField } from "@/components/templates/CreatableSelectFiel
 import { StickmanWhiteboardSetup } from "@/components/templates/StickmanWhiteboardSetup";
 import { StickmanWhiteboard } from "@/components/templates/StickmanWhiteboard";
 import type { StickmanScene } from "@/components/templates/StickmanWhiteboard";
-import { ViralTemplatePreview } from "@/components/templates/ViralTemplatePreview";
-import type { ViralTemplateData } from "@/components/templates/ViralTemplatePreview";
+import { ViralTemplatePreview, VIRAL_SHORT_DURATION, VIRAL_LONG_DURATION } from "@/components/templates/ViralTemplatePreview";
+import type { ViralTemplateData, ViralSettings } from "@/components/templates/ViralTemplatePreview";
 import { KineticTypographyPreview, KINETIC_COLOR_OPTIONS, KINETIC_VOICE_OPTIONS } from "@/components/templates/KineticTypographyPreview";
 import type { KineticData } from "@/components/templates/KineticTypographyPreview";
 import { AiStorySceneVoiceover } from "@/components/ai-story/AiStorySceneVoiceover";
@@ -327,6 +327,9 @@ export default function TemplateStudioClient() {
   const [viralTopic, setViralTopic] = useState("");
   const [viralType, setViralType] = useState<"would-you-rather" | "quiz">("would-you-rather");
   const [viralRoundCount, setViralRoundCount] = useState(7);
+  const [viralFormLength, setViralFormLength] = useState<"short" | "long">("short");
+  const [viralShowTimer, setViralShowTimer] = useState(true);
+  const [viralVoiceover, setViralVoiceover] = useState(false);
   const [viralData, setViralData] = useState<import("@/components/templates/ViralTemplatePreview").ViralTemplateData | null>(null);
   const [viralLoading, setViralLoading] = useState(false);
   const [viralExporting, setViralExporting] = useState(false);
@@ -2824,7 +2827,35 @@ export default function TemplateStudioClient() {
                     onChange={(e) => setViralRoundCount(Number(e.target.value))}
                     className="w-full accent-orange-500"
                   />
-                  <p className="text-xs text-muted-foreground">{viralRoundCount} rounds — approx. {Math.round(viralRoundCount * 6)}s of content</p>
+                  <p className="text-xs text-muted-foreground">{viralRoundCount} rounds — approx. {Math.round(viralRoundCount * (viralFormLength === "long" ? VIRAL_LONG_DURATION : VIRAL_SHORT_DURATION))}s of content</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Format length</Label>
+                  <div className="flex gap-2">
+                    {(["short", "long"] as const).map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => { setViralFormLength(v); setViralRoundCount(v === "long" ? 15 : 7); }}
+                        className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition ${viralFormLength === v ? "bg-orange-500 text-white border-orange-500" : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-orange-400"}`}
+                      >
+                        {v === "short" ? "⚡ Short-form (TikTok/Reels)" : "🎬 Long-form (YouTube)"}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {viralFormLength === "short" ? `${VIRAL_SHORT_DURATION}s per slide — best for TikTok / Reels` : `${VIRAL_LONG_DURATION}s per slide — best for YouTube Shorts / long-form`}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={viralShowTimer} onChange={(e) => setViralShowTimer(e.target.checked)} className="accent-orange-500 w-4 h-4" />
+                    <span className="text-sm">⏱ Show countdown timer</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={viralVoiceover} onChange={(e) => setViralVoiceover(e.target.checked)} className="accent-orange-500 w-4 h-4" />
+                    <span className="text-sm">🔊 Preview voiceover (browser TTS)</span>
+                  </label>
                 </div>
               </div>
             )}
@@ -3369,7 +3400,14 @@ export default function TemplateStudioClient() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <ViralTemplatePreview data={viralData} />
+            <ViralTemplatePreview
+              data={viralData}
+              settings={{
+                slideDuration: viralFormLength === "long" ? VIRAL_LONG_DURATION : VIRAL_SHORT_DURATION,
+                showTimer: viralShowTimer,
+                voiceover: viralVoiceover,
+              } satisfies ViralSettings}
+            />
             <div className="rounded-lg bg-muted/60 border p-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-2">Export options</p>
               <div className="flex flex-wrap gap-2">
@@ -3379,7 +3417,7 @@ export default function TemplateStudioClient() {
                     const res = await fetch("/api/templates/viral/export", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify(viralData),
+                      body: JSON.stringify({ ...viralData, slideDuration: viralFormLength === "long" ? VIRAL_LONG_DURATION : VIRAL_SHORT_DURATION }),
                     });
                     if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error((j as {error?:string}).error ?? "Export failed"); }
                     const blob = await res.blob();
