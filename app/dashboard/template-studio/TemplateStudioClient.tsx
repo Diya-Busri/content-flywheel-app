@@ -3485,7 +3485,7 @@ export default function TemplateStudioClient() {
                     const res = await fetch("/api/templates/kinetic/export", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ ...kineticData, aspectRatio: kineticFormLength === "long" ? "16:9" : "9:16" }),
+                      body: JSON.stringify({ ...kineticData, voiceId: kineticVoiceId, aspectRatio: kineticFormLength === "long" ? "16:9" : "9:16" }),
                     });
                     if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error((j as {error?:string}).error ?? "Export failed"); }
                     const blob = await res.blob();
