@@ -183,6 +183,13 @@ export function KineticTypographyPreview({ data, voiceover = false, aspectRatio 
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1.05;
     u.pitch = 1;
+    // Try to use a female English voice for the preview
+    const voices = window.speechSynthesis.getVoices();
+    const femaleVoice = voices.find(v =>
+      v.lang.startsWith("en") &&
+      /samantha|zira|victoria|karen|moira|fiona|tessa|veena|hazel|google uk english female/i.test(v.name)
+    ) ?? voices.find(v => v.lang.startsWith("en") && /female/i.test(v.name));
+    if (femaleVoice) u.voice = femaleVoice;
     window.speechSynthesis.speak(u);
     return () => { window.speechSynthesis.cancel(); };
   }, [currentIdx, playing, voiceover, data.scenes]);

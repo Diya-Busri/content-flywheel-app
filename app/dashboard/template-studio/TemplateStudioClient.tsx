@@ -2923,7 +2923,7 @@ export default function TemplateStudioClient() {
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={kineticPreviewVoiceover} onChange={(e) => setKineticPreviewVoiceover(e.target.checked)} className="accent-orange-500 w-4 h-4" />
-                  <span className="text-sm">🔊 Preview voiceover (browser TTS)</span>
+                  <span className="text-sm">🔊 Preview voiceover <span className="text-muted-foreground">(browser voice — export uses ElevenLabs)</span></span>
                 </label>
               </div>
             )}
