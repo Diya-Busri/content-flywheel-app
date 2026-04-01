@@ -144,7 +144,7 @@ export const KINETIC_VOICE_OPTIONS = [
   { value: "onwK4e9ZLuTAKqWW03F9", label: "Daniel (professional)" },
 ];
 
-export function KineticTypographyPreview({ data, voiceover = false }: { data: KineticData; voiceover?: boolean }) {
+export function KineticTypographyPreview({ data, voiceover = false, aspectRatio = "9:16" }: { data: KineticData; voiceover?: boolean; aspectRatio?: "9:16" | "16:9" }) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -190,10 +190,15 @@ export function KineticTypographyPreview({ data, voiceover = false }: { data: Ki
   const scene = data.scenes[currentIdx];
   if (!scene) return null;
 
+  const is16x9 = aspectRatio === "16:9";
+
   return (
     <div className="flex flex-col gap-3 w-full select-none">
-      {/* 9:16 preview */}
-      <div className="relative mx-auto w-full" style={{ maxWidth: 380, aspectRatio: "9/16" }}>
+      {/* Preview — switches between 9:16 and 16:9 */}
+      <div
+        className="relative mx-auto w-full"
+        style={is16x9 ? { maxWidth: 640, aspectRatio: "16/9" } : { maxWidth: 380, aspectRatio: "9/16" }}
+      >
         <div className="absolute inset-0 rounded-2xl overflow-hidden shadow-2xl">
           <KineticSlide
             key={currentIdx}

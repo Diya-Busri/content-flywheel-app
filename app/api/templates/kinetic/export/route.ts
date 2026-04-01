@@ -35,7 +35,8 @@ function renderKineticSlide(
   accentWords: number,
   schemeKey: SchemeKey,
   index: number,
-  total: number
+  total: number,
+  wide = false
 ): string {
   const scheme = SCHEMES[schemeKey] ?? SCHEMES["dark-orange"];
   const words = text.split(/\s+/).filter(Boolean);
@@ -46,14 +47,19 @@ function renderKineticSlide(
 
   const progressPct = Math.round(((index + 1) / total) * 100);
 
-  // Font size based on text length
-  const fontSize = text.length > 80 ? 60 : text.length > 50 ? 76 : text.length > 30 ? 90 : 108;
+  const W = wide ? 1920 : 1080;
+  const H = wide ? 1080 : 1920;
+  // Font size: wider canvas needs larger type for visual impact
+  const baseFontSize = wide
+    ? (text.length > 80 ? 72 : text.length > 50 ? 92 : text.length > 30 ? 108 : 128)
+    : (text.length > 80 ? 60 : text.length > 50 ? 76 : text.length > 30 ? 90 : 108);
+  const maxWidth = wide ? 1600 : 920;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    width: 1080px; height: 1920px; overflow: hidden;
+    width: ${W}px; height: ${H}px; overflow: hidden;
     background: ${scheme.bg};
     font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
     display: flex; flex-direction: column;
@@ -61,34 +67,34 @@ function renderKineticSlide(
     position: relative;
   }
   .glow {
-    position: absolute; top: 30%; left: 50%;
+    position: absolute; top: 40%; left: 50%;
     transform: translate(-50%, -50%);
-    width: 900px; height: 800px;
+    width: ${wide ? 1400 : 900}px; height: ${wide ? 700 : 800}px;
     background: radial-gradient(ellipse, ${scheme.glow} 0%, transparent 70%);
     pointer-events: none;
   }
   .progress {
     position: absolute; top: 0; left: 0;
-    height: 6px; width: ${progressPct}%;
+    height: ${wide ? 5 : 6}px; width: ${progressPct}%;
     background: ${scheme.accent}; border-radius: 0 3px 3px 0;
   }
   .counter {
-    position: absolute; top: 50px; right: 60px;
-    font-size: 32px; font-weight: 700; letter-spacing: 2px;
+    position: absolute; top: ${wide ? 36 : 50}px; right: ${wide ? 48 : 60}px;
+    font-size: ${wide ? 28 : 32}px; font-weight: 700; letter-spacing: 2px;
     color: rgba(255,255,255,0.22);
   }
   .text-block {
     position: relative; z-index: 2;
-    max-width: 920px; text-align: center; padding: 0 60px;
+    max-width: ${maxWidth}px; text-align: center; padding: 0 ${wide ? 80 : 60}px;
   }
   .main-text {
-    font-size: ${fontSize}px; font-weight: 900;
+    font-size: ${baseFontSize}px; font-weight: 900;
     line-height: 1.2; letter-spacing: -0.01em;
   }
   .accent-line {
-    position: absolute; bottom: 200px; left: 50%;
+    position: absolute; bottom: ${wide ? 80 : 200}px; left: 50%;
     transform: translateX(-50%);
-    width: 80px; height: 6px;
+    width: ${wide ? 100 : 80}px; height: ${wide ? 5 : 6}px;
     background: ${scheme.accent}; border-radius: 3px; opacity: 0.5;
   }
 </style></head><body>
@@ -116,6 +122,7 @@ export async function POST(request: NextRequest) {
       topic?: string;
       colorScheme?: string;
       voiceId?: string;
+      aspectRatio?: string;
       scenes?: { text?: string; accentWords?: number }[];
     };
 
@@ -125,6 +132,10 @@ export async function POST(request: NextRequest) {
     const colorScheme = (["dark-orange", "dark-blue", "dark-green", "dark-purple"].includes(body.colorScheme ?? "")
       ? body.colorScheme
       : "dark-orange") as SchemeKey;
+
+    const is16x9 = body.aspectRatio === "16:9";
+    const vpWidth = is16x9 ? 1920 : 1080;
+    const vpHeight = is16x9 ? 1080 : 1920;
 
     const voiceId = typeof body.voiceId === "string" && body.voiceId.trim() ? body.voiceId.trim() : DEFAULT_VOICE_ID;
 
@@ -167,11 +178,12 @@ export async function POST(request: NextRequest) {
           scene.accentWords ?? 2,
           colorScheme,
           i,
-          scenes.length
+          scenes.length,
+          is16x9
         );
 
         const page = await browser.newPage();
-        await page.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
+        await page.setViewport({ width: vpWidth, height: vpHeight, deviceScaleFactor: 1 });
         await page.setContent(html, { waitUntil: "networkidle0" });
         const imgPath = join(workDir, `scene_${i}.png`);
         await page.screenshot({ path: imgPath as `${string}.png`, type: "png" });
@@ -189,7 +201,7 @@ export async function POST(request: NextRequest) {
       await writeFile(voicePath, audioBytes);
 
       const finalPath = await compileVideoToFile(workDir, compileScenes, "", voicePath, "fade", {
-        outputAspect: "9:16",
+        outputAspect: is16x9 ? "16:9" : "9:16",
         videoPreset: "veryfast",
       });
 

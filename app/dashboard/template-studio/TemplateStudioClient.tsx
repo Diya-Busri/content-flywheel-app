@@ -336,6 +336,7 @@ export default function TemplateStudioClient() {
 
   // ── Kinetic Typography state (mode 13) ───────────────────────────────────────
   const [kineticTopic, setKineticTopic] = useState("");
+  const [kineticFormLength, setKineticFormLength] = useState<"short" | "long">("short");
   const [kineticSceneCount, setKineticSceneCount] = useState(12);
   const [kineticColorScheme, setKineticColorScheme] = useState<import("@/components/templates/KineticTypographyPreview").KineticData["colorScheme"]>("dark-orange");
   const [kineticVoiceId, setKineticVoiceId] = useState("EXAVITQu4vr4xnSDxMaL");
@@ -2872,6 +2873,24 @@ export default function TemplateStudioClient() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label>Format</Label>
+                  <div className="flex gap-2">
+                    {(["short", "long"] as const).map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => { setKineticFormLength(v); setKineticSceneCount(v === "long" ? 20 : 12); }}
+                        className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition ${kineticFormLength === v ? "bg-orange-500 text-white border-orange-500" : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-orange-400"}`}
+                      >
+                        {v === "short" ? "⚡ Short-form (TikTok/Reels)" : "🎬 Long-form (YouTube)"}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {kineticFormLength === "short" ? "9:16 portrait — best for TikTok / Reels / Shorts" : "16:9 widescreen — best for YouTube"}
+                  </p>
+                </div>
+                <div className="space-y-2">
                   <Label>Number of scenes ({kineticSceneCount})</Label>
                   <input
                     type="range" min={6} max={30} value={kineticSceneCount}
@@ -3456,7 +3475,7 @@ export default function TemplateStudioClient() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <KineticTypographyPreview data={kineticData} voiceover={kineticPreviewVoiceover} />
+            <KineticTypographyPreview data={kineticData} voiceover={kineticPreviewVoiceover} aspectRatio={kineticFormLength === "long" ? "16:9" : "9:16"} />
             <div className="rounded-lg bg-muted/60 border p-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-2">Export options</p>
               <div className="flex flex-wrap gap-2">
@@ -3466,7 +3485,7 @@ export default function TemplateStudioClient() {
                     const res = await fetch("/api/templates/kinetic/export", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify(kineticData),
+                      body: JSON.stringify({ ...kineticData, aspectRatio: kineticFormLength === "long" ? "16:9" : "9:16" }),
                     });
                     if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error((j as {error?:string}).error ?? "Export failed"); }
                     const blob = await res.blob();
