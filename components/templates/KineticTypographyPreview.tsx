@@ -144,7 +144,7 @@ export const KINETIC_VOICE_OPTIONS = [
   { value: "onwK4e9ZLuTAKqWW03F9", label: "Daniel (professional)" },
 ];
 
-export function KineticTypographyPreview({ data }: { data: KineticData }) {
+export function KineticTypographyPreview({ data, voiceover = false }: { data: KineticData; voiceover?: boolean }) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -153,21 +153,39 @@ export function KineticTypographyPreview({ data }: { data: KineticData }) {
   const total = data.scenes.length;
 
   const goTo = (idx: number) => {
-    setCurrentIdx(idx);
     if (timerRef.current) clearTimeout(timerRef.current);
+    if (voiceover && typeof window !== "undefined") window.speechSynthesis?.cancel();
+    setCurrentIdx(idx);
   };
 
+  // Auto-advance timer — duration based on word count
   useEffect(() => {
     if (!playing) return;
+    const scene = data.scenes[currentIdx];
+    const wordCount = (scene?.text ?? "").split(/\s+/).filter(Boolean).length;
+    const durationMs = Math.max(2000, Math.round((wordCount / 2.5) * 1000) + 600);
     timerRef.current = setTimeout(() => {
       if (currentIdx < total - 1) {
         setCurrentIdx(i => i + 1);
       } else {
         setPlaying(false);
       }
-    }, SLIDE_HOLD_MS);
+    }, durationMs);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [playing, currentIdx, total]);
+  }, [playing, currentIdx, total, data.scenes]);
+
+  // Voiceover: speak each scene's text when playing
+  useEffect(() => {
+    if (!voiceover || !playing) return;
+    const text = data.scenes[currentIdx]?.text;
+    if (!text || typeof window === "undefined" || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.05;
+    u.pitch = 1;
+    window.speechSynthesis.speak(u);
+    return () => { window.speechSynthesis.cancel(); };
+  }, [currentIdx, playing, voiceover, data.scenes]);
 
   const scene = data.scenes[currentIdx];
   if (!scene) return null;
@@ -195,7 +213,7 @@ export function KineticTypographyPreview({ data }: { data: KineticData }) {
           className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 disabled:opacity-30 transition"
         >←</button>
         <button
-          onClick={() => setPlaying(!playing)}
+          onClick={() => { if (playing) { window.speechSynthesis?.cancel(); } setPlaying(p => !p); }}
           className="px-5 py-1.5 rounded-lg text-sm font-semibold bg-orange-500 hover:bg-orange-600 text-white transition"
         >{playing ? "⏸ Pause" : "▶ Play"}</button>
         <button

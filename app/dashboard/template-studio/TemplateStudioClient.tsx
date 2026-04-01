@@ -342,6 +342,7 @@ export default function TemplateStudioClient() {
   const [kineticData, setKineticData] = useState<import("@/components/templates/KineticTypographyPreview").KineticData | null>(null);
   const [kineticLoading, setKineticLoading] = useState(false);
   const [kineticExporting, setKineticExporting] = useState(false);
+  const [kineticPreviewVoiceover, setKineticPreviewVoiceover] = useState(false);
 
   const [storyVideoExporting, setStoryVideoExporting] = useState(false);
   const [storyVideoExportPhase, setStoryVideoExportPhase] = useState<"saving" | "compiling" | null>(null);
@@ -2891,7 +2892,7 @@ export default function TemplateStudioClient() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Voice</Label>
+                  <Label>Voice (for export)</Label>
                   <Select value={kineticVoiceId} onValueChange={setKineticVoiceId}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -2901,6 +2902,10 @@ export default function TemplateStudioClient() {
                     </SelectContent>
                   </Select>
                 </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={kineticPreviewVoiceover} onChange={(e) => setKineticPreviewVoiceover(e.target.checked)} className="accent-orange-500 w-4 h-4" />
+                  <span className="text-sm">🔊 Preview voiceover (browser TTS)</span>
+                </label>
               </div>
             )}
 
@@ -3450,7 +3455,7 @@ export default function TemplateStudioClient() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <KineticTypographyPreview data={kineticData} />
+            <KineticTypographyPreview data={kineticData} voiceover={kineticPreviewVoiceover} />
             <div className="rounded-lg bg-muted/60 border p-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-2">Export options</p>
               <div className="flex flex-wrap gap-2">
