@@ -1,4 +1,4 @@
-export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "13";
+export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "13" | "14";
 
 /** Story-style Template Studio modes that share the 8-scene pipeline */
 export type TemplateStudioStoryTemplateId = "ai_story" | "satisfying_build" | "ai_cooking_video";
@@ -22,6 +22,10 @@ export const CREATION_MODE_OPTION_GROUPS: {
   label: string;
   options: { value: CreationMode; label: string }[];
 }[] = [
+  {
+    label: "Library",
+    options: [{ value: "14", label: "Show & episode (My Library grouping)" }],
+  },
   {
     label: "Content Type",
     options: [

@@ -23,9 +23,11 @@ interface DashboardThemeProviderProps {
   children: React.ReactNode;
   /** Optional: apply theme class and layout styles to this wrapper (so layout is theme-aware) */
   className?: string;
+  /** Forwarded to the wrapper div — use for row flex layout so the shell works if Tailwind/CSS fails to load */
+  style?: React.CSSProperties;
 }
 
-export function DashboardThemeProvider({ children, className = "" }: DashboardThemeProviderProps) {
+export function DashboardThemeProvider({ children, className = "", style }: DashboardThemeProviderProps) {
   const { setTheme: setNextTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -52,6 +54,7 @@ export function DashboardThemeProvider({ children, className = "" }: DashboardTh
     <DashboardThemeContext.Provider value={{ theme: effectiveTheme, setTheme, toggleTheme }}>
       <div
         className={className}
+        style={style}
         data-theme={effectiveTheme}
         suppressHydrationWarning
       >

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { normalizeRawQuizRound, shuffleQuizRound } from "@/lib/viral-quiz-shuffle";
+import { pickRandomViralVisualThemeId } from "@/lib/viral-visual-themes";
 
 export const dynamic = "force-dynamic";
 
@@ -49,12 +51,13 @@ Return ONLY valid JSON in this exact format:
 }`
         : `Generate exactly ${roundCount} trivia quiz questions about: "${topic}".
 Include a relevant single emoji for the question topic.
+Put the truly correct answer in options[0] and set correctIndex to 0 (order will be randomized after generation).
 Return ONLY valid JSON in this exact format:
 {
   "rounds": [
     {
       "question": "...",
-      "options": ["option A", "option B", "option C", "option D"],
+      "options": ["correct answer text here", "wrong option", "wrong option", "wrong option"],
       "correctIndex": 0,
       "explanation": "...",
       "emoji": "⚽"
@@ -79,7 +82,13 @@ Return ONLY valid JSON in this exact format:
       return NextResponse.json({ error: "AI returned no rounds" }, { status: 500 });
     }
 
-    return NextResponse.json({ type, topic, rounds: parsed.rounds });
+    const rounds =
+      type === "quiz"
+        ? parsed.rounds.map((r) => shuffleQuizRound(normalizeRawQuizRound(r)))
+        : parsed.rounds;
+
+    const visualTheme = pickRandomViralVisualThemeId();
+    return NextResponse.json({ type, topic, rounds, visualTheme });
   } catch (err) {
     console.error("[templates/viral/generate]", err);
     return NextResponse.json(

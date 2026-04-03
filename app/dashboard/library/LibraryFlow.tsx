@@ -237,6 +237,53 @@ function groupByBundle(items: LibraryItem[]): { bundleId: string; bundleName: st
   });
 }
 
+/** Timeline videos that share `metadata.seriesTitle` (from Template Studio) render under one heading. */
+function groupTimelineVideosBySeries(items: LibraryItem[]): { seriesTitle: string | null; items: LibraryItem[] }[] {
+  const bySeries = new Map<string, LibraryItem[]>();
+  const ungrouped: LibraryItem[] = [];
+  for (const item of items) {
+    const meta = item.metadata;
+    const st =
+      meta &&
+      typeof meta === "object" &&
+      meta !== null &&
+      typeof (meta as { seriesTitle?: unknown }).seriesTitle === "string" &&
+      (meta as { seriesTitle: string }).seriesTitle.trim().length > 0
+        ? (meta as { seriesTitle: string }).seriesTitle.trim()
+        : null;
+    if (st) {
+      const list = bySeries.get(st) ?? [];
+      list.push(item);
+      bySeries.set(st, list);
+    } else {
+      ungrouped.push(item);
+    }
+  }
+  const out: { seriesTitle: string | null; items: LibraryItem[] }[] = [];
+  const keys = [...bySeries.keys()].sort((a, b) => a.localeCompare(b));
+  for (const k of keys) {
+    const list = bySeries.get(k)!;
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    out.push({ seriesTitle: k, items: list });
+  }
+  if (ungrouped.length > 0) {
+    ungrouped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    out.push({ seriesTitle: null, items: ungrouped });
+  }
+  return out;
+}
+
+function itemMatchesLibrarySearch(item: LibraryItem, q: string): boolean {
+  if (!q) return true;
+  if (item.title.toLowerCase().includes(q)) return true;
+  const meta = item.metadata;
+  if (meta && typeof meta === "object" && meta !== null) {
+    const st = (meta as { seriesTitle?: unknown }).seriesTitle;
+    if (typeof st === "string" && st.toLowerCase().includes(q)) return true;
+  }
+  return false;
+}
+
 export default function LibraryFlow() {
   const [tab, setTab] = useState<LibraryTab>("all");
   const [items, setItems] = useState<LibraryItem[]>([]);
@@ -308,9 +355,10 @@ export default function LibraryFlow() {
     else fetchItems();
   }, [tab]);
 
-  const filtered = items.filter((item) =>
-    search.trim() ? item.title.toLowerCase().includes(search.toLowerCase()) : true
-  );
+  const searchQuery = search.trim().toLowerCase();
+  const filtered = items.filter((item) => itemMatchesLibrarySearch(item, searchQuery));
+  const timelineSeriesSections = tab === "timeline" ? groupTimelineVideosBySeries(filtered) : [];
+  const timelineHasNamedSeries = timelineSeriesSections.some((s) => s.seriesTitle !== null);
 
   const getEditLink = (item: LibraryItem) => {
     if (item.type === "product") return `/dashboard/digital-products/${item.id}/edit`;
@@ -613,116 +661,132 @@ export default function LibraryFlow() {
               </CardContent>
             </Card>
           ) : tab === "timeline" ? (
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((project) => {
-                const content = (project.metadata ?? {}) as {
-                  scenes?: { duration?: number; elements?: { media?: { url?: string } }[] }[];
-                  template?: { name?: string };
-                  platform?: string;
-                  publishedPlatforms?: string[];
-                  [key: string]: unknown;
-                };
-                const scenes = Array.isArray(content.scenes) ? content.scenes : [];
-                const totalDuration = scenes.reduce((acc, s) => acc + (Number(s.duration) || 0), 0);
-                const firstScene = scenes[0];
-                const backgroundMediaUrl =
-                  firstScene?.elements?.[0] && typeof firstScene.elements[0] === "object" && firstScene.elements[0] !== null && "media" in firstScene.elements[0]
-                    ? (firstScene.elements[0] as { media?: { url?: string } }).media?.url
-                    : undefined;
-                const templateName = content.template && typeof content.template === "object" && "name" in content.template ? String(content.template.name) : undefined;
-                const openHref = `/dashboard/video-timeline?projectId=${encodeURIComponent(project.id)}`;
-                const publishedPlatforms = Array.isArray(content.publishedPlatforms)
-                  ? content.publishedPlatforms
-                  : typeof content.platform === "string" && content.platform
-                    ? [content.platform]
-                    : [];
+            <div className="space-y-10">
+              {timelineSeriesSections.map((section) => {
+                if (section.items.length === 0) return null;
+                const showHeading =
+                  section.seriesTitle !== null || (timelineHasNamedSeries && section.seriesTitle === null);
                 return (
-                  <Card key={project.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                    <div className="relative aspect-video bg-gray-200 dark:bg-[#2A2A2A] rounded-t-lg flex items-center justify-center overflow-hidden">
-                      {backgroundMediaUrl ? (
-                        <img src={backgroundMediaUrl} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="text-4xl" aria-hidden>🎬</div>
-                      )}
-                      {totalDuration > 0 && (
-                        <span className="absolute top-2 right-2 rounded bg-black/70 text-white text-xs font-medium px-1.5 py-0.5">
-                          {formatDuration(totalDuration)}
-                        </span>
-                      )}
-                      {totalDuration > 0 && (
-                        <span className="absolute bottom-2 right-2 rounded bg-black/70 text-white text-xs font-medium px-1.5 py-0.5">
-                          {formatDuration(totalDuration)}
-                        </span>
-                      )}
-                    </div>
-                    <CardHeader className="pb-2 pt-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-base truncate text-gray-900 dark:text-white min-w-0">{project.title}</CardTitle>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <Badge variant="outline" className={`text-xs font-normal ${statusBadgeClass(project.status ?? "draft")}`}>
-                            {statusLabel(project.status ?? "draft")}
-                          </Badge>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreVertical className="w-4 h-4" />
+                  <section key={section.seriesTitle ?? "__other__"}>
+                    {showHeading ? (
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                        {section.seriesTitle ?? "Other videos"}
+                      </h2>
+                    ) : null}
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                      {section.items.map((project) => {
+                        const content = (project.metadata ?? {}) as {
+                          scenes?: { duration?: number; elements?: { media?: { url?: string } }[] }[];
+                          template?: { name?: string };
+                          platform?: string;
+                          publishedPlatforms?: string[];
+                          [key: string]: unknown;
+                        };
+                        const scenes = Array.isArray(content.scenes) ? content.scenes : [];
+                        const totalDuration = scenes.reduce((acc, s) => acc + (Number(s.duration) || 0), 0);
+                        const firstScene = scenes[0];
+                        const backgroundMediaUrl =
+                          firstScene?.elements?.[0] && typeof firstScene.elements[0] === "object" && firstScene.elements[0] !== null && "media" in firstScene.elements[0]
+                            ? (firstScene.elements[0] as { media?: { url?: string } }).media?.url
+                            : undefined;
+                        const templateName = content.template && typeof content.template === "object" && "name" in content.template ? String(content.template.name) : undefined;
+                        const openHref = `/dashboard/video-timeline?projectId=${encodeURIComponent(project.id)}`;
+                        const publishedPlatforms = Array.isArray(content.publishedPlatforms)
+                          ? content.publishedPlatforms
+                          : typeof content.platform === "string" && content.platform
+                            ? [content.platform]
+                            : [];
+                        return (
+                          <Card key={project.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
+                            <div className="relative aspect-video bg-gray-200 dark:bg-[#2A2A2A] rounded-t-lg flex items-center justify-center overflow-hidden">
+                              {backgroundMediaUrl ? (
+                                <img src={backgroundMediaUrl} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="text-4xl" aria-hidden>🎬</div>
+                              )}
+                              {totalDuration > 0 && (
+                                <span className="absolute top-2 right-2 rounded bg-black/70 text-white text-xs font-medium px-1.5 py-0.5">
+                                  {formatDuration(totalDuration)}
+                                </span>
+                              )}
+                              {totalDuration > 0 && (
+                                <span className="absolute bottom-2 right-2 rounded bg-black/70 text-white text-xs font-medium px-1.5 py-0.5">
+                                  {formatDuration(totalDuration)}
+                                </span>
+                              )}
+                            </div>
+                            <CardHeader className="pb-2 pt-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <CardTitle className="text-base truncate text-gray-900 dark:text-white min-w-0">{project.title}</CardTitle>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <Badge variant="outline" className={`text-xs font-normal ${statusBadgeClass(project.status ?? "draft")}`}>
+                                    {statusLabel(project.status ?? "draft")}
+                                  </Badge>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                                        <MoreVertical className="w-4 h-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem
+                                        className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                                        onClick={() => handleDelete(project)}
+                                      >
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Delete
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </div>
+                              <CardDescription className="text-sm text-gray-600 dark:text-gray-400">
+                                {templateName ?? "Video"} • {scenes.length} scene{scenes.length !== 1 ? "s" : ""}
+                                {totalDuration > 0 && ` • ${formatDuration(totalDuration)}`}
+                              </CardDescription>
+                              <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+                                {formatDate(project.createdAt)}
+                              </p>
+                              {publishedPlatforms.length > 0 && (project.status ?? "").toLowerCase() === "published" && (
+                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                  {publishedPlatforms.map((p) => {
+                                    const name = String(p).toLowerCase();
+                                    const label = name.includes("tiktok") ? "TikTok" : name.includes("instagram") ? "Instagram" : name.includes("youtube") ? "YouTube" : p;
+                                    return (
+                                      <Badge key={p} variant="secondary" className="text-xs font-normal bg-muted">
+                                        {label}
+                                      </Badge>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </CardHeader>
+                            <CardContent className="pt-0 flex gap-2 flex-wrap">
+                              <Button variant="outline" size="sm" className="flex-1 min-w-0" asChild>
+                                <Link href={openHref}>
+                                  <ExternalLink className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                                  Open
+                                </Link>
                               </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
-                                onClick={() => handleDelete(project)}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                title="Preview"
+                                onClick={() => setPreviewVideo({ id: project.id, title: project.title, openHref })}
                               >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                      <CardDescription className="text-sm text-gray-600 dark:text-gray-400">
-                        {templateName ?? "Video"} • {scenes.length} scene{scenes.length !== 1 ? "s" : ""}
-                        {totalDuration > 0 && ` • ${formatDuration(totalDuration)}`}
-                      </CardDescription>
-                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
-                        {formatDate(project.createdAt)}
-                      </p>
-                      {publishedPlatforms.length > 0 && (project.status ?? "").toLowerCase() === "published" && (
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          {publishedPlatforms.map((p) => {
-                            const name = String(p).toLowerCase();
-                            const label = name.includes("tiktok") ? "TikTok" : name.includes("instagram") ? "Instagram" : name.includes("youtube") ? "YouTube" : p;
-                            return (
-                              <Badge key={p} variant="secondary" className="text-xs font-normal bg-muted">
-                                {label}
-                              </Badge>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </CardHeader>
-                    <CardContent className="pt-0 flex gap-2 flex-wrap">
-                      <Button variant="outline" size="sm" className="flex-1 min-w-0" asChild>
-                        <Link href={openHref}>
-                          <ExternalLink className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-                          Open
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        title="Preview"
-                        onClick={() => setPreviewVideo({ id: project.id, title: project.title, openHref })}
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="outline" size="sm" asChild title="Download">
-                        <Link href={openHref}>
-                          <Download className="w-3.5 h-3.5" />
-                        </Link>
-                      </Button>
-                    </CardContent>
-                  </Card>
+                                <Eye className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button variant="outline" size="sm" asChild title="Download">
+                                <Link href={openHref}>
+                                  <Download className="w-3.5 h-3.5" />
+                                </Link>
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </section>
                 );
               })}
             </div>

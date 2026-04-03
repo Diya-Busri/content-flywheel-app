@@ -71,9 +71,11 @@ export async function PATCH(
 
     const status = typeof body.status === "string" ? body.status : undefined;
     const metadataUpdate = body.metadata && typeof body.metadata === "object" ? body.metadata : undefined;
+    const titleUpdate = typeof body.title === "string" && body.title.trim() ? body.title.trim() : undefined;
 
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (status) updates.status = status;
+    if (titleUpdate) updates.title = titleUpdate.slice(0, 500);
     if (metadataUpdate) {
       const [current] = await db
         .select({ metadata: videosTable.metadata })

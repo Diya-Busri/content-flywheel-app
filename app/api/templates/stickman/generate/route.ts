@@ -35,7 +35,12 @@ export type StickmanShotTemplate =
 
 export interface StickmanScene {
   sceneIndex: number;
+  /** Full narration read by TTS — can be longer than on-screen text. */
   caption: string;
+  /** Short on-screen headline (viral Shorts / whiteboard style). */
+  sceneTitle?: string;
+  /** 2–3 punchy lines shown as a handwritten list while VO expands (tutorial-style). */
+  bullets?: string[];
   pose: StickmanPose;
   layout: StickmanLayout;
   keyObject: StickmanKeyObject;
@@ -61,14 +66,32 @@ function buildFallbackScenes(topic: string, sceneCount: number): StickmanScene[]
     const isIntro = i === 0;
     const isOutro = i === sceneCount - 1;
     const caption = isIntro
-      ? `Welcome to this deep dive on ${topic}. In this video we will break it down step by step so you can apply it confidently.`
+      ? `Most people get ${topic} backwards — here is the one shift that actually moves the needle in the first week.`
       : isOutro
-        ? `Now you have a complete framework for ${topic}. Review these steps, apply one action today, and keep iterating until results compound.`
-        : `Chapter ${chapter}, point ${beat}: here is a practical idea about ${topic} and how to use it in real situations without overcomplicating your process.`;
+        ? `Do this today: pick one step from ${topic}, ship it in public, and repeat tomorrow. That loop beats another month of planning.`
+        : `Beat ${beat}: a concrete move for ${topic} you can copy without buying another course or tool.`;
+
+    const sceneTitle = isIntro
+      ? `Stop guessing — fix ${topic} in one week`
+      : isOutro
+        ? `Your move today (copy this)`
+        : `Beat ${beat}: a real step for ${topic}`;
+
+    const bullets = isIntro
+      ? [`Everyone starts ${topic} backwards`, `One shift = visible progress fast`, `No new tools required`]
+      : isOutro
+        ? [`Pick one action from this video`, `Ship it publicly today`, `Repeat tomorrow — that is the system`]
+        : [
+            `Concrete move #${beat} for ${topic}`,
+            `Copy it without extra software`,
+            `Stack it with the previous beats`,
+          ];
 
     return {
       sceneIndex: i,
       caption,
+      sceneTitle,
+      bullets,
       pose: poses[i % poses.length] ?? "standing",
       layout: layouts[i % layouts.length] ?? "left-presenter",
       keyObject: keyObjects[i % keyObjects.length] ?? "idea",
@@ -131,7 +154,7 @@ function buildStickmanDraftMetadata(scenes: StickmanScene[], longMode: boolean) 
     runStart += estimatedSceneDuration;
     return {
       id,
-      title: scene.caption.slice(0, 80),
+      title: (scene.sceneTitle?.trim() || scene.caption).slice(0, 80),
       duration: estimatedSceneDuration,
       color: TIMELINE_SCENE_COLORS[idx % TIMELINE_SCENE_COLORS.length] ?? "#3B82F6",
       startTime,
@@ -188,7 +211,7 @@ export async function POST(request: NextRequest) {
       : "Target runtime: short explainer preview.";
     const captionGuide = longMode
       ? "caption: string (20-38 words, natural narration for long-form YouTube, include connective transitions between ideas)"
-      : "caption: string (15-25 words, clear and conversational, directly explaining the topic)";
+      : "caption: string (14-22 words, punchy YouTube voice — concrete, specific, zero filler)";
 
     // Build a required pose sequence that guarantees visual variety
     const ALL_POSES = ["pointing","standing","thinking","sitting","walking","celebrating","defeated","arms-raised"] as const;
@@ -216,9 +239,25 @@ export async function POST(request: NextRequest) {
 
 ${runtimeLine}
 
+Audience: distracted YouTube viewers — every scene must earn the next click. No corporate training tone.
+
+Hook rules (CRITICAL):
+- Scene 0 caption MUST open like a feed-stopping Short: bold claim, sharp contrast, or a direct question — NOT a soft setup.
+- FORBIDDEN in scene 0 (and avoid everywhere): "welcome", "in this video", "let's dive", "today we will", "journey", "embark", "exciting adventure", "deep dive".
+- Scene 0 must state ONE specific insight or mistake about "${topic}" in the first 12 words when possible.
+- Last scene: clear action step + urgency (today / this week), not vague inspiration.
+- Middle scenes: teach with numbers, steps, contrasts (before vs after, myth vs reality), or mini-stories — never generic platitudes.
+
+On-screen vs voice (like viral AI stickman tutorials):
+- "caption" is the FULL script the voiceover will read (can be longer, conversational).
+- "sceneTitle" is the BIG handwritten headline on the whiteboard (3-10 words, no quotes) — must grab attention like a Shorts title.
+- "bullets" is an array of EXACTLY 2 or 3 short lines (each max 10 words) that pop in as a list — the viewer reads these while listening; they must match the caption's meaning but stay punchy.
+
 Return ONLY a JSON object with a "scenes" array. Each scene object must have exactly these keys:
 - sceneIndex: number (0-based, 0 through ${sceneCount - 1})
 - ${captionGuide}
+- sceneTitle: string (3-10 words, bold claim or label for the whiteboard)
+- bullets: string[] (length 2 or 3 only; each item a short on-screen line)
 - pose: exactly one of: "standing" | "thinking" | "sitting" | "celebrating" | "pointing" | "defeated" | "arms-raised" | "walking"
 - layout: exactly one of: "left-presenter" | "center-presenter" | "right-presenter" | "desk-scene"
 - keyObject: exactly one of: "chart" | "clock" | "money" | "warning" | "audience" | "idea" | "brand"
@@ -295,17 +334,36 @@ Return ONLY valid JSON, no markdown, no explanation.`;
         ? (parsed as { scenes: unknown[] }).scenes
         : [];
 
+    function normalizeBullets(raw: unknown): string[] | undefined {
+      if (!Array.isArray(raw)) return undefined;
+      const out = raw
+        .filter((x): x is string => typeof x === "string")
+        .map((x) => x.trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      if (out.length < 2) return undefined;
+      return out;
+    }
+
     const scenes: StickmanScene[] = scenesRaw
-      .filter((s): s is { sceneIndex: number; caption: string; pose: string; layout?: string; keyObject?: string; camera?: string; shotTemplate?: string } =>
+      .filter((s): s is { sceneIndex: number; caption: string; pose: string; layout?: string; keyObject?: string; camera?: string; shotTemplate?: string; sceneTitle?: unknown; bullets?: unknown } =>
         typeof s === "object" &&
         s !== null &&
         typeof (s as { sceneIndex?: unknown }).sceneIndex === "number" &&
         typeof (s as { caption?: unknown }).caption === "string" &&
         typeof (s as { pose?: unknown }).pose === "string"
       )
-      .map((s, i) => ({
+      .map((s, i) => {
+        const sceneTitle =
+          typeof s.sceneTitle === "string" && s.sceneTitle.trim().length > 0
+            ? s.sceneTitle.trim().slice(0, 120)
+            : undefined;
+        const bullets = normalizeBullets(s.bullets);
+        return {
         sceneIndex: i,
         caption: s.caption.trim(),
+        sceneTitle,
+        bullets,
         pose: VALID_POSES.includes(s.pose as StickmanPose) ? (s.pose as StickmanPose) : "standing",
         layout: VALID_LAYOUTS.includes(s.layout as StickmanLayout)
           ? (s.layout as StickmanLayout)
@@ -327,7 +385,8 @@ Return ONLY valid JSON, no markdown, no explanation.`;
                   : i % 5 === 3
                     ? "walk-and-talk"
                     : "result-moment"),
-      }));
+      };
+      });
 
     if (scenes.length === 0) {
       const fallbackScenes = buildFallbackScenes(topic, sceneCount);

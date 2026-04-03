@@ -26,8 +26,6 @@ export type SatisfyingBuildSetupProps = {
   setBuildStyle: (v: string) => void;
   tone: string;
   setTone: (v: string) => void;
-  episodeNumber: number;
-  setEpisodeNumber: (v: number) => void;
   openingHook: string;
   setOpeningHook: (v: string) => void;
 };
@@ -41,8 +39,6 @@ export function SatisfyingBuildSetup({
   setBuildStyle,
   tone,
   setTone,
-  episodeNumber,
-  setEpisodeNumber,
   openingHook,
   setOpeningHook,
 }: SatisfyingBuildSetupProps) {
@@ -85,16 +81,6 @@ export function SatisfyingBuildSetup({
           options={SATISFYING_BUILD_TONE_OPTIONS}
           storageKey="template-studio/satisfying-build/tone"
           addPlaceholder="Add custom tone"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="satisfying-episode-number">Episode number</Label>
-        <Input
-          id="satisfying-episode-number"
-          type="number"
-          min={1}
-          value={episodeNumber}
-          onChange={(e) => setEpisodeNumber(Number(e.target.value) || 1)}
         />
       </div>
       <div className="space-y-2">

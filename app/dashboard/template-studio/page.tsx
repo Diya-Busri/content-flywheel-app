@@ -23,7 +23,7 @@ export default function TemplateStudioPage() {
   if (!userId) redirect("/sign-in");
 
   return (
-    <main className="p-6 md:p-10">
+    <div className="min-w-0 max-w-full p-6 md:p-10">
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
         Template Studio
       </h1>
@@ -33,6 +33,6 @@ export default function TemplateStudioPage() {
       <Suspense fallback={<TemplateStudioFallback />}>
         <TemplateStudioClient />
       </Suspense>
-    </main>
+    </div>
   );
 }

@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
+import { cn } from "@/lib/utils";
 import {
   Loader2,
   Sparkles,
@@ -69,6 +70,16 @@ import {
   type CreationMode,
   type TemplateStudioStoryTemplateId,
 } from "./template-studio-shared";
+import { ELEVENLABS_VOICES, getDefaultVoiceId, setDefaultVoiceId } from "@/lib/elevenlabs-voices";
+import { normalizeRawQuizRound } from "@/lib/viral-quiz-shuffle";
+import { resolveViralVisualTheme } from "@/lib/viral-visual-themes";
+import {
+  buildStickmanLibraryTitle,
+  buildViralExportFilenameBase,
+  loadTemplateStudioSeriesPrefs,
+  mergeSeriesIntoTimelinePayload,
+  saveTemplateStudioSeriesPrefs,
+} from "@/lib/template-studio-series";
 type TemplateType = "quotes" | "tips" | "affirmations";
 type FontStyle = "modern" | "elegant" | "bold" | "minimal";
 type SlideItem = { heading: string; body: string; bg_color?: string };
@@ -207,32 +218,32 @@ function buildTemplateStudioLibraryTitle(params: {
   theme: string;
   whatBuilding: string;
   dishName: string;
+  /** When set, titles become `Show · Ep N: …` for My Library grouping. */
+  seriesShowTitle?: string;
 }): string {
   const ep = params.episodeNumber >= 1 ? params.episodeNumber : 1;
+  let core: string;
   if (params.mode === "9") {
     const dish = params.dishName.trim();
-    const base = dish
+    core = dish
       ? `AI Cooking Video - ${dish.slice(0, 70)}${dish.length > 70 ? "…" : ""} - Episode ${ep}`
       : `AI Cooking Video - Episode ${ep}`;
-    return base.length > MAX_LIBRARY_TITLE_LEN
-      ? `${base.slice(0, MAX_LIBRARY_TITLE_LEN - 1)}…`
-      : base;
-  }
-  if (params.mode === "8") {
+  } else if (params.mode === "8") {
     const wb = params.whatBuilding.trim();
-    const base = wb
+    core = wb
       ? `Satisfying Build - ${wb.slice(0, 70)}${wb.length > 70 ? "…" : ""} - Episode ${ep}`
       : `Satisfying Build - Episode ${ep}`;
-    return base.length > MAX_LIBRARY_TITLE_LEN
-      ? `${base.slice(0, MAX_LIBRARY_TITLE_LEN - 1)}…`
-      : base;
+  } else {
+    const storyTitle = params.theme.trim() || "Story";
+    const st = storyTitle.length > 60 ? `${storyTitle.slice(0, 59)}…` : storyTitle;
+    core = `AI Story - ${st} - Episode ${ep}`;
   }
-  const storyTitle = params.theme.trim() || "Story";
-  const st = storyTitle.length > 60 ? `${storyTitle.slice(0, 59)}…` : storyTitle;
-  const base = `AI Story - ${st} - Episode ${ep}`;
-  return base.length > MAX_LIBRARY_TITLE_LEN
-    ? `${base.slice(0, MAX_LIBRARY_TITLE_LEN - 1)}…`
-    : base;
+  const show = params.seriesShowTitle?.trim();
+  if (!show) {
+    return core.length > MAX_LIBRARY_TITLE_LEN ? `${core.slice(0, MAX_LIBRARY_TITLE_LEN - 1)}…` : core;
+  }
+  const prefixed = `${show} · Ep ${ep}: ${core}`;
+  return prefixed.length > MAX_LIBRARY_TITLE_LEN ? `${prefixed.slice(0, MAX_LIBRARY_TITLE_LEN - 1)}…` : prefixed;
 }
 
 export default function TemplateStudioClient() {
@@ -263,6 +274,9 @@ export default function TemplateStudioClient() {
   const [aiStoryTone, setAiStoryTone] = useState("Dramatic");
   const [aiStoryStyle, setAiStoryStyle] = useState("Brainrot");
   const [episodeNumber, setEpisodeNumber] = useState(1);
+  /** Optional show name — groups drafts in My Library + prefixes stickman / story titles. */
+  const [seriesShowTitle, setSeriesShowTitle] = useState("");
+  const [seriesPrefsLoaded, setSeriesPrefsLoaded] = useState(false);
   const [satisfyingCharacterType, setSatisfyingCharacterType] = useState("Person");
   const [whatBuilding, setWhatBuilding] = useState("");
   const [satisfyingBuildStyle, setSatisfyingBuildStyle] = useState("Miniature Construction");
@@ -330,9 +344,16 @@ export default function TemplateStudioClient() {
   const [viralFormLength, setViralFormLength] = useState<"short" | "long">("short");
   const [viralShowTimer, setViralShowTimer] = useState(true);
   const [viralVoiceover, setViralVoiceover] = useState(false);
+  /** ElevenLabs voice for MP4 export (same catalog as Video Creation Guide). */
+  const [viralExportVoiceId, setViralExportVoiceId] = useState(ELEVENLABS_VOICES[0].voiceId);
+  const [viralBgm, setViralBgm] = useState<BgmSelectValue>("upbeat");
   const [viralData, setViralData] = useState<import("@/components/templates/ViralTemplatePreview").ViralTemplateData | null>(null);
   const [viralLoading, setViralLoading] = useState(false);
   const [viralExporting, setViralExporting] = useState(false);
+
+  useEffect(() => {
+    setViralExportVoiceId(getDefaultVoiceId());
+  }, []);
 
   // ── Kinetic Typography state (mode 13) ───────────────────────────────────────
   const [kineticTopic, setKineticTopic] = useState("");
@@ -400,13 +421,29 @@ export default function TemplateStudioClient() {
   const isStickmanMode = mode === "11";
   const isViralMode = mode === "12";
   const isKineticMode = mode === "13";
+  /** Modes that attach show/episode into timeline metadata when saving (not the setup-only screen). */
+  const isTemplateStudioSeriesMode =
+    mode === "7" || mode === "8" || mode === "9" || mode === "10" || mode === "11" || mode === "12" || mode === "13";
+  const isSeriesLibrarySetupMode = mode === "14";
+
+  useEffect(() => {
+    const p = loadTemplateStudioSeriesPrefs();
+    setSeriesShowTitle(p.seriesTitle);
+    setEpisodeNumber(p.episodeNumber);
+    setSeriesPrefsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!seriesPrefsLoaded) return;
+    saveTemplateStudioSeriesPrefs({ seriesTitle: seriesShowTitle, episodeNumber });
+  }, [seriesPrefsLoaded, seriesShowTitle, episodeNumber]);
 
   const persistStickmanDraft = useCallback(async (silent = false): Promise<string | null> => {
     if (!isStickmanMode || stickmanScenes.length === 0) return null;
     if (!silent) setStickmanLibrarySaving(true);
     try {
       const baseTopic = stickmanTopic.trim() || "Stickman Whiteboard";
-      const draftTitle = `Stickman: ${baseTopic.slice(0, 72)} (Draft)`;
+      const draftTitle = buildStickmanLibraryTitle(baseTopic, seriesShowTitle, episodeNumber);
       const estimatedSceneDuration = stickmanLongMode ? 28 : 12;
       let runStart = 0;
       const timelineScenes = stickmanScenes.map((scene, idx) => {
@@ -434,14 +471,18 @@ export default function TemplateStudioClient() {
         startTime: s.startTime,
         endTime: s.startTime + s.duration,
       }));
-      const payloadContent = {
-        scenes: timelineScenes,
-        captions: timedCaptions,
-        totalDuration,
-        aspectRatio: "16:9",
-        sourceType: "stickman-whiteboard",
-        stickmanScenes,
-      };
+      const payloadContent = mergeSeriesIntoTimelinePayload(
+        {
+          scenes: timelineScenes,
+          captions: timedCaptions,
+          totalDuration,
+          aspectRatio: "16:9",
+          sourceType: "stickman-whiteboard",
+          stickmanScenes,
+        },
+        seriesShowTitle,
+        episodeNumber
+      );
 
       if (stickmanLibraryVideoId) {
         const patchRes = await fetch(`/api/video-timeline/videos/${encodeURIComponent(stickmanLibraryVideoId)}`, {
@@ -496,7 +537,7 @@ export default function TemplateStudioClient() {
     } finally {
       if (!silent) setStickmanLibrarySaving(false);
     }
-  }, [isStickmanMode, stickmanLibraryVideoId, stickmanLongMode, stickmanScenes, stickmanTopic, toast]);
+  }, [isStickmanMode, stickmanLibraryVideoId, stickmanLongMode, stickmanScenes, stickmanTopic, toast, seriesShowTitle, episodeNumber]);
 
   const saveStickmanToLibrary = useCallback(async () => {
     setStickmanLibrarySaving(true);
@@ -718,7 +759,9 @@ export default function TemplateStudioClient() {
   }, [socialMediaPack]);
 
   const canProceedStep1 =
-    mode === "7"
+    mode === "14"
+      ? false
+      : mode === "7"
       ? characters.trim().length > 0 && theme.trim().length > 0
       : mode === "8"
         ? satisfyingCharacterType.trim().length > 0 && whatBuilding.trim().length > 0
@@ -980,6 +1023,7 @@ export default function TemplateStudioClient() {
           theme,
           whatBuilding,
           dishName: cookingDishName,
+          seriesShowTitle,
         });
         void fetch("/api/video-timeline/save", {
           method: "POST",
@@ -1813,20 +1857,31 @@ export default function TemplateStudioClient() {
       effectiveVoiceoverUrls
     );
     try {
+      const draftTitle = buildTemplateStudioLibraryTitle({
+        mode,
+        episodeNumber,
+        theme,
+        whatBuilding,
+        dishName: cookingDishName,
+        seriesShowTitle,
+      });
+      const metaBase = {
+        scenes,
+        captions,
+        totalDuration,
+        sourceType: "ai-story" as const,
+        savedAt: new Date().toISOString(),
+        ...(Object.keys(characterReferenceUrls).length > 0
+          ? { aiStoryCharacterReferenceUrls: characterReferenceUrls }
+          : {}),
+      };
+      const metadata = mergeSeriesIntoTimelinePayload(metaBase, seriesShowTitle, episodeNumber);
       const res = await fetch(`/api/video-timeline/videos/${encodeURIComponent(libraryDraftVideoId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          metadata: {
-            scenes,
-            captions,
-            totalDuration,
-            sourceType: "ai-story",
-            savedAt: new Date().toISOString(),
-            ...(Object.keys(characterReferenceUrls).length > 0
-              ? { aiStoryCharacterReferenceUrls: characterReferenceUrls }
-              : {}),
-          },
+          title: draftTitle,
+          metadata,
         }),
       });
       return res.ok;
@@ -1841,6 +1896,12 @@ export default function TemplateStudioClient() {
     sceneVideoUrls,
     effectiveVoiceoverUrls,
     characterReferenceUrlsSerializeKey,
+    cookingDishName,
+    episodeNumber,
+    mode,
+    seriesShowTitle,
+    theme,
+    whatBuilding,
   ]);
 
   const openVideoTimeline = useCallback(async () => {
@@ -1911,12 +1972,14 @@ export default function TemplateStudioClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title:
-            mode === "8"
-              ? `Satisfying Build — Episode ${episodeNumber}`
-              : mode === "9"
-                ? `AI Cooking Video — Episode ${episodeNumber}`
-              : `AI Story — Episode ${episodeNumber}`,
+          title: buildTemplateStudioLibraryTitle({
+            mode,
+            episodeNumber,
+            theme,
+            whatBuilding,
+            dishName: cookingDishName,
+            seriesShowTitle,
+          }),
           scenes_json,
         }),
       });
@@ -1960,15 +2023,19 @@ export default function TemplateStudioClient() {
   }, [
     aiStoryScenes,
     canExportStoryVideo,
+    cookingDishName,
     episodeNumber,
     flushAiStoryDraftToLibrary,
     libraryDraftVideoId,
     mode,
     sceneImageUrls,
     sceneVideoUrls,
+    seriesShowTitle,
     storyBackgroundMusic,
+    theme,
     toast,
     effectiveVoiceoverUrls,
+    whatBuilding,
     writeAiStoryTimelinePrefill,
   ]);
 
@@ -1988,7 +2055,8 @@ export default function TemplateStudioClient() {
         if (!res.ok) return;
         const data = await res.json();
         setSetupLoaded(true);
-        if (data.mode && ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"].includes(data.mode)) {
+        const allowedModes = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"];
+        if (data.mode && allowedModes.includes(data.mode)) {
           setMode(data.mode as CreationMode);
         }
         const i = data.inputs || {};
@@ -2039,7 +2107,15 @@ export default function TemplateStudioClient() {
       sceneVideoUrls,
       voiceoverUrls
     );
-    const metadata = {
+    const draftTitle = buildTemplateStudioLibraryTitle({
+      mode,
+      episodeNumber,
+      theme,
+      whatBuilding,
+      dishName: cookingDishName,
+      seriesShowTitle,
+    });
+    const metaBase = {
       scenes,
       captions,
       totalDuration,
@@ -2049,6 +2125,7 @@ export default function TemplateStudioClient() {
         ? { aiStoryCharacterReferenceUrls: characterReferenceUrls }
         : {}),
     };
+    const metadata = mergeSeriesIntoTimelinePayload(metaBase, seriesShowTitle, episodeNumber);
 
     let cancelled = false;
     setLibraryDraftSaving(true);
@@ -2056,7 +2133,7 @@ export default function TemplateStudioClient() {
       fetch(`/api/video-timeline/videos/${encodeURIComponent(libraryDraftVideoId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ metadata }),
+        body: JSON.stringify({ title: draftTitle, metadata }),
       })
         .then((res) => {
           if (cancelled) return;
@@ -2074,13 +2151,17 @@ export default function TemplateStudioClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: mode === "8" ? "Satisfying Build (Draft)" : mode === "9" ? "AI Cooking Video (Draft)" : "AI Story (Draft)",
-          content: {
-            scenes,
-            captions,
-            totalDuration,
-            sourceType: "ai-story",
-          },
+          title: draftTitle,
+          content: mergeSeriesIntoTimelinePayload(
+            {
+              scenes,
+              captions,
+              totalDuration,
+              sourceType: "ai-story",
+            },
+            seriesShowTitle,
+            episodeNumber
+          ),
         }),
       })
         .then((res) => res.json())
@@ -2116,6 +2197,11 @@ export default function TemplateStudioClient() {
     voiceoverUrls,
     libraryDraftVideoId,
     characterReferenceUrlsSerializeKey,
+    cookingDishName,
+    episodeNumber,
+    seriesShowTitle,
+    theme,
+    whatBuilding,
   ]);
 
   // Prefill from Campaign Mode (carousel): slides + brand colours
@@ -2260,7 +2346,8 @@ export default function TemplateStudioClient() {
         const storyN = next === "7" || next === "8" || next === "9";
         const brandM = mode === "10";
         const brandN = next === "10";
-        if (storyM || storyN || brandM || brandN) {
+        const skipPipelineReset = mode === "14" || next === "14";
+        if (!skipPipelineReset && (storyM || storyN || brandM || brandN)) {
           setAiStoryScenes([]);
           setSocialMediaPack(null);
           setVoiceoverUrls({});
@@ -2276,15 +2363,20 @@ export default function TemplateStudioClient() {
             // ignore
           }
         }
-        if (brandM && !brandN) {
+        if (!skipPipelineReset && brandM && !brandN) {
           setBrandStoryVideoUrl(null);
           setBrandStoryVideoError(null);
         }
 
         const stickM = mode === "11";
         const stickN = next === "11";
-        if (stickM || stickN) {
+        if (!skipPipelineReset && (stickM || stickN)) {
           setStickmanScenes([]);
+        }
+
+        // Saved "custom topic" only applies to slide-pack modes; drop it when switching to AI video, etc.
+        if (next !== "1" && next !== "4") {
+          setCustomCreationTopic("");
         }
       }
       setMode(next);
@@ -2293,7 +2385,7 @@ export default function TemplateStudioClient() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="min-w-0 max-w-full space-y-8">
       {/* Step indicator */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span
@@ -2321,73 +2413,123 @@ export default function TemplateStudioClient() {
           <CardHeader>
             <CardTitle>Template Setup</CardTitle>
             <CardDescription>
-              Choose what you&apos;re creating, then fill in the fields. Your choices are saved so you can regenerate later.
+              {isSeriesLibrarySetupMode
+                ? "Set your show name and episode number once. They apply when you save or export from AI Story, Stickman, Quiz, Kinetic, and similar templates. Switch back to a format when you're ready to create."
+                : "Pick a format from the menu — the form below updates for that mode only. Your setup is saved automatically."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label>What are you creating this for?</Label>
-              <Select
-                value={customCreationTopic.trim() ? undefined : mode}
-                onValueChange={(v) => {
-                  // Picking a predefined mode should clear custom-topic override.
-                  if (customCreationTopic.trim()) setCustomCreationTopic("");
-                  handleCreationModeChange(v as CreationMode);
+              <Label htmlFor="template-studio-creation-mode">What are you creating?</Label>
+              <select
+                id="template-studio-creation-mode"
+                className={cn(
+                  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground",
+                  "ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                  "disabled:cursor-not-allowed disabled:opacity-50"
+                )}
+                value={mode}
+                onChange={(e) => {
+                  const v = e.target.value as CreationMode;
+                  if (!v) return;
+                  handleCreationModeChange(v);
                 }}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select from presets (optional if using custom topic)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CREATION_MODE_OPTION_GROUPS.map((group, gi) => (
-                    <Fragment key={group.label}>
-                      <SelectGroup>
-                        <SelectLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          {group.label}
-                        </SelectLabel>
-                        {group.options.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                      {gi < CREATION_MODE_OPTION_GROUPS.length - 1 ? (
-                        <SelectSeparator className="my-2 bg-border" />
-                      ) : null}
-                    </Fragment>
-                  ))}
-                </SelectContent>
-              </Select>
-              <div className="pt-1">
+                <option value="" disabled>
+                  Choose a format…
+                </option>
+                {CREATION_MODE_OPTION_GROUPS.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.options.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              {isSeriesLibrarySetupMode ? null : !isTemplateStudioSeriesMode ? (
+                <p className="text-xs text-muted-foreground">
+                  Optional <span className="font-medium text-foreground">show name &amp; episode</span> for My Library: choose{" "}
+                  <span className="font-medium text-foreground">Show &amp; episode (My Library grouping)</span> under Library above.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  To change show or episode without leaving this template, switch to{" "}
+                  <span className="font-medium text-foreground">Show &amp; episode (My Library grouping)</span> under Library.
+                </p>
+              )}
+            </div>
+
+            {(mode === "1" || mode === "4") && (
+              <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+                <p className="text-sm font-medium text-foreground">Slide pack topic (quotes / tips)</p>
+                <p className="text-xs text-muted-foreground">
+                  Saved topics fill your niche field. This section is only for Share Knowledge and Motivational slide packs — not for Stickman or other AI videos.
+                </p>
                 <CreatableSelectField
-                  label="Or add your own topic (saved)"
+                  label="Saved topics (optional)"
                   value={customCreationTopic}
                   onValueChange={(v) => {
                     setCustomCreationTopic(v);
                     setNiche(v);
-                    // Keep non-story form fields visible for custom topics.
-                    handleCreationModeChange("1");
                   }}
                   options={[]}
                   storageKey="template-studio/custom-creation-topics"
-                  addPlaceholder="Type your topic and save it"
+                  addPlaceholder="Type a topic and click Save"
                 />
-                {customCreationTopic.trim() ? (
-                  <p className="text-xs text-muted-foreground pt-1">
-                    Using custom topic: preset mode is intentionally unselected.
-                  </p>
-                ) : null}
               </div>
-            </div>
+            )}
 
-            {mode !== "10" ? (
+            {isSeriesLibrarySetupMode ? (
+              <div className="rounded-xl border border-orange-500/30 bg-gradient-to-br from-orange-500/10 to-violet-500/5 p-4 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Show &amp; episode</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    These values are saved on this device and merged into My Library when you use AI templates (story, stickman, quiz, kinetic, brand story, etc.).
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="series-show-title">Show name</Label>
+                  <Input
+                    id="series-show-title"
+                    placeholder='e.g. "Money myths Monday" or "Coach Jay explains"'
+                    value={seriesShowTitle}
+                    onChange={(e) => setSeriesShowTitle(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="space-y-2 flex-1 min-w-[140px]">
+                    <Label htmlFor="global-episode-number">Episode #</Label>
+                    <Input
+                      id="global-episode-number"
+                      type="number"
+                      min={1}
+                      value={episodeNumber}
+                      onChange={(e) => setEpisodeNumber(Math.max(1, Number(e.target.value) || 1))}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="mb-0.5"
+                    onClick={() => setEpisodeNumber((n) => n + 1)}
+                  >
+                    Next episode +1
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {isStoryTemplateMode ? (
               <div className="flex flex-row items-center justify-between gap-4 rounded-lg border border-border px-4 py-3">
                 <div className="space-y-0.5">
                   <Label htmlFor="voiceover-enabled" className="text-base">
                     Voiceover
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Turn off to hide voice generation and audio on story scene cards.
+                    Turn off to hide voice generation and audio on AI Story / Satisfying Build / Cooking scene cards.
                   </p>
                 </div>
                 <Switch
@@ -2414,22 +2556,22 @@ export default function TemplateStudioClient() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Template type</Label>
-                  <Select
+                  <Label htmlFor="template-studio-template-type">Template type</Label>
+                  <select
+                    id="template-studio-template-type"
+                    className={cn(
+                      "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground",
+                      "ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    )}
                     value={templateType}
-                    onValueChange={(v) => setTemplateType(v as TemplateType)}
+                    onChange={(e) => setTemplateType(e.target.value as TemplateType)}
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TEMPLATE_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    {TEMPLATE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </>
             )}
@@ -2753,16 +2895,6 @@ export default function TemplateStudioClient() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="episodeNumber">Episode number</Label>
-                  <Input
-                    id="episodeNumber"
-                    type="number"
-                    min={1}
-                    value={episodeNumber}
-                    onChange={(e) => setEpisodeNumber(Number(e.target.value) || 1)}
-                  />
-                </div>
               </>
             )}
 
@@ -2776,8 +2908,6 @@ export default function TemplateStudioClient() {
                 setBuildStyle={setSatisfyingBuildStyle}
                 tone={satisfyingBuildTone}
                 setTone={setSatisfyingBuildTone}
-                episodeNumber={episodeNumber}
-                setEpisodeNumber={setEpisodeNumber}
                 openingHook={satisfyingOpeningHook}
                 setOpeningHook={setSatisfyingOpeningHook}
               />
@@ -2793,8 +2923,6 @@ export default function TemplateStudioClient() {
                 setCookingStyle={setCookingStyle}
                 tone={cookingTone}
                 setTone={setCookingTone}
-                episodeNumber={episodeNumber}
-                setEpisodeNumber={setEpisodeNumber}
                 openingHook={cookingOpeningHook}
                 setOpeningHook={setCookingOpeningHook}
                 sceneCount={cookingSceneCount}
@@ -2858,6 +2986,50 @@ export default function TemplateStudioClient() {
                     <input type="checkbox" checked={viralVoiceover} onChange={(e) => setViralVoiceover(e.target.checked)} className="accent-orange-500 w-4 h-4" />
                     <span className="text-sm">🔊 Preview voiceover (browser TTS)</span>
                   </label>
+                </div>
+                <div className="space-y-2">
+                  <Label>Voice (ElevenLabs, for MP4 export)</Label>
+                  <Select
+                    value={viralExportVoiceId}
+                    onValueChange={(v) => {
+                      setViralExportVoiceId(v);
+                      setDefaultVoiceId(v);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select voice" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ELEVENLABS_VOICES.map((v) => (
+                        <SelectItem key={v.voiceId} value={v.voiceId}>
+                          {v.name} — {v.description}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Used for the full narration when you export MP4. Preview above uses browser speech unless you only need a quick listen. Requires{" "}
+                    <code className="text-[11px] bg-muted px-1 rounded">ELEVENLABS_API_KEY</code>.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Background music</Label>
+                  <Select value={viralBgm} onValueChange={(v) => setViralBgm(v as BgmSelectValue)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Music" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BGM_SELECT_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Looped under the voiceover in preview and MP4. Add MP3s under <code className="text-[11px] bg-muted px-1 rounded">public/bgm/</code> per{" "}
+                    <code className="text-[11px] bg-muted px-1 rounded">ATTRIBUTION.md</code>.
+                  </p>
                 </div>
               </div>
             )}
@@ -2943,14 +3115,19 @@ export default function TemplateStudioClient() {
               />
             )}
 
-            {!isStoryTemplateMode && mode !== "10" && !isStickmanMode && (
+            {!isStoryTemplateMode && mode !== "10" && !isStickmanMode && !isSeriesLibrarySetupMode && (
               <>
             <div className="space-y-2">
-              <Label>Number of slides</Label>
-              <Select
+              <Label htmlFor="template-studio-slide-count">Number of slides</Label>
+              <select
+                id="template-studio-slide-count"
+                className={cn(
+                  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground",
+                  "ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                )}
                 value={mode === "5" ? String(slideCountViral) : String(slideCount)}
-                onValueChange={(v) => {
-                  const n = Number(v);
+                onChange={(e) => {
+                  const n = Number(e.target.value);
                   if (mode === "5") {
                     if ([5, 6, 7, 8, 9, 10].includes(n)) setSlideCountViral(n as 5 | 6 | 7 | 8 | 9 | 10);
                   } else {
@@ -2958,23 +3135,18 @@ export default function TemplateStudioClient() {
                   }
                 }}
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {mode === "5"
-                    ? SLIDE_COUNT_VIRAL_OPTIONS.map((n) => (
-                        <SelectItem key={n} value={String(n)}>
-                          {n} slides
-                        </SelectItem>
-                      ))
-                    : SLIDE_COUNT_OPTIONS.map((n) => (
-                        <SelectItem key={n} value={String(n)}>
-                          {n} slides
-                        </SelectItem>
-                      ))}
-                </SelectContent>
-              </Select>
+                {mode === "5"
+                  ? SLIDE_COUNT_VIRAL_OPTIONS.map((n) => (
+                      <option key={n} value={String(n)}>
+                        {n} slides
+                      </option>
+                    ))
+                  : SLIDE_COUNT_OPTIONS.map((n) => (
+                      <option key={n} value={String(n)}>
+                        {n} slides
+                      </option>
+                    ))}
+              </select>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -3017,28 +3189,32 @@ export default function TemplateStudioClient() {
             </div>
 
             <div className="space-y-2">
-              <Label>Font style</Label>
-              <Select
+              <Label htmlFor="template-studio-font-style">Font style</Label>
+              <select
+                id="template-studio-font-style"
+                className={cn(
+                  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground",
+                  "ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                )}
                 value={fontStyle}
-                onValueChange={(v) => setFontStyle(v as FontStyle)}
+                onChange={(e) => setFontStyle(e.target.value as FontStyle)}
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {FONT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {FONT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </div>
               </>
             )}
 
             <div className="flex flex-wrap justify-end gap-2">
-              {isAiStoryMode && aiStoryScenes.length === 0 && aiStoryUiPhase === "characterPreview" ? (
+              {isSeriesLibrarySetupMode ? (
+                <p className="w-full text-sm text-muted-foreground text-left border-t border-border pt-4">
+                  Saved automatically on this device. When you&apos;re ready to create, choose a template from the menu above — your show and episode apply to the next My Library save or export.
+                </p>
+              ) : isAiStoryMode && aiStoryScenes.length === 0 && aiStoryUiPhase === "characterPreview" ? (
                 <>
                   <Button
                     type="button"
@@ -3089,7 +3265,14 @@ export default function TemplateStudioClient() {
                         });
                         const json = await res.json() as ViralTemplateData & { error?: string };
                         if (!res.ok || json.error) throw new Error(json.error ?? "Generation failed");
-                        setViralData(json);
+                        const viralPayload: ViralTemplateData =
+                          json.type === "quiz" && Array.isArray(json.rounds)
+                            ? {
+                                ...json,
+                                rounds: json.rounds.map((r) => normalizeRawQuizRound(r)),
+                              }
+                            : json;
+                        setViralData(viralPayload);
                         toast({ title: "Rounds ready!", description: `${(json.rounds ?? []).length} ${viralType === "quiz" ? "quiz questions" : "dilemmas"} generated.` });
                       } catch (e) {
                         toast({ title: "Generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
@@ -3132,14 +3315,17 @@ export default function TemplateStudioClient() {
                         if (!res.ok || data.error) throw new Error(data.error ?? "Generation failed");
                         const generatedScenes = data.scenes ?? [];
                         setStickmanScenes(generatedScenes);
-                        if (typeof data.savedDraftId === "string" && data.savedDraftId) {
-                          setStickmanLibraryVideoId(data.savedDraftId);
+                        const serverDraftId =
+                          typeof data.savedDraftId === "string" && data.savedDraftId ? data.savedDraftId : null;
+                        if (serverDraftId) {
+                          setStickmanLibraryVideoId(serverDraftId);
                           try {
-                            sessionStorage.setItem(STICKMAN_LIBRARY_DRAFT_STORAGE_KEY, data.savedDraftId);
+                            sessionStorage.setItem(STICKMAN_LIBRARY_DRAFT_STORAGE_KEY, serverDraftId);
                           } catch {
                             // ignore
                           }
                         }
+                        const effectiveStickmanLibraryId = serverDraftId ?? stickmanLibraryVideoId;
                         // Save immediately when scenes are generated so it shows in My Library.
                         try {
                           const estimatedSceneDuration = stickmanLongMode ? 28 : 12;
@@ -3169,18 +3355,22 @@ export default function TemplateStudioClient() {
                             startTime: s.startTime,
                             endTime: s.startTime + s.duration,
                           }));
-                          const payloadContent = {
-                            scenes: timelineScenes,
-                            captions: timedCaptions,
-                            totalDuration,
-                            aspectRatio: "16:9",
-                            sourceType: "stickman-whiteboard",
-                            stickmanScenes: generatedScenes,
-                          };
                           const baseTopic = stickmanTopic.trim() || "Stickman Whiteboard";
-                          const draftTitle = `Stickman: ${baseTopic.slice(0, 72)} (Draft)`;
-                          if (stickmanLibraryVideoId) {
-                            const patchRes = await fetch(`/api/video-timeline/videos/${encodeURIComponent(stickmanLibraryVideoId)}`, {
+                          const payloadContent = mergeSeriesIntoTimelinePayload(
+                            {
+                              scenes: timelineScenes,
+                              captions: timedCaptions,
+                              totalDuration,
+                              aspectRatio: "16:9",
+                              sourceType: "stickman-whiteboard",
+                              stickmanScenes: generatedScenes,
+                            },
+                            seriesShowTitle,
+                            episodeNumber
+                          );
+                          const draftTitle = buildStickmanLibraryTitle(baseTopic, seriesShowTitle, episodeNumber);
+                          if (effectiveStickmanLibraryId) {
+                            const patchRes = await fetch(`/api/video-timeline/videos/${encodeURIComponent(effectiveStickmanLibraryId)}`, {
                               method: "PATCH",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({ title: draftTitle, metadata: payloadContent }),
@@ -3328,15 +3518,17 @@ export default function TemplateStudioClient() {
               Press play to watch the stickman draw scene-by-scene with AI voiceover. Each scene auto-advances when the voiceover finishes.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <StickmanWhiteboard
-              scenes={stickmanScenes}
-              voiceId={stickmanVoiceId}
-              autoPlay={false}
-              onComplete={() =>
-                toast({ title: "Playback complete!", description: "Your whiteboard video is ready." })
-              }
-            />
+          <CardContent className="min-w-0 space-y-6">
+            <div className="mx-auto w-full min-w-0 max-w-5xl overflow-hidden rounded-xl border border-border/40 bg-muted/20 p-2 sm:p-3">
+              <StickmanWhiteboard
+                scenes={stickmanScenes}
+                voiceId={stickmanVoiceId}
+                autoPlay={false}
+                onComplete={() =>
+                  toast({ title: "Playback complete!", description: "Your whiteboard video is ready." })
+                }
+              />
+            </div>
 
             {/* Scene list */}
             <div className="border-t pt-4 space-y-2">
@@ -3347,9 +3539,19 @@ export default function TemplateStudioClient() {
                     <span className="shrink-0 w-6 h-6 rounded-full bg-orange-100 text-orange-600 text-xs font-bold flex items-center justify-center">
                       {s.sceneIndex + 1}
                     </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-foreground">{s.caption}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                    <div className="flex-1 min-w-0 space-y-1">
+                      {s.sceneTitle?.trim() ? (
+                        <p className="text-foreground font-semibold text-orange-700 dark:text-orange-400">{s.sceneTitle.trim()}</p>
+                      ) : null}
+                      {Array.isArray(s.bullets) && s.bullets.some((b) => b.trim()) ? (
+                        <ul className="list-disc pl-4 text-muted-foreground text-xs space-y-0.5">
+                          {s.bullets.filter((b) => b.trim()).map((b, j) => (
+                            <li key={j}>{b.trim()}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      <p className="text-foreground text-sm">{s.caption}</p>
+                      <p className="text-xs text-muted-foreground">
                         Pose: {s.pose} · Layout: {s.layout ?? "left-presenter"} · Object: {s.keyObject ?? "idea"} · Camera: {s.camera ?? "medium"} · Shot: {s.shotTemplate ?? "stand-explain"}
                       </p>
                     </div>
@@ -3431,10 +3633,26 @@ export default function TemplateStudioClient() {
                 aspectRatio: viralFormLength === "long" ? "16:9" : "9:16",
                 showTimer: viralShowTimer,
                 voiceover: viralVoiceover,
+                backgroundMusic: viralBgm,
               } satisfies ViralSettings}
             />
             <div className="rounded-lg bg-muted/60 border p-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-2">Export options</p>
+              <p className="text-xs mb-3">
+                MP4 voiceover:{" "}
+                <span className="font-medium text-foreground">
+                  {ELEVENLABS_VOICES.find((v) => v.voiceId === viralExportVoiceId)?.name ?? "ElevenLabs"}
+                </span>
+                {" "}(set under <span className="text-foreground">Voice (ElevenLabs, for MP4 export)</span> above). Background:{" "}
+                <span className="font-medium text-foreground">
+                  {BGM_SELECT_OPTIONS.find((o) => o.value === viralBgm)?.label ?? viralBgm}
+                </span>
+                . Visual style:{" "}
+                <span className="font-medium text-foreground">
+                  {resolveViralVisualTheme(viralData.visualTheme).label}
+                </span>
+                {" "}(picked randomly when you generate — export matches preview).
+              </p>
               <div className="flex flex-wrap gap-2">
                 <Button type="button" size="sm" disabled={viralExporting} onClick={async () => {
                   setViralExporting(true);
@@ -3442,14 +3660,20 @@ export default function TemplateStudioClient() {
                     const res = await fetch("/api/templates/viral/export", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ ...viralData, slideDuration: viralFormLength === "long" ? VIRAL_LONG_DURATION : VIRAL_SHORT_DURATION, aspectRatio: viralFormLength === "long" ? "16:9" : "9:16" }),
+                      body: JSON.stringify({
+                        ...viralData,
+                        slideDuration: viralFormLength === "long" ? VIRAL_LONG_DURATION : VIRAL_SHORT_DURATION,
+                        aspectRatio: viralFormLength === "long" ? "16:9" : "9:16",
+                        voiceId: viralExportVoiceId,
+                        backgroundMusic: viralBgm,
+                      }),
                     });
                     if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error((j as {error?:string}).error ?? "Export failed"); }
                     const blob = await res.blob();
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;
-                    a.download = `${(viralData.topic || "viral").slice(0, 40)}.mp4`;
+                    a.download = `${buildViralExportFilenameBase(viralData.topic || "", seriesShowTitle, episodeNumber)}.mp4`;
                     a.click();
                     URL.revokeObjectURL(url);
                     toast({ title: "MP4 downloading", description: "Check your Downloads folder." });
@@ -3492,7 +3716,7 @@ export default function TemplateStudioClient() {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;
-                    a.download = `${(kineticData.topic || "kinetic").slice(0, 40)}.mp4`;
+                    a.download = `${buildViralExportFilenameBase(kineticData.topic || "", seriesShowTitle, episodeNumber)}.mp4`;
                     a.click();
                     URL.revokeObjectURL(url);
                     toast({ title: "MP4 downloading", description: "Check your Downloads folder." });

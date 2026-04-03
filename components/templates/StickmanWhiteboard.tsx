@@ -26,7 +26,12 @@ export type StickmanShotTemplate =
 
 export interface StickmanScene {
   sceneIndex: number;
+  /** Full VO script (ElevenLabs reads this). */
   caption: string;
+  /** Short headline on the whiteboard (Shorts-style hook). */
+  sceneTitle?: string;
+  /** 2–3 punchy lines shown as a list while VO plays (tutorial-style). */
+  bullets?: string[];
   pose: StickmanPose;
   layout?: StickmanLayout;
   keyObject?: StickmanKeyObject;
@@ -54,11 +59,11 @@ type El =
   | { k: "P"; p: string; delay: number; sw?: number }
   | { k: "D"; cx: number; cy: number; r: number; delay: number };
 
-// ─── Stroke widths ────────────────────────────────────────────────────────────
+// ─── Stroke widths (slightly bolder for crisp HD scaling) ─────────────────────
 
-const SW = 3.6;   // stickman body
-const FW = 2.2;   // face features
-const PW = 2.4;   // props
+const SW = 4.1;   // stickman body / limbs
+const FW = 2.65;  // face features
+const PW = 2.75;  // props / desk / laptop
 
 // ─── Low-level helpers ────────────────────────────────────────────────────────
 
@@ -174,7 +179,7 @@ function mkFace(cx: number, cy: number, expr: FaceExpr): El[] {
   const EX = 5.5, EY = cy - 2.5;
   const BX = 6.5, BY = cy - 9;
 
-  const eyes: El[] = [D(cx - EX, EY, 1.8, 140), D(cx + EX, EY, 1.8, 175)];
+  const eyes: El[] = [D(cx - EX, EY, 2.15, 140), D(cx + EX, EY, 2.15, 175)];
 
   const browFlat = (): El[] => [
     L(cx - BX, BY, cx - 1.5, BY, 215, FW),
@@ -267,18 +272,19 @@ function mkBody({ cx, cy, lArm, rArm, lLeg, rLeg, shoulderY = 28, hipY, extraLim
 // ─── Pose definitions ─────────────────────────────────────────────────────────
 
 const POSES: Record<StickmanPose, El[]> = {
-  // ── STANDING — centred, neutral. Props: floating question marks (hook/intro)
+  // ── STANDING — presenter stance; no floating symbols (those read as clutter next to KeyObjectDoodle)
   standing: [
     ...mkBody({
-      cx: 80, cy: 30,
-      lArm: [56, 56], rArm: [104, 56],
-      lLeg: [65, 135], rLeg: [95, 135],
+      cx: 80,
+      cy: 30,
+      lArm: [54, 58],
+      rArm: [106, 58],
+      lLeg: [66, 135],
+      rLeg: [94, 135],
     }),
-    ...mkFace(80, 30, "neutral"),
-    // Question marks scattered around
-    ...qmark(28, 52, 1.1, 1120),
-    ...qmark(134, 36, 0.95, 1280),
-    ...qmark(148, 88, 0.8, 1440),
+    ...mkFace(80, 30, "smile"),
+    // Subtle “stage” line under feet — grounds the figure
+    L(52, 138, 108, 138, 1080, PW),
   ],
 
   // ── THINKING — shifted left, right arm to chin. Props: thought bubble top-right
@@ -413,7 +419,7 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
       <line
         x1={x1 + nx} y1={y1 + ny} x2={x2 + nx} y2={y2 + ny}
         style={{
-          stroke: "rgba(255,255,255,0.72)", strokeWidth: 1.6,
+          stroke: "rgba(255,255,255,0.85)", strokeWidth: 1.95,
           strokeLinecap: "round",
           strokeDasharray: 600, strokeDashoffset: 600,
           animation: "cf-draw 0.55s ease-out forwards",
@@ -423,38 +429,80 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
     );
   };
 
+  const isHeadCircle = (el: El) => el.k === "C" && el.delay === 0 && el.r >= 12;
+
   return (
     <svg
       key={animKey}
       viewBox="0 0 160 180"
-      className="w-full h-full"
+      className="w-full h-full [shape-rendering:geometricPrecision]"
       aria-label={`Stickman: ${pose}`}
     >
+      <defs>
+        <filter
+          id={`cfStickmanInk-${animKey}`}
+          x="-25%"
+          y="-25%"
+          width="150%"
+          height="150%"
+          colorInterpolationFilters="sRGB"
+        >
+          <feGaussianBlur in="SourceAlpha" stdDeviation="0.45" result="blur" />
+          <feOffset in="blur" dx="0.35" dy="1.1" result="off" />
+          <feFlood floodColor="#1a1208" floodOpacity="0.2" result="flood" />
+          <feComposite in="flood" in2="off" operator="in" result="sh" />
+          <feMerge>
+            <feMergeNode in="sh" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <radialGradient id={`cfHeadFill-${animKey}`} cx="32%" cy="28%" r="78%">
+          <stop offset="0%" stopColor="#fffdf8" />
+          <stop offset="55%" stopColor="#f3ece0" />
+          <stop offset="100%" stopColor="#e8dfd0" />
+        </radialGradient>
+        <radialGradient id={`cfEyeGrad-${animKey}`} cx="32%" cy="32%" r="68%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+          <stop offset="35%" stopColor="#3d3830" />
+          <stop offset="100%" stopColor="#0f0d0b" />
+        </radialGradient>
+      </defs>
       <style>{`
         @keyframes cf-draw { to { stroke-dashoffset: 0; } }
         @keyframes cf-pop {
           0%   { opacity: 0; transform: scale(0.3); }
-          60%  { opacity: 1; transform: scale(1.15); }
+          60%  { opacity: 1; transform: scale(1.08); }
           100% { opacity: 1; transform: scale(1); }
         }
         @keyframes cf-shadow-in { to { opacity: 1; } }
+        @keyframes cf-head-fill-in {
+          from { opacity: 0; transform: scale(0.92); }
+          to { opacity: 1; transform: scale(1); }
+        }
         .cf-stroke {
-          fill: none; stroke: #1a1512;
+          fill: none; stroke: #100e0c;
           stroke-linecap: round; stroke-linejoin: round;
           stroke-dasharray: 600; stroke-dashoffset: 600;
           animation: cf-draw 0.55s ease-out forwards;
+          paint-order: stroke fill;
         }
         .cf-dot {
-          opacity: 0; fill: #1a1512;
+          opacity: 0;
           transform-box: fill-box; transform-origin: center;
-          animation: cf-pop 0.2s ease-out forwards;
+          animation: cf-pop 0.22s cubic-bezier(.34,1.56,.64,1) forwards;
+        }
+        .cf-dot-eye { fill: url(#cfEyeGrad-${animKey}); }
+        .cf-dot-solid { fill: #100e0c; }
+        .cf-head-fill {
+          opacity: 0;
+          animation: cf-head-fill-in 0.38s ease-out 0.05s forwards;
         }
       `}</style>
 
       {/* Ground shadow — gives 3D grounded feel */}
-      <ellipse cx="83" cy="168" rx="38" ry="7"
-        style={{ fill: "rgba(0,0,0,0.07)", opacity: 0,
-          animation: "cf-shadow-in 0.4s ease-out 0.15s forwards" }} />
+      <ellipse cx="83" cy="168" rx="40" ry="8"
+        style={{ fill: "rgba(0,0,0,0.09)", opacity: 0,
+          animation: "cf-shadow-in 0.45s ease-out 0.12s forwards" }} />
 
       {/* Depth pass: slight offset/extrusion behind main ink lines */}
       {elements.map((el, i) => {
@@ -467,7 +515,7 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
               cy={el.cy + depthDy}
               r={el.r}
               style={{
-                fill: "rgba(0,0,0,0.18)",
+                fill: "rgba(0,0,0,0.14)",
                 opacity: 0,
                 transformBox: "fill-box",
                 transformOrigin: "center",
@@ -488,7 +536,7 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
               y2={el.y2 + depthDy}
               style={{
                 fill: "none",
-                stroke: "rgba(0,0,0,0.18)",
+                stroke: "rgba(0,0,0,0.11)",
                 strokeWidth: sw,
                 strokeLinecap: "round",
                 strokeLinejoin: "round",
@@ -510,7 +558,7 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
               r={el.r}
               style={{
                 fill: "none",
-                stroke: "rgba(0,0,0,0.18)",
+                stroke: "rgba(0,0,0,0.11)",
                 strokeWidth: sw,
                 strokeLinecap: "round",
                 strokeLinejoin: "round",
@@ -529,7 +577,7 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
             d={el.p}
             style={{
               fill: "none",
-              stroke: "rgba(0,0,0,0.18)",
+              stroke: "rgba(0,0,0,0.11)",
               strokeWidth: sw,
               strokeLinecap: "round",
               strokeLinejoin: "round",
@@ -543,88 +591,222 @@ function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number })
         );
       })}
 
-      {elements.map((el, i) => {
-        if (el.k === "D") {
-          return (
-            <circle key={i} className="cf-dot"
-              cx={el.cx} cy={el.cy} r={el.r}
-              style={{ animationDelay: `${el.delay}ms` }} />
-          );
-        }
-        const style: React.CSSProperties = { animationDelay: `${el.delay}ms` };
-        const sw = el.sw ?? SW;
-
-        if (el.k === "L") {
-          return (
-            <g key={i}>
-              {/* main limb stroke */}
-              <line className="cf-stroke"
-                x1={el.x1} y1={el.y1} x2={el.x2} y2={el.y2}
-                strokeWidth={sw} style={style} />
-              {/* 3D tube highlight — white sheen on upper-left edge */}
-              {sw >= 3 && tubeHighlight(el.x1, el.y1, el.x2, el.y2, el.delay)}
-            </g>
-          );
-        }
-
-        if (el.k === "C") {
-          const hr = el.r * 0.28; // highlight radius
-          return (
-            <g key={i}>
-              {/* main circle */}
-              <circle className="cf-stroke"
-                cx={el.cx} cy={el.cy} r={el.r}
-                strokeWidth={sw} style={style} />
-              {/* 3D sphere highlight dot — top-left */}
+      <g filter={`url(#cfStickmanInk-${animKey})`}>
+        {elements.map((el, i) => {
+          if (el.k === "D") {
+            const eyeGrad = el.r >= 2.05 && el.r <= 2.35;
+            return (
               <circle
-                cx={el.cx - el.r * 0.3} cy={el.cy - el.r * 0.3} r={hr}
-                style={{
-                  fill: "rgba(255,255,255,0.78)", opacity: 0,
-                  animation: "cf-pop 0.2s ease-out forwards",
-                  animationDelay: `${el.delay + 80}ms`,
-                  transformBox: "fill-box", transformOrigin: "center",
-                }} />
-              {/* subtle shadow arc bottom-right */}
-              <circle
-                cx={el.cx + el.r * 0.22} cy={el.cy + el.r * 0.28} r={el.r * 0.18}
-                style={{
-                  fill: "rgba(0,0,0,0.10)", opacity: 0,
-                  animation: "cf-pop 0.2s ease-out forwards",
-                  animationDelay: `${el.delay + 100}ms`,
-                  transformBox: "fill-box", transformOrigin: "center",
-                }} />
-            </g>
-          );
-        }
+                key={i}
+                className={`cf-dot ${eyeGrad ? "cf-dot-eye" : "cf-dot-solid"}`}
+                cx={el.cx}
+                cy={el.cy}
+                r={el.r}
+                style={{ animationDelay: `${el.delay}ms` }}
+              />
+            );
+          }
+          const style: React.CSSProperties = { animationDelay: `${el.delay}ms` };
+          const sw = el.sw ?? SW;
 
-        // k === "P" — paths (face features, props)
-        return (
-          <path key={i} className="cf-stroke"
-            d={el.p} strokeWidth={sw} style={style} />
-        );
-      })}
+          if (el.k === "L") {
+            return (
+              <g key={i}>
+                <line
+                  className="cf-stroke"
+                  x1={el.x1}
+                  y1={el.y1}
+                  x2={el.x2}
+                  y2={el.y2}
+                  strokeWidth={sw}
+                  style={style}
+                />
+                {sw >= 2.85 && tubeHighlight(el.x1, el.y1, el.x2, el.y2, el.delay)}
+              </g>
+            );
+          }
+
+          if (el.k === "C") {
+            const hr = el.r * 0.28;
+            const head = isHeadCircle(el);
+            return (
+              <g key={i}>
+                {head ? (
+                  <circle
+                    className="cf-head-fill"
+                    cx={el.cx}
+                    cy={el.cy}
+                    r={Math.max(el.r - 0.55, 0.5)}
+                    fill={`url(#cfHeadFill-${animKey})`}
+                  />
+                ) : null}
+                <circle className="cf-stroke" cx={el.cx} cy={el.cy} r={el.r} strokeWidth={sw} style={style} />
+                <circle
+                  cx={el.cx - el.r * 0.3}
+                  cy={el.cy - el.r * 0.3}
+                  r={hr}
+                  style={{
+                    fill: "rgba(255,255,255,0.88)",
+                    opacity: 0,
+                    animation: "cf-pop 0.2s ease-out forwards",
+                    animationDelay: `${el.delay + 80}ms`,
+                    transformBox: "fill-box",
+                    transformOrigin: "center",
+                  }}
+                />
+                <circle
+                  cx={el.cx + el.r * 0.22}
+                  cy={el.cy + el.r * 0.28}
+                  r={el.r * 0.18}
+                  style={{
+                    fill: "rgba(0,0,0,0.08)",
+                    opacity: 0,
+                    animation: "cf-pop 0.2s ease-out forwards",
+                    animationDelay: `${el.delay + 100}ms`,
+                    transformBox: "fill-box",
+                    transformOrigin: "center",
+                  }}
+                />
+              </g>
+            );
+          }
+
+          return (
+            <path key={i} className="cf-stroke" d={el.p} strokeWidth={sw} style={style} />
+          );
+        })}
+      </g>
     </svg>
   );
 }
 
 // ─── Caption lines (staggered slide-in, first line orange) ───────────────────
 
-function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number }) {
-  const words = text.split(/\s+/).filter(Boolean);
-  const wordsPerLine = words.length > 64 ? 9 : words.length > 48 ? 8 : words.length > 36 ? 7 : words.length > 24 ? 6 : 5;
-  const lines: string[] = [];
-  for (let i = 0; i < words.length; i += wordsPerLine) {
-    lines.push(words.slice(i, i + wordsPerLine).join(" "));
+/** First sentence (or first chunk) = orange hook; rest = supporting lines — reads like a Short hook + payoff. */
+function splitCaptionHook(raw: string): { hook: string; body: string } {
+  const text = raw.trim();
+  if (!text) return { hook: "", body: "" };
+  const sentence = text.match(/^(.{1,100}?[.!?])(\s+|$)/);
+  if (sentence && sentence[1].length >= 12 && sentence[1].length <= 110) {
+    const hook = sentence[1].trim();
+    const body = text.slice(sentence[1].length).trim();
+    return { hook, body };
   }
+  const words = text.split(/\s+/).filter(Boolean);
+  const hookLen = Math.min(12, Math.max(5, Math.ceil(words.length * 0.38)));
+  if (words.length <= hookLen) return { hook: text, body: "" };
+  return {
+    hook: words.slice(0, hookLen).join(" "),
+    body: words.slice(hookLen).join(" "),
+  };
+}
+
+/** Headline + bullet list on the board; full `caption` stays audio-only when bullets are present (matches common AI stickman tutorial layout). */
+function TutorialBoardText({
+  sceneTitle,
+  bullets,
+  caption,
+  sceneKey,
+}: {
+  sceneTitle?: string;
+  bullets?: string[];
+  caption: string;
+  sceneKey: number;
+}) {
+  const title = sceneTitle?.trim() ?? "";
+  const list = (bullets ?? []).map((b) => b.trim()).filter(Boolean);
+  const hasBullets = list.length >= 2;
+  const titleDelay = 90;
+  const bulletBaseDelay = title ? titleDelay + 240 : titleDelay;
+
+  return (
+    <div key={sceneKey} style={{ position: "relative" }}>
+      {title ? (
+        <div
+          className="cf-line"
+          style={{
+            animationDelay: `${titleDelay}ms`,
+            fontFamily: "'Caveat', cursive",
+            fontWeight: 700,
+            fontSize: "clamp(1.15rem, 1.35rem + 0.65vw, 2.35rem)",
+            lineHeight: 1.12,
+            color: "#c2410c",
+            marginBottom: "0.28em",
+            letterSpacing: "0.01em",
+            textShadow: "0 1px 0 rgba(255,255,255,0.6)",
+          }}
+        >
+          {title}
+        </div>
+      ) : null}
+      {list.map((line, i) => (
+        <div
+          key={i}
+          className="cf-line"
+          style={{
+            animationDelay: `${bulletBaseDelay + i * 230}ms`,
+            fontFamily: "'Caveat', cursive",
+            fontWeight: 600,
+            fontSize: "clamp(0.95rem, 1rem + 0.35vw, 1.55rem)",
+            lineHeight: 1.14,
+            color: "#1e1b12",
+            marginBottom: "0.12em",
+            paddingLeft: "0.05em",
+            display: "flex",
+            alignItems: "baseline",
+            gap: "0.35em",
+          }}
+        >
+          <span style={{ color: "#ea580c", fontWeight: 700, flexShrink: 0 }}>→</span>
+          <span>{line}</span>
+        </div>
+      ))}
+      {!hasBullets && title ? (
+        <div style={{ marginTop: "0.35em" }}>
+          <AnimatedCaption text={caption} sceneKey={sceneKey * 1000 + 1} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SceneBoardText({ scene }: { scene: StickmanScene }) {
+  const title = scene.sceneTitle?.trim() ?? "";
+  const bulletCount = (scene.bullets ?? []).filter((b) => b.trim()).length;
+  const useTutorial = Boolean(title) || bulletCount >= 2;
+  if (!useTutorial) {
+    return <AnimatedCaption text={scene.caption} sceneKey={scene.sceneIndex} />;
+  }
+  return (
+    <TutorialBoardText
+      sceneTitle={title || undefined}
+      bullets={bulletCount >= 2 ? scene.bullets : undefined}
+      caption={scene.caption}
+      sceneKey={scene.sceneIndex}
+    />
+  );
+}
+
+function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number }) {
+  const { hook, body } = splitCaptionHook(text);
+  const bodyWords = body.split(/\s+/).filter(Boolean);
+  const wordsPerLine = bodyWords.length > 52 ? 8 : bodyWords.length > 36 ? 7 : bodyWords.length > 24 ? 6 : 5;
+  const lines: string[] = [];
+  if (hook) lines.push(hook);
+  for (let i = 0; i < bodyWords.length; i += wordsPerLine) {
+    lines.push(bodyWords.slice(i, i + wordsPerLine).join(" "));
+  }
+  if (lines.length === 0) lines.push(text.trim());
   const lineCount = Math.max(lines.length, 1);
+  // Use rem-only clamps so caption text scales with layout, not viewport width (avoids huge type on wide screens / flex overflow).
   const titleSize =
-    lineCount > 9 ? "clamp(15px, 1.9vw, 24px)" :
-    lineCount > 7 ? "clamp(16px, 2.1vw, 28px)" :
-    "clamp(18px, 2.4vw, 34px)";
+    lineCount > 9 ? "clamp(0.9375rem, 1.05rem + 0.4vw, 1.5rem)" :
+    lineCount > 7 ? "clamp(1rem, 1.1rem + 0.45vw, 1.75rem)" :
+    "clamp(1.05rem, 1.15rem + 0.5vw, 2rem)";
   const bodySize =
-    lineCount > 9 ? "clamp(12px, 1.35vw, 18px)" :
-    lineCount > 7 ? "clamp(13px, 1.5vw, 20px)" :
-    "clamp(14px, 1.7vw, 24px)";
+    lineCount > 9 ? "clamp(0.75rem, 0.82rem + 0.25vw, 1.125rem)" :
+    lineCount > 7 ? "clamp(0.8125rem, 0.88rem + 0.28vw, 1.25rem)" :
+    "clamp(0.875rem, 0.95rem + 0.3vw, 1.35rem)";
   const lineHeight = lineCount > 8 ? 1.08 : 1.12;
 
   return (
@@ -639,9 +821,10 @@ function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number })
             fontWeight: i === 0 ? 700 : 600,
             fontSize: i === 0 ? titleSize : bodySize,
             lineHeight,
-            color: i === 0 ? "#ea580c" : "#1e1b12",
-            marginBottom: i === 0 ? "0.18em" : "0.1em",
+            color: i === 0 ? "#c2410c" : "#1e1b12",
+            marginBottom: i === 0 ? "0.22em" : "0.1em",
             letterSpacing: i === 0 ? "0.01em" : "0",
+            textShadow: i === 0 ? "0 1px 0 rgba(255,255,255,0.6)" : undefined,
           }}
         >
           {line}
@@ -653,7 +836,7 @@ function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number })
 
 // ─── Pose doodle (top-right decorative icon) ──────────────────────────────────
 
-// shared style helpers (used by PoseDoodle + ScatterDoodles)
+// shared style helpers (used by PoseDoodle)
 const _ss = (delay: number, sw = 2.5, da = 300): React.CSSProperties => ({
   fill: "none", stroke: "#1e1b12", strokeWidth: sw,
   strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
@@ -889,15 +1072,39 @@ function KeyObjectDoodle({ kind }: { kind: StickmanKeyObject }) {
       return (
         <svg viewBox="0 0 100 88" className="w-full h-full">
           <style>{`@keyframes cf-draw{to{stroke-dashoffset:0}}@keyframes cf-pop{0%{opacity:0;transform:scale(0.2)}60%{opacity:1;transform:scale(1.25)}100%{opacity:1;transform:scale(1)}}`}</style>
+          <circle
+            cx="50"
+            cy="44"
+            r="24"
+            fill="rgba(251,191,36,0.1)"
+            style={{
+              opacity: 0,
+              transformBox: "fill-box",
+              transformOrigin: "center",
+              animation: "cf-pop 0.32s ease-out forwards",
+              animationDelay: "70ms",
+            }}
+          />
           <circle cx="50" cy="44" r="26" style={dr(200, 164)} />
-          <line x1="50" y1="44" x2="50" y2="25" style={dr(500, 20)} />
-          <line x1="50" y1="44" x2="66" y2="52" style={dr(560, 18)} />
-          <circle cx="50" cy="44" r="2.5" style={dp(640)} />
-          {[0,60,120,180,240,300].map((deg,i) => {
-            const a=deg*Math.PI/180;
-            return <line key={i} x1={50+22*Math.cos(a)} y1={44+22*Math.sin(a)} x2={50+26*Math.cos(a)} y2={44+26*Math.sin(a)} style={dr(700+i*40, 5)} />;
+          <line x1="50" y1="44" x2="50" y2="26" style={{ ...dr(480, 20), strokeWidth: 2.85 }} />
+          <line x1="50" y1="44" x2="64" y2="50" style={{ ...dr(540, 16), strokeWidth: 2.35 }} />
+          <circle cx="50" cy="44" r="2.8" style={dp(620)} />
+          {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg, i) => {
+            const a = (deg * Math.PI) / 180;
+            const inner = deg % 90 === 0 ? 19 : 21.5;
+            const outer = 26;
+            return (
+              <line
+                key={i}
+                x1={50 + inner * Math.cos(a)}
+                y1={44 + inner * Math.sin(a)}
+                x2={50 + outer * Math.cos(a)}
+                y2={44 + outer * Math.sin(a)}
+                style={dr(680 + i * 28, 4 + (deg % 90 === 0 ? 2 : 0))}
+              />
+            );
           })}
-          <circle cx="76" cy="22" r="3.5" style={dp(1000)} />
+          <circle cx="76" cy="22" r="3.5" style={dp(1040)} />
         </svg>
       );
     case "money":
@@ -917,21 +1124,20 @@ function KeyObjectDoodle({ kind }: { kind: StickmanKeyObject }) {
         </svg>
       );
     case "warning":
-      // Instead of the boring static triangle, draw an exclamation in a circle
+      // Hazard triangle — visually distinct from the round clock metaphor
       return (
         <svg viewBox="0 0 100 88" className="w-full h-full">
           <style>{`@keyframes cf-draw{to{stroke-dashoffset:0}}@keyframes cf-pop{0%{opacity:0;transform:scale(0.2)}60%{opacity:1;transform:scale(1.25)}100%{opacity:1;transform:scale(1)}}`}</style>
-          {/* outer circle */}
-          <circle cx="50" cy="44" r="28" style={dr(200, 176)} />
-          {/* exclamation body */}
-          <line x1="50" y1="26" x2="50" y2="52" style={dr(560, 28)} />
-          <circle cx="50" cy="60" r="3.5" style={dp(720)} />
-          {/* 4 notch marks on the circle like a warning dial */}
-          {[270, 330, 30, 90].map((deg, i) => {
-            const a = deg * Math.PI / 180;
-            return <line key={i} x1={50+24*Math.cos(a)} y1={44+24*Math.sin(a)} x2={50+28*Math.cos(a)} y2={44+28*Math.sin(a)} style={dr(800+i*50, 5)} />;
-          })}
-          <circle cx="76" cy="20" r="3" style={dp(1000)} />
+          <path
+            d="M 50 18 L 84 72 L 16 72 Z"
+            fill="rgba(234,88,12,0.11)"
+            stroke="none"
+            style={{ opacity: 0, animation: "cf-pop 0.35s ease-out 0.15s forwards" }}
+          />
+          <path d="M 50 18 L 84 72 L 16 72 Z" style={{ ...dr(200, 198), fill: "none" }} />
+          <line x1="50" y1="36" x2="50" y2="56" style={{ ...dr(520, 22), stroke: "#9a3412", strokeWidth: 3.2 }} />
+          <circle cx="50" cy="64" r="3.2" style={dp(680, "#c2410c")} />
+          <circle cx="76" cy="22" r="3" style={dp(900)} />
         </svg>
       );
     case "audience":
@@ -1170,320 +1376,6 @@ function SceneSupportAccents({
   );
 }
 
-// ─── Scene-aware doodles (caption-driven, not random) ────────────────────────
-function SceneContextDoodles({
-  caption,
-  animKey,
-}: {
-  caption: string;
-  animKey: number;
-}) {
-  const text = caption.toLowerCase();
-  const has = (words: string[]) => words.some((w) => text.includes(w));
-  type Kind = "brand" | "money" | "growth" | "time" | "warning" | "idea" | "social";
-  let primary: Kind = "idea";
-  if (has(["problem", "mistake", "wrong", "fail", "risk", "avoid"])) primary = "warning";
-  else if (has(["money", "sales", "revenue", "profit", "income", "price"])) primary = "money";
-  else if (has(["grow", "growth", "scale", "increase", "improve", "results"])) primary = "growth";
-  else if (has(["time", "fast", "quick", "minutes", "today", "now"])) primary = "time";
-  else if (has(["audience", "people", "customers", "community", "social", "followers"])) primary = "social";
-  else if (has(["brand", "business", "startup", "company", "founder"])) primary = "brand";
-
-  const sceneCycle: Kind[] = ["idea", "growth", "brand", "social", "time", "money", "warning", "growth"];
-  const secondary = sceneCycle[Math.abs(animKey) % sceneCycle.length]!;
-
-  const ink = "rgba(30,27,18,0.32)";
-  const accent = "#ea580c";
-  const style = (
-    delay: number,
-    width = 1.4,
-    stroke: string = ink
-  ): React.CSSProperties => ({
-    fill: "none",
-    stroke,
-    strokeWidth: width,
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    strokeDasharray: 180,
-    strokeDashoffset: 180,
-    animation: "cf-draw 0.42s ease-out forwards",
-    animationDelay: `${delay}ms`,
-  });
-  const pop = (delay: number): React.CSSProperties => ({
-    fill: accent,
-    opacity: 0,
-    transformBox: "fill-box",
-    transformOrigin: "center",
-    animation: "cf-pop 0.24s ease-out forwards",
-    animationDelay: `${delay}ms`,
-  });
-
-  const drawIcon = (kind: Kind, x: number, y: number, delay: number, compact = false) => {
-    const k = compact ? 0.8 : 1;
-    switch (kind) {
-      case "money":
-        return (
-          <g>
-            <rect x={x - 10 * k} y={y - 6 * k} width={20 * k} height={12 * k} rx={2} style={style(delay, 1.8, ink)} />
-            <circle cx={x} cy={y} r={2.6 * k} style={style(delay + 60, 1.5, ink)} />
-          </g>
-        );
-      case "growth":
-        return (
-          <g>
-            <line x1={x - 10 * k} y1={y + 8 * k} x2={x - 10 * k} y2={y - 8 * k} style={style(delay, 1.8, ink)} />
-            <line x1={x - 10 * k} y1={y + 8 * k} x2={x + 10 * k} y2={y + 8 * k} style={style(delay + 50, 1.8, ink)} />
-            <polyline points={`${x - 7 * k},${y + 4 * k} ${x - 1 * k},${y} ${x + 3 * k},${y - 4 * k} ${x + 8 * k},${y - 8 * k}`} style={style(delay + 110, 1.8, ink)} />
-          </g>
-        );
-      case "time":
-        return (
-          <g>
-            <circle cx={x} cy={y} r={8 * k} style={style(delay, 1.8, ink)} />
-            <line x1={x} y1={y} x2={x} y2={y - 4 * k} style={style(delay + 60, 1.6, ink)} />
-            <line x1={x} y1={y} x2={x + 3 * k} y2={y + 2 * k} style={style(delay + 90, 1.6, ink)} />
-          </g>
-        );
-      case "warning":
-        return (
-          <g>
-            <polygon points={`${x},${y - 9 * k} ${x + 9 * k},${y + 8 * k} ${x - 9 * k},${y + 8 * k}`} style={style(delay, 1.8, ink)} />
-            <line x1={x} y1={y - 2 * k} x2={x} y2={y + 3 * k} style={style(delay + 60, 1.6, ink)} />
-            <circle cx={x} cy={y + 6 * k} r={1.4 * k} style={pop(delay + 110)} />
-          </g>
-        );
-      case "brand":
-        return (
-          <g>
-            <rect x={x - 9 * k} y={y - 7 * k} width={18 * k} height={14 * k} rx={2} style={style(delay, 1.8, ink)} />
-            <path d={`M ${x - 3 * k} ${y - 9 * k} h ${6 * k}`} style={style(delay + 60, 1.6, ink)} />
-          </g>
-        );
-      case "social":
-        return (
-          <g>
-            <circle cx={x - 6 * k} cy={y - 1 * k} r={2.8 * k} style={style(delay, 1.5, ink)} />
-            <circle cx={x + 6 * k} cy={y - 1 * k} r={2.8 * k} style={style(delay + 40, 1.5, ink)} />
-            <circle cx={x} cy={y + 5 * k} r={2.8 * k} style={style(delay + 80, 1.5, ink)} />
-            <line x1={x - 3 * k} y1={y} x2={x - 1 * k} y2={y + 3 * k} style={style(delay + 110, 1.4, ink)} />
-            <line x1={x + 3 * k} y1={y} x2={x + 1 * k} y2={y + 3 * k} style={style(delay + 140, 1.4, ink)} />
-          </g>
-        );
-      default:
-        return (
-          <g>
-            <circle cx={x} cy={y} r={7 * k} style={style(delay, 1.8, ink)} />
-            <line x1={x - 3 * k} y1={y + 7 * k} x2={x + 3 * k} y2={y + 7 * k} style={style(delay + 60, 1.6, ink)} />
-          </g>
-        );
-    }
-  };
-
-  return (
-    <svg key={animKey} viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
-      <style>{`
-        @keyframes cf-draw { to { stroke-dashoffset: 0; } }
-        @keyframes cf-pop  { 0%{opacity:0;transform:scale(0.2)} 60%{opacity:1;transform:scale(1.2)} 100%{opacity:1;transform:scale(1)} }
-      `}</style>
-      {/* Clean layout: one primary + one secondary marker */}
-      {/* Primary icon (ink) */}
-      {drawIcon(primary, 118, 68, 420, false)}
-      {/* Secondary icon (lighter ink) */}
-      <g opacity={0.85}>
-        {/* we keep geometry identical but soften via opacity + stroke color */}
-        {(() => {
-          const original = (kind: Kind) => drawIcon(kind, 145, 62, 560, true);
-          // Wrap secondary in a <g> where all strokes are softened by CSS currentColor.
-          // Simpler: re-render with softInk via the style() stroke argument.
-          const drawSoft = (kind: Kind) => {
-            const k = true ? 0.8 : 1;
-            // Reuse drawIcon by duplicating compact shapes with softInk.
-            // For maintainability, keep secondary as a minimal dot marker if not directly supported.
-            return drawIcon(kind, 145, 62, 560, true);
-          };
-          return drawSoft(secondary);
-        })()}
-      </g>
-    </svg>
-  );
-}
-
-// ─── Scatter doodles ─────────────────────────────────────────────────────────
-
-function ScatterDoodles({ pose, animKey }: { pose: StickmanPose; animKey: number }) {
-  // viewBox 160×90 (16:9). Canvas zones:
-  //   Text area: x=8–115, y=8–55  |  Doodle icon: x=118–158, y=8–52
-  //   Stickman: x=8–72, y=54–88   |  OPEN: x=73–158 y=54–88, margins, bottom strip
-
-  const sc: React.CSSProperties = { strokeLinecap:"round" as const, strokeLinejoin:"round" as const };
-
-  // stroke-dashoffset draw-on helper
-  const sd = (delay: number, da: number, stroke="#c4b89a", sw=1.4): React.CSSProperties => ({
-    ...sc, fill:"none", stroke, strokeWidth:sw,
-    strokeDasharray:da, strokeDashoffset:da,
-    animation:"cf-draw 0.38s ease-out forwards", animationDelay:`${delay}ms`,
-  });
-  // filled pop-in helper
-  const pd = (delay: number, fill="#c4b89a"): React.CSSProperties => ({
-    fill, opacity:0, transformBox:"fill-box" as const, transformOrigin:"center",
-    animation:"cf-pop 0.25s ease-out forwards", animationDelay:`${delay}ms`,
-  });
-
-  // ── element builders ──
-  const dot   = (cx:number,cy:number,r:number,d:number,c="#ea580c") =>
-    <circle cx={cx} cy={cy} r={r} style={pd(d,c)} />;
-
-  const ring  = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
-    <circle cx={cx} cy={cy} r={r} style={sd(d,r*7,c)} />;
-
-  const cross = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => (<g>
-    <line x1={cx-r} y1={cy-r} x2={cx+r} y2={cy+r} style={sd(d,r*4,c)} />
-    <line x1={cx+r} y1={cy-r} x2={cx-r} y2={cy+r} style={sd(d+40,r*4,c)} />
-  </g>);
-
-  const plus  = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => (<g>
-    <line x1={cx-r} y1={cy} x2={cx+r} y2={cy} style={sd(d,r*3,c)} />
-    <line x1={cx} y1={cy-r} x2={cx} y2={cy+r} style={sd(d+30,r*3,c)} />
-  </g>);
-
-  const asterisk6 = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => (<g>
-    {[0,60,120].map((deg,i) => {
-      const a=deg*Math.PI/180;
-      return <line key={i} x1={cx-r*Math.cos(a)} y1={cy-r*Math.sin(a)} x2={cx+r*Math.cos(a)} y2={cy+r*Math.sin(a)} style={sd(d+i*40,r*3,c)} />;
-    })}
-  </g>);
-
-  const arrow = (x1:number,y1:number,x2:number,y2:number,d:number,c="#c4b89a") => {
-    const dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy),nx=dx/len,ny=dy/len;
-    const ax=nx*0.7,ay=ny*0.7,px=-ny*0.5,py=nx*0.5;
-    return (<g>
-      <line x1={x1} y1={y1} x2={x2} y2={y2} style={sd(d,len+4,c,1.4)} />
-      <line x1={x2} y1={y2} x2={x2-ax*3+px*2} y2={y2-ay*3+py*2} style={sd(d+80,6,c,1.4)} />
-      <line x1={x2} y1={y2} x2={x2-ax*3-px*2} y2={y2-ay*3-py*2} style={sd(d+100,6,c,1.4)} />
-    </g>);
-  };
-
-  const diamond = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
-    <polygon points={`${cx},${cy-r} ${cx+r},${cy} ${cx},${cy+r} ${cx-r},${cy}`}
-      style={sd(d,r*8,c)} />;
-
-  const triangle = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
-    <polygon points={`${cx},${cy-r} ${cx+r*0.866},${cy+r*0.5} ${cx-r*0.866},${cy+r*0.5}`}
-      style={sd(d,r*7,c)} />;
-
-  const check = (cx:number,cy:number,r:number,d:number,c="#ea580c") =>
-    <polyline points={`${cx-r},${cy} ${cx-r*0.3},${cy+r} ${cx+r},${cy-r*0.6}`}
-      style={sd(d,r*6,c,1.6)} />;
-
-  const squiggle = (x:number,y:number,d:number,c="#d4c9a8") =>
-    <path d={`M${x},${y} Q${x+4},${y-3} ${x+8},${y} Q${x+12},${y+3} ${x+16},${y}`}
-      style={sd(d,30,c,1.3)} />;
-
-  const lightning = (cx:number,cy:number,r:number,d:number,c="#fbbf24") =>
-    <polyline points={`${cx+r*0.4},${cy-r} ${cx-r*0.2},${cy-r*0.1} ${cx+r*0.3},${cy} ${cx-r*0.4},${cy+r}`}
-      style={sd(d,r*6,c,1.6)} />;
-
-  const hashtag = (cx:number,cy:number,r:number,d:number,c="#c4b89a") => (<g>
-    <line x1={cx-r*0.6} y1={cy-r*0.4} x2={cx+r*0.6} y2={cy-r*0.4} style={sd(d,r*2,c)} />
-    <line x1={cx-r*0.6} y1={cy+r*0.4} x2={cx+r*0.6} y2={cy+r*0.4} style={sd(d+40,r*2,c)} />
-    <line x1={cx-r*0.2} y1={cy-r*0.8} x2={cx-r*0.4} y2={cy+r*0.8} style={sd(d+70,r*2,c)} />
-    <line x1={cx+r*0.2} y1={cy-r*0.8} x2={cx+r*0.0} y2={cy+r*0.8} style={sd(d+100,r*2,c)} />
-  </g>);
-
-  const infinity = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
-    <path d={`M${cx},${cy} C${cx-r},${cy-r} ${cx-r*2},${cy-r} ${cx-r*1.5},${cy} C${cx-r},${cy+r} ${cx},${cy+r*0.5} ${cx},${cy} C${cx},${cy-r*0.5} ${cx+r},${cy-r} ${cx+r*1.5},${cy} C${cx+r*2},${cy+r} ${cx+r},${cy+r} ${cx},${cy}`}
-      style={sd(d,r*12,c)} />;
-
-  const spiral = (cx:number,cy:number,r:number,d:number,c="#c4b89a") =>
-    <path d={`M${cx+r},${cy} A${r},${r} 0 1 0 ${cx-r*0.3},${cy-r*0.95} A${r*0.5},${r*0.5} 0 0 1 ${cx+r*0.3},${cy+r*0.3}`}
-      style={sd(d,r*10,c)} />;
-
-  return (
-    <svg key={animKey} viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
-      <style>{`
-        @keyframes cf-draw { to { stroke-dashoffset: 0; } }
-        @keyframes cf-pop  { 0%{opacity:0;transform:scale(0.2)} 60%{opacity:1;transform:scale(1.3)} 100%{opacity:1;transform:scale(1)} }
-      `}</style>
-
-      {/* ── LEFT MARGIN strip (x=2–8) ── */}
-      {dot(3,6,1.6,280,"#ea580c")}
-      {dot(5,15,1.3,340,"#fbbf24")}
-      {cross(4,26,2.2,400)}
-      {dot(3,35,1.5,460,"#ea580c")}
-      {plus(5,45,2.5,520)}
-      {cross(4,56,2.2,580)}
-      {dot(3,65,1.6,640,"#fbbf24")}
-      {ring(5,74,2.2,700)}
-      {dot(4,83,1.4,760,"#ea580c")}
-
-      {/* ── RIGHT MARGIN strip (x=152–158) ── */}
-      {dot(157,6,1.6,300,"#fbbf24")}
-      {dot(155,15,1.3,360,"#ea580c")}
-      {cross(156,26,2.2,420)}
-      {dot(157,35,1.5,480,"#fbbf24")}
-      {plus(155,45,2.5,540)}
-      {cross(156,56,2.2,600)}
-      {dot(157,65,1.6,660,"#ea580c")}
-      {ring(155,74,2.2,720)}
-      {dot(156,83,1.4,780,"#fbbf24")}
-
-      {/* ── BOTTOM STRIP (y=78–88, all x) — fills the narrow footer ── */}
-      {squiggle(10,84,650)}
-      {squiggle(35,86,690)}
-      {squiggle(60,83,730)}
-      {squiggle(88,85,770)}
-      {squiggle(112,84,810)}
-      {squiggle(136,86,850)}
-      {dot(22,87,1.4,880,"#ea580c")}
-      {dot(48,85,1.3,910,"#fbbf24")}
-      {dot(75,88,1.5,940,"#ea580c")}
-      {dot(104,86,1.3,970,"#fbbf24")}
-      {dot(130,87,1.4,1000,"#ea580c")}
-      {dot(148,85,1.3,1030,"#fbbf24")}
-
-      {/* ── BOTTOM-RIGHT OPEN AREA (x=73–155, y=54–78) — main doodle zone ── */}
-      {asterisk6(82,62,4,550,"#c4b89a")}
-      {arrow(92,58,104,58,600)}
-      {diamond(115,60,4,650)}
-      {lightning(130,57,5,700,"#fbbf24")}
-      {triangle(145,60,4,750)}
-      {check(86,72,4.5,800)}
-      {hashtag(100,70,5,840)}
-      {infinity(117,71,4,890)}
-      {asterisk6(133,68,3.5,930,"#ea580c")}
-      {spiral(148,70,4,970)}
-      {plus(78,76,3.5,820,"#ea580c")}
-      {ring(95,78,3,870)}
-      {cross(110,77,2.8,910)}
-      {arrow(122,80,134,75,950)}
-      {diamond(143,77,3.5,990)}
-      {dot(80,69,1.5,680,"#fbbf24")}
-      {dot(153,63,1.4,720,"#ea580c")}
-
-      {/* ── BOTTOM-CENTER (x=40–72, y=60–78) beside stickman ── */}
-      {asterisk6(48,64,3.5,560,"#d4c9a8")}
-      {plus(60,68,2.8,610)}
-      {ring(50,74,2.5,660)}
-      {cross(65,72,2.2,710)}
-      {dot(55,80,1.4,760,"#ea580c")}
-      {dot(68,76,1.3,800,"#fbbf24")}
-
-      {/* ── Pose-specific accents ── */}
-      {pose==="pointing"   && arrow(40,87,110,87,1050,"#ea580c")}
-      {pose==="celebrating"&& [28,44,60,76,92,108].map((x,i)=>(
-        <line key={i} x1={x} y1={84} x2={x+5} y2={90}
-          style={sd(1000+i*55,10,i%2===0?"#ea580c":"#fbbf24",1.6)} />
-      ))}
-      {pose==="thinking"   && <>{ring(88,65,3.5,950,"#a8956a")}{ring(92,60,2,1020,"#a8956a")}</>}
-      {pose==="arms-raised"&& [80,95,110,125,140].map((x,i)=>(
-        dot(x,i%2===0?60:66,1.6,900+i*60,i%2===0?"#ea580c":"#fbbf24")
-      ))}
-      {pose==="walking"    && arrow(80,65,98,60,900,"#ea580c")}
-      {pose==="defeated"   && cross(95,62,3,900,"#ea580c")}
-    </svg>
-  );
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const DEFAULT_VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
@@ -1496,13 +1388,30 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
 
   const audioRef            = useRef<HTMLAudioElement | null>(null);
   const audioCacheRef       = useRef<Map<number, string>>(new Map());
-  const prefetchInFlightRef = useRef<Set<number>>(new Set());
+  /** Same-scene fetches must share one promise — prefetch + play used to race and return null while in flight. */
+  const voPromisesRef       = useRef<Map<number, Promise<string | null>>>(new Map());
+  const lastVoFailureRef    = useRef<string | null>(null);
+  const voFallbackTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef          = useRef(true);
+  /** When resuming paused audio from the play button, skip one [isPlaying] effect — it would otherwise double-call playScene with handlePlay. */
+  const skipNextSceneEffectRef = useRef(false);
+  const audioSceneIndexRef = useRef<number | null>(null);
+
+  const clearVoFallback = useCallback(() => {
+    if (voFallbackTimerRef.current) {
+      clearTimeout(voFallbackTimerRef.current);
+      voFallbackTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (voFallbackTimerRef.current) {
+        clearTimeout(voFallbackTimerRef.current);
+        voFallbackTimerRef.current = null;
+      }
       audioCacheRef.current.forEach((u) => URL.revokeObjectURL(u));
       audioCacheRef.current.clear();
     };
@@ -1512,28 +1421,50 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
     async (idx: number): Promise<string | null> => {
       const cached = audioCacheRef.current.get(idx);
       if (cached) return cached;
-      if (prefetchInFlightRef.current.has(idx)) return null;
-      prefetchInFlightRef.current.add(idx);
-      try {
-        const scene = scenes[idx];
-        if (!scene) return null;
-        const res = await fetch("/api/templates/stickman/voiceover", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: scene.caption, sceneIndex: idx, voiceId: voiceId ?? DEFAULT_VOICE_ID }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
-        const url  = URL.createObjectURL(blob);
-        if (mountedRef.current) { audioCacheRef.current.set(idx, url); return url; }
-        URL.revokeObjectURL(url);
-        return null;
-      } catch (e) {
-        console.error("[StickmanWhiteboard] voiceover", e);
-        return null;
-      } finally {
-        prefetchInFlightRef.current.delete(idx);
-      }
+
+      const existing = voPromisesRef.current.get(idx);
+      if (existing) return existing;
+
+      const p = (async (): Promise<string | null> => {
+        try {
+          const scene = scenes[idx];
+          if (!scene) return null;
+          const res = await fetch("/api/templates/stickman/voiceover", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: scene.caption, sceneIndex: idx, voiceId: voiceId ?? DEFAULT_VOICE_ID }),
+          });
+          const errText = res.ok ? "" : (await res.text().catch(() => "")).trim();
+          if (!res.ok) {
+            const short =
+              errText.length > 280 ? `${errText.slice(0, 277)}…` : errText || `HTTP ${res.status}`;
+            lastVoFailureRef.current = short;
+            console.error("[StickmanWhiteboard] voiceover HTTP", res.status, short);
+            return null;
+          }
+          const blob = await res.blob();
+          if (blob.size < 64) {
+            lastVoFailureRef.current = "ElevenLabs returned an empty or invalid audio response.";
+            return null;
+          }
+          const url = URL.createObjectURL(blob);
+          if (mountedRef.current) {
+            audioCacheRef.current.set(idx, url);
+            return url;
+          }
+          URL.revokeObjectURL(url);
+          return null;
+        } catch (e) {
+          lastVoFailureRef.current = e instanceof Error ? e.message : "Network error";
+          console.error("[StickmanWhiteboard] voiceover", e);
+          return null;
+        } finally {
+          voPromisesRef.current.delete(idx);
+        }
+      })();
+
+      voPromisesRef.current.set(idx, p);
+      return p;
     },
     [scenes, voiceId]
   );
@@ -1541,7 +1472,7 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
   const prefetchAhead = useCallback(
     (from: number) => {
       for (let i = from + 1; i <= from + 2 && i < scenes.length; i++) {
-        if (!audioCacheRef.current.has(i) && !prefetchInFlightRef.current.has(i)) void fetchVO(i);
+        if (!audioCacheRef.current.has(i)) void fetchVO(i);
       }
     },
     [fetchVO, scenes.length]
@@ -1550,29 +1481,57 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
   const playScene = useCallback(
     async (idx: number) => {
       if (!mountedRef.current) return;
+      clearVoFallback();
       if (audioRef.current) { audioRef.current.pause(); audioRef.current.onended = null; }
       setLoadingVO(true); setError(null);
       const url = await fetchVO(idx);
       prefetchAhead(idx);
       if (!mountedRef.current) return;
       setLoadingVO(false);
-      if (!url) { setError("Could not load voiceover — check your ElevenLabs API key."); return; }
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      audio.onended = () => {
+      const sceneNow = scenes[idx];
+      const advance = () => {
         if (!mountedRef.current) return;
         const next = idx + 1;
         if (next < scenes.length) setCurrentIndex(next);
         else { setIsPlaying(false); onComplete?.(); }
       };
+      if (!url) {
+        audioSceneIndexRef.current = null;
+        const detail = lastVoFailureRef.current;
+        lastVoFailureRef.current = null;
+        const base =
+          detail ??
+          "Voiceover request returned no audio. If ELEVENLABS_API_KEY is in .env.local, restart the dev server so Next.js picks it up.";
+        const withHint =
+          /not configured|API key|xi-api-key|401|403/i.test(base)
+            ? `${base} Restart \`npm run dev\` after changing env; the key is never read from the browser.`
+            : `${base} Preview auto-advances by read time.`;
+        setError(withHint);
+        const words = (sceneNow?.caption ?? "").split(/\s+/).filter(Boolean).length;
+        const ms = Math.min(Math.max(3200, words * 380), 15000);
+        voFallbackTimerRef.current = setTimeout(advance, ms);
+        return;
+      }
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audioSceneIndexRef.current = idx;
+      audio.onended = () => {
+        clearVoFallback();
+        if (!mountedRef.current) return;
+        advance();
+      };
       audio.onerror = () => { if (mountedRef.current) setError("Audio playback error."); };
       try { await audio.play(); } catch { setError("Playback blocked — click ▶ to start."); setIsPlaying(false); }
     },
-    [fetchVO, prefetchAhead, scenes.length, onComplete]
+    [fetchVO, prefetchAhead, scenes, onComplete, clearVoFallback]
   );
 
   useEffect(() => {
     if (!isPlaying || scenes.length === 0) return;
+    if (skipNextSceneEffectRef.current) {
+      skipNextSceneEffectRef.current = false;
+      return;
+    }
     void playScene(currentIndex);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, isPlaying]);
@@ -1581,15 +1540,39 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
     if (!isPlaying) audioRef.current?.pause();
   }, [isPlaying]);
 
-  const handlePlay  = () => { setIsPlaying(true); if (!audioRef.current || audioRef.current.paused) void playScene(currentIndex); };
-  const handlePause = () => { setIsPlaying(false); audioRef.current?.pause(); };
-  const handlePrev  = () => { if (currentIndex > 0) setCurrentIndex((i) => i - 1); };
-  const handleNext  = () => { if (currentIndex < scenes.length - 1) setCurrentIndex((i) => i + 1); };
+  const handlePlay = () => {
+    const a = audioRef.current;
+    if (a && a.src && !a.ended && a.paused && audioSceneIndexRef.current === currentIndex) {
+      skipNextSceneEffectRef.current = true;
+      setIsPlaying(true);
+      void a.play().catch(() => {
+        skipNextSceneEffectRef.current = false;
+        setError("Playback blocked — click ▶ to start.");
+        setIsPlaying(false);
+      });
+      return;
+    }
+    setIsPlaying(true);
+  };
+  const handlePause = () => {
+    clearVoFallback();
+    setIsPlaying(false);
+    audioRef.current?.pause();
+  };
+  const handlePrev  = () => {
+    clearVoFallback();
+    if (currentIndex > 0) setCurrentIndex((i) => i - 1);
+  };
+  const handleNext  = () => {
+    clearVoFallback();
+    if (currentIndex < scenes.length - 1) setCurrentIndex((i) => i + 1);
+  };
 
   const scene    = scenes[currentIndex];
   if (!scene) return null;
   const progress = scenes.length > 1 ? (currentIndex / (scenes.length - 1)) * 100 : 100;
   const keyObject: StickmanKeyObject = scene.keyObject ?? "idea";
+  const shotTemplate: StickmanShotTemplate = scene.shotTemplate ?? "stand-explain";
 
   // ── Per-scene visual composition ──────────────────────────────────────────
   // Each property uses a DIFFERENT prime modulo so combinations never repeat
@@ -1633,9 +1616,10 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
   ][i % 3]!;
 
   // Build caption position from captionOnLeft + iconTier
-  const iconWidth = iconTier === 1 ? "26%" : iconTier === 3 ? "30%" : iconTier === 4 ? "34%" : "22%";
-  const iconOpacity = iconTier === 4 ? "0.15" : "1";
-  const captionGap = iconTier === 4 ? "40%" : `calc(${iconWidth} + 6%)`;
+  const iconWidth = iconTier === 1 ? "26%" : iconTier === 3 ? "30%" : iconTier === 4 ? "30%" : "22%";
+  /** Was 0.15 for "watermark" tier — looked like broken empty placeholders in the feed. */
+  const iconOpacity = iconTier === 4 ? "0.88" : "1";
+  const captionGap = iconTier === 4 ? `calc(${iconWidth} + 8%)` : `calc(${iconWidth} + 6%)`;
 
   const captionPos = captionOnLeft
     ? { top:"9%", left:"5%", right:captionGap, bottom: dividerPct === "55%" ? "46%" : "42%" }
@@ -1660,7 +1644,7 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
   const effectiveStickmanPos = { bottom:"2%", left: stickmanLeft, width: stickmanWidth, top: dividerPct };
 
   return (
-    <div className="flex flex-col gap-3 w-full select-none">
+    <div className="flex min-w-0 max-w-full flex-col gap-3 w-full select-none">
       {/* Global styles */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap');
@@ -1700,8 +1684,17 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
           transition: "background 0.4s ease",
         }}
       >
+        {/* Soft vignette under grid + scene (no z-index — stays below later siblings) */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse 85% 75% at 50% 45%, transparent 0%, transparent 55%, rgba(90,78,56,0.06) 100%)",
+          }}
+          aria-hidden
+        />
         {/* Dot grid */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 160 90" preserveAspectRatio="none" style={{ opacity: 0.16 }}>
+        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 160 90" preserveAspectRatio="none" style={{ opacity: 0.07 }}>
           {Array.from({ length: 15 }, (_, row) =>
             Array.from({ length: 27 }, (_, col) => (
               <circle key={`${row}-${col}`} cx={col * 6 + 3} cy={row * 6 + 3} r="0.55" fill="#b8a882" />
@@ -1719,6 +1712,7 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
 
         {/* Scene fade-in wrapper */}
         <div key={currentIndex} className="cf-scene-fade absolute inset-0">
+          <SceneShotTemplateLayer shotTemplate={shotTemplate} />
 
           {/* Highlight bar behind caption */}
           <div
@@ -1737,7 +1731,7 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
 
           {/* Caption text */}
           <div style={{ position: "absolute", ...captionPos, overflow: "hidden" }}>
-            <AnimatedCaption text={scene.caption} sceneKey={currentIndex} />
+            <SceneBoardText scene={scene} />
           </div>
 
           {/* Scene key object */}
@@ -1752,9 +1746,6 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
             <KeyObjectDoodle kind={keyObject} />
           </div>
 
-          {/* Caption-aware scene doodles */}
-          <SceneContextDoodles caption={scene.caption} animKey={currentIndex} />
-
           {/* Stickman — position driven by theme */}
           <div style={{ position: "absolute", ...effectiveStickmanPos }}>
             <StickmanSvg pose={scene.pose} animKey={currentIndex} />
@@ -1764,7 +1755,7 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
           <div style={{
             position: "absolute", bottom: "4%", right: "4%",
             fontFamily: "'Caveat', cursive", fontWeight: 700,
-            fontSize: "clamp(11px, 1.3vw, 16px)", color: "#a8956a",
+            fontSize: "clamp(0.6875rem, 0.75rem + 0.2vw, 1rem)", color: "#a8956a",
           }}>
             {currentIndex + 1} / {scenes.length}
           </div>
@@ -1785,7 +1776,15 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
         )}
       </div>
 
-      {error && <p className="text-center text-sm text-red-500">{error}</p>}
+      {error && (
+        <p
+          className={`text-center text-sm ${
+            /auto-advance|restart|\.env/i.test(error) ? "text-amber-800 dark:text-amber-200" : "text-red-500"
+          }`}
+        >
+          {error}
+        </p>
+      )}
 
       {/* Progress bar */}
       <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "#EDE8D9" }}>
@@ -1805,7 +1804,18 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
         <div className="flex items-center gap-1.5 flex-wrap justify-center">
           {scenes.map((s, i) => (
             <button key={s.sceneIndex} type="button"
-              onClick={() => { setCurrentIndex(i); if (!isPlaying) handlePlay(); }}
+              onClick={() => {
+                if (isPlaying) {
+                  setCurrentIndex(i);
+                  return;
+                }
+                if (i === currentIndex) {
+                  handlePlay();
+                  return;
+                }
+                setCurrentIndex(i);
+                setIsPlaying(true);
+              }}
               className="rounded-full transition-all duration-300"
               style={{ width: i === currentIndex ? 22 : 8, height: 8, background: i === currentIndex ? "#ea580c" : "#CFC5A8" }}
               aria-label={`Scene ${i + 1}`} />

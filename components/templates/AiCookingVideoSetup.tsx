@@ -30,8 +30,6 @@ export type AiCookingVideoSetupProps = {
   setCookingStyle: (v: string) => void;
   tone: string;
   setTone: (v: string) => void;
-  episodeNumber: number;
-  setEpisodeNumber: (v: number) => void;
   openingHook: string;
   setOpeningHook: (v: string) => void;
   sceneCount: AiCookingVideoSceneCountChoice;
@@ -47,8 +45,6 @@ export function AiCookingVideoSetup({
   setCookingStyle,
   tone,
   setTone,
-  episodeNumber,
-  setEpisodeNumber,
   openingHook,
   setOpeningHook,
   sceneCount,
@@ -224,16 +220,6 @@ export function AiCookingVideoSetup({
         <p className="text-xs text-muted-foreground">
           Auto picks 8–16 scenes from how complex the dish is. Fixed counts lock length to exactly that many steps. Export works once every scene has image, animation, and voiceover.
         </p>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="cooking-episode-number">Episode number</Label>
-        <Input
-          id="cooking-episode-number"
-          type="number"
-          min={1}
-          value={episodeNumber}
-          onChange={(e) => setEpisodeNumber(Number(e.target.value) || 1)}
-        />
       </div>
       <div className="space-y-2">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">

@@ -13,10 +13,8 @@ interface LayoutWrapperProps {
 
 export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   return (
-    <>
-      <main className="min-w-0 overflow-x-hidden">
-        {children}
-      </main>
-    </>
+    <div className="min-w-0 overflow-x-hidden">
+      {children}
+    </div>
   );
 } 

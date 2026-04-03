@@ -1,6 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import type { MutableRefObject } from "react";
+import {
+  buildViralTimeline,
+  getCtaVoiceSnippet,
+  getIntroVoiceSnippet,
+  getOutroVoiceSnippet,
+  timelineIndexForRound,
+} from "@/lib/viral-cta-plan";
+import { ViralCTASlide } from "@/components/templates/ViralCTASlide";
+import { ViralIntroSlide, ViralOutroSlide } from "@/components/templates/ViralIntroOutroSlides";
+import { BGM_MIX_VOLUME, BGM_TRACKS, type BgmSelectValue } from "@/lib/bgm-tracks";
+import { resolveViralVisualTheme, type ViralVisualThemeId, type ViralVisualThemeTokens } from "@/lib/viral-visual-themes";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -22,14 +34,16 @@ export type QuizRound = {
 export type ViralTemplateType = "would-you-rather" | "quiz";
 
 export type ViralTemplateData =
-  | { type: "would-you-rather"; topic: string; rounds: WouldYouRatherRound[] }
-  | { type: "quiz"; topic: string; rounds: QuizRound[] };
+  | { type: "would-you-rather"; topic: string; rounds: WouldYouRatherRound[]; visualTheme?: ViralVisualThemeId }
+  | { type: "quiz"; topic: string; rounds: QuizRound[]; visualTheme?: ViralVisualThemeId };
 
 export type ViralSettings = {
   slideDuration: number;   // seconds per slide
   aspectRatio: "9:16" | "16:9";
   showTimer: boolean;
   voiceover: boolean;
+  /** Looped preview + export mix (same catalog as story / video compile). */
+  backgroundMusic: BgmSelectValue;
 };
 
 export const VIRAL_SHORT_DURATION = 5;
@@ -68,7 +82,8 @@ function CountdownTimer({ total, remaining, size = 56 }: { total: number; remain
 
 // ─── Would You Rather slide ───────────────────────────────────────────────────
 
-function WYRSlide({ round, index, total, timeLeft, totalTime, showTimer }: {
+function WYRSlide({ theme, round, index, total, timeLeft, totalTime, showTimer }: {
+  theme: ViralVisualThemeTokens;
   round: WouldYouRatherRound; index: number; total: number;
   timeLeft: number; totalTime: number; showTimer: boolean;
 }) {
@@ -76,14 +91,14 @@ function WYRSlide({ round, index, total, timeLeft, totalTime, showTimer }: {
     <div style={{
       width: "100%", height: "100%",
       display: "flex", flexDirection: "column",
-      background: "#0A0A0F",
+      background: theme.wyrBg,
       fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
       position: "relative", overflow: "hidden",
     }}>
       {/* Background glow */}
       <div style={{
         position: "absolute", inset: 0,
-        background: "radial-gradient(ellipse at 20% 50%, rgba(255,65,108,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, rgba(71,118,230,0.08) 0%, transparent 60%)",
+        background: theme.wyrGlow,
       }} />
 
       {/* Round counter + timer row */}
@@ -119,11 +134,11 @@ function WYRSlide({ round, index, total, timeLeft, totalTime, showTimer }: {
       }}>
         {/* Option A */}
         <div style={{
-          flex: 1, background: "linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%)",
+          flex: 1, background: theme.wyrPanelA,
           borderRadius: "clamp(10px,1.6vw,18px)",
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
-          padding: "5% 8%", boxShadow: "0 8px 32px rgba(255,65,108,0.35)",
+          padding: "5% 8%", boxShadow: theme.wyrShadowA,
           position: "relative", overflow: "hidden",
         }}>
           <div style={{ position: "absolute", top: "-20%", right: "-10%", width: "50%", height: "140%", background: "rgba(255,255,255,0.06)", borderRadius: "50%" }} />
@@ -135,7 +150,7 @@ function WYRSlide({ round, index, total, timeLeft, totalTime, showTimer }: {
         {/* OR badge */}
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "9%", flexShrink: 0 }}>
           <div style={{
-            background: "#fff", color: "#0A0A0F", fontWeight: 900,
+            background: "#fff", color: theme.wyrOrColor, fontWeight: 900,
             fontSize: "clamp(10px,1.5vw,15px)",
             width: "clamp(32px,4.5vw,48px)", height: "clamp(32px,4.5vw,48px)",
             borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
@@ -145,11 +160,11 @@ function WYRSlide({ round, index, total, timeLeft, totalTime, showTimer }: {
 
         {/* Option B */}
         <div style={{
-          flex: 1, background: "linear-gradient(135deg, #4776E6 0%, #8E54E9 100%)",
+          flex: 1, background: theme.wyrPanelB,
           borderRadius: "clamp(10px,1.6vw,18px)",
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
-          padding: "5% 8%", boxShadow: "0 8px 32px rgba(71,118,230,0.35)",
+          padding: "5% 8%", boxShadow: theme.wyrShadowB,
           position: "relative", overflow: "hidden",
         }}>
           <div style={{ position: "absolute", bottom: "-20%", left: "-10%", width: "50%", height: "140%", background: "rgba(255,255,255,0.06)", borderRadius: "50%" }} />
@@ -175,22 +190,23 @@ function WYRSlide({ round, index, total, timeLeft, totalTime, showTimer }: {
 // ─── Quiz slide ───────────────────────────────────────────────────────────────
 
 const OPTION_LABELS = ["A", "B", "C", "D"] as const;
-const OPTION_COLORS = ["#FF6B35", "#4776E6", "#00C49A", "#FF416C"] as const;
 
-function QuizSlide({ round, index, total, revealed, timeLeft, totalTime, showTimer }: {
+function QuizSlide({ theme, round, index, total, revealed, timeLeft, totalTime, showTimer }: {
+  theme: ViralVisualThemeTokens;
   round: QuizRound; index: number; total: number; revealed: boolean;
   timeLeft: number; totalTime: number; showTimer: boolean;
 }) {
+  const optColors = theme.optColors;
   return (
     <div style={{
       width: "100%", height: "100%",
       display: "flex", flexDirection: "column",
-      background: "#080B14",
+      background: theme.quizBg,
       fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
       position: "relative", overflow: "hidden",
     }}>
       <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, background: "linear-gradient(90deg,#FF6B35,#FF416C)", height: "0.4%", minHeight: 3 }} />
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, background: theme.quizTopBar, height: "0.4%", minHeight: 3 }} />
 
       {/* Top row: badge + timer */}
       <div style={{
@@ -199,14 +215,14 @@ function QuizSlide({ round, index, total, revealed, timeLeft, totalTime, showTim
         gap: "clamp(8px,2vw,16px)", zIndex: 2,
       }}>
         <span style={{
-          background: "rgba(255,107,53,0.15)", color: "#FF6B35",
+          background: theme.quizBadgeBg, color: theme.quizBadgeColor,
           fontSize: "clamp(9px,1.4vw,13px)", fontWeight: 700,
           letterSpacing: "0.12em", textTransform: "uppercase",
           padding: "0.35em 1em", borderRadius: "999px",
-          border: "1px solid rgba(255,107,53,0.3)",
+          border: `1px solid ${theme.quizBadgeBorder}`,
         }}>Q{index + 1}/{total}</span>
         {showTimer && !revealed && <CountdownTimer total={totalTime} remaining={timeLeft} size={46} />}
-        {revealed && <span style={{ fontSize: "clamp(10px,1.5vw,14px)", color: "#00C49A", fontWeight: 700 }}>✓ Answer</span>}
+        {revealed && <span style={{ fontSize: "clamp(10px,1.5vw,14px)", color: theme.correctText, fontWeight: 700 }}>✓ Answer</span>}
       </div>
 
       {/* Emoji */}
@@ -235,10 +251,10 @@ function QuizSlide({ round, index, total, revealed, timeLeft, totalTime, showTim
       }}>
         {round.options.map((opt, i) => {
           const isCorrect = i === round.correctIndex;
-          const color = OPTION_COLORS[i]!;
-          const bgColor = revealed ? (isCorrect ? "rgba(0,196,154,0.15)" : "rgba(255,255,255,0.03)") : "rgba(255,255,255,0.05)";
-          const borderColor = revealed ? (isCorrect ? "#00C49A" : "rgba(255,255,255,0.07)") : "rgba(255,255,255,0.1)";
-          const textColor = revealed ? (isCorrect ? "#00C49A" : "rgba(255,255,255,0.3)") : "#fff";
+          const color = optColors[i]!;
+          const bgColor = revealed ? (isCorrect ? theme.correctBg : "rgba(255,255,255,0.03)") : "rgba(255,255,255,0.05)";
+          const borderColor = revealed ? (isCorrect ? theme.correctBorder : "rgba(255,255,255,0.07)") : "rgba(255,255,255,0.1)";
+          const textColor = revealed ? (isCorrect ? theme.correctText : "rgba(255,255,255,0.3)") : "#fff";
           return (
             <div key={i} style={{
               flex: 1, background: bgColor,
@@ -250,7 +266,7 @@ function QuizSlide({ round, index, total, revealed, timeLeft, totalTime, showTim
               <div style={{
                 width: "clamp(22px,3.2vw,34px)", height: "clamp(22px,3.2vw,34px)",
                 borderRadius: "50%", flexShrink: 0, marginRight: "4%",
-                background: revealed ? (isCorrect ? "#00C49A" : "rgba(255,255,255,0.07)") : color,
+                background: revealed ? (isCorrect ? theme.correctBorder : "rgba(255,255,255,0.07)") : color,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: "clamp(8px,1.2vw,12px)", fontWeight: 800,
                 color: revealed && !isCorrect ? "rgba(255,255,255,0.25)" : "#fff",
@@ -273,7 +289,8 @@ function QuizSlide({ round, index, total, revealed, timeLeft, totalTime, showTim
 
 // ─── 16:9 Would You Rather slide ─────────────────────────────────────────────
 
-function WYRSlide16x9({ round, index, total, timeLeft, totalTime, showTimer }: {
+function WYRSlide16x9({ theme, round, index, total, timeLeft, totalTime, showTimer }: {
+  theme: ViralVisualThemeTokens;
   round: WouldYouRatherRound; index: number; total: number;
   timeLeft: number; totalTime: number; showTimer: boolean;
 }) {
@@ -281,14 +298,14 @@ function WYRSlide16x9({ round, index, total, timeLeft, totalTime, showTimer }: {
     <div style={{
       width: "100%", height: "100%",
       display: "flex", flexDirection: "column",
-      background: "#0A0A0F",
+      background: theme.wyrBg,
       fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
       position: "relative", overflow: "hidden",
     }}>
       {/* Background glow */}
       <div style={{
         position: "absolute", inset: 0,
-        background: "radial-gradient(ellipse at 20% 50%, rgba(255,65,108,0.1) 0%, transparent 55%), radial-gradient(ellipse at 80% 50%, rgba(71,118,230,0.1) 0%, transparent 55%)",
+        background: theme.wyrGlowStrong,
       }} />
 
       {/* Top bar */}
@@ -318,11 +335,11 @@ function WYRSlide16x9({ round, index, total, timeLeft, totalTime, showTimer }: {
       }}>
         {/* Option A */}
         <div style={{
-          flex: 1, background: "linear-gradient(160deg, #FF416C 0%, #FF4B2B 100%)",
+          flex: 1, background: theme.wyrPanelA,
           borderRadius: "clamp(8px,1.2vw,16px) 0 0 clamp(8px,1.2vw,16px)",
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
-          padding: "4% 6%", boxShadow: "0 8px 40px rgba(255,65,108,0.35)",
+          padding: "4% 6%", boxShadow: theme.wyrShadowA,
           position: "relative", overflow: "hidden",
         }}>
           <div style={{ position: "absolute", top: "-30%", right: "-20%", width: "60%", height: "160%", background: "rgba(255,255,255,0.06)", borderRadius: "50%" }} />
@@ -334,7 +351,7 @@ function WYRSlide16x9({ round, index, total, timeLeft, totalTime, showTimer }: {
         {/* OR badge in center */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "clamp(40px,6vw,72px)", flexShrink: 0, zIndex: 3 }}>
           <div style={{
-            background: "#fff", color: "#0A0A0F", fontWeight: 900,
+            background: "#fff", color: theme.wyrOrColor, fontWeight: 900,
             fontSize: "clamp(9px,1.2vw,14px)",
             width: "clamp(32px,4.5vw,52px)", height: "clamp(32px,4.5vw,52px)",
             borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
@@ -344,11 +361,11 @@ function WYRSlide16x9({ round, index, total, timeLeft, totalTime, showTimer }: {
 
         {/* Option B */}
         <div style={{
-          flex: 1, background: "linear-gradient(160deg, #4776E6 0%, #8E54E9 100%)",
+          flex: 1, background: theme.wyrPanelB,
           borderRadius: "0 clamp(8px,1.2vw,16px) clamp(8px,1.2vw,16px) 0",
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
-          padding: "4% 6%", boxShadow: "0 8px 40px rgba(71,118,230,0.35)",
+          padding: "4% 6%", boxShadow: theme.wyrShadowB,
           position: "relative", overflow: "hidden",
         }}>
           <div style={{ position: "absolute", bottom: "-30%", left: "-20%", width: "60%", height: "160%", background: "rgba(255,255,255,0.06)", borderRadius: "50%" }} />
@@ -368,20 +385,22 @@ function WYRSlide16x9({ round, index, total, timeLeft, totalTime, showTimer }: {
 
 // ─── 16:9 Quiz slide ──────────────────────────────────────────────────────────
 
-function QuizSlide16x9({ round, index, total, revealed, timeLeft, totalTime, showTimer }: {
+function QuizSlide16x9({ theme, round, index, total, revealed, timeLeft, totalTime, showTimer }: {
+  theme: ViralVisualThemeTokens;
   round: QuizRound; index: number; total: number; revealed: boolean;
   timeLeft: number; totalTime: number; showTimer: boolean;
 }) {
+  const optColors = theme.optColors;
   return (
     <div style={{
       width: "100%", height: "100%",
       display: "flex", flexDirection: "row",
-      background: "#080B14",
+      background: theme.quizBg,
       fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
       position: "relative", overflow: "hidden",
     }}>
       <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, background: "linear-gradient(90deg,#FF6B35,#FF416C)", height: "0.5%", minHeight: 3 }} />
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, background: theme.quizTopBar, height: "0.5%", minHeight: 3 }} />
 
       {/* Left: question area */}
       <div style={{
@@ -391,11 +410,11 @@ function QuizSlide16x9({ round, index, total, revealed, timeLeft, totalTime, sho
         borderRight: "1px solid rgba(255,255,255,0.06)",
       }}>
         <div style={{
-          background: "rgba(255,107,53,0.15)", color: "#FF6B35",
+          background: theme.quizBadgeBg, color: theme.quizBadgeColor,
           fontSize: "clamp(8px,1vw,12px)", fontWeight: 700,
           letterSpacing: "0.12em", textTransform: "uppercase",
           padding: "0.3em 0.9em", borderRadius: "999px",
-          border: "1px solid rgba(255,107,53,0.3)", marginBottom: "1em",
+          border: `1px solid ${theme.quizBadgeBorder}`, marginBottom: "1em",
         }}>Q{index + 1}/{total}</div>
         {round.emoji && <span style={{ fontSize: "clamp(24px,4vw,52px)", marginBottom: "0.3em" }}>{round.emoji}</span>}
         <p style={{ color: "#fff", fontSize: "clamp(12px,1.8vw,22px)", fontWeight: 800, textAlign: "center", margin: 0, lineHeight: 1.35 }}>{round.question}</p>
@@ -404,7 +423,7 @@ function QuizSlide16x9({ round, index, total, revealed, timeLeft, totalTime, sho
             <CountdownTimer total={totalTime} remaining={timeLeft} size={42} />
           </div>
         )}
-        {revealed && <span style={{ marginTop: "0.8em", fontSize: "clamp(9px,1.2vw,14px)", color: "#00C49A", fontWeight: 700 }}>✓ Answer revealed</span>}
+        {revealed && <span style={{ marginTop: "0.8em", fontSize: "clamp(9px,1.2vw,14px)", color: theme.correctText, fontWeight: 700 }}>✓ Answer revealed</span>}
       </div>
 
       {/* Right: 2×2 options grid */}
@@ -417,10 +436,10 @@ function QuizSlide16x9({ round, index, total, revealed, timeLeft, totalTime, sho
       }}>
         {round.options.map((opt, i) => {
           const isCorrect = i === round.correctIndex;
-          const color = OPTION_COLORS[i]!;
-          const bgColor = revealed ? (isCorrect ? "rgba(0,196,154,0.15)" : "rgba(255,255,255,0.03)") : "rgba(255,255,255,0.05)";
-          const borderColor = revealed ? (isCorrect ? "#00C49A" : "rgba(255,255,255,0.07)") : "rgba(255,255,255,0.1)";
-          const textColor = revealed ? (isCorrect ? "#00C49A" : "rgba(255,255,255,0.3)") : "#fff";
+          const color = optColors[i]!;
+          const bgColor = revealed ? (isCorrect ? theme.correctBg : "rgba(255,255,255,0.03)") : "rgba(255,255,255,0.05)";
+          const borderColor = revealed ? (isCorrect ? theme.correctBorder : "rgba(255,255,255,0.07)") : "rgba(255,255,255,0.1)";
+          const textColor = revealed ? (isCorrect ? theme.correctText : "rgba(255,255,255,0.3)") : "#fff";
           return (
             <div key={i} style={{
               background: bgColor, border: `1px solid ${borderColor}`,
@@ -431,7 +450,7 @@ function QuizSlide16x9({ round, index, total, revealed, timeLeft, totalTime, sho
               <div style={{
                 width: "clamp(20px,2.8vw,32px)", height: "clamp(20px,2.8vw,32px)",
                 borderRadius: "50%", flexShrink: 0, marginRight: "6%",
-                background: revealed ? (isCorrect ? "#00C49A" : "rgba(255,255,255,0.07)") : color,
+                background: revealed ? (isCorrect ? theme.correctBorder : "rgba(255,255,255,0.07)") : color,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: "clamp(7px,0.9vw,11px)", fontWeight: 800,
                 color: revealed && !isCorrect ? "rgba(255,255,255,0.25)" : "#fff",
@@ -465,6 +484,37 @@ function speakText(text: string) {
   window.speechSynthesis.speak(u);
 }
 
+/** Soft beep each time the on-screen countdown drops a second (Web Audio, no asset files). */
+function playViralTimerTick(audioCtxRef: MutableRefObject<AudioContext | null>, secondsRemaining: number) {
+  if (typeof window === "undefined") return;
+  if (typeof document !== "undefined" && document.hidden) return;
+  try {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new AC();
+    }
+    const ctx = audioCtxRef.current;
+    void ctx.resume();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const urgent = secondsRemaining <= 3;
+    osc.frequency.value = urgent ? 1040 : 720;
+    osc.type = "sine";
+    const vol = urgent ? 0.11 : 0.075;
+    const t0 = ctx.currentTime;
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(vol, t0 + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0008, t0 + (urgent ? 0.1 : 0.065));
+    osc.start(t0);
+    osc.stop(t0 + 0.11);
+  } catch {
+    /* ignore — autoplay or unsupported */
+  }
+}
+
 export function ViralTemplatePreview({
   data,
   settings,
@@ -472,77 +522,183 @@ export function ViralTemplatePreview({
   data: ViralTemplateData;
   settings: ViralSettings;
 }) {
-  const [currentIdx, setCurrentIdx] = useState(0);
+  const [slideIdx, setSlideIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [timeLeft, setTimeLeft] = useState(settings.slideDuration);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const slideIdxRef = useRef(0);
+  const timerAudioCtxRef = useRef<AudioContext | null>(null);
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+  /** Last whole-second value shown on the circular timer (for tick sounds). */
+  const timerSecondRef = useRef<number | null>(null);
 
   const rounds = data.rounds as (WouldYouRatherRound | QuizRound)[];
-  const total = rounds.length;
+  const totalRounds = rounds.length;
+  const visualTheme = useMemo(
+    () => resolveViralVisualTheme(data.visualTheme),
+    [data.visualTheme]
+  );
+  const timeline = useMemo(() => buildViralTimeline(totalRounds, 4), [totalRounds]);
+  const totalSlides = timeline.length;
+
+  useEffect(() => {
+    setSlideIdx((s) => Math.min(s, Math.max(0, totalSlides - 1)));
+  }, [totalSlides]);
+
+  useEffect(() => {
+    slideIdxRef.current = slideIdx;
+  }, [slideIdx]);
+
+  useEffect(() => {
+    timerSecondRef.current = null;
+  }, [slideIdx]);
+
+  // Countdown tick sound when the displayed second drops (timer visible + playing only).
+  useEffect(() => {
+    if (!playing || !settings.showTimer) {
+      timerSecondRef.current = null;
+      return;
+    }
+    const item = timeline[slideIdx];
+    const countdownVisible =
+      item?.kind === "round" &&
+      (data.type === "would-you-rather" || (data.type === "quiz" && !revealed));
+    if (!countdownVisible) {
+      timerSecondRef.current = null;
+      return;
+    }
+    const sec = Math.ceil(timeLeft);
+    const prev = timerSecondRef.current;
+    if (prev !== null && sec < prev && sec >= 0) {
+      playViralTimerTick(timerAudioCtxRef, sec);
+    }
+    timerSecondRef.current = sec;
+  }, [timeLeft, playing, settings.showTimer, slideIdx, revealed, data.type, timeline]);
+
+  const musicId = settings.backgroundMusic ?? "none";
+
+  useEffect(() => {
+    const el = bgmRef.current;
+    if (!el) return;
+    if (musicId === "none") {
+      el.pause();
+      el.removeAttribute("src");
+      void el.load();
+      return;
+    }
+    const row = BGM_TRACKS.find((t) => t.id === musicId);
+    if (!row?.filename) return;
+    el.src = `/bgm/${row.filename}`;
+    el.loop = true;
+    el.volume = BGM_MIX_VOLUME;
+    void el.load();
+  }, [musicId]);
+
+  useEffect(() => {
+    const el = bgmRef.current;
+    if (!el || musicId === "none") return;
+    if (playing) void el.play().catch(() => {});
+    else el.pause();
+  }, [playing, musicId]);
+
+  useEffect(
+    () => () => {
+      const el = bgmRef.current;
+      if (el) {
+        el.pause();
+        el.removeAttribute("src");
+      }
+    },
+    []
+  );
 
   const stopTick = useCallback(() => {
-    if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+    if (tickRef.current) {
+      clearInterval(tickRef.current);
+      tickRef.current = null;
+    }
   }, []);
 
-  const goTo = useCallback((idx: number) => {
-    stopTick();
-    if (settings.voiceover) window.speechSynthesis?.cancel();
-    setCurrentIdx(idx);
-    setRevealed(false);
-    setTimeLeft(settings.slideDuration);
-  }, [settings.slideDuration, settings.voiceover, stopTick]);
+  const goTo = useCallback(
+    (idx: number) => {
+      stopTick();
+      if (settings.voiceover) window.speechSynthesis?.cancel();
+      const clamped = Math.max(0, Math.min(totalSlides - 1, idx));
+      setSlideIdx(clamped);
+      setRevealed(false);
+      setTimeLeft(settings.slideDuration);
+    },
+    [settings.slideDuration, settings.voiceover, stopTick, totalSlides]
+  );
 
   // Reset timer when settings change
-  useEffect(() => { setTimeLeft(settings.slideDuration); }, [settings.slideDuration]);
-
-  // Tick
   useEffect(() => {
-    if (!playing) { stopTick(); return; }
+    setTimeLeft(settings.slideDuration);
+  }, [settings.slideDuration]);
+
+  // Tick: advance through timeline (rounds + CTA cards). slideIdx in deps restarts the timer each slide so quiz reveal works every round.
+  useEffect(() => {
+    if (!playing) {
+      stopTick();
+      return;
+    }
     const TICK = 0.25;
     tickRef.current = setInterval(() => {
       setTimeLeft((t) => {
         const next = t - TICK;
+        const item = timeline[slideIdxRef.current];
+        const isQuizRound = data.type === "quiz" && item?.kind === "round";
+
+        if (isQuizRound && t > settings.slideDuration * REVEAL_FRAC && next <= settings.slideDuration * REVEAL_FRAC) {
+          setRevealed(true);
+        }
+
         if (next <= 0) {
           stopTick();
-          // advance
-          setCurrentIdx((i) => {
-            const nextIdx = i < total - 1 ? i + 1 : i;
-            if (i < total - 1) {
+          setSlideIdx((i) => {
+            if (i < totalSlides - 1) {
               setRevealed(false);
               setTimeLeft(settings.slideDuration);
-              // restart tick
-              setTimeout(() => {
-                if (tickRef.current) clearInterval(tickRef.current);
-                tickRef.current = setInterval(() => {
-                  setTimeLeft((tt) => {
-                    const nn = tt - TICK;
-                    if (nn <= 0) { stopTick(); return 0; }
-                    return nn;
-                  });
-                }, TICK * 1000);
-              }, 50);
-            } else {
-              setPlaying(false);
+              return i + 1;
             }
-            return nextIdx;
+            setPlaying(false);
+            return i;
           });
           return 0;
-        }
-        // Quiz: reveal at halfway
-        if (data.type === "quiz" && t > settings.slideDuration * REVEAL_FRAC && next <= settings.slideDuration * REVEAL_FRAC) {
-          setRevealed(true);
         }
         return next;
       });
     }, TICK * 1000);
     return stopTick;
-  }, [playing, total, settings.slideDuration, data.type, stopTick]);
+  }, [playing, slideIdx, totalSlides, settings.slideDuration, data.type, timeline, stopTick]);
 
-  // Voiceover on slide change
+  // Voiceover on timeline step change
   useEffect(() => {
     if (!settings.voiceover || !playing) return;
-    const round = rounds[currentIdx];
+    const item = timeline[slideIdx];
+    if (!item) return;
+
+    if (item.kind === "intro") {
+      speakText(getIntroVoiceSnippet(data.type, data.topic));
+      return () => {
+        window.speechSynthesis?.cancel();
+      };
+    }
+    if (item.kind === "outro") {
+      speakText(getOutroVoiceSnippet(data.type));
+      return () => {
+        window.speechSynthesis?.cancel();
+      };
+    }
+    if (item.kind === "cta") {
+      speakText(getCtaVoiceSnippet(data.type));
+      return () => {
+        window.speechSynthesis?.cancel();
+      };
+    }
+
+    const round = rounds[item.roundIndex];
     if (!round) return;
     let text = "";
     if (data.type === "would-you-rather") {
@@ -553,8 +709,10 @@ export function ViralTemplatePreview({
       text = r.question;
     }
     speakText(text);
-    return () => { window.speechSynthesis?.cancel(); };
-  }, [currentIdx, playing, settings.voiceover]);
+    return () => {
+      window.speechSynthesis?.cancel();
+    };
+  }, [slideIdx, playing, settings.voiceover, data.type, data.topic, timeline, data.rounds]);
 
   const handlePlayPause = () => {
     if (playing) {
@@ -566,102 +724,157 @@ export function ViralTemplatePreview({
     }
   };
 
-  const round = rounds[currentIdx];
-  if (!round) return null;
+  const currentItem = timeline[slideIdx];
+  if (!currentItem) return null;
 
   const is16x9 = settings.aspectRatio === "16:9";
+  const showRevealBtn =
+    data.type === "quiz" && currentItem.kind === "round" && !revealed;
 
   return (
     <div className="flex flex-col gap-3 w-full select-none">
-      {/* Preview — switches between 9:16 and 16:9 */}
+      <audio ref={bgmRef} className="sr-only" playsInline preload="auto" aria-hidden />
       <div
         className="relative mx-auto w-full"
-        style={is16x9
-          ? { maxWidth: 640, aspectRatio: "16/9" }
-          : { maxWidth: 380, aspectRatio: "9/16" }
-        }
+        style={is16x9 ? { maxWidth: 640, aspectRatio: "16/9" } : { maxWidth: 380, aspectRatio: "9/16" }}
       >
         <div className="absolute inset-0 rounded-2xl overflow-hidden shadow-2xl">
-          {data.type === "would-you-rather" ? (
+          {currentItem.kind === "intro" ? (
+            <ViralIntroSlide
+              theme={visualTheme}
+              topic={data.topic}
+              contentType={data.type}
+              roundCount={totalRounds}
+              aspectRatio={settings.aspectRatio}
+            />
+          ) : currentItem.kind === "outro" ? (
+            <ViralOutroSlide theme={visualTheme} topic={data.topic} contentType={data.type} aspectRatio={settings.aspectRatio} />
+          ) : currentItem.kind === "cta" ? (
+            <ViralCTASlide theme={visualTheme} variant="mid" aspectRatio={settings.aspectRatio} />
+          ) : data.type === "would-you-rather" ? (
             is16x9 ? (
               <WYRSlide16x9
-                round={round as WouldYouRatherRound}
-                index={currentIdx} total={total}
-                timeLeft={timeLeft} totalTime={settings.slideDuration}
+                theme={visualTheme}
+                round={rounds[currentItem.roundIndex] as WouldYouRatherRound}
+                index={currentItem.roundIndex}
+                total={totalRounds}
+                timeLeft={timeLeft}
+                totalTime={settings.slideDuration}
                 showTimer={settings.showTimer}
               />
             ) : (
               <WYRSlide
-                round={round as WouldYouRatherRound}
-                index={currentIdx} total={total}
-                timeLeft={timeLeft} totalTime={settings.slideDuration}
+                theme={visualTheme}
+                round={rounds[currentItem.roundIndex] as WouldYouRatherRound}
+                index={currentItem.roundIndex}
+                total={totalRounds}
+                timeLeft={timeLeft}
+                totalTime={settings.slideDuration}
                 showTimer={settings.showTimer}
               />
             )
+          ) : is16x9 ? (
+            <QuizSlide16x9
+              theme={visualTheme}
+              round={rounds[currentItem.roundIndex] as QuizRound}
+              index={currentItem.roundIndex}
+              total={totalRounds}
+              revealed={revealed}
+              timeLeft={timeLeft}
+              totalTime={settings.slideDuration}
+              showTimer={settings.showTimer}
+            />
           ) : (
-            is16x9 ? (
-              <QuizSlide16x9
-                round={round as QuizRound}
-                index={currentIdx} total={total}
-                revealed={revealed}
-                timeLeft={timeLeft} totalTime={settings.slideDuration}
-                showTimer={settings.showTimer}
-              />
-            ) : (
-              <QuizSlide
-                round={round as QuizRound}
-                index={currentIdx} total={total}
-                revealed={revealed}
-                timeLeft={timeLeft} totalTime={settings.slideDuration}
-                showTimer={settings.showTimer}
-              />
-            )
+            <QuizSlide
+              theme={visualTheme}
+              round={rounds[currentItem.roundIndex] as QuizRound}
+              index={currentItem.roundIndex}
+              total={totalRounds}
+              revealed={revealed}
+              timeLeft={timeLeft}
+              totalTime={settings.slideDuration}
+              showTimer={settings.showTimer}
+            />
           )}
         </div>
       </div>
 
-      {/* Controls */}
       <div className="flex items-center justify-center gap-2 mt-1 flex-wrap">
         <button
-          onClick={() => { goTo(Math.max(0, currentIdx - 1)); }}
-          disabled={currentIdx === 0}
+          type="button"
+          onClick={() => goTo(slideIdx - 1)}
+          disabled={slideIdx === 0}
           className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 disabled:opacity-30 transition"
-        >←</button>
+        >
+          ←
+        </button>
         <button
+          type="button"
           onClick={handlePlayPause}
           className="px-5 py-1.5 rounded-lg text-sm font-semibold bg-orange-500 hover:bg-orange-600 text-white transition"
-        >{playing ? "⏸ Pause" : "▶ Play"}</button>
-        {data.type === "quiz" && !revealed && (
+        >
+          {playing ? "⏸ Pause" : "▶ Play"}
+        </button>
+        {showRevealBtn && (
           <button
+            type="button"
             onClick={() => setRevealed(true)}
             className="px-3 py-1.5 rounded-lg text-sm font-medium bg-green-500 hover:bg-green-600 text-white transition"
-          >Reveal</button>
+          >
+            Reveal
+          </button>
         )}
         <button
-          onClick={() => { goTo(Math.min(total - 1, currentIdx + 1)); }}
-          disabled={currentIdx === total - 1}
+          type="button"
+          onClick={() => goTo(slideIdx + 1)}
+          disabled={slideIdx === totalSlides - 1}
           className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 disabled:opacity-30 transition"
-        >→</button>
+        >
+          →
+        </button>
       </div>
 
-      {/* Dot indicators */}
       <div className="flex justify-center gap-1.5 flex-wrap">
-        {rounds.map((_, i) => (
+        {timeline.map((step, i) => (
           <button
             key={i}
+            type="button"
+            title={
+              step.kind === "intro"
+                ? "Intro"
+                : step.kind === "outro"
+                  ? "Outro"
+                  : step.kind === "cta"
+                    ? "CTA"
+                    : `Question ${step.roundIndex + 1}`
+            }
             onClick={() => goTo(i)}
-            className={`rounded-full transition-all ${i === currentIdx ? "w-5 h-2 bg-orange-500" : "w-2 h-2 bg-gray-300 dark:bg-gray-600"}`}
+            className={`rounded-full transition-all ${
+              i === slideIdx
+                ? "w-5 h-2 bg-orange-500"
+                : step.kind === "intro"
+                  ? "w-2 h-2 bg-violet-400 dark:bg-violet-600"
+                  : step.kind === "outro"
+                    ? "w-2 h-2 bg-emerald-400 dark:bg-emerald-600"
+                    : step.kind === "cta"
+                      ? "w-2 h-2 bg-amber-400 dark:bg-amber-600"
+                      : "w-2 h-2 bg-gray-300 dark:bg-gray-600"
+            }`}
           />
         ))}
       </div>
 
-      {/* Round list */}
       <div className="mt-2 space-y-2 max-h-64 overflow-y-auto pr-1">
         {rounds.map((r, i) => (
           <button
             key={i}
-            onClick={() => goTo(i)}
-            className={`w-full text-left rounded-lg border p-3 text-sm transition ${i === currentIdx ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30" : "border-gray-200 dark:border-gray-700 hover:border-gray-300"}`}
+            type="button"
+            onClick={() => goTo(timelineIndexForRound(timeline, i))}
+            className={`w-full text-left rounded-lg border p-3 text-sm transition ${
+              currentItem.kind === "round" && currentItem.roundIndex === i
+                ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30"
+                : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
+            }`}
           >
             <span className="font-semibold text-gray-400 mr-2">#{i + 1}</span>
             {data.type === "would-you-rather"

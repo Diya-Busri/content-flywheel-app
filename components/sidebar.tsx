@@ -101,7 +101,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
         <motion.button
           type="button"
           onClick={toggleCollapsed}
-          className="fixed left-0 top-1/2 -translate-y-1/2 z-30 flex items-center justify-center w-8 h-12 rounded-r-md bg-white dark:bg-card border border-l-0 border-[#E5E7EB] dark:border-white/10 shadow-sm text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-700 dark:hover:text-white transition-colors"
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-50 flex items-center justify-center w-8 h-12 rounded-r-md bg-white dark:bg-card border border-l-0 border-[#E5E7EB] dark:border-white/10 shadow-sm text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-700 dark:hover:text-white transition-colors"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           aria-label="Expand sidebar"
@@ -111,7 +111,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
       )}
 
       <div
-        className={`sidebar no-print h-screen flex-shrink-0 bg-white dark:bg-card backdrop-blur-xl border-r border-[#E5E7EB] dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-20 transition-[width] duration-200 ease-in-out ${
+        className={`sidebar no-print h-screen flex-shrink-0 bg-white dark:bg-card backdrop-blur-xl border-r border-[#E5E7EB] dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-40 transition-[width] duration-200 ease-in-out ${
           isCollapsed ? "w-0 min-w-0 border-r-0" : "w-[60px] md:w-[220px] min-w-[60px] md:min-w-[220px]"
         }`}
         style={mounted && isCollapsed ? { width: 0, minWidth: 0 } : undefined}
