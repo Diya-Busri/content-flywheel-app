@@ -5,7 +5,14 @@ const nextConfig = {
     return [{ source: "/favicon.ico", destination: "/icon.svg" }];
   },
   experimental: {
-    serverComponentsExternalPackages: ["puppeteer"],
+    serverComponentsExternalPackages: [
+      "puppeteer",
+      "puppeteer-core",
+      "@sparticuz/chromium-min",
+      "@ffmpeg-installer/ffmpeg",
+      "ffmpeg-static",
+      "fluent-ffmpeg",
+    ],
     // Exclude puppeteer from API routes that don't use it (reduces deploy bundle; avoids "Deploying outputs" internal error)
     outputFileTracingExcludes: {
       "/api/video-guide/**": ["**/node_modules/puppeteer/**", "**/node_modules/puppeteer-core/**"],
@@ -73,7 +80,15 @@ const nextConfig = {
       };
     }
     if (isServer) {
-      config.externals = [...(config.externals || []), "puppeteer"];
+      config.externals = [
+        ...(config.externals || []),
+        "puppeteer",
+        "puppeteer-core",
+        "@sparticuz/chromium-min",
+        "@ffmpeg-installer/ffmpeg",
+        "ffmpeg-static",
+        "fluent-ffmpeg",
+      ];
     }
     return config;
   },

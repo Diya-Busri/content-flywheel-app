@@ -43,10 +43,12 @@ function resolveDrawtextFontFile(): string | null {
 
 export type CompileScene = {
   duration: number;
-  /** Image URL (for Ken Burns) or null if video_url is set */
+  /** Image URL (for Ken Burns) or null if video_url / localImagePath is set */
   image_url: string | null;
-  /** Video URL (trimmed to duration) or null if image_url is set */
+  /** Video URL (trimmed to duration) or null if image_url / localImagePath is set */
   video_url: string | null;
+  /** Absolute local path to an already-downloaded image (skips network download) */
+  localImagePath?: string | null;
   /** Full dialogue line (e.g. "Name: …") for burned-in captions; optional */
   dialogue?: string | null;
 };
@@ -329,7 +331,11 @@ export async function compileVideoToFile(
 
     const imageUrl = s.image_url?.trim() || null;
     const videoUrl = s.video_url?.trim() || null;
-    if (imageUrl && !videoUrl) {
+    const localImagePath = s.localImagePath?.trim() || null;
+    if (localImagePath) {
+      const segPath = join(workDir, `seg_${i}.mp4`);
+      await renderImageSegment(localImagePath, dur, segPath, width, height, s.dialogue);
+    } else if (imageUrl && !videoUrl) {
       if (!isHttpUrl(imageUrl)) throw new Error(`Scene ${i + 1} image_url must be http(s)`);
       const inputPath = await downloadAsset(imageUrl, workDir, i, true);
       const segPath = join(workDir, `seg_${i}.mp4`);
@@ -340,7 +346,7 @@ export async function compileVideoToFile(
       const segPath = join(workDir, `seg_${i}.mp4`);
       await renderVideoSegment(inputPath, dur, segPath, width, height, s.dialogue);
     } else {
-      throw new Error(`Scene ${i + 1} must have image_url or video_url`);
+      throw new Error(`Scene ${i + 1} must have image_url, video_url, or localImagePath`);
     }
   }
 
