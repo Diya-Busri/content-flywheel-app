@@ -51,6 +51,10 @@ export type CompileScene = {
   localImagePath?: string | null;
   /** Full dialogue line (e.g. "Name: …") for burned-in captions; optional */
   dialogue?: string | null;
+  /** Server-local absolute path to an image file — skips HTTP download when set */
+  localImagePath?: string | null;
+  /** When true, image scenes use a static full-frame shot (no Ken Burns zoom/pan). */
+  disableKenBurns?: boolean;
 };
 
 function isHttpUrl(s: string): boolean {
@@ -197,7 +201,8 @@ async function renderImageSegment(
   segPath: string,
   width: number,
   height: number,
-  dialogueLine?: string | null
+  dialogueLine?: string | null,
+  opts?: { staticShot?: boolean }
 ): Promise<void> {
   const dFrames = Math.max(1, Math.round(FPS * duration));
   /** Cover WxH: scale up with aspect preserved until both dimensions meet target, then center-crop.
@@ -208,10 +213,11 @@ async function renderImageSegment(
    * Single-input chain via -vf (no stream labels). Avoids -filter_complex + -map [label] failures when
    * the graph is misparsed or pads are missing on some FFmpeg builds.
    */
+  const staticToYuv = `${coverCrop},setsar=1:1,format=yuv420p`;
   const kenBurnsToYuv =
     `${coverCrop},setsar=1:1,` +
     `scale=8000:-1,zoompan=z='min(zoom+0.001,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${dFrames}:s=${width}x${height}:fps=${FPS},format=yuv420p`;
-  let vf = kenBurnsToYuv;
+  let vf = opts?.staticShot ? staticToYuv : kenBurnsToYuv;
   if (dialogueLine?.trim()) {
     const fontFile = resolveDrawtextFontFile();
     const flatCaps = buildViralCaptionDrawtextFlatVf(
@@ -279,6 +285,8 @@ export type CompileVideoOptions = {
   bgmVolume?: number;
   /** Landscape 1920×1080 (default) or vertical 1080×1920 for TikTok-style MP4. */
   outputAspect?: "16:9" | "9:16";
+  /** Optional x264 preset override for faster exports on some flows. */
+  videoPreset?: "ultrafast" | "superfast" | "veryfast" | "faster" | "fast" | "medium";
 };
 
 /**
@@ -331,15 +339,20 @@ export async function compileVideoToFile(
 
     const imageUrl = s.image_url?.trim() || null;
     const videoUrl = s.video_url?.trim() || null;
-    const localImagePath = s.localImagePath?.trim() || null;
-    if (localImagePath) {
+    const localImg = s.localImagePath?.trim() || null;
+    if (localImg && !videoUrl) {
+      await access(localImg);
       const segPath = join(workDir, `seg_${i}.mp4`);
-      await renderImageSegment(localImagePath, dur, segPath, width, height, s.dialogue);
+      await renderImageSegment(localImg, dur, segPath, width, height, s.dialogue, {
+        staticShot: Boolean(s.disableKenBurns),
+      });
     } else if (imageUrl && !videoUrl) {
       if (!isHttpUrl(imageUrl)) throw new Error(`Scene ${i + 1} image_url must be http(s)`);
       const inputPath = await downloadAsset(imageUrl, workDir, i, true);
       const segPath = join(workDir, `seg_${i}.mp4`);
-      await renderImageSegment(inputPath, dur, segPath, width, height, s.dialogue);
+      await renderImageSegment(inputPath, dur, segPath, width, height, s.dialogue, {
+        staticShot: Boolean(s.disableKenBurns),
+      });
     } else if (videoUrl) {
       if (!isHttpUrl(videoUrl)) throw new Error(`Scene ${i + 1} video_url must be http(s)`);
       const inputPath = await downloadAsset(videoUrl, workDir, i, false);
@@ -378,6 +391,8 @@ export async function compileVideoToFile(
     mapAudioStream = `${inputCount}:a`;
   }
 
+  const preset = compileOpts?.videoPreset ?? "medium";
+
   const args = [
     "-y",
     ...segInputs,
@@ -388,7 +403,7 @@ export async function compileVideoToFile(
     "-map", mapAudioStream,
     // Do not use -shortest: if total VO duration > sum(scene video durations), -shortest trims the audio tail (often the last scene).
     "-c:v", "libx264",
-    "-preset", "medium",
+    "-preset", preset,
     "-c:a", "aac",
     "-movflags", "+faststart",
     finalPath,

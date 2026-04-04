@@ -33,6 +33,8 @@ export type StickmanShotTemplate =
   | "walk-and-talk"
   | "result-moment";
 
+export type StickmanSceneSegment = "intro" | "main" | "cta" | "outro" | "cta-outro";
+
 export interface StickmanScene {
   sceneIndex: number;
   /** Full narration read by TTS — can be longer than on-screen text. */
@@ -46,6 +48,67 @@ export interface StickmanScene {
   keyObject: StickmanKeyObject;
   camera: StickmanCamera;
   shotTemplate: StickmanShotTemplate;
+  segment?: StickmanSceneSegment;
+}
+
+const CTA_GOAL_HINTS: Record<string, string> = {
+  "Get followers": 'Include an explicit follow CTA (e.g. "Follow for more").',
+  "Get saves": 'Ask viewers to save the video for later.',
+  "Drive link clicks": "Mention link in bio or where to tap next.",
+  "Get engagement": "Ask a specific comment or reply prompt.",
+};
+
+/** Every CTA beat must stack platform actions with the chosen goal (natural speech, not a list). */
+const CTA_PLATFORM_ENGAGEMENT =
+  "In the same CTA narration, also invite viewers to subscribe on YouTube or follow on TikTok, Reels, or Shorts, tap like, and share with someone who would find this useful — weave it into one or two conversational sentences, not a robotic checklist.";
+
+function segmentForIndex(sceneCount: number, i: number): StickmanSceneSegment {
+  if (sceneCount <= 0) return "main";
+  if (sceneCount === 1) return "intro";
+  if (sceneCount === 2) return i === 0 ? "intro" : "outro";
+  if (sceneCount === 3) return i === 0 ? "intro" : i === 1 ? "main" : "cta-outro";
+  if (i === 0) return "intro";
+  if (i === sceneCount - 1) return "outro";
+  if (i === sceneCount - 2) return "cta";
+  return "main";
+}
+
+function assignSegments(scenes: StickmanScene[]): StickmanScene[] {
+  const n = scenes.length;
+  return scenes.map((s, i) => ({ ...s, segment: segmentForIndex(n, i) }));
+}
+
+/** Apply optional user-written lines; CTA/outro share the last scene when there are only 3 scenes. */
+function applyScriptOverrides(
+  scenes: StickmanScene[],
+  opts: { introScript?: string; ctaScript?: string; outroScript?: string }
+): StickmanScene[] {
+  const n = scenes.length;
+  if (n === 0) return scenes;
+  const intro = opts.introScript?.replace(/\s+/g, " ").trim();
+  const cta = opts.ctaScript?.replace(/\s+/g, " ").trim();
+  const outro = opts.outroScript?.replace(/\s+/g, " ").trim();
+  const next = scenes.map((s) => ({ ...s }));
+
+  if (intro) next[0] = { ...next[0], caption: intro };
+
+  if (n >= 4) {
+    if (cta) next[n - 2] = { ...next[n - 2], caption: cta };
+    if (outro) next[n - 1] = { ...next[n - 1], caption: outro };
+  } else if (n === 3) {
+    if (cta && outro) {
+      next[2] = { ...next[2], caption: `${cta} ${outro}`.replace(/\s+/g, " ").trim() };
+    } else if (cta) {
+      next[2] = { ...next[2], caption: cta };
+    } else if (outro) {
+      next[2] = { ...next[2], caption: outro };
+    }
+  } else if (n === 2) {
+    const tail = [cta, outro].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    if (tail) next[1] = { ...next[1], caption: tail };
+  }
+
+  return next;
 }
 
 function buildFallbackScenes(topic: string, sceneCount: number): StickmanScene[] {
@@ -60,32 +123,58 @@ function buildFallbackScenes(topic: string, sceneCount: number): StickmanScene[]
     "result-moment",
   ];
 
-  return Array.from({ length: sceneCount }, (_, i) => {
+  const rows = Array.from({ length: sceneCount }, (_, i) => {
+    if (sceneCount === 1) {
+      return {
+        sceneIndex: 0,
+        caption: `Here is the essential idea behind ${topic}, why it matters, and what to do next: subscribe or follow for more, hit like if this helped, and share it with someone who needs the breakdown.`,
+        pose: "pointing" as StickmanPose,
+        layout: "center-presenter" as StickmanLayout,
+        keyObject: "idea" as StickmanKeyObject,
+        camera: "wide" as StickmanCamera,
+        shotTemplate: "stand-explain" as StickmanShotTemplate,
+        segment: "intro" as StickmanSceneSegment,
+      };
+    }
     const chapter = Math.floor(i / 5) + 1;
     const beat = (i % 5) + 1;
-    const isIntro = i === 0;
-    const isOutro = i === sceneCount - 1;
-    const caption = isIntro
-      ? `Most people get ${topic} backwards — here is the one shift that actually moves the needle in the first week.`
-      : isOutro
-        ? `Do this today: pick one step from ${topic}, ship it in public, and repeat tomorrow. That loop beats another month of planning.`
-        : `Beat ${beat}: a concrete move for ${topic} you can copy without buying another course or tool.`;
+    const seg = segmentForIndex(sceneCount, i);
+    let caption: string;
+    if (seg === "intro") {
+      caption = `Most people get ${topic} backwards — in the next few minutes you will see the part that actually moves the needle, step by step.`;
+    } else if (seg === "outro") {
+      caption = `Alright, that is the line I wish someone had drawn for me on ${topic}. Go try one piece of this today — thanks for sticking around, and I will catch you in the next video.`;
+    } else if (seg === "cta") {
+      caption = `If this landed, subscribe or follow for more on ${topic}, tap like, share with a friend who needs this, save the video, and drop a comment with what you want next.`;
+    } else if (seg === "cta-outro") {
+      caption = `Subscribe or follow for more on ${topic}, hit like, share this, save it for later — thanks for watching, and I will see you in the next one.`;
+    } else {
+      caption = `Chapter ${chapter}, point ${beat}: a practical idea about ${topic} you can apply without overcomplicating your process.`;
+    }
+
+    const isIntro = seg === "intro";
+    const isCta = seg === "cta";
+    const isOutroLine = seg === "outro" || seg === "cta-outro";
 
     const sceneTitle = isIntro
       ? `Stop guessing — fix ${topic} in one week`
-      : isOutro
+      : isOutroLine
         ? `Your move today (copy this)`
-        : `Beat ${beat}: a real step for ${topic}`;
+        : isCta
+          ? `Stay in the loop`
+          : `Beat ${beat}: a real step for ${topic}`;
 
     const bullets = isIntro
       ? [`Everyone starts ${topic} backwards`, `One shift = visible progress fast`, `No new tools required`]
-      : isOutro
+      : isOutroLine
         ? [`Pick one action from this video`, `Ship it publicly today`, `Repeat tomorrow — that is the system`]
-        : [
-            `Concrete move #${beat} for ${topic}`,
-            `Copy it without extra software`,
-            `Stack it with the previous beats`,
-          ];
+        : isCta
+          ? [`Subscribe or follow for more`, `Like and share`, `Comment what you want next`]
+          : [
+              `Concrete move #${beat} for ${topic}`,
+              `Copy it without extra software`,
+              `Stack it with the previous beats`,
+            ];
 
     return {
       sceneIndex: i,
@@ -97,8 +186,10 @@ function buildFallbackScenes(topic: string, sceneCount: number): StickmanScene[]
       keyObject: keyObjects[i % keyObjects.length] ?? "idea",
       camera: i % 3 === 0 ? "wide" : "medium",
       shotTemplate: shots[i % shots.length] ?? "stand-explain",
+      segment: seg,
     };
   });
+  return rows;
 }
 
 const VALID_POSES: StickmanPose[] = [
@@ -191,8 +282,19 @@ export async function POST(request: NextRequest) {
       sceneCount?: number;
       longMode?: boolean;
       targetMinutes?: number;
+      ctaGoal?: string;
+      introScript?: string;
+      ctaScript?: string;
+      outroScript?: string;
     };
     const topic = typeof body.topic === "string" ? body.topic.trim() : "";
+    const ctaGoalRaw = typeof body.ctaGoal === "string" ? body.ctaGoal.trim() : "";
+    const ctaGoalLine = `${CTA_GOAL_HINTS[ctaGoalRaw] ?? "End with a clear action (follow, save, comment, or link in bio) that fits the topic."} ${CTA_PLATFORM_ENGAGEMENT}`;
+    const scriptOverrides = {
+      introScript: typeof body.introScript === "string" ? body.introScript : "",
+      ctaScript: typeof body.ctaScript === "string" ? body.ctaScript : "",
+      outroScript: typeof body.outroScript === "string" ? body.outroScript : "",
+    };
     const longMode = Boolean(body.longMode);
     const targetMinutes =
       typeof body.targetMinutes === "number"
@@ -235,9 +337,45 @@ export async function POST(request: NextRequest) {
       ? `\nCRITICAL: Use EXACTLY this pose for each scene in order: ${poseSequence.map((p,i)=>`scene ${i}=${p}`).join(", ")}. Do NOT deviate.`
       : `\nPose variety rules: NEVER use the same pose twice in a row. Cycle through all 8 poses. Every 3rd scene must differ from the previous 2.`;
 
+    const introOutroContrast = `
+INTRO vs OUTRO (mandatory — they must feel like different beats):
+- INTRO (scene 0): hook forward — curiosity, tension, or promise of what this video delivers. You may say "here is what we cover" style setup.
+- OUTRO (final scene, or the outro half of a combined last scene): close backward — gratitude, quick recap energy, or "see you next time". No second hook, no "welcome", no repeating the intro's opening sentence or its promise verbatim. Use different vocabulary and sentence openings than scene 0.
+`;
+
+    const structureBlock =
+      sceneCount >= 4
+        ? `
+STRUCTURE (mandatory — respect scene order):
+- Scene 0: INTRO — hook the viewer and promise what they will learn.
+- Scenes 1 through ${sceneCount - 3}: MAIN — teach "${topic}" in clear, sequential beats.
+- Scene ${sceneCount - 2}: CTA — one scene dedicated to the ask. ${ctaGoalLine}
+- Scene ${sceneCount - 1}: OUTRO only — brief thank-you and sign-off; do not repeat the full CTA verbatim; must read differently from scene 0 (see INTRO vs OUTRO rules).
+
+`
+        : sceneCount === 3
+          ? `
+STRUCTURE (mandatory):
+- Scene 0: INTRO — hook and set expectations (nothing that belongs in a sign-off).
+- Scene 1: MAIN — core teaching beat for "${topic}".
+- Scene 2: One caption with TWO clear parts in order: (1) CTA block with the ask plus subscribe/follow, like, and share. (2) OUTRO block — 1–2 sentences, distinct sign-off that does NOT reuse intro phrasing or reopen the hook. ${ctaGoalLine}
+
+`
+          : sceneCount === 2
+            ? `
+STRUCTURE: Scene 0 = INTRO hook only (forward promise, no CTA). Scene 1 = MAIN value, then CTA (with engagement asks), then a short OUTRO sign-off — the sign-off must sound different from scene 0, not a second intro. ${ctaGoalLine}
+
+`
+            : `
+STRUCTURE: Single scene — open with a hook, teach one core idea about "${topic}", end with CTA; a separate outro is not possible in one scene, so do not tack on wording that mimics a full intro after the CTA. ${ctaGoalLine}
+
+`;
+
     const prompt = `Create a ${sceneCount}-scene whiteboard explainer video script about: "${topic}".
 
 ${runtimeLine}
+${structureBlock}
+${introOutroContrast}
 
 Audience: distracted YouTube viewers — every scene must earn the next click. No corporate training tone.
 
@@ -281,6 +419,8 @@ Shot template rules:
 - "result-moment" for wins, revelations, summary
 - "stand-explain" as fallback
 
+CTA scenes must satisfy BOTH: (1) the user’s goal from the structure block above, and (2) subscribe or follow, like, and share — blended naturally in the caption text.
+
 Additional long-form rules:
 - Spread content across beginning, middle, and end (clear arc)
 - Every 4-6 scenes introduce a mini-shift (story beat, myth-vs-fact, or practical step)
@@ -301,7 +441,9 @@ Return ONLY valid JSON, no markdown, no explanation.`;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      const fallbackScenes = buildFallbackScenes(topic, sceneCount);
+      const fallbackScenes = assignSegments(
+        applyScriptOverrides(buildFallbackScenes(topic, sceneCount), scriptOverrides)
+      );
       // Save a draft to library when scene generation falls back.
       let savedDraftId: string | null = null;
       if (userId) {
@@ -388,8 +530,12 @@ Return ONLY valid JSON, no markdown, no explanation.`;
       };
       });
 
-    if (scenes.length === 0) {
-      const fallbackScenes = buildFallbackScenes(topic, sceneCount);
+    const finalScenes = assignSegments(applyScriptOverrides(scenes, scriptOverrides));
+
+    if (finalScenes.length === 0) {
+      const fallbackScenes = assignSegments(
+        applyScriptOverrides(buildFallbackScenes(topic, sceneCount), scriptOverrides)
+      );
       let savedDraftId: string | null = null;
       if (userId) {
         try {
@@ -428,7 +574,7 @@ Return ONLY valid JSON, no markdown, no explanation.`;
             status: "draft",
             productId: null,
             scriptId: null,
-            metadata: buildStickmanDraftMetadata(scenes, longMode),
+            metadata: buildStickmanDraftMetadata(finalScenes, longMode),
           })
           .returning({ id: videosTable.id });
         savedDraftId = row?.id ?? null;
@@ -437,7 +583,7 @@ Return ONLY valid JSON, no markdown, no explanation.`;
       }
     }
 
-    return NextResponse.json({ scenes, savedDraftId });
+    return NextResponse.json({ scenes: finalScenes, savedDraftId });
   } catch (err) {
     console.error("[stickman/generate]", err);
     return NextResponse.json(

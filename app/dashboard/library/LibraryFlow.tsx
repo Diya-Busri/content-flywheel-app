@@ -79,6 +79,16 @@ type TemplatePackItem = {
   createdAt: string;
 };
 
+type ScheduledPostItem = {
+  id: string;
+  platform: string;
+  contentType: string;
+  postedStatus: boolean;
+  scheduledTime: string | null;
+  createdAt: string | null;
+  contentJson?: Record<string, unknown>;
+};
+
 type LibraryItem = {
   id: string;
   type: "product" | "video" | "script";
@@ -164,6 +174,33 @@ const FORMAT_LABELS: Record<string, string> = {
 function formatLabel(format: string | undefined): string {
   if (!format) return "";
   return FORMAT_LABELS[format] ?? format.charAt(0).toUpperCase() + format.slice(1);
+}
+
+function isTimelineVideoItem(item: LibraryItem): boolean {
+  return item.type === "video" && Array.isArray(item.platforms) && item.platforms.includes("video-timeline");
+}
+
+function getVideoDownloadUrl(item: LibraryItem): string | null {
+  if (item.type !== "video" || !item.metadata || typeof item.metadata !== "object") return null;
+  const m = item.metadata as Record<string, unknown>;
+  const candidates = [
+    m.videoUrl,
+    m.video_url,
+    m.exportUrl,
+    m.export_url,
+    m.downloadUrl,
+    m.download_url,
+    m.compiledUrl,
+    m.compiled_url,
+    m.outputUrl,
+    m.output_url,
+    m.compiledVideoUrl,
+    m.compiled_video_url,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && /^https?:\/\//i.test(c.trim())) return c.trim();
+  }
+  return null;
 }
 
 /** Human-readable label for where a script came from (platform). */
@@ -297,6 +334,8 @@ export default function LibraryFlow() {
   const [previewVideo, setPreviewVideo] = useState<{ id: string; title: string; openHref: string } | null>(null);
   const [templatePacks, setTemplatePacks] = useState<TemplatePackItem[]>([]);
   const [packsLoading, setPacksLoading] = useState(false);
+  const [youtubePosts, setYoutubePosts] = useState<ScheduledPostItem[]>([]);
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
   const { toast } = useToast();
 
   const showThumbnail = (item: LibraryItem) =>
@@ -349,8 +388,47 @@ export default function LibraryFlow() {
     }
   };
 
+  const fetchYouTubePosts = async () => {
+    setYoutubeLoading(true);
+    try {
+      const res = await fetch("/api/scheduled-posts");
+      if (!res.ok) throw new Error("Failed to load YouTube posts");
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data : [];
+      const ytOnly = rows.filter(
+        (r: { platform?: unknown }) => typeof r.platform === "string" && r.platform.toLowerCase() === "youtube"
+      );
+      setYoutubePosts(ytOnly);
+    } catch (err) {
+      // Fallback: show locally queued YouTube posts when DB schedule API is unavailable.
+      let localQueued: ScheduledPostItem[] = [];
+      try {
+        const localRows = JSON.parse(localStorage.getItem("cf:youtube-queue-local") ?? "[]") as ScheduledPostItem[];
+        localQueued = Array.isArray(localRows) ? localRows : [];
+      } catch {
+        localQueued = [];
+      }
+      if (localQueued.length > 0) {
+        setYoutubePosts(localQueued);
+        toast({
+          title: "Using local queue",
+          description: "Cloud scheduled-post API unavailable. Showing locally queued YouTube posts.",
+        });
+      } else {
+        toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to load YouTube posts", variant: "destructive" });
+        setYoutubePosts([]);
+      }
+    } finally {
+      setYoutubeLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (tab === "templates" || tab === "history" || tab === "youtube") return;
+    if (tab === "templates" || tab === "history") return;
+    if (tab === "youtube") {
+      fetchYouTubePosts();
+      return;
+    }
     if (tab === "template-packs") fetchTemplatePacks();
     else fetchItems();
   }, [tab]);
@@ -362,7 +440,7 @@ export default function LibraryFlow() {
 
   const getEditLink = (item: LibraryItem) => {
     if (item.type === "product") return `/dashboard/digital-products/${item.id}/edit`;
-    if (item.type === "video" && Array.isArray(item.platforms) && item.platforms.includes("video-timeline")) {
+    if (isTimelineVideoItem(item)) {
       return `/dashboard/video-timeline?projectId=${encodeURIComponent(item.id)}`;
     }
     if (item.type === "video") return `/dashboard/library`;
@@ -425,6 +503,28 @@ export default function LibraryFlow() {
     } finally {
       setDeletingAll(false);
     }
+  };
+
+  const handleDownloadItem = (item: LibraryItem) => {
+    if (item.type !== "video") {
+      toast({ title: "Download not available", description: "Only exported videos can be downloaded." });
+      return;
+    }
+    const url = getVideoDownloadUrl(item);
+    if (!url) {
+      toast({
+        title: "No downloadable video yet",
+        description: "Open Editor and export MP4 first. Then download will be available here.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${item.title || "video"}.mp4`;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.click();
   };
 
   const showDeleteAll = !isTrashView && tab !== "template-packs" && tab !== "templates" && tab !== "history" && tab !== "youtube" && items.length > 0;
@@ -542,20 +642,67 @@ export default function LibraryFlow() {
           ) : tab === "history" ? (
             <HistoryClient />
           ) : tab === "youtube" ? (
-            <FeaturePreviewGate title="YouTube">
-              <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
-                <CardContent className="py-12 text-center">
-                  <Video className="w-12 h-12 text-orange-500 mx-auto mb-4" />
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">YouTube</h2>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4 max-w-md mx-auto">
-                    Your YouTube scripts and video guides from Content Studio will appear here. This section is in development.
-                  </p>
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/dashboard/content-studio">Content Studio</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            </FeaturePreviewGate>
+            <div className="space-y-4">
+              {youtubeLoading ? (
+                <div className="py-16 flex flex-col items-center justify-center">
+                  <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">Loading YouTube queue...</p>
+                </div>
+              ) : youtubePosts.length === 0 ? (
+                <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+                  <CardContent className="py-12 text-center">
+                    <Video className="w-12 h-12 text-orange-500 mx-auto mb-4" />
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No YouTube posts queued</h2>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4 max-w-md mx-auto">
+                      Queue a YouTube post from Thumbnail Generator or Template Studio.
+                    </p>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href="/dashboard/content-studio/thumbnails">Open Thumbnail Generator</Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {youtubePosts.map((p) => {
+                    const content = (p.contentJson ?? {}) as Record<string, unknown>;
+                    const title =
+                      typeof content.title === "string" && content.title.trim()
+                        ? content.title
+                        : "Untitled YouTube Post";
+                    const accountId =
+                      typeof content.youtubeAccountId === "string" ? content.youtubeAccountId : "unknown";
+                    const when = p.scheduledTime ? formatDate(p.scheduledTime) : "No schedule";
+                    return (
+                      <Card key={p.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+                        <CardHeader className="pb-2 pt-3">
+                          <CardTitle className="text-base truncate text-gray-900 dark:text-white">{title}</CardTitle>
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            <Badge variant="secondary" className="text-xs font-normal bg-red-500/10 text-red-600 dark:text-red-400 border-0">
+                              YouTube
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs font-normal bg-blue-500/10 text-blue-600 dark:text-blue-400 border-0">
+                              {p.postedStatus ? "Posted" : "Queued"}
+                            </Badge>
+                          </div>
+                          <CardDescription className="text-xs">
+                            Scheduled: {when}
+                          </CardDescription>
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">Account: {accountId}</p>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <Button asChild variant="outline" size="sm" className="w-full">
+                            <Link href="/dashboard/content-studio/thumbnails">
+                              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                              Open queue source
+                            </Link>
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           ) : (tab === "template-packs" ? packsLoading : loading) ? (
             <div className="py-16 flex flex-col items-center justify-center">
               <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
@@ -883,7 +1030,7 @@ export default function LibraryFlow() {
                               </Link>
                             </Button>
                           )}
-                          <Button variant="outline" size="sm">
+                          <Button variant="outline" size="sm" onClick={() => handleDownloadItem(item)}>
                             <Download className="w-3.5 h-3.5" />
                           </Button>
                         </CardContent>
@@ -932,6 +1079,11 @@ export default function LibraryFlow() {
                           {item.type === "video" && (item.metadata as { sourceType?: string })?.sourceType === "ai-story" && (
                             <Badge variant="secondary" className="text-xs font-normal bg-violet-500/10 text-violet-600 dark:text-violet-400 border-0">
                               AI Story
+                            </Badge>
+                          )}
+                          {isTimelineVideoItem(item) && (
+                            <Badge variant="secondary" className="text-xs font-normal bg-amber-500/10 text-amber-700 dark:text-amber-400 border-0">
+                              Timeline Draft
                             </Badge>
                           )}
                         </div>
@@ -1020,7 +1172,7 @@ export default function LibraryFlow() {
                         <Button variant="outline" size="sm" className="flex-1" asChild>
                           <Link href={getEditLink(item)}>
                             <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                            Open
+                            {isTimelineVideoItem(item) ? "Open Editor" : "Open"}
                           </Link>
                         </Button>
                         {item.type === "product" && (
@@ -1030,7 +1182,7 @@ export default function LibraryFlow() {
                             </Link>
                           </Button>
                         )}
-                        <Button variant="outline" size="sm">
+                        <Button variant="outline" size="sm" onClick={() => handleDownloadItem(item)}>
                           <Download className="w-3.5 h-3.5" />
                         </Button>
                       </>

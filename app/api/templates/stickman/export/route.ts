@@ -21,10 +21,22 @@ type StickmanSceneInput = {
   pose?: string;
   keyObject?: string;
   layout?: string;
+  segment?: string;
 };
+
+type StickmanBumperKind = "main" | "intro" | "outro";
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
+}
+
+function resolveStickmanBumperKind(scene: StickmanSceneInput, index: number, total: number): StickmanBumperKind {
+  const seg = typeof scene.segment === "string" ? scene.segment.trim().toLowerCase() : "";
+  if (seg === "intro") return "intro";
+  if (seg === "outro" || seg === "cta-outro") return "outro";
+  if (!seg && index === 0) return "intro";
+  if (!seg && index === total - 1) return "outro";
+  return "main";
 }
 
 function drawScenePpm(width: number, height: number, scene: StickmanSceneInput): Buffer {
@@ -119,6 +131,134 @@ function drawScenePpm(width: number, height: number, scene: StickmanSceneInput):
   return Buffer.concat([Buffer.from(`P6\n${width} ${height}\n255\n`, "ascii"), pixels]);
 }
 
+/** Cinematic intro card — dark slate gradient, brand bar, frame accents (captions burn in via FFmpeg). */
+function drawIntroBumperPpm(width: number, height: number): Buffer {
+  const pixels = Buffer.alloc(width * height * 3);
+  const top = [15, 23, 42];
+  const bot = [30, 41, 59];
+  for (let y = 0; y < height; y++) {
+    const t = height <= 1 ? 0 : y / (height - 1);
+    const r = Math.round(top[0]! + (bot[0]! - top[0]!) * t);
+    const g = Math.round(top[1]! + (bot[1]! - top[1]!) * t);
+    const b = Math.round(top[2]! + (bot[2]! - top[2]!) * t);
+    const oBase = y * width * 3;
+    for (let x = 0; x < width; x++) {
+      const o = oBase + x * 3;
+      pixels[o] = r;
+      pixels[o + 1] = g;
+      pixels[o + 2] = b;
+    }
+  }
+  const setPx = (x: number, y: number, rgb: [number, number, number]) => {
+    const ix = Math.floor(x);
+    const iy = Math.floor(y);
+    if (ix < 0 || iy < 0 || ix >= width || iy >= height) return;
+    const o = (iy * width + ix) * 3;
+    pixels[o] = rgb[0];
+    pixels[o + 1] = rgb[1];
+    pixels[o + 2] = rgb[2];
+  };
+  const fillRect = (x: number, y: number, w: number, h: number, rgb: [number, number, number]) => {
+    const x0 = clamp(Math.floor(x), 0, width - 1);
+    const y0 = clamp(Math.floor(y), 0, height - 1);
+    const x1 = clamp(Math.floor(x + w), 0, width);
+    const y1 = clamp(Math.floor(y + h), 0, height);
+    for (let yy = y0; yy < y1; yy++) {
+      for (let xx = x0; xx < x1; xx++) setPx(xx, yy, rgb);
+    }
+  };
+  const drawLine = (x0: number, y0: number, x1: number, y1: number, t: number, rgb: [number, number, number]) => {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const steps = Math.max(Math.abs(dx), Math.abs(dy), 1);
+    for (let i = 0; i <= steps; i++) {
+      const x = x0 + (dx * i) / steps;
+      const y = y0 + (dy * i) / steps;
+      for (let oy = -t; oy <= t; oy++) {
+        for (let ox = -t; ox <= t; ox++) {
+          if (ox * ox + oy * oy <= t * t) setPx(x + ox, y + oy, rgb);
+        }
+      }
+    }
+  };
+  fillRect(0, 0, width, 12, [234, 88, 12]);
+  // Warm corner glow (bottom-right)
+  for (let gy = 0; gy < 220; gy++) {
+    for (let gx = 0; gx < 320; gx++) {
+      const px = width - 340 + gx;
+      const py = height - 240 + gy;
+      const falloff = 1 - Math.min(1, Math.hypot(gx / 320, gy / 220));
+      if (falloff <= 0) continue;
+      const o = (Math.floor(py) * width + Math.floor(px)) * 3;
+      if (Math.floor(px) < 0 || Math.floor(py) < 0 || Math.floor(px) >= width || Math.floor(py) >= height) continue;
+      const add = Math.floor(40 * falloff * falloff);
+      pixels[o] = clamp((pixels[o] ?? 0) + add, 0, 255);
+      pixels[o + 1] = clamp((pixels[o + 1] ?? 0) + Math.floor(22 * falloff * falloff), 0, 255);
+      pixels[o + 2] = clamp((pixels[o + 2] ?? 0) + Math.floor(8 * falloff * falloff), 0, 255);
+    }
+  }
+  const m = Math.round(width * 0.06);
+  drawLine(m, m, width - m, m, 2, [148, 163, 184]);
+  drawLine(m, height - m, width - m, height - m, 2, [148, 163, 184]);
+  drawLine(m, m, m, height - m, 2, [148, 163, 184]);
+  drawLine(width - m, m, width - m, height - m, 2, [148, 163, 184]);
+  drawLine(m, m + 40, m + 180, m + 220, 3, [234, 88, 12]);
+  return Buffer.concat([Buffer.from(`P6\n${width} ${height}\n255\n`, "ascii"), pixels]);
+}
+
+/** Warm outro card — closing gradient and accent bar (captions burn in via FFmpeg). */
+function drawOutroBumperPpm(width: number, height: number): Buffer {
+  const pixels = Buffer.alloc(width * height * 3);
+  const top = [67, 20, 7];
+  const bot = [30, 27, 23];
+  for (let y = 0; y < height; y++) {
+    const t = height <= 1 ? 0 : y / (height - 1);
+    const r = Math.round(top[0]! + (bot[0]! - top[0]!) * t);
+    const g = Math.round(top[1]! + (bot[1]! - top[1]!) * t);
+    const b = Math.round(top[2]! + (bot[2]! - top[2]!) * t);
+    const oBase = y * width * 3;
+    for (let x = 0; x < width; x++) {
+      const o = oBase + x * 3;
+      pixels[o] = r;
+      pixels[o + 1] = g;
+      pixels[o + 2] = b;
+    }
+  }
+  const setPx = (x: number, y: number, rgb: [number, number, number]) => {
+    const ix = Math.floor(x);
+    const iy = Math.floor(y);
+    if (ix < 0 || iy < 0 || ix >= width || iy >= height) return;
+    const o = (iy * width + ix) * 3;
+    pixels[o] = rgb[0];
+    pixels[o + 1] = rgb[1];
+    pixels[o + 2] = rgb[2];
+  };
+  const fillRect = (x: number, y: number, w: number, h: number, rgb: [number, number, number]) => {
+    const x0 = clamp(Math.floor(x), 0, width - 1);
+    const y0 = clamp(Math.floor(y), 0, height - 1);
+    const x1 = clamp(Math.floor(x + w), 0, width);
+    const y1 = clamp(Math.floor(y + h), 0, height);
+    for (let yy = y0; yy < y1; yy++) {
+      for (let xx = x0; xx < x1; xx++) setPx(xx, yy, rgb);
+    }
+  };
+  // Soft vignette (before accent bars so orange/amber stay crisp)
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const dx = (x - width / 2) / (width / 2);
+      const dy = (y - height / 2) / (height / 2);
+      const v = Math.min(1, (dx * dx + dy * dy) * 0.38);
+      const o = (y * width + x) * 3;
+      pixels[o] = clamp(Math.floor((pixels[o] ?? 0) * (1 - v * 0.35)), 0, 255);
+      pixels[o + 1] = clamp(Math.floor((pixels[o + 1] ?? 0) * (1 - v * 0.4)), 0, 255);
+      pixels[o + 2] = clamp(Math.floor((pixels[o + 2] ?? 0) * (1 - v * 0.45)), 0, 255);
+    }
+  }
+  fillRect(0, height - 14, width, 14, [234, 88, 12]);
+  fillRect(0, 0, width, 5, [251, 191, 36]);
+  return Buffer.concat([Buffer.from(`P6\n${width} ${height}\n255\n`, "ascii"), pixels]);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -181,13 +321,21 @@ export async function POST(request: NextRequest) {
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
         const ppmPath = join(workDir, `stickman_scene_${i}.ppm`);
-        await writeFile(ppmPath, drawScenePpm(1280, 720, scene));
+        const bumper = resolveStickmanBumperKind(scene, i, scenes.length);
+        const ppm =
+          bumper === "intro"
+            ? drawIntroBumperPpm(1280, 720)
+            : bumper === "outro"
+              ? drawOutroBumperPpm(1280, 720)
+              : drawScenePpm(1280, 720, scene);
+        await writeFile(ppmPath, ppm);
         compileScenes.push({
           duration: estimateDurationForCaption(typeof scene.caption === "string" ? scene.caption : ""),
           image_url: null,
           video_url: null,
           localImagePath: ppmPath,
           dialogue: typeof scene.caption === "string" ? scene.caption : null,
+          disableKenBurns: bumper !== "main",
         });
       }
 

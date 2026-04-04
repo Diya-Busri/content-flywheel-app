@@ -323,6 +323,9 @@ export default function TemplateStudioClient() {
   const [stickmanLongMode, setStickmanLongMode] = useState(false);
   const [stickmanTargetMinutes, setStickmanTargetMinutes] = useState(15);
   const [stickmanVoiceId, setStickmanVoiceId] = useState("EXAVITQu4vr4xnSDxMaL");
+  const [stickmanIntroScript, setStickmanIntroScript] = useState("");
+  const [stickmanCtaScript, setStickmanCtaScript] = useState("");
+  const [stickmanOutroScript, setStickmanOutroScript] = useState("");
   const [stickmanScenes, setStickmanScenes] = useState<StickmanScene[]>([]);
   const [stickmanLoading, setStickmanLoading] = useState(false);
   const [stickmanLibrarySaving, setStickmanLibrarySaving] = useState(false);
@@ -3112,6 +3115,14 @@ export default function TemplateStudioClient() {
                 setTargetMinutes={setStickmanTargetMinutes}
                 voiceId={stickmanVoiceId}
                 setVoiceId={setStickmanVoiceId}
+                ctaGoal={ctaGoal}
+                setCtaGoal={setCtaGoal}
+                introScript={stickmanIntroScript}
+                setIntroScript={setStickmanIntroScript}
+                ctaScript={stickmanCtaScript}
+                setCtaScript={setStickmanCtaScript}
+                outroScript={stickmanOutroScript}
+                setOutroScript={setStickmanOutroScript}
               />
             )}
 
@@ -3309,6 +3320,10 @@ export default function TemplateStudioClient() {
                             sceneCount: stickmanSceneCount,
                             longMode: stickmanLongMode,
                             targetMinutes: stickmanTargetMinutes,
+                            ctaGoal,
+                            introScript: stickmanIntroScript,
+                            ctaScript: stickmanCtaScript,
+                            outroScript: stickmanOutroScript,
                           }),
                         });
                         const data = await res.json() as { scenes?: StickmanScene[]; error?: string; savedDraftId?: string };
@@ -3515,7 +3530,7 @@ export default function TemplateStudioClient() {
           <CardHeader>
             <CardTitle>🖊️ Whiteboard Preview</CardTitle>
             <CardDescription>
-              Press play to watch the stickman draw scene-by-scene with AI voiceover. Each scene auto-advances when the voiceover finishes.
+              Press play to watch the 3D explainer character animate scene-by-scene with AI voiceover. Each scene auto-advances when the voiceover finishes. The first scene is the intro and the last is the outro — both use a dedicated bumper-style frame (dark title card and warm closing card) in the preview and in the exported MP4. Middle scenes use the dotted whiteboard layout. With 4+ scenes, the second-to-last is your CTA beat, including subscribe or follow, like, and share alongside your chosen goal.
             </CardDescription>
           </CardHeader>
           <CardContent className="min-w-0 space-y-6">
@@ -3524,6 +3539,7 @@ export default function TemplateStudioClient() {
                 scenes={stickmanScenes}
                 voiceId={stickmanVoiceId}
                 autoPlay={false}
+                topic={stickmanTopic}
                 onComplete={() =>
                   toast({ title: "Playback complete!", description: "Your whiteboard video is ready." })
                 }
@@ -3540,6 +3556,21 @@ export default function TemplateStudioClient() {
                       {s.sceneIndex + 1}
                     </span>
                     <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {s.segment ? (
+                          <span className="text-[10px] uppercase tracking-wide font-semibold text-orange-700 bg-orange-50 border border-orange-200/80 px-2 py-0.5 rounded">
+                            {s.segment === "cta-outro"
+                              ? "CTA + outro"
+                              : s.segment === "intro"
+                                ? "Intro"
+                                : s.segment === "cta"
+                                  ? "CTA"
+                                  : s.segment === "outro"
+                                    ? "Outro"
+                                    : "Main"}
+                          </span>
+                        ) : null}
+                      </div>
                       {s.sceneTitle?.trim() ? (
                         <p className="text-foreground font-semibold text-orange-700 dark:text-orange-400">{s.sceneTitle.trim()}</p>
                       ) : null}

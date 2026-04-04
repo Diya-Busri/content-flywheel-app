@@ -6,6 +6,7 @@ import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+type ThumbnailStyle = "auto" | "viral_stickman" | "viral_realistic";
 
 const DIMENSIONS: Record<string, "1024x1024" | "1792x1024" | "1024x1792"> = {
   youtube: "1792x1024",
@@ -25,10 +26,19 @@ export async function POST(request: NextRequest) {
     if (rl) return rl;
 
     const body = await request.json().catch(() => ({}));
-    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+    const basePrompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
     const dimKey = Object.keys(DIMENSIONS).includes(body.dimensions) ? body.dimensions : "youtube";
+    const style: ThumbnailStyle =
+      body.style === "viral_stickman" || body.style === "viral_realistic" ? body.style : "auto";
 
-    if (!prompt) return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
+    if (!basePrompt) return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
+
+    const prompt =
+      style === "viral_stickman"
+        ? `${basePrompt}\n\n` +
+          `Thumbnail quality constraints: polished stickman mascot illustration, premium digital art finish, crisp clean outlines, dynamic perspective, strong depth and lighting, aggressive high-CTR YouTube composition, oversized focal subject, clear visual conflict, simple background separation, red/yellow urgency accents, no rough sketch look, no text, no watermark, no logo.`
+        : `${basePrompt}\n\n` +
+          `Thumbnail quality constraints: realistic, clean composition, one clear focal subject, high contrast, cinematic lighting, no abstract collage, no random icon clutter, no text, no watermark, no logo.`;
 
     const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) return NextResponse.json({ error: "OpenAI API key not configured." }, { status: 503 });
@@ -40,8 +50,8 @@ export async function POST(request: NextRequest) {
       prompt,
       n: 1,
       size,
-      quality: "standard",
-      style: "natural",
+      quality: "hd",
+      style: style === "viral_stickman" ? "vivid" : "natural",
       response_format: "url",
     });
 

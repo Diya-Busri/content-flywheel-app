@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
-import { scheduledPostsTable } from "@/db/schema/scheduled-posts-schema";
-import { eq, and } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
+
+function pick(row: Record<string, unknown>, keys: string[], fallback: unknown = null): unknown {
+  for (const k of keys) {
+    if (k in row) return row[k];
+  }
+  return fallback;
+}
 
 /**
  * PATCH: Update a scheduled post (e.g. mark as posted).
@@ -36,11 +42,20 @@ export async function PATCH(
       return NextResponse.json({ error: "postedStatus (boolean) required" }, { status: 400 });
     }
 
-    const [row] = await db
-      .update(scheduledPostsTable)
-      .set({ postedStatus })
-      .where(and(eq(scheduledPostsTable.id, id), eq(scheduledPostsTable.userId, userId)))
-      .returning();
+    const updated = await db.execute(sql`
+      update scheduled_posts
+      set posted_status = ${postedStatus}
+      where id = ${id}::uuid and user_id = ${userId}
+      returning id, posted_status
+    `);
+    const rows = Array.isArray(updated) ? updated : (updated as { rows?: unknown[] }).rows ?? [];
+    const first = (rows[0] ?? null) as Record<string, unknown> | null;
+    const row = first
+      ? {
+          id: String(first.id ?? ""),
+          postedStatus: Boolean(first.posted_status),
+        }
+      : null;
 
     if (!row) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });

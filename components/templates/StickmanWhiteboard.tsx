@@ -1,18 +1,26 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import dynamic from "next/dynamic";
+import * as React from "react";
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from "react";
+import type { StickmanPose } from "./stickman-types";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
-export type StickmanPose =
-  | "standing"
-  | "thinking"
-  | "sitting"
-  | "celebrating"
-  | "pointing"
-  | "defeated"
-  | "arms-raised"
-  | "walking";
+export type { StickmanPose } from "./stickman-types";
+
+const StickmanCharacter3DCanvas = dynamic(
+  () => import("./StickmanCharacter3D").then((m) => m.StickmanCharacter3DCanvas),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="w-full h-full min-h-[100px] rounded-lg bg-gradient-to-b from-slate-100/90 to-slate-200/60 animate-pulse"
+        aria-hidden
+      />
+    ),
+  }
+);
 
 export type StickmanLayout = "left-presenter" | "center-presenter" | "right-presenter" | "desk-scene";
 export type StickmanKeyObject = "chart" | "clock" | "money" | "warning" | "audience" | "idea" | "brand";
@@ -23,6 +31,9 @@ export type StickmanShotTemplate =
   | "point-to-board"
   | "walk-and-talk"
   | "result-moment";
+
+/** Optional beat label for intro / CTA / outro (main = educational middle). */
+export type StickmanSceneSegment = "intro" | "main" | "cta" | "outro" | "cta-outro";
 
 export interface StickmanScene {
   sceneIndex: number;
@@ -37,6 +48,7 @@ export interface StickmanScene {
   keyObject?: StickmanKeyObject;
   camera?: StickmanCamera;
   shotTemplate?: StickmanShotTemplate;
+  segment?: StickmanSceneSegment;
 }
 
 interface Props {
@@ -44,641 +56,24 @@ interface Props {
   voiceId?: string;
   autoPlay?: boolean;
   onComplete?: () => void;
+  /** Shown as a small kicker on intro bumper scenes when set. */
+  topic?: string;
 }
 
-// ─── SVG element types ────────────────────────────────────────────────────────
-// ViewBox: 0 0 160 180
-// k="L" → stroke line (draw-on)
-// k="C" → stroke circle (draw-on)
-// k="P" → stroke path (draw-on)
-// k="D" → filled dot (pop-in)
-
-type El =
-  | { k: "L"; x1: number; y1: number; x2: number; y2: number; delay: number; sw?: number }
-  | { k: "C"; cx: number; cy: number; r: number; delay: number; sw?: number }
-  | { k: "P"; p: string; delay: number; sw?: number }
-  | { k: "D"; cx: number; cy: number; r: number; delay: number };
-
-// ─── Stroke widths (slightly bolder for crisp HD scaling) ─────────────────────
-
-const SW = 4.1;   // stickman body / limbs
-const FW = 2.65;  // face features
-const PW = 2.75;  // props / desk / laptop
-
-// ─── Low-level helpers ────────────────────────────────────────────────────────
-
-const L = (x1: number, y1: number, x2: number, y2: number, delay: number, sw = SW): El =>
-  ({ k: "L", x1, y1, x2, y2, delay, sw });
-
-const C = (cx: number, cy: number, r: number, delay: number, sw = SW): El =>
-  ({ k: "C", cx, cy, r, delay, sw });
-
-const P = (p: string, delay: number, sw = PW): El =>
-  ({ k: "P", p, delay, sw });
-
-const D = (cx: number, cy: number, r: number, delay: number): El =>
-  ({ k: "D", cx, cy, r, delay });
-
-// ─── Composite helpers ────────────────────────────────────────────────────────
-
-/** Asterisk-style sparkle ✦ */
-const sparkle = (cx: number, cy: number, R: number, delay: number): El[] => {
-  const d = R * 0.65;
-  return [
-    L(cx - R, cy, cx + R, cy, delay, PW),
-    L(cx, cy - R, cx, cy + R, delay + 60, PW),
-    L(cx - d, cy - d, cx + d, cy + d, delay + 120, PW),
-    L(cx - d, cy + d, cx + d, cy - d, delay + 180, PW),
-  ];
-};
-
-/** Downward arrow */
-const arrowDown = (x: number, y1: number, y2: number, delay: number): El[] => [
-  L(x, y1, x, y2, delay, PW),
-  L(x - 5, y2 - 8, x, y2, delay + 130, PW),
-  L(x + 5, y2 - 8, x, y2, delay + 160, PW),
-];
-
-/** Exclamation mark */
-const exclaim = (cx: number, y1: number, delay: number): El[] => [
-  L(cx, y1, cx, y1 + 18, delay, PW),
-  D(cx, y1 + 24, 1.8, delay + 200),
-];
-
-/** Horizontal motion lines (speed lines pointing left) */
-const speedLines = (rightEdge: number, yStart: number, delay: number): El[] =>
-  [24, 18, 22, 15].map((len, i) =>
-    L(rightEdge - len, yStart + i * 14, rightEdge, yStart + i * 14, delay + i * 70, PW)
-  );
-
-/** Question mark drawn with path + dot */
-const qmark = (cx: number, cy: number, s: number, delay: number): El[] => [
-  P(
-    `M ${cx - 3 * s} ${cy - 1 * s}` +
-    ` Q ${cx - 3 * s} ${cy - 8 * s} ${cx} ${cy - 8 * s}` +
-    ` Q ${cx + 3 * s} ${cy - 8 * s} ${cx + 3 * s} ${cy - 3.5 * s}` +
-    ` Q ${cx + 3 * s} ${cy} ${cx} ${cy}` +
-    ` L ${cx} ${cy + 2 * s}`,
-    delay, PW
-  ),
-  D(cx, cy + 4.5 * s, 1.4 * s, delay + 260),
-];
-
-/** Chart: Y-axis, X-axis, upward trend line + dots */
-const chart = (ox: number, oy: number, delay: number): El[] => [
-  // Axes
-  L(ox, oy - 5, ox, oy + 88, delay, PW),           // Y-axis
-  L(ox, oy + 88, ox + 46, oy + 88, delay + 100, PW), // X-axis
-  // Arrow on Y-axis
-  L(ox - 4, oy + 4, ox, oy - 5, delay + 80, PW),
-  L(ox + 4, oy + 4, ox, oy - 5, delay + 100, PW),
-  // Trend line going up-right
-  P(`M ${ox + 6} ${oy + 78} L ${ox + 16} ${oy + 55} L ${ox + 28} ${oy + 30} L ${ox + 40} ${oy + 8}`, delay + 300, PW),
-  // Dots on trend
-  D(ox + 6,  oy + 78, 2.5, delay + 380),
-  D(ox + 16, oy + 55, 2.5, delay + 420),
-  D(ox + 28, oy + 30, 2.5, delay + 460),
-  D(ox + 40, oy + 8,  2.5, delay + 500),
-];
-
-/** Laptop: screen + keyboard on a desk */
-const laptop = (sx: number, sy: number, delay: number): El[] => [
-  // Screen frame
-  L(sx, sy,      sx + 28, sy,      delay,       PW), // top
-  L(sx + 28, sy, sx + 28, sy + 22, delay + 80,  PW), // right
-  L(sx, sy + 22, sx + 28, sy + 22, delay + 160, PW), // bottom (hinge)
-  L(sx, sy,      sx, sy + 22,      delay + 240, PW), // left
-  // Screen content lines
-  L(sx + 4, sy + 7,  sx + 24, sy + 7,  delay + 340, PW),
-  L(sx + 4, sy + 13, sx + 18, sy + 13, delay + 380, PW),
-  // Keyboard base
-  L(sx - 3, sy + 22, sx + 31, sy + 22, delay + 440, PW),
-  L(sx - 3, sy + 26, sx + 31, sy + 26, delay + 480, PW),
-];
-
-/** Thought bubble: three escalating circles */
-const thoughtBubble = (tx: number, ty: number, delay: number): El[] => [
-  C(tx,      ty + 12, 3.5,  delay,       PW),
-  C(tx + 14, ty,      6,    delay + 150, PW),
-  C(tx + 32, ty - 10, 13,   delay + 300, PW),
-  // "?" inside big circle
-  ...qmark(tx + 32, ty - 6, 1, delay + 500),
-];
-
-/** Sweat drop (wavy teardrop) */
-const sweatDrop = (cx: number, cy: number, delay: number): El[] => [
-  P(`M ${cx} ${cy} Q ${cx + 5} ${cy + 8} ${cx + 3} ${cy + 13} Q ${cx} ${cy + 16} ${cx - 3} ${cy + 13} Q ${cx - 5} ${cy + 8} ${cx} ${cy}`, delay, PW),
-];
-
-// ─── Face builder ─────────────────────────────────────────────────────────────
-
-type FaceExpr = "neutral" | "smile" | "grin" | "frown" | "curious" | "excited" | "determined";
-
-function mkFace(cx: number, cy: number, expr: FaceExpr): El[] {
-  // Eye & brow geometry
-  const EX = 5.5, EY = cy - 2.5;
-  const BX = 6.5, BY = cy - 9;
-
-  const eyes: El[] = [D(cx - EX, EY, 2.15, 140), D(cx + EX, EY, 2.15, 175)];
-
-  const browFlat = (): El[] => [
-    L(cx - BX, BY, cx - 1.5, BY, 215, FW),
-    L(cx + 1.5, BY, cx + BX, BY, 245, FW),
-  ];
-  const browHappy = (): El[] => [
-    L(cx - BX, BY, cx - 1.5, BY - 1.5, 215, FW),
-    L(cx + 1.5, BY - 1.5, cx + BX, BY, 245, FW),
-  ];
-  const browSad = (): El[] => [
-    L(cx - BX, BY - 2, cx - 1.5, BY, 215, FW),
-    L(cx + 1.5, BY, cx + BX, BY - 2, 245, FW),
-  ];
-  const browCurious = (): El[] => [
-    L(cx - BX, BY, cx - 1.5, BY - 0.5, 215, FW),
-    L(cx + 1.5, BY - 3.5, cx + BX, BY - 1.5, 245, FW), // right raised
-  ];
-  const browExcited = (): El[] => [
-    L(cx - BX, BY - 2, cx - 1.5, BY - 4, 215, FW),
-    L(cx + 1.5, BY - 4, cx + BX, BY - 2, 245, FW),
-  ];
-
-  let brows: El[];
-  let mouth: El;
-
-  switch (expr) {
-    case "smile":
-      brows = browHappy();
-      mouth = P(`M ${cx-5} ${cy+4} Q ${cx} ${cy+9} ${cx+5} ${cy+4}`, 280, FW);
-      break;
-    case "grin":
-      brows = browHappy();
-      mouth = P(`M ${cx-7} ${cy+3} Q ${cx} ${cy+11} ${cx+7} ${cy+3}`, 280, FW + 0.3);
-      break;
-    case "frown":
-      brows = browSad();
-      mouth = P(`M ${cx-5} ${cy+8} Q ${cx} ${cy+3} ${cx+5} ${cy+8}`, 280, FW);
-      break;
-    case "curious":
-      brows = browCurious();
-      mouth = P(`M ${cx-4} ${cy+4} Q ${cx} ${cy+7.5} ${cx+4} ${cy+4}`, 280, FW);
-      break;
-    case "excited":
-      brows = browExcited();
-      mouth = C(cx, cy + 5, 3.5, 280, FW); // open O
-      break;
-    case "determined":
-      brows = [
-        L(cx - BX, BY - 0.5, cx - 1.5, BY, 215, FW),
-        L(cx + 1.5, BY, cx + BX, BY - 0.5, 245, FW),
-      ];
-      mouth = L(cx - 3.5, cy + 5, cx + 3.5, cy + 5, 280, FW);
-      break;
-    default: // neutral
-      brows = browFlat();
-      mouth = L(cx - 4, cy + 5, cx + 4, cy + 5, 280, FW);
-  }
-
-  return [...eyes, ...brows, mouth];
+/** Intro / outro use full-frame bumper styling; CTA and middle scenes use the whiteboard layout. */
+function stickmanSceneVisualKind(
+  scene: StickmanScene,
+  index: number,
+  total: number
+): "intro-bumper" | "outro-bumper" | "whiteboard" {
+  const seg = scene.segment;
+  if (seg === "intro") return "intro-bumper";
+  if (seg === "outro" || seg === "cta-outro") return "outro-bumper";
+  if (!seg && index === 0) return "intro-bumper";
+  if (!seg && index === total - 1) return "outro-bumper";
+  return "whiteboard";
 }
 
-// ─── Standard body segments ───────────────────────────────────────────────────
-
-interface BodyArgs {
-  cx: number; cy: number;       // head centre
-  lArm: [number, number];
-  rArm: [number, number];
-  lLeg: [number, number];
-  rLeg: [number, number];
-  shoulderY?: number;           // offset from cy (default +28)
-  hipY?: number;                // absolute Y (default cy+66)
-  extraLimbs?: El[];            // e.g. bent forearm
-}
-
-function mkBody({ cx, cy, lArm, rArm, lLeg, rLeg, shoulderY = 28, hipY, extraLimbs = [] }: BodyArgs): El[] {
-  const neck = cy + 14;
-  const shoulder = cy + shoulderY;
-  const hip = hipY ?? cy + 66;
-  return [
-    C(cx, cy, 14, 0),                                    // head
-    L(cx, neck, cx, hip, 270),                           // body
-    L(cx, shoulder, lArm[0], lArm[1], 500, SW),         // L arm
-    L(cx, shoulder, rArm[0], rArm[1], 650, SW),         // R arm
-    L(cx, hip, lLeg[0], lLeg[1], 820, SW),              // L leg
-    L(cx, hip, rLeg[0], rLeg[1], 970, SW),              // R leg
-    ...extraLimbs,
-  ];
-}
-
-// ─── Pose definitions ─────────────────────────────────────────────────────────
-
-const POSES: Record<StickmanPose, El[]> = {
-  // ── STANDING — presenter stance; no floating symbols (those read as clutter next to KeyObjectDoodle)
-  standing: [
-    ...mkBody({
-      cx: 80,
-      cy: 30,
-      lArm: [54, 58],
-      rArm: [106, 58],
-      lLeg: [66, 135],
-      rLeg: [94, 135],
-    }),
-    ...mkFace(80, 30, "smile"),
-    // Subtle “stage” line under feet — grounds the figure
-    L(52, 138, 108, 138, 1080, PW),
-  ],
-
-  // ── THINKING — shifted left, right arm to chin. Props: thought bubble top-right
-  thinking: [
-    ...mkBody({
-      cx: 58, cy: 30,
-      lArm: [33, 56], rArm: [74, 44],
-      lLeg: [43, 135], rLeg: [73, 135],
-      extraLimbs: [L(74, 44, 68, 33, 800, SW)], // forearm to chin
-    }),
-    ...mkFace(58, 30, "curious"),
-    ...thoughtBubble(86, 52, 1100),
-  ],
-
-  // ── SITTING — at desk left, laptop right
-  sitting: [
-    // Body (shorter — seated)
-    C(58, 26, 14, 0),                        // head
-    L(58, 40, 58, 82, 270),                  // body
-    L(58, 54, 38, 66, 500, SW),              // L arm (resting on desk)
-    L(58, 54, 78, 66, 650, SW),              // R arm (resting on desk)
-    L(58, 82, 32, 90, 820, SW),             // L thigh (horizontal)
-    L(32, 90, 32, 126, 900, SW),            // L shin (vertical)
-    L(58, 82, 84, 90, 970, SW),             // R thigh
-    L(84, 90, 84, 126, 1050, SW),           // R shin
-    // Desk surface
-    L(18, 66, 118, 66, 1200, PW + 0.4),
-    L(18, 69, 118, 69, 1230, PW),            // desk thickness
-    ...mkFace(58, 26, "determined"),
-    // Laptop
-    ...laptop(88, 42, 1350),
-  ],
-
-  // ── CELEBRATING — arms raised high. Props: sparkles at corners
-  celebrating: [
-    ...mkBody({
-      cx: 80, cy: 30,
-      lArm: [42, 8],   // raised high left
-      rArm: [118, 8],  // raised high right
-      lLeg: [60, 135], rLeg: [100, 135],
-    }),
-    ...mkFace(80, 30, "grin"),
-    // Sparkles
-    ...sparkle(26, 18, 11, 1080),
-    ...sparkle(134, 18, 11, 1180),
-    ...sparkle(16, 68, 7, 1280),
-    ...sparkle(144, 68, 7, 1350),
-    ...sparkle(80, 6, 5, 1450),   // small sparkle above head
-  ],
-
-  // ── POINTING — stickman hard-left, arm extended right. Props: chart
-  pointing: [
-    ...mkBody({
-      cx: 46, cy: 30,
-      lArm: [20, 56],              // L arm hanging down
-      rArm: [112, 52],             // R arm fully extended → pointing
-      lLeg: [30, 135], rLeg: [62, 135],
-      shoulderY: 26,
-    }),
-    ...mkFace(46, 30, "smile"),
-    // Upward-trending chart on the right
-    ...chart(116, 18, 1080),
-  ],
-
-  // ── DEFEATED — arms hanging inward. Props: down-arrows + sweat drop
-  defeated: [
-    // Slightly tilted head for sad slumped look
-    C(82, 32, 14, 0),
-    L(80, 46, 80, 92, 270),
-    L(80, 60, 62, 84, 500, SW),    // L arm hanging in
-    L(80, 60, 98, 84, 650, SW),    // R arm hanging in
-    L(80, 92, 68, 135, 820, SW),   // legs closer together
-    L(80, 92, 92, 135, 970, SW),
-    ...mkFace(82, 32, "frown"),
-    // Down-arrows on left
-    ...arrowDown(30, 48, 80, 1100),
-    ...arrowDown(18, 62, 90, 1250),
-    // Sweat drop near head
-    ...sweatDrop(98, 26, 1380),
-  ],
-
-  // ── ARMS-RAISED — full V. Props: exclamation marks + starburst
-  "arms-raised": [
-    ...mkBody({
-      cx: 80, cy: 30,
-      lArm: [34, 4],    // V shape high-left
-      rArm: [126, 4],   // V shape high-right
-      lLeg: [64, 135], rLeg: [96, 135],
-    }),
-    ...mkFace(80, 30, "excited"),
-    // Starburst between raised arms (centred top)
-    ...sparkle(80, 10, 8, 1060),
-    // Exclamation marks
-    ...exclaim(22, 48, 1200),
-    ...exclaim(138, 48, 1320),
-    // Extra tiny sparkles
-    ...sparkle(20, 22, 5, 1420),
-    ...sparkle(140, 22, 5, 1480),
-  ],
-
-  // ── WALKING — stickman left-of-centre, striding. Props: speed lines + ground
-  walking: [
-    ...mkBody({
-      cx: 70, cy: 28,
-      lArm: [48, 50],    // L arm forward
-      rArm: [90, 56],    // R arm back
-      lLeg: [46, 132],   // L leg forward
-      rLeg: [92, 135],   // R leg trailing
-    }),
-    ...mkFace(70, 28, "determined"),
-    // Speed lines to the left
-    ...speedLines(46, 48, 1060),
-    // Ground line
-    L(6, 138, 154, 138, 1240, PW),
-  ],
-};
-
-// ─── StickmanSvg renderer ─────────────────────────────────────────────────────
-
-function StickmanSvg({ pose, animKey }: { pose: StickmanPose; animKey: number }) {
-  const elements = POSES[pose] ?? POSES.standing;
-  const depthDx = 1.8;
-  const depthDy = 1.8;
-
-  // Perpendicular highlight for 3D tube effect on a line segment
-  const tubeHighlight = (x1: number, y1: number, x2: number, y2: number, delay: number): React.ReactNode => {
-    const dx = x2 - x1, dy = y2 - y1;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 1) return null;
-    const nx = (-dy / len) * 2.0, ny = (dx / len) * 2.0;
-    return (
-      <line
-        x1={x1 + nx} y1={y1 + ny} x2={x2 + nx} y2={y2 + ny}
-        style={{
-          stroke: "rgba(255,255,255,0.85)", strokeWidth: 1.95,
-          strokeLinecap: "round",
-          strokeDasharray: 600, strokeDashoffset: 600,
-          animation: "cf-draw 0.55s ease-out forwards",
-          animationDelay: `${delay + 20}ms`,
-        }}
-      />
-    );
-  };
-
-  const isHeadCircle = (el: El) => el.k === "C" && el.delay === 0 && el.r >= 12;
-
-  return (
-    <svg
-      key={animKey}
-      viewBox="0 0 160 180"
-      className="w-full h-full [shape-rendering:geometricPrecision]"
-      aria-label={`Stickman: ${pose}`}
-    >
-      <defs>
-        <filter
-          id={`cfStickmanInk-${animKey}`}
-          x="-25%"
-          y="-25%"
-          width="150%"
-          height="150%"
-          colorInterpolationFilters="sRGB"
-        >
-          <feGaussianBlur in="SourceAlpha" stdDeviation="0.45" result="blur" />
-          <feOffset in="blur" dx="0.35" dy="1.1" result="off" />
-          <feFlood floodColor="#1a1208" floodOpacity="0.2" result="flood" />
-          <feComposite in="flood" in2="off" operator="in" result="sh" />
-          <feMerge>
-            <feMergeNode in="sh" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-        <radialGradient id={`cfHeadFill-${animKey}`} cx="32%" cy="28%" r="78%">
-          <stop offset="0%" stopColor="#fffdf8" />
-          <stop offset="55%" stopColor="#f3ece0" />
-          <stop offset="100%" stopColor="#e8dfd0" />
-        </radialGradient>
-        <radialGradient id={`cfEyeGrad-${animKey}`} cx="32%" cy="32%" r="68%">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
-          <stop offset="35%" stopColor="#3d3830" />
-          <stop offset="100%" stopColor="#0f0d0b" />
-        </radialGradient>
-      </defs>
-      <style>{`
-        @keyframes cf-draw { to { stroke-dashoffset: 0; } }
-        @keyframes cf-pop {
-          0%   { opacity: 0; transform: scale(0.3); }
-          60%  { opacity: 1; transform: scale(1.08); }
-          100% { opacity: 1; transform: scale(1); }
-        }
-        @keyframes cf-shadow-in { to { opacity: 1; } }
-        @keyframes cf-head-fill-in {
-          from { opacity: 0; transform: scale(0.92); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .cf-stroke {
-          fill: none; stroke: #100e0c;
-          stroke-linecap: round; stroke-linejoin: round;
-          stroke-dasharray: 600; stroke-dashoffset: 600;
-          animation: cf-draw 0.55s ease-out forwards;
-          paint-order: stroke fill;
-        }
-        .cf-dot {
-          opacity: 0;
-          transform-box: fill-box; transform-origin: center;
-          animation: cf-pop 0.22s cubic-bezier(.34,1.56,.64,1) forwards;
-        }
-        .cf-dot-eye { fill: url(#cfEyeGrad-${animKey}); }
-        .cf-dot-solid { fill: #100e0c; }
-        .cf-head-fill {
-          opacity: 0;
-          animation: cf-head-fill-in 0.38s ease-out 0.05s forwards;
-        }
-      `}</style>
-
-      {/* Ground shadow — gives 3D grounded feel */}
-      <ellipse cx="83" cy="168" rx="40" ry="8"
-        style={{ fill: "rgba(0,0,0,0.09)", opacity: 0,
-          animation: "cf-shadow-in 0.45s ease-out 0.12s forwards" }} />
-
-      {/* Depth pass: slight offset/extrusion behind main ink lines */}
-      {elements.map((el, i) => {
-        const sw = ((el as { sw?: number }).sw ?? SW) + 0.3;
-        if (el.k === "D") {
-          return (
-            <circle
-              key={`depth-dot-${i}`}
-              cx={el.cx + depthDx}
-              cy={el.cy + depthDy}
-              r={el.r}
-              style={{
-                fill: "rgba(0,0,0,0.14)",
-                opacity: 0,
-                transformBox: "fill-box",
-                transformOrigin: "center",
-                animation: "cf-pop 0.2s ease-out forwards",
-                animationDelay: `${el.delay + 30}ms`,
-              }}
-            />
-          );
-        }
-
-        if (el.k === "L") {
-          return (
-            <line
-              key={`depth-line-${i}`}
-              x1={el.x1 + depthDx}
-              y1={el.y1 + depthDy}
-              x2={el.x2 + depthDx}
-              y2={el.y2 + depthDy}
-              style={{
-                fill: "none",
-                stroke: "rgba(0,0,0,0.11)",
-                strokeWidth: sw,
-                strokeLinecap: "round",
-                strokeLinejoin: "round",
-                strokeDasharray: 600,
-                strokeDashoffset: 600,
-                animation: "cf-draw 0.55s ease-out forwards",
-                animationDelay: `${el.delay + 25}ms`,
-              }}
-            />
-          );
-        }
-
-        if (el.k === "C") {
-          return (
-            <circle
-              key={`depth-circle-${i}`}
-              cx={el.cx + depthDx}
-              cy={el.cy + depthDy}
-              r={el.r}
-              style={{
-                fill: "none",
-                stroke: "rgba(0,0,0,0.11)",
-                strokeWidth: sw,
-                strokeLinecap: "round",
-                strokeLinejoin: "round",
-                strokeDasharray: 600,
-                strokeDashoffset: 600,
-                animation: "cf-draw 0.55s ease-out forwards",
-                animationDelay: `${el.delay + 25}ms`,
-              }}
-            />
-          );
-        }
-
-        return (
-          <path
-            key={`depth-path-${i}`}
-            d={el.p}
-            style={{
-              fill: "none",
-              stroke: "rgba(0,0,0,0.11)",
-              strokeWidth: sw,
-              strokeLinecap: "round",
-              strokeLinejoin: "round",
-              strokeDasharray: 600,
-              strokeDashoffset: 600,
-              animation: "cf-draw 0.55s ease-out forwards",
-              animationDelay: `${el.delay + 25}ms`,
-            }}
-            transform={`translate(${depthDx} ${depthDy})`}
-          />
-        );
-      })}
-
-      <g filter={`url(#cfStickmanInk-${animKey})`}>
-        {elements.map((el, i) => {
-          if (el.k === "D") {
-            const eyeGrad = el.r >= 2.05 && el.r <= 2.35;
-            return (
-              <circle
-                key={i}
-                className={`cf-dot ${eyeGrad ? "cf-dot-eye" : "cf-dot-solid"}`}
-                cx={el.cx}
-                cy={el.cy}
-                r={el.r}
-                style={{ animationDelay: `${el.delay}ms` }}
-              />
-            );
-          }
-          const style: React.CSSProperties = { animationDelay: `${el.delay}ms` };
-          const sw = el.sw ?? SW;
-
-          if (el.k === "L") {
-            return (
-              <g key={i}>
-                <line
-                  className="cf-stroke"
-                  x1={el.x1}
-                  y1={el.y1}
-                  x2={el.x2}
-                  y2={el.y2}
-                  strokeWidth={sw}
-                  style={style}
-                />
-                {sw >= 2.85 && tubeHighlight(el.x1, el.y1, el.x2, el.y2, el.delay)}
-              </g>
-            );
-          }
-
-          if (el.k === "C") {
-            const hr = el.r * 0.28;
-            const head = isHeadCircle(el);
-            return (
-              <g key={i}>
-                {head ? (
-                  <circle
-                    className="cf-head-fill"
-                    cx={el.cx}
-                    cy={el.cy}
-                    r={Math.max(el.r - 0.55, 0.5)}
-                    fill={`url(#cfHeadFill-${animKey})`}
-                  />
-                ) : null}
-                <circle className="cf-stroke" cx={el.cx} cy={el.cy} r={el.r} strokeWidth={sw} style={style} />
-                <circle
-                  cx={el.cx - el.r * 0.3}
-                  cy={el.cy - el.r * 0.3}
-                  r={hr}
-                  style={{
-                    fill: "rgba(255,255,255,0.88)",
-                    opacity: 0,
-                    animation: "cf-pop 0.2s ease-out forwards",
-                    animationDelay: `${el.delay + 80}ms`,
-                    transformBox: "fill-box",
-                    transformOrigin: "center",
-                  }}
-                />
-                <circle
-                  cx={el.cx + el.r * 0.22}
-                  cy={el.cy + el.r * 0.28}
-                  r={el.r * 0.18}
-                  style={{
-                    fill: "rgba(0,0,0,0.08)",
-                    opacity: 0,
-                    animation: "cf-pop 0.2s ease-out forwards",
-                    animationDelay: `${el.delay + 100}ms`,
-                    transformBox: "fill-box",
-                    transformOrigin: "center",
-                  }}
-                />
-              </g>
-            );
-          }
-
-          return (
-            <path key={i} className="cf-stroke" d={el.p} strokeWidth={sw} style={style} />
-          );
-        })}
-      </g>
-    </svg>
-  );
-}
 
 // ─── Caption lines (staggered slide-in, first line orange) ───────────────────
 
@@ -787,17 +182,40 @@ function SceneBoardText({ scene }: { scene: StickmanScene }) {
   );
 }
 
-function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number }) {
-  const { hook, body } = splitCaptionHook(text);
-  const bodyWords = body.split(/\s+/).filter(Boolean);
-  const wordsPerLine = bodyWords.length > 52 ? 8 : bodyWords.length > 36 ? 7 : bodyWords.length > 24 ? 6 : 5;
-  const lines: string[] = [];
-  if (hook) lines.push(hook);
-  for (let i = 0; i < bodyWords.length; i += wordsPerLine) {
-    lines.push(bodyWords.slice(i, i + wordsPerLine).join(" "));
+function AnimatedCaption({
+  text,
+  sceneKey,
+  variant = "whiteboard",
+}: {
+  text: string;
+  sceneKey: number;
+  variant?: "whiteboard" | "intro-bumper" | "outro-bumper";
+}) {
+  const bumper = variant !== "whiteboard";
+  let lines: string[];
+  let lineCount: number;
+  if (bumper) {
+    const wordsB = text.split(/\s+/).filter(Boolean);
+    const wordsPerLineB =
+      wordsB.length > 64 ? 9 : wordsB.length > 48 ? 8 : wordsB.length > 36 ? 7 : wordsB.length > 24 ? 6 : 5;
+    lines = [];
+    for (let i = 0; i < wordsB.length; i += wordsPerLineB) {
+      lines.push(wordsB.slice(i, i + wordsPerLineB).join(" "));
+    }
+    if (lines.length === 0) lines.push(text.trim());
+    lineCount = Math.max(lines.length, 1);
+  } else {
+    const { hook, body } = splitCaptionHook(text);
+    const bodyWords = body.split(/\s+/).filter(Boolean);
+    const wordsPerLine = bodyWords.length > 52 ? 8 : bodyWords.length > 36 ? 7 : bodyWords.length > 24 ? 6 : 5;
+    lines = [];
+    if (hook) lines.push(hook);
+    for (let i = 0; i < bodyWords.length; i += wordsPerLine) {
+      lines.push(bodyWords.slice(i, i + wordsPerLine).join(" "));
+    }
+    if (lines.length === 0) lines.push(text.trim());
+    lineCount = Math.max(lines.length, 1);
   }
-  if (lines.length === 0) lines.push(text.trim());
-  const lineCount = Math.max(lines.length, 1);
   // Use rem-only clamps so caption text scales with layout, not viewport width (avoids huge type on wide screens / flex overflow).
   const titleSize =
     lineCount > 9 ? "clamp(0.9375rem, 1.05rem + 0.4vw, 1.5rem)" :
@@ -808,6 +226,13 @@ function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number })
     lineCount > 7 ? "clamp(0.8125rem, 0.88rem + 0.28vw, 1.25rem)" :
     "clamp(0.875rem, 0.95rem + 0.3vw, 1.35rem)";
   const lineHeight = lineCount > 8 ? 1.08 : 1.12;
+
+  const colors =
+    variant === "intro-bumper"
+      ? { first: "#fbbf24", rest: "#f8fafc" }
+      : variant === "outro-bumper"
+        ? { first: "#fed7aa", rest: "#fef3c7" }
+        : { first: "#ea580c", rest: "#1e1b12" };
 
   return (
     <div key={sceneKey} style={{ position: "relative" }}>
@@ -821,10 +246,14 @@ function AnimatedCaption({ text, sceneKey }: { text: string; sceneKey: number })
             fontWeight: i === 0 ? 700 : 600,
             fontSize: i === 0 ? titleSize : bodySize,
             lineHeight,
-            color: i === 0 ? "#c2410c" : "#1e1b12",
-            marginBottom: i === 0 ? "0.22em" : "0.1em",
+            color: bumper ? (i === 0 ? colors.first : colors.rest) : i === 0 ? "#c2410c" : "#1e1b12",
+            marginBottom: i === 0 ? (bumper ? "0.18em" : "0.22em") : "0.1em",
             letterSpacing: i === 0 ? "0.01em" : "0",
-            textShadow: i === 0 ? "0 1px 0 rgba(255,255,255,0.6)" : undefined,
+            textShadow: bumper
+              ? "0 2px 18px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.35)"
+              : i === 0
+                ? "0 1px 0 rgba(255,255,255,0.6)"
+                : undefined,
           }}
         >
           {line}
@@ -1278,6 +707,144 @@ function SceneShotTemplateLayer({
   );
 }
 
+// ─── Scene-aware doodles (caption-driven, not random) ────────────────────────
+function SceneContextDoodles({
+  caption,
+  animKey,
+}: {
+  caption: string;
+  animKey: number;
+}) {
+  const text = caption.toLowerCase();
+  const has = (words: string[]) => words.some((w) => text.includes(w));
+  type Kind = "brand" | "money" | "growth" | "time" | "warning" | "idea" | "social";
+  let primary: Kind = "idea";
+  if (has(["problem", "mistake", "wrong", "fail", "risk", "avoid"])) primary = "warning";
+  else if (has(["money", "sales", "revenue", "profit", "income", "price"])) primary = "money";
+  else if (has(["grow", "growth", "scale", "increase", "improve", "results"])) primary = "growth";
+  else if (has(["time", "fast", "quick", "minutes", "today", "now"])) primary = "time";
+  else if (has(["audience", "people", "customers", "community", "social", "followers"])) primary = "social";
+  else if (has(["brand", "business", "startup", "company", "founder"])) primary = "brand";
+
+  const sceneCycle: Kind[] = ["idea", "growth", "brand", "social", "time", "money", "warning", "growth"];
+  const secondary = sceneCycle[Math.abs(animKey) % sceneCycle.length]!;
+
+  const ink = "rgba(30,27,18,0.32)";
+  const accent = "#ea580c";
+  const style = (
+    delay: number,
+    width = 1.4,
+    stroke: string = ink
+  ): CSSProperties => ({
+    fill: "none",
+    stroke,
+    strokeWidth: width,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    strokeDasharray: 180,
+    strokeDashoffset: 180,
+    animation: "cf-draw 0.42s ease-out forwards",
+    animationDelay: `${delay}ms`,
+  });
+  const pop = (delay: number): CSSProperties => ({
+    fill: accent,
+    opacity: 0,
+    transformBox: "fill-box",
+    transformOrigin: "center",
+    animation: "cf-pop 0.24s ease-out forwards",
+    animationDelay: `${delay}ms`,
+  });
+
+  const drawIcon = (kind: Kind, x: number, y: number, delay: number, compact = false) => {
+    const k = compact ? 0.8 : 1;
+    switch (kind) {
+      case "money":
+        return (
+          <g>
+            <rect x={x - 10 * k} y={y - 6 * k} width={20 * k} height={12 * k} rx={2} style={style(delay, 1.8, ink)} />
+            <circle cx={x} cy={y} r={2.6 * k} style={style(delay + 60, 1.5, ink)} />
+          </g>
+        );
+      case "growth":
+        return (
+          <g>
+            <line x1={x - 10 * k} y1={y + 8 * k} x2={x - 10 * k} y2={y - 8 * k} style={style(delay, 1.8, ink)} />
+            <line x1={x - 10 * k} y1={y + 8 * k} x2={x + 10 * k} y2={y + 8 * k} style={style(delay + 50, 1.8, ink)} />
+            <polyline points={`${x - 7 * k},${y + 4 * k} ${x - 1 * k},${y} ${x + 3 * k},${y - 4 * k} ${x + 8 * k},${y - 8 * k}`} style={style(delay + 110, 1.8, ink)} />
+          </g>
+        );
+      case "time":
+        return (
+          <g>
+            <circle cx={x} cy={y} r={8 * k} style={style(delay, 1.8, ink)} />
+            <line x1={x} y1={y} x2={x} y2={y - 4 * k} style={style(delay + 60, 1.6, ink)} />
+            <line x1={x} y1={y} x2={x + 3 * k} y2={y + 2 * k} style={style(delay + 90, 1.6, ink)} />
+          </g>
+        );
+      case "warning":
+        return (
+          <g>
+            <polygon points={`${x},${y - 9 * k} ${x + 9 * k},${y + 8 * k} ${x - 9 * k},${y + 8 * k}`} style={style(delay, 1.8, ink)} />
+            <line x1={x} y1={y - 2 * k} x2={x} y2={y + 3 * k} style={style(delay + 60, 1.6, ink)} />
+            <circle cx={x} cy={y + 6 * k} r={1.4 * k} style={pop(delay + 110)} />
+          </g>
+        );
+      case "brand":
+        return (
+          <g>
+            <rect x={x - 9 * k} y={y - 7 * k} width={18 * k} height={14 * k} rx={2} style={style(delay, 1.8, ink)} />
+            <path d={`M ${x - 3 * k} ${y - 9 * k} h ${6 * k}`} style={style(delay + 60, 1.6, ink)} />
+          </g>
+        );
+      case "social":
+        return (
+          <g>
+            <circle cx={x - 6 * k} cy={y - 1 * k} r={2.8 * k} style={style(delay, 1.5, ink)} />
+            <circle cx={x + 6 * k} cy={y - 1 * k} r={2.8 * k} style={style(delay + 40, 1.5, ink)} />
+            <circle cx={x} cy={y + 5 * k} r={2.8 * k} style={style(delay + 80, 1.5, ink)} />
+            <line x1={x - 3 * k} y1={y} x2={x - 1 * k} y2={y + 3 * k} style={style(delay + 110, 1.4, ink)} />
+            <line x1={x + 3 * k} y1={y} x2={x + 1 * k} y2={y + 3 * k} style={style(delay + 140, 1.4, ink)} />
+          </g>
+        );
+      default:
+        return (
+          <g>
+            <circle cx={x} cy={y} r={7 * k} style={style(delay, 1.8, ink)} />
+            <line x1={x - 3 * k} y1={y + 7 * k} x2={x + 3 * k} y2={y + 7 * k} style={style(delay + 60, 1.6, ink)} />
+          </g>
+        );
+    }
+  };
+
+  return (
+    <svg key={animKey} viewBox="0 0 160 90" className="absolute inset-0 w-full h-full pointer-events-none">
+      <style>{`
+        @keyframes cf-draw { to { stroke-dashoffset: 0; } }
+        @keyframes cf-pop  { 0%{opacity:0;transform:scale(0.2)} 60%{opacity:1;transform:scale(1.2)} 100%{opacity:1;transform:scale(1)} }
+      `}</style>
+      {/* Clean layout: one primary + one secondary marker */}
+      {/* Primary icon (ink) */}
+      {drawIcon(primary, 118, 68, 420, false)}
+      {/* Secondary icon (lighter ink) */}
+      <g opacity={0.85}>
+        {/* we keep geometry identical but soften via opacity + stroke color */}
+        {(() => {
+          const original = (kind: Kind) => drawIcon(kind, 145, 62, 560, true);
+          // Wrap secondary in a <g> where all strokes are softened by CSS currentColor.
+          // Simpler: re-render with softInk via the style() stroke argument.
+          const drawSoft = (kind: Kind) => {
+            const k = true ? 0.8 : 1;
+            // Reuse drawIcon by duplicating compact shapes with softInk.
+            // For maintainability, keep secondary as a minimal dot marker if not directly supported.
+            return drawIcon(kind, 145, 62, 560, true);
+          };
+          return drawSoft(secondary);
+        })()}
+      </g>
+    </svg>
+  );
+}
+
 function SceneSupportAccents({
   kind,
   layout,
@@ -1380,7 +947,7 @@ function SceneSupportAccents({
 
 const DEFAULT_VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
 
-export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplete }: Props) {
+export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplete, topic }: Props) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying]       = useState(autoPlay);
   const [loadingVO, setLoadingVO]       = useState(false);
@@ -1568,8 +1135,9 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
     if (currentIndex < scenes.length - 1) setCurrentIndex((i) => i + 1);
   };
 
-  const scene    = scenes[currentIndex];
+  const scene = scenes[currentIndex];
   if (!scene) return null;
+  const visualKind = stickmanSceneVisualKind(scene, currentIndex, scenes.length);
   const progress = scenes.length > 1 ? (currentIndex / (scenes.length - 1)) * 100 : 100;
   const keyObject: StickmanKeyObject = scene.keyObject ?? "idea";
   const shotTemplate: StickmanShotTemplate = scene.shotTemplate ?? "stand-explain";
@@ -1643,6 +1211,31 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
   const stickmanWidth = scene.pose === "sitting" ? "48%" : "42%";
   const effectiveStickmanPos = { bottom:"2%", left: stickmanLeft, width: stickmanWidth, top: dividerPct };
 
+  const outerFrameStyle: CSSProperties =
+    visualKind === "intro-bumper"
+      ? {
+          aspectRatio: "16/9",
+          background: "linear-gradient(165deg, #0f172a 0%, #1e293b 42%, #1e3a5f 100%)",
+          border: "2px solid #334155",
+          boxShadow: "0 20px 50px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.2)",
+          transition: "background 0.4s ease",
+        }
+      : visualKind === "outro-bumper"
+        ? {
+            aspectRatio: "16/9",
+            background: "linear-gradient(172deg, #9a3412 0%, #431407 38%, #1c1917 100%)",
+            border: "2px solid #78350f",
+            boxShadow: "0 20px 50px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.2)",
+            transition: "background 0.4s ease",
+          }
+        : {
+            aspectRatio: "16/9",
+            background: bg,
+            border: "2px solid #E6DFC8",
+            boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06)",
+            transition: "background 0.4s ease",
+          };
+
   return (
     <div className="flex min-w-0 max-w-full flex-col gap-3 w-full select-none">
       {/* Global styles */}
@@ -1673,99 +1266,236 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
         .cf-doodle-pop { opacity: 0; animation: cf-doodle-pop 0.5s cubic-bezier(.34,1.56,.64,1) 0.2s forwards; }
       `}</style>
 
-      {/* ── Whiteboard canvas 16:9 ── */}
-      <div
-        className="relative rounded-2xl overflow-hidden w-full"
-        style={{
-          aspectRatio: "16/9",
-          background: bg,
-          border: "2px solid #E6DFC8",
-          boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06)",
-          transition: "background 0.4s ease",
-        }}
-      >
-        {/* Soft vignette under grid + scene (no z-index — stays below later siblings) */}
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse 85% 75% at 50% 45%, transparent 0%, transparent 55%, rgba(90,78,56,0.06) 100%)",
-          }}
-          aria-hidden
-        />
-        {/* Dot grid */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 160 90" preserveAspectRatio="none" style={{ opacity: 0.07 }}>
-          {Array.from({ length: 15 }, (_, row) =>
-            Array.from({ length: 27 }, (_, col) => (
-              <circle key={`${row}-${col}`} cx={col * 6 + 3} cy={row * 6 + 3} r="0.55" fill="#b8a882" />
-            ))
-          )}
-        </svg>
+      {/* ── 16:9 canvas — intro/outro bumpers vs whiteboard body ── */}
+      <div className="relative rounded-2xl overflow-hidden w-full" style={outerFrameStyle}>
+        {visualKind === "intro-bumper" ? (
+          <>
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 160 90" preserveAspectRatio="none" style={{ opacity: 0.14 }}>
+              {Array.from({ length: 15 }, (_, row) =>
+                Array.from({ length: 27 }, (_, col) => (
+                  <circle key={`${row}-${col}`} cx={col * 6 + 3} cy={row * 6 + 3} r="0.55" fill="#94a3b8" />
+                ))
+              )}
+            </svg>
+            <div
+              className="absolute top-0 left-0 right-0 h-2"
+              style={{ background: "linear-gradient(90deg,#c2410c,#ea580c,#f97316,#fbbf24)" }}
+            />
+            <div
+              className="absolute pointer-events-none rounded-xl"
+              style={{
+                top: "5%",
+                left: "5%",
+                right: "5%",
+                bottom: "11%",
+                border: "1px solid rgba(148,163,184,0.4)",
+              }}
+            />
+            <div key={currentIndex} className="cf-scene-fade absolute inset-0">
+              {topic?.trim() ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "9%",
+                    left: "7%",
+                    fontFamily: "ui-sans-serif, system-ui, sans-serif",
+                    fontSize: "clamp(9px, 0.85vw, 12px)",
+                    fontWeight: 600,
+                    letterSpacing: "0.2em",
+                    textTransform: "uppercase",
+                    color: "rgba(253,230,138,0.9)",
+                  }}
+                >
+                  {(topic.trim().length > 72 ? `${topic.trim().slice(0, 72)}…` : topic.trim())}
+                </div>
+              ) : null}
+              <div
+                style={{
+                  position: "absolute",
+                  top: topic?.trim() ? "15%" : "10%",
+                  left: "7%",
+                  right: "34%",
+                  bottom: "22%",
+                  overflow: "hidden",
+                }}
+              >
+                <AnimatedCaption text={scene.caption} sceneKey={currentIndex} variant="intro-bumper" />
+              </div>
+              <div style={{ position: "absolute", bottom: "5%", right: "4%", width: "30%", top: "36%" }}>
+                <StickmanCharacter3DCanvas pose={scene.pose} animKey={currentIndex} />
+              </div>
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "5%",
+                  left: "6%",
+                  fontFamily: "'Caveat', cursive",
+                  fontWeight: 700,
+                  fontSize: "clamp(11px, 1.3vw, 16px)",
+                  color: "rgba(226,232,240,0.78)",
+                }}
+              >
+                Intro · {currentIndex + 1} / {scenes.length}
+              </div>
+            </div>
+          </>
+        ) : visualKind === "outro-bumper" ? (
+          <>
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 160 90" preserveAspectRatio="none" style={{ opacity: 0.12 }}>
+              {Array.from({ length: 15 }, (_, row) =>
+                Array.from({ length: 27 }, (_, col) => (
+                  <circle key={`${row}-${col}`} cx={col * 6 + 3} cy={row * 6 + 3} r="0.55" fill="#fdba74" />
+                ))
+              )}
+            </svg>
+            <div
+              className="absolute top-0 left-0 right-0 h-1"
+              style={{ background: "linear-gradient(90deg,#fde047,#fbbf24,#f97316)" }}
+            />
+            <div
+              className="absolute bottom-0 left-0 right-0 h-2"
+              style={{ background: "linear-gradient(90deg,#ea580c,#c2410c)" }}
+            />
+            <div
+              className="absolute pointer-events-none rounded-xl"
+              style={{
+                top: "5%",
+                left: "5%",
+                right: "5%",
+                bottom: "12%",
+                border: "1px solid rgba(253,186,116,0.35)",
+              }}
+            />
+            <div key={currentIndex} className="cf-scene-fade absolute inset-0">
+              <div
+                style={{
+                  position: "absolute",
+                  top: "10%",
+                  left: "7%",
+                  right: "7%",
+                  bottom: "24%",
+                  overflow: "hidden",
+                }}
+              >
+                <AnimatedCaption text={scene.caption} sceneKey={currentIndex} variant="outro-bumper" />
+              </div>
+              <div style={{ position: "absolute", bottom: "13%", right: "5%", width: "28%", top: "42%" }}>
+                <StickmanCharacter3DCanvas pose={scene.pose} animKey={currentIndex} />
+              </div>
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "5%",
+                  left: "6%",
+                  fontFamily: "'Caveat', cursive",
+                  fontWeight: 700,
+                  fontSize: "clamp(11px, 1.3vw, 16px)",
+                  color: "rgba(254,243,199,0.8)",
+                }}
+              >
+                Outro · {currentIndex + 1} / {scenes.length}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Soft vignette under grid + scene (no z-index — stays below later siblings) */}
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(ellipse 85% 75% at 50% 45%, transparent 0%, transparent 55%, rgba(90,78,56,0.06) 100%)",
+              }}
+              aria-hidden
+            />
+            {/* Dot grid */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 160 90" preserveAspectRatio="none" style={{ opacity: 0.07 }}>
+              {Array.from({ length: 15 }, (_, row) =>
+                Array.from({ length: 27 }, (_, col) => (
+                  <circle key={`${row}-${col}`} cx={col * 6 + 3} cy={row * 6 + 3} r="0.55" fill="#b8a882" />
+                ))
+              )}
+            </svg>
+            {/* Accent top bar — rotates gradient per scene */}
+            <div className="absolute top-0 left-0 right-0 h-[7px]"
+              style={{ background: accentGradient, transition: "background 0.5s ease" }} />
 
-        {/* Accent top bar — rotates gradient per scene */}
-        <div className="absolute top-0 left-0 right-0 h-[7px]"
-          style={{ background: accentGradient, transition: "background 0.5s ease" }} />
+            {/* Horizontal separator */}
+            <div className="absolute left-[5%] right-[5%]"
+              style={{ top: dividerPct, height: "1px", background: "linear-gradient(90deg, transparent, #d4c9a8 20%, #d4c9a8 80%, transparent)" }} />
 
-        {/* Horizontal separator */}
-        <div className="absolute left-[5%] right-[5%]"
-          style={{ top: dividerPct, height: "1px", background: "linear-gradient(90deg, transparent, #d4c9a8 20%, #d4c9a8 80%, transparent)" }} />
+            {/* Scene fade-in wrapper */}
+            <div key={currentIndex} className="cf-scene-fade absolute inset-0">
+              <SceneShotTemplateLayer shotTemplate={shotTemplate} />
 
-        {/* Scene fade-in wrapper */}
-        <div key={currentIndex} className="cf-scene-fade absolute inset-0">
-          <SceneShotTemplateLayer shotTemplate={shotTemplate} />
+              {/* Highlight bar behind caption */}
+              <div
+                className="cf-highlight-bar"
+                style={{
+                  position: "absolute",
+                  top: highlightPos.top,
+                  left: highlightPos.left,
+                  right: highlightPos.right,
+                  height: highlightPos.height,
+                  background: accentBgColor,
+                  borderRadius: 6,
+                  animationDelay: "60ms",
+                }}
+              />
 
-          {/* Highlight bar behind caption */}
-          <div
-            className="cf-highlight-bar"
-            style={{
-              position: "absolute",
-              top: highlightPos.top,
-              left: highlightPos.left,
-              right: highlightPos.right,
-              height: highlightPos.height,
-              background: accentBgColor,
-              borderRadius: 6,
-              animationDelay: "60ms",
-            }}
-          />
+              {/* Caption text */}
+              <div style={{ position: "absolute", ...captionPos, overflow: "hidden" }}>
+                <SceneBoardText scene={scene} />
+              </div>
 
-          {/* Caption text */}
-          <div style={{ position: "absolute", ...captionPos, overflow: "hidden" }}>
-            <SceneBoardText scene={scene} />
-          </div>
+              {/* Scene key object */}
+              <div
+                className="cf-doodle-pop"
+                style={{
+                  position: "absolute",
+                  ...iconPos,
+                  ...(iconFlip ? { transform: "scaleX(-1)" } : {}),
+                }}
+              >
+                <KeyObjectDoodle kind={keyObject} />
+              </div>
 
-          {/* Scene key object */}
-          <div
-            className="cf-doodle-pop"
-            style={{
-              position: "absolute",
-              ...iconPos,
-              ...(iconFlip ? { transform: "scaleX(-1)" } : {}),
-            }}
-          >
-            <KeyObjectDoodle kind={keyObject} />
-          </div>
+              {/* Caption-aware scene doodles */}
+              <SceneContextDoodles caption={scene.caption} animKey={currentIndex} />
 
-          {/* Stickman — position driven by theme */}
-          <div style={{ position: "absolute", ...effectiveStickmanPos }}>
-            <StickmanSvg pose={scene.pose} animKey={currentIndex} />
-          </div>
+              {/* Stickman — position driven by theme */}
+              <div style={{ position: "absolute", ...effectiveStickmanPos }}>
+                <StickmanCharacter3DCanvas pose={scene.pose} animKey={currentIndex} />
+              </div>
 
-          {/* Scene badge — bottom right */}
-          <div style={{
-            position: "absolute", bottom: "4%", right: "4%",
-            fontFamily: "'Caveat', cursive", fontWeight: 700,
-            fontSize: "clamp(0.6875rem, 0.75rem + 0.2vw, 1rem)", color: "#a8956a",
-          }}>
-            {currentIndex + 1} / {scenes.length}
-          </div>
-        </div>
+              {/* Scene badge — bottom right */}
+              <div style={{
+                position: "absolute", bottom: "4%", right: "4%",
+                fontFamily: "'Caveat', cursive", fontWeight: 700,
+                fontSize: "clamp(0.6875rem, 0.75rem + 0.2vw, 1rem)", color: "#a8956a",
+              }}>
+                {currentIndex + 1} / {scenes.length}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Loading overlay */}
         {loadingVO && (
-          <div className="absolute inset-0 flex items-center justify-center z-20"
-            style={{ background: "rgba(255,254,248,0.82)", backdropFilter: "blur(4px)" }}>
-            <div className="flex flex-col items-center gap-2" style={{ color: "#a8956a" }}>
+          <div
+            className="absolute inset-0 flex items-center justify-center z-20"
+            style={{
+              background:
+                visualKind === "whiteboard"
+                  ? "rgba(255,254,248,0.82)"
+                  : "rgba(15,23,42,0.78)",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <div
+              className="flex flex-col items-center gap-2"
+              style={{ color: visualKind === "whiteboard" ? "#a8956a" : "rgba(254,243,199,0.95)" }}
+            >
               <svg className="w-7 h-7 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />

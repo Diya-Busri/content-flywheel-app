@@ -2,6 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -9,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CTA_GOAL_OPTIONS } from "@/app/dashboard/template-studio/template-studio-shared";
 
 interface Props {
   topic: string;
@@ -21,6 +23,14 @@ interface Props {
   setTargetMinutes: (v: number) => void;
   voiceId: string;
   setVoiceId: (v: string) => void;
+  ctaGoal: string;
+  setCtaGoal: (v: string) => void;
+  introScript: string;
+  setIntroScript: (v: string) => void;
+  ctaScript: string;
+  setCtaScript: (v: string) => void;
+  outroScript: string;
+  setOutroScript: (v: string) => void;
 }
 
 export const STICKMAN_SCENE_COUNT_OPTIONS = [4, 5, 6, 7, 8] as const;
@@ -46,6 +56,14 @@ export function StickmanWhiteboardSetup({
   setTargetMinutes,
   voiceId,
   setVoiceId,
+  ctaGoal,
+  setCtaGoal,
+  introScript,
+  setIntroScript,
+  ctaScript,
+  setCtaScript,
+  outroScript,
+  setOutroScript,
 }: Props) {
   return (
     <>
@@ -138,6 +156,76 @@ export function StickmanWhiteboardSetup({
           </SelectContent>
         </Select>
       </div>
+
+      <div className="space-y-2">
+        <Label>Video CTA goal</Label>
+        <Select value={ctaGoal} onValueChange={setCtaGoal}>
+          <SelectTrigger>
+            <SelectValue placeholder="How should the CTA scene ask viewers to act?" />
+          </SelectTrigger>
+          <SelectContent>
+            {CTA_GOAL_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          The model reserves the second-to-last scene for a CTA (last scene is outro). That CTA always layers in subscribe or follow, like, and share, plus the goal you pick. With only 3 scenes, CTA and outro are combined on the final scene.
+        </p>
+      </div>
+
+      <details className="group border rounded-lg p-3 bg-muted/20">
+        <summary className="text-sm font-medium cursor-pointer list-none flex items-center gap-1">
+          <span className="group-open:rotate-90 transition-transform inline-block text-xs">▶</span>
+          Optional — exact intro / CTA / outro lines
+        </summary>
+        <p className="text-xs text-muted-foreground mt-2 mb-3">
+          Leave blank to let AI write them. Intro and outro are instructed to sound like different beats (hook forward vs. sign-off). If you paste your own lines, use different wording for each. For 3 scenes, the last scene merges CTA then outro in one caption — keep those two parts distinct.
+        </p>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="stickman-intro-script" className="text-xs">
+              Intro (scene 1)
+            </Label>
+            <Textarea
+              id="stickman-intro-script"
+              rows={2}
+              placeholder="e.g. In the next 60 seconds, here is why faceless brands win on short-form…"
+              value={introScript}
+              onChange={(e) => setIntroScript(e.target.value)}
+              className="text-sm resize-y min-h-[60px]"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="stickman-cta-script" className="text-xs">
+              CTA line {sceneCount >= 4 ? `(scene ${sceneCount - 1})` : sceneCount === 3 ? "(last scene, with outro if set)" : "(merged into final scene if 2 scenes)"}
+            </Label>
+            <Textarea
+              id="stickman-cta-script"
+              rows={2}
+              placeholder="e.g. Follow for more faceless-brand tips — link in bio for the playbook."
+              value={ctaScript}
+              onChange={(e) => setCtaScript(e.target.value)}
+              className="text-sm resize-y min-h-[60px]"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="stickman-outro-script" className="text-xs">
+              Outro (last scene{sceneCount === 3 ? "; merged with CTA if both set" : ""})
+            </Label>
+            <Textarea
+              id="stickman-outro-script"
+              rows={2}
+              placeholder="e.g. Thanks for watching — see you in the next one."
+              value={outroScript}
+              onChange={(e) => setOutroScript(e.target.value)}
+              className="text-sm resize-y min-h-[60px]"
+            />
+          </div>
+        </div>
+      </details>
     </>
   );
 }

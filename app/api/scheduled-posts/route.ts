@@ -2,10 +2,36 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
-import { scheduledPostsTable } from "@/db/schema/scheduled-posts-schema";
-import { eq, asc } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
+
+function pick(row: Record<string, unknown>, keys: string[], fallback: unknown = null): unknown {
+  for (const k of keys) {
+    if (k in row) return row[k];
+  }
+  return fallback;
+}
+
+function normalizeScheduledRow(row: Record<string, unknown>) {
+  const id = String(pick(row, ["id"], ""));
+  const contentType = String(pick(row, ["content_type", "contentType"], "video"));
+  const contentJson = (pick(row, ["content_json", "contentJson"], {}) as Record<string, unknown>) ?? {};
+  const platform = String(pick(row, ["platform"], "youtube"));
+  const scheduledRaw = pick(row, ["scheduled_time", "scheduledTime"], null);
+  const postedRaw = pick(row, ["posted_status", "postedStatus"], false);
+  const createdRaw = pick(row, ["created_at", "createdAt"], null);
+  return {
+    id,
+    contentType,
+    contentJson,
+    platform,
+    scheduledTime: scheduledRaw ? new Date(String(scheduledRaw)).toISOString() : null,
+    postedStatus: Boolean(postedRaw),
+    createdAt: createdRaw ? new Date(String(createdRaw)).toISOString() : null,
+  };
+}
 
 /**
  * GET: List scheduled posts for the current user (for Scheduled tab).
@@ -17,29 +43,28 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rows = await db
-      .select()
-      .from(scheduledPostsTable)
-      .where(eq(scheduledPostsTable.userId, userId))
-      .orderBy(asc(scheduledPostsTable.scheduledTime));
-
-    return NextResponse.json(
-      rows.map((r) => ({
-        id: r.id,
-        contentType: r.contentType,
-        contentJson: r.contentJson,
-        platform: r.platform,
-        scheduledTime: r.scheduledTime?.toISOString(),
-        postedStatus: r.postedStatus,
-        createdAt: r.createdAt?.toISOString(),
-      }))
-    );
+    try {
+      const result = await db.execute(sql`
+        select id, content_type, content_json, platform, scheduled_time, posted_status, created_at
+        from scheduled_posts
+        where user_id = ${userId}
+        order by scheduled_time asc
+      `);
+      const rows = Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows ?? [];
+      return NextResponse.json(rows.map((r) => normalizeScheduledRow(r as Record<string, unknown>)));
+    } catch {
+      const result = await db.execute(sql`
+        select id, "contentType", "contentJson", platform, "scheduledTime", "postedStatus", "createdAt"
+        from scheduled_posts
+        where "userId" = ${userId}
+        order by "scheduledTime" asc
+      `);
+      const rows = Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows ?? [];
+      return NextResponse.json(rows.map((r) => normalizeScheduledRow(r as Record<string, unknown>)));
+    }
   } catch (e) {
     console.error("[scheduled-posts] GET error:", e);
-    return NextResponse.json(
-      { error: "Failed to load scheduled posts" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to load scheduled posts" }, { status: 500 });
   }
 }
 
@@ -81,30 +106,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid scheduledTime" }, { status: 400 });
     }
 
-    const [row] = await db
-      .insert(scheduledPostsTable)
-      .values({
-        userId,
-        contentType,
-        contentJson,
-        platform,
-        scheduledTime,
-        postedStatus: false,
-      })
-      .returning();
-
-    if (!row) {
-      return NextResponse.json({ error: "Insert failed" }, { status: 500 });
+    const contentJsonText = JSON.stringify(contentJson);
+    const newId = randomUUID();
+    try {
+      const inserted = await db.execute(sql`
+        insert into scheduled_posts (id, user_id, content_type, content_json, platform, scheduled_time, posted_status)
+        values (${newId}, ${userId}, ${contentType}, ${contentJsonText}::jsonb, ${platform}, ${scheduledTime.toISOString()}::timestamptz, false)
+        returning id, content_type, content_json, platform, scheduled_time, posted_status, created_at
+      `);
+      const rows = Array.isArray(inserted) ? inserted : (inserted as { rows?: unknown[] }).rows ?? [];
+      const row = (rows[0] ?? null) as Record<string, unknown> | null;
+      if (!row) return NextResponse.json({ error: "Insert failed" }, { status: 500 });
+      return NextResponse.json(normalizeScheduledRow(row));
+    } catch {
+      const inserted = await db.execute(sql`
+        insert into scheduled_posts (id, "userId", "contentType", "contentJson", platform, "scheduledTime", "postedStatus")
+        values (${newId}, ${userId}, ${contentType}, ${contentJsonText}::jsonb, ${platform}, ${scheduledTime.toISOString()}::timestamptz, false)
+        returning id, "contentType", "contentJson", platform, "scheduledTime", "postedStatus", "createdAt"
+      `);
+      const rows = Array.isArray(inserted) ? inserted : (inserted as { rows?: unknown[] }).rows ?? [];
+      const row = (rows[0] ?? null) as Record<string, unknown> | null;
+      if (!row) return NextResponse.json({ error: "Insert failed" }, { status: 500 });
+      return NextResponse.json(normalizeScheduledRow(row));
     }
-
-    return NextResponse.json({
-      id: row.id,
-      contentType: row.contentType,
-      platform: row.platform,
-      scheduledTime: row.scheduledTime?.toISOString(),
-      postedStatus: row.postedStatus,
-      createdAt: row.createdAt?.toISOString(),
-    });
   } catch (e) {
     console.error("[scheduled-posts] POST error:", e);
     return NextResponse.json(

@@ -340,7 +340,7 @@ function buildSceneBlocks(fullTexts: string[], duration: number): SceneBlock[] {
 }
 
 function getSceneBackgroundMedia(scene: Scene): { url: string; type: "image" | "video" } | null {
-  const first = scene.elements[0];
+  const first = Array.isArray(scene.elements) ? scene.elements[0] : undefined;
   return first && isBackgroundEl(first) ? first.media : null;
 }
 
@@ -353,6 +353,173 @@ function normalizeSceneClipAudioUrl(scene: Scene): Scene {
     typeof o.voiceover_url === "string" ? o.voiceover_url : typeof o.voiceoverUrl === "string" ? o.voiceoverUrl : ""
   ).trim();
   return fb ? { ...scene, audioUrl: fb } : scene;
+}
+
+function buildTimelineFromStickmanMetadata(rawScenes: unknown[]): { scenes: Scene[]; captions: CaptionBlock[]; totalDuration: number } {
+  const fallbackDuration = 12;
+  let runStart = 0;
+  const sceneRows = rawScenes
+    .map((raw, idx) => {
+      if (!raw || typeof raw !== "object") return null;
+      const node = raw as Record<string, unknown>;
+      const caption = typeof node.caption === "string" ? node.caption.trim() : "";
+      const duration =
+        typeof node.duration === "number" && Number.isFinite(node.duration) && node.duration > 0
+          ? node.duration
+          : fallbackDuration;
+      const id = `stickman-migrated-${idx + 1}`;
+      const scene: Scene = {
+        id,
+        title: (caption || `Scene ${idx + 1}`).slice(0, 80),
+        duration,
+        color: SCENE_COLOR_HEX[idx % SCENE_COLOR_HEX.length] ?? DEFAULT_SCENE_COLOR,
+        startTime: runStart,
+        elements: [{
+          id: `${id}-bg`,
+          type: ELEMENT_TYPES.BACKGROUND,
+          media: {
+            type: "image",
+            url: renderStickmanSceneDataUrl({
+              caption,
+              pose: typeof node.pose === "string" ? node.pose : undefined,
+              keyObject: typeof node.keyObject === "string" ? node.keyObject : undefined,
+              layout: typeof node.layout === "string" ? node.layout : undefined,
+            }),
+          },
+        }],
+      };
+      runStart += duration;
+      return { scene, caption };
+    })
+    .filter((item): item is { scene: Scene; caption: string } => item !== null);
+
+  const scenes = sceneRows.map((item) => item.scene);
+  const captions: CaptionBlock[] = sceneRows
+    .map((item, idx) => {
+      const text = item.caption.trim();
+      if (!text) return null;
+      const startTime = typeof item.scene.startTime === "number" ? item.scene.startTime : 0;
+      return {
+        id: `cap-stickman-migrated-${idx + 1}`,
+        text,
+        startTime,
+        endTime: startTime + item.scene.duration,
+      };
+    })
+    .filter((row): row is CaptionBlock => row !== null);
+
+  return {
+    scenes,
+    captions,
+    totalDuration: scenes.reduce((sum, scene) => sum + (Number(scene.duration) || 0), 0),
+  };
+}
+
+function renderStickmanSceneDataUrl(input: { caption: string; pose?: string; keyObject?: string; layout?: string }): string {
+  const text = (input.caption || "").slice(0, 210).replace(/[<>&"]/g, "");
+  const left = input.layout === "right-presenter" ? 900 : input.layout === "center-presenter" ? 640 : 460;
+  const pose = input.pose ?? "standing";
+  const armY = pose === "pointing" ? 468 : pose === "celebrating" ? 410 : 452;
+  const icon = input.keyObject === "money" ? "$" : input.keyObject === "warning" ? "!" : input.keyObject === "clock" ? "O" : input.keyObject === "chart" ? "/" : "*";
+  const dots: string[] = [];
+  for (let y = 28; y <= 690; y += 28) {
+    for (let x = 28; x <= 1250; x += 28) {
+      dots.push(`<circle cx="${x}" cy="${y}" r="1.6" fill="#d8cfb5" opacity="0.38" />`);
+    }
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#FFFEF8"/>
+  ${dots.join("")}
+  <rect x="0" y="0" width="1280" height="10" fill="#F59E0B"/>
+  <rect x="80" y="85" width="720" height="170" rx="16" fill="#f8e8d8" opacity="0.85"/>
+  <text x="110" y="150" font-family="Caveat, Arial, sans-serif" font-size="58" font-weight="700" fill="#b45309">In a world obsessed with personal branding...</text>
+  <text x="110" y="215" font-family="Caveat, Arial, sans-serif" font-size="46" fill="#111827">${text}</text>
+  <line x1="80" y1="505" x2="1200" y2="505" stroke="#8f8f8f" stroke-width="14" stroke-linecap="round" opacity="0.6"/>
+  <circle cx="${left}" cy="360" r="26" fill="none" stroke="#1f2937" stroke-width="8"/>
+  <line x1="${left}" y1="386" x2="${left}" y2="468" stroke="#1f2937" stroke-width="8" stroke-linecap="round"/>
+  <line x1="${left}" y1="420" x2="${left - 58}" y2="${armY}" stroke="#1f2937" stroke-width="8" stroke-linecap="round"/>
+  <line x1="${left}" y1="420" x2="${left + 82}" y2="${armY}" stroke="#1f2937" stroke-width="8" stroke-linecap="round"/>
+  <line x1="${left}" y1="468" x2="${left - 45}" y2="548" stroke="#1f2937" stroke-width="8" stroke-linecap="round"/>
+  <line x1="${left}" y1="468" x2="${left + 45}" y2="548" stroke="#1f2937" stroke-width="8" stroke-linecap="round"/>
+  <rect x="${left + 95}" y="322" width="195" height="140" rx="10" fill="none" stroke="#111827" stroke-width="6"/>
+  <line x1="${left + 120}" y1="430" x2="${left + 260}" y2="430" stroke="#111827" stroke-width="5"/>
+  <line x1="${left + 120}" y1="430" x2="${left + 120}" y2="350" stroke="#111827" stroke-width="5"/>
+  <line x1="${left + 132}" y1="416" x2="${left + 170}" y2="385" stroke="#111827" stroke-width="5"/>
+  <line x1="${left + 170}" y1="385" x2="${left + 230}" y2="350" stroke="#111827" stroke-width="5"/>
+  <circle cx="${left + 250}" cy="392" r="14" fill="#f97316"/>
+  <text x="${left + 248}" y="368" font-family="Arial, sans-serif" font-size="34" font-weight="800" fill="#f59e0b">${icon}</text>
+  <text x="1135" y="662" font-family="Caveat, Arial, sans-serif" font-size="34" fill="#b45309">1 / 39</text>
+</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function isRenderableTimelineScene(raw: unknown): raw is Scene {
+  if (!raw || typeof raw !== "object") return false;
+  const scene = raw as Record<string, unknown>;
+  return typeof scene.duration === "number" && scene.duration > 0 && Array.isArray(scene.elements);
+}
+
+function migrateLegacyScenesList(rawScenes: unknown[]): { scenes: Scene[]; captions: CaptionBlock[]; totalDuration: number } {
+  const fallbackDuration = 12;
+  let runStart = 0;
+  const scenes: Scene[] = [];
+  const captions: CaptionBlock[] = [];
+
+  rawScenes.forEach((raw, idx) => {
+    if (!raw || typeof raw !== "object") return;
+    const node = raw as Record<string, unknown>;
+    const caption =
+      typeof node.caption === "string"
+        ? node.caption.trim()
+        : typeof node.title === "string"
+          ? node.title.trim()
+          : "";
+    const duration =
+      typeof node.duration === "number" && Number.isFinite(node.duration) && node.duration > 0
+        ? node.duration
+        : fallbackDuration;
+    const id = typeof node.id === "string" && node.id.trim() ? node.id : `scene-migrated-${idx + 1}`;
+    const startTime =
+      typeof node.startTime === "number" && Number.isFinite(node.startTime) && node.startTime >= 0
+        ? node.startTime
+        : runStart;
+    const scene: Scene = {
+      id,
+      title: (caption || `Scene ${idx + 1}`).slice(0, 80),
+      duration,
+      color: SCENE_COLOR_HEX[idx % SCENE_COLOR_HEX.length] ?? DEFAULT_SCENE_COLOR,
+      startTime,
+      elements: [{
+        id: `${id}-bg`,
+        type: ELEMENT_TYPES.BACKGROUND,
+        media: {
+          type: "image",
+          url: renderStickmanSceneDataUrl({
+            caption,
+            pose: typeof node.pose === "string" ? node.pose : undefined,
+            keyObject: typeof node.keyObject === "string" ? node.keyObject : undefined,
+            layout: typeof node.layout === "string" ? node.layout : undefined,
+          }),
+        },
+      }],
+    };
+    scenes.push(scene);
+    if (caption) {
+      captions.push({
+        id: `cap-migrated-${idx + 1}`,
+        text: caption,
+        startTime,
+        endTime: startTime + duration,
+      });
+    }
+    runStart = startTime + duration;
+  });
+
+  return {
+    scenes,
+    captions,
+    totalDuration: scenes.reduce((sum, scene) => sum + (Number(scene.duration) || 0), 0),
+  };
 }
 
 function buildSceneBlocksFromScenes(sceneList: Scene[]): SceneBlock[] {
@@ -1861,8 +2028,23 @@ export default function VideoTimelinePage() {
   // Load saved project and restore full timeline state (template, scenes, captions, media, style, etc.)
   const loadProject = useCallback(async (projectId: string) => {
     try {
-      const res = await fetch(`/api/video-timeline/videos/${encodeURIComponent(projectId)}`);
-      if (!res.ok) throw new Error("Failed to load project");
+      let res: Response | null = null;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        res = await fetch(`/api/video-timeline/videos/${encodeURIComponent(projectId)}`, {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (res.ok) break;
+        if (res.status === 401 && attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+          continue;
+        }
+        break;
+      }
+      if (!res || !res.ok) {
+        const errData = await res?.json().catch(() => ({} as { error?: string }));
+        throw new Error(typeof errData?.error === "string" ? errData.error : "Failed to load project");
+      }
       const data = (await res.json()) as {
         metadata?: Record<string, unknown>;
         title?: string;
@@ -1872,41 +2054,79 @@ export default function VideoTimelinePage() {
       // Scenes (normalize so they fill total duration for normal video flow)
       const scenesList = Array.isArray(meta.scenes) ? meta.scenes : [];
       const totalDuration = typeof meta.totalDuration === "number" && meta.totalDuration > 0 ? meta.totalDuration : 0;
-      if (scenesList.length > 0) {
-        const list = (scenesList as Scene[]).map(normalizeSceneClipAudioUrl);
-        const sceneTotal = list.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 0), 0);
-        const needNormalize = totalDuration > 0 && list.length >= 2 && sceneTotal < totalDuration * 0.9;
-        const scenesToSet = needNormalize
-          ? list.map((s, i) => ({
-              ...s,
-              startTime: i * (totalDuration / list.length),
-              duration: totalDuration / list.length,
-            }))
-          : list;
-        setScenes(scenesToSet);
+      let migratedCaptions: CaptionBlock[] | null = null;
+      const sourceType = typeof meta.sourceType === "string" ? meta.sourceType : "";
+      const legacyStickmanScenes = Array.isArray(meta.stickmanScenes) ? meta.stickmanScenes : [];
+      const shouldForceStickmanRebuild = sourceType === "stickman-whiteboard" && legacyStickmanScenes.length > 0;
+      if (shouldForceStickmanRebuild) {
+        const migrated = buildTimelineFromStickmanMetadata(legacyStickmanScenes);
+        if (migrated.scenes.length > 0) {
+          setScenes(migrated.scenes.map(normalizeSceneClipAudioUrl));
+          migratedCaptions = migrated.captions;
+          if (migrated.totalDuration > 0) setVoiceoverDuration(migrated.totalDuration);
+        }
+      } else if (scenesList.length > 0) {
+        const allRenderable = scenesList.every(isRenderableTimelineScene);
+        if (allRenderable) {
+          const list = (scenesList as Scene[]).map(normalizeSceneClipAudioUrl);
+          const sceneTotal = list.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 0), 0);
+          const needNormalize = totalDuration > 0 && list.length >= 2 && sceneTotal < totalDuration * 0.9;
+          const scenesToSet = needNormalize
+            ? list.map((s, i) => ({
+                ...s,
+                startTime: i * (totalDuration / list.length),
+                duration: totalDuration / list.length,
+              }))
+            : list;
+          setScenes(scenesToSet);
+        } else {
+          const migratedFromScenes = migrateLegacyScenesList(scenesList);
+          if (migratedFromScenes.scenes.length > 0) {
+            setScenes(migratedFromScenes.scenes.map(normalizeSceneClipAudioUrl));
+            migratedCaptions = migratedFromScenes.captions;
+            if (migratedFromScenes.totalDuration > 0) setVoiceoverDuration(migratedFromScenes.totalDuration);
+          }
+        }
+      } else {
+        if (legacyStickmanScenes.length > 0) {
+          const migrated = buildTimelineFromStickmanMetadata(legacyStickmanScenes);
+          if (migrated.scenes.length > 0) {
+            setScenes(migrated.scenes.map(normalizeSceneClipAudioUrl));
+            migratedCaptions = migrated.captions;
+            if (migrated.totalDuration > 0) setVoiceoverDuration(migrated.totalDuration);
+          }
+        }
       }
       // Captions
       const caps = Array.isArray(meta.captions) ? meta.captions : [];
-      if (caps.length > 0) {
+      const parsedCaps = caps
+        .map((c: { id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }, i: number) => ({
+          id: typeof c.id === "string" ? c.id : `cap-${i}`,
+          text: typeof c.text === "string" ? c.text : "",
+          startTime: typeof c.startTime === "number" ? c.startTime : 0,
+          endTime: typeof c.endTime === "number" ? c.endTime : 0,
+          wordTimings: Array.isArray(c.wordTimings)
+            ? c.wordTimings.filter(
+                (w): w is WordTiming =>
+                  typeof w?.word === "string" && typeof w?.start === "number" && typeof w?.end === "number"
+              )
+            : undefined,
+        }))
+        .filter((c) => c.text.trim() && c.endTime > c.startTime);
+      if (parsedCaps.length > 0) {
         setCaptions(
-          caps.map((c: { id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }, i: number) => ({
-            id: typeof c.id === "string" ? c.id : `cap-${i}`,
-            text: typeof c.text === "string" ? c.text : "",
-            startTime: typeof c.startTime === "number" ? c.startTime : 0,
-            endTime: typeof c.endTime === "number" ? c.endTime : 0,
-            wordTimings: Array.isArray(c.wordTimings)
-              ? c.wordTimings.filter(
-                  (w): w is WordTiming =>
-                    typeof w?.word === "string" && typeof w?.start === "number" && typeof w?.end === "number"
-                )
-              : undefined,
-          }))
+          parsedCaps
         );
+      } else if (migratedCaptions && migratedCaptions.length > 0) {
+        setCaptions(migratedCaptions);
       }
       if (typeof meta.voiceoverUrl === "string") setVoiceoverUrl(meta.voiceoverUrl);
       if (typeof meta.musicUrl === "string") setMusicUrl(meta.musicUrl);
       if (typeof meta.musicVolume === "number") setMusicVolume(meta.musicVolume);
       if (typeof meta.totalDuration === "number") setVoiceoverDuration(meta.totalDuration);
+      if (sourceType === "stickman-whiteboard") {
+        setAspectRatio("16:9");
+      }
       const style = meta.captionStyle && typeof meta.captionStyle === "object" ? (meta.captionStyle as Record<string, unknown>) : {};
       if (style.position === "top" || style.position === "middle" || style.position === "bottom") setCaptionPosition(style.position as "top" | "middle" | "bottom");
       if (style.fontSize === "small" || style.fontSize === "medium" || style.fontSize === "large") setCaptionFontSize(style.fontSize as "small" | "medium" | "large");
@@ -1916,7 +2136,7 @@ export default function VideoTimelinePage() {
       if (style.displayMode === "full" || style.displayMode === "wordByWord" || style.displayMode === "singleWord") setCaptionDisplayMode(style.displayMode);
       const transition = meta.sceneTransition;
       if (["fade","slideLeft","slideRight","wipe","zoom","pushUp","pushDown","blur","spin","flip"].includes(transition)) setSceneTransitionType(transition as SceneTransitionType);
-      if (typeof meta.aspectRatio === "string") setAspectRatio(meta.aspectRatio);
+      if (typeof meta.aspectRatio === "string" && sourceType !== "stickman-whiteboard") setAspectRatio(meta.aspectRatio);
       const t = meta.template;
       if (t != null && typeof t === "object" && "id" in t) {
         const full = VIDEO_TEMPLATES.find((tm) => tm.id === (t as { id: string }).id);
@@ -2641,7 +2861,11 @@ export default function VideoTimelinePage() {
       return;
     }
     const hasPerClipAudio = assets.some(hasAssetAudioUrl);
-    if (!voiceoverUrl?.trim() && !hasPerClipAudio) {
+    const looksLikeStickmanTimeline = scenes.some((s) => {
+      const n = s as Scene & { pose?: string; shotTemplate?: string; keyObject?: string };
+      return typeof n.pose === "string" || typeof n.shotTemplate === "string" || typeof n.keyObject === "string";
+    });
+    if (!voiceoverUrl?.trim() && !hasPerClipAudio && !looksLikeStickmanTimeline) {
       alert("No voiceover or per-clip audio to export. Add a voiceover or use scenes with audio.");
       return;
     }
@@ -2697,7 +2921,11 @@ export default function VideoTimelinePage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               status: "completed",
-              metadata: { exportedAt: new Date().toISOString() },
+              metadata: {
+                exportedAt: new Date().toISOString(),
+                // Client-side exports are downloaded locally; no permanent remote URL exists.
+                localExported: true,
+              },
             }),
           });
         } catch (e) {
@@ -2789,14 +3017,43 @@ export default function VideoTimelinePage() {
       if (!res.ok) {
         throw new Error(data.error ?? `Compile failed (${res.status})`);
       }
-      if (data.url) setCompileDownloadUrl(data.url);
-      else setCompileError("No download URL returned.");
+      if (data.url) {
+        setCompileDownloadUrl(data.url);
+        // Trigger immediate browser download so user does not need to hunt for links.
+        const a = document.createElement("a");
+        a.href = data.url;
+        a.download = `${(scriptName || "content-flywheel-video").trim()}.mp4`;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.click();
+
+        // Persist export URL on the saved timeline project so Library download always works.
+        const currentProjectId = projectIdFromUrl ?? (await handleSaveToLibrary({ silent: true }))?.id ?? null;
+        if (currentProjectId) {
+          await fetch(`/api/video-timeline/videos/${encodeURIComponent(currentProjectId)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              status: "completed",
+              metadata: {
+                exportedAt: new Date().toISOString(),
+                videoUrl: data.url,
+                exportUrl: data.url,
+                outputUrl: data.url,
+                compiledVideoUrl: data.url,
+              },
+            }),
+          }).catch(() => {});
+        }
+      } else {
+        setCompileError("No download URL returned.");
+      }
     } catch (err) {
       setCompileError(err instanceof Error ? err.message : "Compile failed");
     } finally {
       setCompileLoading(false);
     }
-  }, [scriptId, sceneTransitionType]);
+  }, [scriptId, sceneTransitionType, scriptName, projectIdFromUrl, handleSaveToLibrary]);
 
   // Optional: auto-export when navigated from Video Creation Guide after animations finish.
   // Uses voiceovers already present on the timeline scenes (per-clip audio) for template-studio flows.
@@ -2806,7 +3063,11 @@ export default function VideoTimelinePage() {
     if (!shouldAutoExport) return;
     if (autoExportStartedRef.current) return;
     if (scenes.length === 0) return;
-    if (!hasPerClipAudio && !voiceoverUrl?.trim()) return;
+    const looksLikeStickmanTimeline = scenes.some((s) => {
+      const n = s as Scene & { pose?: string; shotTemplate?: string; keyObject?: string };
+      return typeof n.pose === "string" || typeof n.shotTemplate === "string" || typeof n.keyObject === "string";
+    });
+    if (!hasPerClipAudio && !voiceoverUrl?.trim() && !looksLikeStickmanTimeline) return;
     if (scriptId?.trim()) {
       autoExportStartedRef.current = true;
       void handleExportVideoServer();
@@ -2819,7 +3080,7 @@ export default function VideoTimelinePage() {
     void handleExportVideo();
   }, [
     searchParams,
-    scenes.length,
+    scenes,
     scriptId,
     hasPerClipAudio,
     voiceoverUrl,
@@ -2827,6 +3088,16 @@ export default function VideoTimelinePage() {
     handleExportVideoServer,
     handleExportVideo,
   ]);
+
+  useEffect(() => {
+    const shouldAutoClose = searchParams.get("autoClose") === "1";
+    if (!shouldAutoClose) return;
+    if (!compileDownloadUrl) return;
+    const t = window.setTimeout(() => {
+      window.close();
+    }, 1200);
+    return () => window.clearTimeout(t);
+  }, [searchParams, compileDownloadUrl]);
 
   /** Test compile: creates 2-scene script, compiles, returns URL (no scriptId needed). */
   const handleTestCompile = useCallback(async () => {

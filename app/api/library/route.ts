@@ -11,7 +11,7 @@ import { eq, desc, and, isNull, isNotNull } from "drizzle-orm";
 export const dynamic = "force-dynamic";
 
 const LibrarySearchSchema = z.object({
-  type: z.enum(["all", "product", "products", "video", "script", "scripts"]).optional().default("all"),
+  type: z.enum(["all", "product", "products", "video", "script", "scripts", "timeline", "bundles"]).optional().default("all"),
   deleted: z.enum(["true", "false"]).optional(),
 });
 
