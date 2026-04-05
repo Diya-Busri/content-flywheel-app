@@ -27,11 +27,16 @@ function compileDimensions(outputAspect: "16:9" | "9:16" | undefined): { width: 
 function resolveDrawtextFontFile(): string | null {
   const env = process.env.FFMPEG_DRAWTEXT_FONTFILE?.trim();
   if (env && existsSync(env)) return env;
-  // Common paths across macOS + Linux server images (Vercel often has DejaVu).
+  const cwd = process.cwd();
+  // Common paths across macOS + Linux server images + bundled node_modules fallback.
   const candidates = [
+    // Bundled via pdfjs-dist — always present in node_modules on Vercel
+    join(cwd, "node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf"),
+    // System Linux paths (Vercel, Ubuntu)
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    // macOS paths
     "/System/Library/Fonts/Supplemental/Arial.ttf",
     "/System/Library/Fonts/Supplemental/Helvetica.ttf",
   ];
