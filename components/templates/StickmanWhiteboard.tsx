@@ -1164,17 +1164,11 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
   ];
   const accentGradient = GRADIENTS[i % 7]!;
 
-  // Caption side: left or right — mod 2 (alternates every scene)
-  const captionOnLeft = (i % 2) === 0;
-
   // Icon size tier — mod 5 (small / medium / large / wide / watermark)
   const iconTier = i % 5; // 0=normal, 1=large, 2=small+high, 3=wide, 4=watermark
 
-  // Stickman X slot — mod 11 mapped to 5 positions so it shifts unpredictably
-  const stickmanSlot = i % 11 < 3 ? 0 : i % 11 < 5 ? 1 : i % 11 < 7 ? 2 : i % 11 < 9 ? 3 : 4;
-
-  // Divider height — mod 13 mapped to 3 heights
-  const dividerPct = i % 13 < 5 ? "55%" : i % 13 < 9 ? "58%" : "61%";
+  /** Horizontal rule between upper copy/icon band and character band (16:9 frame). */
+  const dividerPct = i % 13 < 5 ? "38%" : i % 13 < 9 ? "40%" : "42%";
 
   // Highlight accent colour — mod 3
   const accentBgColor = [
@@ -1183,33 +1177,23 @@ export function StickmanWhiteboard({ scenes, voiceId, autoPlay = true, onComplet
     "rgba(234,88,12,0.07)",
   ][i % 3]!;
 
-  // Build caption position from captionOnLeft + iconTier
-  const iconWidth = iconTier === 1 ? "26%" : iconTier === 3 ? "30%" : iconTier === 4 ? "30%" : "22%";
+  const iconWidth = iconTier === 1 ? "24%" : iconTier === 3 ? "28%" : iconTier === 4 ? "26%" : "20%";
   /** Was 0.15 for "watermark" tier — looked like broken empty placeholders in the feed. */
   const iconOpacity = iconTier === 4 ? "0.88" : "1";
-  const captionGap = iconTier === 4 ? `calc(${iconWidth} + 8%)` : `calc(${iconWidth} + 6%)`;
 
-  const captionPos = captionOnLeft
-    ? { top:"9%", left:"5%", right:captionGap, bottom: dividerPct === "55%" ? "46%" : "42%" }
-    : { top:"9%", left:captionGap, right:"5%", bottom: dividerPct === "55%" ? "46%" : "42%" };
+  // Text panel top-left; key-object doodle top-right
+  const captionPos = { top: "6%", left: "3%", right: "42%", bottom: "52%" };
+  const highlightPos = { top: "5.5%", left: "2.5%", right: "43%", height: "14%" };
+  const iconHeight = iconTier === 1 ? "40%" : iconTier === 2 ? "30%" : iconTier === 3 ? "42%" : "34%";
+  const iconTop = "6%";
+  const iconPos = { top: iconTop, right: "2.5%", width: iconWidth, height: iconHeight, opacity: iconOpacity };
+  const iconFlip = false;
 
-  const highlightPos = captionOnLeft
-    ? { top:"10%", left:"4%", right:captionGap, height:"17%" }
-    : { top:"10%", left:captionGap, right:"4%", height:"17%" };
-
-  // Icon position — opposite side of caption, height varies by tier
-  const iconHeight = iconTier === 1 ? "52%" : iconTier === 2 ? "38%" : iconTier === 3 ? "50%" : "46%";
-  const iconTop    = iconTier === 2 ? "6%"  : iconTier === 1 ? "7%"  : "9%";
-  const iconPos = captionOnLeft
-    ? { top: iconTop, right:"2%", width: iconWidth, height: iconHeight, opacity: iconOpacity }
-    : { top: iconTop, left:"2%",  width: iconWidth, height: iconHeight, opacity: iconOpacity };
-  const iconFlip = !captionOnLeft;
-
-  // Stickman X position (5 slots spread across bottom row)
-  const STICKMAN_X = ["5%","15%","28%","40%","52%"];
+  const stickmanSlot = i % 11 < 3 ? 0 : i % 11 < 5 ? 1 : i % 11 < 7 ? 2 : i % 11 < 9 ? 3 : 4;
+  const STICKMAN_X = ["5%", "15%", "28%", "40%", "52%"];
   const stickmanLeft = scene.pose === "sitting" ? "12%" : (STICKMAN_X[stickmanSlot] ?? "5%");
   const stickmanWidth = scene.pose === "sitting" ? "48%" : "42%";
-  const effectiveStickmanPos = { bottom:"2%", left: stickmanLeft, width: stickmanWidth, top: dividerPct };
+  const effectiveStickmanPos = { bottom: "2%", left: stickmanLeft, width: stickmanWidth, top: dividerPct };
 
   const outerFrameStyle: CSSProperties =
     visualKind === "intro-bumper"

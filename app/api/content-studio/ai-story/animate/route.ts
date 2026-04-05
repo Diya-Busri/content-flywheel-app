@@ -11,7 +11,7 @@ const FAL_QUEUE_URL = "https://queue.fal.run/fal-ai/kling-video/v1.6/standard/im
 /**
  * POST: Submit animation job to Fal Kling. Returns immediately with request_id.
  * Client polls GET /api/content-studio/ai-story/animate/status?requestId=... every 5s.
- * Body: { imageUrl: string, motionPrompt: string }
+ * Body: { imageUrl: string, motionPrompt: string, aspectRatio?: "9:16" | "16:9" } (default 9:16)
  * Returns: { requestId: string }
  */
 export async function POST(request: NextRequest) {
@@ -36,6 +36,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : "";
     const motionPrompt = typeof body.motionPrompt === "string" ? body.motionPrompt.trim() : "";
+    const aspectRaw =
+      typeof body.aspectRatio === "string" ? body.aspectRatio.trim().toLowerCase() : "";
+    const aspect_ratio = aspectRaw === "16:9" || aspectRaw === "16x9" ? "16:9" : "9:16";
 
     if (!imageUrl || !motionPrompt) {
       return NextResponse.json(
@@ -54,7 +57,7 @@ export async function POST(request: NextRequest) {
         image_url: imageUrl,
         prompt: motionPrompt,
         duration: "5",
-        aspect_ratio: "9:16",
+        aspect_ratio,
       }),
     });
 

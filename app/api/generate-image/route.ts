@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import { put } from "@vercel/blob";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { STORY_VIDEO_IMAGE_ANIME_STYLE_CORE } from "@/lib/story-video";
 
 export const maxDuration = 60;
 
@@ -31,6 +32,15 @@ export async function POST(request: Request) {
     const identityLock = body.identityLock === true;
     const cookingFocus = body.cookingFocus === true;
     const characterStyle = typeof body.characterStyle === "string" ? body.characterStyle.trim() : "";
+    const storyVideoFormatRaw =
+      typeof (body as { storyVideoFormat?: string }).storyVideoFormat === "string"
+        ? String((body as { storyVideoFormat: string }).storyVideoFormat).trim().toLowerCase()
+        : "";
+    const storyVideoImage =
+      storyVideoFormatRaw === "long" || storyVideoFormatRaw === "short";
+    if (storyVideoImage) {
+      prompt = `wide cinematic 16:9 landscape composition, horizontal framing. ${prompt}`;
+    }
     if (!aiStoryLocked && characterStyle) {
       prompt = `${characterStyle} ${prompt} Do not include any humans or realistic elements.`;
     }
@@ -51,7 +61,11 @@ ${identityLock ? "IGNORE any cartoon/3D/illustration/Pixar style cues found in t
 ${cookingFocus ? "Food-first framing: show ingredients, pan/pot, utensils, texture, steam, sizzling action, and plated dish as primary subjects. Keep people secondary, but if the chef appears, keep the same chef identity (eyes/hair/outfit) consistently. Avoid portrait-style face-centric framing that would encourage a different person." : ""}
 Avoid CGI/plastic look, uncanny features, extra fingers, warped anatomy, duplicate people, collage layouts, and heavy over-stylization.
 No text, letters, watermarks, logos, or labels in the image.`
-        : `High-quality, professional image: ${prompt}. Clean, modern, suitable for digital content. No text in image.`;
+        : storyVideoImage
+          ? `${prompt}
+
+${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or labels in the image.`
+          : `High-quality, professional image: ${prompt}. Clean, modern, suitable for digital content. No text in image.`;
 
     console.log(
       "[generate-image] aiStoryLocked=%s full DALL-E prompt (%d chars):\n%s",
@@ -75,7 +89,7 @@ No text, letters, watermarks, logos, or labels in the image.`
       model: "dall-e-3",
       prompt: dallE3Prompt,
       n: 1,
-      size: "1024x1024",
+      size: storyVideoImage ? "1792x1024" : "1024x1024",
       quality: photoreal ? "hd" : "standard",
       style: "natural",
       response_format: "b64_json",

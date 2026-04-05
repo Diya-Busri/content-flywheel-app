@@ -1,7 +1,11 @@
-export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "13" | "14";
+export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15";
 
-/** Story-style Template Studio modes that share the 8-scene pipeline */
-export type TemplateStudioStoryTemplateId = "ai_story" | "satisfying_build" | "ai_cooking_video";
+/** Story-style Template Studio modes that share the scene pipeline */
+export type TemplateStudioStoryTemplateId =
+  | "ai_story"
+  | "satisfying_build"
+  | "ai_cooking_video"
+  | "story_video";
 
 export const TEMPLATE_STUDIO_STORY_GENERATE_ROUTES: Record<
   TemplateStudioStoryTemplateId,
@@ -10,6 +14,7 @@ export const TEMPLATE_STUDIO_STORY_GENERATE_ROUTES: Record<
   ai_story: "/api/content-studio/ai-story/generate",
   satisfying_build: "/api/generate/satisfying-build",
   ai_cooking_video: "/api/generate/ai-cooking-video",
+  story_video: "/api/generate/story-video",
 };
 export type TemplateType = "quotes" | "tips" | "affirmations";
 export type FontStyle = "modern" | "elegant" | "bold" | "minimal";
@@ -52,6 +57,7 @@ export const CREATION_MODE_OPTION_GROUPS: {
       { value: "11", label: "🖊️ Stickman Whiteboard Video" },
       { value: "12", label: "🎯 Would You Rather / Quiz" },
       { value: "13", label: "⚡ Kinetic Typography Video" },
+      { value: "15", label: "Story Video" },
     ],
   },
 ];
@@ -64,6 +70,12 @@ export const AI_STORY_TONE_OPTIONS = [
   { value: "Dramatic", label: "Dramatic" },
   { value: "Shocking", label: "Shocking" },
 ];
+
+export const STORY_VIDEO_TONE_OPTIONS = [
+  { value: "motivational", label: "Motivational" },
+  { value: "educational", label: "Educational" },
+  { value: "story", label: "Story" },
+] as const;
 
 export const SATISFYING_BUILD_CHARACTER_TYPES = [
   { value: "Person", label: "Person" },

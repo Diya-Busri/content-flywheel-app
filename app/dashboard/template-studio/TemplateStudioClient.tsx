@@ -66,6 +66,7 @@ import { AiStoryAnimateSceneBlock } from "@/components/ai-story/AiStoryAnimateSc
 import {
   CREATION_MODE_OPTION_GROUPS,
   type AiCookingVideoSceneCountChoice,
+  STORY_VIDEO_TONE_OPTIONS,
   TEMPLATE_STUDIO_STORY_GENERATE_ROUTES,
   type CreationMode,
   type TemplateStudioStoryTemplateId,
@@ -80,6 +81,16 @@ import {
   mergeSeriesIntoTimelinePayload,
   saveTemplateStudioSeriesPrefs,
 } from "@/lib/template-studio-series";
+import {
+  STORY_VIDEO_DEFAULT_ART_STYLE,
+  STORY_VIDEO_FORMAT_OPTIONS,
+  STORY_VIDEO_SCENE_LONG,
+  STORY_VIDEO_SCENE_SHORT,
+  STORY_VIDEO_VIDEO_STRUCTURE_OPTIONS,
+  clampStoryVideoSceneCount,
+  type StoryVideoFormat,
+  type StoryVideoVideoStructure,
+} from "@/lib/story-video";
 type TemplateType = "quotes" | "tips" | "affirmations";
 type FontStyle = "modern" | "elegant" | "bold" | "minimal";
 type SlideItem = { heading: string; body: string; bg_color?: string };
@@ -218,12 +229,19 @@ function buildTemplateStudioLibraryTitle(params: {
   theme: string;
   whatBuilding: string;
   dishName: string;
+  /** Story Video (mode 15) topic line for library title. */
+  storyVideoTopic?: string;
   /** When set, titles become `Show · Ep N: …` for My Library grouping. */
   seriesShowTitle?: string;
 }): string {
   const ep = params.episodeNumber >= 1 ? params.episodeNumber : 1;
   let core: string;
-  if (params.mode === "9") {
+  if (params.mode === "15") {
+    const t = (params.storyVideoTopic ?? "").trim();
+    core = t
+      ? `Story Video - ${t.slice(0, 70)}${t.length > 70 ? "…" : ""} - Episode ${ep}`
+      : `Story Video - Episode ${ep}`;
+  } else if (params.mode === "9") {
     const dish = params.dishName.trim();
     core = dish
       ? `AI Cooking Video - ${dish.slice(0, 70)}${dish.length > 70 ? "…" : ""} - Episode ${ep}`
@@ -289,6 +307,17 @@ export default function TemplateStudioClient() {
   const [cookingOpeningHook, setCookingOpeningHook] = useState("");
   const [cookingSceneCount, setCookingSceneCount] =
     useState<AiCookingVideoSceneCountChoice>("auto");
+  const [storyVideoTopic, setStoryVideoTopic] = useState("");
+  const [storyVideoTargetAudience, setStoryVideoTargetAudience] = useState("");
+  const [storyVideoCharacterDescription, setStoryVideoCharacterDescription] = useState("");
+  const [storyVideoTone, setStoryVideoTone] = useState<"motivational" | "educational" | "story">(
+    "story"
+  );
+  const [storyVideoFormat, setStoryVideoFormat] = useState<StoryVideoFormat>("short");
+  const [storyVideoVideoStructure, setStoryVideoVideoStructure] =
+    useState<StoryVideoVideoStructure>("full_story");
+  const [storyVideoSceneCount, setStoryVideoSceneCount] = useState(6);
+  const [storyVideoArtStyle, setStoryVideoArtStyle] = useState(STORY_VIDEO_DEFAULT_ART_STYLE);
   const [brandStoryDayLabel, setBrandStoryDayLabel] = useState("Day 1");
   const [brandStoryBrandField, setBrandStoryBrandField] = useState("");
   const [brandStoryThemeLine, setBrandStoryThemeLine] = useState("");
@@ -418,15 +447,30 @@ export default function TemplateStudioClient() {
   const { toast } = useToast();
 
   const selectedTemplate: TemplateStudioStoryTemplateId | undefined =
-    mode === "7" ? "ai_story" : mode === "8" ? "satisfying_build" : mode === "9" ? "ai_cooking_video" : undefined;
-  const isStoryTemplateMode = mode === "7" || mode === "8" || mode === "9";
+    mode === "7"
+      ? "ai_story"
+      : mode === "8"
+        ? "satisfying_build"
+        : mode === "9"
+          ? "ai_cooking_video"
+          : mode === "15"
+            ? "story_video"
+            : undefined;
+  const isStoryTemplateMode = mode === "7" || mode === "8" || mode === "9" || mode === "15";
   const isAiStoryMode = mode === "7";
   const isStickmanMode = mode === "11";
   const isViralMode = mode === "12";
   const isKineticMode = mode === "13";
   /** Modes that attach show/episode into timeline metadata when saving (not the setup-only screen). */
   const isTemplateStudioSeriesMode =
-    mode === "7" || mode === "8" || mode === "9" || mode === "10" || mode === "11" || mode === "12" || mode === "13";
+    mode === "7" ||
+    mode === "8" ||
+    mode === "9" ||
+    mode === "10" ||
+    mode === "11" ||
+    mode === "12" ||
+    mode === "13" ||
+    mode === "15";
   const isSeriesLibrarySetupMode = mode === "14";
 
   useEffect(() => {
@@ -770,6 +814,8 @@ export default function TemplateStudioClient() {
         ? satisfyingCharacterType.trim().length > 0 && whatBuilding.trim().length > 0
         : mode === "9"
           ? cookingChefType.trim().length > 0 && cookingDishName.trim().length > 0
+          : mode === "15"
+            ? storyVideoTopic.trim().length > 0 && storyVideoTargetAudience.trim().length > 0
           : mode === "10"
             ? brandStoryDayLabel.trim().length > 0 &&
               brandStoryBrandField.trim().length > 0 &&
@@ -895,7 +941,9 @@ export default function TemplateStudioClient() {
             ? TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.ai_story
             : mode === "8"
               ? TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.satisfying_build
-              : TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.ai_cooking_video;
+              : mode === "15"
+                ? TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.story_video
+                : TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.ai_cooking_video;
         const res = await fetch(generateUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -912,31 +960,46 @@ export default function TemplateStudioClient() {
                     ? { consistencyMode: "img2img" as const }
                     : {}),
                 }
-              : {
-                  ...(mode === "8"
-                    ? {
-                        character_type: satisfyingCharacterType,
-                        what_building: whatBuilding.trim(),
-                        build_style: satisfyingBuildStyle,
-                        tone: satisfyingBuildTone,
-                        episode_number: episodeForApi,
-                        ...(satisfyingOpeningHook.trim()
-                          ? { opening_hook: satisfyingOpeningHook.trim() }
-                          : {}),
-                      }
-                    : {
-                        chef_type: cookingChefType,
-                        dish_name: cookingDishName.trim(),
-                        cooking_style: cookingStyle,
-                        tone: cookingTone,
-                        episode_number: episodeForApi,
-                        scene_count:
-                          cookingSceneCount === "auto" ? "auto" : cookingSceneCount,
-                        ...(cookingOpeningHook.trim()
-                          ? { opening_hook: cookingOpeningHook.trim() }
-                          : {}),
-                      }),
-                }
+              : mode === "15"
+                ? {
+                    topic: storyVideoTopic.trim(),
+                    target_audience: storyVideoTargetAudience.trim(),
+                    ...(storyVideoCharacterDescription.trim()
+                      ? { character_description: storyVideoCharacterDescription.trim() }
+                      : {}),
+                    tone: storyVideoTone,
+                    format: storyVideoFormat,
+                    ...(storyVideoFormat === "long"
+                      ? { video_structure: storyVideoVideoStructure }
+                      : {}),
+                    scene_count: storyVideoSceneCount,
+                    episode_number: episodeForApi,
+                  }
+                : {
+                    ...(mode === "8"
+                      ? {
+                          character_type: satisfyingCharacterType,
+                          what_building: whatBuilding.trim(),
+                          build_style: satisfyingBuildStyle,
+                          tone: satisfyingBuildTone,
+                          episode_number: episodeForApi,
+                          ...(satisfyingOpeningHook.trim()
+                            ? { opening_hook: satisfyingOpeningHook.trim() }
+                            : {}),
+                        }
+                      : {
+                          chef_type: cookingChefType,
+                          dish_name: cookingDishName.trim(),
+                          cooking_style: cookingStyle,
+                          tone: cookingTone,
+                          episode_number: episodeForApi,
+                          scene_count:
+                            cookingSceneCount === "auto" ? "auto" : cookingSceneCount,
+                          ...(cookingOpeningHook.trim()
+                            ? { opening_hook: cookingOpeningHook.trim() }
+                            : {}),
+                        }),
+                  }
           ),
         });
         const data = await res.json();
@@ -1026,6 +1089,7 @@ export default function TemplateStudioClient() {
           theme,
           whatBuilding,
           dishName: cookingDishName,
+          storyVideoTopic,
           seriesShowTitle,
         });
         void fetch("/api/video-timeline/save", {
@@ -1037,7 +1101,14 @@ export default function TemplateStudioClient() {
               scenes: timelineScenes,
               captions: timelineCaptions,
               totalDuration,
-              sourceType: mode === "8" ? "satisfying-build" : mode === "9" ? "ai-cooking-video" : "ai-story",
+              sourceType:
+                mode === "8"
+                  ? "satisfying-build"
+                  : mode === "9"
+                    ? "ai-cooking-video"
+                    : mode === "15"
+                      ? "story-video"
+                      : "ai-story",
               templateStudioScenes: nextScenes,
               libraryItemType: "Video",
               ...(Object.keys(characterReferenceUrls).length > 0
@@ -1082,7 +1153,9 @@ export default function TemplateStudioClient() {
               ? "Satisfying Build generated"
               : mode === "9"
                 ? "AI Cooking Video generated"
-                : "AI Story generated",
+                : mode === "15"
+                  ? "Story Video generated"
+                  : "AI Story generated",
           description: `${scenesList.length} scenes ready.`,
         });
         return true;
@@ -1093,7 +1166,9 @@ export default function TemplateStudioClient() {
               ? "Satisfying Build failed"
               : mode === "9"
                 ? "AI Cooking Video failed"
-                : "AI Story failed",
+                : mode === "15"
+                  ? "Story Video failed"
+                  : "AI Story failed",
           description: e instanceof Error ? e.message : "Something went wrong",
           variant: "destructive",
         });
@@ -1122,6 +1197,13 @@ export default function TemplateStudioClient() {
       cookingTone,
       cookingOpeningHook,
       cookingSceneCount,
+      storyVideoTopic,
+      storyVideoTargetAudience,
+      storyVideoCharacterDescription,
+      storyVideoTone,
+      storyVideoSceneCount,
+      storyVideoFormat,
+      storyVideoVideoStructure,
       toast,
     ]
   );
@@ -1257,15 +1339,25 @@ export default function TemplateStudioClient() {
               episodeNumber,
               scenes: aiStoryScenes.map((s) => ({ dialogue: s.dialogue })),
             }
-          : {
-              characters: mode === "8" ? satisfyingCharacterType : cookingChefType,
-              characterNames: "",
-              theme: mode === "8" ? whatBuilding.trim() : cookingDishName.trim(),
-              tone: mode === "8" ? satisfyingBuildTone : cookingTone,
-              style: mode === "8" ? satisfyingBuildStyle : cookingStyle,
-              episodeNumber,
-              scenes: aiStoryScenes.map((s) => ({ dialogue: s.dialogue })),
-            };
+          : mode === "15"
+            ? {
+                characters: storyVideoCharacterDescription.trim() || "Narrator / unspecified",
+                characterNames: "",
+                theme: `${storyVideoTopic.trim()} | Audience: ${storyVideoTargetAudience.trim()}`,
+                tone: storyVideoTone,
+                style: "Story Video",
+                episodeNumber,
+                scenes: aiStoryScenes.map((s) => ({ dialogue: s.dialogue })),
+              }
+            : {
+                characters: mode === "8" ? satisfyingCharacterType : cookingChefType,
+                characterNames: "",
+                theme: mode === "8" ? whatBuilding.trim() : cookingDishName.trim(),
+                tone: mode === "8" ? satisfyingBuildTone : cookingTone,
+                style: mode === "8" ? satisfyingBuildStyle : cookingStyle,
+                episodeNumber,
+                scenes: aiStoryScenes.map((s) => ({ dialogue: s.dialogue })),
+              };
       const res = await fetch("/api/content-studio/ai-story/social-media-pack", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1313,6 +1405,10 @@ export default function TemplateStudioClient() {
     cookingDishName,
     cookingTone,
     cookingStyle,
+    storyVideoCharacterDescription,
+    storyVideoTopic,
+    storyVideoTargetAudience,
+    storyVideoTone,
     toast,
   ]);
 
@@ -1801,6 +1897,14 @@ export default function TemplateStudioClient() {
       hookAngle,
       ctaGoal,
       voiceover_enabled: voiceoverEnabled,
+      storyVideoTopic,
+      storyVideoTargetAudience,
+      storyVideoCharacterDescription,
+      storyVideoTone,
+      storyVideoSceneCount,
+      storyVideoArtStyle,
+      storyVideoFormat,
+      storyVideoVideoStructure,
     };
     try {
       await fetch("/api/template-studio/setup", {
@@ -1830,6 +1934,14 @@ export default function TemplateStudioClient() {
     hookAngle,
     ctaGoal,
     voiceoverEnabled,
+    storyVideoTopic,
+    storyVideoTargetAudience,
+    storyVideoCharacterDescription,
+    storyVideoTone,
+    storyVideoSceneCount,
+    storyVideoArtStyle,
+    storyVideoFormat,
+    storyVideoVideoStructure,
   ]);
 
   /** SessionStorage prefill for /dashboard/video-timeline (must run before navigation). */
@@ -1845,7 +1957,14 @@ export default function TemplateStudioClient() {
     }));
     setVideoPrefill({
       source: "template-studio",
-      title: mode === "8" ? "Satisfying Build" : mode === "9" ? "AI Cooking Video" : "AI Story",
+      title:
+        mode === "8"
+          ? "Satisfying Build"
+          : mode === "9"
+            ? "AI Cooking Video"
+            : mode === "15"
+              ? "Story Video"
+              : "AI Story",
       timelineScenes,
     });
   }, [isStoryTemplateMode, mode, aiStoryScenes, sceneImageUrls, sceneVideoUrls, effectiveVoiceoverUrls]);
@@ -1866,13 +1985,14 @@ export default function TemplateStudioClient() {
         theme,
         whatBuilding,
         dishName: cookingDishName,
+        storyVideoTopic,
         seriesShowTitle,
       });
       const metaBase = {
         scenes,
         captions,
         totalDuration,
-        sourceType: "ai-story" as const,
+        sourceType: (mode === "15" ? "story-video" : "ai-story") as "ai-story" | "story-video",
         savedAt: new Date().toISOString(),
         ...(Object.keys(characterReferenceUrls).length > 0
           ? { aiStoryCharacterReferenceUrls: characterReferenceUrls }
@@ -1903,6 +2023,7 @@ export default function TemplateStudioClient() {
     episodeNumber,
     mode,
     seriesShowTitle,
+    storyVideoTopic,
     theme,
     whatBuilding,
   ]);
@@ -1981,6 +2102,7 @@ export default function TemplateStudioClient() {
             theme,
             whatBuilding,
             dishName: cookingDishName,
+            storyVideoTopic,
             seriesShowTitle,
           }),
           scenes_json,
@@ -2002,6 +2124,7 @@ export default function TemplateStudioClient() {
           scriptId,
           transition: "fade",
           backgroundMusic: storyBackgroundMusic,
+          ...(mode === "15" && storyVideoFormat === "long" ? { outputAspect: "16:9" } : {}),
         }),
       });
       const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; error?: string };
@@ -2039,6 +2162,8 @@ export default function TemplateStudioClient() {
     toast,
     effectiveVoiceoverUrls,
     whatBuilding,
+    storyVideoTopic,
+    storyVideoFormat,
     writeAiStoryTimelinePrefill,
   ]);
 
@@ -2058,7 +2183,7 @@ export default function TemplateStudioClient() {
         if (!res.ok) return;
         const data = await res.json();
         setSetupLoaded(true);
-        const allowedModes = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"];
+        const allowedModes = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"];
         if (data.mode && allowedModes.includes(data.mode)) {
           setMode(data.mode as CreationMode);
         }
@@ -2090,6 +2215,32 @@ export default function TemplateStudioClient() {
         if (typeof i.hookAngle === "string") setHookAngle(i.hookAngle);
         if (typeof i.ctaGoal === "string") setCtaGoal(i.ctaGoal);
         if (typeof i.voiceover_enabled === "boolean") setVoiceoverEnabled(i.voiceover_enabled);
+        if (typeof i.storyVideoTopic === "string") setStoryVideoTopic(i.storyVideoTopic);
+        if (typeof i.storyVideoTargetAudience === "string") setStoryVideoTargetAudience(i.storyVideoTargetAudience);
+        if (typeof i.storyVideoCharacterDescription === "string") {
+          setStoryVideoCharacterDescription(i.storyVideoCharacterDescription);
+        }
+        if (i.storyVideoTone === "motivational" || i.storyVideoTone === "educational" || i.storyVideoTone === "story") {
+          setStoryVideoTone(i.storyVideoTone);
+        }
+        const loadedStoryFmt: StoryVideoFormat = i.storyVideoFormat === "long" ? "long" : "short";
+        if (i.storyVideoFormat === "long" || i.storyVideoFormat === "short") {
+          setStoryVideoFormat(loadedStoryFmt);
+        }
+        if (
+          i.storyVideoVideoStructure === "full_story" ||
+          i.storyVideoVideoStructure === "educational" ||
+          i.storyVideoVideoStructure === "motivational"
+        ) {
+          setStoryVideoVideoStructure(i.storyVideoVideoStructure);
+        }
+        const svc = Number(i.storyVideoSceneCount);
+        if (Number.isFinite(svc)) {
+          setStoryVideoSceneCount(clampStoryVideoSceneCount(svc, loadedStoryFmt));
+        }
+        if (typeof i.storyVideoArtStyle === "string" && i.storyVideoArtStyle.trim()) {
+          setStoryVideoArtStyle(i.storyVideoArtStyle);
+        }
       } catch {
         setSetupLoaded(true);
       }
@@ -2116,13 +2267,14 @@ export default function TemplateStudioClient() {
       theme,
       whatBuilding,
       dishName: cookingDishName,
+      storyVideoTopic,
       seriesShowTitle,
     });
     const metaBase = {
       scenes,
       captions,
       totalDuration,
-      sourceType: "ai-story" as const,
+      sourceType: (mode === "15" ? "story-video" : "ai-story") as "ai-story" | "story-video",
       savedAt: new Date().toISOString(),
       ...(Object.keys(characterReferenceUrls).length > 0
         ? { aiStoryCharacterReferenceUrls: characterReferenceUrls }
@@ -2160,7 +2312,7 @@ export default function TemplateStudioClient() {
               scenes,
               captions,
               totalDuration,
-              sourceType: "ai-story",
+              sourceType: mode === "15" ? "story-video" : "ai-story",
             },
             seriesShowTitle,
             episodeNumber
@@ -2203,6 +2355,7 @@ export default function TemplateStudioClient() {
     cookingDishName,
     episodeNumber,
     seriesShowTitle,
+    storyVideoTopic,
     theme,
     whatBuilding,
   ]);
@@ -2345,8 +2498,8 @@ export default function TemplateStudioClient() {
   const handleCreationModeChange = useCallback(
     (next: CreationMode) => {
       if (next !== mode) {
-        const storyM = mode === "7" || mode === "8" || mode === "9";
-        const storyN = next === "7" || next === "8" || next === "9";
+        const storyM = mode === "7" || mode === "8" || mode === "9" || mode === "15";
+        const storyN = next === "7" || next === "8" || next === "9" || next === "15";
         const brandM = mode === "10";
         const brandN = next === "10";
         const skipPipelineReset = mode === "14" || next === "14";
@@ -2532,7 +2685,7 @@ export default function TemplateStudioClient() {
                     Voiceover
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Turn off to hide voice generation and audio on AI Story / Satisfying Build / Cooking scene cards.
+                    Turn off to hide voice generation and audio on AI Story / Satisfying Build / Cooking / Story Video scene cards.
                   </p>
                 </div>
                 <Switch
@@ -2933,6 +3086,149 @@ export default function TemplateStudioClient() {
               />
             )}
 
+            {selectedTemplate === "story_video" && (
+              <>
+                <div className="space-y-2">
+                  <Label>Format</Label>
+                  <div className="flex gap-2">
+                    {STORY_VIDEO_FORMAT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          const next = opt.value;
+                          setStoryVideoFormat(next);
+                          if (next === "long") {
+                            setStoryVideoSceneCount(STORY_VIDEO_SCENE_LONG.default);
+                          } else {
+                            setStoryVideoSceneCount((prev) => clampStoryVideoSceneCount(prev, "short"));
+                          }
+                        }}
+                        className={cn(
+                          "flex-1 py-2 rounded-lg text-sm font-semibold border transition",
+                          storyVideoFormat === opt.value
+                            ? "bg-orange-500 text-white border-orange-500"
+                            : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-orange-400"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {storyVideoFormat === "short"
+                      ? "Vertical short-form — scene count 3–16 (default 6)."
+                      : "YouTube-style long-form — scene count 15–50 (default 15), 16:9 images and export."}
+                  </p>
+                </div>
+                {storyVideoFormat === "long" && (
+                  <div className="space-y-2">
+                    <Label>Video structure</Label>
+                    <Select
+                      value={storyVideoVideoStructure}
+                      onValueChange={(v) => setStoryVideoVideoStructure(v as StoryVideoVideoStructure)}
+                    >
+                      <SelectTrigger id="story-video-structure">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STORY_VIDEO_VIDEO_STRUCTURE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="story-video-topic">Topic</Label>
+                  <Input
+                    id="story-video-topic"
+                    placeholder="e.g. How to bounce back after burnout"
+                    value={storyVideoTopic}
+                    onChange={(e) => setStoryVideoTopic(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="story-video-audience">Target audience</Label>
+                  <Input
+                    id="story-video-audience"
+                    placeholder="e.g. First-time founders, college students, new parents"
+                    value={storyVideoTargetAudience}
+                    onChange={(e) => setStoryVideoTargetAudience(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="story-video-character">Character description (optional)</Label>
+                  <Textarea
+                    id="story-video-character"
+                    placeholder="e.g. A warm narrator in their 30s, or a specific on-screen lead"
+                    value={storyVideoCharacterDescription}
+                    onChange={(e) => setStoryVideoCharacterDescription(e.target.value)}
+                    rows={2}
+                    className="resize-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tone</Label>
+                  <Select
+                    value={storyVideoTone}
+                    onValueChange={(v) =>
+                      setStoryVideoTone(v as "motivational" | "educational" | "story")
+                    }
+                  >
+                    <SelectTrigger id="story-video-tone">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STORY_VIDEO_TONE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="story-video-scene-count">Scene count</Label>
+                  <Input
+                    id="story-video-scene-count"
+                    type="number"
+                    min={
+                      storyVideoFormat === "long" ? STORY_VIDEO_SCENE_LONG.min : STORY_VIDEO_SCENE_SHORT.min
+                    }
+                    max={
+                      storyVideoFormat === "long" ? STORY_VIDEO_SCENE_LONG.max : STORY_VIDEO_SCENE_SHORT.max
+                    }
+                    value={storyVideoSceneCount}
+                    onChange={(e) => {
+                      const raw = Math.floor(Number(e.target.value));
+                      setStoryVideoSceneCount(clampStoryVideoSceneCount(raw, storyVideoFormat));
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {storyVideoFormat === "long"
+                      ? `Default ${STORY_VIDEO_SCENE_LONG.default} scenes (${STORY_VIDEO_SCENE_LONG.min}–${STORY_VIDEO_SCENE_LONG.max}).`
+                      : `Default ${STORY_VIDEO_SCENE_SHORT.default} scenes (${STORY_VIDEO_SCENE_SHORT.min}–${STORY_VIDEO_SCENE_SHORT.max}).`}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="story-video-art-style">Art style (for batch image generation)</Label>
+                  <Textarea
+                    id="story-video-art-style"
+                    value={storyVideoArtStyle}
+                    onChange={(e) => setStoryVideoArtStyle(e.target.value)}
+                    rows={3}
+                    className="resize-none text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Used with <code className="text-xs">/api/story-video/generate-images</code>; same style is locked across all scenes.
+                  </p>
+                </div>
+              </>
+            )}
+
             {isViralMode && (
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -3263,7 +3559,7 @@ export default function TemplateStudioClient() {
                         return;
                       }
                       await runCharacterStylePreview();
-                    } else if (mode === "8" || mode === "9") {
+                    } else if (mode === "8" || mode === "9" || mode === "15") {
                       await runGenerateAiStory();
                     } else if (isViralMode) {
                       setViralLoading(true);
@@ -3440,7 +3736,7 @@ export default function TemplateStudioClient() {
                   disabled={
                     !canProceedStep1 ||
                     (isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
-                    ((mode === "8" || mode === "9") && aiStoryLoading) ||
+                    ((mode === "8" || mode === "9" || mode === "15") && aiStoryLoading) ||
                     (mode === "10" && brandStoryVideoLoading) ||
                     (isStickmanMode && stickmanLoading) ||
                     (isViralMode && viralLoading) ||
@@ -3459,7 +3755,11 @@ export default function TemplateStudioClient() {
                         ? aiStoryScenes.length > 0
                           ? "Regenerate story"
                           : "Generate episode"
-                        : mode === "10"
+                        : mode === "15"
+                          ? aiStoryScenes.length > 0
+                            ? "Regenerate story"
+                            : "Generate episode"
+                          : mode === "10"
                           ? "Generate 9:16 Brand Story video"
                           : isViralMode
                             ? viralData ? "Regenerate" : viralType === "quiz" ? "Generate quiz" : "Generate Would You Rather"
@@ -3473,7 +3773,7 @@ export default function TemplateStudioClient() {
                                     : "Generate whiteboard video"
                                 : "Next — Generate content"}
                   {(isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
-                  ((mode === "8" || mode === "9") && aiStoryLoading) ||
+                  ((mode === "8" || mode === "9" || mode === "15") && aiStoryLoading) ||
                   (mode === "10" && brandStoryVideoLoading) ||
                   (isStickmanMode && stickmanLoading) ||
                   (isViralMode && viralLoading) ||
@@ -3834,7 +4134,9 @@ export default function TemplateStudioClient() {
                 ? "Generated scenes for your Satisfying Build."
                 : mode === "9"
                   ? "Generated scenes for your AI Cooking Video."
-                : "Generated scenes for your AI Story."}
+                  : mode === "15"
+                    ? "Generated scenes for your Story Video."
+                    : "Generated scenes for your AI Story."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -3869,7 +4171,14 @@ export default function TemplateStudioClient() {
                   </CardHeader>
                   <CardContent className="p-4 pt-0 space-y-2 text-sm">
                     {sceneImageUrl ? (
-                      <img src={sceneImageUrl} alt={`Scene ${scene.sceneNumber}`} className="w-full rounded-md object-cover aspect-square" />
+                      <img
+                        src={sceneImageUrl}
+                        alt={`Scene ${scene.sceneNumber}`}
+                        className={cn(
+                          "w-full rounded-md object-cover",
+                          mode === "15" ? "aspect-video" : "aspect-square"
+                        )}
+                      />
                     ) : null}
                     <Button
                       variant="outline"
@@ -3929,16 +4238,15 @@ export default function TemplateStudioClient() {
                             const imageBody: Record<string, unknown> = {
                               prompt: scene.imagePrompt,
                             };
+                            if (mode === "15") {
+                              imageBody.storyVideoFormat = storyVideoFormat;
+                            }
                             if (hasEmbeddedSeed) {
                               if (mode === "7") {
                                 imageBody.aiStoryLocked = true;
-                              } else if (mode === "8" || mode === "9") {
-                                // Story templates with locked seed should request stronger realism + identity lock.
+                              } else if (mode === "8") {
                                 imageBody.photoreal = true;
                                 imageBody.identityLock = true;
-                                if (mode === "9") {
-                                  imageBody.cookingFocus = true;
-                                }
                               }
                             } else if (!useImg2ImgSceneImages && aiStoryCharacterStyle) {
                               imageBody.characterStyle = aiStoryCharacterStyle;
@@ -3990,6 +4298,13 @@ export default function TemplateStudioClient() {
                         onVideoUrl={(url) =>
                           setSceneVideoUrls((prev) => ({ ...prev, [scene.sceneNumber]: url }))
                         }
+                        {...(mode === "15"
+                          ? {
+                              aspectRatio: "16:9" as const,
+                              videoClassName:
+                                "w-full rounded-md mt-2 aspect-video object-cover",
+                            }
+                          : {})}
                       />
                     ) : null}
                     <p className="font-medium">Dialogue</p>

@@ -51,10 +51,14 @@ export type CompileScene = {
   localImagePath?: string | null;
   /** Full dialogue line (e.g. "Name: …") for burned-in captions; optional */
   dialogue?: string | null;
-  /** Server-local absolute path to an image file — skips HTTP download when set */
-  localImagePath?: string | null;
   /** When true, image scenes use a static full-frame shot (no Ken Burns zoom/pan). */
   disableKenBurns?: boolean;
+  /**
+   * When set (e.g. 1.05), Ken Burns uses a slow linear zoom from 1.0 to this factor over the scene.
+   * When unset, uses the default stronger incremental zoom (legacy AI Story / compile look).
+   * Ignored when disableKenBurns is true.
+   */
+  kenBurnsZoomMax?: number | null;
 };
 
 function isHttpUrl(s: string): boolean {
@@ -202,7 +206,7 @@ async function renderImageSegment(
   width: number,
   height: number,
   dialogueLine?: string | null,
-  opts?: { staticShot?: boolean }
+  opts?: { staticShot?: boolean; kenBurnsZoomMax?: number | null }
 ): Promise<void> {
   const dFrames = Math.max(1, Math.round(FPS * duration));
   /** Cover WxH: scale up with aspect preserved until both dimensions meet target, then center-crop.
@@ -214,10 +218,22 @@ async function renderImageSegment(
    * the graph is misparsed or pads are missing on some FFmpeg builds.
    */
   const staticToYuv = `${coverCrop},setsar=1:1,format=yuv420p`;
-  const kenBurnsToYuv =
-    `${coverCrop},setsar=1:1,` +
-    `scale=8000:-1,zoompan=z='min(zoom+0.001,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${dFrames}:s=${width}x${height}:fps=${FPS},format=yuv420p`;
-  let vf = opts?.staticShot ? staticToYuv : kenBurnsToYuv;
+  const kenZoomMax = opts?.kenBurnsZoomMax;
+  const useSubtleZoom =
+    !opts?.staticShot &&
+    typeof kenZoomMax === "number" &&
+    Number.isFinite(kenZoomMax) &&
+    kenZoomMax > 1 &&
+    kenZoomMax <= 2;
+  const delta = useSubtleZoom ? kenZoomMax! - 1 : 0;
+  /** Comma inside max() must be escaped for the filtergraph. */
+  const kenBurnsToYuv = useSubtleZoom
+    ? `${coverCrop},setsar=1:1,` +
+      `scale=8000:-1,zoompan=z='1+${delta}*on/max(1\\,${dFrames}-1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${dFrames}:s=${width}x${height}:fps=${FPS},format=yuv420p`
+    : `${coverCrop},setsar=1:1,` +
+      `scale=8000:-1,zoompan=z='min(zoom+0.001,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${dFrames}:s=${width}x${height}:fps=${FPS},format=yuv420p`;
+  let baseVf = opts?.staticShot ? staticToYuv : kenBurnsToYuv;
+  let vf = baseVf;
   if (dialogueLine?.trim()) {
     const fontFile = resolveDrawtextFontFile();
     const flatCaps = buildViralCaptionDrawtextFlatVf(
@@ -226,7 +242,7 @@ async function renderImageSegment(
       VIRAL_CAPTION_FONT_SIZES.medium,
       fontFile ?? undefined
     );
-    if (flatCaps) vf = `${kenBurnsToYuv},${flatCaps}`;
+    if (flatCaps) vf = `${baseVf},${flatCaps}`;
   }
   const args = [
     "-y",
@@ -345,6 +361,7 @@ export async function compileVideoToFile(
       const segPath = join(workDir, `seg_${i}.mp4`);
       await renderImageSegment(localImg, dur, segPath, width, height, s.dialogue, {
         staticShot: Boolean(s.disableKenBurns),
+        kenBurnsZoomMax: s.kenBurnsZoomMax,
       });
     } else if (imageUrl && !videoUrl) {
       if (!isHttpUrl(imageUrl)) throw new Error(`Scene ${i + 1} image_url must be http(s)`);
@@ -352,6 +369,7 @@ export async function compileVideoToFile(
       const segPath = join(workDir, `seg_${i}.mp4`);
       await renderImageSegment(inputPath, dur, segPath, width, height, s.dialogue, {
         staticShot: Boolean(s.disableKenBurns),
+        kenBurnsZoomMax: s.kenBurnsZoomMax,
       });
     } else if (videoUrl) {
       if (!isHttpUrl(videoUrl)) throw new Error(`Scene ${i + 1} video_url must be http(s)`);

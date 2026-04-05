@@ -18,6 +18,8 @@ export function AiStoryAnimateSceneBlock({
   onVideoUrl,
   onAnimationStateChange,
   videoClassName = "w-full rounded-md mt-2 aspect-[9/16] object-cover",
+  /** Passed to animate API as Kling output aspect (default portrait). */
+  aspectRatio = "9:16",
 }: {
   imageUrl: string;
   motionPrompt: string;
@@ -26,6 +28,7 @@ export function AiStoryAnimateSceneBlock({
   onAnimationStateChange?: (isAnimating: boolean) => void;
   /** Class for the preview video element (e.g. 16:9 in Video Guide). */
   videoClassName?: string;
+  aspectRatio?: "9:16" | "16:9";
 }) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -133,6 +136,7 @@ export function AiStoryAnimateSceneBlock({
                 body: JSON.stringify({
                   imageUrl,
                   motionPrompt: motionPrompt || imageUrl,
+                  aspectRatio,
                 }),
               });
               const data = (await res.json()) as {
