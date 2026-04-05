@@ -6,6 +6,7 @@ import { Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { SignedIn, SignedOut, SignOutButton } from "@clerk/nextjs";
 
 const NAV_OFFSET_PX = 80;
 
@@ -60,18 +61,27 @@ export function LandingNavbar() {
         {/* Desktop CTA + theme - more spacing */}
         <div className="hidden md:flex items-center gap-6">
           <ThemeToggle />
-          <Link
-            href="/sign-in"
-            className="text-muted-foreground hover:text-foreground transition-colors hidden sm:block"
-          >
-            Sign In
-          </Link>
-          <Link
-            href="/sign-up"
-            className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold text-sm text-white transition-all hover:scale-105"
-          >
-            Start Creating Free
-          </Link>
+          <SignedOut>
+            <Link
+              href="/sign-in"
+              className="text-muted-foreground hover:text-foreground transition-colors hidden sm:block"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/sign-up"
+              className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold text-sm text-white transition-all hover:scale-105"
+            >
+              Start Creating Free
+            </Link>
+          </SignedOut>
+          <SignedIn>
+            <SignOutButton redirectUrl="/">
+              <button className="text-muted-foreground hover:text-foreground transition-colors text-sm">
+                Sign Out
+              </button>
+            </SignOutButton>
+          </SignedIn>
         </div>
 
         {/* Mobile: theme + menu */}
@@ -104,20 +114,29 @@ export function LandingNavbar() {
               {label}
             </a>
           ))}
-          <Link
-            href="/sign-in"
-            onClick={() => setMobileOpen(false)}
-            className="rounded-lg px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-accent"
-          >
-            Sign In
-          </Link>
-          <Link
-            href="/sign-up"
-            onClick={() => setMobileOpen(false)}
-            className="rounded-lg px-4 py-3 bg-orange-500 hover:bg-orange-600 font-semibold text-center text-white"
-          >
-            Start Creating Free
-          </Link>
+          <SignedOut>
+            <Link
+              href="/sign-in"
+              onClick={() => setMobileOpen(false)}
+              className="rounded-lg px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-accent"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/sign-up"
+              onClick={() => setMobileOpen(false)}
+              className="rounded-lg px-4 py-3 bg-orange-500 hover:bg-orange-600 font-semibold text-center text-white"
+            >
+              Start Creating Free
+            </Link>
+          </SignedOut>
+          <SignedIn>
+            <SignOutButton redirectUrl="/">
+              <button className="rounded-lg px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-accent text-left w-full">
+                Sign Out
+              </button>
+            </SignOutButton>
+          </SignedIn>
         </div>
       )}
     </header>
