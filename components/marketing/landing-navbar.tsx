@@ -76,6 +76,9 @@ export function LandingNavbar() {
             </Link>
           </SignedOut>
           <SignedIn>
+            <Link href="/dashboard" className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold text-sm text-white transition-all hover:scale-105">
+              Go to Dashboard
+            </Link>
             <SignOutButton redirectUrl="/">
               <button className="text-muted-foreground hover:text-foreground transition-colors text-sm">
                 Sign Out
@@ -131,6 +134,9 @@ export function LandingNavbar() {
             </Link>
           </SignedOut>
           <SignedIn>
+            <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="rounded-lg px-4 py-3 bg-orange-500 hover:bg-orange-600 font-semibold text-center text-white">
+              Go to Dashboard
+            </Link>
             <SignOutButton redirectUrl="/">
               <button className="rounded-lg px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-accent text-left w-full">
                 Sign Out
