@@ -1,9 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 
 type FormState = "idle" | "loading" | "success" | "error";
+
+type CreatorInfo = {
+  brandName: string | null;
+  targetAudience: string | null;
+  tone: string | null;
+  productCount: number;
+};
 
 export default function SubscribePage() {
   const params = useParams();
@@ -13,6 +20,41 @@ export default function SubscribePage() {
   const [email, setEmail] = useState("");
   const [formState, setFormState] = useState<FormState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [creator, setCreator] = useState<CreatorInfo | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    fetch(`/api/public/creator/${userId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: CreatorInfo | null) => {
+        if (data) setCreator(data);
+      })
+      .catch(() => {});
+  }, [userId]);
+
+  const displayName = creator?.brandName ?? null;
+
+  const headline = displayName
+    ? `Get exclusive updates from ${displayName}`
+    : "Subscribe for exclusive updates & offers";
+
+  const subheadline = (() => {
+    if (displayName && creator?.targetAudience) {
+      return `Join ${creator.targetAudience} already following ${displayName} — get content, deals, and updates straight to your inbox.`;
+    }
+    if (displayName) {
+      return `Be the first to hear about new content, deals, and offers from ${displayName}.`;
+    }
+    return "Join the list and be the first to know about new content, deals, and more.";
+  })();
+
+  const successHeadline = displayName
+    ? `You&rsquo;re subscribed to ${displayName}!`
+    : "You&rsquo;re subscribed!";
+
+  const successBody = displayName
+    ? `Check your inbox for a welcome email. You&rsquo;ll be the first to know about new drops and exclusive offers from ${displayName}.`
+    : "Check your inbox for a welcome email. We&rsquo;re excited to have you on board!";
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -80,7 +122,7 @@ export default function SubscribePage() {
           "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
       }}
     >
-      <div style={{ width: "100%", maxWidth: "440px" }}>
+      <div style={{ width: "100%", maxWidth: "460px" }}>
         {/* Card */}
         <div
           style={{
@@ -118,9 +160,8 @@ export default function SubscribePage() {
                   color: "#111827",
                   lineHeight: "1.3",
                 }}
-              >
-                You&rsquo;re subscribed!
-              </h1>
+                dangerouslySetInnerHTML={{ __html: successHeadline }}
+              />
               <p
                 style={{
                   margin: "0",
@@ -128,9 +169,8 @@ export default function SubscribePage() {
                   color: "#6b7280",
                   lineHeight: "1.65",
                 }}
-              >
-                Check your inbox for a welcome email. We&rsquo;re excited to have you&nbsp;on board!
-              </p>
+                dangerouslySetInnerHTML={{ __html: successBody }}
+              />
             </div>
           ) : (
             /* ---- Form state ---- */
@@ -164,18 +204,40 @@ export default function SubscribePage() {
                   letterSpacing: "-0.4px",
                 }}
               >
-                Subscribe for exclusive updates &amp; offers
+                {headline}
               </h1>
               <p
                 style={{
-                  margin: "0 0 32px",
+                  margin: "0 0 28px",
                   fontSize: "15px",
                   color: "#6b7280",
                   lineHeight: "1.6",
                 }}
               >
-                Join the list and be the first to know about new content, deals, and more.
+                {subheadline}
               </p>
+
+              {/* Social proof pill — product count */}
+              {creator && creator.productCount > 0 && (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    backgroundColor: "#fff7ed",
+                    border: "1px solid #fed7aa",
+                    borderRadius: "999px",
+                    padding: "5px 12px",
+                    marginBottom: "24px",
+                    fontSize: "13px",
+                    color: "#c2410c",
+                    fontWeight: "600",
+                  }}
+                >
+                  <span style={{ fontSize: "14px" }}>🔥</span>
+                  {creator.productCount} digital product{creator.productCount !== 1 ? "s" : ""} available
+                </div>
+              )}
 
               {/* Error banner */}
               {formState === "error" && (
