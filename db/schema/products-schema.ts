@@ -8,6 +8,16 @@ export type MarketingAssets = {
   thumbnailUrl?: string | null;
   /** Cover page thumbnail for library cards (generated on save). */
   coverThumbnailUrl?: string | null;
+  /** Realistic book-on-desk mockup image generated via DALL-E 3. */
+  bookMockupUrl?: string | null;
+  /** HeyGen avatar promo video URL (9:16 vertical, expires in 7 days unless persisted). */
+  promoVideoUrl?: string | null;
+  /** In-progress HeyGen video_id being polled. */
+  promoVideoId?: string | null;
+  /** "processing" | "completed" | "failed" */
+  promoVideoStatus?: string | null;
+  /** "falai" | "did" | "heygen" */
+  promoVideoProvider?: string | null;
   updatedAt?: string;
 };
 

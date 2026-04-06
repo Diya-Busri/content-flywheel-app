@@ -3,7 +3,7 @@
  *
  * Body: { imageUrls: string[], audioUrls: string[], outputAspect?: "9:16" | "16:9" }
  * - Same length arrays; public http(s) URLs only (no data: or blob:).
- * - Per-scene audio is concatenated; each still is shown for that clip’s duration (probed).
+ * - Per-scene audio is concatenated; each still is shown for that clip’s duration (ffprobe on each scene file).
  * - Ken Burns: slow linear zoom 1.0 → 1.05 over each scene (see CompileScene.kenBurnsZoomMax).
  * - Reuses lib/videos/compile.ts (FFmpeg path, concat, mux) + Supabase upload like /api/videos/compile.
  */
@@ -28,8 +28,6 @@ export const maxDuration = 300;
 
 const BUCKET = "timeline-media";
 const MAX_SCENES = 50;
-/** Match pacing tweak in /api/videos/compile for per-scene VO. */
-const HOLD_SEC = 0.15;
 const STORY_KEN_BURNS_ZOOM_MAX = 1.05;
 
 function isHttpUrl(s: string): boolean {
@@ -112,8 +110,7 @@ export async function POST(request: NextRequest) {
 
       const scenes: CompileScene[] = images.map((image_url: string, i: number) => {
         const measured = concatenated.sceneDurationsSec[i] ?? 0;
-        const duration =
-          measured > 0.2 ? Math.max(1, Number((measured + HOLD_SEC).toFixed(2))) : 5;
+        const duration = measured > 0 ? measured : 5;
         return {
           duration,
           image_url,

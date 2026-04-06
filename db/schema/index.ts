@@ -27,3 +27,5 @@ export * from "./scheduled-posts-schema";
 export * from "./template-studio-setup-schema";
 export * from "./coach-settings-schema";
 export * from "./chat-summaries-schema";
+export * from "./email-marketing-schema";
+export * from "./product-sales-schema";

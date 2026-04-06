@@ -46,65 +46,155 @@ function renderKineticSlide(
   }).join("");
 
   const progressPct = Math.round(((index + 1) / total) * 100);
-
   const W = wide ? 1920 : 1080;
   const H = wide ? 1080 : 1920;
-  // Font size: wider canvas needs larger type for visual impact
-  const baseFontSize = wide
-    ? (text.length > 80 ? 72 : text.length > 50 ? 92 : text.length > 30 ? 108 : 128)
-    : (text.length > 80 ? 60 : text.length > 50 ? 76 : text.length > 30 ? 90 : 108);
-  const maxWidth = wide ? 1600 : 920;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+  if (!wide) {
+    // Portrait: single centred layout (unchanged)
+    const baseFontSize = text.length > 80 ? 60 : text.length > 50 ? 76 : text.length > 30 ? 90 : 108;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    width: ${W}px; height: ${H}px; overflow: hidden;
-    background: ${scheme.bg};
-    font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    position: relative;
-  }
-  .glow {
-    position: absolute; top: 40%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: ${wide ? 1400 : 900}px; height: ${wide ? 700 : 800}px;
-    background: radial-gradient(ellipse, ${scheme.glow} 0%, transparent 70%);
-    pointer-events: none;
-  }
-  .progress {
-    position: absolute; top: 0; left: 0;
-    height: ${wide ? 5 : 6}px; width: ${progressPct}%;
-    background: ${scheme.accent}; border-radius: 0 3px 3px 0;
-  }
-  .counter {
-    position: absolute; top: ${wide ? 36 : 50}px; right: ${wide ? 48 : 60}px;
-    font-size: ${wide ? 28 : 32}px; font-weight: 700; letter-spacing: 2px;
-    color: rgba(255,255,255,0.22);
-  }
-  .text-block {
-    position: relative; z-index: 2;
-    max-width: ${maxWidth}px; text-align: center; padding: 0 ${wide ? 80 : 60}px;
-  }
-  .main-text {
-    font-size: ${baseFontSize}px; font-weight: 900;
-    line-height: 1.2; letter-spacing: -0.01em;
-  }
-  .accent-line {
-    position: absolute; bottom: ${wide ? 80 : 200}px; left: 50%;
-    transform: translateX(-50%);
-    width: ${wide ? 100 : 80}px; height: ${wide ? 5 : 6}px;
-    background: ${scheme.accent}; border-radius: 3px; opacity: 0.5;
-  }
+  body { width:${W}px; height:${H}px; overflow:hidden; background:${scheme.bg};
+    font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; }
+  .glow { position:absolute; top:40%; left:50%; transform:translate(-50%,-50%);
+    width:900px; height:800px; background:radial-gradient(ellipse,${scheme.glow} 0%,transparent 70%); pointer-events:none; }
+  .progress { position:absolute; top:0; left:0; height:6px; width:${progressPct}%;
+    background:${scheme.accent}; border-radius:0 3px 3px 0; }
+  .counter { position:absolute; top:50px; right:60px; font-size:32px; font-weight:700;
+    letter-spacing:2px; color:rgba(255,255,255,0.22); }
+  .text-block { position:relative; z-index:2; max-width:920px; text-align:center; padding:0 60px; }
+  .main-text { font-size:${baseFontSize}px; font-weight:900; line-height:1.2; letter-spacing:-0.01em; }
+  .accent-line { position:absolute; bottom:200px; left:50%; transform:translateX(-50%);
+    width:80px; height:6px; background:${scheme.accent}; border-radius:3px; opacity:0.5; }
 </style></head><body>
   <div class="glow"></div>
   <div class="progress"></div>
   <div class="counter">${index + 1}/${total}</div>
-  <div class="text-block">
+  <div class="text-block"><div class="main-text">${wordsHtml}</div></div>
+  <div class="accent-line"></div>
+</body></html>`;
+  }
+
+  // ── Wide (16:9): 3 rotating layouts ─────────────────────────────────────────
+  const layout = index % 3;
+  const fs = text.length > 80 ? 64 : text.length > 50 ? 80 : text.length > 30 ? 96 : 112;
+
+  if (layout === 0) {
+    // Layout A: Large ghost number left | text right
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:${W}px; height:${H}px; overflow:hidden; background:${scheme.bg};
+    font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;
+    display:flex; align-items:center; position:relative; }
+  .glow { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:1400px; height:700px; background:radial-gradient(ellipse,${scheme.glow} 0%,transparent 70%); pointer-events:none; }
+  .progress { position:absolute; top:0; left:0; height:5px; width:${progressPct}%;
+    background:${scheme.accent}; border-radius:0 3px 3px 0; }
+  .ghost-num { position:absolute; left:60px; top:50%; transform:translateY(-50%);
+    font-size:520px; font-weight:900; line-height:1;
+    color:${scheme.accent}; opacity:0.06; letter-spacing:-0.05em; user-select:none; }
+  .left-bar { position:absolute; left:0; top:0; width:8px; height:100%;
+    background:${scheme.accent}; opacity:0.7; }
+  .right-panel { position:relative; z-index:2; margin-left:480px; max-width:1300px;
+    padding:0 80px 0 0; }
+  .eyebrow { font-size:22px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase;
+    color:${scheme.accent}; margin-bottom:24px; opacity:0.9; }
+  .main-text { font-size:${fs}px; font-weight:900; line-height:1.2; letter-spacing:-0.01em; }
+  .counter { position:absolute; bottom:50px; right:60px; font-size:24px; font-weight:700;
+    letter-spacing:2px; color:rgba(255,255,255,0.2); }
+</style></head><body>
+  <div class="glow"></div>
+  <div class="progress"></div>
+  <div class="ghost-num">${index + 1}</div>
+  <div class="left-bar"></div>
+  <div class="right-panel">
+    <div class="eyebrow">Part ${index + 1} of ${total}</div>
     <div class="main-text">${wordsHtml}</div>
   </div>
-  <div class="accent-line"></div>
+  <div class="counter">${index + 1} / ${total}</div>
+</body></html>`;
+  }
+
+  if (layout === 1) {
+    // Layout B: Centered text with flanking horizontal rules + corner accents
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:${W}px; height:${H}px; overflow:hidden; background:${scheme.bg};
+    font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;
+    display:flex; align-items:center; justify-content:center; position:relative; }
+  .glow { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:1600px; height:800px; background:radial-gradient(ellipse,${scheme.glow} 0%,transparent 65%); pointer-events:none; }
+  .progress { position:absolute; top:0; left:0; height:5px; width:${progressPct}%;
+    background:${scheme.accent}; border-radius:0 3px 3px 0; }
+  /* corner accents */
+  .c-tl,.c-tr,.c-bl,.c-br { position:absolute; width:48px; height:48px; }
+  .c-tl { top:32px; left:32px; border-top:4px solid ${scheme.accent}; border-left:4px solid ${scheme.accent}; }
+  .c-tr { top:32px; right:32px; border-top:4px solid ${scheme.accent}; border-right:4px solid ${scheme.accent}; }
+  .c-bl { bottom:32px; left:32px; border-bottom:4px solid ${scheme.accent}; border-left:4px solid ${scheme.accent}; }
+  .c-br { bottom:32px; right:32px; border-bottom:4px solid ${scheme.accent}; border-right:4px solid ${scheme.accent}; }
+  .inner { position:relative; z-index:2; max-width:1400px; text-align:center; padding:0 100px; }
+  .rule-wrap { display:flex; align-items:center; gap:24px; margin-bottom:36px; }
+  .rule { flex:1; height:2px; background:${scheme.accent}; opacity:0.35; }
+  .rule-label { font-size:20px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase;
+    color:${scheme.accent}; opacity:0.8; white-space:nowrap; }
+  .main-text { font-size:${fs}px; font-weight:900; line-height:1.2; letter-spacing:-0.01em; }
+  .rule-wrap-b { display:flex; align-items:center; gap:24px; margin-top:40px; }
+  .counter { position:absolute; bottom:48px; right:60px; font-size:22px; font-weight:700;
+    letter-spacing:2px; color:rgba(255,255,255,0.2); }
+</style></head><body>
+  <div class="glow"></div>
+  <div class="progress"></div>
+  <div class="c-tl"></div><div class="c-tr"></div>
+  <div class="c-bl"></div><div class="c-br"></div>
+  <div class="inner">
+    <div class="rule-wrap"><div class="rule"></div><div class="rule-label">${index + 1} / ${total}</div><div class="rule"></div></div>
+    <div class="main-text">${wordsHtml}</div>
+    <div class="rule-wrap-b"><div class="rule"></div><div class="rule"></div></div>
+  </div>
+  <div class="counter">${progressPct}%</div>
+</body></html>`;
+  }
+
+  // Layout C: text left-aligned with decorative dot grid + vertical line on right
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:${W}px; height:${H}px; overflow:hidden; background:${scheme.bg};
+    font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;
+    display:flex; align-items:center; position:relative; }
+  .glow { position:absolute; top:50%; left:30%; transform:translate(-50%,-50%);
+    width:1200px; height:700px; background:radial-gradient(ellipse,${scheme.glow} 0%,transparent 70%); pointer-events:none; }
+  .progress { position:absolute; top:0; left:0; height:5px; width:${progressPct}%;
+    background:${scheme.accent}; border-radius:0 3px 3px 0; }
+  .content { position:relative; z-index:2; padding:0 0 0 120px; max-width:1300px; }
+  .tag { display:inline-flex; align-items:center; gap:10px; margin-bottom:32px; }
+  .tag-dot { width:14px; height:14px; border-radius:50%; background:${scheme.accent}; }
+  .tag-text { font-size:20px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase;
+    color:${scheme.accent}; opacity:0.85; }
+  .main-text { font-size:${fs}px; font-weight:900; line-height:1.2; letter-spacing:-0.01em; text-align:left; }
+  /* dot grid on right */
+  .dot-grid { position:absolute; right:80px; top:50%; transform:translateY(-50%);
+    display:grid; grid-template-columns:repeat(6,24px); gap:16px; opacity:0.12; }
+  .dot-grid span { width:8px; height:8px; border-radius:50%; background:${scheme.accent}; display:block; }
+  /* vertical accent bar */
+  .v-bar { position:absolute; right:340px; top:10%; height:80%; width:3px;
+    background:${scheme.accent}; opacity:0.18; border-radius:2px; }
+  .counter { position:absolute; bottom:48px; left:120px; font-size:22px; font-weight:700;
+    letter-spacing:2px; color:rgba(255,255,255,0.2); }
+</style></head><body>
+  <div class="glow"></div>
+  <div class="progress"></div>
+  <div class="content">
+    <div class="tag"><div class="tag-dot"></div><div class="tag-text">Scene ${index + 1}</div></div>
+    <div class="main-text">${wordsHtml}</div>
+  </div>
+  <div class="v-bar"></div>
+  <div class="dot-grid">${Array.from({length:42}).map(()=>`<span></span>`).join("")}</div>
+  <div class="counter">${index + 1} / ${total}</div>
 </body></html>`;
 }
 

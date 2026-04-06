@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { getBrandVoice } from "@/lib/brand-voice";
 import type { ScriptViolation } from "../route";
 
 export async function POST(request: NextRequest) {
@@ -17,7 +18,10 @@ export async function POST(request: NextRequest) {
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
 
-    const body = await request.json().catch(() => ({}));
+    const [body, brandVoice] = await Promise.all([
+      request.json().catch(() => ({})),
+      getBrandVoice(userId),
+    ]);
     const { script, violations } = body as {
       script?: string;
       violations?: ScriptViolation[];
@@ -45,7 +49,11 @@ export async function POST(request: NextRequest) {
           .join("\n")
         : "No specific violations provided.";
 
-    const systemPrompt = `You are a script compliance expert who writes COMPLIANT scripts that still SELL. Rewrite scripts to fix violations while keeping a persuasive, benefit-driven marketing tone.
+    const brandVoiceSection = brandVoice
+      ? `\n\n${brandVoice}\nMaintain this brand voice throughout the rewrite.`
+      : "";
+
+    const systemPrompt = `You are a script compliance expert who writes COMPLIANT scripts that still SELL. Rewrite scripts to fix violations while keeping a persuasive, benefit-driven marketing tone.${brandVoiceSection}
 
 CRITICAL: The output must SOUND LIKE A REAL MARKETING SCRIPT, not a medical disclaimer or legal fine print.
 

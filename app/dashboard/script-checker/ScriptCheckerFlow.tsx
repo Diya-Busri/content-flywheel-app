@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, Upload, ArrowRight, Loader2, AlertCircle, AlertTriangle, Info, Sparkles, Copy, Download, RefreshCw, Library, Film } from "lucide-react";
+import { ArrowLeft, Upload, ArrowRight, Loader2, AlertCircle, AlertTriangle, Info, Sparkles, Copy, Download, RefreshCw, Library, Film, Mic2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import type { ScriptViolation } from "@/app/api/script-checker/route";
 
@@ -198,7 +198,7 @@ function ViolationCard({ violation }: { violation: ScriptViolation }) {
   );
 }
 
-export default function ScriptCheckerFlow() {
+export default function ScriptCheckerFlow({ hasBrandVoice = false }: { hasBrandVoice?: boolean }) {
   const [platform, setPlatform] = useState<Platform>("tiktok");
   const [script, setScript] = useState("");
   const [productImage, setProductImage] = useState<File | null>(null);
@@ -390,9 +390,25 @@ export default function ScriptCheckerFlow() {
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
         Check Script Compliance
       </h1>
-      <p className="text-gray-600 dark:text-gray-400 mb-10">
+      <p className="text-gray-600 dark:text-gray-400 mb-3">
         Ensure your video scripts meet TikTok, Instagram, YouTube, Facebook, and Twitter guidelines
       </p>
+      <div className="mb-8">
+        {hasBrandVoice ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50">
+            <Mic2 className="w-3 h-3" />
+            ✓ Brand voice applied
+          </span>
+        ) : (
+          <Link
+            href="/dashboard/settings#brand-voice"
+            className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50 hover:bg-orange-100 dark:hover:bg-orange-950/50 transition-colors"
+          >
+            <Mic2 className="w-3 h-3" />
+            Set up your brand voice
+          </Link>
+        )}
+      </div>
 
       <form onSubmit={handleSubmit}>
         <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
@@ -404,7 +420,7 @@ export default function ScriptCheckerFlow() {
           </CardHeader>
           <CardContent className="space-y-8">
             {/* 1. Platform Selection */}
-            <div className="space-y-3">
+            <div className="space-y-3" data-tour="checker-platform">
               <Label className="text-gray-300">Which platform(s) are you posting on?</Label>
               <RadioGroup
                 value={platform}
@@ -451,7 +467,7 @@ export default function ScriptCheckerFlow() {
             </div>
 
             {/* 2. Video Script */}
-            <div className="space-y-2">
+            <div className="space-y-2" data-tour="checker-input">
               <div className="flex items-center justify-between">
                 <Label htmlFor="script" className="text-gray-300">Paste Your Video Script *</Label>
                 <Button
@@ -554,7 +570,7 @@ export default function ScriptCheckerFlow() {
 
       {/* Results section */}
       {submitted && (
-        <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] mt-8">
+        <Card data-tour="checker-result" className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] mt-8">
           <CardHeader>
             <CardTitle className="text-xl">Results</CardTitle>
             <CardDescription>

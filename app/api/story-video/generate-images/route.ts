@@ -7,6 +7,7 @@ import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import {
   STORY_VIDEO_DEFAULT_ART_STYLE,
   parseStoryVideoFormatFromBody,
+  sanitizeStoryVideoVisualDescription,
   type StoryVideoFormat,
 } from "@/lib/story-video";
 
@@ -26,24 +27,6 @@ const DELAY_MS_BETWEEN_CALLS = 450;
 /** Prepended to each scene’s visual description for FLUX (exact copy per product spec). */
 export const STORY_VIDEO_FLUX_PROMPT_PREFIX =
   "anime illustration, cel-shaded, Studio Ghibli style, warm soft colours, clean line art, ";
-
-/** Phrases that tend to trip content filters; stripped case-insensitively from scene visuals. */
-const VISUAL_FILTER_PHRASES: RegExp[] = [
-  /\bdimly\s*[- ]?\s*lit\b/gi,
-  /\bdark\s+room\b/gi,
-  /\bdesk\s+lamp\b/gi,
-];
-
-/**
- * Removes filter-trigger wording from model-supplied scene visuals; collapses whitespace.
- */
-export function sanitizeStoryVideoVisualDescription(raw: string): string {
-  let s = raw.trim();
-  for (const re of VISUAL_FILTER_PHRASES) {
-    s = s.replace(re, " ");
-  }
-  return s.replace(/\s{2,}/g, " ").trim();
-}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

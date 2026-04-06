@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Lock } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Lock, Mail, Calendar } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -15,6 +15,7 @@ import { SelectProfile } from "@/db/schema/profiles-schema";
 import { useState, useEffect } from "react";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 import { useSidebar } from "@/components/sidebar-context";
+import { HelpPanel, HelpButton } from "@/components/help/HelpPanel";
 
 interface SidebarProps {
   profile: SelectProfile | null;
@@ -24,7 +25,10 @@ interface SidebarProps {
 
 export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarProps) {
   const pathname = usePathname();
+  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase() ?? "";
+  const isAdminUser = !!adminEmail && (userEmail ?? "").trim().toLowerCase() === adminEmail;
   const [mounted, setMounted] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const sidebar = useSidebar();
   const isCollapsed = sidebar?.isCollapsed ?? false;
   const toggleCollapsed = sidebar?.toggleCollapsed ?? (() => {});
@@ -47,7 +51,9 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
     { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️" },
     { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅" },
     { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯" },
+    { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅" },
     { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚" },
+    ...(isAdminUser ? [{ href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧" }] : []),
     { href: "/dashboard/video-timeline", icon: <Film size={18} />, label: "Video Timeline", emoji: "🎬" },
     { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true },
   ];
@@ -178,6 +184,11 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
               </motion.button>
             </div>
           )}
+          {/* Help */}
+          <div className="px-3 mb-3">
+            <HelpButton onClick={() => setHelpOpen(true)} />
+          </div>
+
           {/* Dark mode */}
           <div className="px-3 mb-3">
             <motion.button
@@ -245,6 +256,9 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
           </motion.div>
         </div>
       </div>
+
+      {/* Help Panel — rendered outside sidebar so it overlays the full page */}
+      <HelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
     </>
   );
 } 

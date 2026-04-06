@@ -7,7 +7,7 @@ import { spawn } from "child_process";
 import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { getFfmpegPath, runFfmpeg } from "@/lib/videos/compile";
+import { prepareFfmpegBinaryForSpawn, runFfmpeg } from "@/lib/videos/compile";
 
 const EPS = 0.02;
 
@@ -21,7 +21,7 @@ function parseDurationFromFfmpegStderr(stderr: string): number | null {
 }
 
 async function probeMp3DurationSeconds(filePath: string): Promise<number> {
-  const ffmpeg = getFfmpegPath();
+  const ffmpeg = await prepareFfmpegBinaryForSpawn();
   return new Promise((resolve, reject) => {
     const proc = spawn(ffmpeg, ["-nostats", "-i", filePath], {
       stdio: ["ignore", "ignore", "pipe"],

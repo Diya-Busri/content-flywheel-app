@@ -27,100 +27,165 @@ const SCHEMES = {
 
 // ─── Single kinetic scene ─────────────────────────────────────────────────────
 
+function WordsSpan({ words, accentCount, scheme }: { words: string[]; accentCount: number; scheme: typeof SCHEMES["dark-orange"] }) {
+  return (
+    <>
+      {words.map((word, wi) => (
+        <span key={wi} style={{ color: wi < accentCount ? scheme.accent : scheme.text }}>
+          {word}{wi < words.length - 1 ? " " : ""}
+        </span>
+      ))}
+    </>
+  );
+}
+
 function KineticSlide({
-  scene, scheme, index, total,
+  scene, scheme, index, total, wide = false,
 }: {
-  scene: KineticScene; scheme: typeof SCHEMES["dark-orange"]; index: number; total: number;
+  scene: KineticScene; scheme: typeof SCHEMES["dark-orange"]; index: number; total: number; wide?: boolean;
 }) {
   const words = scene.text.split(/\s+/).filter(Boolean);
   const accentCount = Math.min(scene.accentWords, words.length);
+  const progressPct = ((index + 1) / total) * 100;
+  const font = "'Inter', 'Helvetica Neue', Arial, sans-serif";
 
-  return (
-    <div
-      key={`${index}-${scene.text.slice(0, 20)}`}
-      style={{
-        width: "100%", height: "100%",
-        background: scheme.bg,
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-        fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
-        position: "relative", overflow: "hidden",
-        padding: "8% 7%",
-        boxSizing: "border-box",
-      }}
-    >
-      {/* Ambient glow */}
-      <div style={{
-        position: "absolute", top: "30%", left: "50%",
-        transform: "translate(-50%, -50%)",
-        width: "80%", height: "60%",
-        background: `radial-gradient(ellipse, ${scheme.glow} 0%, transparent 70%)`,
-        pointerEvents: "none",
-      }} />
+  const style = `
+    @keyframes kt-slide {
+      from { opacity: 0; transform: translateY(16px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .kt-in { animation: kt-slide 0.4s cubic-bezier(.22,1,.36,1) forwards; }
+  `;
 
-      {/* Progress bar */}
-      <div style={{
-        position: "absolute", top: 0, left: 0,
-        height: 3,
-        width: `${((index + 1) / total) * 100}%`,
-        background: scheme.accent,
-        transition: "width 0.4s ease",
-      }} />
-
-      {/* Scene number */}
-      <div style={{
-        position: "absolute", top: "5%", right: "6%",
-        color: "rgba(255,255,255,0.25)", fontSize: "clamp(10px, 1.4vw, 13px)",
-        fontWeight: 600, letterSpacing: "0.1em",
-      }}>
-        {index + 1}/{total}
+  if (!wide) {
+    // Portrait: centered
+    return (
+      <div style={{ width: "100%", height: "100%", background: scheme.bg, fontFamily: font,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        position: "relative", overflow: "hidden", padding: "8% 7%", boxSizing: "border-box" }}>
+        <style>{style}</style>
+        <div style={{ position: "absolute", top: "30%", left: "50%", transform: "translate(-50%,-50%)",
+          width: "80%", height: "60%", background: `radial-gradient(ellipse,${scheme.glow} 0%,transparent 70%)`, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent, transition: "width 0.4s" }} />
+        <div style={{ position: "absolute", top: "5%", right: "6%", color: "rgba(255,255,255,0.25)", fontSize: "clamp(9px,1.4vw,12px)", fontWeight: 600, letterSpacing: "0.1em" }}>
+          {index + 1}/{total}
+        </div>
+        <div className="kt-in" style={{ textAlign: "center", position: "relative", zIndex: 2, maxWidth: "90%" }}>
+          <p style={{ fontSize: "clamp(18px,4vw,52px)", fontWeight: 900, lineHeight: 1.2, margin: 0, letterSpacing: "-0.01em" }}>
+            <WordsSpan words={words} accentCount={accentCount} scheme={scheme} />
+          </p>
+        </div>
+        <div style={{ position: "absolute", bottom: "10%", left: "50%", transform: "translateX(-50%)", width: "clamp(24px,4vw,44px)", height: 3, background: scheme.accent, borderRadius: 2, opacity: 0.55 }} />
       </div>
+    );
+  }
 
-      {/* Text block */}
-      <div
-        className="kt-slide-in"
-        style={{
-          textAlign: "center",
-          position: "relative", zIndex: 2,
-          maxWidth: "90%",
-        }}
-      >
-        <p style={{
-          fontSize: "clamp(20px, 4vw, 54px)",
-          fontWeight: 900,
-          lineHeight: 1.2,
-          margin: 0,
-          letterSpacing: "-0.01em",
-        }}>
-          {words.map((word, wi) => (
-            <span key={wi} style={{
-              color: wi < accentCount ? scheme.accent : scheme.text,
-              display: "inline",
-            }}>
-              {word}{wi < words.length - 1 ? " " : ""}
+  const layout = index % 3;
+
+  if (layout === 0) {
+    // Layout A: ghost number left + text right
+    return (
+      <div style={{ width: "100%", height: "100%", background: scheme.bg, fontFamily: font,
+        display: "flex", alignItems: "center", position: "relative", overflow: "hidden" }}>
+        <style>{style}</style>
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 50% 50%,${scheme.glow} 0%,transparent 65%)`, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent }} />
+        {/* left accent bar */}
+        <div style={{ position: "absolute", left: 0, top: 0, width: 6, height: "100%", background: scheme.accent, opacity: 0.7 }} />
+        {/* ghost number */}
+        <div style={{ position: "absolute", left: "3%", top: "50%", transform: "translateY(-50%)",
+          fontSize: "clamp(80px,28vw,220px)", fontWeight: 900, lineHeight: 1,
+          color: scheme.accent, opacity: 0.07, letterSpacing: "-0.05em", userSelect: "none", pointerEvents: "none" }}>
+          {index + 1}
+        </div>
+        <div className="kt-in" style={{ position: "relative", zIndex: 2, marginLeft: "28%", paddingRight: "5%", maxWidth: "70%" }}>
+          <div style={{ fontSize: "clamp(7px,1vw,11px)", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: scheme.accent, marginBottom: "8%", opacity: 0.85 }}>
+            Part {index + 1} of {total}
+          </div>
+          <p style={{ fontSize: "clamp(14px,3.5vw,44px)", fontWeight: 900, lineHeight: 1.2, margin: 0, letterSpacing: "-0.01em" }}>
+            <WordsSpan words={words} accentCount={accentCount} scheme={scheme} />
+          </p>
+        </div>
+        <div style={{ position: "absolute", bottom: "5%", right: "4%", fontSize: "clamp(7px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.18)", letterSpacing: 2 }}>
+          {index + 1} / {total}
+        </div>
+      </div>
+    );
+  }
+
+  if (layout === 1) {
+    // Layout B: centered with flanking rules + corner brackets
+    const corner = { position: "absolute" as const, width: "clamp(12px,3vw,28px)", height: "clamp(12px,3vw,28px)" };
+    return (
+      <div style={{ width: "100%", height: "100%", background: scheme.bg, fontFamily: font,
+        display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
+        <style>{style}</style>
+        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 50% 50%,${scheme.glow} 0%,transparent 60%)`, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent }} />
+        {/* corner brackets */}
+        {[
+          { top: "4%", left: "3%", borderTop: `3px solid ${scheme.accent}`, borderLeft: `3px solid ${scheme.accent}` },
+          { top: "4%", right: "3%", borderTop: `3px solid ${scheme.accent}`, borderRight: `3px solid ${scheme.accent}` },
+          { bottom: "4%", left: "3%", borderBottom: `3px solid ${scheme.accent}`, borderLeft: `3px solid ${scheme.accent}` },
+          { bottom: "4%", right: "3%", borderBottom: `3px solid ${scheme.accent}`, borderRight: `3px solid ${scheme.accent}` },
+        ].map((s, i) => <div key={i} style={{ ...corner, ...s }} />)}
+        <div className="kt-in" style={{ position: "relative", zIndex: 2, maxWidth: "80%", textAlign: "center", padding: "0 4%" }}>
+          {/* top rule */}
+          <div style={{ display: "flex", alignItems: "center", gap: "2%", marginBottom: "6%" }}>
+            <div style={{ flex: 1, height: 1.5, background: scheme.accent, opacity: 0.35 }} />
+            <span style={{ fontSize: "clamp(6px,0.9vw,10px)", fontWeight: 700, letterSpacing: "0.22em", textTransform: "uppercase", color: scheme.accent, opacity: 0.8, whiteSpace: "nowrap" }}>
+              {index + 1} / {total}
             </span>
-          ))}
+            <div style={{ flex: 1, height: 1.5, background: scheme.accent, opacity: 0.35 }} />
+          </div>
+          <p style={{ fontSize: "clamp(14px,3.5vw,44px)", fontWeight: 900, lineHeight: 1.2, margin: 0, letterSpacing: "-0.01em" }}>
+            <WordsSpan words={words} accentCount={accentCount} scheme={scheme} />
+          </p>
+          {/* bottom rule */}
+          <div style={{ display: "flex", alignItems: "center", gap: "2%", marginTop: "6%" }}>
+            <div style={{ flex: 1, height: 1.5, background: scheme.accent, opacity: 0.25 }} />
+            <div style={{ flex: 1, height: 1.5, background: scheme.accent, opacity: 0.25 }} />
+          </div>
+        </div>
+        <div style={{ position: "absolute", bottom: "5%", right: "4%", fontSize: "clamp(7px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.18)", letterSpacing: 2 }}>
+          {Math.round(progressPct)}%
+        </div>
+      </div>
+    );
+  }
+
+  // Layout C: left-aligned text + dot grid + vertical bar right
+  const dots = Array.from({ length: 42 });
+  return (
+    <div style={{ width: "100%", height: "100%", background: scheme.bg, fontFamily: font,
+      display: "flex", alignItems: "center", position: "relative", overflow: "hidden" }}>
+      <style>{style}</style>
+      <div style={{ position: "absolute", top: "50%", left: "30%", transform: "translate(-50%,-50%)",
+        width: "70%", height: "80%", background: `radial-gradient(ellipse,${scheme.glow} 0%,transparent 70%)`, pointerEvents: "none" }} />
+      <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent }} />
+      <div className="kt-in" style={{ position: "relative", zIndex: 2, padding: "0 0 0 7%", maxWidth: "70%" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "2%", marginBottom: "6%" }}>
+          <div style={{ width: "clamp(6px,1vw,10px)", height: "clamp(6px,1vw,10px)", borderRadius: "50%", background: scheme.accent }} />
+          <span style={{ fontSize: "clamp(6px,0.9vw,10px)", fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: scheme.accent, opacity: 0.85 }}>
+            Scene {index + 1}
+          </span>
+        </div>
+        <p style={{ fontSize: "clamp(14px,3.5vw,44px)", fontWeight: 900, lineHeight: 1.2, margin: 0, letterSpacing: "-0.01em", textAlign: "left" }}>
+          <WordsSpan words={words} accentCount={accentCount} scheme={scheme} />
         </p>
       </div>
-
-      {/* Decorative accent line */}
-      <div style={{
-        position: "absolute", bottom: "12%", left: "50%",
-        transform: "translateX(-50%)",
-        width: "clamp(30px, 5vw, 50px)", height: 3,
-        background: scheme.accent, borderRadius: 2,
-        opacity: 0.6,
-      }} />
-
-      <style>{`
-        @keyframes kt-slide {
-          from { opacity: 0; transform: translateY(24px) scale(0.97); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        .kt-slide-in {
-          animation: kt-slide 0.45s cubic-bezier(.22,1,.36,1) forwards;
-        }
-      `}</style>
+      {/* vertical bar */}
+      <div style={{ position: "absolute", right: "23%", top: "10%", height: "80%", width: 2, background: scheme.accent, opacity: 0.15, borderRadius: 2 }} />
+      {/* dot grid */}
+      <div style={{ position: "absolute", right: "4%", top: "50%", transform: "translateY(-50%)",
+        display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: "clamp(4px,0.8vw,10px)", opacity: 0.1 }}>
+        {dots.map((_, i) => (
+          <div key={i} style={{ width: "clamp(3px,0.5vw,6px)", height: "clamp(3px,0.5vw,6px)", borderRadius: "50%", background: scheme.accent }} />
+        ))}
+      </div>
+      <div style={{ position: "absolute", bottom: "5%", left: "7%", fontSize: "clamp(7px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.18)", letterSpacing: 2 }}>
+        {index + 1} / {total}
+      </div>
     </div>
   );
 }
@@ -223,6 +288,7 @@ export function KineticTypographyPreview({ data, voiceover = false, aspectRatio 
             scheme={scheme}
             index={currentIdx}
             total={total}
+            wide={is16x9}
           />
         </div>
       </div>

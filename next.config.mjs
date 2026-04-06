@@ -11,6 +11,7 @@ const nextConfig = {
       "@sparticuz/chromium-min",
       "@ffmpeg-installer/ffmpeg",
       "ffmpeg-static",
+      "ffprobe-static",
       "fluent-ffmpeg",
     ],
     // Exclude puppeteer from API routes that don't use it (reduces deploy bundle; avoids "Deploying outputs" internal error)
@@ -87,6 +88,7 @@ const nextConfig = {
         "@sparticuz/chromium-min",
         "@ffmpeg-installer/ffmpeg",
         "ffmpeg-static",
+        "ffprobe-static",
         "fluent-ffmpeg",
       ];
     }

@@ -7,6 +7,7 @@ import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import type { MarketingAssets } from "@/db/schema/products-schema";
 import { cleanProductTitle } from "@/lib/product-title";
+import { getBrandVoice } from "@/lib/brand-voice";
 
 type Section = { id: string; title: string; content?: string };
 
@@ -67,7 +68,10 @@ export async function POST(
       );
     }
 
+    const brandVoice = await getBrandVoice(userId).catch(() => "");
+
     const prompt = `You are an expert at writing marketplace listings for digital products (Etsy, Gumroad, Stan Store, Payhip). Generate marketing copy for this product.
+${brandVoice ? `\n${brandVoice}\nApply this brand voice to the productTitle and productDescription.\n` : ""}
 
 PRODUCT:
 - Title: "${title}"

@@ -8,6 +8,7 @@ import {
   clampStoryVideoSceneCount,
   parseStoryVideoFormatFromBody,
   parseStoryVideoStructureFromBody,
+  sanitizeStoryVideoVisualDescription,
   type StoryVideoVideoStructure,
 } from "@/lib/story-video";
 
@@ -44,47 +45,9 @@ function durationSecondsLongFormNarration(wordCount: number): number {
   return Math.round((wordCount / 2.5) * 10) / 10;
 }
 
-/**
- * Neutralize wording in visualDescription before image APIs (filters / brand safety).
- * Includes fixed phrase swaps (e.g. dimly lit → softly lit, dark room → quiet room, struggling → focused,
- * overwhelmed → thinking deeply, broke → determined, frustrated → thoughtful, desperate → motivated).
- * Longer phrases first; then whole-word swaps.
- */
+/** Delegates to shared sanitizer (DALL-E / FLUX–class filters, poverty/mess/struggle wording). */
 export function postProcessStoryScriptVisualDescription(visual: string): string {
-  let s = visual.trim();
-  if (!s) return s;
-
-  // Preserve "stand alone" / standalone before replacing "alone"
-  s = s.replace(/\bstand\s*[- ]?alone\b/gi, "standalone");
-
-  const phraseReplacements: [RegExp, string][] = [
-    [/\bdimly\s*[- ]?\s*lit\b/gi, "softly lit"],
-    [/\bdark\s+room\b/gi, "quiet room"],
-    [/\bstruggling\b/gi, "focused"],
-    [/\boverwhelmed\b/gi, "thinking deeply"],
-    [/\bbroke\b/gi, "determined"],
-    [/\bfrustrated\b/gi, "thoughtful"],
-    [/\bdesperate\b/gi, "motivated"],
-    [/\bempty\s+wallet\b/gi, "simple desk with everyday items"],
-    [/\bdark\s+corner\b/gi, "quiet corner"],
-    [/\bdark\s+space\b/gi, "open calm space"],
-    [/\bdark\s+interior\b/gi, "calm interior"],
-    [/\bin\s+the\s+dark\b/gi, "in soft ambient light"],
-  ];
-  for (const [re, rep] of phraseReplacements) {
-    s = s.replace(re, rep);
-  }
-
-  // Whole-word "alone" → focused (after standalone guard above)
-  s = s.replace(/\balone\b/gi, "focused");
-
-  // Remaining "dark" as a mood/lighting word (avoid breaking "dark blue", "dark wood", etc.)
-  s = s.replace(
-    /\bdark\b(?!\s*(?:blue|green|brown|grey|gray|red|hair|wood|suit|chocolate|skin|mode|matter|magic|knight|age|web|arts|comedy|humor|jeans|denim))/gi,
-    "calm"
-  );
-
-  return s.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
+  return sanitizeStoryVideoVisualDescription(visual);
 }
 
 /**

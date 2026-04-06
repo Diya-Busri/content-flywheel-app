@@ -2018,6 +2018,54 @@ export default function VideoTimelinePage() {
     }
   }, []);
 
+  // AI Coach: load script from sessionStorage and pre-populate timeline scenes
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem("cf_coach_script");
+    } catch {
+      return;
+    }
+    if (!raw?.trim()) return;
+    try {
+      sessionStorage.removeItem("cf_coach_script");
+    } catch {
+      // ignore
+    }
+    const scriptText = raw.trim();
+    // Split by double newlines first, then fall back to ~150-char sentence chunks
+    let chunks: string[] = scriptText.split(/\n\n+/).map((s) => s.trim()).filter(Boolean);
+    if (chunks.length < 2) {
+      // No double-newline paragraphs: split into ~150-char sentence-based chunks
+      const sentences = scriptText.match(/[^.!?]+[.!?]+(?:\s|$)?/g) ?? [scriptText];
+      chunks = [];
+      let current = "";
+      for (const sentence of sentences) {
+        if (current.length + sentence.length > 150 && current.length > 0) {
+          chunks.push(current.trim());
+          current = sentence;
+        } else {
+          current += sentence;
+        }
+      }
+      if (current.trim()) chunks.push(current.trim());
+    }
+    const MAX_SCENES = 8;
+    const sceneChunks = chunks.slice(0, MAX_SCENES);
+    if (sceneChunks.length === 0) return;
+    const coachScenes: Scene[] = sceneChunks.map((chunk, i) =>
+      createScene(
+        `coach-scene-${i}`,
+        chunk.slice(0, 80),
+        5,
+        SCENE_COLOR_HEX[i % SCENE_COLOR_HEX.length]
+      )
+    );
+    setScenes(coachScenes);
+    setSelectedTemplate(VIDEO_TEMPLATES[4]);
+  }, []);
+
   // When scriptId or projectId is in URL, set a template so the timeline layout shows and script/project can load.
   const projectIdFromUrl = searchParams.get("projectId");
   const scriptIdFromUrl = searchParams.get("scriptId") ?? searchParams.get("libraryScriptId");

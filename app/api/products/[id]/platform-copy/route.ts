@@ -6,6 +6,7 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { cleanProductTitle } from "@/lib/product-title";
+import { getBrandVoice } from "@/lib/brand-voice";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,7 @@ export async function POST(
     }
 
     const userPrompt = buildPrompt(title, niche, format);
+    const brandVoice = await getBrandVoice(userId).catch(() => "");
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -97,8 +99,10 @@ export async function POST(
         messages: [
           {
             role: "system",
-            content:
+            content: [
               "You write marketplace listing copy for digital products. Return only the requested copy, no preamble or labels.",
+              brandVoice ? `\n${brandVoice}` : "",
+            ].join(""),
           },
           { role: "user", content: userPrompt },
         ],

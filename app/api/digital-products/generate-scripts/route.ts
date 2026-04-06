@@ -11,6 +11,7 @@ import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { cleanProductTitle } from "@/lib/product-title";
 import { getVideoLengthOptionOrDefault } from "@/lib/video-length-options";
+import { getBrandVoice } from "@/lib/brand-voice";
 
 export type YouTubeMetrics = {
   projectedViews?: string;
@@ -42,7 +43,10 @@ export async function POST(request: NextRequest) {
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
 
-    const body = await request.json().catch(() => ({}));
+    const [body, brandVoice] = await Promise.all([
+      request.json().catch(() => ({})),
+      getBrandVoice(userId),
+    ]);
     const productId = typeof body.productId === "string" ? body.productId.trim() : "";
     const youtubeChannelId = typeof body.youtubeChannelId === "string" ? body.youtubeChannelId.trim() : "";
     const channelName = typeof body.channelName === "string" ? body.channelName.trim() : "";
@@ -137,7 +141,7 @@ Rules:
 - Structure for watch time: open loop, payoff in body, clear CTA
 - Ad-friendly and sponsor-friendly language where relevant
 - Each script should support: high CTR, retention, engagement signals (likes, comments, subscribe)
-
+${brandVoice ? `\n${brandVoice}` : ""}
 Return only valid JSON with a "scripts" array. Each item has title, hook, body, cta (strings), and optionally youtube_metrics (object). No markdown, no code fences.`;
 
       userPrompt = `Generate YouTube video script angles for growth and monetization.
@@ -207,7 +211,7 @@ Write the script in this structure:
 HOOK (0-3s): One sentence. Pain point or curiosity gap only.
 BODY (3-25s): Agitate the problem (2 sentences), then introduce the solution naturally (2-3 sentences), then social proof or outcome (1-2 sentences)
 CTA (25-30s): One clear action. Urgent but natural.
-
+${brandVoice ? `\n${brandVoice}` : ""}
 Return only valid JSON with a "scripts" array. Each item has title, hook, body, cta (strings). No markdown, no code fences.`;
 
       const contextLabel = productId ? "PRODUCT" : "TOPIC / CHANNEL";

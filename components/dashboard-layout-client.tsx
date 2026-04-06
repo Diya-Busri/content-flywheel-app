@@ -7,6 +7,7 @@ import { SidebarProvider } from "@/components/sidebar-context";
 import Sidebar from "@/components/sidebar";
 import { DashboardReviewPopup } from "@/components/dashboard-review-popup";
 import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
+import { VideoNotificationWatcher } from "@/components/video-notification-watcher";
 import { SelectProfile } from "@/db/schema/profiles-schema";
 
 interface DashboardLayoutClientProps {
@@ -25,6 +26,7 @@ export function DashboardLayoutClient({ profile, userEmail, children }: Dashboar
       style={{ display: "flex", flexDirection: "row", height: "100vh", minHeight: 0 }}
     >
       <SidebarProvider>
+        <VideoNotificationWatcher />
         <OnboardingProvider markDashboardSeen>
           <DashboardReviewPopup
           profile={profile}

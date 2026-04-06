@@ -403,6 +403,7 @@ export default function TemplateStudioClient() {
   const [storyVideoExportUrl, setStoryVideoExportUrl] = useState<string | null>(null);
   const [storyVideoExportScriptId, setStoryVideoExportScriptId] = useState<string | null>(null);
   const [storyVideoExportError, setStoryVideoExportError] = useState<string | null>(null);
+  const [copiedStoryVideoLink, setCopiedStoryVideoLink] = useState(false);
   const [storyBackgroundMusic, setStoryBackgroundMusic] = useState<BgmSelectValue>("none");
 
   const [libraryDraftVideoId, setLibraryDraftVideoId] = useState<string | null>(() => {
@@ -2543,7 +2544,7 @@ export default function TemplateStudioClient() {
   return (
     <div className="min-w-0 max-w-full space-y-8">
       {/* Step indicator */}
-      <div className="flex flex-wrap items-center gap-2 text-sm">
+      <div data-tour="template-steps" className="flex flex-wrap items-center gap-2 text-sm">
         <span
           className={step === 1 ? "font-medium text-foreground" : "text-muted-foreground"}
         >
@@ -2578,6 +2579,7 @@ export default function TemplateStudioClient() {
             <div className="space-y-2">
               <Label htmlFor="template-studio-creation-mode">What are you creating?</Label>
               <select
+                data-tour="template-type-select"
                 id="template-studio-creation-mode"
                 className={cn(
                   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground",
@@ -3258,7 +3260,7 @@ export default function TemplateStudioClient() {
                   />
                   <p className="text-xs text-muted-foreground">{viralRoundCount} rounds — approx. {Math.round(viralRoundCount * (viralFormLength === "long" ? VIRAL_LONG_DURATION : VIRAL_SHORT_DURATION))}s of content</p>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-tour="template-format">
                   <Label>Format length</Label>
                   <div className="flex gap-2">
                     {(["short", "long"] as const).map((v) => (
@@ -3984,7 +3986,7 @@ export default function TemplateStudioClient() {
                 </span>
                 {" "}(picked randomly when you generate — export matches preview).
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div data-tour="template-export" className="flex flex-wrap gap-2">
                 <Button type="button" size="sm" disabled={viralExporting} onClick={async () => {
                   setViralExporting(true);
                   try {
@@ -4462,21 +4464,69 @@ export default function TemplateStudioClient() {
                     <p className="text-sm text-destructive">{storyVideoExportError}</p>
                   )}
                   {storyVideoExportUrl && !storyVideoExporting && (
-                    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 pt-1">
-                      <Button variant="default" asChild>
-                        <a href={storyVideoExportUrl} download target="_blank" rel="noopener noreferrer">
-                          <Download className="w-4 h-4 mr-2" />
-                          Download MP4
-                        </a>
-                      </Button>
-                      {storyVideoExportScriptId && (
-                        <Button variant="outline" asChild>
-                          <a href={getTimelineUrl(storyVideoExportScriptId)}>
-                            <ExternalLink className="w-4 h-4 mr-2" />
-                            Edit in Timeline
+                    <div className="flex flex-col gap-2 pt-1">
+                      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
+                        <Button variant="default" asChild>
+                          <a href={storyVideoExportUrl} download target="_blank" rel="noopener noreferrer">
+                            <Download className="w-4 h-4 mr-2" />
+                            Download MP4
                           </a>
                         </Button>
-                      )}
+                        {storyVideoExportScriptId && (
+                          <Button variant="outline" asChild>
+                            <a href={getTimelineUrl(storyVideoExportScriptId)}>
+                              <ExternalLink className="w-4 h-4 mr-2" />
+                              Edit in Timeline
+                            </a>
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <a
+                          href="https://www.tiktok.com/upload"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Opens TikTok upload — your video will be downloaded ready to upload"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-black hover:bg-gray-900 text-white transition-colors"
+                        >
+                          📱 Post to TikTok
+                        </a>
+                        <a
+                          href="https://www.instagram.com/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open Instagram to upload your video via the app"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 hover:opacity-90 text-white transition-opacity"
+                        >
+                          📸 Post to Instagram
+                        </a>
+                        <a
+                          href="https://studio.youtube.com/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Opens YouTube Studio to upload your video"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-red-600 hover:bg-red-700 text-white transition-colors"
+                        >
+                          🎬 Post to YouTube
+                        </a>
+                        <button
+                          type="button"
+                          title="Copy video URL to clipboard"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-foreground transition-colors"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(storyVideoExportUrl).then(() => {
+                              setCopiedStoryVideoLink(true);
+                              setTimeout(() => setCopiedStoryVideoLink(false), 2000);
+                            });
+                          }}
+                        >
+                          <Copy className="w-3 h-3" />
+                          {copiedStoryVideoLink ? "Copied!" : "📋 Copy video link"}
+                        </button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Tip: Download first, then upload to your chosen platform.
+                      </p>
                     </div>
                   )}
                 </div>

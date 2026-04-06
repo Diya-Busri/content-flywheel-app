@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { getBrandVoice } from "@/lib/brand-voice";
 
 export type ScriptViolationSeverity = "critical" | "warning" | "suggestion";
 
@@ -59,7 +60,10 @@ export async function POST(request: NextRequest) {
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
 
-    const body = await request.json().catch(() => ({}));
+    const [body, brandVoice] = await Promise.all([
+      request.json().catch(() => ({})),
+      getBrandVoice(userId),
+    ]);
     const { script, platforms } = body as { script?: string; platforms?: string[] };
 
     if (!script || typeof script !== "string") {
@@ -92,6 +96,10 @@ ${script
 
 Return JSON with violations array. Check ALL categories: misleading health claims, unverified facts, exaggerated promises, prohibited content, missing disclosures.`;
 
+    const systemPromptWithVoice = brandVoice
+      ? `${SYSTEM_PROMPT}\n\n${brandVoice}\nWhen rewriting for compliance, maintain this brand voice.`
+      : SYSTEM_PROMPT;
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -102,7 +110,7 @@ Return JSON with violations array. Check ALL categories: misleading health claim
         // gpt-4o-mini: validation/formatting, non-critical
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPromptWithVoice },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.2,

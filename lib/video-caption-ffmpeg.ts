@@ -10,6 +10,18 @@ export const VIRAL_CAPTION_BOTTOM_PAD = 24;
  * Escape text embedded in FFmpeg filter drawtext=text='...'.
  * Commas MUST be \, or the filtergraph splits options and dialogue after the first comma disappears.
  */
+/** TrueType collections (.ttc) need an explicit face index for drawtext on many FFmpeg builds. */
+function buildDrawtextFontfileFilterOpt(fontFile: string): string {
+  const p = fontFile.trim().replace(/\\/g, "/");
+  const safe = p
+    .replace(/:/g, "\\:")
+    .replace(/,/g, "\\,")
+    .replace(/%/g, "\\%")
+    .replace(/ /g, "\\ ");
+  const ttc = /\.ttc$/i.test(p) ? ":fontindex=0" : "";
+  return `:fontfile=${safe}${ttc}`;
+}
+
 export function escapeDrawtextForFfmpeg(s: string): string {
   return s
     .replace(/\\/g, "\\\\")
@@ -97,18 +109,7 @@ export function buildViralCaptionDrawtextChain(
     opts.alphaExpr != null && String(opts.alphaExpr).trim() !== "" ? `:alpha='${opts.alphaExpr}'` : "";
   // FFmpeg drawtext is sensitive to quoting for fontfile; pass it unquoted.
   const fontOpt =
-    opts.fontFile && opts.fontFile.trim()
-      ? (() => {
-          const p = opts.fontFile.trim().replace(/\\/g, "/");
-          const safe = p
-            .replace(/:/g, "\\:")
-            .replace(/,/g, "\\,")
-            .replace(/%/g, "\\%")
-            // Avoid splitting the path token when spaces exist.
-            .replace(/ /g, "\\ ");
-          return `:fontfile=${safe}`;
-        })()
-      : "";
+    opts.fontFile && opts.fontFile.trim() ? buildDrawtextFontfileFilterOpt(opts.fontFile) : "";
 
   if (!line) {
     throw new Error("buildViralCaptionDrawtextChain: empty dialogueLine");
@@ -175,19 +176,7 @@ export function buildViralCaptionDrawtextFlatVf(
   const minFs = 18;
   const maxW = Math.max(32, videoWidth - 2 * margin);
   // FFmpeg drawtext is sensitive to quoting for fontfile; pass it unquoted.
-  const fontOpt =
-    fontFile && fontFile.trim()
-      ? (() => {
-          const p = fontFile.trim().replace(/\\/g, "/");
-          const safe = p
-            .replace(/:/g, "\\:")
-            .replace(/,/g, "\\,")
-            .replace(/%/g, "\\%")
-            // Avoid splitting the path token when spaces exist.
-            .replace(/ /g, "\\ ");
-          return `:fontfile=${safe}`;
-        })()
-      : "";
+  const fontOpt = fontFile && fontFile.trim() ? buildDrawtextFontfileFilterOpt(fontFile) : "";
   const split = splitDialogueLine(line);
   if (!split) {
     const t = escapeDrawtextForFfmpeg(line);

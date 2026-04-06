@@ -25,7 +25,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
-import { savedScriptsTable } from "@/db/schema/library-schema";
+import { savedScriptsTable, videosTable } from "@/db/schema/library-schema";
+import { goalsTable } from "@/db/schema/goals-schema";
 import { eq, and } from "drizzle-orm";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { compileVideoToFile, concatVoiceoverUrls, cleanupWorkDir, type CompileScene } from "@/lib/videos/compile";
@@ -181,7 +182,7 @@ export async function POST(request: NextRequest) {
       const dialogue = rawLine ? rawLine.replace(/\r?\n/g, " ").trim() : null;
       return {
         duration,
-        image_url: videoUrl ? null : imageUrl,
+        image_url: imageUrl,
         video_url: videoUrl || null,
         dialogue,
       };
@@ -260,7 +261,58 @@ export async function POST(request: NextRequest) {
       }
 
       const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
-      return NextResponse.json({ url: urlData.publicUrl });
+      const publicUrl = urlData.publicUrl;
+
+      // Save compiled video to My Library (videos table) so users can find it later
+      try {
+        const dateLabel = new Date().toLocaleDateString("en-GB", {
+          day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+        });
+        await db.insert(videosTable).values({
+          userId,
+          title: `Compiled Video — ${dateLabel}`,
+          platforms: ["video-guide"],
+          status: "draft",
+          metadata: { download_url: publicUrl, compiled_video_url: publicUrl },
+        });
+      } catch (libErr) {
+        // Non-fatal: log but don't fail the response
+        console.warn("[videos/compile] Could not save to library:", libErr);
+      }
+
+      // Auto-track goal progress: increment currentDay for active goals related to video creation
+      try {
+        const VIDEO_GOAL_KEYWORDS = ["video", "post", "content", "create"];
+        const activeGoals = await db
+          .select()
+          .from(goalsTable)
+          .where(and(eq(goalsTable.userId, userId), eq(goalsTable.status, "active")));
+
+        const matchingGoals = activeGoals.filter((g) => {
+          const haystack = `${g.title} ${g.description ?? ""}`.toLowerCase();
+          return VIDEO_GOAL_KEYWORDS.some((kw) => haystack.includes(kw));
+        });
+
+        for (const goal of matchingGoals) {
+          const nextDay = Math.min(goal.totalDays, goal.currentDay + 1);
+          const newStreak = goal.streakCount + 1;
+          const newLongest = Math.max(goal.longestStreak, newStreak);
+          await db
+            .update(goalsTable)
+            .set({
+              currentDay: nextDay,
+              streakCount: newStreak,
+              longestStreak: newLongest,
+              updatedAt: new Date(),
+            })
+            .where(and(eq(goalsTable.id, goal.id), eq(goalsTable.userId, userId)));
+        }
+      } catch (goalErr) {
+        // Non-fatal: log but don't fail the response
+        console.warn("[videos/compile] Could not auto-track goal progress:", goalErr);
+      }
+
+      return NextResponse.json({ url: publicUrl });
     } finally {
       await cleanupWorkDir(workDir);
     }

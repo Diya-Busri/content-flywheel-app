@@ -2222,6 +2222,23 @@ function ChatPanel({
                       (msg.content?.trim()?.length ?? 0) > 100 && (
                         <div className="mt-3 w-full">
                           <YouTubeScriptActionPanel scriptText={stripMarkdown(msg.content ?? "")} />
+                          <div className="mt-3">
+                            <Button
+                              type="button"
+                              className="gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold"
+                              onClick={() => {
+                                const scriptText = stripMarkdown(msg.content ?? "");
+                                try {
+                                  sessionStorage.setItem("cf_coach_script", scriptText);
+                                } catch {
+                                  // ignore storage errors
+                                }
+                                window.location.href = "/dashboard/video-timeline";
+                              }}
+                            >
+                              🎬 Create Video from this Script
+                            </Button>
+                          </div>
                         </div>
                       )}
                   </div>

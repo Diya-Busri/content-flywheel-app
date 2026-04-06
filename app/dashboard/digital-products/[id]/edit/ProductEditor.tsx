@@ -90,6 +90,18 @@ import { CoverPageEditor } from "./CoverPageEditor";
 import { BackCoverEditor } from "./BackCoverEditor";
 import { ContentPageEditor } from "./ContentPageEditor";
 import { EditorRightPanel } from "./EditorRightPanel";
+import { BookMockupPanel } from "@/components/product-editor/BookMockupPanel";
+import { AvatarVideoPanel } from "@/components/product-editor/AvatarVideoPanel";
+import { NextStepPrompt } from "@/components/product-editor/NextStepPrompt";
+import { ReadyToSellChecklist } from "@/components/product-editor/ReadyToSellChecklist";
+import { BrandVoiceIndicator } from "@/components/product-editor/BrandVoiceIndicator";
+import { SellItNowPanel } from "@/components/product-editor/SellItNowPanel";
+import { PricingCard } from "@/components/product-editor/PricingCard";
+import { SocialCaptionsCard } from "@/components/product-editor/SocialCaptionsCard";
+import { EmailSequenceCard } from "@/components/product-editor/EmailSequenceCard";
+import { SalesPageCard } from "@/components/product-editor/SalesPageCard";
+import { ThumbnailVariantPicker } from "@/components/product-editor/ThumbnailVariantPicker";
+import { RevenueTracker } from "@/components/product-editor/RevenueTracker";
 
 type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string };
 
@@ -983,6 +995,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [pdfExporting, setPdfExporting] = useState(false);
   const [marketingGenerating, setMarketingGenerating] = useState(false);
   const [marketingRegenerating, setMarketingRegenerating] = useState(false);
+  const [activeEditorTab, setActiveEditorTab] = useState("content");
   const [pricingRecommendationLoading, setPricingRecommendationLoading] = useState(false);
   const [platformCopyPlatform, setPlatformCopyPlatform] = useState<string>("beacons");
   const [platformCopyLoading, setPlatformCopyLoading] = useState(false);
@@ -1851,6 +1864,38 @@ export default function ProductEditor({ productId }: { productId: string }) {
     } catch (err) {
       toast({
         title: "Failed",
+        description: err instanceof Error ? err.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRegenerating(false);
+    }
+  }
+
+  async function handleImproveSection(sectionId: string) {
+    const section = sections.find((s) => s.id === sectionId);
+    if (!section || !productId || !section.content?.trim()) return;
+    setIsRegenerating(true);
+    try {
+      const res = await fetch(`/api/products/${productId}/improve-section`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sectionTitle: section.title,
+          content: section.content,
+        }),
+      });
+      const data = (await res.json()) as { improved?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Request failed");
+      if (data.improved) {
+        recordUndo();
+        setSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, content: data.improved! } : s)));
+        if (editingSectionId === sectionId) setEditingContent(data.improved);
+        toast({ title: "Section improved! ✨" });
+      }
+    } catch (err) {
+      toast({
+        title: "Failed to improve section",
         description: err instanceof Error ? err.message : "Something went wrong",
         variant: "destructive",
       });
@@ -3602,7 +3647,12 @@ export default function ProductEditor({ productId }: { productId: string }) {
     hashtags?: string[];
     seoKeywords?: string[];
     thumbnailUrl?: string | null;
+    coverThumbnailUrl?: string | null;
     thumbnailStyle?: ThumbnailTemplateId;
+    bookMockupUrl?: string | null;
+    promoVideoUrl?: string | null;
+    promoVideoStatus?: string | null;
+    promoVideoId?: string | null;
   };
 
   const handleGenerateThumbnail = useCallback(async () => {
@@ -4843,7 +4893,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 </div>
               </div>
             )}
-            <Tabs defaultValue="content" className="w-full flex flex-col flex-1 min-h-0">
+            <Tabs value={activeEditorTab} onValueChange={setActiveEditorTab} className="w-full flex flex-col flex-1 min-h-0">
               <TabsList className="bg-gray-50 border-b border-gray-200 w-full grid grid-cols-7 rounded-none h-11 px-0">
                 <TabsTrigger value="content" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
                   <BookOpen className="w-3.5 h-3.5" /> Content
@@ -4869,6 +4919,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </TabsList>
               <div className="flex-1 overflow-y-auto">
               <TabsContent value="content" className="mt-0 p-4 space-y-3">
+                <BrandVoiceIndicator />
+                <ReadyToSellChecklist
+                  hasThumbnail={!!(marketingAssets.thumbnailUrl || marketingAssets.coverThumbnailUrl)}
+                  hasBookMockup={!!marketingAssets.bookMockupUrl}
+                  hasMarketingAssets={!!(marketingAssets.productTitle?.trim() && marketingAssets.productDescription?.trim())}
+                  hasPromoVideo={!!(marketingAssets.promoVideoUrl && marketingAssets.promoVideoStatus === "completed")}
+                  onSwitchTab={setActiveEditorTab}
+                />
                 <ContentPageEditor
                   isOnContentPage={currentPageIndex > 0 && currentPageIndex < totalPages - 1}
                   currentPageBackgroundColor={currentPageBackgroundColor ?? null}
@@ -6131,6 +6189,18 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   <p className="text-xs font-medium text-gray-700 mb-2">Video guide for this product</p>
                   <p className="text-xs text-gray-500">Create a Video Creation Guide from the button above. The guide includes AI prompts, editing tips, and scene breakdowns.</p>
                 </div>
+                <div className="pt-2 border-t border-gray-200">
+                  <AvatarVideoPanel
+                    productId={productId}
+                    productTitle={product?.title ?? "Digital Product"}
+                    existingVideoUrl={marketingAssets.promoVideoUrl}
+                    existingVideoStatus={marketingAssets.promoVideoStatus}
+                    existingVideoId={marketingAssets.promoVideoId}
+                    onVideoReady={(url) => {
+                      setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, promoVideoUrl: url, promoVideoStatus: "completed" } } : null);
+                    }}
+                  />
+                </div>
               </TabsContent>
               <TabsContent value="export" className="mt-0 p-4 space-y-3">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Export</h3>
@@ -6159,6 +6229,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     Create Video Guide →
                   </Button>
                 </div>
+                <NextStepPrompt
+                  emoji="🎬"
+                  title="Turn this into a promo video"
+                  description="Generate an AI avatar video that sells this product — ready for TikTok, Reels, or YouTube Shorts."
+                  actionLabel="Create avatar video"
+                  onAction={() => setActiveEditorTab("videos")}
+                />
               </TabsContent>
               <TabsContent value="marketing" className="mt-0 p-4 space-y-6 overflow-y-auto">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Marketplace listing assets</h3>
@@ -6266,6 +6343,24 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         />
                       </div>
                     </div>
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <ThumbnailVariantPicker
+                        productId={productId}
+                        onSelect={(url, style) => {
+                          setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, thumbnailUrl: url, thumbnailStyle: style as ThumbnailTemplateId } } : null);
+                          saveToServer({ marketingAssets: { ...marketingAssets, thumbnailUrl: url, thumbnailStyle: style as ThumbnailTemplateId } });
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <BookMockupPanel
+                        productId={productId}
+                        existingMockupUrl={marketingAssets.bookMockupUrl}
+                        onMockupGenerated={(url) => {
+                          setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, bookMockupUrl: url } } : null);
+                        }}
+                      />
+                    </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Label className="text-xs font-medium text-gray-700">Product title</Label>
@@ -6302,105 +6397,12 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         className="text-sm resize-y"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-medium text-gray-700">Platform Copy</Label>
-                      <div className="flex gap-2">
-                        <Select value={platformCopyPlatform} onValueChange={setPlatformCopyPlatform}>
-                          <SelectTrigger className="flex-1 h-9 text-sm border-gray-200">
-                            <SelectValue placeholder="Select platform" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="beacons">Beacons</SelectItem>
-                            <SelectItem value="gumroad">Gumroad</SelectItem>
-                            <SelectItem value="etsy">Etsy</SelectItem>
-                            <SelectItem value="stan-store">Stan Store</SelectItem>
-                            <SelectItem value="payhip">Payhip</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-gray-200 gap-1.5 shrink-0"
-                          type="button"
-                          onClick={handleGeneratePlatformCopy}
-                          disabled={platformCopyLoading}
-                        >
-                          {platformCopyLoading ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : null}
-                          {platformCopyLoading ? "Generating…" : "Generate Platform Copy"}
-                        </Button>
-                      </div>
-                      {platformCopyResult ? (
-                        <Card className="border-gray-200 bg-gray-50/80">
-                          <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-center justify-between gap-2">
-                            <CardTitle className="text-sm font-semibold text-gray-900 sr-only">
-                              Platform copy
-                            </CardTitle>
-                            <div className="flex items-center gap-1">
-                              <SaveAsTemplateButton
-                                content={platformCopyResult}
-                                formatType="marketing"
-                                defaultTitle="Platform copy"
-                                size="sm"
-                              />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 shrink-0"
-                                onClick={() => copyToClipboard(platformCopyResult, "Platform copy")}
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="px-4 pb-3 pt-0">
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{platformCopyResult}</p>
-                          </CardContent>
-                        </Card>
-                      ) : null}
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full border-gray-200 gap-2"
-                      type="button"
-                      onClick={handleGetPricingRecommendation}
-                      disabled={pricingRecommendationLoading}
-                    >
-                      {pricingRecommendationLoading ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : null}
-                      {pricingRecommendationLoading ? "Getting recommendation…" : "Get Pricing Recommendation"}
-                    </Button>
-                    {pricingRecommendation ? (
-                      <Card className="border-gray-200 bg-gray-50/80">
-                        <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
-                          <CardTitle className="text-base font-bold text-gray-900">
-                            {pricingRecommendation.priceRange}
-                          </CardTitle>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 shrink-0"
-                            onClick={() =>
-                              copyToClipboard(
-                                `Recommended price: ${pricingRecommendation.priceRange}\nStrategy: ${pricingRecommendation.strategy}\n${pricingRecommendation.reasoning}`,
-                                "Pricing recommendation"
-                              )
-                            }
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </Button>
-                        </CardHeader>
-                        <CardContent className="px-4 pb-3 pt-0 space-y-1">
-                          <p className="text-xs font-medium text-gray-600">{pricingRecommendation.strategy}</p>
-                          <p className="text-sm text-gray-700">{pricingRecommendation.reasoning}</p>
-                        </CardContent>
-                      </Card>
-                    ) : null}
+                    <SellItNowPanel productId={productId} />
+                    <PricingCard productId={productId} />
+                    <RevenueTracker productId={productId} />
+                    <SocialCaptionsCard productId={productId} productTitle={product?.title ?? "Digital Product"} />
+                    <EmailSequenceCard productId={productId} />
+                    <SalesPageCard productId={productId} />
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Label className="text-xs font-medium text-gray-700">Hashtags / tags</Label>
@@ -6442,6 +6444,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       {marketingGenerating ? "Regenerating…" : "Regenerate all"}
                     </Button>
                   </>
+                )}
+                {marketingAssets.productTitle && (
+                  <NextStepPrompt
+                    emoji="🎬"
+                    title="Now make a promo video"
+                    description="Your listing copy is ready. Create an AI avatar video to promote this product on social media."
+                    actionLabel="Generate avatar video"
+                    onAction={() => setActiveEditorTab("videos")}
+                    secondaryLabel="Maybe later"
+                    dismissible={true}
+                  />
                 )}
               </TabsContent>
               </div>
@@ -6502,6 +6515,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
               >
                 {isRegenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 <span className="ml-1.5">Regenerate</span>
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+                onClick={() => handleImproveSection(editingSectionId)}
+                disabled={isRegenerating}
+              >
+                <Sparkles className="w-4 h-4" />
+                <span className="ml-1.5">Improve</span>
               </Button>
               <Button
                 type="button"
