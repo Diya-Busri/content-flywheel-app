@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/use-toast";
 export default function ReferralPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [referralCount, setReferralCount] = useState<number | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -17,6 +18,12 @@ export default function ReferralPage() {
       .then((r) => r.ok ? r.json() : null)
       .then((data: { userId?: string } | null) => {
         if (data?.userId) setUserId(data.userId);
+      })
+      .catch(() => {});
+    fetch("/api/referral/stats")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { total?: number } | null) => {
+        if (data != null) setReferralCount(data.total ?? 0);
       })
       .catch(() => {});
   }, []);
@@ -80,6 +87,21 @@ export default function ReferralPage() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Referral count */}
+      {referralCount !== null && (
+        <div className="mb-8 flex items-center gap-3 p-4 rounded-xl border border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+          <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
+            <Users className="w-5 h-5 text-orange-500" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white leading-none">{referralCount}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {referralCount === 1 ? "creator joined" : "creators joined"} via your link
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Perks */}
       <div className="grid gap-4">

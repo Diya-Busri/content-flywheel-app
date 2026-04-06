@@ -105,7 +105,7 @@ type UpcomingTask = {
 
 type TasksByGoalId = Record<
   string,
-  { today: UpcomingTask[]; tomorrow: UpcomingTask[] }
+  { today: UpcomingTask[]; tomorrow: UpcomingTask[]; completedDays?: number[] }
 >;
 
 export default function GoalsFlow() {
@@ -753,6 +753,38 @@ export default function GoalsFlow() {
                       <Flame className="w-4 h-4 text-orange-500 shrink-0" />
                       {goal.streakCount}-day streak
                     </div>
+                    {/* Streak heatmap — last 30 days */}
+                    {(() => {
+                      const completedSet = new Set(tasksByGoalId[goal.id]?.completedDays ?? []);
+                      const totalShown = Math.min(goal.totalDays, 30);
+                      const startDay = Math.max(1, goal.currentDay - totalShown + 1);
+                      const days = Array.from({ length: goal.currentDay - startDay + 1 }, (_, i) => startDay + i);
+                      if (days.length === 0) return null;
+                      return (
+                        <div className="flex flex-wrap gap-[3px]">
+                          {days.map((d) => (
+                            <TooltipProvider key={d} delayDuration={100}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div
+                                    className={`w-3 h-3 rounded-sm ${
+                                      completedSet.has(d)
+                                        ? "bg-orange-500"
+                                        : d < goal.currentDay
+                                        ? "bg-slate-200 dark:bg-slate-700"
+                                        : "bg-slate-100 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-600"
+                                    }`}
+                                  />
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                  Day {d} {completedSet.has(d) ? "✓ Done" : d < goal.currentDay ? "Missed" : "Today"}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     {todayTasks.length > 0 && (
                       <p className="text-sm text-slate-600 dark:text-slate-400">
                         TODAY: {todayComplete}/{todayTasks.length} tasks complete

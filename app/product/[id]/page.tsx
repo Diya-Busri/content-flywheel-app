@@ -14,6 +14,7 @@ type MarketingAssets = {
   coverThumbnailUrl?: string | null;
   bookMockupUrl?: string | null;
   checkoutUrl?: string | null;
+  priceLabel?: string | null;
 };
 
 export async function generateMetadata({
@@ -72,6 +73,7 @@ export default async function ProductSalesPage({
   const hashtags: string[] = ma.hashtags ?? [];
   const creatorName = bv?.brandName ?? null;
   const checkoutUrl = ma.checkoutUrl?.trim() || null;
+  const priceLabel = ma.priceLabel?.trim() || null;
   const formatLabel = product.format
     ? product.format.charAt(0).toUpperCase() + product.format.slice(1).replace(/_/g, " ")
     : "Digital Product";
@@ -182,6 +184,20 @@ export default async function ProductSalesPage({
 
         {/* CTA */}
         <div style={{ textAlign: "center", marginBottom: "40px" }}>
+          {priceLabel && (
+            <div style={{ marginBottom: "12px" }}>
+              <span
+                style={{
+                  fontSize: "32px",
+                  fontWeight: 800,
+                  color: "#111827",
+                  letterSpacing: "-1px",
+                }}
+              >
+                {priceLabel}
+              </span>
+            </div>
+          )}
           <a
             href={checkoutUrl ?? `mailto:?subject=Interested in ${encodeURIComponent(displayTitle)}`}
             target={checkoutUrl ? "_blank" : undefined}

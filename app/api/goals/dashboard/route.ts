@@ -45,6 +45,7 @@ export async function GET() {
           isCompleted: boolean;
           dayNumber: number;
         }>;
+        completedDays: number[];
       }
     > = {};
 
@@ -95,7 +96,19 @@ export async function GET() {
             isCompleted: t.isCompleted,
             dayNumber: t.dayNumber,
           }));
-        tasksByGoalId[goal.id] = { today, tomorrow };
+
+        // Completed day numbers: days where ALL tasks are completed
+        const dayGroups = new Map<number, boolean[]>();
+        for (const t of goalTasks) {
+          if (!dayGroups.has(t.dayNumber)) dayGroups.set(t.dayNumber, []);
+          dayGroups.get(t.dayNumber)!.push(t.isCompleted);
+        }
+        const completedDays = Array.from(dayGroups.entries())
+          .filter(([, statuses]) => statuses.length > 0 && statuses.every(Boolean))
+          .map(([day]) => day)
+          .sort((a, b) => a - b);
+
+        tasksByGoalId[goal.id] = { today, tomorrow, completedDays };
       }
     }
 

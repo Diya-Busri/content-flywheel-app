@@ -32,7 +32,7 @@ export async function POST(
 
     // Fetch all subscribed contacts (not unsubscribed)
     const contacts = await db
-      .select({ email: emailContactsTable.email, name: emailContactsTable.name })
+      .select({ id: emailContactsTable.id, email: emailContactsTable.email, name: emailContactsTable.name })
       .from(emailContactsTable)
       .where(and(eq(emailContactsTable.userId, userId), isNull(emailContactsTable.unsubscribedAt)));
 
@@ -46,13 +46,22 @@ export async function POST(
 
     for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
       const chunk = contacts.slice(i, i + BATCH_SIZE);
-      const messages = chunk.map((contact) => ({
-        from: "Content Flywheel <onboarding@resend.dev>",
-        to: contact.email,
-        subject: campaign.subject,
-        ...(campaign.previewText ? { text: campaign.previewText } : {}),
-        html: campaign.bodyHtml,
-      }));
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
+      const messages = chunk.map((contact) => {
+        const unsubscribeUrl = `${baseUrl}/api/email/unsubscribe?id=${contact.id}`;
+        const unsubscribeFooter = `
+          <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;color:#9ca3af;">
+            You received this email because you subscribed to updates from this creator.<br/>
+            <a href="${unsubscribeUrl}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
+          </div>`;
+        return {
+          from: "Content Flywheel <onboarding@resend.dev>",
+          to: contact.email,
+          subject: campaign.subject,
+          ...(campaign.previewText ? { text: campaign.previewText } : {}),
+          html: campaign.bodyHtml + unsubscribeFooter,
+        };
+      });
 
       await resend.batch.send(messages);
       totalSent += chunk.length;

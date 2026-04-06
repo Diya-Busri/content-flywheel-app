@@ -8,39 +8,59 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Copy, RefreshCw, Globe, ExternalLink, Eye, EyeOff, Link2, Check } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
-export function SalesPageCard({ productId, initialCheckoutUrl }: { productId: string; initialCheckoutUrl?: string | null }) {
+export function SalesPageCard({ productId, initialCheckoutUrl, initialPriceLabel }: { productId: string; initialCheckoutUrl?: string | null; initialPriceLabel?: string | null }) {
   const [loading, setLoading] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState(initialCheckoutUrl ?? "");
+  const [priceLabel, setPriceLabel] = useState(initialPriceLabel ?? "");
   const [urlSaving, setUrlSaving] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const priceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     setCheckoutUrl(initialCheckoutUrl ?? "");
   }, [initialCheckoutUrl]);
 
+  useEffect(() => {
+    setPriceLabel(initialPriceLabel ?? "");
+  }, [initialPriceLabel]);
+
+  const saveField = async (updates: Record<string, string | null>) => {
+    const getRes = await fetch(`/api/products/${productId}`);
+    const current = getRes.ok ? await getRes.json().catch(() => ({})) : {};
+    const merged = { ...(current.marketingAssets ?? {}), ...updates };
+    const res = await fetch(`/api/products/${productId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ marketingAssets: merged }),
+    });
+    if (!res.ok) throw new Error("Failed to save");
+  };
+
   const saveCheckoutUrl = (url: string) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       setUrlSaving(true);
       try {
-        // Fetch current marketingAssets to merge (avoid wiping other fields)
-        const getRes = await fetch(`/api/products/${productId}`);
-        const current = getRes.ok ? await getRes.json().catch(() => ({})) : {};
-        const merged = { ...(current.marketingAssets ?? {}), checkoutUrl: url.trim() || null };
-        const res = await fetch(`/api/products/${productId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ marketingAssets: merged }),
-        });
-        if (!res.ok) throw new Error("Failed to save");
+        await saveField({ checkoutUrl: url.trim() || null });
       } catch {
         toast({ title: "Couldn't save checkout URL", variant: "destructive" });
       } finally {
         setUrlSaving(false);
+      }
+    }, 800);
+  };
+
+  const savePriceLabel = (label: string) => {
+    if (priceTimer.current) clearTimeout(priceTimer.current);
+    priceTimer.current = setTimeout(async () => {
+      try {
+        await saveField({ priceLabel: label.trim() || null });
+      } catch {
+        toast({ title: "Couldn't save price", variant: "destructive" });
       }
     }, 800);
   };
@@ -138,31 +158,41 @@ export function SalesPageCard({ productId, initialCheckoutUrl }: { productId: st
             </Button>
           </div>
         </div>
-        {/* Checkout URL input — always visible */}
-        <div className="mt-3 flex items-center gap-2">
-          <Label className="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-24">Checkout URL</Label>
-          <div className="flex-1 relative">
+        {/* Checkout URL + Price inputs — always visible */}
+        <div className="mt-3 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Label className="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-20">Checkout URL</Label>
+            <div className="flex-1 relative">
+              <Input
+                type="url"
+                placeholder="https://gumroad.com/l/… or Beacons link"
+                value={checkoutUrl}
+                onChange={(e) => {
+                  setCheckoutUrl(e.target.value);
+                  saveCheckoutUrl(e.target.value);
+                }}
+                className="h-7 text-xs pr-8"
+              />
+              {urlSaving && (
+                <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 animate-spin text-gray-400" />
+              )}
+            </div>
             <Input
-              type="url"
-              placeholder="https://gumroad.com/l/… or Beacons link"
-              value={checkoutUrl}
+              placeholder="$27"
+              value={priceLabel}
               onChange={(e) => {
-                setCheckoutUrl(e.target.value);
-                saveCheckoutUrl(e.target.value);
+                setPriceLabel(e.target.value);
+                savePriceLabel(e.target.value);
               }}
-              className="h-7 text-xs pr-8"
+              className="h-7 text-xs w-20 shrink-0"
             />
-            {urlSaving && (
-              <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 animate-spin text-gray-400" />
-            )}
           </div>
+          {!checkoutUrl && (
+            <p className="text-xs text-orange-500 dark:text-orange-400">
+              Add your checkout URL — it will appear as the buy button on your public sales page.
+            </p>
+          )}
         </div>
-        {!checkoutUrl && (
-          <p className="text-xs text-orange-500 dark:text-orange-400 mt-1.5">
-            Add your checkout URL above — it will replace{" "}
-            <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">#BUY_LINK</code> on your public sales page automatically.
-          </p>
-        )}
       </CardHeader>
 
       {html && preview && (

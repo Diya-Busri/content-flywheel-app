@@ -16,6 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Package, ShoppingBag, CheckSquare, Video, Play, ExternalLink, AlertCircle, ArrowRight, Package2, TrendingUp, Mail } from "lucide-react";
 import { SyncOnboardingSteps } from "@/components/onboarding/sync-onboarding-steps";
+import { ReferralCapture } from "@/components/ReferralCapture";
+import { Suspense } from "react";
 import { GettingStartedChecklist } from "@/components/dashboard/GettingStartedChecklist";
 import { AnalyticsWidget } from "@/components/dashboard/AnalyticsWidget";
 import { WhatsWorkingSection } from "@/components/dashboard/WhatsWorkingSection";
@@ -234,6 +236,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="p-6 md:p-10">
+      <Suspense fallback={null}><ReferralCapture /></Suspense>
       <SyncOnboardingSteps digitalProductsCount={videoStats.digitalProductsCount} />
 
       {/* Motivation Banner */}

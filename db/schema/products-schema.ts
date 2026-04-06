@@ -20,6 +20,8 @@ export type MarketingAssets = {
   promoVideoProvider?: string | null;
   /** Creator's checkout / purchase URL (Gumroad, Beacons, Stripe, etc.) shown on the public sales page. */
   checkoutUrl?: string | null;
+  /** Display price shown on the public sales page (e.g. "$27", "£15", "Free"). */
+  priceLabel?: string | null;
   updatedAt?: string;
 };
 

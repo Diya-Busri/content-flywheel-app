@@ -45,6 +45,8 @@ import {
   Calendar as CalendarIcon,
   Clock,
   Send,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -133,6 +135,8 @@ export default function ContentCalendarClient({
   const [schedulePostPlatform, setSchedulePostPlatform] = useState("both");
   const [savingSchedulePost, setSavingSchedulePost] = useState(false);
   const [dueNotificationShown, setDueNotificationShown] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestions, setSuggestions] = useState<{ title: string; hook: string; platform: string; suggestedDate: string }[]>([]);
 
   const { toast } = useToast();
   const router = useRouter();
@@ -206,6 +210,20 @@ export default function ContentCalendarClient({
       });
     }
   }, [scheduledPosts, dueNotificationShown, toast]);
+
+  const fetchSuggestions = async () => {
+    setSuggesting(true);
+    try {
+      const res = await fetch("/api/content-calendar/suggest", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setSuggestions(Array.isArray(data.ideas) ? data.ideas : []);
+    } catch (e) {
+      toast({ title: "Could not generate ideas", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setSuggesting(false);
+    }
+  };
 
   const openSchedulePostModal = (ev: CalendarEvent) => {
     setSchedulePostModalEvent(ev);
@@ -420,13 +438,64 @@ export default function ContentCalendarClient({
             Schedule videos from Timeline. Queue posts for TikTok/Instagram and get reminded when it&apos;s time to post.
           </p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link href="/dashboard/video-timeline">
-            <Film className="w-4 h-4 mr-2" />
-            Create in Timeline
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchSuggestions}
+            disabled={suggesting}
+          >
+            {suggesting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
+            {suggesting ? "Thinking…" : "Suggest content"}
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/dashboard/video-timeline">
+              <Film className="w-4 h-4 mr-2" />
+              Create in Timeline
+            </Link>
+          </Button>
+        </div>
       </div>
+
+      {/* AI content suggestions panel */}
+      {suggestions.length > 0 && (
+        <div className="rounded-xl border border-orange-200 dark:border-orange-800/40 bg-orange-50/40 dark:bg-orange-950/10 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-orange-500" />
+              AI Content Ideas
+            </p>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSuggestions([])}>
+              <X className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {suggestions.map((idea, i) => (
+              <div
+                key={i}
+                className="rounded-lg bg-white dark:bg-[#1A1A1A] border border-[#E5E7EB] dark:border-[#2A2A2A] p-3 flex flex-col gap-2"
+              >
+                <p className="text-xs font-semibold text-gray-900 dark:text-white leading-snug">{idea.title}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed flex-1">&ldquo;{idea.hook}&rdquo;</p>
+                <div className="flex items-center justify-between gap-2 mt-auto pt-1">
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500">{idea.suggestedDate} · {idea.platform}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-[10px] px-2 border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-800/50 dark:text-orange-400"
+                    onClick={() => {
+                      setVideoPrefill({ title: idea.title, description: idea.hook, source: "calendar" });
+                      router.push(getTimelineUrl());
+                    }}
+                  >
+                    Use idea
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Tabs value={calendarTab} onValueChange={(v) => setCalendarTab(v as "calendar" | "scheduled")}>
         <TabsList className="mb-4 bg-muted">
