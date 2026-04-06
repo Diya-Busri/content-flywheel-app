@@ -124,6 +124,7 @@ export async function GET() {
       streakCount: g.streakCount,
       longestStreak: g.longestStreak,
       createdAt: (g.createdAt as Date)?.toISOString?.() ?? String(g.createdAt),
+      updatedAt: (g.updatedAt as Date)?.toISOString?.() ?? String(g.updatedAt),
     }));
 
     return NextResponse.json({

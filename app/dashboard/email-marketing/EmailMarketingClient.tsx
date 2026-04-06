@@ -36,7 +36,13 @@ import {
   Users,
   Search,
   AlertTriangle,
+  Upload,
+  FlaskConical,
+  Tag,
+  X,
+  Check,
 } from "lucide-react";
+import { useRef } from "react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -125,6 +131,7 @@ function CampaignSheet({
     bodyHtml: "",
   });
   const [saving, setSaving] = useState(false);
+  const [testSending, setTestSending] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -231,16 +238,40 @@ function CampaignSheet({
             </p>
           </div>
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-2 flex-wrap">
             <Button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || testSending}
               className="bg-orange-500 hover:bg-orange-600 text-white"
             >
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {initial ? "Save Changes" : "Create Campaign"}
             </Button>
-            <Button variant="outline" onClick={onClose} disabled={saving}>
+            {initial && (
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  setTestSending(true);
+                  try {
+                    // Save first so the test uses latest content
+                    await handleSave();
+                    const res = await fetch(`/api/email/campaigns/${initial.id}/test`, { method: "POST" });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error ?? "Failed");
+                    toast({ title: "Test email sent!", description: `Check your inbox at ${data.sentTo}.` });
+                  } catch (err) {
+                    toast({ title: "Test failed", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+                  } finally {
+                    setTestSending(false);
+                  }
+                }}
+                disabled={saving || testSending}
+              >
+                {testSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FlaskConical className="mr-2 h-4 w-4" />}
+                Send test to me
+              </Button>
+            )}
+            <Button variant="outline" onClick={onClose} disabled={saving || testSending}>
               Cancel
             </Button>
           </div>
@@ -387,21 +418,31 @@ function AddContactDialog({
 
 function ConfirmSendDialog({
   campaign,
-  contactCount,
+  contacts,
   open,
   onClose,
   onConfirm,
   sending,
 }: {
   campaign: Campaign | null;
-  contactCount: number;
+  contacts: Contact[];
   open: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (tagFilter: string) => void;
   sending: boolean;
 }) {
+  const [tagFilter, setTagFilter] = useState("");
+
+  const activeContacts = contacts.filter((c) => !c.unsubscribedAt);
+  const filteredCount = tagFilter.trim()
+    ? activeContacts.filter((c) => c.tags.includes(tagFilter.trim())).length
+    : activeContacts.length;
+
+  // Collect all unique tags across active contacts
+  const allTags = Array.from(new Set(activeContacts.flatMap((c) => c.tags))).sort();
+
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setTagFilter(""); } }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -410,32 +451,64 @@ function ConfirmSendDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="py-2 space-y-2 text-sm text-gray-600 dark:text-gray-400">
+        <div className="py-2 space-y-4 text-sm text-gray-600 dark:text-gray-400">
           <p>
-            You are about to send{" "}
+            Sending{" "}
             <span className="font-semibold text-gray-900 dark:text-white">
               &quot;{campaign?.subject}&quot;
             </span>{" "}
             to{" "}
             <span className="font-semibold text-orange-500">
-              {contactCount} subscriber{contactCount !== 1 ? "s" : ""}
+              {filteredCount} subscriber{filteredCount !== 1 ? "s" : ""}
             </span>
-            .
+            {tagFilter.trim() ? ` with tag "${tagFilter.trim()}"` : ""}.
           </p>
-          <p>This action cannot be undone.</p>
+          {allTags.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <Tag className="w-3 h-3" /> Send to a specific tag (optional)
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setTagFilter(tagFilter === tag ? "" : tag)}
+                    className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+                      tagFilter === tag
+                        ? "bg-orange-500 text-white border-orange-500"
+                        : "bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:border-orange-300"
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+                {tagFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setTagFilter("")}
+                    className="text-xs px-2 py-0.5 rounded-full border border-gray-200 dark:border-white/10 text-gray-400 hover:text-red-500"
+                  >
+                    <X className="w-3 h-3 inline" /> clear
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-gray-400">This action cannot be undone.</p>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={sending}>
+          <Button variant="outline" onClick={() => { onClose(); setTagFilter(""); }} disabled={sending}>
             Cancel
           </Button>
           <Button
-            onClick={onConfirm}
-            disabled={sending}
+            onClick={() => onConfirm(tagFilter.trim())}
+            disabled={sending || filteredCount === 0}
             className="bg-orange-500 hover:bg-orange-600 text-white"
           >
             {sending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {sending ? "Sending..." : "Send Now"}
+            {sending ? "Sending..." : `Send to ${filteredCount}`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -465,6 +538,11 @@ export default function EmailMarketingClient() {
   const [contactSearch, setContactSearch] = useState("");
   const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
   const [deletingCampaignId, setDeletingCampaignId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [editingTagsId, setEditingTagsId] = useState<string | null>(null);
+  const [editingTagsValue, setEditingTagsValue] = useState("");
+  const [savingTagsId, setSavingTagsId] = useState<string | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   // ---------------------------------------------------------------------------
   // Data fetchers
@@ -538,12 +616,14 @@ export default function EmailMarketingClient() {
     }
   };
 
-  const handleSendCampaign = async () => {
+  const handleSendCampaign = async (tagFilter: string) => {
     if (!sendConfirmCampaign) return;
     setSending(true);
     try {
       const res = await fetch(`/api/email/campaigns/${sendConfirmCampaign.id}/send`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tagFilter: tagFilter || null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to send");
@@ -561,6 +641,74 @@ export default function EmailMarketingClient() {
       });
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleCsvImport = async (file: File) => {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if (lines.length === 0) { toast({ title: "Empty file", variant: "destructive" }); return; }
+
+      // Detect header row
+      const firstLine = lines[0].toLowerCase();
+      const hasHeader = firstLine.includes("email") || firstLine.includes("name");
+      const dataLines = hasHeader ? lines.slice(1) : lines;
+
+      const contacts = dataLines.map((line) => {
+        const cols = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+        // Try to detect which column is email
+        const emailIdx = hasHeader
+          ? firstLine.split(",").findIndex((h) => h.includes("email"))
+          : 0;
+        const nameIdx = hasHeader
+          ? firstLine.split(",").findIndex((h) => h.includes("name"))
+          : 1;
+        return {
+          email: cols[emailIdx >= 0 ? emailIdx : 0] ?? "",
+          name: nameIdx >= 0 ? (cols[nameIdx] || undefined) : undefined,
+        };
+      }).filter((c) => c.email);
+
+      const res = await fetch("/api/email/contacts/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contacts }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Import failed");
+      toast({ title: "Import complete", description: `${data.imported} added, ${data.skipped} skipped.` });
+      await fetchContacts();
+    } catch (err) {
+      toast({ title: "Import failed", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setImporting(false);
+      if (csvInputRef.current) csvInputRef.current.value = "";
+    }
+  };
+
+  const startEditTags = (contact: Contact) => {
+    setEditingTagsId(contact.id);
+    setEditingTagsValue(contact.tags.join(", "));
+  };
+
+  const saveEditTags = async (contactId: string) => {
+    setSavingTagsId(contactId);
+    try {
+      const tags = editingTagsValue.split(",").map((t) => t.trim()).filter(Boolean);
+      const res = await fetch(`/api/email/contacts/${contactId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setContacts((prev) => prev.map((c) => c.id === contactId ? { ...c, tags } : c));
+      setEditingTagsId(null);
+    } catch {
+      toast({ title: "Could not save tags", variant: "destructive" });
+    } finally {
+      setSavingTagsId(null);
     }
   };
 
@@ -771,6 +919,25 @@ export default function EmailMarketingClient() {
                 />
               </div>
               <Button
+                variant="outline"
+                onClick={() => csvInputRef.current?.click()}
+                disabled={importing}
+                className="h-9 rounded-xl border-gray-200 dark:border-white/10 text-sm"
+              >
+                {importing ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />}
+                Import CSV
+              </Button>
+              <input
+                ref={csvInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleCsvImport(file);
+                }}
+              />
+              <Button
                 onClick={() => setAddContactOpen(true)}
                 className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl h-9"
               >
@@ -839,20 +1006,61 @@ export default function EmailMarketingClient() {
                           </Badge>
                         )}
                       </div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {contact.tags.map((tag) => (
-                          <Badge
-                            key={tag}
-                            variant="secondary"
-                            className="text-xs px-1.5 py-0 bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-100 dark:border-orange-500/20"
+                      {editingTagsId === contact.id ? (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <Input
+                            value={editingTagsValue}
+                            onChange={(e) => setEditingTagsValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveEditTags(contact.id);
+                              if (e.key === "Escape") setEditingTagsId(null);
+                            }}
+                            placeholder="tag1, tag2"
+                            className="h-6 text-xs px-2 py-0 border-gray-200 dark:border-white/10 focus-visible:ring-orange-500 w-40"
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
+                            onClick={() => saveEditTags(contact.id)}
+                            disabled={savingTagsId === contact.id}
                           >
-                            {tag}
-                          </Badge>
-                        ))}
-                        <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
-                          Added {formatDate(contact.subscribedAt)}
-                        </span>
-                      </div>
+                            {savingTagsId === contact.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
+                            onClick={() => setEditingTagsId(null)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {contact.tags.map((tag) => (
+                            <Badge
+                              key={tag}
+                              variant="secondary"
+                              className="text-xs px-1.5 py-0 bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-100 dark:border-orange-500/20"
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => startEditTags(contact)}
+                            className="text-gray-300 dark:text-gray-600 hover:text-orange-400 dark:hover:text-orange-400 transition-colors"
+                            title="Edit tags"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
+                            Added {formatDate(contact.subscribedAt)}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Delete */}
@@ -895,7 +1103,7 @@ export default function EmailMarketingClient() {
 
       <ConfirmSendDialog
         campaign={sendConfirmCampaign}
-        contactCount={activeContactCount}
+        contacts={contacts}
         open={!!sendConfirmCampaign}
         onClose={() => setSendConfirmCampaign(null)}
         onConfirm={handleSendCampaign}

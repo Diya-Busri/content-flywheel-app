@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { emailCampaignsTable, emailContactsTable } from "@/db/schema/email-marketing-schema";
+import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { Resend } from "resend";
 
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -18,6 +19,12 @@ export async function POST(
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id } = params;
+
+    // Optional tag filter from request body
+    const body = await request.json().catch(() => ({}));
+    const tagFilter: string | null = typeof body.tagFilter === "string" && body.tagFilter.trim()
+      ? body.tagFilter.trim()
+      : null;
 
     // Fetch the campaign
     const [campaign] = await db
@@ -30,11 +37,25 @@ export async function POST(
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
 
+    // Fetch brand name for the from address
+    const [bv] = await db
+      .select({ brandName: brandVoiceTable.brandName })
+      .from(brandVoiceTable)
+      .where(eq(brandVoiceTable.userId, userId))
+      .limit(1);
+    const fromName = bv?.brandName?.trim() || "Content Flywheel";
+    const from = `${fromName} <onboarding@resend.dev>`;
+
     // Fetch all subscribed contacts (not unsubscribed)
-    const contacts = await db
-      .select({ id: emailContactsTable.id, email: emailContactsTable.email, name: emailContactsTable.name })
+    let contacts = await db
+      .select({ id: emailContactsTable.id, email: emailContactsTable.email, name: emailContactsTable.name, tags: emailContactsTable.tags })
       .from(emailContactsTable)
       .where(and(eq(emailContactsTable.userId, userId), isNull(emailContactsTable.unsubscribedAt)));
+
+    // Apply tag filter if requested
+    if (tagFilter) {
+      contacts = contacts.filter((c) => c.tags.includes(tagFilter));
+    }
 
     if (contacts.length === 0) {
       return NextResponse.json({ error: "No active contacts to send to" }, { status: 400 });
@@ -55,7 +76,7 @@ export async function POST(
             <a href="${unsubscribeUrl}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
           </div>`;
         return {
-          from: "Content Flywheel <onboarding@resend.dev>",
+          from,
           to: contact.email,
           subject: campaign.subject,
           ...(campaign.previewText ? { text: campaign.previewText } : {}),

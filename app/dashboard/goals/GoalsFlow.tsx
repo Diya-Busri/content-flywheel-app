@@ -88,6 +88,7 @@ type Goal = {
   streakCount: number;
   longestStreak: number;
   createdAt: string;
+  updatedAt?: string;
 };
 
 type UpcomingTask = {
@@ -132,14 +133,37 @@ export default function GoalsFlow() {
   const bestStreakCardRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  const fetchGoals = async () => {
+  const fetchGoals = async (skipAutoAdvance = false) => {
     setLoading(true);
     try {
       const res = await fetch("/api/goals/dashboard");
       if (!res.ok) throw new Error("Failed to load goals");
       const data = await res.json();
-      setGoals(data.goals ?? []);
+      const fetchedGoals: Goal[] = data.goals ?? [];
+      setGoals(fetchedGoals);
       setTasksByGoalId(data.tasksByGoalId ?? {});
+
+      // Auto-advance goals that haven't been updated today (after 2am grace period)
+      if (!skipAutoAdvance) {
+        const now = new Date();
+        const todayStr = now.toLocaleDateString("en-CA"); // YYYY-MM-DD local
+        const isAfterGrace = now.getHours() >= 2;
+        if (isAfterGrace) {
+          const stale = fetchedGoals.filter((g) => {
+            if (g.status !== "active" || g.currentDay >= g.totalDays) return false;
+            const lastUpdated = new Date(g.updatedAt ?? g.createdAt);
+            return lastUpdated.toLocaleDateString("en-CA") < todayStr;
+          });
+          if (stale.length > 0) {
+            await Promise.all(
+              stale.map((g) => fetch(`/api/goals/${g.id}/advance-past-grace`, { method: "POST" }))
+            );
+            // Re-fetch with skipAutoAdvance to avoid infinite loop
+            void fetchGoals(true);
+            return;
+          }
+        }
+      }
     } catch {
       setGoals([]);
       setTasksByGoalId({});
