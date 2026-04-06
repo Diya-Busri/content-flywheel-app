@@ -799,27 +799,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     copyToClipboard(text, "Full script");
   }, [displayScript, copyToClipboard]);
 
-  /** Copy the best available TikTok caption (social kit description + hashtags, else script text). */
-  const copyCaption = useCallback(() => {
-    let text = "";
-    if (socialKit?.tiktok) {
-      const desc = socialKit.tiktok.descriptionVariations?.[0] ?? "";
-      const hashtags = socialKit.tiktok.hashtags?.join(" ") ?? "";
-      text = [desc, hashtags].filter(Boolean).join("\n\n");
-    } else {
-      text = fullScriptText.trim();
-    }
-    if (!text) {
-      toast({ title: "Nothing to copy", description: "Generate a Social Media Kit first for a polished caption." });
-      return;
-    }
-    void navigator.clipboard.writeText(text).then(() => {
-      setCopiedCaption(true);
-      setTimeout(() => setCopiedCaption(false), 2000);
-      toast({ title: "Caption copied!", description: "Ready to paste straight into TikTok." });
-    });
-  }, [socialKit, fullScriptText, toast]);
-
   const handleRegenerateFullScript = useCallback(
     async (lengthAdjustment?: "shorter" | "longer") => {
       if (!libraryScriptId) return;
@@ -967,6 +946,28 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   }, [displayScript, guide.productName, productId, onScenesRegenerated, toast, isYouTubeMode, config.duration, config.sceneCount, applyRegeneratePayload]);
 
   const fullScriptText = `${currentScriptForDisplay.hook}\n\n${currentScriptForDisplay.body}\n\n${currentScriptForDisplay.cta}`;
+
+  /** Copy the best available TikTok caption (social kit description + hashtags, else script text). */
+  const copyCaption = useCallback(() => {
+    let text = "";
+    if (socialKit?.tiktok) {
+      const desc = socialKit.tiktok.descriptionVariations?.[0] ?? "";
+      const hashtags = socialKit.tiktok.hashtags?.join(" ") ?? "";
+      text = [desc, hashtags].filter(Boolean).join("\n\n");
+    } else {
+      text = fullScriptText.trim();
+    }
+    if (!text) {
+      toast({ title: "Nothing to copy", description: "Generate a Social Media Kit first for a polished caption." });
+      return;
+    }
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopiedCaption(true);
+      setTimeout(() => setCopiedCaption(false), 2000);
+      toast({ title: "Caption copied!", description: "Ready to paste straight into TikTok." });
+    });
+  }, [socialKit, fullScriptText, toast]);
+
   const scriptStats = useMemo(() => {
     const text = fullScriptText.trim();
     const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
