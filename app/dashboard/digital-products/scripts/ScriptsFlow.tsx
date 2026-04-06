@@ -221,6 +221,7 @@ export default function ScriptsFlow() {
   const searchParams = useSearchParams();
   const productIdFromUrl = searchParams.get("productId");
   const intentVideoGuide = searchParams.get("intent") === "video-guide";
+  const fromVideoFlow = searchParams.get("from") === "video-flow";
   const [loading, setLoading] = useState(true);
   const [scripts, setScripts] = useState<ScriptData[]>([]);
   const [editModal, setEditModal] = useState<{ scriptId: string; section: SectionType } | null>(null);
@@ -480,36 +481,71 @@ export default function ScriptsFlow() {
 
   return (
     <main className="min-h-screen bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white p-6 md:p-10 max-w-6xl mx-auto pb-28">
-      <Link
-        href={productIdFromUrl ? `/dashboard/digital-products/${productIdFromUrl}/edit` : "/dashboard/digital-products/create"}
-        className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-[#A0A0A0] hover:text-orange-500 mb-6 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        {productIdFromUrl ? "Back to Product Editor" : "Back to Product"}
-      </Link>
 
-      {/* Progress */}
-      <div className="flex items-center gap-2 mb-6">
-        <div className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm font-semibold">
-          ✓
+      {/* ── Flow header ── */}
+      <div className="mb-8">
+        {/* Back link */}
+        <Link
+          href={
+            fromVideoFlow
+              ? "/dashboard/videos/select-product"
+              : productIdFromUrl
+                ? `/dashboard/digital-products/${productIdFromUrl}/edit`
+                : "/dashboard/digital-products/create"
+          }
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-orange-500 dark:hover:text-orange-400 transition-colors mb-6"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {fromVideoFlow ? "Change product" : productIdFromUrl ? "Back to Product Editor" : "Back to Product"}
+        </Link>
+
+        {/* Step indicator */}
+        <div className="flex items-center gap-2 mb-5">
+          {/* Step 1 — done */}
+          <div className="flex items-center gap-1.5">
+            <div className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center text-xs font-bold">✓</div>
+            <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">Select product</span>
+          </div>
+          <div className="h-px w-6 bg-orange-500" />
+          {/* Step 2 — current */}
+          <div className="flex items-center gap-1.5">
+            <div className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center text-xs font-bold ring-2 ring-orange-500/30">2</div>
+            <span className="text-xs font-semibold text-orange-500 hidden sm:inline">Customize scripts</span>
+          </div>
+          <div className="h-px w-6 bg-gray-200 dark:bg-[#2A2A2A]" />
+          {/* Step 3 — upcoming */}
+          <div className="flex items-center gap-1.5">
+            <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-[#2A2A2A] text-gray-500 dark:text-gray-400 flex items-center justify-center text-xs font-bold">3</div>
+            <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">Create video</span>
+          </div>
         </div>
-        <div className="h-px w-8 bg-orange-500" />
-        <div className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm font-semibold">
-          2
-        </div>
-        <div className="h-px w-8 bg-gray-200 dark:bg-[#2A2A2A]" />
-<div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center text-sm font-semibold text-gray-700 dark:text-gray-400">
-         3
-        </div>
-        <span className="ml-3 text-sm font-medium text-gray-900 dark:text-gray-400">
-          Step 2 of 3 — Customize Your Video Scripts
-        </span>
+
+        {/* Context banner */}
+        {productName && (
+          <div className="flex items-start gap-3 rounded-xl border border-orange-500/20 bg-orange-500/5 dark:bg-orange-500/8 px-4 py-3">
+            <BookOpen className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 mb-0.5">
+                Step 2 of 3 — Customize Your Scripts
+              </p>
+              <p className="text-sm text-gray-900 dark:text-white font-medium truncate">
+                Creating video for:{" "}
+                <span className="text-orange-500">{cleanProductTitle(productName) || productName}</span>
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Fallback heading when no product name yet */}
+        {!productName && !loading && (
+          <div className="rounded-xl border border-[#E5E7EB] dark:border-[#2A2A2A] px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 mb-0.5">
+              Step 2 of 3 — Customize Your Scripts
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Customize the scripts below for your video</p>
+          </div>
+        )}
       </div>
-      {productName && (
-        <p className="text-sm text-gray-700 dark:text-gray-400 mb-6">
-          Based on: <span className="font-medium text-gray-900 dark:text-white">{cleanProductTitle(productName) || productName}</span>
-        </p>
-      )}
 
       {loading ? (
         <Card className="border-slate-200 dark:border-slate-800">

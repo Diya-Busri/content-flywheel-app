@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Package, Sparkles, Check, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { Package, Sparkles, Check, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, RefreshCw, Package2, Pencil, ExternalLink } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 const CARD_CLASS =
@@ -88,7 +88,28 @@ async function pollWithAutoRetry(
   return result;
 }
 
+type MyProduct = {
+  id: string;
+  title: string;
+  format?: string;
+};
+
+const FORMAT_LABELS: Record<string, string> = {
+  ebook: "Ebook",
+  guide: "Guide",
+  workbook: "Workbook",
+  planner: "Planner",
+  journal: "Journal",
+  checklist: "Checklist Pack",
+  course: "Course Outline",
+  notion: "Notion Template",
+  template: "Template",
+  spreadsheet: "Spreadsheet Guide",
+};
+
 export default function DigitalProductsLanding() {
+  const [myProducts, setMyProducts] = useState<MyProduct[]>([]);
+  const [myProductsLoading, setMyProductsLoading] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [bundleOpen, setBundleOpen] = useState(false);
   const [topicInput, setTopicInput] = useState("");
@@ -103,6 +124,14 @@ export default function DigitalProductsLanding() {
     try {
       if (localStorage.getItem(SELLING_GUIDE_BANNER_KEY) === "1") setBannerDismissed(true);
     } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/products")
+      .then((r) => r.json())
+      .then((data) => setMyProducts(Array.isArray(data.products) ? data.products : []))
+      .catch(() => setMyProducts([]))
+      .finally(() => setMyProductsLoading(false));
   }, []);
 
   const dismissBanner = () => {
@@ -246,6 +275,46 @@ export default function DigitalProductsLanding() {
           Choose how you&apos;d like to get started
         </p>
 
+        {/* ── My Products section ── */}
+        {myProductsLoading ? null : myProducts.length > 0 && (
+          <div className="mb-12">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">My Products</h2>
+              <Link
+                href="/dashboard/library?tab=products"
+                className="inline-flex items-center gap-1.5 text-sm text-orange-500 hover:text-orange-400 font-medium transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                View all in Library
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {myProducts.map((product) => (
+                <Link
+                  key={product.id}
+                  href={`/dashboard/digital-products/${product.id}/edit`}
+                  className="group flex items-start gap-3 rounded-xl border border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-4 hover:border-orange-400/60 dark:hover:border-orange-500/40 hover:shadow-md transition-all"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Package className="w-5 h-5 text-orange-500" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    {product.format && (
+                      <span className="inline-block text-[10px] font-medium uppercase tracking-wide text-orange-600 dark:text-orange-400 bg-orange-500/10 rounded px-1.5 py-0.5 mb-1.5">
+                        {FORMAT_LABELS[product.format] ?? product.format}
+                      </span>
+                    )}
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 leading-snug">
+                      {product.title}
+                    </p>
+                  </div>
+                  <Pencil className="w-4 h-4 text-gray-400 group-hover:text-orange-500 transition-colors shrink-0 mt-1" />
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="grid md:grid-cols-2 gap-6 items-stretch">
           {/* LEFT CARD */}
           <Card className={CARD_CLASS}>
@@ -331,20 +400,38 @@ export default function DigitalProductsLanding() {
           </Card>
         </div>
 
-        {/* Generate Full Bundle */}
-        <div className="mt-8 flex flex-col items-center">
-          <Button
-            type="button"
-            variant="outline"
-            className="border-orange-500/50 text-orange-600 dark:text-orange-400 hover:bg-orange-500/10 hover:border-orange-500 gap-2 h-12 px-6"
-            onClick={() => setBundleOpen(true)}
-          >
-            <Layers className="w-5 h-5" />
-            Generate Full Bundle
-          </Button>
-          <p className="mt-2 text-sm text-gray-500 dark:text-[#A0A0A0]">
-            One topic → all 8 formats (Ebook, Workbook, Planner, Journal, Checklist, Course, Notion, Spreadsheet)
-          </p>
+        {/* Bottom actions */}
+        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+          <div className="flex flex-col items-center">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-orange-500/50 text-orange-600 dark:text-orange-400 hover:bg-orange-500/10 hover:border-orange-500 gap-2 h-12 px-6"
+              onClick={() => setBundleOpen(true)}
+            >
+              <Layers className="w-5 h-5" />
+              Generate Full Bundle
+            </Button>
+            <p className="mt-2 text-xs text-gray-500 dark:text-[#A0A0A0] text-center">
+              One topic → all 8 formats
+            </p>
+          </div>
+          <div className="hidden sm:block w-px h-10 bg-gray-200 dark:bg-gray-700" />
+          <div className="flex flex-col items-center">
+            <Button
+              asChild
+              variant="outline"
+              className="border-orange-500/50 text-orange-600 dark:text-orange-400 hover:bg-orange-500/10 hover:border-orange-500 gap-2 h-12 px-6"
+            >
+              <Link href="/dashboard/digital-products/bundle">
+                <Package2 className="w-5 h-5" />
+                Bundle Creator
+              </Link>
+            </Button>
+            <p className="mt-2 text-xs text-gray-500 dark:text-[#A0A0A0] text-center">
+              Package existing products with AI copy &amp; pricing
+            </p>
+          </div>
         </div>
 
         <p className="mt-8 text-center text-sm text-gray-500">

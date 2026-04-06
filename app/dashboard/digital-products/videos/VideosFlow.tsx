@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Check, Play, Loader2, User, Image, Package, Sparkles, AlertCircle, FileText, Plus, X } from "lucide-react";
+import { ArrowLeft, Check, Play, Loader2, User, Image, Package, Sparkles, AlertCircle, FileText, Plus, X, BookOpen, PartyPopper } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { VIDEO_GUIDE_PLATFORMS } from "@/lib/video-guide-platforms";
 import { cleanProductTitle } from "@/lib/product-title";
@@ -79,6 +79,13 @@ export default function VideosFlow() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [generateLoading, setGenerateLoading] = useState(false);
   const [generateProgress, setGenerateProgress] = useState<string | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
+  const autoNavRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const goToGuide = () => {
+    if (autoNavRef.current) clearTimeout(autoNavRef.current);
+    router.push("/dashboard/digital-products/video-guide");
+  };
 
   useEffect(() => {
     try {
@@ -228,8 +235,12 @@ export default function VideosFlow() {
         throw new Error(guide.error || `Request failed: ${res.status}`);
       }
       sessionStorage.setItem("videoCreationGuide", JSON.stringify({ ...guide, scriptTitle: script.title, preferredVoiceId: selectedVoiceId, scriptsForGuide: selectedScripts, productIdForGuide: productId || undefined }));
-      toast({ title: "Guide ready", description: "Your personalised video creation guide is ready." });
-      router.push("/dashboard/digital-products/video-guide");
+      setVideoReady(true);
+      setGenerateProgress(null);
+      // Auto-navigate after 1.8s — user can also click "View Video Guide →" to go instantly
+      autoNavRef.current = setTimeout(() => {
+        router.push("/dashboard/digital-products/video-guide");
+      }, 1800);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong";
       toast({ title: "Guide generation failed", description: msg, variant: "destructive" });
@@ -245,21 +256,82 @@ export default function VideosFlow() {
   return (
     <main className="min-h-screen bg-background text-foreground mb-[100px]">
       <div className="max-w-4xl mx-auto p-6 md:p-10">
-        <Link
-          href="/dashboard/digital-products/scripts"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-orange-500 mb-6 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Scripts
-        </Link>
+        {/* ── Flow header (matches Step 2 style) ── */}
+        <div className="mb-8">
+          {/* Back link */}
+          <Link
+            href={productId
+              ? `/dashboard/digital-products/scripts?productId=${productId}&from=video-flow`
+              : "/dashboard/digital-products/scripts"
+            }
+            className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-orange-500 dark:hover:text-orange-400 transition-colors mb-6"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to scripts
+          </Link>
 
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs font-medium text-orange-500 uppercase tracking-wider">Step 3 of 3</span>
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mb-5">
+            {/* Step 1 — done */}
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center text-xs font-bold">✓</div>
+              <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">Select product</span>
+            </div>
+            <div className="h-px w-6 bg-orange-500" />
+            {/* Step 2 — done */}
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center text-xs font-bold">✓</div>
+              <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">Customize scripts</span>
+            </div>
+            <div className="h-px w-6 bg-orange-500" />
+            {/* Step 3 — current */}
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center text-xs font-bold ring-2 ring-orange-500/30">3</div>
+              <span className="text-xs font-semibold text-orange-500 hidden sm:inline">Create video</span>
+            </div>
+          </div>
+
+          {/* Context banner */}
+          {videoReady ? (
+            <div className="flex items-start justify-between gap-4 rounded-xl border border-green-500/30 bg-green-500/8 dark:bg-green-500/10 px-4 py-3">
+              <div className="flex items-start gap-3 min-w-0">
+                <PartyPopper className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-green-600 dark:text-green-400 mb-0.5">
+                    Complete — All 3 steps done
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    Your video is ready 🎉
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Built to get clicks, saves, and sales →</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">(Opening automatically…)</p>
+                </div>
+              </div>
+              <Button
+                onClick={goToGuide}
+                size="sm"
+                className="shrink-0 bg-green-600 hover:bg-green-700 text-white font-semibold gap-1.5 whitespace-nowrap"
+              >
+                View Video Guide →
+              </Button>
+            </div>
+          ) : (productName || !generateLoading) ? (
+            <div className="flex items-start gap-3 rounded-xl border border-orange-500/20 bg-orange-500/5 dark:bg-orange-500/8 px-4 py-3">
+              <BookOpen className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 mb-0.5">
+                  Step 3 of 3 — Create Your Video
+                </p>
+                <p className="text-sm text-gray-900 dark:text-white font-medium truncate">
+                  Creating video for:{" "}
+                  <span className="text-orange-500">
+                    {cleanProductTitle(productName) || productName || "your product"}
+                  </span>
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">Customize Your Videos</h1>
-        <p className="text-muted-foreground mb-8">
-          Based on: <span className="font-medium text-foreground">{cleanProductTitle(productName) || productName || "Product"}</span>
-        </p>
 
         {count === 0 ? (
           <Card className={cardClass}>
@@ -555,22 +627,38 @@ export default function VideosFlow() {
               )}
               <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
                 <div className="flex flex-col sm:items-end gap-2 sm:ml-auto">
-                  <p className="text-sm text-muted-foreground">
-                    Get a personalised step-by-step guide to create your video using free tools
-                  </p>
-                  <Button
-                    className="bg-orange-500 hover:bg-orange-600 gap-2"
-                    size="lg"
-                    onClick={handleGenerateGuide}
-                    disabled={generateLoading}
-                  >
-                    {generateLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <FileText className="w-4 h-4" />
-                    )}
-                    {generateLoading ? "Generating..." : "Create Video Guide →"}
-                  </Button>
+                  {videoReady ? (
+                    <div className="flex flex-col sm:items-end gap-1.5">
+                      <Button
+                        onClick={goToGuide}
+                        size="lg"
+                        className="bg-green-600 hover:bg-green-700 text-white font-semibold gap-2"
+                      >
+                        <Check className="w-4 h-4" />
+                        View Video Guide →
+                      </Button>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">(Opening automatically…)</p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        Get a personalised step-by-step guide to create your video using free tools
+                      </p>
+                      <Button
+                        className="bg-orange-500 hover:bg-orange-600 gap-2"
+                        size="lg"
+                        onClick={handleGenerateGuide}
+                        disabled={generateLoading}
+                      >
+                        {generateLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <FileText className="w-4 h-4" />
+                        )}
+                        {generateLoading ? "Generating…" : "Create Video Guide →"}
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

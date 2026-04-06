@@ -97,7 +97,7 @@ export type SocialMediaKit = {
 const SOCIAL_KIT_STORAGE_KEY = "videoCreationGuideSocialKit";
 
 /** Matches Template Studio AI Story → Video Timeline prefill (`TIMELINE_SCENE_DURATION`). */
-const VIDEO_GUIDE_TIMELINE_SCENE_SEC = 5;
+const VIDEO_GUIDE_TIMELINE_SCENE_SEC = 8;
 
 /** Same URL resolution as Template Studio `/api/generate-image` handling. */
 function resolveGenerateImageApiUrl(data: unknown): string | null {
@@ -449,6 +449,16 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const [guideBulkImagesLoading, setGuideBulkImagesLoading] = useState(false);
   /** Server-side FFmpeg compile (whole MP4) in progress. */
   const [guideFullVideoLoading, setGuideFullVideoLoading] = useState(false);
+  /** URL of the last successfully compiled MP4 — persists on the card so users don't miss it. */
+  const [lastCompiledVideoUrl, setLastCompiledVideoUrl] = useState<string | null>(null);
+  /** Tracks whether the video link was just copied to clipboard (shows "Copied!" briefly). */
+  const [copiedVideoLink, setCopiedVideoLink] = useState(false);
+  /** Tracks whether the TikTok caption was just copied. */
+  const [copiedCaption, setCopiedCaption] = useState(false);
+  /** Whether the "Post on TikTok" checklist is expanded. */
+  const [showTikTokChecklist, setShowTikTokChecklist] = useState(false);
+  /** Interactive TikTok checklist item states. */
+  const [tiktokCheckItems, setTiktokCheckItems] = useState<boolean[]>([false, false, false, false, false, false, false]);
   /** Track which scene "Animate Scene" jobs are currently running so we can show export CTA. */
   const [animatingByScene, setAnimatingByScene] = useState<Record<number, boolean>>({});
   /** When true, we auto-export once all animated scene videos + voiceovers are ready. */
@@ -788,6 +798,27 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     const text = `Hook:\n${displayScript.hook}\n\nBody:\n${displayScript.body}\n\nCTA:\n${displayScript.cta}`;
     copyToClipboard(text, "Full script");
   }, [displayScript, copyToClipboard]);
+
+  /** Copy the best available TikTok caption (social kit description + hashtags, else script text). */
+  const copyCaption = useCallback(() => {
+    let text = "";
+    if (socialKit?.tiktok) {
+      const desc = socialKit.tiktok.descriptionVariations?.[0] ?? "";
+      const hashtags = socialKit.tiktok.hashtags?.join(" ") ?? "";
+      text = [desc, hashtags].filter(Boolean).join("\n\n");
+    } else {
+      text = fullScriptText.trim();
+    }
+    if (!text) {
+      toast({ title: "Nothing to copy", description: "Generate a Social Media Kit first for a polished caption." });
+      return;
+    }
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopiedCaption(true);
+      setTimeout(() => setCopiedCaption(false), 2000);
+      toast({ title: "Caption copied!", description: "Ready to paste straight into TikTok." });
+    });
+  }, [socialKit, fullScriptText, toast]);
 
   const handleRegenerateFullScript = useCallback(
     async (lengthAdjustment?: "shorter" | "longer") => {
@@ -1328,7 +1359,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
       const guideScenes = scenes.map((_, i) => {
         const video_url = mergedVideoUrls[i]?.trim() || null;
-        const image_url = video_url ? null : mergedUrls[i]?.trim() ?? null;
+        const rawStill = mergedUrls[i]?.trim() || null;
+        const image_url = rawStill && isHttp(rawStill) ? rawStill : null;
         const vo = guideCoachVoiceoverUrls[i]?.trim() || perSceneUrls[i]?.trim() || "";
         const caption = buildGuideSceneCaptionText(i).trim();
         const row: {
@@ -1364,16 +1396,26 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       if (!res.ok) throw new Error(data.error || "Compile failed");
       const url = data.url?.trim();
       if (!url) throw new Error("No video URL returned");
+      setLastCompiledVideoUrl(url);
+      // Trigger download directly via a link click (avoids popup blocker)
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `video-${Date.now()}.mp4`;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       toast({
-        title: "Full video ready",
-        description: "Opening your MP4. You can download it from the new tab.",
+        title: "Full video ready ✅",
+        description: "Downloading to your Downloads folder. Also saved to My Library.",
+        duration: 60000,
         action: (
-          <ToastAction altText="Open download" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
+          <ToastAction altText="Open in new tab" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
             Open
           </ToastAction>
         ),
       });
-      window.open(url, "_blank", "noopener,noreferrer");
     } catch (e) {
       toast({
         title: "Could not make full video",
@@ -2104,6 +2146,123 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             </Button>
           </div>
         </div>
+
+        {/* ── Quick Actions Strip ── */}
+        <div className="flex flex-wrap items-center gap-3 mb-6 px-4 py-3 rounded-xl border border-orange-200 dark:border-orange-800/50 bg-orange-50/40 dark:bg-orange-950/10">
+          <span className="text-xs font-semibold uppercase tracking-wider text-orange-500 mr-1 shrink-0">Quick actions</span>
+          <Button
+            size="sm"
+            className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5 shrink-0"
+            onClick={downloadGuide}
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-orange-200 dark:border-orange-800/60 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-950/30 gap-1.5 shrink-0"
+            onClick={copyCaption}
+          >
+            <Copy className="w-3.5 h-3.5" />
+            {copiedCaption ? "Copied!" : "Copy Caption"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className={[
+              "gap-1.5 shrink-0 transition-colors",
+              showTikTokChecklist
+                ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white"
+                : "border-gray-300 dark:border-border text-gray-700 dark:text-muted-foreground hover:bg-gray-100 dark:hover:bg-muted",
+            ].join(" ")}
+            onClick={() => setShowTikTokChecklist((v) => !v)}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Post on TikTok checklist
+          </Button>
+        </div>
+
+        {/* ── TikTok Posting Checklist ── */}
+        {showTikTokChecklist && (
+          <Card className="mb-6 border-gray-200 dark:border-border overflow-visible">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
+                <span className="text-lg leading-none">📱</span>
+                Post on TikTok — Step-by-Step
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-600 dark:text-muted-foreground">
+                Tick each step off as you go
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              {[
+                { label: "Film your video using the hook, body and CTA from the script above", extra: null },
+                { label: "Export as vertical MP4 (1080 × 1920, 30 fps)", extra: null },
+                {
+                  label: "Copy your caption — hit \"Copy Caption\" above, or use your Social Media Kit description + hashtags",
+                  extra: (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); copyCaption(); }}
+                      className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors"
+                    >
+                      <Copy className="w-3 h-3" />
+                      {copiedCaption ? "Copied!" : "Copy Caption"}
+                    </button>
+                  ),
+                },
+                { label: "Open TikTok → tap + → upload your video", extra: null },
+                { label: "Paste your caption and hashtags, set your cover thumbnail", extra: null },
+                { label: "Schedule or post at your peak time (check your TikTok Analytics)", extra: null },
+                { label: "Reply to every comment in the first 30 minutes to boost the algorithm", extra: null },
+              ].map((item, i) => (
+                <label
+                  key={i}
+                  className="flex items-start gap-2.5 cursor-pointer group select-none"
+                  onClick={() =>
+                    setTiktokCheckItems((prev) => {
+                      const next = [...prev];
+                      next[i] = !next[i];
+                      return next;
+                    })
+                  }
+                >
+                  <span
+                    className={[
+                      "mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors",
+                      tiktokCheckItems[i]
+                        ? "bg-black dark:bg-white border-black dark:border-white"
+                        : "border-gray-300 dark:border-border group-hover:border-gray-400 dark:group-hover:border-muted-foreground",
+                    ].join(" ")}
+                  >
+                    {tiktokCheckItems[i] && (
+                      <svg className="w-2.5 h-2.5 text-white dark:text-black" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 12 12">
+                        <polyline points="1.5,6 4.5,9 10.5,3" />
+                      </svg>
+                    )}
+                  </span>
+                  <div>
+                    <span className={tiktokCheckItems[i] ? "line-through text-gray-400 dark:text-muted-foreground" : "text-foreground"}>
+                      {item.label}
+                    </span>
+                    {item.extra}
+                  </div>
+                </label>
+              ))}
+              <div className="pt-3 border-t border-gray-100 dark:border-border">
+                <a
+                  href="https://www.tiktok.com/upload"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-black hover:bg-gray-900 text-white transition-colors"
+                >
+                  📱 Open TikTok Upload
+                </a>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {isYouTubeMode && (
           <Card className="mb-6 border-green-200 dark:border-green-800/50 bg-green-50/50 dark:bg-green-950/20 overflow-visible">
@@ -3024,6 +3183,66 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 justify-end">
+                    {lastCompiledVideoUrl && (
+                      <>
+                        <a
+                          href={lastCompiledVideoUrl}
+                          download={`video-${Date.now()}.mp4`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 shrink-0 px-4 py-2 rounded-md text-sm font-medium bg-green-500 hover:bg-green-600 text-white transition-colors"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download last video
+                        </a>
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                          <a
+                            href="https://www.tiktok.com/upload"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Opens TikTok upload — your video will be downloaded ready to upload"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-black hover:bg-gray-900 text-white transition-colors"
+                          >
+                            📱 Post to TikTok
+                          </a>
+                          <a
+                            href="https://www.instagram.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Open Instagram to upload your video via the app"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 hover:opacity-90 text-white transition-opacity"
+                          >
+                            📸 Post to Instagram
+                          </a>
+                          <a
+                            href="https://studio.youtube.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Opens YouTube Studio to upload your video"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-red-600 hover:bg-red-700 text-white transition-colors"
+                          >
+                            🎬 Post to YouTube
+                          </a>
+                          <button
+                            type="button"
+                            title="Copy video URL to clipboard"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-foreground transition-colors"
+                            onClick={() => {
+                              void navigator.clipboard.writeText(lastCompiledVideoUrl).then(() => {
+                                setCopiedVideoLink(true);
+                                setTimeout(() => setCopiedVideoLink(false), 2000);
+                              });
+                            }}
+                          >
+                            <Copy className="w-3 h-3" />
+                            {copiedVideoLink ? "Copied!" : "📋 Copy video link"}
+                          </button>
+                        </div>
+                        <p className="w-full text-xs text-muted-foreground mt-0.5">
+                          Tip: Download first, then upload to your chosen platform.
+                        </p>
+                      </>
+                    )}
                     <Button
                       type="button"
                       variant="secondary"

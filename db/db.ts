@@ -35,6 +35,8 @@ import { scheduledPostsTable } from "./schema/scheduled-posts-schema";
 import { templateStudioSetupTable } from "./schema/template-studio-setup-schema";
 import { coachSettingsTable, coachChatsTable } from "./schema/coach-settings-schema";
 import { chatSummariesTable } from "./schema/chat-summaries-schema";
+import { emailContactsTable, emailCampaignsTable } from "./schema/email-marketing-schema";
+import { productSalesTable } from "./schema/product-sales-schema";
 
 // Define the schema properly
 const schema = {
@@ -78,18 +80,23 @@ const schema = {
   coachChats: coachChatsTable,
   myLibrary: myLibraryTable,
   savedScripts: savedScriptsTable,
+  emailContacts: emailContactsTable,
+  emailCampaigns: emailCampaignsTable,
+  productSales: productSalesTable,
 };
 
-// Add connection options with improved timeout and retry settings for Vercel environment
+// Connection options tuned for Supabase pgBouncer (port 6543 pooler).
+// prepare: false is REQUIRED for pgBouncer transaction mode.
+// connect_timeout raised so cold-start connections don't fail prematurely.
 const connectionOptions = {
-  max: 3,               // Lower max connections to prevent overloading
-  idle_timeout: 10,     // Shorter idle timeout
-  connect_timeout: 5,   // Shorter connect timeout
-  prepare: false,       // Disable prepared statements
-  keepalive: true,      // Keep connections alive
-  debug: false,         // Disable debug logging in production
+  max: 5,                // pgBouncer handles the real pool; 5 is safe
+  idle_timeout: 30,      // Keep connections alive longer to avoid cold starts
+  connect_timeout: 15,   // Give pgBouncer time to hand off a connection
+  prepare: false,        // REQUIRED: pgBouncer doesn't support prepared statements
+  keepalive: true,       // Keep TCP alive between requests
+  debug: false,
   connection: {
-    application_name: "whop-boilerplate" // Identify app in Supabase logs
+    application_name: "content-flywheel"
   }
 };
 

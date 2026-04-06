@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -66,6 +66,7 @@ import { Badge } from "@/components/ui/badge";
 import TemplatesClient from "@/app/dashboard/templates/TemplatesClient";
 import HistoryClient from "@/app/dashboard/history/HistoryClient";
 import { FeaturePreviewGate } from "@/components/feature-preview-gate";
+import { QuickSellSheet } from "@/components/product-editor/QuickSellSheet";
 
 type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "trash";
 
@@ -104,6 +105,16 @@ type LibraryItem = {
   bundleId?: string;
   /** When 'ai' or 'brand', product was auto-designed; show "AI Designed" badge. */
   designSource?: "ai" | "brand" | null;
+  /** True when product has a completed avatar promo video. */
+  hasPromoVideo?: boolean;
+  /** True when product has a book mockup image. */
+  hasBookMockup?: boolean;
+  /** True when product has AI-generated marketplace listing copy. */
+  hasMarketingAssets?: boolean;
+  /** True when product has a cover thumbnail. */
+  hasThumbnail?: boolean;
+  /** 0–100 completion score. */
+  completionScore?: number;
   /** Video: timeline project metadata (scenes, template, etc.). */
   metadata?: Record<string, unknown>;
   /** Video: platforms array, e.g. ['video-timeline']. */
@@ -215,6 +226,31 @@ function scriptSourceLabel(platform: string | undefined): string {
   return SCRIPT_SOURCE_LABELS[platform.toLowerCase()] ?? platform.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** SVG ring that shows product completion score (0–100). */
+function CompletionRing({ score }: { score: number }) {
+  const r = 16;
+  const circ = 2 * Math.PI * r;
+  const dash = (score / 100) * circ;
+  const color = score === 100 ? "#22c55e" : score >= 60 ? "#f59e0b" : "#e5e7eb";
+  return (
+    <div className="relative flex items-center justify-center" title={`${score}% complete`}>
+      <svg width="40" height="40" viewBox="0 0 40 40" className="-rotate-90">
+        <circle cx="20" cy="20" r={r} fill="none" stroke="#e5e7eb" strokeWidth="3.5" className="dark:stroke-slate-700" />
+        <circle
+          cx="20" cy="20" r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="3.5"
+          strokeDasharray={`${dash} ${circ}`}
+          strokeLinecap="round"
+          style={{ transition: "stroke-dasharray 0.4s ease" }}
+        />
+      </svg>
+      <span className="absolute text-[9px] font-bold text-slate-600 dark:text-slate-300 rotate-90">{score}%</span>
+    </div>
+  );
+}
+
 /** Icon for product format (used in thumbnail placeholder). */
 function formatIcon(format: string | undefined) {
   const f = (format ?? "").toLowerCase();
@@ -322,7 +358,10 @@ function itemMatchesLibrarySearch(item: LibraryItem, q: string): boolean {
 }
 
 export default function LibraryFlow() {
-  const [tab, setTab] = useState<LibraryTab>("all");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get("tab") as LibraryTab | null) ?? "all";
+  const [tab, setTab] = useState<LibraryTab>(initialTab);
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -330,6 +369,7 @@ export default function LibraryFlow() {
   const [deletingAll, setDeletingAll] = useState(false);
   /** Item ids whose thumbnail failed to load (404, CORS, etc.) — show placeholder instead. */
   const [thumbnailErrors, setThumbnailErrors] = useState<Set<string>>(new Set());
+  const [fetchError, setFetchError] = useState<string | null>(null);
   /** Timeline video preview modal: open in timeline to preview (no stored video URL). */
   const [previewVideo, setPreviewVideo] = useState<{ id: string; title: string; openHref: string } | null>(null);
   const [templatePacks, setTemplatePacks] = useState<TemplatePackItem[]>([]);
@@ -345,7 +385,20 @@ export default function LibraryFlow() {
     setThumbnailErrors((prev) => new Set(prev).add(itemId));
   };
 
-  const fetchItems = async () => {
+  const STALE_KEY = (t: string) => `cf:library:${t}`;
+
+  const fetchItems = async (attempt = 1) => {
+    // On first attempt, immediately show stale cached data so the page isn't blank
+    if (attempt === 1) {
+      setFetchError(null);
+      try {
+        const stale = localStorage.getItem(STALE_KEY(tab));
+        if (stale) {
+          const parsed = JSON.parse(stale);
+          if (Array.isArray(parsed)) setItems(parsed);
+        }
+      } catch { /* ignore */ }
+    }
     setLoading(true);
     try {
       const isTrash = tab === "trash";
@@ -354,20 +407,28 @@ export default function LibraryFlow() {
         ? `/api/library?type=all&deleted=true`
         : `/api/library?type=${typeParam}`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      // 20s timeout; auto-retry up to 2 times on slow DB cold-start
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timeoutId);
       if (!res.ok) throw new Error("Failed to load library");
       const data = await res.json();
-      setItems(Array.isArray(data) ? data : []);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load library";
-      if ((err as { name?: string })?.name === "AbortError") {
-        toast({ title: "Timeout", description: "Library took too long to load. Try again.", variant: "destructive" });
-      } else {
-        toast({ title: "Error", description: message, variant: "destructive" });
+      const freshItems = Array.isArray(data) ? data : [];
+      setItems(freshItems);
+      setFetchError(null);
+      // Persist to localStorage for instant stale load next time
+      if (!isTrash) {
+        try { localStorage.setItem(STALE_KEY(tab), JSON.stringify(freshItems)); } catch { /* ignore */ }
       }
-      setItems([]);
+    } catch (err) {
+      const isTimeout = (err as { name?: string })?.name === "AbortError";
+      // Auto-retry silently up to 2 times on timeout (DB cold start)
+      if (isTimeout && attempt < 3) {
+        setLoading(false);
+        return fetchItems(attempt + 1);
+      }
+      // After retries exhausted, show inline error (no red toast — items may still show from stale cache)
+      setFetchError(isTimeout ? "Taking too long — tap Retry to try again." : (err instanceof Error ? err.message : "Failed to load library"));
     } finally {
       setLoading(false);
     }
@@ -490,6 +551,19 @@ export default function LibraryFlow() {
     }
   };
 
+  const handleDuplicate = async (item: LibraryItem) => {
+    if (item.type !== "product") return;
+    try {
+      const res = await fetch(`/api/products/${item.id}/duplicate`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to duplicate");
+      toast({ title: "Product duplicated!", description: "Opening your copy…" });
+      router.push(`/dashboard/digital-products/${data.id}/edit`);
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to duplicate", variant: "destructive" });
+    }
+  };
+
   const handleDeleteAll = async () => {
     setDeletingAll(true);
     try {
@@ -539,14 +613,22 @@ export default function LibraryFlow() {
         Back to dashboard
       </Link>
 
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">My Library</h1>
+      <div className="flex items-center gap-3 mb-2">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">My Library</h1>
+        {loading && items.length > 0 && (
+          <span className="inline-flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Refreshing…
+          </span>
+        )}
+      </div>
       <p className="text-gray-600 dark:text-gray-400 mb-8">
         Your digital products, video guides, and scripts in one place
       </p>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <TabsList className="bg-gray-200 dark:bg-[#1A1A1A] border border-[#E5E7EB] dark:border-[#2A2A2A]">
+          <TabsList data-tour="library-tabs" className="bg-gray-200 dark:bg-[#1A1A1A] border border-[#E5E7EB] dark:border-[#2A2A2A]">
             <TabsTrigger value="all" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">All items</TabsTrigger>
             <TabsTrigger value="products" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Digital Products</TabsTrigger>
             <TabsTrigger value="bundles" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Bundles</TabsTrigger>
@@ -573,7 +655,7 @@ export default function LibraryFlow() {
                 Delete All
               </Button>
             )}
-            <div className="relative w-48 sm:w-64 shrink-0">
+            <div data-tour="library-search" className="relative w-48 sm:w-64 shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <Input
               placeholder="Search..."
@@ -703,10 +785,29 @@ export default function LibraryFlow() {
                 </div>
               )}
             </div>
-          ) : (tab === "template-packs" ? packsLoading : loading) ? (
+          ) : (tab === "template-packs" ? packsLoading : (loading && items.length === 0)) ? (
             <div className="py-16 flex flex-col items-center justify-center">
               <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
               <p className="text-gray-600 dark:text-gray-400">Loading library...</p>
+            </div>
+          ) : fetchError && items.length === 0 ? (
+            <div className="py-16 flex flex-col items-center justify-center text-center">
+              <div className="w-14 h-14 rounded-full bg-orange-500/10 flex items-center justify-center mb-4">
+                <RotateCcw className="w-6 h-6 text-orange-500" />
+              </div>
+              <p className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+                Couldn&apos;t load your library
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 max-w-xs">
+                {fetchError}
+              </p>
+              <Button
+                onClick={() => fetchItems()}
+                className="bg-orange-500 hover:bg-orange-600 text-white font-semibold gap-2"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Retry
+              </Button>
             </div>
           ) : tab === "template-packs" && templatePacks.length === 0 ? (
             <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
@@ -960,16 +1061,36 @@ export default function LibraryFlow() {
                         <CardHeader className="pb-2 pt-3">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
-                              <CardTitle className="text-base truncate text-gray-900 dark:text-white">{item.title}</CardTitle>
+                              <div className="flex items-center gap-2">
+                                <CardTitle className="text-base truncate text-gray-900 dark:text-white flex-1">{item.title}</CardTitle>
+                                {item.type === "product" && typeof item.completionScore === "number" && (
+                                  <CompletionRing score={item.completionScore} />
+                                )}
+                              </div>
                               <div className="mt-1.5 flex flex-wrap gap-1.5">
                                 {item.type === "product" && item.format && (
                                   <Badge variant="secondary" className="text-xs font-normal bg-orange-500/10 text-orange-600 dark:text-orange-400 border-0">
                                     {formatLabel(item.format)}
                                   </Badge>
                                 )}
+                                {item.type === "product" && item.completionScore === 100 && (
+                                  <Badge variant="secondary" className="text-xs font-normal bg-green-500/10 text-green-600 dark:text-green-400 border-0">
+                                    ✓ Ready to sell
+                                  </Badge>
+                                )}
                                 {item.type === "product" && (item.designSource === "ai" || item.designSource === "brand") && (
                                   <Badge variant="secondary" className="text-xs font-normal bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-0">
                                     AI Designed
+                                  </Badge>
+                                )}
+                                {item.type === "product" && item.hasPromoVideo && (
+                                  <Badge variant="secondary" className="text-xs font-normal bg-blue-500/10 text-blue-600 dark:text-blue-400 border-0" title="Has avatar promo video">
+                                    🎬 Video
+                                  </Badge>
+                                )}
+                                {item.type === "product" && item.hasBookMockup && (
+                                  <Badge variant="secondary" className="text-xs font-normal bg-purple-500/10 text-purple-600 dark:text-purple-400 border-0" title="Has book mockup">
+                                    📸 Mockup
                                   </Badge>
                                 )}
                                 {item.type === "video" && (item.metadata as { sourceType?: string })?.sourceType === "ai-story" && (
@@ -1000,10 +1121,12 @@ export default function LibraryFlow() {
                                     </Link>
                                   </DropdownMenuItem>
                                 )}
-                                <DropdownMenuItem onClick={() => navigator.clipboard.writeText(item.title)}>
-                                  <Copy className="w-4 h-4 mr-2" />
-                                  Duplicate
-                                </DropdownMenuItem>
+                                {item.type === "product" && (
+                                  <DropdownMenuItem onClick={() => handleDuplicate(item)}>
+                                    <Copy className="w-4 h-4 mr-2" />
+                                    Duplicate
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => handleDelete(item, false)}>
                                   <Trash2 className="w-4 h-4 mr-2" />
@@ -1023,6 +1146,9 @@ export default function LibraryFlow() {
                               Open
                             </Link>
                           </Button>
+                          {item.type === "product" && (
+                            <QuickSellSheet productId={item.id} productTitle={item.title} />
+                          )}
                           {item.type === "product" && (
                             <Button variant="outline" size="sm" asChild title="Create Videos">
                               <Link href={`/dashboard/digital-products/scripts?productId=${encodeURIComponent(item.id)}`}>
@@ -1059,16 +1185,36 @@ export default function LibraryFlow() {
                   <CardHeader className="pb-2 pt-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <CardTitle className="text-base truncate text-gray-900 dark:text-white">{item.title}</CardTitle>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-base truncate text-gray-900 dark:text-white flex-1">{item.title}</CardTitle>
+                          {item.type === "product" && typeof item.completionScore === "number" && (
+                            <CompletionRing score={item.completionScore} />
+                          )}
+                        </div>
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                           {item.type === "product" && item.format && (
                             <Badge variant="secondary" className="text-xs font-normal bg-orange-500/10 text-orange-600 dark:text-orange-400 border-0">
                               {formatLabel(item.format)}
                             </Badge>
                           )}
+                          {item.type === "product" && item.completionScore === 100 && (
+                            <Badge variant="secondary" className="text-xs font-normal bg-green-500/10 text-green-600 dark:text-green-400 border-0">
+                              ✓ Ready to sell
+                            </Badge>
+                          )}
                           {item.type === "product" && (item.designSource === "ai" || item.designSource === "brand") && (
                             <Badge variant="secondary" className="text-xs font-normal bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-0">
                               AI Designed
+                            </Badge>
+                          )}
+                          {item.type === "product" && item.hasPromoVideo && (
+                            <Badge variant="secondary" className="text-xs font-normal bg-blue-500/10 text-blue-600 dark:text-blue-400 border-0" title="Has avatar promo video">
+                              🎬 Video
+                            </Badge>
+                          )}
+                          {item.type === "product" && item.hasBookMockup && (
+                            <Badge variant="secondary" className="text-xs font-normal bg-purple-500/10 text-purple-600 dark:text-purple-400 border-0" title="Has book mockup">
+                              📸 Mockup
                             </Badge>
                           )}
                           {item.type === "script" && (
@@ -1175,6 +1321,9 @@ export default function LibraryFlow() {
                             {isTimelineVideoItem(item) ? "Open Editor" : "Open"}
                           </Link>
                         </Button>
+                        {item.type === "product" && (
+                          <QuickSellSheet productId={item.id} productTitle={item.title} />
+                        )}
                         {item.type === "product" && (
                           <Button variant="outline" size="sm" asChild title="Create Videos">
                             <Link href={`/dashboard/digital-products/scripts?productId=${encodeURIComponent(item.id)}`}>

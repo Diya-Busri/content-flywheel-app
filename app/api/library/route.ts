@@ -10,6 +10,8 @@ import { eq, desc, and, isNull, isNotNull } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
+import { getLibraryCached, setLibraryCache } from "@/lib/library-cache";
+
 const LibrarySearchSchema = z.object({
   type: z.enum(["all", "product", "products", "video", "script", "scripts", "timeline", "bundles"]).optional().default("all"),
   deleted: z.enum(["true", "false"]).optional(),
@@ -31,6 +33,16 @@ type LibraryItem = {
   deletedAt?: string;
   /** When 'ai' or 'brand', product was auto-designed; show "AI Designed" badge. */
   designSource?: "ai" | "brand" | null;
+  /** True when product has a completed avatar promo video. */
+  hasPromoVideo?: boolean;
+  /** True when product has a book mockup image. */
+  hasBookMockup?: boolean;
+  /** True when product has AI-generated marketplace listing copy. */
+  hasMarketingAssets?: boolean;
+  /** True when product has a cover thumbnail. */
+  hasThumbnail?: boolean;
+  /** 0–100 completion score: content + thumbnail + mockup + marketing + video = 20pts each. */
+  completionScore?: number;
   /** Video: timeline project metadata (scenes, template, etc.). */
   metadata?: Record<string, unknown>;
   /** Video: platforms array, e.g. ['video-timeline']. */
@@ -50,6 +62,15 @@ export async function GET(request: NextRequest) {
     const typeFilter = params.type ?? "all";
     const showDeleted = params.deleted === "true";
 
+    // Return cached result immediately if still fresh
+    const cacheKey = `${userId}:${typeFilter}:${showDeleted}`;
+    const cached = getLibraryCached(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: { "X-Cache": "HIT" },
+      });
+    }
+
     let products: { id: string; title: string; status: string; format: string; bundleId: string | null; createdAt: Date | null; deletedAt: Date | null; marketingAssets: { coverThumbnailUrl?: string | null; thumbnailUrl?: string | null } | null }[] = [];
     let scripts: { id: string; title: string; status: string; createdAt: Date | null; videoId: string | null; productId: string | null; platform: string; deletedAt: Date | null }[] = [];
     let videos: { id: string; title: string; thumbnailUrl: string | null; status: string; createdAt: Date | null; productId: string | null; scriptId: string | null; deletedAt: Date | null; metadata: Record<string, unknown> | null; platforms: string[] }[] = [];
@@ -64,50 +85,75 @@ export async function GET(request: NextRequest) {
       ? and(eq(videosTable.userId, userId), isNotNull(videosTable.deletedAt))
       : and(eq(videosTable.userId, userId), isNull(videosTable.deletedAt));
 
-    try {
-      products = await db
-        .select({
-          id: productsTable.id,
-          title: productsTable.title,
-          status: productsTable.status,
-          format: productsTable.format,
-          bundleId: productsTable.bundleId,
-          designSource: productsTable.designSource,
-          createdAt: productsTable.createdAt,
-          deletedAt: productsTable.deletedAt,
-          marketingAssets: productsTable.marketingAssets,
-        })
-        .from(productsTable)
-        .where(productWhere)
-        .orderBy(desc(productsTable.createdAt));
-    } catch (err) {
-      console.error("Library products fetch error:", err);
-    }
+    // Determine which tables are actually needed for the requested type filter.
+    // This avoids querying all 3 tables when only one is needed (e.g. "products" tab).
+    const needsProducts = typeFilter === "all" || typeFilter === "product" || typeFilter === "products" || typeFilter === "bundles";
+    const needsScripts  = typeFilter === "all" || typeFilter === "script"  || typeFilter === "scripts";
+    const needsVideos   = typeFilter === "all" || typeFilter === "video"   || typeFilter === "timeline";
 
-    try {
-      scripts = await db
-        .select()
-        .from(scriptsTable)
-        .where(scriptWhere)
-        .orderBy(desc(scriptsTable.createdAt));
-    } catch (err) {
-      console.error("Library scripts fetch error:", err);
-    }
+    const productQuery = needsProducts
+      ? db
+          .select({
+            id: productsTable.id,
+            title: productsTable.title,
+            status: productsTable.status,
+            format: productsTable.format,
+            bundleId: productsTable.bundleId,
+            designSource: productsTable.designSource,
+            createdAt: productsTable.createdAt,
+            deletedAt: productsTable.deletedAt,
+            marketingAssets: productsTable.marketingAssets,
+          })
+          .from(productsTable)
+          .where(productWhere)
+          .orderBy(desc(productsTable.createdAt))
+          .catch((err) => { console.error("Library products fetch error:", err); return []; })
+      : Promise.resolve([]);
 
-    try {
-      videos = await db
-        .select()
-        .from(videosTable)
-        .where(videoWhere)
-        .orderBy(desc(videosTable.createdAt));
-    } catch (err) {
-      console.error("Library videos fetch error:", err);
-    }
+    const scriptQuery = needsScripts
+      ? db
+          .select()
+          .from(scriptsTable)
+          .where(scriptWhere)
+          .orderBy(desc(scriptsTable.createdAt))
+          .catch((err) => { console.error("Library scripts fetch error:", err); return []; })
+      : Promise.resolve([]);
+
+    const videoQuery = needsVideos
+      ? db
+          .select()
+          .from(videosTable)
+          .where(videoWhere)
+          .orderBy(desc(videosTable.createdAt))
+          .catch((err) => { console.error("Library videos fetch error:", err); return []; })
+      : Promise.resolve([]);
+
+    // Run only the needed queries in parallel
+    [products, scripts, videos] = await Promise.all([productQuery, scriptQuery, videoQuery]);
 
     const productItems: LibraryItem[] = products.map((p) => {
-      const ma = p.marketingAssets as { coverThumbnailUrl?: string | null; thumbnailUrl?: string | null } | null;
+      const ma = p.marketingAssets as {
+        coverThumbnailUrl?: string | null;
+        thumbnailUrl?: string | null;
+        promoVideoUrl?: string | null;
+        promoVideoStatus?: string | null;
+        bookMockupUrl?: string | null;
+        productTitle?: string | null;
+        productDescription?: string | null;
+      } | null;
       const thumbnail = ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? undefined;
-      const row = p as { designSource?: "ai" | "brand" | null };
+      const row = p as { designSource?: "ai" | "brand" | null; status?: string };
+      const hasPromoVideo = !!(ma?.promoVideoUrl && ma?.promoVideoStatus === "completed");
+      const hasBookMockup = !!(ma?.bookMockupUrl);
+      const hasThumbnail = !!(thumbnail);
+      const hasMarketingAssets = !!(ma?.productTitle?.trim() && ma?.productDescription?.trim());
+      const hasContent = (row.status === "draft");
+      const completionScore =
+        (hasContent ? 20 : 0) +
+        (hasThumbnail ? 20 : 0) +
+        (hasBookMockup ? 20 : 0) +
+        (hasMarketingAssets ? 20 : 0) +
+        (hasPromoVideo ? 20 : 0);
       return {
         id: p.id,
         type: "product" as const,
@@ -118,6 +164,11 @@ export async function GET(request: NextRequest) {
         format: p.format,
         bundleId: p.bundleId ?? undefined,
         designSource: row.designSource ?? undefined,
+        hasPromoVideo,
+        hasBookMockup,
+        hasThumbnail,
+        hasMarketingAssets,
+        completionScore,
         ...(showDeleted && p.deletedAt && { deletedAt: (p.deletedAt as Date)?.toISOString?.() ?? String(p.deletedAt) }),
       };
     });
@@ -164,6 +215,9 @@ export async function GET(request: NextRequest) {
         typeFilter === "products" ? "product" : typeFilter === "scripts" ? "script" : typeFilter;
       items = items.filter((i) => i.type === matchType);
     }
+
+    // Store in cache (skip trash/deleted views — those should always be fresh)
+    if (!showDeleted) setLibraryCache(cacheKey, items);
 
     return NextResponse.json(items);
   } catch (err) {
