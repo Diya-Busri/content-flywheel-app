@@ -18,6 +18,8 @@ export type MarketingAssets = {
   promoVideoStatus?: string | null;
   /** "falai" | "did" | "heygen" */
   promoVideoProvider?: string | null;
+  /** Creator's checkout / purchase URL (Gumroad, Beacons, Stripe, etc.) shown on the public sales page. */
+  checkoutUrl?: string | null;
   updatedAt?: string;
 };
 

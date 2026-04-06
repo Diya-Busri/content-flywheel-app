@@ -1,17 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Loader2, Copy, RefreshCw, Globe, ExternalLink, Eye, EyeOff, Link2, Check } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
-export function SalesPageCard({ productId }: { productId: string }) {
+export function SalesPageCard({ productId, initialCheckoutUrl }: { productId: string; initialCheckoutUrl?: string | null }) {
   const [loading, setLoading] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [checkoutUrl, setCheckoutUrl] = useState(initialCheckoutUrl ?? "");
+  const [urlSaving, setUrlSaving] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setCheckoutUrl(initialCheckoutUrl ?? "");
+  }, [initialCheckoutUrl]);
+
+  const saveCheckoutUrl = (url: string) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      setUrlSaving(true);
+      try {
+        // Fetch current marketingAssets to merge (avoid wiping other fields)
+        const getRes = await fetch(`/api/products/${productId}`);
+        const current = getRes.ok ? await getRes.json().catch(() => ({})) : {};
+        const merged = { ...(current.marketingAssets ?? {}), checkoutUrl: url.trim() || null };
+        const res = await fetch(`/api/products/${productId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ marketingAssets: merged }),
+        });
+        if (!res.ok) throw new Error("Failed to save");
+      } catch {
+        toast({ title: "Couldn't save checkout URL", variant: "destructive" });
+      } finally {
+        setUrlSaving(false);
+      }
+    }, 800);
+  };
 
   const shareProductPage = () => {
     const url = `${window.location.origin}/product/${productId}`;
@@ -106,10 +138,29 @@ export function SalesPageCard({ productId }: { productId: string }) {
             </Button>
           </div>
         </div>
-        {!loading && !html && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Generates a complete HTML sales page — paste it into Beacons, Gumroad, or your own site. Replace{" "}
-            <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">#BUY_LINK</code> with your checkout URL.
+        {/* Checkout URL input — always visible */}
+        <div className="mt-3 flex items-center gap-2">
+          <Label className="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-24">Checkout URL</Label>
+          <div className="flex-1 relative">
+            <Input
+              type="url"
+              placeholder="https://gumroad.com/l/… or Beacons link"
+              value={checkoutUrl}
+              onChange={(e) => {
+                setCheckoutUrl(e.target.value);
+                saveCheckoutUrl(e.target.value);
+              }}
+              className="h-7 text-xs pr-8"
+            />
+            {urlSaving && (
+              <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 animate-spin text-gray-400" />
+            )}
+          </div>
+        </div>
+        {!checkoutUrl && (
+          <p className="text-xs text-orange-500 dark:text-orange-400 mt-1.5">
+            Add your checkout URL above — it will replace{" "}
+            <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">#BUY_LINK</code> on your public sales page automatically.
           </p>
         )}
       </CardHeader>

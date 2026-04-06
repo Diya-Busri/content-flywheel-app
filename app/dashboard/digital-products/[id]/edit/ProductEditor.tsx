@@ -6402,7 +6402,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     <RevenueTracker productId={productId} />
                     <SocialCaptionsCard productId={productId} productTitle={product?.title ?? "Digital Product"} />
                     <EmailSequenceCard productId={productId} />
-                    <SalesPageCard productId={productId} />
+                    <SalesPageCard productId={productId} initialCheckoutUrl={(marketingAssets as { checkoutUrl?: string | null }).checkoutUrl} />
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Label className="text-xs font-medium text-gray-700">Hashtags / tags</Label>
