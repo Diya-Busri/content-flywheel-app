@@ -20,6 +20,7 @@ export const emailCampaignsTable = pgTable("email_campaigns", {
   bodyHtml: text("body_html").notNull(),
   status: text("status").$type<CampaignStatus>().default("draft").notNull(),
   sentAt: timestamp("sent_at"),
+  scheduledFor: timestamp("scheduled_for"),
   recipientCount: integer("recipient_count").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

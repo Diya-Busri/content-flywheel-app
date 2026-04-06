@@ -64,6 +64,7 @@ type Campaign = {
   bodyHtml: string;
   status: "draft" | "sent" | "scheduled";
   sentAt: string | null;
+  scheduledFor: string | null;
   recipientCount: number;
   createdAt: string;
 };
@@ -111,6 +112,7 @@ type CampaignFormState = {
   subject: string;
   previewText: string;
   bodyHtml: string;
+  scheduledFor: string;
 };
 
 function CampaignSheet({
@@ -135,10 +137,17 @@ function CampaignSheet({
 
   useEffect(() => {
     if (open) {
+      // Convert scheduledFor ISO string to datetime-local format (YYYY-MM-DDTHH:mm)
+      let scheduledFor = "";
+      if (initial?.scheduledFor) {
+        const d = new Date(initial.scheduledFor);
+        scheduledFor = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      }
       setForm({
         subject: initial?.subject ?? "",
         previewText: initial?.previewText ?? "",
         bodyHtml: initial?.bodyHtml ?? "",
+        scheduledFor,
       });
     }
   }, [open, initial]);
@@ -156,17 +165,23 @@ function CampaignSheet({
     setSaving(true);
     try {
       let res: Response;
+      const payload = {
+        subject: form.subject,
+        previewText: form.previewText,
+        bodyHtml: form.bodyHtml,
+        scheduledFor: form.scheduledFor || null,
+      };
       if (initial) {
         res = await fetch(`/api/email/campaigns/${initial.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify(payload),
         });
       } else {
         res = await fetch("/api/email/campaigns", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify(payload),
         });
       }
       const data = await res.json();
@@ -238,6 +253,21 @@ function CampaignSheet({
             </p>
           </div>
 
+          <div className="space-y-1.5">
+            <Label htmlFor="scheduledFor" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Schedule for later{" "}
+              <span className="text-gray-400 font-normal text-xs">(optional — leave blank to save as draft)</span>
+            </Label>
+            <input
+              id="scheduledFor"
+              type="datetime-local"
+              value={form.scheduledFor}
+              onChange={(e) => setForm((f) => ({ ...f, scheduledFor: e.target.value }))}
+              min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+              className="flex h-9 w-full rounded-md border border-gray-200 dark:border-white/10 bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-orange-500 dark:text-white"
+            />
+          </div>
+
           <div className="flex gap-3 pt-2 flex-wrap">
             <Button
               onClick={handleSave}
@@ -245,7 +275,9 @@ function CampaignSheet({
               className="bg-orange-500 hover:bg-orange-600 text-white"
             >
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {initial ? "Save Changes" : "Create Campaign"}
+              {form.scheduledFor
+                ? initial ? "Update Schedule" : "Schedule Campaign"
+                : initial ? "Save Changes" : "Create Draft"}
             </Button>
             {initial && (
               <Button
@@ -747,6 +779,26 @@ export default function EmailMarketingClient() {
 
   const activeContactCount = contacts.filter((c) => !c.unsubscribedAt).length;
 
+  // Build 30-day subscriber growth data
+  const growthData = (() => {
+    const days = 30;
+    const now = new Date();
+    const counts: number[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const dayStart = new Date(now);
+      dayStart.setDate(now.getDate() - i);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setHours(23, 59, 59, 999);
+      const count = contacts.filter((c) => {
+        const subDate = new Date(c.subscribedAt);
+        return subDate >= dayStart && subDate <= dayEnd;
+      }).length;
+      counts.push(count);
+    }
+    return counts;
+  })();
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -851,6 +903,8 @@ export default function EmailMarketingClient() {
                             {campaign.recipientCount} recipient{campaign.recipientCount !== 1 ? "s" : ""}
                           </span>
                         </>
+                      ) : campaign.status === "scheduled" && campaign.scheduledFor ? (
+                        <span>Scheduled for {formatDate(campaign.scheduledFor)}</span>
                       ) : (
                         <span>Created {formatDate(campaign.createdAt)}</span>
                       )}
@@ -858,7 +912,7 @@ export default function EmailMarketingClient() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {campaign.status === "draft" && (
+                    {(campaign.status === "draft" || campaign.status === "scheduled") && (
                       <>
                         <Button
                           size="sm"
@@ -875,7 +929,7 @@ export default function EmailMarketingClient() {
                           onClick={() => setSendConfirmCampaign(campaign)}
                         >
                           <Send className="h-3.5 w-3.5 mr-1" />
-                          Send
+                          Send now
                         </Button>
                       </>
                     )}
@@ -946,6 +1000,31 @@ export default function EmailMarketingClient() {
               </Button>
             </div>
           </div>
+
+          {/* Growth sparkline */}
+          {!contactsLoading && contacts.length > 0 && growthData.some((v) => v > 0) && (
+            <div className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-2xl p-5">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-3">New subscribers — last 30 days</p>
+              <div className="flex items-end gap-0.5 h-12">
+                {growthData.map((val, i) => {
+                  const max = Math.max(...growthData, 1);
+                  const height = Math.max((val / max) * 100, val > 0 ? 8 : 2);
+                  return (
+                    <div
+                      key={i}
+                      title={`${val} subscriber${val !== 1 ? "s" : ""}`}
+                      style={{ height: `${height}%` }}
+                      className={`flex-1 rounded-sm transition-all ${
+                        val > 0
+                          ? "bg-orange-400 dark:bg-orange-500"
+                          : "bg-gray-100 dark:bg-white/5"
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {contactsLoading ? (
             <div className="flex items-center justify-center py-16">

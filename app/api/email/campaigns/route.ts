@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json();
-    const { subject, previewText, bodyHtml } = body;
+    const { subject, previewText, bodyHtml, scheduledFor } = body;
 
     if (!subject || typeof subject !== "string") {
       return NextResponse.json({ error: "Subject is required" }, { status: 400 });
@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Body is required" }, { status: 400 });
     }
 
+    const scheduledDate = scheduledFor ? new Date(scheduledFor) : null;
+    const isScheduled = scheduledDate && !isNaN(scheduledDate.getTime()) && scheduledDate > new Date();
+
     const [campaign] = await db
       .insert(emailCampaignsTable)
       .values({
@@ -46,7 +49,8 @@ export async function POST(request: NextRequest) {
         subject: subject.trim(),
         previewText: previewText ? String(previewText).trim() : null,
         bodyHtml: bodyHtml.trim(),
-        status: "draft",
+        status: isScheduled ? "scheduled" : "draft",
+        scheduledFor: scheduledDate ?? undefined,
       })
       .returning();
 

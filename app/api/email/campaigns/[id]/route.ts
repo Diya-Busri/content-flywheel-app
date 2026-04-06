@@ -43,9 +43,9 @@ export async function PUT(
 
     const { id } = params;
     const body = await request.json();
-    const { subject, previewText, bodyHtml } = body;
+    const { subject, previewText, bodyHtml, scheduledFor } = body;
 
-    // Only allow editing drafts
+    // Only allow editing drafts and scheduled campaigns
     const [existing] = await db
       .select({ status: emailCampaignsTable.status })
       .from(emailCampaignsTable)
@@ -55,14 +55,27 @@ export async function PUT(
     if (!existing) {
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
-    if (existing.status !== "draft") {
-      return NextResponse.json({ error: "Only draft campaigns can be edited" }, { status: 400 });
+    if (existing.status === "sent") {
+      return NextResponse.json({ error: "Sent campaigns cannot be edited" }, { status: 400 });
     }
 
-    const updateData: Partial<{ subject: string; previewText: string | null; bodyHtml: string }> = {};
+    const scheduledDate = scheduledFor ? new Date(scheduledFor) : null;
+    const isScheduled = scheduledDate && !isNaN(scheduledDate.getTime()) && scheduledDate > new Date();
+
+    const updateData: Partial<{
+      subject: string;
+      previewText: string | null;
+      bodyHtml: string;
+      status: "draft" | "scheduled";
+      scheduledFor: Date | null;
+    }> = {};
     if (subject !== undefined) updateData.subject = String(subject).trim();
     if (previewText !== undefined) updateData.previewText = previewText ? String(previewText).trim() : null;
     if (bodyHtml !== undefined) updateData.bodyHtml = String(bodyHtml).trim();
+    if ("scheduledFor" in body) {
+      updateData.scheduledFor = isScheduled ? scheduledDate : null;
+      updateData.status = isScheduled ? "scheduled" : "draft";
+    }
 
     const [updated] = await db
       .update(emailCampaignsTable)
