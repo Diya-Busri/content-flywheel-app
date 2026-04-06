@@ -10,6 +10,10 @@ const isPublicRoute = createRouteMatcher([
   "/refund-policy",
   "/pricing",
   "/pay(.*)",
+  "/subscribe(.*)",
+  "/product(.*)",
+  "/guide(.*)",
+  "/unsubscribed",
   /** All API routes (nested paths included); individual routes still enforce auth inside handlers. */
   "/api(.*)",
 ]);
