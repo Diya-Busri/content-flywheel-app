@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, AlertTriangle, Link2, ChevronRight, Youtube, Tv } from "lucide-react";
+import { Loader2, AlertTriangle, Link2, ChevronRight, Youtube, Tv, Copy, Check, Users } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import {
   saveProfileAction,
@@ -37,6 +37,7 @@ type Props = {
   settings: SettingsDisplay | null;
   userEmail: string;
   userImageUrl: string | null;
+  userId: string;
   settingsTableMissing?: boolean;
 };
 
@@ -45,6 +46,7 @@ export default function SettingsContent({
   settings,
   userEmail,
   userImageUrl,
+  userId,
   settingsTableMissing = false,
 }: Props) {
   const router = useRouter();
@@ -80,6 +82,19 @@ export default function SettingsContent({
       cancelled = true;
     };
   }, []);
+
+  const [subscribeLinkCopied, setSubscribeLinkCopied] = useState(false);
+  const [origin, setOrigin] = useState("");
+  useEffect(() => { setOrigin(window.location.origin); }, []);
+  const subscribeUrl = `${origin || ""}/subscribe/${userId}`;
+
+  const handleCopySubscribeLink = () => {
+    void navigator.clipboard.writeText(subscribeUrl).then(() => {
+      setSubscribeLinkCopied(true);
+      setTimeout(() => setSubscribeLinkCopied(false), 2000);
+      toast({ title: "Link copied!", description: "Share it anywhere to grow your email list." });
+    });
+  };
 
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [dangerLoading, setDangerLoading] = useState<"delete" | null>(null);
@@ -545,6 +560,42 @@ export default function SettingsContent({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* GROW YOUR AUDIENCE */}
+      {userId && (
+        <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+          <CardHeader>
+            <CardTitle className="text-lg text-gray-900 dark:text-white flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Grow Your Audience
+            </CardTitle>
+            <CardDescription className="text-gray-600 dark:text-gray-400">
+              Share your subscribe page to collect email subscribers. Anyone with the link can sign up to hear from you.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Input
+                readOnly
+                value={subscribeUrl}
+                className="flex-1 font-mono text-sm bg-gray-50 dark:bg-[#0F0F0F] border-[#E5E7EB] dark:border-[#2A2A2A] text-gray-700 dark:text-gray-300"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 border-[#E5E7EB] dark:border-[#2A2A2A] gap-1.5"
+                onClick={handleCopySubscribeLink}
+              >
+                {subscribeLinkCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                {subscribeLinkCopied ? "Copied!" : "Copy link"}
+              </Button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Post this link in your bio, TikTok description, or DMs to grow your list.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* DANGER ZONE */}
       <Card className="border-red-200 dark:border-red-900/50 bg-white dark:bg-[#1A1A1A]">

@@ -38,6 +38,7 @@ export default async function SettingsPage() {
         settings={settings}
         userEmail={userEmail}
         userImageUrl={userImageUrl}
+        userId={userId ?? ""}
         settingsTableMissing={settingsTableMissing}
       />
     </main>

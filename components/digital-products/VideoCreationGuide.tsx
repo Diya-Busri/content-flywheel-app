@@ -2182,6 +2182,22 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             <CheckCircle2 className="w-3.5 h-3.5" />
             Post on TikTok checklist
           </Button>
+          {productId && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-gray-300 dark:border-border text-gray-700 dark:text-muted-foreground hover:bg-gray-100 dark:hover:bg-muted gap-1.5 shrink-0"
+              onClick={() => {
+                const url = `${window.location.origin}/guide/${productId}`;
+                void navigator.clipboard.writeText(url).then(() => {
+                  toast({ title: "Guide link copied!", description: "Share it with your team or view it on mobile." });
+                });
+              }}
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Share Guide
+            </Button>
+          )}
         </div>
 
         {/* ── TikTok Posting Checklist ── */}

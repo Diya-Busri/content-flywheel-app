@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/db";
 import { emailContactsTable } from "@/db/schema/email-marketing-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
+import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { eq, and } from "drizzle-orm";
 import { Resend } from "resend";
 
@@ -134,9 +135,18 @@ export async function POST(request: NextRequest) {
     });
 
     // --- Send welcome email via Resend ---
-    // Use the creator's name from their profile email as a display hint if available.
-    // For now we pass null so the email says "our newsletter" unless a creatorName is added later.
-    const creatorName: string | null = null;
+    // Fetch creator's brand name for personalised welcome email.
+    let creatorName: string | null = null;
+    try {
+      const [bv] = await db
+        .select({ brandName: brandVoiceTable.brandName })
+        .from(brandVoiceTable)
+        .where(eq(brandVoiceTable.userId, userId))
+        .limit(1);
+      creatorName = bv?.brandName?.trim() || null;
+    } catch {
+      // Non-fatal — fall back to generic copy
+    }
 
     try {
       await resend.emails.send({

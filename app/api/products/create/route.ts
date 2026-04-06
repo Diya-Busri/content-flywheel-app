@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
+import { autoCompleteGoalTasks } from "@/lib/goals-auto-complete";
 
 const VALID_FORMATS = ["ebook", "guide", "workbook", "spreadsheet", "notion", "course", "checklist", "journal", "planner", "template"] as const;
 
@@ -78,6 +79,9 @@ export async function POST(request: Request) {
     }).catch((e) => {
       console.error("[products/create] Failed to trigger process:", e);
     });
+
+    // Fire-and-forget: auto-complete any matching goal tasks
+    autoCompleteGoalTasks(userId, "product_created").catch(() => {});
 
     return NextResponse.json({ productId: inserted.id, success: true });
   } catch (err) {

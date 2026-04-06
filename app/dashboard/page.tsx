@@ -9,11 +9,12 @@ import { db } from "@/db/db";
 import { videosTable, tiktokShopVideosTable } from "@/db/schema/library-schema";
 import { videoJobsTable } from "@/db/schema/video-jobs-schema";
 import { productsTable } from "@/db/schema/products-schema";
+import { emailContactsTable } from "@/db/schema/email-marketing-schema";
 import { eq, desc, isNull, and, count, gte } from "drizzle-orm";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Package, ShoppingBag, CheckSquare, Video, Play, ExternalLink, AlertCircle, ArrowRight, Package2, TrendingUp } from "lucide-react";
+import { Package, ShoppingBag, CheckSquare, Video, Play, ExternalLink, AlertCircle, ArrowRight, Package2, TrendingUp, Mail } from "lucide-react";
 import { SyncOnboardingSteps } from "@/components/onboarding/sync-onboarding-steps";
 import { GettingStartedChecklist } from "@/components/dashboard/GettingStartedChecklist";
 import { AnalyticsWidget } from "@/components/dashboard/AnalyticsWidget";
@@ -87,6 +88,23 @@ async function getVideosThisWeek(userId: string): Promise<number> {
       .from(videosTable)
       .where(and(eq(videosTable.userId, userId), isNull(videosTable.deletedAt), gte(videosTable.createdAt, sevenDaysAgo)));
     return Number(result[0]?.count ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+async function getEmailSubscriberCount(userId: string): Promise<number> {
+  try {
+    const [row] = await db
+      .select({ count: count() })
+      .from(emailContactsTable)
+      .where(
+        and(
+          eq(emailContactsTable.userId, userId),
+          isNull(emailContactsTable.unsubscribedAt)
+        )
+      );
+    return Number(row?.count ?? 0);
   } catch {
     return 0;
   }
@@ -201,12 +219,13 @@ async function getVideoStats(userId: string) {
 
 export default async function DashboardPage() {
   const { userId } = auth();
-  const [videoStats, incompleteProducts, checklist, videosThisWeek] = userId
-    ? await Promise.all([getVideoStats(userId), getIncompleteProducts(userId), getChecklistData(userId), getVideosThisWeek(userId)])
+  const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers] = userId
+    ? await Promise.all([getVideoStats(userId), getIncompleteProducts(userId), getChecklistData(userId), getVideosThisWeek(userId), getEmailSubscriberCount(userId)])
     : [
         { digitalProductsCount: 0, tiktokShopCount: 0, totalLibraryVideos: 0, recent: [] as RecentVideoItem[] },
         [] as IncompleteProduct[],
         { hasBrandVoice: false, hasProduct: false, hasThumbnail: false, hasPromoVideo: false },
+        0,
         0,
       ];
 
@@ -257,7 +276,7 @@ export default async function DashboardPage() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Quick Stats
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-gray-300 dark:hover:border-[#3A3A3A] transition-colors">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -285,6 +304,23 @@ export default async function DashboardPage() {
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 {videoStats.tiktokShopCount === 1 ? "video generated" : "videos generated"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-gray-300 dark:hover:border-[#3A3A3A] transition-colors">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5" />
+                Email Subscribers
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {emailSubscribers}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {emailSubscribers === 1 ? "subscriber" : "subscribers"}
               </p>
             </CardContent>
           </Card>

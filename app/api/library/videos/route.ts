@@ -4,6 +4,7 @@ import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { videosTable } from "@/db/schema/library-schema";
 import { eq, desc } from "drizzle-orm";
+import { autoCompleteGoalTasks } from "@/lib/goals-auto-complete";
 
 export async function GET() {
   try {
@@ -54,6 +55,10 @@ export async function POST(request: NextRequest) {
       .returning();
 
     if (!inserted?.id) return NextResponse.json({ error: "Failed to save video" }, { status: 500 });
+
+    // Fire-and-forget: auto-complete any matching goal tasks
+    autoCompleteGoalTasks(userId, "video_created").catch(() => {});
+
     return NextResponse.json(inserted);
   } catch (err) {
     console.error("Library video save error:", err);
