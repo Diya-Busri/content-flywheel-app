@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Lock, Mail, Calendar } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -58,10 +58,7 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
     { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true },
   ];
 
-  // Teaser at bottom: Campaign Mode only (Coming Soon). Content Studio, Video Analytics, Content Calendar, Brand Builder are hidden from nav but pages remain.
-  const comingSoonNavItems: NavItem[] = [
-    { href: "/dashboard/campaign-mode", icon: <Lock size={18} />, label: "Campaign Mode", emoji: "🔒", badge: "Coming Soon" },
-  ];
+  const comingSoonNavItems: NavItem[] = [];
 
   const settingsItem: NavItem = { href: "/dashboard/settings", icon: <Settings size={18} />, label: "Settings", emoji: "⚙️" };
 
@@ -159,9 +156,11 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
         <nav className="flex-1 px-3 relative z-10 overflow-y-auto">
           <div className="space-y-1.5">
             {activeNavItems.map(renderNavItem)}
-            <div className="pt-3 mt-3 border-t border-[#E5E7EB] dark:border-white/10">
-              {comingSoonNavItems.map(renderNavItem)}
-            </div>
+            {comingSoonNavItems.length > 0 && (
+              <div className="pt-3 mt-3 border-t border-[#E5E7EB] dark:border-white/10">
+                {comingSoonNavItems.map(renderNavItem)}
+              </div>
+            )}
           </div>
         </nav>
 

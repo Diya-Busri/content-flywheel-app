@@ -9,7 +9,7 @@ import { db } from "@/db/db";
 import { videosTable, tiktokShopVideosTable } from "@/db/schema/library-schema";
 import { videoJobsTable } from "@/db/schema/video-jobs-schema";
 import { productsTable } from "@/db/schema/products-schema";
-import { eq, desc, isNull, and, count } from "drizzle-orm";
+import { eq, desc, isNull, and, count, gte } from "drizzle-orm";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -78,6 +78,19 @@ type ChecklistData = {
   hasThumbnail: boolean;
   hasPromoVideo: boolean;
 };
+
+async function getVideosThisWeek(userId: string): Promise<number> {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  try {
+    const result = await db
+      .select({ count: count() })
+      .from(videosTable)
+      .where(and(eq(videosTable.userId, userId), isNull(videosTable.deletedAt), gte(videosTable.createdAt, sevenDaysAgo)));
+    return Number(result[0]?.count ?? 0);
+  } catch {
+    return 0;
+  }
+}
 
 async function getChecklistData(userId: string): Promise<ChecklistData> {
   try {
@@ -188,12 +201,13 @@ async function getVideoStats(userId: string) {
 
 export default async function DashboardPage() {
   const { userId } = auth();
-  const [videoStats, incompleteProducts, checklist] = userId
-    ? await Promise.all([getVideoStats(userId), getIncompleteProducts(userId), getChecklistData(userId)])
+  const [videoStats, incompleteProducts, checklist, videosThisWeek] = userId
+    ? await Promise.all([getVideoStats(userId), getIncompleteProducts(userId), getChecklistData(userId), getVideosThisWeek(userId)])
     : [
         { digitalProductsCount: 0, tiktokShopCount: 0, totalLibraryVideos: 0, recent: [] as RecentVideoItem[] },
         [] as IncompleteProduct[],
         { hasBrandVoice: false, hasProduct: false, hasThumbnail: false, hasPromoVideo: false },
+        0,
       ];
 
   // Only show checklist if at least one step is not done yet
@@ -216,7 +230,7 @@ export default async function DashboardPage() {
       />
 
       {/* Consistency Streak */}
-      <ConsistencyStreak videosThisWeek={videoStats.totalLibraryVideos} />
+      <ConsistencyStreak videosThisWeek={videosThisWeek} />
 
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
         Welcome back

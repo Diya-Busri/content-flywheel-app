@@ -231,6 +231,16 @@ export default function ScriptsFlow() {
   const [productName, setProductName] = useState<string | null>(null);
   const [scriptVideoLengthSec, setScriptVideoLengthSec] = useState(DEFAULT_VIDEO_LENGTH_SEC);
   const [regeneratingScripts, setRegeneratingScripts] = useState(false);
+  const [brandVoiceName, setBrandVoiceName] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/brand-voice")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { brandName?: string } | null) => {
+        if (data?.brandName?.trim()) setBrandVoiceName(data.brandName.trim());
+      })
+      .catch(() => {});
+  }, []);
 
   const goToVideos = () => {
     const selected = scripts.filter((s) => s.isSelected).map((s) => ({
@@ -522,17 +532,25 @@ export default function ScriptsFlow() {
 
         {/* Context banner */}
         {productName && (
-          <div className="flex items-start gap-3 rounded-xl border border-orange-500/20 bg-orange-500/5 dark:bg-orange-500/8 px-4 py-3">
-            <BookOpen className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 mb-0.5">
-                Step 2 of 3 — Customize Your Scripts
-              </p>
-              <p className="text-sm text-gray-900 dark:text-white font-medium truncate">
-                Creating video for:{" "}
-                <span className="text-orange-500">{cleanProductTitle(productName) || productName}</span>
-              </p>
+          <div className="flex items-start justify-between gap-3 rounded-xl border border-orange-500/20 bg-orange-500/5 dark:bg-orange-500/8 px-4 py-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <BookOpen className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 mb-0.5">
+                  Step 2 of 3 — Customize Your Scripts
+                </p>
+                <p className="text-sm text-gray-900 dark:text-white font-medium truncate">
+                  Creating video for:{" "}
+                  <span className="text-orange-500">{cleanProductTitle(productName) || productName}</span>
+                </p>
+              </div>
             </div>
+            {brandVoiceName && (
+              <span className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800/50 rounded-full px-2.5 py-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                {brandVoiceName}
+              </span>
+            )}
           </div>
         )}
 
