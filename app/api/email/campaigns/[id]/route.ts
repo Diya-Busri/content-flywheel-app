@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { isAdmin } from "@/lib/is-admin";
 import { db } from "@/db/db";
 import { emailCampaignsTable } from "@/db/schema/email-marketing-schema";
 import { eq, and } from "drizzle-orm";
@@ -14,7 +13,6 @@ export async function GET(
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!await isAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { id } = params;
 
@@ -42,7 +40,6 @@ export async function PUT(
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!await isAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { id } = params;
     const body = await request.json();
@@ -87,7 +84,6 @@ export async function DELETE(
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!await isAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { id } = params;
 

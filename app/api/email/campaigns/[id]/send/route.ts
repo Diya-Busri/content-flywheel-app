@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { isAdmin } from "@/lib/is-admin";
 import { db } from "@/db/db";
 import { emailCampaignsTable, emailContactsTable } from "@/db/schema/email-marketing-schema";
 import { eq, and, isNull } from "drizzle-orm";
@@ -17,7 +16,6 @@ export async function POST(
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!await isAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { id } = params;
 

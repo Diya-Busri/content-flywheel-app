@@ -49,6 +49,7 @@ import {
   Archive,
   ExternalLink,
   BarChart3,
+  RefreshCw,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -118,6 +119,7 @@ export default function GoalsFlow() {
   const [deleting, setDeleting] = useState(false);
   const [archivingGoalId, setArchivingGoalId] = useState<string | null>(null);
   const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
+  const [regeneratingGoalId, setRegeneratingGoalId] = useState<string | null>(null);
   const [goalToEdit, setGoalToEdit] = useState<Goal | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -268,6 +270,21 @@ export default function GoalsFlow() {
       toast({ title: "Could not download report", variant: "destructive" });
     } finally {
       setDownloadingReportId(null);
+    }
+  };
+
+  const handleRegenerateTasks = async (goal: Goal) => {
+    setRegeneratingGoalId(goal.id);
+    try {
+      const res = await fetch(`/api/goals/${goal.id}/regenerate-tasks`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to regenerate");
+      fetchGoals();
+      toast({ title: "Tasks regenerated!", description: `${data.inserted ?? 0} new tasks created for remaining days.` });
+    } catch (e) {
+      toast({ title: "Could not regenerate tasks", description: e instanceof Error ? e.message : "Please try again.", variant: "destructive" });
+    } finally {
+      setRegeneratingGoalId(null);
     }
   };
 
@@ -763,6 +780,15 @@ export default function GoalsFlow() {
                           <DropdownMenuItem onClick={() => openEditModal(goal)}>
                             <Pencil className="w-4 h-4 mr-2" />
                             Edit Goal
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleRegenerateTasks(goal)}
+                            disabled={regeneratingGoalId === goal.id || goal.status === "completed"}
+                          >
+                            {regeneratingGoalId === goal.id
+                              ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              : <RefreshCw className="w-4 h-4 mr-2" />}
+                            Regenerate Tasks
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handlePauseResume(goal)}>
                             {goal.status === "paused" ? (

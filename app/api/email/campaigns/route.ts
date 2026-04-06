@@ -3,7 +3,6 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { emailCampaignsTable } from "@/db/schema/email-marketing-schema";
 import { eq, desc } from "drizzle-orm";
-import { isAdmin } from "@/lib/is-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +10,6 @@ export async function GET() {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!await isAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const campaigns = await db
       .select()
@@ -30,7 +28,6 @@ export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!await isAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = await request.json();
     const { subject, previewText, bodyHtml } = body;

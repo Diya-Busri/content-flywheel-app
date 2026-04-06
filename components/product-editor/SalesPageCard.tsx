@@ -3,14 +3,24 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Copy, RefreshCw, Globe, ExternalLink, Eye, EyeOff } from "lucide-react";
+import { Loader2, Copy, RefreshCw, Globe, ExternalLink, Eye, EyeOff, Link2, Check } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 export function SalesPageCard({ productId }: { productId: string }) {
   const [loading, setLoading] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const { toast } = useToast();
+
+  const shareProductPage = () => {
+    const url = `${window.location.origin}/product/${productId}`;
+    void navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+      toast({ title: "Link copied!", description: "Share it anywhere to promote your product." });
+    });
+  };
 
   const generate = async () => {
     setLoading(true);
@@ -52,6 +62,16 @@ export function SalesPageCard({ productId }: { productId: string }) {
             <Globe className="w-4 h-4 text-orange-500" />
             <CardTitle className="text-sm font-semibold text-gray-900 dark:text-white">Sales Page Generator</CardTitle>
           </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1.5 text-xs border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-800/50 dark:text-orange-400"
+            onClick={shareProductPage}
+          >
+            {linkCopied ? <Check className="w-3 h-3 text-green-500" /> : <Link2 className="w-3 h-3" />}
+            {linkCopied ? "Copied!" : "Share Product Page"}
+          </Button>
           <div className="flex items-center gap-1">
             {html && (
               <>

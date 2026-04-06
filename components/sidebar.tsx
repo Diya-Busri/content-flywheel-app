@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -53,9 +53,10 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
     { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯" },
     { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅" },
     { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚" },
-    ...(isAdminUser ? [{ href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧" }] : []),
+    { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧" },
     { href: "/dashboard/video-timeline", icon: <Film size={18} />, label: "Video Timeline", emoji: "🎬" },
     { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true },
+    { href: "/dashboard/referral", icon: <Gift size={18} />, label: "Refer a Creator", emoji: "🎁" },
   ];
 
   const comingSoonNavItems: NavItem[] = [];

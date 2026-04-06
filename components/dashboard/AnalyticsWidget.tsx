@@ -66,9 +66,9 @@ export function AnalyticsWidget() {
     },
     {
       icon: Zap,
-      label: "Best hook type",
-      value: "Problem / Solution",
-      sub: "highest converting structure",
+      label: "Products created",
+      value: String(stats?.totalProducts ?? 0),
+      sub: stats?.totalProducts === 1 ? "digital product" : "digital products",
     },
     {
       icon: Target,
