@@ -227,7 +227,7 @@ function CampaignSheet({
               className="min-h-64 border-gray-200 dark:border-white/10 focus-visible:ring-orange-500 font-mono text-sm resize-y"
             />
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              You can use HTML for formatting (e.g., &lt;b&gt;bold&lt;/b&gt;, &lt;a href="..."&gt;links&lt;/a&gt;, &lt;br&gt; for line breaks).
+              You can use HTML for formatting (e.g., &lt;b&gt;bold&lt;/b&gt;, &lt;a href=&quot;...&quot;&gt;links&lt;/a&gt;, &lt;br&gt; for line breaks).
             </p>
           </div>
 

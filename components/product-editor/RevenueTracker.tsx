@@ -229,7 +229,7 @@ export function RevenueTracker({ productId }: { productId: string }) {
             <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
           </div>
         ) : sales.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-3">No sales logged yet. Click "Log Sale" to record your first sale!</p>
+          <p className="text-xs text-gray-400 text-center py-3">No sales logged yet. Click &quot;Log Sale&quot; to record your first sale!</p>
         ) : (
           <ul className="space-y-1.5 max-h-52 overflow-y-auto">
             {sales.map((sale) => (

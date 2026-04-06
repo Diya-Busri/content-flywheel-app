@@ -99,7 +99,7 @@ export function SchedulePostReminder({ productId, productTitle, platform, captio
             {PLATFORM_EMOJIS[platform] ?? ""} Schedule {platform} post
           </p>
           <p className="text-xs text-gray-500">
-            Set a reminder — we'll notify you when it's time to post this caption.
+            Set a reminder — we&apos;ll notify you when it&apos;s time to post this caption.
           </p>
         </div>
         <div className="space-y-1">

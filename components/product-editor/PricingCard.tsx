@@ -110,7 +110,7 @@ export function PricingCard({ productId }: PricingCardProps) {
             </div>
             {/* Reasoning */}
             <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed italic">
-              "{result.reasoning}"
+              &quot;{result.reasoning}&quot;
             </p>
           </div>
         )}

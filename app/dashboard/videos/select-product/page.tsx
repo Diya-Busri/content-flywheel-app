@@ -88,7 +88,7 @@ export default function SelectProductPage() {
           Choose a product to create a video for
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          We'll generate scripts based on this product — pick the one you want to promote.
+          We&apos;ll generate scripts based on this product — pick the one you want to promote.
         </p>
       </div>
 
@@ -110,7 +110,7 @@ export default function SelectProductPage() {
             No products yet
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-7 max-w-xs">
-            Create your first digital product and we'll generate video scripts for it automatically.
+            Create your first digital product and we&apos;ll generate video scripts for it automatically.
           </p>
           <Button
             asChild
@@ -214,7 +214,7 @@ export default function SelectProductPage() {
 
           {/* Bottom hint */}
           <p className="mt-8 text-center text-xs text-gray-400 dark:text-gray-600">
-            Don't see the right product?{" "}
+            Don&apos;t see the right product?{" "}
             <Link
               href="/dashboard/digital-products/create"
               className="text-orange-500 hover:text-orange-400 font-medium transition-colors"

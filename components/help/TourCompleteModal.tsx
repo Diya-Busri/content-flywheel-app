@@ -145,7 +145,7 @@ export function TourCompleteModal() {
                   </div>
                   <div>
                     <p className="font-bold text-lg leading-tight">Tour Complete! 🎉</p>
-                    <p className="text-orange-100 text-xs">You've seen everything Content Flywheel can do</p>
+                    <p className="text-orange-100 text-xs">You&apos;ve seen everything Content Flywheel can do</p>
                   </div>
                 </div>
               </div>
@@ -156,7 +156,7 @@ export function TourCompleteModal() {
                   Want to see it actually work?
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">
-                  Pick a live demo and I'll walk you through the real process — step by step, showing you exactly what to click to create your first video.
+                  Pick a live demo and I&apos;ll walk you through the real process — step by step, showing you exactly what to click to create your first video.
                 </p>
 
                 <div className="space-y-2.5">
@@ -183,7 +183,7 @@ export function TourCompleteModal() {
                   onClick={() => setOpen(false)}
                   className="w-full mt-4 py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                 >
-                  No thanks, I'll explore on my own
+                  No thanks, I&apos;ll explore on my own
                 </button>
               </div>
             </div>

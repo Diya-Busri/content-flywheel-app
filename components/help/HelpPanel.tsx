@@ -285,7 +285,7 @@ export function HelpPanel({ open, onClose }: { open: boolean; onClose: () => voi
 
                       {/* Step preview */}
                       <div className="space-y-2">
-                        <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">What you'll see</p>
+                        <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">What you&apos;ll see</p>
                         {currentTour.steps.map((step, i) => (
                           <div key={i} className="flex gap-3 p-3 rounded-lg bg-gray-50 dark:bg-white/5">
                             <span className="w-5 h-5 rounded-full bg-orange-100 dark:bg-orange-900/50 text-orange-600 dark:text-orange-400 text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
