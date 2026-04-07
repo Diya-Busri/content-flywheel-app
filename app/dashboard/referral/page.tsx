@@ -168,7 +168,7 @@ function UnderReview({ application }: { application?: MyStatusResponse["applicat
         </div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Application under review</h1>
         <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed">
-          We've received your application and you're on our <strong className="text-gray-700 dark:text-gray-300">priority waitlist</strong>. You'll be emailed the moment a spot opens for you.
+          We have received your application and you are on our <strong className="text-gray-700 dark:text-gray-300">priority waitlist</strong>. You will be emailed the moment a spot opens for you.
         </p>
       </div>
       <Card className="border-orange-200 dark:border-orange-900/40 bg-orange-50/40 dark:bg-orange-950/10">

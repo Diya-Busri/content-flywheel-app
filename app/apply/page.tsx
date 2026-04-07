@@ -290,7 +290,7 @@ function ResultScreen({
         <XCircle className="w-16 h-16 text-gray-500 mx-auto mb-6" />
         <h1 className="text-3xl font-bold mb-3">Not this time</h1>
         <p className="text-gray-400 text-base leading-relaxed">
-          We weren't able to offer you a spot right now. Keep building your audience and feel free to apply again in the future.
+          We were not able to offer you a spot right now. Keep building your audience and feel free to apply again in the future.
         </p>
       </div>
     </div>
