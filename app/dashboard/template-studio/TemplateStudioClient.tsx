@@ -43,6 +43,7 @@ import {
   ExternalLink,
   CalendarClock,
   Send,
+  Lightbulb,
 } from "lucide-react";
 import { getTemplateStudioPrefill, clearTemplateStudioPrefill } from "@/lib/template-studio-prefill";
 import { setVideoPrefill, getTimelineUrl } from "@/lib/video-prefill";
@@ -308,6 +309,15 @@ export default function TemplateStudioClient() {
   const [cookingSceneCount, setCookingSceneCount] =
     useState<AiCookingVideoSceneCountChoice>("auto");
   const [storyVideoTopic, setStoryVideoTopic] = useState("");
+  const [storyVideoChannelNiche, setStoryVideoChannelNiche] = useState("");
+  type StoryTopicSuggestion = {
+    title: string;
+    targetAudience: string;
+    tone: "motivational" | "educational" | "story";
+    characterDescription: string;
+  };
+  const [storyVideoTopicSuggestions, setStoryVideoTopicSuggestions] = useState<StoryTopicSuggestion[]>([]);
+  const [storyVideoTopicSuggestionsLoading, setStoryVideoTopicSuggestionsLoading] = useState(false);
   const [storyVideoTargetAudience, setStoryVideoTargetAudience] = useState("");
   const [storyVideoCharacterDescription, setStoryVideoCharacterDescription] = useState("");
   const [storyVideoTone, setStoryVideoTone] = useState<"motivational" | "educational" | "story">(
@@ -323,6 +333,14 @@ export default function TemplateStudioClient() {
   const [brandStoryThemeLine, setBrandStoryThemeLine] = useState("");
   const [brandStoryVoiceId, setBrandStoryVoiceId] = useState("pNInz6obpgDQGcFmaJgB");
   const [brandStoryVideoLoading, setBrandStoryVideoLoading] = useState(false);
+  // Mode 16 — AI Animation Video Prompts
+  const [animCharacterName, setAnimCharacterName] = useState("");
+  const [animCharacterDescription, setAnimCharacterDescription] = useState("");
+  const [animVideoStyle, setAnimVideoStyle] = useState("Relatable couple / POV comedy");
+  const [animPromptCount, setAnimPromptCount] = useState<10 | 15 | 20>(10);
+  const [animPrompts, setAnimPrompts] = useState<{ caption: string; animationPrompt: string; mood: string; engagementHook: string }[]>([]);
+  const [animPromptsLoading, setAnimPromptsLoading] = useState(false);
+  const [animCopiedIndex, setAnimCopiedIndex] = useState<number | null>(null);
   const [brandStoryVideoUrl, setBrandStoryVideoUrl] = useState<string | null>(null);
   const [brandStoryVideoError, setBrandStoryVideoError] = useState<string | null>(null);
   const [aiStoryLoading, setAiStoryLoading] = useState(false);
@@ -403,6 +421,11 @@ export default function TemplateStudioClient() {
   const [storyVideoExportUrl, setStoryVideoExportUrl] = useState<string | null>(null);
   const [storyVideoExportScriptId, setStoryVideoExportScriptId] = useState<string | null>(null);
   const [storyVideoExportError, setStoryVideoExportError] = useState<string | null>(null);
+  // Auto full-video generation state
+  const [autoGenerating, setAutoGenerating] = useState(false);
+  const [autoGeneratePhase, setAutoGeneratePhase] = useState<string | null>(null);
+  const [autoGenerateProgress, setAutoGenerateProgress] = useState<{ done: number; total: number } | null>(null);
+  const [autoGenerateError, setAutoGenerateError] = useState<string | null>(null);
   const [copiedStoryVideoLink, setCopiedStoryVideoLink] = useState(false);
   const [storyBackgroundMusic, setStoryBackgroundMusic] = useState<BgmSelectValue>("none");
 
@@ -827,6 +850,8 @@ export default function TemplateStudioClient() {
                 ? viralTopic.trim().length > 0
                 : mode === "13"
                   ? kineticTopic.trim().length > 0
+                  : mode === "16"
+                    ? animCharacterDescription.trim().length > 0
                   : mode === "1" || mode === "4"
                 ? niche.trim().length > 0
                 : mode === "2" || mode === "6"
@@ -882,6 +907,32 @@ export default function TemplateStudioClient() {
     }
   }, [isAiStoryMode, canProceedStep1, characters, theme, toast]);
 
+  const runAnimationPrompts = useCallback(async () => {
+    if (mode !== "16" || !canProceedStep1) return;
+    setAnimPromptsLoading(true);
+    setAnimPrompts([]);
+    try {
+      const res = await fetch("/api/template-studio/animation-prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          characterName: animCharacterName.trim(),
+          characterDescription: animCharacterDescription.trim(),
+          videoStyle: animVideoStyle.trim(),
+          count: animPromptCount,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { prompts?: { caption: string; animationPrompt: string; mood: string; engagementHook: string }[]; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to generate prompts");
+      setAnimPrompts(Array.isArray(data.prompts) ? data.prompts : []);
+      setStep(2);
+    } catch (e) {
+      toast({ title: "Generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+    } finally {
+      setAnimPromptsLoading(false);
+    }
+  }, [mode, canProceedStep1, animCharacterName, animCharacterDescription, animVideoStyle, animPromptCount, toast]);
+
   const runBrandStoryVideo = useCallback(async () => {
     if (mode !== "10" || !canProceedStep1) return;
     setBrandStoryVideoLoading(true);
@@ -898,7 +949,16 @@ export default function TemplateStudioClient() {
           voiceId: brandStoryVoiceId.trim() || "pNInz6obpgDQGcFmaJgB",
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string; code?: string; redirectTo?: string };
+      if (res.status === 402 || data.code === "NO_VIDEO_CREDITS") {
+        toast({
+          title: "No video credits",
+          description: "You need to buy video credits to generate this video.",
+          variant: "destructive",
+        });
+        window.location.href = "/dashboard/video-credits";
+        return;
+      }
       if (!res.ok) throw new Error(data.error ?? "Brand story video failed");
       const url = typeof data.url === "string" ? data.url.trim() : "";
       if (!url.startsWith("http")) throw new Error("No video URL returned.");
@@ -2064,6 +2124,240 @@ export default function TemplateStudioClient() {
     });
   }, [isStoryTemplateMode, step, mode, aiStoryScenes, sceneVideoUrls, effectiveVoiceoverUrls, voiceoverEnabled]);
 
+  const handleSuggestTopics = useCallback(async () => {
+    const niche = storyVideoChannelNiche.trim() || storyVideoTargetAudience.trim();
+    if (!niche) {
+      toast({ title: "Add your channel or niche first", description: "Type your channel name or niche above, then hit Suggest.", variant: "destructive" });
+      return;
+    }
+    setStoryVideoTopicSuggestionsLoading(true);
+    setStoryVideoTopicSuggestions([]);
+    try {
+      const res = await fetch("/api/template-studio/suggest-topics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ niche }),
+      });
+      if (!res.ok) throw new Error("Could not fetch ideas");
+      const data = (await res.json()) as { topics?: Array<{ title: string; targetAudience: string; tone: "motivational" | "educational" | "story"; characterDescription: string }> };
+      const topics = Array.isArray(data.topics) ? data.topics.filter((t) => t.title?.trim()) : [];
+      if (topics.length === 0) throw new Error("No suggestions returned");
+      setStoryVideoTopicSuggestions(topics);
+    } catch {
+      toast({ title: "Couldn't generate ideas", description: "Try again or type a more specific niche.", variant: "destructive" });
+    } finally {
+      setStoryVideoTopicSuggestionsLoading(false);
+    }
+  }, [storyVideoChannelNiche, storyVideoTargetAudience, toast]);
+
+  const handleGenerateFullVideo = useCallback(async () => {
+    if (autoGenerating || aiStoryScenes.length === 0) return;
+    setAutoGenerating(true);
+    setAutoGenerateError(null);
+    setAutoGeneratePhase(null);
+    setAutoGenerateProgress(null);
+
+    try {
+      // Check credits
+      const creditRes = await fetch("/api/video-credits/balance");
+      const creditData = (await creditRes.json().catch(() => ({}))) as { balance?: number };
+      if ((creditData.balance ?? 0) < 1) {
+        toast({ title: "No video credits", description: "Buy credits to generate a full video.", variant: "destructive" });
+        setAutoGenerateError("You need at least 1 video credit. Buy credits to continue.");
+        return;
+      }
+
+      const ordered = [...aiStoryScenes].sort((a, b) => a.sceneNumber - b.sceneNumber);
+      const total = ordered.length;
+
+      // Step 1: Generate images
+      setAutoGeneratePhase("Generating scene images");
+      setAutoGenerateProgress({ done: 0, total });
+      const latestImageUrls: Record<number, string> = { ...sceneImageUrls };
+
+      for (let i = 0; i < ordered.length; i++) {
+        const scene = ordered[i]!;
+        if (latestImageUrls[scene.sceneNumber]) {
+          setAutoGenerateProgress({ done: i + 1, total });
+          continue;
+        }
+        try {
+          let res: Response;
+          let data: { url?: string; imageUrl?: string; data?: { url?: string }[]; error?: string };
+          if (mode === "9") {
+            const rawPrompt = scene.imagePrompt;
+            const sceneComposition = rawPrompt;
+            res = await fetch("/api/content-studio/ai-cooking-video/scene-image", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sceneComposition, characterSeed: characterSeed.trim(), dialogue: scene.dialogue.trim() }),
+            });
+            data = await res.json();
+          } else {
+            const imageBody: Record<string, unknown> = { prompt: scene.imagePrompt };
+            if (mode === "15") imageBody.storyVideoFormat = storyVideoFormat;
+            if (mode === "7") imageBody.aiStoryLocked = true;
+            if (mode === "8") { imageBody.photoreal = true; imageBody.identityLock = true; }
+            res = await fetch("/api/generate-image", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(imageBody),
+            });
+            data = await res.json();
+          }
+          const url = (typeof data?.url === "string" ? data.url : "") ||
+            (typeof (data as { imageUrl?: string }).imageUrl === "string" ? (data as { imageUrl: string }).imageUrl : "") ||
+            (Array.isArray((data as { data?: { url?: string }[] }).data) ? ((data as { data: { url?: string }[] }).data[0]?.url ?? "") : "");
+          if (url && (url.startsWith("https://") || url.startsWith("http://"))) {
+            latestImageUrls[scene.sceneNumber] = url;
+            setSceneImageUrls((prev) => ({ ...prev, [scene.sceneNumber]: url }));
+          }
+        } catch {
+          // Non-fatal: continue with other scenes
+        }
+        setAutoGenerateProgress({ done: i + 1, total });
+      }
+
+      // Step 2: Animate scenes
+      setAutoGeneratePhase("Animating scenes");
+      setAutoGenerateProgress({ done: 0, total });
+      const latestVideoUrls: Record<number, string> = { ...sceneVideoUrls };
+      const aspectRatio = mode === "15" ? "16:9" : "9:16";
+
+      for (let i = 0; i < ordered.length; i++) {
+        const scene = ordered[i]!;
+        if (latestVideoUrls[scene.sceneNumber]) {
+          setAutoGenerateProgress({ done: i + 1, total });
+          continue;
+        }
+        const imageUrl = latestImageUrls[scene.sceneNumber];
+        if (!imageUrl) { setAutoGenerateProgress({ done: i + 1, total }); continue; }
+        try {
+          const animRes = await fetch("/api/content-studio/ai-story/animate", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageUrl, motionPrompt: scene.motionPrompt || scene.imagePrompt, aspectRatio }),
+          });
+          const animData = (await animRes.json().catch(() => ({}))) as { requestId?: string; videoUrl?: string };
+          if (animData.videoUrl) {
+            latestVideoUrls[scene.sceneNumber] = animData.videoUrl;
+            setSceneVideoUrls((prev) => ({ ...prev, [scene.sceneNumber]: animData.videoUrl! }));
+          } else if (animData.requestId) {
+            // Poll until done
+            let videoUrl: string | null = null;
+            for (let p = 0; p < 120; p++) {
+              await new Promise((r) => setTimeout(r, 5000));
+              const statusRes = await fetch(`/api/content-studio/ai-story/animate/status?requestId=${encodeURIComponent(animData.requestId)}`);
+              const statusData = (await statusRes.json().catch(() => ({}))) as { status?: string; videoUrl?: string };
+              if (statusData.videoUrl) { videoUrl = statusData.videoUrl; break; }
+              if (statusData.status === "FAILED") break;
+            }
+            if (videoUrl) {
+              latestVideoUrls[scene.sceneNumber] = videoUrl;
+              setSceneVideoUrls((prev) => ({ ...prev, [scene.sceneNumber]: videoUrl! }));
+            }
+          }
+        } catch {
+          // Non-fatal
+        }
+        setAutoGenerateProgress({ done: i + 1, total });
+      }
+
+      // Step 3: Generate voiceovers
+      setAutoGeneratePhase("Generating voiceovers");
+      setAutoGenerateProgress({ done: 0, total });
+      const latestVoiceoverUrls: Record<number, string> = { ...voiceoverUrls };
+      const defaultVoiceId = elevenLabsVoices[0]?.voice_id ?? "EXAVITQu4vr4xnSDxMaL";
+
+      for (let i = 0; i < ordered.length; i++) {
+        const scene = ordered[i]!;
+        if (latestVoiceoverUrls[scene.sceneNumber]) {
+          setAutoGenerateProgress({ done: i + 1, total });
+          continue;
+        }
+        const dialogue = scene.dialogue?.trim() ?? "";
+        if (!dialogue) { setAutoGenerateProgress({ done: i + 1, total }); continue; }
+        const speakable = dialogue.replace(/^[^:]+:\s*/, "").replace(/[*_~`#[\]()]/g, "");
+        try {
+          const voiceRes = await fetch("/api/ai-coach/voice-over", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ script: speakable, voiceId: defaultVoiceId, maxDurationSeconds: TIMELINE_SCENE_DURATION }),
+          });
+          const voiceData = (await voiceRes.json().catch(() => ({}))) as { url?: string; publicUrl?: string; audioUrl?: string };
+          const voiceUrl = voiceData.url ?? voiceData.publicUrl ?? voiceData.audioUrl ?? "";
+          if (voiceUrl) {
+            latestVoiceoverUrls[scene.sceneNumber] = voiceUrl;
+            setVoiceoverUrls((prev) => ({ ...prev, [scene.sceneNumber]: voiceUrl }));
+          }
+        } catch {
+          // Non-fatal
+        }
+        setAutoGenerateProgress({ done: i + 1, total });
+      }
+
+      // Step 4: Compile MP4
+      setAutoGeneratePhase("Stitching video");
+      setAutoGenerateProgress(null);
+      const scenes_json = ordered.map((scene) => ({
+        scene_number: scene.sceneNumber,
+        duration: TIMELINE_SCENE_DURATION,
+        script_text: scene.dialogue?.trim() ?? "",
+        image_url: latestImageUrls[scene.sceneNumber] ?? null,
+        video_url: latestVideoUrls[scene.sceneNumber] ?? null,
+        voiceover_url: latestVoiceoverUrls[scene.sceneNumber] ?? null,
+        caption: scene.dialogue?.trim() ?? null,
+        animation_type: "video",
+        section_label: `Scene ${scene.sceneNumber}`,
+      }));
+      const saveRes = await fetch("/api/saved-scripts", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: buildTemplateStudioLibraryTitle({ mode, episodeNumber, theme, whatBuilding, dishName: cookingDishName, storyVideoTopic, seriesShowTitle }),
+          scenes_json,
+        }),
+      });
+      const saveData = (await saveRes.json().catch(() => ({}))) as { id?: string };
+      if (!saveData.id) throw new Error("Failed to save script");
+
+      const compileRes = await fetch("/api/videos/compile", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scriptId: saveData.id,
+          transition: "fade",
+          backgroundMusic: storyBackgroundMusic,
+          ...(mode === "15" && storyVideoFormat === "long" ? { outputAspect: "16:9" } : {}),
+        }),
+      });
+      const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; error?: string; code?: string };
+
+      if (!compileRes.ok) {
+        if (compileData.code === "NO_VIDEO_CREDITS") {
+          toast({ title: "No video credits", description: "Buy credits to export.", variant: "destructive" });
+          setAutoGenerateError("You need video credits to export. Buy credits to continue.");
+          return;
+        }
+        throw new Error(compileData.error ?? "Compile failed");
+      }
+
+      const finalUrl = compileData.url ?? "";
+      if (!finalUrl) throw new Error("No video URL returned");
+
+      setStoryVideoExportUrl(finalUrl);
+      setStoryVideoExportScriptId(saveData.id);
+      toast({ title: "🎉 Your video is ready!", description: "Download it below." });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Generation failed";
+      setAutoGenerateError(msg);
+      toast({ title: "Generation failed", description: msg, variant: "destructive" });
+    } finally {
+      setAutoGenerating(false);
+      setAutoGeneratePhase(null);
+      setAutoGenerateProgress(null);
+    }
+  }, [
+    autoGenerating, aiStoryScenes, mode, sceneImageUrls, sceneVideoUrls, voiceoverUrls,
+    characterSeed, storyVideoFormat, elevenLabsVoices, storyBackgroundMusic,
+    episodeNumber, theme, whatBuilding, cookingDishName, storyVideoTopic, seriesShowTitle,
+    toast,
+  ]);
+
   const handleExportStoryVideo = useCallback(async () => {
     if (!canExportStoryVideo) return;
     setStoryVideoExportError(null);
@@ -3144,6 +3438,58 @@ export default function TemplateStudioClient() {
                   </div>
                 )}
                 <div className="space-y-2">
+                  <Label htmlFor="story-video-channel-niche">Your channel / niche</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="story-video-channel-niche"
+                      placeholder="e.g. Mindset for entrepreneurs, True crime, Budget cooking"
+                      value={storyVideoChannelNiche}
+                      onChange={(e) => setStoryVideoChannelNiche(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSuggestTopics(); } }}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSuggestTopics}
+                      disabled={storyVideoTopicSuggestionsLoading}
+                      className="shrink-0 gap-1.5"
+                    >
+                      {storyVideoTopicSuggestionsLoading
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <Lightbulb className="w-3.5 h-3.5" />}
+                      {storyVideoTopicSuggestionsLoading ? "Thinking…" : "Suggest topics"}
+                    </Button>
+                  </div>
+                  {storyVideoTopicSuggestions.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <p className="text-xs text-muted-foreground">Click a topic to fill all fields automatically:</p>
+                      <div className="flex flex-col gap-1.5">
+                        {storyVideoTopicSuggestions.map((t) => (
+                          <button
+                            key={t.title}
+                            type="button"
+                            onClick={() => {
+                              setStoryVideoTopic(t.title);
+                              if (t.targetAudience) setStoryVideoTargetAudience(t.targetAudience);
+                              if (t.tone) setStoryVideoTone(t.tone);
+                              if (t.characterDescription) setStoryVideoCharacterDescription(t.characterDescription);
+                              setStoryVideoTopicSuggestions([]);
+                            }}
+                            className="w-full text-left text-xs px-3 py-2 rounded-lg border border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-100 hover:border-orange-300 transition-colors"
+                          >
+                            <span className="font-medium">{t.title}</span>
+                            <span className="block text-orange-600 mt-0.5">
+                              {t.targetAudience} · <span className="capitalize">{t.tone}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="story-video-topic">Topic</Label>
                   <Input
                     id="story-video-topic"
@@ -3229,6 +3575,59 @@ export default function TemplateStudioClient() {
                   </p>
                 </div>
               </>
+            )}
+
+            {mode === "16" && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Describe your character once — get ready-to-use prompts for <strong>Kling AI</strong>, <strong>Pika</strong>, or <strong>Runway</strong>. Each prompt includes a screen caption and a full scene description.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="anim-character-name">Character name <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Input
+                    id="anim-character-name"
+                    placeholder="e.g. Quack, Luna, Max"
+                    value={animCharacterName}
+                    onChange={(e) => setAnimCharacterName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="anim-character-desc">Character description <span className="text-destructive">*</span></Label>
+                  <Textarea
+                    id="anim-character-desc"
+                    placeholder="e.g. A cute 3D yellow cartoon duck with big round eyes, wearing small sunglasses, Pixar-style animation, expressive face"
+                    value={animCharacterDescription}
+                    onChange={(e) => setAnimCharacterDescription(e.target.value)}
+                    rows={3}
+                    className="resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground">Be specific — this is pasted directly into the AI video generator each time.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="anim-video-style">Video style / vibe</Label>
+                  <Input
+                    id="anim-video-style"
+                    placeholder="e.g. Relatable couple POV comedy, Daily life humor, Friendship moments"
+                    value={animVideoStyle}
+                    onChange={(e) => setAnimVideoStyle(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Number of prompts</Label>
+                  <div className="flex gap-2">
+                    {([10, 15, 20] as const).map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setAnimPromptCount(n)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition ${animPromptCount === n ? "bg-orange-500 text-white border-orange-500" : "border-border text-foreground hover:border-orange-400"}`}
+                      >
+                        {n} prompts
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
 
             {isViralMode && (
@@ -3730,6 +4129,8 @@ export default function TemplateStudioClient() {
                       }
                     } else if (mode === "10") {
                       await runBrandStoryVideo();
+                    } else if (mode === "16") {
+                      await runAnimationPrompts();
                     } else {
                       await saveSetup();
                       setStep(2);
@@ -3740,6 +4141,7 @@ export default function TemplateStudioClient() {
                     (isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
                     ((mode === "8" || mode === "9" || mode === "15") && aiStoryLoading) ||
                     (mode === "10" && brandStoryVideoLoading) ||
+                    (mode === "16" && animPromptsLoading) ||
                     (isStickmanMode && stickmanLoading) ||
                     (isViralMode && viralLoading) ||
                     (isKineticMode && kineticLoading)
@@ -3763,6 +4165,8 @@ export default function TemplateStudioClient() {
                             : "Generate episode"
                           : mode === "10"
                           ? "Generate 9:16 Brand Story video"
+                          : mode === "16"
+                          ? animPrompts.length > 0 ? "Regenerate prompts" : "Generate animation prompts"
                           : isViralMode
                             ? viralData ? "Regenerate" : viralType === "quiz" ? "Generate quiz" : "Generate Would You Rather"
                             : isKineticMode
@@ -3777,6 +4181,7 @@ export default function TemplateStudioClient() {
                   {(isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
                   ((mode === "8" || mode === "9" || mode === "15") && aiStoryLoading) ||
                   (mode === "10" && brandStoryVideoLoading) ||
+                  (mode === "16" && animPromptsLoading) ||
                   (isStickmanMode && stickmanLoading) ||
                   (isViralMode && viralLoading) ||
                   (isKineticMode && kineticLoading) ? (
@@ -4398,6 +4803,69 @@ export default function TemplateStudioClient() {
                 )}
                 Generate Next Episode
               </Button>
+              {/* Auto full-video generation */}
+              {!storyVideoExportUrl && (
+                <div className="rounded-xl border border-orange-400/40 bg-orange-500/5 p-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-orange-500 shrink-0" />
+                      Generate Full Video — 1 credit
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Automatically generates scene images, animates every clip, adds voiceover, and stitches a ready-to-post MP4 — all in one click.
+                    </p>
+                  </div>
+                  <div className="space-y-2 max-w-xs">
+                    <Label htmlFor="auto-bgm" className="text-foreground text-xs">Background music</Label>
+                    <Select
+                      value={storyBackgroundMusic}
+                      onValueChange={(v) => setStoryBackgroundMusic(v as BgmSelectValue)}
+                    >
+                      <SelectTrigger id="auto-bgm" className="w-full">
+                        <SelectValue placeholder="Background music" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BGM_SELECT_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="button"
+                    className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white"
+                    disabled={autoGenerating || aiStoryLoading}
+                    onClick={() => void handleGenerateFullVideo()}
+                  >
+                    {autoGenerating ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-2" />
+                    )}
+                    {autoGenerating ? "Generating…" : "Generate Full Video (1 credit)"}
+                  </Button>
+                  {autoGenerating && autoGeneratePhase && (
+                    <div className="space-y-1.5">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-orange-500" />
+                        {autoGeneratePhase}
+                        {autoGenerateProgress ? ` (${autoGenerateProgress.done}/${autoGenerateProgress.total})` : "…"}
+                      </p>
+                      {autoGenerateProgress && (
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden max-w-xs">
+                          <div
+                            className="h-full rounded-full bg-orange-500 transition-all duration-300"
+                            style={{ width: `${Math.round((autoGenerateProgress.done / autoGenerateProgress.total) * 100)}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {autoGenerateError && !autoGenerating && (
+                    <p className="text-sm text-destructive">{autoGenerateError}</p>
+                  )}
+                </div>
+              )}
               {canExportStoryVideo && (
                 <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
                   <div>
@@ -4577,7 +5045,104 @@ export default function TemplateStudioClient() {
         </>
       )}
 
-      {step === 2 && (
+      {step === 2 && mode === "16" && (
+        <>
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle>🎬 Animation Prompts</CardTitle>
+                  <CardDescription className="mt-1">
+                    Copy any prompt into <strong>Kling AI</strong>, <strong>Pika</strong>, or <strong>Runway</strong>. The caption is your text overlay — the animation prompt is the scene description.
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const all = animPrompts.map((p, i) =>
+                      `--- Prompt ${i + 1} ---\nCaption: ${p.caption}\nAnimation Prompt: ${p.animationPrompt}\nMood: ${p.mood}`
+                    ).join("\n\n");
+                    void navigator.clipboard.writeText(all).then(
+                      () => toast({ title: "All prompts copied!" }),
+                      () => toast({ title: "Copy failed", variant: "destructive" })
+                    );
+                  }}
+                  className="shrink-0"
+                >
+                  <Copy className="w-3.5 h-3.5 mr-1.5" />
+                  Copy all
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {animPrompts.map((p, i) => (
+                <div key={i} className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+                  {/* Caption / text overlay */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Text overlay</p>
+                      <p className="text-base font-bold text-foreground leading-snug">{p.caption}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(p.caption).then(
+                          () => { setAnimCopiedIndex(i * 10 + 1); setTimeout(() => setAnimCopiedIndex(null), 1500); },
+                          () => toast({ title: "Copy failed", variant: "destructive" })
+                        );
+                      }}
+                      className="shrink-0 text-xs px-2 py-1 rounded border border-border hover:bg-accent transition-colors text-muted-foreground"
+                    >
+                      {animCopiedIndex === i * 10 + 1 ? "✓ Copied" : "Copy"}
+                    </button>
+                  </div>
+                  {/* Animation prompt */}
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Animation prompt (Kling / Pika / Runway)</p>
+                    <p className="text-sm text-foreground leading-relaxed bg-background rounded-lg border border-border px-3 py-2.5">{p.animationPrompt}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">🎵 <span className="font-medium">{p.mood}</span></span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(p.animationPrompt).then(
+                            () => { setAnimCopiedIndex(i * 10 + 2); setTimeout(() => setAnimCopiedIndex(null), 1500); },
+                            () => toast({ title: "Copy failed", variant: "destructive" })
+                          );
+                        }}
+                        className="text-xs px-2.5 py-1 rounded bg-orange-500 hover:bg-orange-600 text-white font-medium transition-colors shrink-0"
+                      >
+                        {animCopiedIndex === i * 10 + 2 ? "✓ Copied!" : "Copy prompt"}
+                      </button>
+                    </div>
+                  </div>
+                  {/* Engagement hook */}
+                  {p.engagementHook && (
+                    <div className="flex items-start gap-2 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-3 py-2">
+                      <span className="text-green-600 dark:text-green-400 text-sm shrink-0">💬</span>
+                      <p className="text-xs text-green-800 dark:text-green-300 leading-relaxed"><span className="font-semibold">Why it works: </span>{p.engagementHook}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep(1)}
+                className="text-muted-foreground mt-2"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to setup
+              </Button>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {step === 2 && mode !== "16" && (
         <>
           <Card>
             <CardHeader>

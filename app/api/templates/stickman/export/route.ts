@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkVideoCredits, useVideoCredit } from "@/actions/video-credits-actions";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { compileVideoToFile, cleanupWorkDir, type CompileScene } from "@/lib/videos/compile";
@@ -266,6 +267,14 @@ export async function POST(request: NextRequest) {
     const rl = await checkApiRateLimit(userId);
     if (rl) return rl;
 
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need video credits to generate a video.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
+
     const body = (await request.json().catch(() => ({}))) as {
       scenes?: StickmanSceneInput[];
       topic?: string;
@@ -355,6 +364,7 @@ export async function POST(request: NextRequest) {
       });
       if (uploaded.error) return NextResponse.json({ error: uploaded.error.message }, { status: 500 });
       const { data } = supabase.storage.from(BUCKET).getPublicUrl(uploaded.data.path);
+      await useVideoCredit("brandStoryVideo").catch((e) => console.error("[templates/stickman/export] credit deduction failed:", e));
       return NextResponse.json({ url: data.publicUrl });
     } finally {
       await cleanupWorkDir(workDir);

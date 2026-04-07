@@ -17,7 +17,7 @@ import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import OpenAI from "openai";
 
-const OPENAI_MODEL = "gpt-4o";
+const OPENAI_MODEL = "gpt-4o-mini";
 
 export async function POST(request: NextRequest) {
   try {

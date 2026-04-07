@@ -1291,6 +1291,8 @@ export default function VideoTimelinePage() {
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   const sceneMediaInputRef = useRef<HTMLInputElement>(null);
   const voiceoverInputRef = useRef<HTMLInputElement>(null);
+  /** Set to true when we want the audio element to play as soon as its new src is ready (canplay). */
+  const pendingPlayRef = useRef(false);
 
   const [captionAnimation, setCaptionAnimation] = useState<"none" | "fadeIn" | "slideUp" | "pop">("fadeIn");
   const [captionPosition, setCaptionPosition] = useState<"bottom" | "middle" | "top">("bottom");
@@ -1378,7 +1380,9 @@ export default function VideoTimelinePage() {
   const playbackSrc =
     hasPerClipAudio && activeBlockAndScene?.scene?.audioUrl
       ? activeBlockAndScene.scene.audioUrl!
-      : voiceoverUrl ?? "";
+      : !hasPerClipAudio && voiceoverUrl
+      ? voiceoverUrl
+      : null;
   const playbackStartOffset =
     hasPerClipAudio && activeBlockAndScene?.scene?.audioUrl ? activeBlockAndScene.block.startTime : 0;
   const playbackStartOffsetRef = useRef(0);
@@ -2259,12 +2263,20 @@ export default function VideoTimelinePage() {
   }, [isDraggingPlayhead, captions]);
 
   const onDurationChange = useCallback(() => {
+    // In per-clip audio mode each clip has its own duration — don't let individual clip
+    // durations overwrite the full-timeline voiceoverDuration used by the ruler/seekbar.
+    if (hasPerClipAudio) return;
     const el = audioRef.current;
     if (el && Number.isFinite(el.duration)) setVoiceoverDuration(el.duration);
-  }, []);
+  }, [hasPerClipAudio]);
 
   const onPlay = useCallback(() => setIsPlaying(true), []);
-  const onPause = useCallback(() => setIsPlaying(false), []);
+  const onPause = useCallback(() => {
+    // Don't mark as "paused" while the tail tick is running — the audio element is intentionally
+    // paused at that point but the timeline/captions are still advancing via requestAnimationFrame.
+    if (playbackTailRef.current) return;
+    setIsPlaying(false);
+  }, []);
 
   const play = useCallback(() => {
     const voice = audioRef.current;
@@ -2275,7 +2287,17 @@ export default function VideoTimelinePage() {
     sceneVideoRef.current?.play();
   }, []);
 
+  /** Fired when a new audio src becomes ready to play. Triggers a pending play if one was queued —
+   *  this avoids the race where play() is called before the new src has finished loading. */
+  const onCanPlay = useCallback(() => {
+    if (pendingPlayRef.current) {
+      pendingPlayRef.current = false;
+      play();
+    }
+  }, [play]);
+
   const pause = useCallback(() => {
+    pendingPlayRef.current = false; // cancel any queued play-on-canplay
     audioRef.current?.pause();
     musicRef.current?.pause();
     sceneVideoRef.current?.pause();
@@ -2311,25 +2333,39 @@ export default function VideoTimelinePage() {
     let voiceEnd = Number(el?.duration) ? el.duration : (voiceoverDuration > 0 ? voiceoverDuration : 0);
     let timelineEnd = Math.max(duration, voiceEnd);
 
-    if (hasPerClipAudio && activeBlockAndScene?.scene?.audioUrl) {
+    if (hasPerClipAudio) {
       const blocksWithAudio = sceneBlocks
         .map((b) => ({ block: b, scene: scenes.find((s) => s.id === b.id) }))
         .filter((x): x is { block: SceneBlock; scene: Scene } => !!x.scene?.audioUrl?.trim())
         .sort((a, b) => a.block.startTime - b.block.startTime);
-      const currentStart = activeBlockAndScene.block.startTime;
-      const next = blocksWithAudio.find((x) => x.block.startTime > currentStart);
-      if (next) {
-        setCurrentTime(next.block.startTime);
-        setActiveCaption(getActiveCaption(next.block.startTime, captions));
-        const music = musicRef.current;
-        if (music) music.currentTime = next.block.startTime;
-        // Start next clip on next tick so the audio element has the new src from React
-        setTimeout(() => play(), 0);
-        return;
+
+      // Identify which clip just ended using the audio element's src — this avoids a race
+      // condition where the last onTimeUpdate fires at exactly a scene boundary, pushing
+      // activeBlockAndScene into the next (potentially audio-less) scene before `ended` fires.
+      const endedSrc = el?.src ?? "";
+      const currentBlock =
+        blocksWithAudio.find((x) => x.scene.audioUrl?.trim() === endedSrc) ??
+        (activeBlockAndScene?.scene?.audioUrl
+          ? { block: activeBlockAndScene.block, scene: activeBlockAndScene.scene }
+          : null);
+
+      if (currentBlock) {
+        const currentStart = currentBlock.block.startTime;
+        const next = blocksWithAudio.find((x) => x.block.startTime > currentStart);
+        if (next) {
+          setCurrentTime(next.block.startTime);
+          setActiveCaption(getActiveCaption(next.block.startTime, captions));
+          const music = musicRef.current;
+          if (music) music.currentTime = next.block.startTime;
+          // Queue play via onCanPlay so we wait until the new src is loaded and ready —
+          // calling play() immediately can race with the browser loading the new src.
+          pendingPlayRef.current = true;
+          return;
+        }
+        // No next clip with audio: continue playhead through rest of timeline (tail from end of current block)
+        voiceEnd = currentBlock.block.endTime;
+        timelineEnd = Math.max(duration, voiceEnd);
       }
-      // No next clip with audio: continue playhead through rest of timeline (tail from end of current block)
-      voiceEnd = activeBlockAndScene.block.endTime;
-      timelineEnd = Math.max(duration, voiceEnd);
     }
 
     // Pause voice and music; scene video may keep playing if we run the tail
@@ -2341,7 +2377,9 @@ export default function VideoTimelinePage() {
     if (hasMoreTimeline) {
       const TAIL_INTERVAL_MS = 100;
       const r = { rafId: 0, timelineEnd, lastTs: performance.now(), lastUpdateTs: performance.now(), tailTime: voiceEnd };
+      // Set ref BEFORE requestAnimationFrame so onPause (fired async by audio.pause()) sees it and skips.
       playbackTailRef.current = r;
+      setIsPlaying(true); // keep UI in "playing" state — audio is paused but timeline is still advancing
       const tick = () => {
         const ref = playbackTailRef.current;
         if (!ref || ref.rafId === 0) return;
@@ -2376,7 +2414,7 @@ export default function VideoTimelinePage() {
       setActiveCaption(getActiveCaption(endTime, captions));
     }
     setIsPlaying(false);
-  }, [pause, voiceoverDuration, duration, captions, hasPerClipAudio, activeBlockAndScene, sceneBlocks, scenes, play]);
+  }, [pause, voiceoverDuration, duration, captions, hasPerClipAudio, activeBlockAndScene, sceneBlocks, scenes]);
 
   const seekTo = useCallback(
     (t: number) => {
@@ -3048,9 +3086,33 @@ export default function VideoTimelinePage() {
 
   /** Server-side compile: FFmpeg on API (Ken Burns, trim, xfade, voiceover) → Supabase → download URL */
   const handleExportVideoServer = useCallback(async () => {
-    if (!scriptId?.trim()) {
-      setCompileError("Load a script first (e.g. from AI Coach → Open in Video Timeline).");
-      return;
+    // Build the request body: prefer scriptId (server loads scenes), fall back to inline guideScenes.
+    let compileBody: Record<string, unknown>;
+    if (scriptId?.trim()) {
+      compileBody = { scriptId: scriptId.trim(), transition: sceneTransitionType };
+    } else {
+      // No saved script — send the current timeline scenes inline as guideScenes.
+      const guideScenes = scenes
+        .map((s) => {
+          const media = getSceneBackgroundMedia(s);
+          return {
+            duration: s.duration,
+            image_url: media?.type === "image" ? media.url : null,
+            video_url: media?.type === "video" ? media.url : null,
+            voiceover_url: s.audioUrl?.trim() || null,
+            caption: captions.find((c) => c.startTime < (s.startTime ?? 0) + s.duration && c.endTime > (s.startTime ?? 0))?.text ?? null,
+          };
+        })
+        .filter((s) => s.image_url || s.video_url); // server compile requires media per scene
+      if (guideScenes.length === 0) {
+        setCompileError("Add images or videos to your scenes before exporting.");
+        return;
+      }
+      compileBody = {
+        guideScenes,
+        voiceoverUrl: voiceoverUrl?.trim() || null,
+        transition: sceneTransitionType,
+      };
     }
     setCompileLoading(true);
     setCompileError(null);
@@ -3059,7 +3121,7 @@ export default function VideoTimelinePage() {
       const res = await fetch("/api/videos/compile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scriptId: scriptId.trim(), transition: sceneTransitionType }),
+        body: JSON.stringify(compileBody),
       });
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (!res.ok) {
@@ -3101,7 +3163,7 @@ export default function VideoTimelinePage() {
     } finally {
       setCompileLoading(false);
     }
-  }, [scriptId, sceneTransitionType, scriptName, projectIdFromUrl, handleSaveToLibrary]);
+  }, [scriptId, sceneTransitionType, scriptName, projectIdFromUrl, handleSaveToLibrary, scenes, captions, voiceoverUrl]);
 
   // Optional: auto-export when navigated from Video Creation Guide after animations finish.
   // Uses voiceovers already present on the timeline scenes (per-clip audio) for template-studio flows.
@@ -3666,67 +3728,79 @@ export default function VideoTimelinePage() {
         <div
           className={`fixed top-0 right-0 bottom-0 z-50 flex min-w-0 flex-col overflow-x-hidden overflow-y-hidden bg-[#0f0f0f] text-white transition-[left] duration-200 ease-out ${sidebar && !sidebar.isCollapsed ? "left-[60px] md:left-[220px]" : "left-0"}`}
         >
-      <header className="shrink-0 border-b border-[#2a2a2a] bg-[#0f0f0f] px-3 h-12 flex items-center">
-        <div className="flex items-center gap-2 w-full">
-          {sidebar && (
-            <button
-              type="button"
-              onClick={sidebar.toggleCollapsed}
-              className="flex-shrink-0 p-1.5 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white transition-colors"
-              aria-label={sidebar.isCollapsed ? "Show sidebar" : "Hide sidebar"}
-            >
-              {sidebar.isCollapsed ? (
-                <Menu size={18} />
-              ) : (
-                <PanelLeftClose size={18} />
-              )}
-            </button>
-          )}
+      <header className="shrink-0 border-b border-[#2a2a2a] bg-[#161616] px-3 h-12 flex items-center gap-2">
+        {sidebar && (
+          <button
+            type="button"
+            onClick={sidebar.toggleCollapsed}
+            className="flex-shrink-0 p-1.5 rounded text-[#606060] hover:bg-[#2a2a2a] hover:text-white transition-colors"
+            aria-label={sidebar.isCollapsed ? "Show sidebar" : "Hide sidebar"}
+          >
+            {sidebar.isCollapsed ? <Menu size={16} /> : <PanelLeftClose size={16} />}
+          </button>
+        )}
+
+        {/* Project name */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="w-2 h-2 rounded-full bg-[#f97316] shrink-0" />
           <input
             type="text"
-            className="bg-transparent text-white font-semibold text-sm border-none outline-none focus:ring-1 focus:ring-[#2a2a2a] rounded px-1 py-0.5 min-w-0 max-w-[200px]"
+            className="bg-transparent text-white font-semibold text-sm border-none outline-none focus:ring-1 focus:ring-[#3a3a3a] rounded px-1 py-0.5 min-w-0 max-w-[180px] truncate"
             value={scriptName ?? "Untitled Project"}
             readOnly
             aria-label="Project name"
           />
-          <div className="flex-1" />
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Undo / Redo */}
+        <div className="flex items-center gap-0.5 bg-[#1e1e1e] rounded-md border border-[#2a2a2a] p-0.5">
           <button
             type="button"
-            className="p-1.5 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 disabled:pointer-events-none transition-colors"
+            className="p-1.5 rounded text-[#606060] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors"
             onClick={undo}
             disabled={undoStack.length === 0}
             title="Undo (Cmd+Z)"
-            aria-label="Undo"
           >
-            <Undo2 className="h-4 w-4" />
+            <Undo2 className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
-            className="p-1.5 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 disabled:pointer-events-none transition-colors"
+            className="p-1.5 rounded text-[#606060] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors"
             onClick={redo}
             disabled={redoStack.length === 0}
             title="Redo (Cmd+Shift+Z)"
-            aria-label="Redo"
           >
-            <Redo2 className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white border border-[#2a2a2a] transition-colors"
-            onClick={handleSaveToLibrary}
-          >
-            💾 Save
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-white bg-[#f97316] hover:bg-orange-600 font-medium disabled:opacity-50 disabled:pointer-events-none transition-colors"
-            disabled={compileLoading || !scriptId?.trim()}
-            onClick={handleExportVideoServer}
-          >
-            {compileLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Export Video
+            <Redo2 className="h-3.5 w-3.5" />
           </button>
         </div>
+
+        {/* Save */}
+        <button
+          type="button"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[#c0c0c0] hover:text-white bg-[#1e1e1e] border border-[#2a2a2a] hover:bg-[#2a2a2a] transition-colors"
+          onClick={handleSaveToLibrary}
+          title="Save to library"
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2a1 1 0 0 1 1-1h8.586a1 1 0 0 1 .707.293l2.414 2.414A1 1 0 0 1 15 4.414V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2zm4 12h4v-4H6v4zM3 2v12h2v-4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4h2V4.828L11.172 3H10V6H5V3H3z"/></svg>
+          Save
+        </button>
+
+        {/* Export */}
+        <button
+          type="button"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold text-white bg-[#f97316] hover:bg-orange-600 disabled:opacity-40 disabled:pointer-events-none transition-colors shadow-[0_0_12px_rgba(249,115,22,0.25)]"
+          disabled={compileLoading || scenes.length === 0}
+          onClick={handleExportVideoServer}
+          title="Export video as MP4 (server-side)"
+        >
+          {compileLoading
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            : <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm3.22 6.47-4 4a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 1 1 1.06-1.06l1.47 1.47 3.47-3.47a.75.75 0 1 1 1.06 1.06z"/></svg>
+          }
+          Export Video
+        </button>
       </header>
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#0f0f0f]">
@@ -3842,7 +3916,7 @@ export default function VideoTimelinePage() {
         <div className="flex flex-1 min-h-0 overflow-hidden">
 
           {/* LEFT PANEL: media / audio library */}
-          <div className="w-44 shrink-0 border-r border-[#2a2a2a] bg-[#1a1a1a] flex flex-col">
+          <div className="w-44 shrink-0 border-r border-[#2a2a2a] bg-[#161616] flex flex-col">
             {/* Tabs */}
             <div className="flex border-b border-[#2a2a2a] shrink-0">
               {(["media", "audio"] as const).map((tab) => (
@@ -3850,9 +3924,17 @@ export default function VideoTimelinePage() {
                   key={tab}
                   type="button"
                   onClick={() => setLeftPanelTab(tab)}
-                  className={`flex-1 py-2 text-[11px] font-medium capitalize transition-colors ${leftPanelTab === tab ? "text-white border-b-2 border-[#f97316]" : "text-[#a0a0a0] hover:text-white"}`}
+                  className={`flex-1 py-2 text-[11px] font-semibold transition-colors flex items-center justify-center gap-1 ${
+                    leftPanelTab === tab
+                      ? "text-white border-b-2 border-[#f97316]"
+                      : "text-[#505050] hover:text-[#a0a0a0]"
+                  }`}
                 >
-                  {tab === "media" ? "Media" : "Audio"}
+                  {tab === "media" ? (
+                    <><Film className="h-3 w-3" /> Media</>
+                  ) : (
+                    <><Music2 className="h-3 w-3" /> Audio</>
+                  )}
                 </button>
               ))}
             </div>
@@ -4032,7 +4114,7 @@ export default function VideoTimelinePage() {
                 <>
                   {/* Audio drop zone */}
                   <div
-                    className="w-full rounded border-2 border-dashed border-[#2a2a2a] flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-[#f97316]/50 hover:bg-[#f97316]/5 transition-colors p-3 mb-2"
+                    className="w-full rounded-lg border-2 border-dashed border-[#2a2a2a] flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:border-[#f97316]/50 hover:bg-[#f97316]/5 transition-colors p-4 mb-2"
                     onClick={() => leftAudioInputRef.current?.click()}
                     onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-[#f97316]'); }}
                     onDragLeave={(e) => { e.currentTarget.classList.remove('border-[#f97316]'); }}
@@ -4052,18 +4134,27 @@ export default function VideoTimelinePage() {
                       }
                     }}
                   >
-                    <span className="text-[#a0a0a0] text-xl">🎵</span>
-                    <span className="text-[10px] text-[#a0a0a0] text-center leading-tight">Drop audio here<br/>(voice or music)</span>
+                    <div className="w-8 h-8 rounded-lg bg-[#1e1e1e] flex items-center justify-center">
+                      <Music2 className="h-4 w-4 text-[#505050]" />
+                    </div>
+                    <span className="text-[10px] text-[#505050] text-center leading-tight">Drop audio here<br/>voice or music</span>
                   </div>
                   {voiceoverUrl && (
-                    <div className="flex items-center gap-1 p-1.5 rounded bg-[#2a2a2a] mb-1">
-                      <span className="text-[9px] text-white truncate flex-1">🎙 {voiceoverFileName ?? "Voiceover"}</span>
+                    <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] mb-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#a855f7] shrink-0" />
+                      <span className="text-[10px] text-[#c0c0c0] truncate flex-1">{voiceoverFileName ?? "Voiceover"}</span>
                     </div>
                   )}
                   {musicUrl && (
-                    <div className="flex items-center gap-1 p-1.5 rounded bg-[#2a2a2a]">
-                      <span className="text-[9px] text-white truncate flex-1">🎵 Music</span>
+                    <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] shrink-0" />
+                      <span className="text-[10px] text-[#c0c0c0] truncate flex-1">Music track</span>
                     </div>
+                  )}
+                  {!voiceoverUrl && !musicUrl && (
+                    <p className="text-[10px] text-[#383838] text-center mt-1">
+                      First drop = voiceover<br/>Second drop = music
+                    </p>
                   )}
                 </>
               )}
@@ -4423,9 +4514,10 @@ export default function VideoTimelinePage() {
             {(voiceoverUrl || hasPerClipAudio) && (
               <audio
                 ref={audioRef}
-                src={playbackSrc}
+                src={playbackSrc ?? undefined}
                 onTimeUpdate={onTimeUpdate}
                 onDurationChange={onDurationChange}
+                onCanPlay={onCanPlay}
                 onPlay={onPlay}
                 onPause={onPause}
                 onEnded={onPlaybackEnded}
@@ -4675,29 +4767,36 @@ export default function VideoTimelinePage() {
                 </div>
 
                 <div className="mb-4">
-                  <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Transition between scenes</label>
-                  <select
-                    className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
-                    value={sceneTransitionType}
-                    onChange={(e) => setSceneTransitionType(e.target.value as SceneTransitionType)}
-                  >
-                    <optgroup label="Basic">
-                      <option value="fade">Fade</option>
-                      <option value="wipe">Wipe</option>
-                    </optgroup>
-                    <optgroup label="Slide">
-                      <option value="slideLeft">Slide Left</option>
-                      <option value="slideRight">Slide Right</option>
-                      <option value="pushUp">Push Up</option>
-                      <option value="pushDown">Push Down</option>
-                    </optgroup>
-                    <optgroup label="Dynamic">
-                      <option value="zoom">Zoom</option>
-                      <option value="blur">Blur</option>
-                      <option value="spin">Spin</option>
-                      <option value="flip">Flip</option>
-                    </optgroup>
-                  </select>
+                  <label className="text-xs font-medium text-[#606060] block mb-2">Transition</label>
+                  <div className="grid grid-cols-5 gap-1">
+                    {([
+                      { value: "fade", label: "Fade", icon: "◐" },
+                      { value: "wipe", label: "Wipe", icon: "▷" },
+                      { value: "slideLeft", label: "◀ Slide", icon: "◀" },
+                      { value: "slideRight", label: "Slide ▶", icon: "▶" },
+                      { value: "pushUp", label: "Push ▲", icon: "▲" },
+                      { value: "pushDown", label: "Push ▼", icon: "▼" },
+                      { value: "zoom", label: "Zoom", icon: "⊕" },
+                      { value: "blur", label: "Blur", icon: "◉" },
+                      { value: "spin", label: "Spin", icon: "↻" },
+                      { value: "flip", label: "Flip", icon: "⇄" },
+                    ] as { value: SceneTransitionType; label: string; icon: string }[]).map((t) => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        title={t.label}
+                        onClick={() => setSceneTransitionType(t.value)}
+                        className={`rounded py-1.5 text-[11px] font-medium transition-all ${
+                          sceneTransitionType === t.value
+                            ? "bg-[#f97316] text-white"
+                            : "bg-[#1a1a1a] border border-[#2a2a2a] text-[#606060] hover:text-white hover:border-[#3a3a3a]"
+                        }`}
+                      >
+                        {t.icon}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-[#404040] mt-1 text-center capitalize">{TRANSITION_LABELS[sceneTransitionType] ?? sceneTransitionType}</p>
                 </div>
 
                 {selectedSceneIndex !== null && (
@@ -5032,20 +5131,29 @@ export default function VideoTimelinePage() {
                   </div>
                 )}
 
-                {/* Music - always visible */}
+                {/* Music */}
                 <div className="mt-4 pt-4 border-t border-[#2a2a2a] space-y-3">
-                  <h3 className="text-sm font-semibold text-white">Music</h3>
-                  <div>
-                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">
-                      Volume {musicUrl ? `${musicVolume}%` : ""}
-                    </label>
+                  <h3 className="text-xs font-bold text-[#a0a0a0] uppercase tracking-widest">Music</h3>
+                  {musicUrl ? (
+                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a]">
+                      <span className="w-2 h-2 rounded-full bg-[#22c55e] shrink-0" />
+                      <span className="text-xs text-[#d0d0d0] truncate flex-1">Music loaded</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#505050]">Upload audio in the Media panel (Audio tab)</p>
+                  )}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs text-[#606060]">Volume</label>
+                      <span className="text-xs text-[#909090] tabular-nums font-mono">{musicVolume}%</span>
+                    </div>
                     <input
                       type="range"
                       min={0}
                       max={100}
                       value={musicVolume}
                       onChange={(e) => setMusicVolume(Number(e.target.value))}
-                      className="w-full h-2 rounded-lg appearance-none bg-[#2a2a2a] accent-[#f97316]"
+                      className="w-full h-1.5 rounded-full appearance-none bg-[#2a2a2a] accent-[#f97316] cursor-pointer"
                       disabled={!musicUrl}
                       title="Music volume"
                     />
@@ -5053,212 +5161,318 @@ export default function VideoTimelinePage() {
                 </div>
 
                 {/* Subtitles */}
-                <div className="mt-4 pt-4 border-t border-[#2a2a2a] space-y-3">
-                  <h3 className="text-sm font-semibold text-white">Subtitles</h3>
-                  <p className="text-xs text-[#a0a0a0]">
-                    Generate timed captions from voiceover or export as SRT.
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    <button
-                      type="button"
-                      className="w-full rounded-md border border-[#f97316]/40 bg-[#f97316]/10 px-3 py-2 text-sm font-medium text-white hover:bg-[#f97316]/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={handleGenerateSubtitlesFromVoiceover}
-                      disabled={transcribeLoading || !voiceoverUrl}
-                      title={voiceoverUrl ? "Generate subtitles from voiceover (Whisper)" : "Add a voiceover first"}
-                    >
-                      {transcribeLoading ? "Generating…" : "Generate from voiceover"}
-                    </button>
-                    {transcribeError && (
-                      <p className="text-xs text-red-400" title={transcribeError}>
-                        {transcribeError}
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white hover:bg-[#2a2a2a] disabled:opacity-50"
-                      onClick={handleExportSrt}
-                      disabled={captions.length === 0}
-                    >
-                      Export SRT ({captions.length} caption{captions.length !== 1 ? "s" : ""})
-                    </button>
-                  </div>
+                <div className="mt-4 pt-4 border-t border-[#2a2a2a] space-y-2.5">
+                  <h3 className="text-xs font-bold text-[#a0a0a0] uppercase tracking-widest">Subtitles</h3>
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border border-[#f97316]/30 bg-[#f97316]/10 px-3 py-2 text-xs font-semibold text-white hover:bg-[#f97316]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                    onClick={handleGenerateSubtitlesFromVoiceover}
+                    disabled={transcribeLoading || !voiceoverUrl}
+                    title={voiceoverUrl ? "Generate subtitles from voiceover (Whisper AI)" : "Add a voiceover first"}
+                  >
+                    {transcribeLoading
+                      ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
+                      : <>✦ Generate from voiceover</>
+                    }
+                  </button>
+                  {transcribeError && (
+                    <p className="text-xs text-red-400 bg-red-950/20 px-2 py-1.5 rounded border border-red-900/30" title={transcribeError}>
+                      {transcribeError}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-xs font-medium text-[#a0a0a0] hover:text-white hover:bg-[#1a1a1a] disabled:opacity-30 transition-colors"
+                    onClick={handleExportSrt}
+                    disabled={captions.length === 0}
+                  >
+                    Export SRT · {captions.length} caption{captions.length !== 1 ? "s" : ""}
+                  </button>
                 </div>
 
                 {/* Additional actions */}
                 <div className="mt-4 pt-4 border-t border-[#2a2a2a] space-y-2">
-                  <div className="flex flex-col gap-2">
-                    <button
-                      type="button"
-                      className="w-full rounded border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-1.5 text-sm text-white hover:bg-[#2a2a2a] disabled:opacity-50"
-                      disabled={compileLoading || compileTestLoading}
-                      onClick={handleTestCompile}
+                  <h3 className="text-xs font-bold text-[#a0a0a0] uppercase tracking-widest mb-2.5">Export</h3>
+                  {ffmpegLoadError && (
+                    <div className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                      <span>Video engine failed to load</span>
+                      <button
+                        type="button"
+                        className="underline font-medium shrink-0"
+                        onClick={() => void initBrowserFFmpeg()}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2 text-xs font-medium text-[#909090] hover:text-white hover:bg-[#2a2a2a] disabled:opacity-30 transition-colors flex items-center justify-center gap-1.5"
+                    disabled={compileLoading || compileTestLoading}
+                    onClick={handleTestCompile}
+                  >
+                    {compileTestLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <span>⚙</span>}
+                    Test compile · {scenes.length || 0} scenes
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border border-emerald-800/40 bg-emerald-950/20 px-3 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-950/40 disabled:opacity-30 transition-colors"
+                    disabled={isExporting}
+                    onClick={handleSchedule}
+                  >
+                    📅 Schedule
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full rounded-lg bg-blue-600 hover:bg-blue-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-30 transition-colors shadow-sm"
+                    disabled={compileLoading || scenes.length === 0}
+                    onClick={handleExportVideoServer}
+                  >
+                    {compileLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin inline mr-1" /> : "📹"} Publish Now
+                  </button>
+                  {compileError && !compileLoading && (
+                    <p className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 rounded-lg px-2.5 py-2 leading-snug">
+                      {compileError}
+                    </p>
+                  )}
+                  {compileDownloadUrl && !compileLoading && (
+                    <a
+                      href={compileDownloadUrl}
+                      download
+                      className="block text-center text-xs text-emerald-400 hover:text-emerald-300 underline"
                     >
-                      {compileTestLoading ? <Loader2 className="inline h-4 w-4 animate-spin mr-1" /> : null}
-                      Test compile ({scenes.length || 0} scenes)
-                    </button>
-                    {ffmpegLoadError && (
-                      <p className="text-xs text-red-400 text-center">
-                        Video engine failed to load ({ffmpegLoadError}).{" "}
-                        <button
-                          type="button"
-                          className="underline font-medium"
-                          onClick={() => void initBrowserFFmpeg()}
-                        >
-                          Retry
-                        </button>
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      className="w-full rounded border border-green-800/50 bg-green-900/20 px-3 py-1.5 text-sm text-green-400 hover:bg-green-900/30 disabled:opacity-50"
-                      disabled={isExporting}
-                      onClick={handleSchedule}
-                    >
-                      📅 Schedule
-                    </button>
-                    <button
-                      type="button"
-                      className="w-full rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-                      disabled={!ffmpegLoaded || !scriptId || (!voiceoverUrl && !hasPerClipAudio) || isExporting}
-                      onClick={() => handleExportVideo()}
-                    >
-                      📹 Publish Now
-                    </button>
-                  </div>
+                      ↓ Download exported video
+                    </a>
+                  )}
                 </div>
               </>
             ) : (
               <>
+                {/* Idle hint */}
+                <div className="mb-4 rounded-xl border border-dashed border-[#2a2a2a] p-4 flex flex-col items-center gap-2 text-center">
+                  <div className="w-8 h-8 rounded-lg bg-[#1e1e1e] flex items-center justify-center text-base">
+                    🎬
+                  </div>
+                  <p className="text-xs text-[#505050] leading-relaxed">
+                    Click a scene block or caption on the timeline to edit it here.
+                  </p>
+                </div>
                 {/* Music - always visible when no scene/caption selected */}
-                <div className="mb-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-white">Music</h3>
-                  <div>
-                    <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">
-                      Volume {musicUrl ? `${musicVolume}%` : ""}
-                    </label>
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold text-[#a0a0a0] uppercase tracking-widest">Music</h3>
+                  {musicUrl ? (
+                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a]">
+                      <span className="w-2 h-2 rounded-full bg-[#22c55e] shrink-0" />
+                      <span className="text-xs text-[#d0d0d0] truncate flex-1">Music loaded</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#505050]">Upload audio in the Media panel (Audio tab)</p>
+                  )}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs text-[#606060]">Volume</label>
+                      <span className="text-xs text-[#909090] tabular-nums font-mono">{musicVolume}%</span>
+                    </div>
                     <input
                       type="range"
                       min={0}
                       max={100}
                       value={musicVolume}
                       onChange={(e) => setMusicVolume(Number(e.target.value))}
-                      className="w-full h-2 rounded-lg appearance-none bg-[#2a2a2a] accent-[#f97316]"
+                      className="w-full h-1.5 rounded-full appearance-none bg-[#2a2a2a] accent-[#f97316] cursor-pointer"
                       disabled={!musicUrl}
                       title="Music volume"
                     />
                   </div>
                 </div>
-                <p className="text-sm text-[#a0a0a0]">Click a scene or caption to edit it.</p>
               </>
             )}
 
             {/* Caption Style - always visible */}
-            <div className="mt-4 pt-4 border-t border-[#2a2a2a] space-y-3">
-              <h3 className="text-sm font-semibold text-white">Caption Style</h3>
+            <div className="mt-4 pt-4 border-t border-[#2a2a2a] space-y-4">
+              <h3 className="text-xs font-bold text-[#a0a0a0] uppercase tracking-widest">Caption Style</h3>
+
+              {/* Presets - visual cards */}
               <div>
-                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Presets</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {CAPTION_PRESETS.map((preset) => (
+                <label className="text-xs font-medium text-[#606060] block mb-2">Presets</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {CAPTION_PRESETS.map((preset) => {
+                    const isActive =
+                      captionPosition === preset.position &&
+                      captionFontSize === preset.fontSize &&
+                      captionTextColor === preset.textColor &&
+                      captionAnimation === preset.animation &&
+                      captionBackground === preset.background &&
+                      captionDisplayMode === preset.displayMode;
+                    return (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() => {
+                          setCaptionPosition(preset.position);
+                          setCaptionFontSize(preset.fontSize);
+                          setCaptionTextColor(preset.textColor);
+                          setCaptionAnimation(preset.animation);
+                          setCaptionBackground(preset.background);
+                          setCaptionDisplayMode(preset.displayMode);
+                        }}
+                        className={`rounded-lg border p-2 flex flex-col items-center gap-1.5 transition-all text-center ${
+                          isActive
+                            ? "border-[#f97316] bg-[#f97316]/10"
+                            : "border-[#2a2a2a] bg-[#0f0f0f] hover:border-[#3a3a3a] hover:bg-[#1a1a1a]"
+                        }`}
+                      >
+                        {/* Mini text preview */}
+                        <div
+                          className="w-full h-5 rounded flex items-center justify-center text-[8px] font-bold leading-none overflow-hidden"
+                          style={{
+                            background: preset.background === "none" ? "transparent" : preset.background === "bar" ? "rgba(0,0,0,0.6)" : undefined,
+                            backgroundColor: preset.background === "pill" ? "rgba(0,0,0,0.55)" : undefined,
+                            borderRadius: preset.background === "pill" ? 4 : preset.background === "bar" ? 0 : undefined,
+                            border: preset.background === "none" ? "1px dashed #3a3a3a" : undefined,
+                            color: preset.textColor,
+                          }}
+                        >
+                          Aa
+                        </div>
+                        <span className="text-[9px] text-[#a0a0a0] leading-tight">{preset.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Background - button group */}
+              <div>
+                <label className="text-xs font-medium text-[#606060] block mb-1.5">Background</label>
+                <div className="flex rounded-md border border-[#2a2a2a] overflow-hidden text-xs">
+                  {(["none", "pill", "bar"] as const).map((val, i) => (
                     <button
-                      key={preset.name}
+                      key={val}
                       type="button"
-                      className="rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-2.5 py-1.5 text-xs text-white hover:bg-[#2a2a2a] capitalize"
-                      onClick={() => {
-                        setCaptionPosition(preset.position);
-                        setCaptionFontSize(preset.fontSize);
-                        setCaptionTextColor(preset.textColor);
-                        setCaptionAnimation(preset.animation);
-                        setCaptionBackground(preset.background);
-                        setCaptionDisplayMode(preset.displayMode);
-                      }}
+                      onClick={() => setCaptionBackground(val)}
+                      className={`flex-1 py-1.5 font-medium transition-colors ${i > 0 ? "border-l border-[#2a2a2a]" : ""} ${
+                        captionBackground === val
+                          ? "bg-[#f97316] text-white"
+                          : "bg-[#0f0f0f] text-[#a0a0a0] hover:bg-[#1a1a1a] hover:text-white"
+                      }`}
                     >
-                      {preset.name}
+                      {val === "none" ? "None" : val === "pill" ? "Pill" : "Bar"}
                     </button>
                   ))}
                 </div>
               </div>
+
+              {/* Position - button group */}
               <div>
-                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Background</label>
-                <select
-                  className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
-                  value={captionBackground}
-                  onChange={(e) =>
-                    setCaptionBackground(e.target.value as "none" | "pill" | "bar")
-                  }
-                >
-                  <option value="none">No box (text only)</option>
-                  <option value="pill">Pill (rounded box)</option>
-                  <option value="bar">Full bar</option>
-                </select>
+                <label className="text-xs font-medium text-[#606060] block mb-1.5">Position</label>
+                <div className="flex rounded-md border border-[#2a2a2a] overflow-hidden text-xs">
+                  {(["top", "middle", "bottom"] as const).map((val, i) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setCaptionPosition(val)}
+                      className={`flex-1 py-1.5 font-medium transition-colors capitalize ${i > 0 ? "border-l border-[#2a2a2a]" : ""} ${
+                        captionPosition === val
+                          ? "bg-[#f97316] text-white"
+                          : "bg-[#0f0f0f] text-[#a0a0a0] hover:bg-[#1a1a1a] hover:text-white"
+                      }`}
+                    >
+                      {val}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* Font Size - button group */}
               <div>
-                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Animation</label>
-                <select
-                  className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
-                  value={captionAnimation}
-                  onChange={(e) =>
-                    setCaptionAnimation(e.target.value as "none" | "fadeIn" | "slideUp" | "pop")
-                  }
-                >
-                  <option value="none">None</option>
-                  <option value="fadeIn">Fade In</option>
-                  <option value="slideUp">Slide Up</option>
-                  <option value="pop">Pop (scale in)</option>
-                </select>
+                <label className="text-xs font-medium text-[#606060] block mb-1.5">Font size</label>
+                <div className="flex rounded-md border border-[#2a2a2a] overflow-hidden text-xs">
+                  {(["small", "medium", "large"] as const).map((val, i) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setCaptionFontSize(val)}
+                      className={`flex-1 py-1.5 font-medium transition-colors ${i > 0 ? "border-l border-[#2a2a2a]" : ""} ${
+                        captionFontSize === val
+                          ? "bg-[#f97316] text-white"
+                          : "bg-[#0f0f0f] text-[#a0a0a0] hover:bg-[#1a1a1a] hover:text-white"
+                      }`}
+                    >
+                      {val === "small" ? "S" : val === "medium" ? "M" : "L"}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* Display mode - button group */}
               <div>
-                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Position</label>
-                <select
-                  className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
-                  value={captionPosition}
-                  onChange={(e) =>
-                    setCaptionPosition(e.target.value as "bottom" | "middle" | "top")
-                  }
-                >
-                  <option value="bottom">Bottom</option>
-                  <option value="middle">Middle</option>
-                  <option value="top">Top</option>
-                </select>
+                <label className="text-xs font-medium text-[#606060] block mb-1.5">Display</label>
+                <div className="flex rounded-md border border-[#2a2a2a] overflow-hidden text-xs">
+                  {(["full", "wordByWord", "singleWord"] as const).map((val, i) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setCaptionDisplayMode(val)}
+                      title={val === "full" ? "All text at once" : val === "wordByWord" ? "Build up word by word with highlight" : "One word on screen at a time"}
+                      className={`flex-1 py-1.5 font-medium transition-colors leading-tight px-1 ${i > 0 ? "border-l border-[#2a2a2a]" : ""} ${
+                        captionDisplayMode === val
+                          ? "bg-[#f97316] text-white"
+                          : "bg-[#0f0f0f] text-[#a0a0a0] hover:bg-[#1a1a1a] hover:text-white"
+                      }`}
+                    >
+                      {val === "full" ? "Line" : val === "wordByWord" ? "Word" : "1 Word"}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* Animation - button group */}
               <div>
-                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Font size</label>
-                <select
-                  className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
-                  value={captionFontSize}
-                  onChange={(e) =>
-                    setCaptionFontSize(e.target.value as "small" | "medium" | "large")
-                  }
-                >
-                  <option value="small">Small</option>
-                  <option value="medium">Medium</option>
-                  <option value="large">Large</option>
-                </select>
+                <label className="text-xs font-medium text-[#606060] block mb-1.5">Animation</label>
+                <div className="flex rounded-md border border-[#2a2a2a] overflow-hidden text-xs">
+                  {(["none", "fadeIn", "slideUp", "pop"] as const).map((val, i) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setCaptionAnimation(val)}
+                      className={`flex-1 py-1.5 font-medium transition-colors ${i > 0 ? "border-l border-[#2a2a2a]" : ""} ${
+                        captionAnimation === val
+                          ? "bg-[#f97316] text-white"
+                          : "bg-[#0f0f0f] text-[#a0a0a0] hover:bg-[#1a1a1a] hover:text-white"
+                      }`}
+                    >
+                      {val === "none" ? "None" : val === "fadeIn" ? "Fade" : val === "slideUp" ? "↑ Slide" : "Pop"}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* Text colour */}
               <div>
-                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Display</label>
-                <select
-                  className="w-full rounded-md border border-[#2a2a2a] bg-[#0f0f0f] px-3 py-2 text-sm text-white"
-                  value={captionDisplayMode}
-                  onChange={(e) =>
-                    setCaptionDisplayMode(e.target.value as "full" | "wordByWord" | "singleWord")
-                  }
-                >
-                  <option value="full">Full line (all text at once)</option>
-                  <option value="wordByWord">Word by word (build up + highlight)</option>
-                  <option value="singleWord">Single word only (one word on screen)</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Text colour</label>
+                <label className="text-xs font-medium text-[#606060] block mb-1.5">Text colour</label>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    className="h-9 w-14 cursor-pointer rounded border border-[#2a2a2a] bg-[#0f0f0f] p-1"
-                    value={captionTextColor}
-                    onChange={(e) => setCaptionTextColor(e.target.value)}
-                    title="Caption text colour"
-                  />
-                  <span className="text-xs text-[#a0a0a0] tabular-nums">{captionTextColor}</span>
+                  <div className="relative">
+                    <input
+                      type="color"
+                      className="h-8 w-8 cursor-pointer rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] p-0.5 block"
+                      value={captionTextColor}
+                      onChange={(e) => setCaptionTextColor(e.target.value)}
+                      title="Caption text colour"
+                    />
+                  </div>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {["#ffffff", "#facc15", "#000000", "#ef4444", "#60a5fa", "#4ade80"].map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        title={c}
+                        onClick={() => setCaptionTextColor(c)}
+                        className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 ${captionTextColor === c ? "border-[#f97316] scale-110" : "border-transparent"}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -5268,104 +5482,117 @@ export default function VideoTimelinePage() {
         </div>{/* end middle row */}
 
         {/* BOTTOM: playback controls + timeline */}
-        <div className="shrink-0 border-t border-[#2a2a2a] bg-[#111111] flex flex-col">
+        <div className="shrink-0 border-t border-[#2a2a2a] bg-[#0d0d0d] flex flex-col">
           {/* Playback controls row */}
-          <div className="flex items-center gap-2 px-3 h-10 border-b border-[#2a2a2a] shrink-0">
-            <button
-              type="button"
-              className="p-1 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 transition-colors"
-              onClick={() => { if (audioRef.current) { audioRef.current.currentTime = 0; } }}
-              title="Skip to start"
-              aria-label="Skip to start"
-            >
-              <SkipBack className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="p-1.5 rounded bg-white/10 hover:bg-white/20 text-white disabled:opacity-50 transition-colors"
-              onClick={isPlaying ? pause : play}
-              disabled={(!voiceoverUrl && !hasPerClipAudio) || isExporting}
-              title={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            </button>
-            <button
-              type="button"
-              className="p-1 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 transition-colors"
-              onClick={() => { if (audioRef.current) { audioRef.current.currentTime = audioRef.current.duration || 0; } }}
-              title="Skip to end"
-              aria-label="Skip to end"
-            >
-              <SkipForward className="h-4 w-4" />
-            </button>
-            <span className="text-xs text-[#a0a0a0] tabular-nums ml-1">
-              {formatTime(currentTime)} / {formatTime(Math.max(duration, voiceoverDuration))}
+          <div className="flex items-center gap-1.5 px-3 h-10 border-b border-[#2a2a2a] shrink-0">
+            {/* Transport controls */}
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                className="p-1.5 rounded text-[#606060] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 transition-colors"
+                onClick={() => { if (audioRef.current) { audioRef.current.currentTime = 0; } }}
+                title="Skip to start"
+              >
+                <SkipBack className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                className="p-1.5 rounded-lg bg-[#f97316]/90 hover:bg-[#f97316] text-white disabled:opacity-40 transition-colors shadow-sm"
+                onClick={isPlaying ? pause : play}
+                disabled={(!voiceoverUrl && !hasPerClipAudio) || isExporting}
+                title={isPlaying ? "Pause (Space)" : "Play (Space)"}
+              >
+                {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+              </button>
+              <button
+                type="button"
+                className="p-1.5 rounded text-[#606060] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 transition-colors"
+                onClick={() => { if (audioRef.current) { audioRef.current.currentTime = audioRef.current.duration || 0; } }}
+                title="Skip to end"
+              >
+                <SkipForward className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <span className="text-xs text-[#505050] tabular-nums font-mono ml-0.5">
+              {formatTime(currentTime)}<span className="text-[#383838]"> / {formatTime(Math.max(duration, voiceoverDuration))}</span>
             </span>
+
             <div className="w-px h-4 bg-[#2a2a2a] mx-1" />
-            <button
-              type="button"
-              className="p-1 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white"
-              onClick={handleZoomOut}
-              title="Zoom out"
-            >
-              <ZoomOut className="h-3.5 w-3.5" />
-            </button>
-            <span className="text-xs text-[#a0a0a0] tabular-nums w-10 text-center">{Math.round(zoomLevel * 100)}%</span>
-            <button
-              type="button"
-              className="p-1 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white"
-              onClick={handleZoomIn}
-              title="Zoom in"
-            >
-              <ZoomIn className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              className="p-1 rounded text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white"
-              onClick={handleFitToScreen}
-              title="Fit to screen"
-            >
-              <Maximize2 className="h-3.5 w-3.5" />
-            </button>
+
+            {/* Zoom controls */}
+            <div className="flex items-center gap-0.5 bg-[#1a1a1a] rounded border border-[#2a2a2a] px-1">
+              <button
+                type="button"
+                className="p-1 text-[#606060] hover:text-white transition-colors"
+                onClick={handleZoomOut}
+                title="Zoom out"
+              >
+                <ZoomOut className="h-3 w-3" />
+              </button>
+              <span className="text-[10px] text-[#606060] tabular-nums w-8 text-center font-mono">{Math.round(zoomLevel * 100)}%</span>
+              <button
+                type="button"
+                className="p-1 text-[#606060] hover:text-white transition-colors"
+                onClick={handleZoomIn}
+                title="Zoom in"
+              >
+                <ZoomIn className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                className="p-1 text-[#606060] hover:text-white transition-colors border-l border-[#2a2a2a] ml-0.5 pl-1.5"
+                onClick={handleFitToScreen}
+                title="Fit to screen"
+              >
+                <Maximize2 className="h-3 w-3" />
+              </button>
+            </div>
+
             <div className="w-px h-4 bg-[#2a2a2a] mx-1" />
-            <button
-              type="button"
-              onClick={addScene}
-              className="px-2 py-0.5 text-[#a0a0a0] hover:text-white text-xs rounded hover:bg-[#2a2a2a] transition-colors"
-              title="Add scene"
-            >
-              + Scene
-            </button>
-            <button
-              type="button"
-              onClick={handleAutoSyncToVoiceover}
-              className="px-2 py-0.5 text-[#a0a0a0] hover:text-white text-xs rounded hover:bg-[#2a2a2a] transition-colors"
-              title="Snap scene blocks to equal voiceover segments"
-            >
-              Sync
-            </button>
-            <button
-              type="button"
-              onClick={handleCompactScenes}
-              className="px-2 py-0.5 text-[#a0a0a0] hover:text-white text-xs rounded hover:bg-[#2a2a2a] transition-colors"
-              title="Remove gaps between scenes"
-            >
-              Remove gaps
-            </button>
-            <button
-              type="button"
-              onClick={handleSplitScene}
-              disabled={selectedSceneIndex == null || (() => {
-                const b = selectedSceneIndex != null ? sceneBlocks.find((x) => scenes[selectedSceneIndex]?.id === x.id) : null;
-                return !b || currentTime <= b.startTime || currentTime >= b.endTime || b.endTime - currentTime < 0.5 || currentTime - b.startTime < 0.5;
-              })()}
-              className="px-2 py-0.5 text-[#a0a0a0] hover:text-white text-xs rounded hover:bg-[#2a2a2a] disabled:opacity-40 transition-colors"
-              title="Split selected scene at playhead"
-            >
-              Split
-            </button>
+
+            {/* Edit actions */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={addScene}
+                className="px-2.5 py-1 text-[#909090] hover:text-white text-[11px] font-medium rounded hover:bg-[#2a2a2a] transition-colors border border-[#2a2a2a]"
+                title="Add scene"
+              >
+                + Scene
+              </button>
+              <button
+                type="button"
+                onClick={handleAutoSyncToVoiceover}
+                className="px-2.5 py-1 text-[#909090] hover:text-white text-[11px] font-medium rounded hover:bg-[#2a2a2a] transition-colors border border-[#2a2a2a]"
+                title="Snap scene blocks to equal voiceover segments"
+              >
+                Sync
+              </button>
+              <button
+                type="button"
+                onClick={handleCompactScenes}
+                className="px-2.5 py-1 text-[#909090] hover:text-white text-[11px] font-medium rounded hover:bg-[#2a2a2a] transition-colors border border-[#2a2a2a]"
+                title="Remove gaps between scenes"
+              >
+                Remove gaps
+              </button>
+              <button
+                type="button"
+                onClick={handleSplitScene}
+                disabled={selectedSceneIndex == null || (() => {
+                  const b = selectedSceneIndex != null ? sceneBlocks.find((x) => scenes[selectedSceneIndex]?.id === x.id) : null;
+                  return !b || currentTime <= b.startTime || currentTime >= b.endTime || b.endTime - currentTime < 0.5 || currentTime - b.startTime < 0.5;
+                })()}
+                className="px-2.5 py-1 text-[#909090] hover:text-white text-[11px] font-medium rounded hover:bg-[#2a2a2a] disabled:opacity-30 disabled:cursor-not-allowed transition-colors border border-[#2a2a2a]"
+                title="Split selected scene at playhead"
+              >
+                Split
+              </button>
+            </div>
+
             <div className="flex-1" />
-            <span className="text-[10px] text-[#a0a0a0]/60 hidden sm:block">Space · Cmd+Z · Cmd+Shift+Z</span>
+            <span className="text-[10px] text-[#383838] hidden sm:block font-mono">Space · ⌘Z · ⌘⇧Z</span>
           </div>
 
           {/* Timeline tracks */}
@@ -5387,24 +5614,24 @@ export default function VideoTimelinePage() {
               if (el) setScrollState({ scrollLeft: el.scrollLeft, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth });
             }}
           >
-            <div className="shrink-0 w-28 border-r border-[#2a2a2a] bg-[#1a1a1a] flex flex-col text-xs text-[#a0a0a0]">
+            <div className="shrink-0 w-28 border-r border-[#2a2a2a] bg-[#161616] flex flex-col text-xs text-[#a0a0a0]">
               <div className="shrink-0 border-b border-[#2a2a2a]" style={{ height: RULER_HEIGHT }} />
               <div className="flex-1 flex flex-col">
-                <div className="flex items-center gap-1.5 px-2 border-b border-[#2a2a2a] shrink-0" style={{ height: 64 }}>
-                  <Film className="h-3 w-3 shrink-0 text-[#a0a0a0]" />
-                  <span className="font-medium text-white shrink-0 leading-tight text-[11px]">Scenes</span>
+                <div className="flex items-center gap-1.5 px-2.5 border-b border-[#2a2a2a] shrink-0" style={{ height: 64 }}>
+                  <span className="w-2 h-2 rounded-full bg-[#3b82f6] shrink-0" />
+                  <span className="font-semibold text-[#d0d0d0] shrink-0 leading-tight text-[11px]">Scenes</span>
                 </div>
-                <div className="shrink-0 px-2 flex items-center gap-1.5 border-b border-[#2a2a2a]" style={{ height: TRACK_HEIGHT }}>
-                  <Mic className="h-3 w-3 shrink-0 text-[#a0a0a0]" />
-                  <span className="font-medium text-white text-[11px]">Voice</span>
+                <div className="shrink-0 px-2.5 flex items-center gap-1.5 border-b border-[#2a2a2a]" style={{ height: TRACK_HEIGHT }}>
+                  <span className="w-2 h-2 rounded-full bg-[#a855f7] shrink-0" />
+                  <span className="font-semibold text-[#d0d0d0] text-[11px]">Voice</span>
                 </div>
-                <div className="shrink-0 px-2 flex items-center gap-1.5 border-b border-[#2a2a2a]" style={{ height: TRACK_HEIGHT }}>
-                  <Type className="h-3 w-3 shrink-0 text-[#a0a0a0]" />
-                  <span className="font-medium text-white text-[11px]">Captions</span>
+                <div className="shrink-0 px-2.5 flex items-center gap-1.5 border-b border-[#2a2a2a]" style={{ height: TRACK_HEIGHT }}>
+                  <span className="w-2 h-2 rounded-full bg-[#f97316] shrink-0" />
+                  <span className="font-semibold text-[#d0d0d0] text-[11px]">Captions</span>
                 </div>
-                <div className="shrink-0 px-2 flex items-center gap-1.5" style={{ height: TRACK_HEIGHT }}>
-                  <Music2 className="h-3 w-3 shrink-0 text-[#a0a0a0]" />
-                  <span className="font-medium text-white text-[11px]">Music</span>
+                <div className="shrink-0 px-2.5 flex items-center gap-1.5" style={{ height: TRACK_HEIGHT }}>
+                  <span className="w-2 h-2 rounded-full bg-[#22c55e] shrink-0" />
+                  <span className="font-semibold text-[#d0d0d0] text-[11px]">Music</span>
                 </div>
               </div>
             </div>

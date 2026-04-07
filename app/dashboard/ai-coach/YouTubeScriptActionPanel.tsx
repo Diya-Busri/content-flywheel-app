@@ -436,7 +436,11 @@ export function YouTubeScriptActionPanel({ scriptText }: Props) {
     if (!scriptText.trim()) return;
     const narrativeOnly = extractScriptNarrativeOnly(scriptText);
     const sceneCount = prompts.length >= 1 ? prompts.length : Math.max(1, Math.ceil((narrativeOnly || scriptText).split(/\n\n+/).filter(Boolean).length));
-    const chunks = splitScriptIntoScenes((narrativeOnly || scriptText).trim(), sceneCount);
+    const rawChunks = splitScriptIntoScenes((narrativeOnly || scriptText).trim(), sceneCount);
+    // Ensure we always have exactly sceneCount slots — pad with "" if the script
+    // has fewer paragraphs than AI-generated scene prompts, so every prompt
+    // gets a timeline scene even when the script text is shorter than expected.
+    const chunks: string[] = Array.from({ length: sceneCount }, (_, i) => rawChunks[i] ?? "");
 
     setBuildLoading(true);
     try {
@@ -445,7 +449,6 @@ export function YouTubeScriptActionPanel({ scriptText }: Props) {
         const sceneNum = i + 1;
         const video = sceneVideos[sceneNum];
         const imageUrl = sceneImages[sceneNum] ?? (video ? video.thumbnail : null);
-        const caption = video ? `${script_text.slice(0, 80)} [Video]` : script_text.slice(0, 100);
         const promptForScene = prompts[i];
         const durationSeconds = promptForScene?.duration_seconds ?? video?.duration ?? 30;
         const endSec = startSec + durationSeconds;
@@ -453,6 +456,9 @@ export function YouTubeScriptActionPanel({ scriptText }: Props) {
         const sectionLabel = promptForScene?.section_label
           ? `${promptForScene.section_label} (${timestamp})`
           : `Scene ${sceneNum} (${timestamp})`;
+        // Use section label as caption fallback when script text is empty (padded scene)
+        const captionBase = script_text.trim() || promptForScene?.section_label || `Scene ${sceneNum}`;
+        const caption = video ? `${captionBase.slice(0, 80)} [Video]` : captionBase.slice(0, 100);
         startSec = endSec;
         return {
           scene_number: sceneNum,

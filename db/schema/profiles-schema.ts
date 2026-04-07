@@ -22,6 +22,8 @@ export const profilesTable = pgTable("profiles", {
   // Usage credits tracking
   usageCredits: integer("usage_credits").default(0),
   usedCredits: integer("used_credits").default(0),
+  // Video generation credits (purchased separately, pay-per-use)
+  videoCredits: integer("video_credits").default(0).notNull(),
   // Subscription status tracking
   status: text("status").default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -42,22 +42,44 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
     activeWhenStartsWith ? pathname.startsWith(path) : pathname === path;
 
   type NavItem = { href: string; icon: React.ReactNode; label: string; emoji: string; subItem?: boolean; badge?: string; activeWhenStartsWith?: boolean };
+  type NavGroup = { label: string; items: NavItem[] };
 
-  const activeNavItems: NavItem[] = [
-    { href: "/dashboard", icon: <Home size={18} />, label: "Home", emoji: "🏠" },
-    { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", emoji: "🤖" },
-    { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦" },
-    { href: "/dashboard/digital-products/selling-guide", icon: <Package size={18} />, label: "Selling Guide", emoji: "🛒", subItem: true },
-    { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️" },
-    { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅" },
-    { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯" },
-    { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅" },
-    { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚" },
-    { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧" },
-    { href: "/dashboard/video-timeline", icon: <Film size={18} />, label: "Video Timeline", emoji: "🎬" },
-    { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true },
-    { href: "/dashboard/referral", icon: <Gift size={18} />, label: "Refer a Creator", emoji: "🎁" },
+  const navGroups: NavGroup[] = [
+    {
+      label: "Create",
+      items: [
+        { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", emoji: "🤖" },
+        { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true },
+        { href: "/dashboard/video-timeline", icon: <Film size={18} />, label: "Video Timeline", emoji: "🎬" },
+        { href: "/dashboard/video-credits", icon: <Film size={18} />, label: "Video Credits", emoji: "🎥" },
+      ],
+    },
+    {
+      label: "Content",
+      items: [
+        { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚" },
+        { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅" },
+        { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅" },
+      ],
+    },
+    {
+      label: "Grow",
+      items: [
+        { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦" },
+        { href: "/dashboard/digital-products/selling-guide", icon: <Package size={18} />, label: "Selling Guide", emoji: "🛒", subItem: true },
+        { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️" },
+        { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯" },
+        { href: "/dashboard/referral", icon: <Gift size={18} />, label: "Invite Creators", emoji: "🎁" },
+      ],
+    },
   ];
+
+  if (isAdminUser) {
+    navGroups.push({ label: "Admin", items: [
+      { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧" },
+      { href: "/dashboard/admin/applications", icon: <Star size={18} />, label: "Applications", emoji: "🛡️", activeWhenStartsWith: true },
+    ]});
+  }
 
   const comingSoonNavItems: NavItem[] = [];
 
@@ -154,11 +176,23 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 px-3 relative z-10 overflow-y-auto">
-          <div className="space-y-1.5">
-            {activeNavItems.map(renderNavItem)}
+        <nav className="flex-1 px-3 relative z-10 overflow-y-auto min-h-0">
+          <div className="space-y-1.5 mb-2">
+            {renderNavItem({ href: "/dashboard", icon: <Home size={18} />, label: "Home", emoji: "🏠" })}
+          </div>
+          <div className="space-y-4">
+            {navGroups.map((group) => (
+              <div key={group.label}>
+                <p className="hidden md:block text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-600 px-3 mb-1.5">
+                  {group.label}
+                </p>
+                <div className="space-y-0.5">
+                  {group.items.map(renderNavItem)}
+                </div>
+              </div>
+            ))}
             {comingSoonNavItems.length > 0 && (
-              <div className="pt-3 mt-3 border-t border-[#E5E7EB] dark:border-white/10">
+              <div className="pt-3 border-t border-[#E5E7EB] dark:border-white/10">
                 {comingSoonNavItems.map(renderNavItem)}
               </div>
             )}

@@ -62,7 +62,7 @@ async function generateOneChunk(
     },
     body: JSON.stringify({
       text,
-      model_id: "eleven_monolingual_v1",
+      model_id: "eleven_turbo_v2_5",
       voice_settings: { stability, similarity_boost: similarity },
       output_format: "mp3_44100_128",
     }),

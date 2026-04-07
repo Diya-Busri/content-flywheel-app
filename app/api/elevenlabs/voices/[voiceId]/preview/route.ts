@@ -47,7 +47,7 @@ export async function GET(
         },
         body: JSON.stringify({
           text: PREVIEW_TEXT,
-          model_id: "eleven_monolingual_v1",
+          model_id: "eleven_turbo_v2_5",
           voice_settings: { stability: 0.5, similarity_boost: 0.75 },
           output_format: "mp3_44100_128",
         }),

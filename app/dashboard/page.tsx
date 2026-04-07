@@ -13,19 +13,21 @@ import { emailContactsTable, emailCampaignsTable } from "@/db/schema/email-marke
 import { goalsTable } from "@/db/schema/goals-schema";
 import { eq, desc, isNull, and, count, gte } from "drizzle-orm";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Package, ShoppingBag, CheckSquare, Video, Play, ExternalLink, AlertCircle, ArrowRight, Package2, TrendingUp, Mail, Target, Send } from "lucide-react";
+import {
+  Package, ShoppingBag, CheckSquare, Video, Play, ExternalLink, AlertCircle,
+  ArrowRight, Package2, TrendingUp, Mail, Target, Send, BarChart2,
+} from "lucide-react";
 import { SyncOnboardingSteps } from "@/components/onboarding/sync-onboarding-steps";
 import { ReferralCapture } from "@/components/ReferralCapture";
+import { InviteCapture } from "@/components/InviteCapture";
 import { Suspense } from "react";
 import { GettingStartedChecklist } from "@/components/dashboard/GettingStartedChecklist";
 import { AnalyticsWidget } from "@/components/dashboard/AnalyticsWidget";
 import { WhatsWorkingSection } from "@/components/dashboard/WhatsWorkingSection";
 import { FirstVideoNudge } from "@/components/dashboard/FirstVideoNudge";
-import { MotivationBanner } from "@/components/dashboard/MotivationBanner";
-import { NextActionStrip } from "@/components/dashboard/NextActionStrip";
-import { ConsistencyStreak } from "@/components/dashboard/ConsistencyStreak";
+import { DashboardHero } from "@/components/dashboard/DashboardHero";
 
 export const metadata: Metadata = {
   title: "Dashboard | Content Flywheel",
@@ -205,7 +207,6 @@ async function getVideoStats(userId: string) {
   let totalLibraryVideos = 0;
   const recent: RecentVideoItem[] = [];
 
-  // Products count
   const productWhere = and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt));
   try {
     const productsCountRow = await db
@@ -244,10 +245,112 @@ async function getVideoStats(userId: string) {
   return { digitalProductsCount: productsCount, tiktokShopCount: tiktokCount, totalLibraryVideos, recent };
 }
 
+// ─── Stat card helper ────────────────────────────────────────────────────────
+function StatCard({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  iconBg,
+  iconColor,
+  href,
+  cta,
+  accent,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  icon: React.ElementType;
+  iconBg: string;
+  iconColor: string;
+  href?: string;
+  /** CTA text shown as a styled hint — card itself is the link */
+  cta?: string;
+  accent?: boolean;
+}) {
+  const inner = (
+    <div
+      className={`group relative rounded-2xl p-5 border transition-all hover:shadow-md ${
+        accent
+          ? "bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/10 border-orange-200 dark:border-orange-900/40"
+          : "bg-white dark:bg-[#1A1A1A] border-gray-100 dark:border-[#2A2A2A] hover:border-gray-200 dark:hover:border-[#3A3A3A]"
+      }`}
+    >
+      <div className="flex items-start justify-between mb-4">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconBg}`}>
+          <Icon className={`w-5 h-5 ${iconColor}`} />
+        </div>
+        {href && (
+          <span className="text-xs text-gray-400 dark:text-gray-600 group-hover:text-gray-600 dark:group-hover:text-gray-400 transition-colors font-medium">
+            View →
+          </span>
+        )}
+      </div>
+      <p className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-0.5">
+        {value}
+      </p>
+      <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{label}</p>
+      {sub && <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">{sub}</p>}
+      {cta && (
+        <span className="inline-block mt-3 text-xs font-semibold text-orange-500 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+          {cta} →
+        </span>
+      )}
+    </div>
+  );
+
+  if (href) {
+    return <Link href={href} className="block">{inner}</Link>;
+  }
+  return inner;
+}
+
+// ─── Quick action card helper ─────────────────────────────────────────────────
+function ActionCard({
+  href,
+  icon: Icon,
+  iconBg,
+  iconColor,
+  label,
+  description,
+}: {
+  href: string;
+  icon: React.ElementType;
+  iconBg: string;
+  iconColor: string;
+  label: string;
+  description: string;
+}) {
+  return (
+    <Link href={href}>
+      <div className="group h-full rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-gray-300 dark:hover:border-[#3A3A3A] hover:shadow-md transition-all p-6 flex flex-col items-center text-center">
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 ${iconBg}`}>
+          <Icon className={`w-6 h-6 ${iconColor}`} />
+        </div>
+        <h3 className="font-bold text-gray-900 dark:text-white text-sm mb-1.5 leading-snug">
+          {label}
+        </h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+          {description}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default async function DashboardPage() {
   const { userId } = auth();
   const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers, activeGoals, campaignsSent] = userId
-    ? await Promise.all([getVideoStats(userId), getIncompleteProducts(userId), getChecklistData(userId), getVideosThisWeek(userId), getEmailSubscriberCount(userId), getActiveGoalsCount(userId), getCampaignsSentCount(userId)])
+    ? await Promise.all([
+        getVideoStats(userId),
+        getIncompleteProducts(userId),
+        getChecklistData(userId),
+        getVideosThisWeek(userId),
+        getEmailSubscriberCount(userId),
+        getActiveGoalsCount(userId),
+        getCampaignsSentCount(userId),
+      ])
     : [
         { digitalProductsCount: 0, tiktokShopCount: 0, totalLibraryVideos: 0, recent: [] as RecentVideoItem[] },
         [] as IncompleteProduct[],
@@ -257,37 +360,27 @@ export default async function DashboardPage() {
 
   const hasSubscriber = emailSubscribers > 0;
   const hasCampaign = campaignsSent > 0;
-  // Only show checklist if at least one step is not done yet
-  const showChecklist = !checklist.hasBrandVoice || !checklist.hasProduct || !checklist.hasThumbnail || !checklist.hasPromoVideo || !hasSubscriber || !hasCampaign;
+  const showChecklist =
+    !checklist.hasBrandVoice || !checklist.hasProduct || !checklist.hasThumbnail ||
+    !checklist.hasPromoVideo || !hasSubscriber || !hasCampaign;
+
+  const estimatedRevenue = videoStats.digitalProductsCount * 15;
 
   return (
-    <main className="p-6 md:p-10">
+    <main className="p-6 md:p-10 max-w-[1280px] mx-auto">
       <Suspense fallback={null}><ReferralCapture /></Suspense>
+      <Suspense fallback={null}><InviteCapture /></Suspense>
       <SyncOnboardingSteps digitalProductsCount={videoStats.digitalProductsCount} />
 
-      {/* Motivation Banner */}
-      <MotivationBanner
+      {/* Hero — replaces MotivationBanner + NextActionStrip + ConsistencyStreak + h1 */}
+      <DashboardHero
         productsCount={videoStats.digitalProductsCount}
         videosCount={videoStats.totalLibraryVideos}
+        videosThisWeek={videosThisWeek}
+        emailSubscribers={emailSubscribers}
       />
 
-      {/* Next Action Strip */}
-      <NextActionStrip
-        productsCount={videoStats.digitalProductsCount}
-        videosCount={videoStats.totalLibraryVideos}
-      />
-
-      {/* Consistency Streak */}
-      <ConsistencyStreak videosThisWeek={videosThisWeek} />
-
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-        Welcome back
-      </h1>
-      <p className="text-gray-600 dark:text-gray-400 mb-10">
-        Create digital products, generate promo videos, and grow your passive income
-      </p>
-
-      {/* First Video Nudge — only shown when totalVideos === 0 and not dismissed */}
+      {/* First Video Nudge */}
       <FirstVideoNudge totalVideos={videoStats.totalLibraryVideos} />
 
       {/* Getting Started Checklist */}
@@ -302,149 +395,78 @@ export default async function DashboardPage() {
         />
       )}
 
-      {/* Quick Stats */}
-      <section className="mb-12" data-tour="quick-stats">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Quick Stats
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-gray-300 dark:hover:border-[#3A3A3A] transition-colors">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                Digital Products
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {videoStats.digitalProductsCount}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {videoStats.digitalProductsCount === 1 ? "product created" : "products created"}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-gray-300 dark:hover:border-[#3A3A3A] transition-colors">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                TikTok Shop Videos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {videoStats.tiktokShopCount}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {videoStats.tiktokShopCount === 1 ? "video generated" : "videos generated"}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-gray-300 dark:hover:border-[#3A3A3A] transition-colors">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5" />
-                Email Subscribers
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {emailSubscribers}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {emailSubscribers === 1 ? "subscriber" : "subscribers"}
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Revenue & Potential */}
-          <Card className="border-orange-200 dark:border-orange-900/40 bg-orange-50/60 dark:bg-orange-950/10 hover:border-orange-300 dark:hover:border-orange-800/60 transition-colors">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-orange-700 dark:text-orange-400 flex items-center gap-1.5">
-                <TrendingUp className="w-3.5 h-3.5" />
-                Revenue &amp; Potential
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                £{videoStats.digitalProductsCount * 15}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Estimated potential
-              </p>
-              <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
-                {videoStats.digitalProductsCount > 0
-                  ? `Based on ${videoStats.digitalProductsCount} product${videoStats.digitalProductsCount > 1 ? "s" : ""} × avg £15 per sale`
-                  : "Create your first product to unlock earning potential"}
-              </p>
-              {videoStats.digitalProductsCount > 0 && (
-                <div className="mt-3 space-y-0.5">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">1 sale today = <span className="font-semibold text-gray-700 dark:text-gray-300">£15</span></p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">3 sales this week = <span className="font-semibold text-gray-700 dark:text-gray-300">£45</span></p>
-                </div>
-              )}
-              <Link
-                href="/dashboard/digital-products"
-                className="inline-block mt-3 text-xs font-medium text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-              >
-                Get your first sale →
-              </Link>
-            </CardContent>
-          </Card>
+      {/* Stats grid */}
+      <section className="mb-10" data-tour="quick-stats">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Overview</h2>
         </div>
-
-        {/* Second row: goals + campaigns */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-          <Link href="/dashboard/goals" className="block">
-            <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-orange-300 dark:hover:border-orange-500/40 transition-colors h-full">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
-                  <Target className="w-3.5 h-3.5" />
-                  Active Goals
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{activeGoals}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {activeGoals === 0 ? "No goals set yet" : activeGoals === 1 ? "goal in progress" : "goals in progress"}
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="/dashboard/email-marketing" className="block">
-            <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-orange-300 dark:hover:border-orange-500/40 transition-colors h-full">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
-                  <Send className="w-3.5 h-3.5" />
-                  Campaigns Sent
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{campaignsSent}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {campaignsSent === 0 ? "No campaigns sent yet" : campaignsSent === 1 ? "campaign sent" : "campaigns sent"}
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="Digital Products"
+            value={videoStats.digitalProductsCount}
+            sub={videoStats.digitalProductsCount === 0 ? "None yet" : `${videoStats.tiktokShopCount} TikTok videos`}
+            icon={Package}
+            iconBg="bg-blue-50 dark:bg-blue-950/30"
+            iconColor="text-blue-500"
+            href={videoStats.digitalProductsCount === 0 ? "/dashboard/digital-products/create" : "/dashboard/digital-products"}
+            cta={videoStats.digitalProductsCount === 0 ? "Create first product" : undefined}
+          />
+          <StatCard
+            label="Email Subscribers"
+            value={emailSubscribers}
+            sub={emailSubscribers === 0 ? "Grow your list" : `${campaignsSent} campaign${campaignsSent !== 1 ? "s" : ""} sent`}
+            icon={Mail}
+            iconBg="bg-violet-50 dark:bg-violet-950/30"
+            iconColor="text-violet-500"
+            href="/dashboard/email-marketing"
+            cta={emailSubscribers === 0 ? "Add subscribers" : undefined}
+          />
+          <StatCard
+            label="Active Goals"
+            value={activeGoals}
+            sub={activeGoals === 0 ? "Set a target" : "goals in progress"}
+            icon={Target}
+            iconBg="bg-emerald-50 dark:bg-emerald-950/30"
+            iconColor="text-emerald-500"
+            href="/dashboard/goals"
+            cta={activeGoals === 0 ? "Set first goal" : undefined}
+          />
+          <StatCard
+            label="Revenue Potential"
+            value={`£${estimatedRevenue}`}
+            sub={
+              videoStats.digitalProductsCount > 0
+                ? `${videoStats.digitalProductsCount} product${videoStats.digitalProductsCount > 1 ? "s" : ""} × avg £15`
+                : "Create a product to unlock"
+            }
+            icon={TrendingUp}
+            iconBg="bg-orange-50 dark:bg-orange-950/30"
+            iconColor="text-orange-500"
+            href="/dashboard/digital-products"
+            accent
+            cta="See products"
+          />
         </div>
       </section>
 
-      {/* Analytics Widget — client component, fetches /api/dashboard/stats */}
+      {/* Analytics Widget */}
       <AnalyticsWidget />
 
       {/* Finish to Sell */}
       {incompleteProducts.length > 0 && (
-        <section className="mb-12">
-          <div className="flex items-center justify-between mb-4">
+        <section className="mb-10">
+          <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-amber-500" />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950/30 flex items-center justify-center">
+                <AlertCircle className="w-4 h-4 text-amber-500" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                 Finish to Sell
               </h2>
             </div>
             <Link
               href="/dashboard/digital-products"
-              className="text-sm font-medium text-orange-500 hover:text-orange-400 flex items-center gap-1"
+              className="text-sm font-medium text-orange-500 hover:text-orange-400 flex items-center gap-1 transition-colors"
             >
               View all
               <ExternalLink className="w-3.5 h-3.5" />
@@ -457,36 +479,34 @@ export default async function DashboardPage() {
                 href={`/dashboard/digital-products/${product.id}/edit?tab=${product.missingTab}`}
                 className="group block"
               >
-                <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-amber-400/60 dark:hover:border-amber-500/40 transition-all">
-                  <CardContent className="p-4 flex items-center gap-4">
-                    {/* Completion ring */}
-                    <div className="relative shrink-0 w-12 h-12">
-                      <svg viewBox="0 0 44 44" className="w-12 h-12 -rotate-90">
-                        <circle cx="22" cy="22" r="18" fill="none" stroke="#e5e7eb" strokeWidth="4" className="dark:stroke-gray-700" />
-                        <circle
-                          cx="22" cy="22" r="18" fill="none"
-                          stroke={product.completionScore >= 80 ? "#22c55e" : product.completionScore >= 40 ? "#f59e0b" : "#f97316"}
-                          strokeWidth="4"
-                          strokeDasharray={`${(product.completionScore / 100) * 2 * Math.PI * 18} ${2 * Math.PI * 18}`}
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-700 dark:text-gray-300 rotate-0">
-                        {product.completionScore}%
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 dark:text-white truncate text-sm">
-                        {product.title}
-                      </p>
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
-                        <span>Next:</span>
-                        <span className="font-medium">{product.missingStep}</span>
-                      </p>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 transition-colors shrink-0" />
-                  </CardContent>
-                </Card>
+                <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-amber-300/60 dark:hover:border-amber-500/40 hover:shadow-md transition-all p-4 flex items-center gap-4">
+                  {/* Completion ring */}
+                  <div className="relative shrink-0 w-12 h-12">
+                    <svg viewBox="0 0 44 44" className="w-12 h-12 -rotate-90">
+                      <circle cx="22" cy="22" r="18" fill="none" stroke="#e5e7eb" strokeWidth="4" className="dark:stroke-gray-700" />
+                      <circle
+                        cx="22" cy="22" r="18" fill="none"
+                        stroke={product.completionScore >= 80 ? "#22c55e" : product.completionScore >= 40 ? "#f59e0b" : "#f97316"}
+                        strokeWidth="4"
+                        strokeDasharray={`${(product.completionScore / 100) * 2 * Math.PI * 18} ${2 * Math.PI * 18}`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-700 dark:text-gray-300">
+                      {product.completionScore}%
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900 dark:text-white truncate text-sm">
+                      {product.title}
+                    </p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
+                      <span>Next:</span>
+                      <span className="font-medium">{product.missingStep}</span>
+                    </p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-orange-500 transition-colors shrink-0" />
+                </div>
               </Link>
             ))}
           </div>
@@ -494,87 +514,86 @@ export default async function DashboardPage() {
       )}
 
       {/* Quick Actions */}
-      <section className="mb-12" data-tour="quick-actions">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <section className="mb-10" data-tour="quick-actions">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-5">
           Quick Actions
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-          <Link href="/dashboard/digital-products/create">
-            <Card className="group cursor-pointer border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-orange-500/50 transition-all overflow-hidden h-full">
-              <CardContent className="p-8 flex flex-col items-center justify-center text-center min-h-[180px]">
-                <div className="w-14 h-14 rounded-xl bg-orange-500/20 flex items-center justify-center mb-4 group-hover:bg-orange-500/30 transition-colors">
-                  <Package className="w-7 h-7 text-orange-500" />
-                </div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-                  Create a Digital Product
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Flow 1 — Turn your knowledge into a sellable digital product
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="/dashboard/tiktok-shop">
-            <Card className="group cursor-pointer border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-orange-500/50 transition-all overflow-hidden h-full">
-              <CardContent className="p-8 flex flex-col items-center justify-center text-center min-h-[180px]">
-                <div className="w-14 h-14 rounded-xl bg-orange-500/20 flex items-center justify-center mb-4 group-hover:bg-orange-500/30 transition-colors">
-                  <ShoppingBag className="w-7 h-7 text-orange-500" />
-                </div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-                  Generate TikTok Shop Video
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Flow 2 — Create videos optimized for TikTok Shop
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="/dashboard/script-checker">
-            <Card className="group cursor-pointer border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-orange-500/50 transition-all overflow-hidden h-full">
-              <CardContent className="p-8 flex flex-col items-center justify-center text-center min-h-[180px]">
-                <div className="w-14 h-14 rounded-xl bg-orange-500/20 flex items-center justify-center mb-4 group-hover:bg-orange-500/30 transition-colors">
-                  <CheckSquare className="w-7 h-7 text-orange-500" />
-                </div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-                  Check Script Compliance
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Flow 3 — Ensure your scripts meet platform guidelines
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="/dashboard/digital-products/bundle">
-            <Card className="group cursor-pointer border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-orange-500/50 transition-all overflow-hidden h-full">
-              <CardContent className="p-8 flex flex-col items-center justify-center text-center min-h-[180px]">
-                <div className="w-14 h-14 rounded-xl bg-orange-500/20 flex items-center justify-center mb-4 group-hover:bg-orange-500/30 transition-colors">
-                  <Package2 className="w-7 h-7 text-orange-500" />
-                </div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-                  Create Bundle
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Package existing products into a bundle with AI copy &amp; pricing
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <ActionCard
+            href="/dashboard/digital-products/create"
+            icon={Package}
+            iconBg="bg-blue-50 dark:bg-blue-950/30"
+            iconColor="text-blue-500"
+            label="Create Digital Product"
+            description="Turn your knowledge into a sellable product"
+          />
+          <ActionCard
+            href="/dashboard/tiktok-shop"
+            icon={ShoppingBag}
+            iconBg="bg-pink-50 dark:bg-pink-950/30"
+            iconColor="text-pink-500"
+            label="TikTok Shop Video"
+            description="Generate videos optimised for TikTok Shop"
+          />
+          <ActionCard
+            href="/dashboard/email-marketing"
+            icon={Send}
+            iconBg="bg-violet-50 dark:bg-violet-950/30"
+            iconColor="text-violet-500"
+            label="Email Campaign"
+            description="Draft and send to your subscriber list"
+          />
+          <ActionCard
+            href="/dashboard/digital-products/bundle"
+            icon={Package2}
+            iconBg="bg-amber-50 dark:bg-amber-950/30"
+            iconColor="text-amber-500"
+            label="Create Bundle"
+            description="Package products with AI pricing & copy"
+          />
+        </div>
+        {/* Secondary actions row */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+          <ActionCard
+            href="/dashboard/script-checker"
+            icon={CheckSquare}
+            iconBg="bg-emerald-50 dark:bg-emerald-950/30"
+            iconColor="text-emerald-500"
+            label="Script Checker"
+            description="Check scripts for platform compliance"
+          />
+          <ActionCard
+            href="/dashboard/goals"
+            icon={Target}
+            iconBg="bg-orange-50 dark:bg-orange-950/30"
+            iconColor="text-orange-500"
+            label="Set a Goal"
+            description="Track your revenue and content milestones"
+          />
+          <ActionCard
+            href="/dashboard/library"
+            icon={BarChart2}
+            iconBg="bg-cyan-50 dark:bg-cyan-950/30"
+            iconColor="text-cyan-500"
+            label="Video Library"
+            description="Browse and manage all your generated videos"
+          />
         </div>
       </section>
 
-      {/* What's Working — hardcoded trending formats */}
+      {/* What's Working */}
       <WhatsWorkingSection />
 
       {/* Recent Videos */}
-      <section data-tour="recent-videos">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+      <section className="mt-10" data-tour="recent-videos">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
             Recent Videos
           </h2>
           {videoStats.recent.length > 0 && (
             <Link
               href="/dashboard/library"
-              className="text-sm font-medium text-orange-500 hover:text-orange-400 flex items-center gap-1"
+              className="text-sm font-medium text-orange-500 hover:text-orange-400 flex items-center gap-1 transition-colors"
             >
               View all
               <ExternalLink className="w-3.5 h-3.5" />
@@ -582,70 +601,66 @@ export default async function DashboardPage() {
           )}
         </div>
         {videoStats.recent.length > 0 ? (
-          <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
-            <CardContent className="p-0">
-              <ul className="divide-y divide-[#E5E7EB] dark:divide-[#2A2A2A]">
-                {videoStats.recent.map((item) => {
-                  const badgeLabel = item.source === "tiktok-shop" ? "TikTok Shop" : "Digital Product";
-                  return (
-                    <li key={`${item.source}-${item.id}`}>
-                      <Link
-                        href={item.href}
-                        className="flex items-center gap-3 px-6 py-4 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
-                      >
-                        <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0">
-                          <Video className="w-5 h-5 text-orange-500" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-medium text-gray-900 dark:text-white truncate">
-                              {item.title}
-                            </p>
-                            <span
-                              className={`shrink-0 inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
-                                item.source === "tiktok-shop"
-                                  ? "bg-gray-200 dark:bg-[#2A2A2A] text-gray-700 dark:text-gray-300"
-                                  : "bg-orange-500/20 text-orange-600 dark:text-orange-300"
-                              }`}
-                            >
-                              {badgeLabel}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {item.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+          <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] overflow-hidden">
+            <ul className="divide-y divide-gray-100 dark:divide-[#2A2A2A]">
+              {videoStats.recent.map((item) => {
+                const badgeLabel = item.source === "tiktok-shop" ? "TikTok Shop" : "Digital Product";
+                return (
+                  <li key={`${item.source}-${item.id}`}>
+                    <Link
+                      href={item.href}
+                      className="flex items-center gap-3 px-6 py-4 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/20 flex items-center justify-center shrink-0">
+                        <Video className="w-5 h-5 text-orange-500" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-gray-900 dark:text-white truncate text-sm">
+                            {item.title}
                           </p>
+                          <span
+                            className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              item.source === "tiktok-shop"
+                                ? "bg-pink-50 dark:bg-pink-950/20 text-pink-600 dark:text-pink-400"
+                                : "bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400"
+                            }`}
+                          >
+                            {badgeLabel}
+                          </span>
                         </div>
-                        <ExternalLink className="w-4 h-4 text-gray-500 shrink-0" />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </CardContent>
-          </Card>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {item.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                        </p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-gray-300 hover:text-orange-500 shrink-0 transition-colors" />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         ) : (
-          <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] border-dashed bg-white dark:bg-[#1A1A1A]">
-            <CardContent className="p-12 flex flex-col items-center justify-center text-center min-h-[200px]">
-              <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center mb-4">
-                <Video className="w-8 h-8 text-gray-500" />
+          <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-dashed border-gray-200 dark:border-[#2A2A2A]">
+            <div className="p-12 flex flex-col items-center justify-center text-center">
+              <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center mb-4">
+                <Video className="w-8 h-8 text-gray-400" />
               </div>
-              <p className="text-gray-700 dark:text-gray-400 mb-2 font-medium">
-                No videos yet. Create your first video to get started!
-              </p>
+              <p className="text-gray-800 dark:text-gray-300 mb-1 font-semibold">No videos yet</p>
               <p className="text-sm text-gray-500 mb-6">
-                Your generated videos will appear here
+                Your generated videos will appear here once you create one.
               </p>
               <Button
                 asChild
-                className="bg-orange-500 hover:bg-orange-600 text-white"
+                className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl gap-2"
               >
-                <Link href="/dashboard/digital-products/create" className="gap-2">
+                <Link href="/dashboard/digital-products/create">
                   <Play className="w-4 h-4" />
                   Create Product
                 </Link>
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
       </section>
     </main>

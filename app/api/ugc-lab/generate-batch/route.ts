@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkVideoCredits, useVideoCredit } from "@/actions/video-credits-actions";
 import { db } from "@/db/db";
 import { videoJobsTable } from "@/db/schema/video-jobs-schema";
 import { ugcCampaignProductsTable } from "@/db/schema/ugc-campaigns-schema";
@@ -29,8 +30,15 @@ export async function POST(request: Request) {
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const rl = await checkApiRateLimit(userId);
-
     if (rl) return rl;
+
+    const { hasCredits, balance } = await checkVideoCredits("avatarVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need video credits to generate a video.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
 
     const body = await request.json().catch(() => ({}));
     const faceProfileId = (body.faceProfileId as string)?.trim() || undefined;
@@ -195,6 +203,7 @@ export async function POST(request: Request) {
       }).catch((e) => console.error("[generate-batch] process-job trigger failed:", id, e));
     }
 
+    await useVideoCredit("avatarVideo").catch((e) => console.error("[generate-batch] credit deduction failed:", e));
     return NextResponse.json({ batchId, jobIds });
   } catch (err) {
     console.error("[generate-batch] Error:", err);

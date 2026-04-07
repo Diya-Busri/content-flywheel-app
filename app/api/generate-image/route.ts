@@ -90,7 +90,7 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
       prompt: dallE3Prompt,
       n: 1,
       size: storyVideoImage ? "1792x1024" : "1024x1024",
-      quality: photoreal ? "hd" : "standard",
+      quality: "standard", // always standard — hd costs 2× and is barely noticeable for video backgrounds
       style: "natural",
       response_format: "b64_json",
     });

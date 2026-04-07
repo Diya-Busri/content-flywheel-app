@@ -29,3 +29,5 @@ export * from "./coach-settings-schema";
 export * from "./chat-summaries-schema";
 export * from "./email-marketing-schema";
 export * from "./product-sales-schema";
+export * from "./creator-applications-schema";
+export * from "./video-credit-transactions-schema";

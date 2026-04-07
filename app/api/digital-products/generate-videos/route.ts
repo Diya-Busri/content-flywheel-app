@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkVideoCredits, useVideoCredit } from "@/actions/video-credits-actions";
 import { db } from "@/db/db";
 import { videosTable } from "@/db/schema/library-schema";
 import { productsTable } from "@/db/schema/products-schema";
@@ -140,6 +141,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need video credits to generate a video.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
+
     const apiKey = getApiKey();
     const templateId = getTemplateId();
 
@@ -219,6 +228,8 @@ export async function POST(request: NextRequest) {
       } else {
         videos.push({ id: script.id, title: script.title, url, duration: script.length });
       }
+
+      await useVideoCredit("brandStoryVideo").catch((e) => console.error("[digital-products/generate-videos] credit deduction failed:", e));
     }
 
     return NextResponse.json({ videos });

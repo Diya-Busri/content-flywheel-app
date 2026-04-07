@@ -2,7 +2,10 @@ import { manageSubscriptionStatusChange, updateStripeCustomer } from "@/actions/
 import { stripe } from "@/lib/stripe";
 import { headers } from "next/headers";
 import Stripe from "stripe";
-import { updateProfile, updateProfileByStripeCustomerId } from "@/db/queries/profiles-queries";
+import { updateProfile, updateProfileByStripeCustomerId, getProfileByUserId } from "@/db/queries/profiles-queries";
+import { VIDEO_CREDITS_METADATA_KEY } from "@/lib/video-credits";
+import { db } from "@/db/db";
+import { videoCreditTransactionsTable } from "@/db/schema/video-credit-transactions-schema";
 
 export const dynamic = "force-dynamic";
 const relevantEvents = new Set([
@@ -75,6 +78,36 @@ async function handleSubscriptionChange(event: Stripe.Event) {
 
 async function handleCheckoutSession(event: Stripe.Event) {
   const checkoutSession = event.data.object as Stripe.Checkout.Session;
+
+  // ── One-time video credit purchase ──────────────────────────────────────────
+  if (
+    checkoutSession.mode === "payment" &&
+    checkoutSession.metadata?.[VIDEO_CREDITS_METADATA_KEY] === "true"
+  ) {
+    const userId = checkoutSession.client_reference_id ?? checkoutSession.metadata?.userId;
+    const credits = parseInt(checkoutSession.metadata?.credits ?? "0", 10);
+
+    if (userId && credits > 0) {
+      try {
+        const profile = await getProfileByUserId(userId);
+        const current = profile?.videoCredits ?? 0;
+        await updateProfile(userId, { videoCredits: current + credits });
+        console.log(`[video-credits] Added ${credits} credits to user ${userId} (new balance: ${current + credits})`);
+        // Log the purchase transaction
+        const packLabel = checkoutSession.metadata?.packId ?? "Credit pack";
+        await db.insert(videoCreditTransactionsTable).values({
+          userId,
+          type: "purchase",
+          amount: credits,
+          description: `Purchased ${credits} video credits (${packLabel})`,
+        }).catch((err) => console.error("[video-credits] Failed to log purchase transaction:", err));
+      } catch (err) {
+        console.error("[video-credits] Failed to add credits:", err);
+      }
+    }
+    return; // Don't fall through to subscription handling
+  }
+
   if (checkoutSession.mode === "subscription") {
     const subscriptionId = checkoutSession.subscription as string;
     await updateStripeCustomer(checkoutSession.client_reference_id as string, subscriptionId, checkoutSession.customer as string);

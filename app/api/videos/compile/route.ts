@@ -24,6 +24,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkVideoCredits, useVideoCredit } from "@/actions/video-credits-actions";
 import { db } from "@/db/db";
 import { savedScriptsTable, videosTable } from "@/db/schema/library-schema";
 import { goalsTable } from "@/db/schema/goals-schema";
@@ -77,6 +78,14 @@ export async function POST(request: NextRequest) {
 
     const rl = await checkApiRateLimit(userId);
     if (rl) return rl;
+
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need video credits to generate a video.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
 
     const body = await request.json().catch(() => ({}));
     const scriptId = typeof (body as { scriptId?: string }).scriptId === "string"
@@ -188,10 +197,12 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    const hasInvalidScene = scenes.some((s) => !s.image_url && !s.video_url);
-    if (hasInvalidScene) {
+    const invalidSceneIndices = scenes.reduce<number[]>((acc, s, i) => (!s.image_url && !s.video_url ? [...acc, i + 1] : acc), []);
+    if (invalidSceneIndices.length > 0) {
       return NextResponse.json(
-        { error: "Every scene must have image_url or video_url (public http(s) URLs)." },
+        {
+          error: `Scene${invalidSceneIndices.length > 1 ? "s" : ""} ${invalidSceneIndices.join(", ")} ${invalidSceneIndices.length > 1 ? "have" : "has"} no image or video — add a photo or clip to every scene before exporting.`,
+        },
         { status: 400 }
       );
     }
@@ -312,6 +323,7 @@ export async function POST(request: NextRequest) {
         console.warn("[videos/compile] Could not auto-track goal progress:", goalErr);
       }
 
+      await useVideoCredit("brandStoryVideo").catch((e) => console.error("[videos/compile] credit deduction failed:", e));
       return NextResponse.json({ url: publicUrl });
     } finally {
       await cleanupWorkDir(workDir);

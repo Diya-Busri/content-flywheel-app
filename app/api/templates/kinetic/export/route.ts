@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkVideoCredits, useVideoCredit } from "@/actions/video-credits-actions";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 import { compileVideoToFile, cleanupWorkDir, type CompileScene } from "@/lib/videos/compile";
 import { mkdir, writeFile, readFile } from "fs/promises";
@@ -208,6 +209,14 @@ export async function POST(request: NextRequest) {
     const rl = await checkApiRateLimit(userId);
     if (rl) return rl;
 
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need video credits to generate a video.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
+
     const body = await request.json().catch(() => ({})) as {
       topic?: string;
       colorScheme?: string;
@@ -296,6 +305,7 @@ export async function POST(request: NextRequest) {
       });
 
       const buffer = await readFile(finalPath);
+      await useVideoCredit("brandStoryVideo").catch((e) => console.error("[templates/kinetic/export] credit deduction failed:", e));
       return new NextResponse(buffer, {
         status: 200,
         headers: {

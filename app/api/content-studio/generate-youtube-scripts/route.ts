@@ -24,7 +24,7 @@ function getAnglesToGenerate(angleIds?: unknown): (typeof ANGLES)[number][] {
   return ANGLES.filter((a) => set.has(a.id));
 }
 
-const MODEL_ORDER = ["gpt-4o", "gpt-4-turbo-preview", "gpt-4o-mini"] as const;
+const MODEL_ORDER = ["gpt-4o-mini"] as const;
 
 export async function POST(request: Request) {
   try {

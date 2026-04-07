@@ -2956,62 +2956,13 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     <CardTitle className="text-base font-medium text-foreground flex items-center justify-between gap-2 flex-wrap">
                       <span>Scene {i + 1} · {scene.timing}</span>
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
-                        <Select
-                          key={`ai-tool-scene-${i}`}
-                          value={getCopyFormat(i)}
-                          onValueChange={(v) => {
-                            const tool = (v as PromptPlatform) || "midjourney";
-                            setCopyFormatByScene((prev) => ({ ...prev, [i]: tool }));
-                          }}
-                        >
-                          <SelectTrigger className="w-[130px] h-8 border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground bg-gray-100 dark:bg-background text-xs">
-                            <SelectValue placeholder="Tool" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-gray-50 dark:bg-card border-gray-200 dark:border-border">
-                            <SelectItem value="midjourney" className="text-sm">Midjourney</SelectItem>
-                            <SelectItem value="grok" className="text-sm">Grok</SelectItem>
-                            <SelectItem value="chatgpt" className="text-sm">ChatGPT</SelectItem>
-                            <SelectItem value="kling" className="text-sm">Kling AI</SelectItem>
-                            <SelectItem value="runway" className="text-sm">Runway ML</SelectItem>
-                            <SelectItem value="pika" className="text-sm">Pika</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <ToggleGroup
-                          type="single"
-                          value={getMediaType(i)}
-                          onValueChange={(v) => {
-                            if (v) setMediaTypeByScene((prev) => ({ ...prev, [i]: v as "still" | "video" }));
-                          }}
-                          className="inline-flex rounded-md border border-gray-200 dark:border-border bg-gray-100 dark:bg-background p-0.5"
-                        >
-                          <ToggleGroupItem value="still" className="h-7 px-2 text-xs data-[state=on]:bg-white dark:data-[state=on]:bg-muted rounded" aria-label="Still image">
-                            Still Image
-                          </ToggleGroupItem>
-                          <ToggleGroupItem value="video" className="h-7 px-2 text-xs data-[state=on]:bg-white dark:data-[state=on]:bg-muted rounded" aria-label="Video clip">
-                            Video Clip
-                          </ToggleGroupItem>
-                        </ToggleGroup>
                         <button
                           type="button"
                           onClick={() => {
-                            const tool = copyFormatByScene[i] || "midjourney";
-                            const base = fullPrompt || "";
-                            const duration = (() => {
-                              const parts = (scene.timing || "0-0").match(/[\d.]+/g) || ["0", "0"];
-                              return Math.max(0, parseFloat(parts[1]) - parseFloat(parts[0]));
-                            })();
-                            const camera = (scene as { cameraAngle?: string }).cameraAngle || "medium shot";
                             const ar = guide.videoFormat?.aspectRatio ?? (scene as { format?: { aspect_ratio?: string } }).format?.aspect_ratio ?? "9:16";
-                            const isHorizontal = ar === "16:9";
-                            let prompt = base;
-                            if (tool === "midjourney") prompt = `${base} --ar ${ar} --v 6 --style raw`;
-                            else if (tool === "grok") prompt = `${base}\n\nAspect ratio: ${ar}\nStyle: photorealistic`;
-                            else if (tool === "chatgpt") prompt = `Generate a photorealistic ${isHorizontal ? "horizontal" : "vertical"} image (${ar} aspect ratio): ${base}`;
-                            else if (tool === "kling") prompt = `${base}\n\nFormat: ${isHorizontal ? "horizontal" : "vertical"} ${ar}\nDuration: ${duration}s\nMotion: subtle slow push in\nCamera: ${camera}`;
-                            else if (tool === "runway") prompt = `${base}\nMotion amount: low\nCamera: ${camera} slow\nDuration: ${duration}s\nAspect ratio: ${ar}`;
-                            else if (tool === "pika") prompt = `${base} | camera: ${camera} | motion: 1 | aspect ratio: ${ar} | duration: ${duration}s`;
+                            const prompt = `${fullPrompt || ""} --ar ${ar} --v 6 --style raw`;
                             navigator.clipboard.writeText(prompt)
-                              .then(() => toast({ title: "Copied", description: "AI prompt copied for " + tool }))
+                              .then(() => toast({ title: "Copied", description: "AI image prompt copied" }))
                               .catch(() => toast({ title: "Copy failed", variant: "destructive" }));
                           }}
                           className="h-7 px-2 text-xs rounded border border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground bg-gray-100 dark:bg-background hover:bg-white hover:text-gray-900 dark:hover:bg-muted dark:hover:text-white cursor-pointer"
@@ -3045,102 +2996,29 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                           : "w-full rounded-md mt-2 aspect-[9/16] object-cover";
                       const coachAudioUrl = guideCoachVoiceoverUrls[i] ?? perSceneUrls[i] ?? null;
                       return (
-                        <>
-                          {!genImageUrl ? (
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                className="bg-orange-500 hover:bg-orange-600 text-white"
-                                disabled={sceneImageBusy}
-                                onClick={() => void generateGuideSceneImage(i)}
-                              >
-                                {guideSceneImageLoadingIndex === i ? (
-                                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                                ) : null}
-                                Generate Image
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,60%)_minmax(0,40%)] md:items-start md:gap-6">
-                              <div className="space-y-2 min-w-0 w-full">
-                                <div
-                                  className={`rounded-lg overflow-hidden border border-gray-200 dark:border-border bg-gray-100 dark:bg-background ${aspectCls} w-full`}
-                                >
-                                  <img
-                                    src={genImageUrl}
-                                    alt={`Scene ${i + 1} generated still`}
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  className="bg-orange-500 hover:bg-orange-600 text-white w-full sm:w-auto"
-                                  disabled={sceneImageBusy}
-                                  onClick={() => void generateGuideSceneImage(i)}
-                                >
-                                  {guideSceneImageLoadingIndex === i ? (
-                                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                                  ) : null}
-                                  Generate Image
-                                </Button>
-                              </div>
-                              <div className="space-y-3 min-w-0">
-                                <div>
-                                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">
-                                    Scene title
-                                  </p>
-                                  <p className="text-foreground font-medium">{sceneTitleText}</p>
-                                </div>
-                                <div>
-                                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">
-                                    Dialogue / text overlay
-                                  </p>
-                                  <p className="text-foreground whitespace-pre-wrap">{overlaySummary}</p>
-                                </div>
-                                <div>
-                                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">
-                                    Voiceover
-                                  </p>
-                                  <p className="text-foreground whitespace-pre-wrap mb-2">
-                                    {voiceLine.trim() || "—"}
-                                  </p>
-                                  <AiStorySceneVoiceover
-                                    voiceId={voiceId}
-                                    dialogueLine={voiceLine}
-                                    audioUrl={coachAudioUrl}
-                                    onAudioUrl={(url) =>
-                                      setGuideCoachVoiceoverUrls((prev) => ({ ...prev, [i]: url }))
-                                    }
-                                    maxDurationSeconds={VIDEO_GUIDE_TIMELINE_SCENE_SEC}
-                                  />
-                                </div>
-                                <AiStoryAnimateSceneBlock
-                                  imageUrl={genImageUrl}
-                                  motionPrompt={fullPrompt}
-                                  videoUrl={guideSceneVideoUrls[i]}
-                                  onVideoUrl={(url) =>
-                                    setGuideSceneVideoUrls((prev) => ({ ...prev, [i]: url }))
-                                  }
-                                  onAnimationStateChange={(isAnimating) => {
-                                    setAnimatingByScene((prev) => ({ ...prev, [i]: isAnimating }));
-                                  }}
-                                  videoClassName={videoPreviewClass}
-                                />
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="w-full border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground"
-                                  onClick={() => handleAddGuideSceneToTimeline(i)}
-                                >
-                                  Add to Timeline
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                        </>
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Scene title</p>
+                            <p className="text-foreground font-medium">{sceneTitleText}</p>
+                          </div>
+                          <div>
+                            <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Dialogue / text overlay</p>
+                            <p className="text-foreground whitespace-pre-wrap">{overlaySummary}</p>
+                          </div>
+                          <div>
+                            <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Voiceover</p>
+                            <p className="text-foreground whitespace-pre-wrap mb-2">{voiceLine.trim() || "—"}</p>
+                            <AiStorySceneVoiceover
+                              voiceId={voiceId}
+                              dialogueLine={voiceLine}
+                              audioUrl={coachAudioUrl}
+                              onAudioUrl={(url) =>
+                                setGuideCoachVoiceoverUrls((prev) => ({ ...prev, [i]: url }))
+                              }
+                              maxDurationSeconds={VIDEO_GUIDE_TIMELINE_SCENE_SEC}
+                            />
+                          </div>
+                        </div>
                       );
                     })()}
                     <div>
@@ -3260,54 +3138,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                         </p>
                       </>
                     )}
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="shrink-0 gap-2 border-orange-200 dark:border-orange-900/50"
-                      disabled={guideBulkImagesLoading || guideFullVideoLoading || scenes.length === 0}
-                      onClick={() => void handleMakeFullVideoMp4()}
-                    >
-                      {guideFullVideoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                      Make full MP4
-                    </Button>
-                    <Button
-                      type="button"
-                      className="bg-orange-500 hover:bg-orange-600 text-white shrink-0 gap-2"
-                      disabled={guideBulkImagesLoading || guideFullVideoLoading || scenes.length === 0}
-                      onClick={() => void handleGenerateAllGuideImagesAndOpenTimeline()}
-                    >
-                      {guideBulkImagesLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Film className="w-4 h-4" />}
-                      Animate scenes & open Video Timeline
-                    </Button>
-                    {isAnySceneAnimating || autoExportWhenAnimationsReady ? (
-                      <Button
-                        type="button"
-                        className="bg-green-600 hover:bg-green-700 text-white shrink-0 gap-2"
-                        disabled={!allVoiceoversReady || !scenes.length}
-                        onClick={() => {
-                          if (!allVoiceoversReady) {
-                            toast({
-                              title: "Generate voiceovers first",
-                              description: "Export needs voiceovers so the final video includes them.",
-                              variant: "destructive",
-                            });
-                            return;
-                          }
-                          setAutoExportWhenAnimationsReady(true);
-                          if (allAnimatedVideosReady && allVoiceoversReady && !autoExportStartedRef.current) {
-                            autoExportStartedRef.current = true;
-                            setAutoExportWhenAnimationsReady(false);
-                            handleAutoExportFromAnimatedScenes();
-                          }
-                        }}
-                      >
-                        {autoExportWhenAnimationsReady || !allAnimatedVideosReady ? (
-                          "Export when animations finish"
-                        ) : (
-                          "Export now"
-                        )}
-                      </Button>
-                    ) : null}
+                    <p className="text-xs text-gray-500 dark:text-muted-foreground">Use the AI prompts above to generate images in Midjourney, ChatGPT, or Grok, then edit your video in CapCut or Premiere.</p>
                   </div>
                 </div>
               </CardContent>

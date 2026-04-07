@@ -11,6 +11,7 @@ import { randomUUID } from "crypto";
 import { tmpdir } from "os";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { checkVideoCredits, useVideoCredit } from "@/actions/video-credits-actions";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { db } from "@/db/db";
@@ -47,7 +48,7 @@ async function generateBrandStorySceneImage(
     prompt: BRAND_STORY_DALLE_PROMPT,
     n: 1,
     size: "1024x1024",
-    quality: "hd",
+    quality: "standard",
     style: "natural",
     response_format: "b64_json",
   });
@@ -94,7 +95,7 @@ async function ttsUploadMp3(userId: string, text: string, voiceId: string, apiKe
     },
     body: JSON.stringify({
       text: trimmed.slice(0, 2500),
-      model_id: "eleven_monolingual_v1",
+      model_id: "eleven_turbo_v2_5",
       voice_settings: { stability: 0.5, similarity_boost: 0.75 },
       output_format: "mp3_44100_128",
     }),
@@ -165,6 +166,20 @@ export async function POST(request: NextRequest) {
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
 
+    // Check video credits before doing any expensive work
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        {
+          error: "You need video credits to generate a video.",
+          code: "NO_VIDEO_CREDITS",
+          balance,
+          redirectTo: "/dashboard/video-credits",
+        },
+        { status: 402 }
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const dayLabel = typeof body.dayLabel === "string" ? body.dayLabel.trim() : "";
     const brandName = typeof body.brandName === "string" ? body.brandName.trim() : "";
@@ -203,7 +218,7 @@ export async function POST(request: NextRequest) {
     const openai = new OpenAI({ apiKey: openaiKey });
 
     const scriptCompletion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       response_format: { type: "json_object" },
       messages: [
         {
@@ -313,6 +328,11 @@ Generate the 5-scene JSON.`,
       }
 
       const { data: urlData } = supabase.storage.from(TIMELINE_BUCKET).getPublicUrl(data.path);
+
+      // Deduct 1 video credit — only after successful generation
+      await useVideoCredit("brandStoryVideo").catch((e) =>
+        console.error("[brand-story-video] credit deduction failed:", e)
+      );
 
       return NextResponse.json({
         url: urlData.publicUrl,
