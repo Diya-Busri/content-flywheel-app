@@ -8,6 +8,7 @@ import { videoCreditTransactionsTable } from "@/db/schema/video-credit-transacti
 
 const VIDEO_TYPE_LABELS: Record<VideoType, string> = {
   brandStoryVideo: "Brand Story Video",
+  cookingVideo: "AI Cooking Video",
   avatarVideo: "Avatar Promo Video",
 };
 

@@ -4,14 +4,15 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useAnimations, useGLTF, Center } from "@react-three/drei";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { SkeletonUtils } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { StickmanPose } from "./stickman-types";
 
 function cloneExplainerScene(scene: THREE.Object3D): THREE.Object3D {
-  if (SkeletonUtils?.clone) {
-    return SkeletonUtils.clone(scene);
+  try {
+    return skeletonClone(scene);
+  } catch {
+    return scene.clone(true);
   }
-  return scene.clone(true);
 }
 
 /** Three.js sample asset (Tomás Laulhé / Don McCurdy, CC0 via three.js examples). */
