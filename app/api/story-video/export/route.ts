@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
-import { checkVideoCredits, useVideoCredit } from "@/actions/video-credits-actions";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import {
   compileVideoToFile,
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
       }
 
       const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
-      await useVideoCredit("brandStoryVideo").catch((e) => console.error("[story-video/export] credit deduction failed:", e));
+      await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[story-video/export] credit deduction failed:", e));
       return NextResponse.json({ url: urlData.publicUrl });
     } finally {
       await cleanupWorkDir(workDir);

@@ -11,7 +11,7 @@ import { randomUUID } from "crypto";
 import { tmpdir } from "os";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
-import { checkVideoCredits, useVideoCredit } from "@/actions/video-credits-actions";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { db } from "@/db/db";
@@ -330,7 +330,7 @@ Generate the 5-scene JSON.`,
       const { data: urlData } = supabase.storage.from(TIMELINE_BUCKET).getPublicUrl(data.path);
 
       // Deduct 1 video credit — only after successful generation
-      await useVideoCredit("brandStoryVideo").catch((e) =>
+      await deductVideoCredit("brandStoryVideo").catch((e) =>
         console.error("[brand-story-video] credit deduction failed:", e)
       );
 

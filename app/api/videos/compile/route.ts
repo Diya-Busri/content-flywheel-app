@@ -24,7 +24,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
-import { checkVideoCredits, useVideoCredit } from "@/actions/video-credits-actions";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { db } from "@/db/db";
 import { savedScriptsTable, videosTable } from "@/db/schema/library-schema";
 import { goalsTable } from "@/db/schema/goals-schema";
@@ -323,7 +323,7 @@ export async function POST(request: NextRequest) {
         console.warn("[videos/compile] Could not auto-track goal progress:", goalErr);
       }
 
-      await useVideoCredit("brandStoryVideo").catch((e) => console.error("[videos/compile] credit deduction failed:", e));
+      await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[videos/compile] credit deduction failed:", e));
       return NextResponse.json({ url: publicUrl });
     } finally {
       await cleanupWorkDir(workDir);

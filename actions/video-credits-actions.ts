@@ -31,7 +31,7 @@ export async function checkVideoCredits(videoType: VideoType = "brandStoryVideo"
  * Call this AFTER a video has been successfully generated.
  * Returns { success: boolean; newBalance: number }
  */
-export async function useVideoCredit(videoType: VideoType = "brandStoryVideo") {
+export async function deductVideoCredit(videoType: VideoType = "brandStoryVideo") {
   const { userId } = await auth();
   if (!userId) return { success: false, newBalance: 0 };
 

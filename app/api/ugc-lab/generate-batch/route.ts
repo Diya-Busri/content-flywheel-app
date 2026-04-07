@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
-import { checkVideoCredits, useVideoCredit } from "@/actions/video-credits-actions";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { db } from "@/db/db";
 import { videoJobsTable } from "@/db/schema/video-jobs-schema";
 import { ugcCampaignProductsTable } from "@/db/schema/ugc-campaigns-schema";
@@ -203,7 +203,7 @@ export async function POST(request: Request) {
       }).catch((e) => console.error("[generate-batch] process-job trigger failed:", id, e));
     }
 
-    await useVideoCredit("avatarVideo").catch((e) => console.error("[generate-batch] credit deduction failed:", e));
+    await deductVideoCredit("avatarVideo").catch((e) => console.error("[generate-batch] credit deduction failed:", e));
     return NextResponse.json({ batchId, jobIds });
   } catch (err) {
     console.error("[generate-batch] Error:", err);
