@@ -11,9 +11,9 @@ export const dynamic = "force-dynamic";
 export default async function ProductsListingPage({
   params,
 }: {
-  params: { userId: string };
+  params: { id: string };
 }) {
-  const { userId } = params;
+  const userId = params.id;
 
   const [brandVoice] = await db
     .select()
