@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -76,8 +76,13 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
 
   if (isAdminUser) {
     navGroups.push({ label: "Admin", items: [
+      { href: "/dashboard/admin", icon: <LayoutDashboard size={18} />, label: "Admin Overview", emoji: "🛡️", activeWhenStartsWith: false },
+      { href: "/dashboard/admin/users", icon: <Users size={18} />, label: "Users", emoji: "👥", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/revenue", icon: <TrendingUp size={18} />, label: "Revenue", emoji: "💰", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/applications", icon: <Star size={18} />, label: "Applications", emoji: "📋", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/feature-flags", icon: <Flag size={18} />, label: "Feature Flags", emoji: "🚩", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/health", icon: <Activity size={18} />, label: "Platform Health", emoji: "❤️", activeWhenStartsWith: true },
       { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧" },
-      { href: "/dashboard/admin/applications", icon: <Star size={18} />, label: "Applications", emoji: "🛡️", activeWhenStartsWith: true },
     ]});
   }
 

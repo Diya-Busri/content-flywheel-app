@@ -31,3 +31,5 @@ export * from "./email-marketing-schema";
 export * from "./product-sales-schema";
 export * from "./creator-applications-schema";
 export * from "./video-credit-transactions-schema";
+export * from "./feature-flags-schema";
+export * from "./admin-health-logs-schema";
