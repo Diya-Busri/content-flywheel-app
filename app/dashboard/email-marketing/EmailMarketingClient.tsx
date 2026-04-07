@@ -41,6 +41,9 @@ import {
   Tag,
   X,
   Check,
+  Copy,
+  Link2,
+  ExternalLink,
 } from "lucide-react";
 import { useRef } from "react";
 
@@ -65,6 +68,7 @@ type Campaign = {
   status: "draft" | "sent" | "scheduled";
   sentAt: string | null;
   scheduledFor: string | null;
+  openCount: number;
   recipientCount: number;
   createdAt: string;
 };
@@ -103,6 +107,80 @@ function StatusBadge({ status }: { status: Campaign["status"] }) {
     </Badge>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Email Templates
+// ---------------------------------------------------------------------------
+
+const EMAIL_TEMPLATES = [
+  {
+    name: "Newsletter",
+    subject: "Your [Month] Update",
+    previewText: "Here's what's new this month",
+    bodyHtml: `<h2 style="color:#111827;font-size:22px;font-weight:700;margin:0 0 12px;">Hey [Name]! 👋</h2>
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">Here's a quick roundup of what's been happening this month — tips, updates, and things I've been working on.</p>
+
+<h3 style="color:#f97316;font-size:16px;font-weight:700;margin:0 0 8px;">This month's highlight</h3>
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">[Write your main update here]</p>
+
+<h3 style="color:#f97316;font-size:16px;font-weight:700;margin:0 0 8px;">Quick tip</h3>
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">[Share a valuable tip with your audience]</p>
+
+<p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0;">That's it for this month. Hit reply and let me know what you think! 🙌</p>`,
+  },
+  {
+    name: "Product Launch",
+    subject: "🚀 [Product Name] is here!",
+    previewText: "I've been building something for you",
+    bodyHtml: `<h2 style="color:#111827;font-size:22px;font-weight:700;margin:0 0 12px;">It's finally here! 🎉</h2>
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">I've spent [time] building <strong>[Product Name]</strong> — and today it's officially live.</p>
+
+<h3 style="color:#f97316;font-size:16px;font-weight:700;margin:0 0 8px;">What's inside?</h3>
+<ul style="color:#374151;font-size:15px;line-height:1.8;margin:0 0 20px;padding-left:20px;">
+  <li>[Feature / benefit 1]</li>
+  <li>[Feature / benefit 2]</li>
+  <li>[Feature / benefit 3]</li>
+</ul>
+
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 24px;">This is for you if [describe who it's for].</p>
+
+<a href="[CHECKOUT_URL]" style="display:inline-block;padding:14px 28px;background:#f97316;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:15px;">Get it now →</a>
+
+<p style="color:#9ca3af;font-size:13px;line-height:1.7;margin:24px 0 0;">Early-bird pricing ends [date]. After that, price goes up.</p>`,
+  },
+  {
+    name: "Announcement",
+    subject: "Big news 📢",
+    previewText: "Something exciting is happening",
+    bodyHtml: `<h2 style="color:#111827;font-size:22px;font-weight:700;margin:0 0 12px;">I have some exciting news 📢</h2>
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">[Lead with your most exciting announcement — what's happening and why it matters to your readers]</p>
+
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">[Add more context, background, or a story behind the announcement]</p>
+
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 24px;"><strong>Here's what this means for you:</strong> [Explain the benefit to your readers]</p>
+
+<p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0;">Stay tuned — more details coming soon. As always, reply to this email if you have any questions.</p>`,
+  },
+  {
+    name: "Value Email",
+    subject: "How to [achieve outcome] in [timeframe]",
+    previewText: "A quick tip you can use today",
+    bodyHtml: `<h2 style="color:#111827;font-size:22px;font-weight:700;margin:0 0 12px;">Here's something that changed everything for me</h2>
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">[Start with a hook — a story, a surprising stat, or a bold claim]</p>
+
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 12px;"><strong>Here's the thing most people get wrong about [topic]:</strong></p>
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">[Explain the common mistake]</p>
+
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 12px;"><strong>What works instead:</strong></p>
+<ol style="color:#374151;font-size:15px;line-height:1.8;margin:0 0 20px;padding-left:20px;">
+  <li>[Step 1]</li>
+  <li>[Step 2]</li>
+  <li>[Step 3]</li>
+</ol>
+
+<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">Try this today and let me know how it goes. Reply to this email — I read every response. 💬</p>`,
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Campaign Composer Sheet
@@ -210,6 +288,30 @@ function CampaignSheet({
         </SheetHeader>
 
         <div className="space-y-5">
+          {/* Template picker — only show for new campaigns */}
+          {!initial && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Start from a template (optional)</p>
+              <div className="flex flex-wrap gap-2">
+                {EMAIL_TEMPLATES.map((tpl) => (
+                  <button
+                    key={tpl.name}
+                    type="button"
+                    onClick={() => setForm((f) => ({
+                      ...f,
+                      subject: f.subject || tpl.subject,
+                      previewText: f.previewText || tpl.previewText,
+                      bodyHtml: tpl.bodyHtml,
+                    }))}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:border-orange-300 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                  >
+                    {tpl.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="subject" className="text-sm font-medium text-gray-700 dark:text-gray-300">
               Subject <span className="text-orange-500">*</span>
@@ -552,8 +654,18 @@ function ConfirmSendDialog({
 // Main Component
 // ---------------------------------------------------------------------------
 
-export default function EmailMarketingClient() {
+export default function EmailMarketingClient({ userId }: { userId: string }) {
   const { toast } = useToast();
+  const [copiedLink, setCopiedLink] = useState<"subscribe" | "profile" | null>(null);
+
+  const copyLink = (type: "subscribe" | "profile") => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const url = type === "subscribe" ? `${origin}/subscribe/${userId}` : `${origin}/c/${userId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedLink(type);
+      setTimeout(() => setCopiedLink(null), 2000);
+    });
+  };
 
   // --- Campaigns state ---
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -818,6 +930,40 @@ export default function EmailMarketingClient() {
         </div>
       </div>
 
+      {/* Share Links */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {[
+          { type: "subscribe" as const, label: "Subscribe page", desc: "Share with your audience to grow your list", path: `/subscribe/${userId}` },
+          { type: "profile" as const, label: "Creator profile", desc: "Link-in-bio with all your products", path: `/c/${userId}` },
+        ].map(({ type, label, desc, path }) => (
+          <div key={type} className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-2xl p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center flex-shrink-0">
+              <Link2 className="h-4 w-4 text-orange-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">{label}</p>
+              <p className="text-xs text-gray-400 truncate">{desc}</p>
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <a href={path} target="_blank" rel="noopener noreferrer">
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-gray-400 hover:text-orange-500">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              </a>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 px-3 text-xs border-gray-200 dark:border-white/10"
+                onClick={() => copyLink(type)}
+              >
+                {copiedLink === type ? <Check className="h-3.5 w-3.5 mr-1 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
+                {copiedLink === type ? "Copied!" : "Copy link"}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Tabs */}
       <Tabs defaultValue="campaigns" className="w-full">
         <TabsList className="bg-gray-100 dark:bg-white/5 rounded-xl p-1 mb-6">
@@ -899,9 +1045,15 @@ export default function EmailMarketingClient() {
                         <>
                           <span>Sent {formatDate(campaign.sentAt)}</span>
                           <span>·</span>
-                          <span>
-                            {campaign.recipientCount} recipient{campaign.recipientCount !== 1 ? "s" : ""}
-                          </span>
+                          <span>{campaign.recipientCount} recipient{campaign.recipientCount !== 1 ? "s" : ""}</span>
+                          {campaign.recipientCount > 0 && (
+                            <>
+                              <span>·</span>
+                              <span className="text-orange-500 font-medium">
+                                {Math.round((campaign.openCount / campaign.recipientCount) * 100)}% opened
+                              </span>
+                            </>
+                          )}
                         </>
                       ) : campaign.status === "scheduled" && campaign.scheduledFor ? (
                         <span>Scheduled for {formatDate(campaign.scheduledFor)}</span>

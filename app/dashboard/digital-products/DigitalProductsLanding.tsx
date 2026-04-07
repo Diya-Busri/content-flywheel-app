@@ -14,8 +14,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Package, Sparkles, Check, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, RefreshCw, Package2, Pencil, ExternalLink } from "lucide-react";
+import { Package, Sparkles, Check, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, RefreshCw, Package2, Pencil, ExternalLink, Repeat2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { RepurposeDialog } from "@/components/RepurposeDialog";
 
 const CARD_CLASS =
   "border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-200 hover:scale-[1.01] overflow-hidden";
@@ -118,6 +119,7 @@ export default function DigitalProductsLanding() {
   const [bundleGenerating, setBundleGenerating] = useState(false);
   const [bundleComplete, setBundleComplete] = useState(false);
   const [bundleError, setBundleError] = useState<string | null>(null);
+  const [repurposeProduct, setRepurposeProduct] = useState<{ id: string; title: string } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -290,26 +292,35 @@ export default function DigitalProductsLanding() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {myProducts.map((product) => (
-                <Link
+                <div
                   key={product.id}
-                  href={`/dashboard/digital-products/${product.id}/edit`}
-                  className="group flex items-start gap-3 rounded-xl border border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-4 hover:border-orange-400/60 dark:hover:border-orange-500/40 hover:shadow-md transition-all"
+                  className="group flex flex-col gap-3 rounded-xl border border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-4 hover:border-orange-400/60 dark:hover:border-orange-500/40 hover:shadow-md transition-all"
                 >
-                  <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <Package className="w-5 h-5 text-orange-500" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    {product.format && (
-                      <span className="inline-block text-[10px] font-medium uppercase tracking-wide text-orange-600 dark:text-orange-400 bg-orange-500/10 rounded px-1.5 py-0.5 mb-1.5">
-                        {FORMAT_LABELS[product.format] ?? product.format}
-                      </span>
-                    )}
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 leading-snug">
-                      {product.title}
-                    </p>
-                  </div>
-                  <Pencil className="w-4 h-4 text-gray-400 group-hover:text-orange-500 transition-colors shrink-0 mt-1" />
-                </Link>
+                  <Link href={`/dashboard/digital-products/${product.id}/edit`} className="flex items-start gap-3 flex-1">
+                    <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <Package className="w-5 h-5 text-orange-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {product.format && (
+                        <span className="inline-block text-[10px] font-medium uppercase tracking-wide text-orange-600 dark:text-orange-400 bg-orange-500/10 rounded px-1.5 py-0.5 mb-1.5">
+                          {FORMAT_LABELS[product.format] ?? product.format}
+                        </span>
+                      )}
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 leading-snug">
+                        {product.title}
+                      </p>
+                    </div>
+                    <Pencil className="w-4 h-4 text-gray-400 group-hover:text-orange-500 transition-colors shrink-0 mt-1" />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setRepurposeProduct({ id: product.id, title: product.title })}
+                    className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-orange-500 transition-colors self-start"
+                  >
+                    <Repeat2 className="w-3.5 h-3.5" />
+                    Repurpose content
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -574,6 +585,15 @@ export default function DigitalProductsLanding() {
           )}
         </DialogContent>
       </Dialog>
+
+      {repurposeProduct && (
+        <RepurposeDialog
+          open={!!repurposeProduct}
+          onClose={() => setRepurposeProduct(null)}
+          productId={repurposeProduct.id}
+          productTitle={repurposeProduct.title}
+        />
+      )}
     </main>
   );
 }

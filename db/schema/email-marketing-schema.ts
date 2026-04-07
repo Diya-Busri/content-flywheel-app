@@ -21,6 +21,7 @@ export const emailCampaignsTable = pgTable("email_campaigns", {
   status: text("status").$type<CampaignStatus>().default("draft").notNull(),
   sentAt: timestamp("sent_at"),
   scheduledFor: timestamp("scheduled_for"),
+  openCount: integer("open_count").default(0).notNull(),
   recipientCount: integer("recipient_count").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

@@ -15,6 +15,7 @@ const isPublicRoute = createRouteMatcher([
   "/guide(.*)",
   "/unsubscribed",
   "/c(.*)",
+  "/products(.*)",
   /** All API routes (nested paths included); individual routes still enforce auth inside handlers. */
   "/api(.*)",
 ]);

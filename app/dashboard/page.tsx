@@ -9,12 +9,13 @@ import { db } from "@/db/db";
 import { videosTable, tiktokShopVideosTable } from "@/db/schema/library-schema";
 import { videoJobsTable } from "@/db/schema/video-jobs-schema";
 import { productsTable } from "@/db/schema/products-schema";
-import { emailContactsTable } from "@/db/schema/email-marketing-schema";
+import { emailContactsTable, emailCampaignsTable } from "@/db/schema/email-marketing-schema";
+import { goalsTable } from "@/db/schema/goals-schema";
 import { eq, desc, isNull, and, count, gte } from "drizzle-orm";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Package, ShoppingBag, CheckSquare, Video, Play, ExternalLink, AlertCircle, ArrowRight, Package2, TrendingUp, Mail } from "lucide-react";
+import { Package, ShoppingBag, CheckSquare, Video, Play, ExternalLink, AlertCircle, ArrowRight, Package2, TrendingUp, Mail, Target, Send } from "lucide-react";
 import { SyncOnboardingSteps } from "@/components/onboarding/sync-onboarding-steps";
 import { ReferralCapture } from "@/components/ReferralCapture";
 import { Suspense } from "react";
@@ -90,6 +91,30 @@ async function getVideosThisWeek(userId: string): Promise<number> {
       .from(videosTable)
       .where(and(eq(videosTable.userId, userId), isNull(videosTable.deletedAt), gte(videosTable.createdAt, sevenDaysAgo)));
     return Number(result[0]?.count ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+async function getActiveGoalsCount(userId: string): Promise<number> {
+  try {
+    const [row] = await db
+      .select({ count: count() })
+      .from(goalsTable)
+      .where(and(eq(goalsTable.userId, userId), eq(goalsTable.status, "active")));
+    return Number(row?.count ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+async function getCampaignsSentCount(userId: string): Promise<number> {
+  try {
+    const [row] = await db
+      .select({ count: count() })
+      .from(emailCampaignsTable)
+      .where(and(eq(emailCampaignsTable.userId, userId), eq(emailCampaignsTable.status, "sent")));
+    return Number(row?.count ?? 0);
   } catch {
     return 0;
   }
@@ -221,18 +246,19 @@ async function getVideoStats(userId: string) {
 
 export default async function DashboardPage() {
   const { userId } = auth();
-  const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers] = userId
-    ? await Promise.all([getVideoStats(userId), getIncompleteProducts(userId), getChecklistData(userId), getVideosThisWeek(userId), getEmailSubscriberCount(userId)])
+  const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers, activeGoals, campaignsSent] = userId
+    ? await Promise.all([getVideoStats(userId), getIncompleteProducts(userId), getChecklistData(userId), getVideosThisWeek(userId), getEmailSubscriberCount(userId), getActiveGoalsCount(userId), getCampaignsSentCount(userId)])
     : [
         { digitalProductsCount: 0, tiktokShopCount: 0, totalLibraryVideos: 0, recent: [] as RecentVideoItem[] },
         [] as IncompleteProduct[],
         { hasBrandVoice: false, hasProduct: false, hasThumbnail: false, hasPromoVideo: false },
-        0,
-        0,
+        0, 0, 0, 0,
       ];
 
+  const hasSubscriber = emailSubscribers > 0;
+  const hasCampaign = campaignsSent > 0;
   // Only show checklist if at least one step is not done yet
-  const showChecklist = !checklist.hasBrandVoice || !checklist.hasProduct || !checklist.hasThumbnail || !checklist.hasPromoVideo;
+  const showChecklist = !checklist.hasBrandVoice || !checklist.hasProduct || !checklist.hasThumbnail || !checklist.hasPromoVideo || !hasSubscriber || !hasCampaign;
 
   return (
     <main className="p-6 md:p-10">
@@ -271,6 +297,8 @@ export default async function DashboardPage() {
           hasProduct={checklist.hasProduct}
           hasThumbnail={checklist.hasThumbnail}
           hasPromoVideo={checklist.hasPromoVideo}
+          hasSubscriber={hasSubscriber}
+          hasCampaign={hasCampaign}
         />
       )}
 
@@ -362,6 +390,42 @@ export default async function DashboardPage() {
               </Link>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Second row: goals + campaigns */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+          <Link href="/dashboard/goals" className="block">
+            <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-orange-300 dark:hover:border-orange-500/40 transition-colors h-full">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                  <Target className="w-3.5 h-3.5" />
+                  Active Goals
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{activeGoals}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {activeGoals === 0 ? "No goals set yet" : activeGoals === 1 ? "goal in progress" : "goals in progress"}
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/dashboard/email-marketing" className="block">
+            <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] hover:border-orange-300 dark:hover:border-orange-500/40 transition-colors h-full">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                  <Send className="w-3.5 h-3.5" />
+                  Campaigns Sent
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{campaignsSent}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {campaignsSent === 0 ? "No campaigns sent yet" : campaignsSent === 1 ? "campaign sent" : "campaigns sent"}
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </section>
 

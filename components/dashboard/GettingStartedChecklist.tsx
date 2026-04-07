@@ -21,9 +21,11 @@ type Props = {
   hasProduct: boolean;
   hasThumbnail: boolean;
   hasPromoVideo: boolean;
+  hasSubscriber?: boolean;
+  hasCampaign?: boolean;
 };
 
-export function GettingStartedChecklist({ hasBrandVoice, hasProduct, hasThumbnail, hasPromoVideo }: Props) {
+export function GettingStartedChecklist({ hasBrandVoice, hasProduct, hasThumbnail, hasPromoVideo, hasSubscriber = false, hasCampaign = false }: Props) {
   const [dismissed, setDismissed] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -77,6 +79,20 @@ export function GettingStartedChecklist({ hasBrandVoice, hasProduct, hasThumbnai
       description: "Create an AI avatar video to promote your product on TikTok and Instagram.",
       href: "/dashboard/digital-products",
       done: hasPromoVideo,
+    },
+    {
+      id: "subscriber",
+      label: "Add your first subscriber",
+      description: "Build your list — share your subscribe page or import existing contacts.",
+      href: "/dashboard/email-marketing",
+      done: hasSubscriber,
+    },
+    {
+      id: "campaign",
+      label: "Send your first email campaign",
+      description: "Reach your audience directly — announce a product, share a tip, or say hi.",
+      href: "/dashboard/email-marketing",
+      done: hasCampaign,
     },
   ];
 

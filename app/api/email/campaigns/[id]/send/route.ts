@@ -70,6 +70,7 @@ export async function POST(
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
       const messages = chunk.map((contact) => {
         const unsubscribeUrl = `${baseUrl}/api/email/unsubscribe?id=${contact.id}`;
+        const trackingPixel = `<img src="${baseUrl}/api/email/track?c=${campaign.id}" width="1" height="1" style="display:block;border:0;" alt="" />`;
         const unsubscribeFooter = `
           <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;color:#9ca3af;">
             You received this email because you subscribed to updates from this creator.<br/>
@@ -80,7 +81,7 @@ export async function POST(
           to: contact.email,
           subject: campaign.subject,
           ...(campaign.previewText ? { text: campaign.previewText } : {}),
-          html: campaign.bodyHtml + unsubscribeFooter,
+          html: campaign.bodyHtml + unsubscribeFooter + trackingPixel,
         };
       });
 

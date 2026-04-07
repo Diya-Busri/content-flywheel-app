@@ -12,5 +12,5 @@ export default async function EmailMarketingPage() {
   const { userId } = auth();
   if (!userId) redirect("/sign-in");
 
-  return <EmailMarketingClient />;
+  return <EmailMarketingClient userId={userId} />;
 }

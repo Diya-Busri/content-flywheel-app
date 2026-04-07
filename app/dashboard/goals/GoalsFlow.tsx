@@ -128,6 +128,8 @@ export default function GoalsFlow() {
   const [deleteConfirmChecked, setDeleteConfirmChecked] = useState(false);
   const [proofModalTask, setProofModalTask] = useState<{ goal: Goal; task: UpcomingTask } | null>(null);
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
+  const [celebratingGoal, setCelebratingGoal] = useState<Goal | null>(null);
+  const prevCompletedIds = useRef<Set<string>>(new Set());
   const dailyScheduleRef = useRef<HTMLDivElement>(null);
   const activeSectionRef = useRef<HTMLDivElement>(null);
   const bestStreakCardRef = useRef<HTMLDivElement>(null);
@@ -142,6 +144,16 @@ export default function GoalsFlow() {
       const fetchedGoals: Goal[] = data.goals ?? [];
       setGoals(fetchedGoals);
       setTasksByGoalId(data.tasksByGoalId ?? {});
+
+      // Detect newly completed goals to celebrate
+      const newlyCompleted = fetchedGoals.filter(
+        (g) => g.status === "completed" && !prevCompletedIds.current.has(g.id)
+      );
+      if (newlyCompleted.length > 0) {
+        setCelebratingGoal(newlyCompleted[0]);
+        setCompletedOpen(true);
+      }
+      fetchedGoals.filter((g) => g.status === "completed").forEach((g) => prevCompletedIds.current.add(g.id));
 
       // Auto-advance goals that haven't been updated today (after 2am grace period)
       if (!skipAutoAdvance) {
@@ -1009,6 +1021,41 @@ export default function GoalsFlow() {
               className="bg-orange-500 hover:bg-orange-600"
             >
               {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Goal completion celebration dialog */}
+      <Dialog open={!!celebratingGoal} onOpenChange={(v) => !v && setCelebratingGoal(null)}>
+        <DialogContent className="sm:max-w-md text-center">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white flex flex-col items-center gap-3 pt-2">
+              <span className="text-5xl">🏆</span>
+              Goal Complete!
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <p className="text-lg font-semibold text-orange-500">
+              {celebratingGoal?.title}
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              You finished all {celebratingGoal?.totalDays} days. That&apos;s serious consistency — amazing work! 🔥
+            </p>
+            <div className="flex items-center justify-center gap-6 pt-2">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{celebratingGoal?.totalDays}</p>
+                <p className="text-xs text-gray-500">Days completed</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-orange-500">{celebratingGoal?.longestStreak}</p>
+                <p className="text-xs text-gray-500">Best streak</p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button onClick={() => setCelebratingGoal(null)} className="bg-orange-500 hover:bg-orange-600 text-white w-full">
+              View achievement →
             </Button>
           </DialogFooter>
         </DialogContent>
