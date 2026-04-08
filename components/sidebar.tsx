@@ -8,6 +8,7 @@
 import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
@@ -172,10 +173,10 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
               transition={{ duration: 0.2 }}
             >
               <div className="hidden md:block">
-                <span className="font-bold text-lg text-gray-900 dark:text-white">Content Flywheel</span>
+                <Image src="/logo.png" alt="Content Flywheel" width={130} height={36} className="h-9 w-auto object-contain" />
               </div>
               <div className="block md:hidden text-center">
-                <span className="font-bold text-sm text-gray-900 dark:text-white">CF</span>
+                <Image src="/logo.png" alt="CF" width={32} height={32} className="h-8 w-auto object-contain" />
               </div>
             </motion.div>
           </Link>

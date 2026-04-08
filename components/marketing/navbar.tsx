@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 
 const ACCENT = "#F5C97A";
@@ -23,11 +24,8 @@ export function Navbar() {
       }
     >
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link
-          href="/"
-          className="text-sm font-semibold tracking-tight text-white transition-opacity hover:opacity-90"
-        >
-          Content <span style={{ color: ACCENT }}>Flywheel</span>
+        <Link href="/" className="transition-opacity hover:opacity-90">
+          <Image src="/logo.png" alt="Content Flywheel" width={140} height={40} className="h-10 w-auto object-contain" />
         </Link>
 
         <div className="hidden items-center gap-10 lg:flex">
