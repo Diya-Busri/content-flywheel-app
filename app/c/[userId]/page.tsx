@@ -19,9 +19,8 @@ export default async function CreatorProfilePage({
     .select()
     .from(brandVoiceTable)
     .where(eq(brandVoiceTable.userId, userId))
-    .limit(1);
-
-  if (!brandVoice) notFound();
+    .limit(1)
+    .catch(() => [undefined]);
 
   const products = await db
     .select({
@@ -33,7 +32,7 @@ export default async function CreatorProfilePage({
     .where(and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt)))
     .limit(20);
 
-  const brandName = brandVoice.brandName?.trim() || "Creator";
+  const brandName = brandVoice?.brandName?.trim() || "Creator";
   const initials = brandName
     .split(" ")
     .map((w) => w[0])
@@ -102,7 +101,7 @@ export default async function CreatorProfilePage({
             {brandName}
           </h1>
 
-          {brandVoice.targetAudience && (
+          {brandVoice?.targetAudience && (
             <p style={{ margin: "0 0 24px", fontSize: "15px", color: "#6b7280", lineHeight: "1.6" }}>
               {brandVoice.targetAudience}
             </p>
