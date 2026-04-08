@@ -19,7 +19,9 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const unread = notifications.filter(n => !n.read).length;
 
@@ -35,18 +37,33 @@ export function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60000); // poll every minute
+    const interval = setInterval(fetchNotifications, 60000);
     return () => clearInterval(interval);
   }, []);
 
   // Close on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (
+        panelRef.current && !panelRef.current.contains(e.target as Node) &&
+        btnRef.current && !btnRef.current.contains(e.target as Node)
+      ) setOpen(false);
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  function handleOpen() {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPanelPos({
+        top: rect.bottom + 8,
+        left: rect.right + 8,
+      });
+      fetchNotifications();
+    }
+    setOpen(o => !o);
+  }
 
   async function markAllRead() {
     await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ readAll: true }) });
@@ -68,9 +85,10 @@ export function NotificationBell() {
   }
 
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
-        onClick={() => { setOpen(o => !o); if (!open) fetchNotifications(); }}
+        ref={btnRef}
+        onClick={handleOpen}
         className="relative flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-700 dark:hover:text-white transition-colors"
         aria-label="Notifications"
       >
@@ -85,11 +103,13 @@ export function NotificationBell() {
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            ref={panelRef}
+            initial={{ opacity: 0, x: -8, scale: 0.96 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -8, scale: 0.96 }}
             transition={{ duration: 0.15 }}
-            className="absolute left-0 top-10 z-50 w-80 rounded-xl border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-card shadow-xl overflow-hidden"
+            style={{ position: "fixed", top: panelPos.top, left: panelPos.left, zIndex: 9999 }}
+            className="w-80 rounded-xl border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-card shadow-xl overflow-hidden"
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#E5E7EB] dark:border-white/10">
               <span className="text-sm font-semibold text-gray-900 dark:text-white">Notifications</span>
@@ -127,6 +147,6 @@ export function NotificationBell() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
