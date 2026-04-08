@@ -263,7 +263,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
           {/* Billing */}
           <div className="px-3 mb-4">
             <div className="h-px bg-gradient-to-r from-transparent via-black/10 dark:via-white/10 to-transparent mb-4" />
-            <Link href="/dashboard/settings">
+            <Link href="/pricing">
               <motion.div
                 whileHover={{ scale: 1.03, transition: { duration: 0.2 } }}
                 whileTap={{ scale: 0.97 }}
