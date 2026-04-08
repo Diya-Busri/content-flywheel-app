@@ -770,7 +770,7 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
         body: JSON.stringify({ tagFilter: tagFilter || null }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to send");
+      if (!res.ok) throw new Error(data.detail ?? data.error ?? "Failed to send");
       toast({
         title: "Campaign sent!",
         description: `Successfully sent to ${data.sent} subscriber${data.sent !== 1 ? "s" : ""}.`,

@@ -105,6 +105,7 @@ export async function POST(
     return NextResponse.json({ success: true, sent: totalSent });
   } catch (err) {
     console.error("Email campaign send error:", err);
-    return NextResponse.json({ error: "Failed to send campaign" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: "Failed to send campaign", detail: msg }, { status: 500 });
   }
 }
