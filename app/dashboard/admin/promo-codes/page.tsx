@@ -14,8 +14,8 @@ type PromoCode = {
   id: string;
   code: string;
   description: string | null;
-  discountType: DiscountType;
-  discountValue: number;
+  discountPercent: number;
+  discountAmount: number; // in cents
   maxUses: number | null;
   usedCount: number;
   active: boolean;
@@ -367,13 +367,11 @@ export default function AdminPromoCodesPage() {
                     {/* Discount */}
                     <td className="px-4 py-3">
                       <span className="font-semibold text-orange-600 dark:text-orange-400">
-                        {pc.discountType === "percent"
-                          ? `${pc.discountValue}%`
-                          : `$${pc.discountValue.toFixed(2)}`}
+                        {pc.discountPercent > 0
+                          ? `${pc.discountPercent}%`
+                          : `$${(pc.discountAmount / 100).toFixed(2)}`}
                       </span>
-                      <span className="text-xs text-muted-foreground ml-1">
-                        {pc.discountType === "percent" ? "off" : "off"}
-                      </span>
+                      <span className="text-xs text-muted-foreground ml-1">off</span>
                     </td>
 
                     {/* Uses */}
