@@ -139,7 +139,7 @@ export default function AdminRevenuePage() {
               </CardHeader>
               <CardContent>
                 {data.stripeCharges.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No charges or Stripe key not configured.</p>
+                  <p className="text-sm text-muted-foreground">No Stripe charges yet.</p>
                 ) : (
                   <div className="space-y-2">
                     {data.stripeCharges.map((c) => (
