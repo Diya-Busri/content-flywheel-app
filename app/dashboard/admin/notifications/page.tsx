@@ -15,8 +15,8 @@ type Audience = "all" | "specific";
 type UserRow = {
   userId: string;
   email: string;
-  membership: string;
-  status: string;
+  firstName?: string;
+  lastName?: string;
 };
 
 type FormState = {
@@ -54,7 +54,8 @@ function UserPicker({ users, selected, onSelect }: {
 
   const filtered = users.filter(u =>
     u.email.toLowerCase().includes(search.toLowerCase()) ||
-    u.userId.toLowerCase().includes(search.toLowerCase())
+    u.userId.toLowerCase().includes(search.toLowerCase()) ||
+    `${u.firstName ?? ""} ${u.lastName ?? ""}`.toLowerCase().includes(search.toLowerCase())
   );
 
   useEffect(() => {
@@ -75,7 +76,6 @@ function UserPicker({ users, selected, onSelect }: {
         {selected ? (
           <span className="flex items-center gap-2 min-w-0">
             <span className="truncate font-medium">{selected.email}</span>
-            <Badge variant="outline" className="shrink-0 text-[10px] py-0">{users.find(u => u.userId === selected.userId)?.membership ?? ""}</Badge>
           </span>
         ) : (
           <span className="text-muted-foreground">Select a user…</span>
@@ -110,19 +110,13 @@ function UserPicker({ users, selected, onSelect }: {
                   key={u.userId}
                   type="button"
                   onClick={() => { onSelect(u); setOpen(false); setSearch(""); }}
-                  className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-muted transition-colors ${selected?.userId === u.userId ? "bg-orange-500/5" : ""}`}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-muted transition-colors ${selected?.userId === u.userId ? "bg-orange-500/5" : ""}`}
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{u.email}</p>
-                    <p className="text-xs text-muted-foreground truncate">{u.userId}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <Badge variant="outline" className={`text-[10px] py-0 ${u.membership === "pro" ? "border-orange-400 text-orange-500" : ""}`}>
-                      {u.membership}
-                    </Badge>
-                    {u.status === "suspended" && (
-                      <Badge variant="outline" className="text-[10px] py-0 border-red-400 text-red-500">suspended</Badge>
+                    {(u.firstName || u.lastName) && (
+                      <p className="text-sm font-medium truncate">{[u.firstName, u.lastName].filter(Boolean).join(" ")}</p>
                     )}
+                    <p className={`truncate ${(u.firstName || u.lastName) ? "text-xs text-muted-foreground" : "text-sm font-medium"}`}>{u.email}</p>
                   </div>
                 </button>
               ))

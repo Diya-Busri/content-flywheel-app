@@ -1,29 +1,28 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/is-admin";
-import { db } from "@/db/db";
-import { profilesTable } from "@/db/schema/profiles-schema";
-import { asc } from "drizzle-orm";
+import { clerkClient } from "@clerk/nextjs/server";
 
-// Lightweight endpoint — just userId, email, membership, status for the user picker
+// Pulls all users directly from Clerk — no dependency on profiles table
 export async function GET() {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
-    const rows = await db
-      .select({
-        userId: profilesTable.userId,
-        email: profilesTable.email,
-        membership: profilesTable.membership,
-        status: profilesTable.status,
-      })
-      .from(profilesTable)
-      .orderBy(asc(profilesTable.email));
+    const client = await clerkClient();
+    // Fetch up to 500 users from Clerk
+    const { data } = await client.users.getUserList({ limit: 500, orderBy: "-created_at" });
 
-    return NextResponse.json({ users: rows });
+    const users = data.map((u) => ({
+      userId: u.id,
+      email: u.emailAddresses?.[0]?.emailAddress ?? "—",
+      firstName: u.firstName ?? "",
+      lastName: u.lastName ?? "",
+    }));
+
+    return NextResponse.json({ users });
   } catch (err) {
-    console.error("[user-list] DB error:", err);
-    return NextResponse.json({ error: "Database error", users: [] }, { status: 500 });
+    console.error("[user-list] Clerk error:", err);
+    return NextResponse.json({ error: "Failed to fetch users from Clerk", users: [] }, { status: 500 });
   }
 }
