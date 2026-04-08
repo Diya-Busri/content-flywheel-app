@@ -15,15 +15,20 @@ export async function GET() {
     .from(profilesTable)
     .orderBy(desc(profilesTable.createdAt));
 
-  const txStats = await db
-    .select({
-      userId: videoCreditTransactionsTable.userId,
-      type: videoCreditTransactionsTable.type,
-      total: sum(videoCreditTransactionsTable.amount),
-      txCount: count(),
-    })
-    .from(videoCreditTransactionsTable)
-    .groupBy(videoCreditTransactionsTable.userId, videoCreditTransactionsTable.type);
+  let txStats: { userId: string; type: string | null; total: string | null; txCount: number }[] = [];
+  try {
+    txStats = await db
+      .select({
+        userId: videoCreditTransactionsTable.userId,
+        type: videoCreditTransactionsTable.type,
+        total: sum(videoCreditTransactionsTable.amount),
+        txCount: count(),
+      })
+      .from(videoCreditTransactionsTable)
+      .groupBy(videoCreditTransactionsTable.userId, videoCreditTransactionsTable.type);
+  } catch {
+    // table may not exist yet — skip stats gracefully
+  }
 
   const statsByUser: Record<string, { purchased: number; used: number; videoCount: number }> = {};
   for (const row of txStats) {
