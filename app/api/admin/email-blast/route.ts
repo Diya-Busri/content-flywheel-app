@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
       await resend.emails.send({
         from:
           process.env.RESEND_FROM_EMAIL ??
-          "Content Flywheel <noreply@contentflywheel.com>",
+          "Content Flywheel <hello@contentflywheel.co.uk>",
         to: batch,
         subject,
         html: htmlBody,
