@@ -682,6 +682,7 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
   const [contactSearch, setContactSearch] = useState("");
   const [deletingContactId, setDeletingContactId] = useState<string | null>(null);
   const [deletingCampaignId, setDeletingCampaignId] = useState<string | null>(null);
+  const [viewingCampaign, setViewingCampaign] = useState<Campaign | null>(null);
   const [importing, setImporting] = useState(false);
   const [editingTagsId, setEditingTagsId] = useState<string | null>(null);
   const [editingTagsValue, setEditingTagsValue] = useState("");
@@ -1064,6 +1065,17 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {campaign.status === "sent" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-3 text-xs border-gray-200 dark:border-white/10 hover:border-orange-300 hover:text-orange-600"
+                        onClick={() => setViewingCampaign(campaign)}
+                      >
+                        <Mail className="h-3.5 w-3.5 mr-1" />
+                        View
+                      </Button>
+                    )}
                     {(campaign.status === "draft" || campaign.status === "scheduled") && (
                       <>
                         <Button
@@ -1340,6 +1352,37 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
         onConfirm={handleSendCampaign}
         sending={sending}
       />
+
+      {/* View Campaign Dialog */}
+      <Dialog open={!!viewingCampaign} onOpenChange={() => setViewingCampaign(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">{viewingCampaign?.subject}</DialogTitle>
+            {viewingCampaign?.previewText && (
+              <p className="text-sm text-gray-500 dark:text-gray-400">{viewingCampaign.previewText}</p>
+            )}
+            <div className="flex items-center gap-3 text-xs text-gray-400 pt-1">
+              <span>Sent {formatDate(viewingCampaign?.sentAt)}</span>
+              <span>·</span>
+              <span>{viewingCampaign?.recipientCount ?? 0} recipient{(viewingCampaign?.recipientCount ?? 0) !== 1 ? "s" : ""}</span>
+              {(viewingCampaign?.recipientCount ?? 0) > 0 && (
+                <>
+                  <span>·</span>
+                  <span className="text-orange-500 font-medium">
+                    {Math.round(((viewingCampaign?.openCount ?? 0) / (viewingCampaign?.recipientCount ?? 1)) * 100)}% opened
+                  </span>
+                </>
+              )}
+            </div>
+          </DialogHeader>
+          <div className="border-t border-gray-100 dark:border-white/10 pt-4 mt-2">
+            <div
+              className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 whitespace-pre-wrap text-sm leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: viewingCampaign?.bodyHtml ?? "" }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
