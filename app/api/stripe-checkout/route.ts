@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import Stripe from "stripe";
+import { db } from "@/db/db";
+import { promoCodesTable } from "@/db/schema/promo-codes-schema";
+import { eq, and } from "drizzle-orm";
 
 /** Production domain for Stripe success/cancel redirects. Never use Vercel preview URLs. */
 const PRODUCTION_DOMAIN = "https://contentflywheel.co.uk";
@@ -12,11 +15,39 @@ function getStripeRedirectBase(): string {
 }
 
 /**
+ * Finds or creates a Stripe coupon for the given promo code.
+ * Uses id = "CF_<CODE>" as a stable identifier so we never duplicate.
+ */
+async function getOrCreateStripeCoupon(
+  stripe: Stripe,
+  promo: { code: string; discountPercent: number; discountAmount: number }
+): Promise<string> {
+  const couponId = `CF_${promo.code}`;
+  try {
+    const existing = await stripe.coupons.retrieve(couponId);
+    return existing.id;
+  } catch {
+    // Coupon doesn't exist — create it
+    const base: Stripe.CouponCreateParams = {
+      id: couponId,
+      name: promo.code,
+      duration: "forever",
+    };
+    if (promo.discountPercent > 0) {
+      base.percent_off = promo.discountPercent;
+    } else if (promo.discountAmount > 0) {
+      base.amount_off = promo.discountAmount;
+      base.currency = "gbp";
+    }
+    const coupon = await stripe.coupons.create(base);
+    return coupon.id;
+  }
+}
+
+/**
  * POST /api/stripe-checkout
- * Body: { priceId: string }
+ * Body: { plan: "monthly" | "yearly", promoCode?: string }
  * Creates a Stripe Checkout Session (subscription) and returns the session URL.
- * success_url: /dashboard?session_id={CHECKOUT_SESSION_ID}, cancel_url: /pricing
- * Use STRIPE_MONTHLY_PRICE_ID or STRIPE_YEARLY_PRICE_ID as priceId.
  */
 export async function POST(request: NextRequest) {
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
@@ -43,7 +74,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { priceId?: string; plan?: "monthly" | "yearly" };
+  let body: { priceId?: string; plan?: "monthly" | "yearly"; promoCode?: string };
   try {
     body = await request.json();
   } catch {
@@ -65,6 +96,42 @@ export async function POST(request: NextRequest) {
   const baseUrl = getStripeRedirectBase();
   const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
 
+  // --- Promo code handling ---
+  let sessionExtras: Partial<Stripe.Checkout.SessionCreateParams> = {
+    allow_promotion_codes: true,
+  };
+
+  if (body.promoCode) {
+    const code = body.promoCode.trim().toUpperCase();
+    const now = new Date();
+
+    const [promo] = await db
+      .select()
+      .from(promoCodesTable)
+      .where(and(eq(promoCodesTable.code, code), eq(promoCodesTable.active, true)));
+
+    if (!promo) {
+      return NextResponse.json({ error: "Invalid or expired promo code." }, { status: 400 });
+    }
+    if (promo.expiresAt && promo.expiresAt < now) {
+      return NextResponse.json({ error: "This promo code has expired." }, { status: 400 });
+    }
+    if (promo.maxUses !== null && promo.usedCount >= promo.maxUses) {
+      return NextResponse.json({ error: "This promo code has reached its usage limit." }, { status: 400 });
+    }
+
+    try {
+      const couponId = await getOrCreateStripeCoupon(stripe, promo);
+      // When applying a coupon directly, can't also use allow_promotion_codes
+      sessionExtras = {
+        discounts: [{ coupon: couponId }],
+      };
+    } catch (err) {
+      console.error("[stripe-checkout] Failed to create coupon:", err);
+      // Don't block checkout if coupon creation fails — fall back to no discount
+    }
+  }
+
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -72,7 +139,11 @@ export async function POST(request: NextRequest) {
       success_url: `${baseUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/pricing`,
       client_reference_id: userId,
-      allow_promotion_codes: true,
+      metadata: {
+        promoCode: body.promoCode?.trim().toUpperCase() || "",
+        userId,
+      },
+      ...sessionExtras,
     });
 
     if (!session.url) {

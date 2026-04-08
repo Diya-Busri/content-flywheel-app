@@ -6,6 +6,8 @@ import { updateProfile, updateProfileByStripeCustomerId, getProfileByUserId } fr
 import { VIDEO_CREDITS_METADATA_KEY } from "@/lib/video-credits";
 import { db } from "@/db/db";
 import { videoCreditTransactionsTable } from "@/db/schema/video-credit-transactions-schema";
+import { promoCodesTable, promoCodeUsesTable } from "@/db/schema/promo-codes-schema";
+import { eq, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 const relevantEvents = new Set([
@@ -119,6 +121,26 @@ async function handleCheckoutSession(event: Stripe.Event) {
     const productId = subscription.items.data[0].price.product as string;
     await manageSubscriptionStatusChange(subscription.id, subscription.customer as string, productId);
     
+    // Record promo code usage if one was applied
+    const promoCode = checkoutSession.metadata?.promoCode;
+    if (promoCode && checkoutSession.client_reference_id) {
+      try {
+        const [promo] = await db.select().from(promoCodesTable).where(eq(promoCodesTable.code, promoCode));
+        if (promo) {
+          await db.insert(promoCodeUsesTable).values({
+            codeId: promo.id,
+            userId: checkoutSession.client_reference_id,
+          }).onConflictDoNothing();
+          await db.update(promoCodesTable)
+            .set({ usedCount: sql`${promoCodesTable.usedCount} + 1` })
+            .where(eq(promoCodesTable.id, promo.id));
+          console.log(`[promo] Recorded use of ${promoCode} for user ${checkoutSession.client_reference_id}`);
+        }
+      } catch (err) {
+        console.error("[promo] Failed to record promo code use:", err);
+      }
+    }
+
     // Reset usage credits on new subscription
     if (checkoutSession.client_reference_id) {
       try {
