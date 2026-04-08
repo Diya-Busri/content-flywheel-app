@@ -138,6 +138,7 @@ export default function AdminNotificationsPage() {
   const { toast } = useToast();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
 
   const [form, setForm] = useState<FormState>({
     title: "", message: "", type: "info", linkUrl: "",
@@ -150,10 +151,16 @@ export default function AdminNotificationsPage() {
   useEffect(() => {
     if (form.audience === "specific" && users.length === 0) {
       setLoadingUsers(true);
-      fetch("/api/admin/users")
-        .then(r => r.json())
-        .then(d => setUsers(d.users ?? []))
-        .catch(() => {})
+      setUsersError(null);
+      fetch("/api/admin/user-list")
+        .then(async r => {
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error ?? `HTTP ${r.status}`);
+          setUsers(d.users ?? []);
+        })
+        .catch((e: unknown) => {
+          setUsersError(e instanceof Error ? e.message : "Failed to load users");
+        })
         .finally(() => setLoadingUsers(false));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -271,6 +278,10 @@ export default function AdminNotificationsPage() {
               {loadingUsers ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                   <Loader2 className="w-4 h-4 animate-spin" /> Loading users…
+                </div>
+              ) : usersError ? (
+                <div className="flex items-center gap-2 text-sm text-red-500 py-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" /> {usersError}
                 </div>
               ) : (
                 <UserPicker
