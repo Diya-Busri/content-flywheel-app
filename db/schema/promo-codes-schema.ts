@@ -10,6 +10,8 @@ export const promoCodesTable = pgTable("promo_codes", {
   usedCount: integer("used_count").notNull().default(0),
   active: boolean("active").notNull().default(true),
   expiresAt: timestamp("expires_at"),
+  stripeCouponId: text("stripe_coupon_id"),
+  stripePromotionCodeId: text("stripe_promotion_code_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
