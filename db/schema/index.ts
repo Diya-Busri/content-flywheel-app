@@ -35,3 +35,7 @@ export * from "./feature-flags-schema";
 export * from "./admin-health-logs-schema";
 export * from "./user-events-schema";
 export * from "./user-feedback-schema";
+export * from "./notifications-schema";
+export * from "./announcements-schema";
+export * from "./promo-codes-schema";
+export * from "./ab-tests-schema";

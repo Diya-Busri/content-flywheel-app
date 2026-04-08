@@ -5,7 +5,8 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown } from "lucide-react";
+import { NotificationBell } from "@/components/NotificationBell";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -86,6 +87,12 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       { href: "/dashboard/admin/analytics", icon: <BarChart2 size={18} />, label: "Analytics", emoji: "📊", activeWhenStartsWith: true },
       { href: "/dashboard/admin/feedback", icon: <Inbox size={18} />, label: "Feedback Inbox", emoji: "💬", activeWhenStartsWith: true },
       { href: "/dashboard/admin/health", icon: <Activity size={18} />, label: "Platform Health", emoji: "❤️", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/announcements", icon: <Megaphone size={18} />, label: "Announcements", emoji: "📣", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/notifications", icon: <Bell size={18} />, label: "Push Notifications", emoji: "🔔", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/retention", icon: <TrendingDown size={18} />, label: "Retention", emoji: "📉", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/promo-codes", icon: <Tag size={18} />, label: "Promo Codes", emoji: "🎟️", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/email-blast", icon: <Send size={18} />, label: "Email Blast", emoji: "✉️", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/ab-tests", icon: <FlaskConical size={18} />, label: "A/B Tests", emoji: "🧪", activeWhenStartsWith: true },
       { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧" },
     ]});
   }
@@ -210,8 +217,13 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
 
         {/* Bottom Section - Settings, Leave a review, Dark mode, Billing, Account */}
         <div className="mt-auto pt-4 relative z-10">
-          <div className="px-3 mb-3">
-            {renderNavItem(settingsItem)}
+          <div className="px-3 mb-3 flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              {renderNavItem(settingsItem)}
+            </div>
+            <div className="flex-shrink-0">
+              <NotificationBell />
+            </div>
           </div>
           {onOpenReview && (
             <div className="px-3 mb-3">
