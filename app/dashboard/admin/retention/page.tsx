@@ -340,7 +340,7 @@ export default function AdminRetentionPage() {
             )}
           </div>
           <p className="text-sm text-muted-foreground">
-            Pro users who haven't been active in 30+ days
+            Pro users who have not been active in 30+ days
           </p>
         </CardHeader>
         <CardContent className="p-0">

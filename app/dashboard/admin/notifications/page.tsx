@@ -233,7 +233,7 @@ export default function AdminNotificationsPage() {
                 onChange={(e) => updateForm("targetUserId", e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Enter the Clerk user ID (starts with user_) or the user's email
+                Enter the Clerk user ID (starts with user_) or the user&apos;s email
                 address stored in the database.
               </p>
             </div>
