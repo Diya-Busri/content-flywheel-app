@@ -10,6 +10,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { DashboardLayoutClient } from "@/components/dashboard-layout-client";
 import { DashboardSetupError } from "@/components/dashboard-setup-error";
+import { getDisabledFeatures } from "@/lib/feature-flags";
 
 /** Paywall: user must have an active subscription to access the dashboard. */
 function hasActiveSubscription(profile: any | null): boolean {
@@ -69,8 +70,10 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     redirect("/pricing");
   }
 
+  const disabledFeatures = await getDisabledFeatures(userId);
+
   return (
-    <DashboardLayoutClient profile={profile} userEmail={userEmail}>
+    <DashboardLayoutClient profile={profile} userEmail={userEmail} disabledFeatures={[...disabledFeatures]}>
       {children}
     </DashboardLayoutClient>
   );

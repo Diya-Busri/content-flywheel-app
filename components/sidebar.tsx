@@ -20,10 +20,12 @@ import { HelpPanel, HelpButton } from "@/components/help/HelpPanel";
 interface SidebarProps {
   profile: SelectProfile | null;
   userEmail?: string;
+  disabledFeatures?: string[];
   onOpenReview?: () => void;
 }
 
-export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarProps) {
+export default function Sidebar({ profile, userEmail, disabledFeatures = [], onOpenReview }: SidebarProps) {
+  const disabled = new Set(disabledFeatures);
   const pathname = usePathname();
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase() ?? "";
   const isAdminUser = !!adminEmail && (userEmail ?? "").trim().toLowerCase() === adminEmail;
@@ -41,38 +43,38 @@ export default function Sidebar({ profile, userEmail, onOpenReview }: SidebarPro
   const isActive = (path: string, activeWhenStartsWith?: boolean) =>
     activeWhenStartsWith ? pathname.startsWith(path) : pathname === path;
 
-  type NavItem = { href: string; icon: React.ReactNode; label: string; emoji: string; subItem?: boolean; badge?: string; activeWhenStartsWith?: boolean };
+  type NavItem = { href: string; icon: React.ReactNode; label: string; emoji: string; subItem?: boolean; badge?: string; activeWhenStartsWith?: boolean; featureKey?: string };
   type NavGroup = { label: string; items: NavItem[] };
 
   const navGroups: NavGroup[] = [
     {
       label: "Create",
       items: [
-        { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", emoji: "🤖" },
-        { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true },
-        { href: "/dashboard/video-timeline", icon: <Film size={18} />, label: "Video Timeline", emoji: "🎬" },
-        { href: "/dashboard/video-credits", icon: <Film size={18} />, label: "Video Credits", emoji: "🎥" },
+        { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", emoji: "🤖", featureKey: "ai_coach" },
+        { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true, featureKey: "template_studio" },
+        { href: "/dashboard/video-timeline", icon: <Film size={18} />, label: "Video Timeline", emoji: "🎬", featureKey: "video_timeline" },
+        { href: "/dashboard/video-credits", icon: <Film size={18} />, label: "Video Credits", emoji: "🎥", featureKey: "video_credits" },
       ],
     },
     {
       label: "Content",
       items: [
-        { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚" },
-        { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅" },
-        { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅" },
+        { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚", featureKey: "my_library" },
+        { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅", featureKey: "content_calendar" },
+        { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅", featureKey: "script_checker" },
       ],
     },
     {
       label: "Grow",
       items: [
-        { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦" },
-        { href: "/dashboard/digital-products/selling-guide", icon: <Package size={18} />, label: "Selling Guide", emoji: "🛒", subItem: true },
-        { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️" },
-        { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯" },
-        { href: "/dashboard/referral", icon: <Gift size={18} />, label: "Invite Creators", emoji: "🎁" },
+        { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦", featureKey: "digital_products" },
+        { href: "/dashboard/digital-products/selling-guide", icon: <Package size={18} />, label: "Selling Guide", emoji: "🛒", subItem: true, featureKey: "digital_products" },
+        { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️", featureKey: "tiktok_shop" },
+        { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯", featureKey: "goal_tracker" },
+        { href: "/dashboard/referral", icon: <Gift size={18} />, label: "Invite Creators", emoji: "🎁", featureKey: "invite_creators" },
       ],
     },
-  ];
+  ].map((group) => ({ ...group, items: group.items.filter((item) => !item.featureKey || !disabled.has(item.featureKey)) }));
 
   if (isAdminUser) {
     navGroups.push({ label: "Admin", items: [
