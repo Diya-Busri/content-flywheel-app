@@ -70,26 +70,64 @@ export async function POST(
     // Build batch messages, chunked at 100 per Resend batch limits
     const BATCH_SIZE = 100;
     let totalSent = 0;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
+
+    const buildEmailHtml = (contact: { id: string; name: string | null }, bodyHtml: string) => {
+      const unsubscribeUrl = `${baseUrl}/api/email/unsubscribe?id=${contact.id}`;
+      const trackingPixel = `<img src="${baseUrl}/api/email/track?c=${campaign.id}" width="1" height="1" style="display:block;border:0;" alt="" />`;
+      // Convert plain-text newlines to HTML paragraphs if no HTML tags present
+      const formattedBody = bodyHtml.includes("<")
+        ? bodyHtml
+        : bodyHtml
+            .split(/\n\n+/)
+            .map((para) => `<p style="margin:0 0 16px 0;">${para.replace(/\n/g, "<br/>")}</p>`)
+            .join("");
+      return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <tr>
+          <td style="background:#0B0B0F;padding:24px 32px;text-align:center;">
+            <img src="https://contentflywheel.co.uk/logo.png" alt="${fromName}" width="160" style="display:inline-block;height:auto;" />
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 40px;color:#1a1a1a;font-size:16px;line-height:1.7;">
+            ${formattedBody}
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background:#F5C97A;padding:20px 40px;text-align:center;">
+            <p style="margin:0 0 6px;font-size:13px;color:#0B0B0F;font-weight:600;">${fromName}</p>
+            <p style="margin:0;font-size:12px;color:#0B0B0F80;">
+              You received this because you subscribed to updates from this creator.<br/>
+              <a href="${unsubscribeUrl}" style="color:#0B0B0F;text-decoration:underline;">Unsubscribe</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+      ${trackingPixel}
+    </td></tr>
+  </table>
+</body>
+</html>`;
+    };
 
     for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
       const chunk = contacts.slice(i, i + BATCH_SIZE);
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
-      const messages = chunk.map((contact) => {
-        const unsubscribeUrl = `${baseUrl}/api/email/unsubscribe?id=${contact.id}`;
-        const trackingPixel = `<img src="${baseUrl}/api/email/track?c=${campaign.id}" width="1" height="1" style="display:block;border:0;" alt="" />`;
-        const unsubscribeFooter = `
-          <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;color:#9ca3af;">
-            You received this email because you subscribed to updates from this creator.<br/>
-            <a href="${unsubscribeUrl}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
-          </div>`;
-        return {
-          from,
-          to: contact.email,
-          subject: campaign.subject,
-          ...(campaign.previewText ? { text: campaign.previewText } : {}),
-          html: campaign.bodyHtml + unsubscribeFooter + trackingPixel,
-        };
-      });
+      const messages = chunk.map((contact) => ({
+        from,
+        to: contact.email,
+        subject: campaign.subject,
+        ...(campaign.previewText ? { text: campaign.previewText } : {}),
+        html: buildEmailHtml(contact, campaign.bodyHtml),
+      }));
 
       await resend.batch.send(messages);
       totalSent += chunk.length;

@@ -77,19 +77,56 @@ export async function GET(request: Request) {
       const BATCH_SIZE = 100;
       let sent = 0;
 
+      const buildCampaignHtml = (contactId: string, bodyHtml: string) => {
+        const unsubscribeUrl = `${baseUrl}/api/email/unsubscribe?id=${contactId}`;
+        const formattedBody = bodyHtml.includes("<")
+          ? bodyHtml
+          : bodyHtml
+              .split(/\n\n+/)
+              .map((para) => `<p style="margin:0 0 16px 0;">${para.replace(/\n/g, "<br/>")}</p>`)
+              .join("");
+        return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:#0B0B0F;padding:24px 32px;text-align:center;">
+            <img src="https://contentflywheel.co.uk/logo.png" alt="${fromName}" width="160" style="display:inline-block;height:auto;" />
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;color:#1a1a1a;font-size:16px;line-height:1.7;">
+            ${formattedBody}
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#F5C97A;padding:20px 40px;text-align:center;">
+            <p style="margin:0 0 6px;font-size:13px;color:#0B0B0F;font-weight:600;">${fromName}</p>
+            <p style="margin:0;font-size:12px;color:#0B0B0F80;">
+              You received this because you subscribed to updates from this creator.<br/>
+              <a href="${unsubscribeUrl}" style="color:#0B0B0F;text-decoration:underline;">Unsubscribe</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+      };
+
       for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
         const chunk = contacts.slice(i, i + BATCH_SIZE);
-        const messages = chunk.map((contact) => {
-          const unsubscribeUrl = `${baseUrl}/api/email/unsubscribe?id=${contact.id}`;
-          const footer = `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;color:#9ca3af;">You received this email because you subscribed to updates from this creator.<br/><a href="${unsubscribeUrl}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a></div>`;
-          return {
-            from,
-            to: contact.email,
-            subject: campaign.subject,
-            ...(campaign.previewText ? { text: campaign.previewText } : {}),
-            html: campaign.bodyHtml + footer,
-          };
-        });
+        const messages = chunk.map((contact) => ({
+          from,
+          to: contact.email,
+          subject: campaign.subject,
+          ...(campaign.previewText ? { text: campaign.previewText } : {}),
+          html: buildCampaignHtml(contact.id, campaign.bodyHtml),
+        }));
         await resend.batch.send(messages);
         sent += chunk.length;
       }
