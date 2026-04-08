@@ -37,13 +37,16 @@ export async function POST(
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
 
-    // Fetch brand name for the from address
-    const [bv] = await db
-      .select({ brandName: brandVoiceTable.brandName })
-      .from(brandVoiceTable)
-      .where(eq(brandVoiceTable.userId, userId))
-      .limit(1);
-    const fromName = bv?.brandName?.trim() || "Content Flywheel";
+    // Fetch brand name for the from address (table may not exist yet)
+    let fromName = "Content Flywheel";
+    try {
+      const [bv] = await db
+        .select({ brandName: brandVoiceTable.brandName })
+        .from(brandVoiceTable)
+        .where(eq(brandVoiceTable.userId, userId))
+        .limit(1);
+      if (bv?.brandName?.trim()) fromName = bv.brandName.trim();
+    } catch { /* brand_voice table not yet created — use default */ }
     const fromEmail = process.env.RESEND_FROM_EMAIL?.match(/<(.+)>/)?.[1]
       ?? process.env.RESEND_FROM_EMAIL
       ?? "hello@contentflywheel.co.uk";

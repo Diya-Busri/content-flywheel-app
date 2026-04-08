@@ -42,13 +42,16 @@ export async function GET(request: Request) {
 
   for (const campaign of dueCampaigns) {
     try {
-      // Fetch brand name
-      const [bv] = await db
-        .select({ brandName: brandVoiceTable.brandName })
-        .from(brandVoiceTable)
-        .where(eq(brandVoiceTable.userId, campaign.userId))
-        .limit(1);
-      const fromName = bv?.brandName?.trim() || "Content Flywheel";
+      // Fetch brand name (table may not exist yet — fall back gracefully)
+      let fromName = "Content Flywheel";
+      try {
+        const [bv] = await db
+          .select({ brandName: brandVoiceTable.brandName })
+          .from(brandVoiceTable)
+          .where(eq(brandVoiceTable.userId, campaign.userId))
+          .limit(1);
+        if (bv?.brandName?.trim()) fromName = bv.brandName.trim();
+      } catch { /* brand_voice table not yet created */ }
       const from = `${fromName} <hello@contentflywheel.co.uk>`;
 
       // Fetch subscribed contacts
