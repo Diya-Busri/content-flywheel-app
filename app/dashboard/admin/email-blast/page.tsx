@@ -5,9 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertTriangle, Mail, Users, Send, X, CheckCircle2, User, Search, ChevronDown } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Loader2, AlertTriangle, Mail, Users, Send, X, CheckCircle2,
+  User, Search, ChevronDown, Clock, Calendar, Trash2, RefreshCw
+} from "lucide-react";
 
 type Audience = "all" | "active_7d" | "active_30d" | "inactive_30d" | "specific";
+type SendMode = "now" | "scheduled";
 
 const AUDIENCE_OPTIONS: { value: Audience; label: string; description: string }[] = [
   { value: "all",          label: "All Users",           description: "Every registered user" },
@@ -19,6 +24,17 @@ const AUDIENCE_OPTIONS: { value: Audience; label: string; description: string }[
 
 type UserRow = { userId: string; email: string; firstName?: string; lastName?: string };
 type Toast = { msg: string; ok: boolean };
+
+type ScheduledBlast = {
+  id: string;
+  subject: string;
+  audience: string;
+  targetEmail: string | null;
+  scheduledFor: string;
+  status: string;
+  recipientCount: number | null;
+  sentAt: string | null;
+};
 
 function UserPicker({ users, selected, onSelect }: {
   users: UserRow[];
@@ -95,6 +111,21 @@ function UserPicker({ users, selected, onSelect }: {
   );
 }
 
+const AUDIENCE_LABELS: Record<string, string> = {
+  all: "All Users",
+  active_7d: "Active 7d",
+  active_30d: "Active 30d",
+  inactive_30d: "Inactive 30d+",
+  specific: "Specific User",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  pending: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  sent: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+  failed: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+  cancelled: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400",
+};
+
 export default function AdminEmailBlastPage() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -102,6 +133,9 @@ export default function AdminEmailBlastPage() {
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+
+  const [sendMode, setSendMode] = useState<SendMode>("now");
+  const [scheduledFor, setScheduledFor] = useState("");
 
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [countLoading, setCountLoading] = useState(false);
@@ -111,10 +145,28 @@ export default function AdminEmailBlastPage() {
   const [toast, setToast] = useState<Toast | null>(null);
   const [sentResult, setSentResult] = useState<{ count: number } | null>(null);
 
+  // Scheduled blasts list
+  const [scheduledBlasts, setScheduledBlasts] = useState<ScheduledBlast[]>([]);
+  const [blastsLoading, setBlastsLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
   function showToast(msg: string, ok: boolean) {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 4000);
   }
+
+  async function loadScheduledBlasts() {
+    setBlastsLoading(true);
+    try {
+      const res = await fetch("/api/admin/email-blast/scheduled");
+      const data = (await res.json().catch(() => ({}))) as { blasts?: ScheduledBlast[] };
+      setScheduledBlasts(data.blasts ?? []);
+    } catch { /* silent */ } finally {
+      setBlastsLoading(false);
+    }
+  }
+
+  useEffect(() => { void loadScheduledBlasts(); }, []);
 
   // Load users when Specific User is selected
   useEffect(() => {
@@ -148,6 +200,43 @@ export default function AdminEmailBlastPage() {
   async function handleSend() {
     if (!subject.trim() || !body.trim()) return;
     if (audience === "specific" && !selectedUser) return;
+
+    if (sendMode === "scheduled") {
+      if (!scheduledFor) return;
+      // Schedule it
+      setSending(true);
+      try {
+        const res = await fetch("/api/admin/email-blast/scheduled", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subject: subject.trim(),
+            htmlBody: body.trim(),
+            audience,
+            targetEmail: audience === "specific" ? selectedUser?.email : undefined,
+            scheduledFor,
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { blast?: ScheduledBlast; error?: string };
+        if (data.blast) {
+          setScheduledBlasts(prev => [data.blast!, ...prev]);
+          setSubject(""); setBody(""); setAudience("all"); setSelectedUser(null); setScheduledFor("");
+          setConfirmStep(false);
+          showToast("Email blast scheduled!", true);
+        } else {
+          showToast(data.error ?? "Failed to schedule", false);
+          setConfirmStep(false);
+        }
+      } catch {
+        showToast("Failed to schedule", false);
+        setConfirmStep(false);
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
+    // Send now
     setSending(true);
     try {
       const res = await fetch("/api/admin/email-blast", {
@@ -178,12 +267,26 @@ export default function AdminEmailBlastPage() {
     }
   }
 
+  async function cancelBlast(id: string) {
+    setCancellingId(id);
+    try {
+      await fetch(`/api/admin/email-blast/scheduled/${id}`, { method: "DELETE" });
+      setScheduledBlasts(prev => prev.map(b => b.id === id ? { ...b, status: "cancelled" } : b));
+      showToast("Scheduled blast cancelled", true);
+    } catch {
+      showToast("Failed to cancel", false);
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
   const audienceLabel = audience === "specific"
     ? (selectedUser?.email ?? "Specific User")
     : (AUDIENCE_OPTIONS.find((o) => o.value === audience)?.label ?? audience);
 
   const canSend = subject.trim().length > 0 && body.trim().length > 0 &&
-    (audience !== "specific" || !!selectedUser);
+    (audience !== "specific" || !!selectedUser) &&
+    (sendMode === "now" || !!scheduledFor);
 
   function renderPreview(text: string): string {
     return text
@@ -195,6 +298,9 @@ export default function AdminEmailBlastPage() {
       .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-orange-500 underline">$1</a>')
       .replace(/\n/g, "<br />");
   }
+
+  const pendingBlasts = scheduledBlasts.filter(b => b.status === "pending");
+  const pastBlasts = scheduledBlasts.filter(b => b.status !== "pending");
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -292,12 +398,10 @@ export default function AdminEmailBlastPage() {
                   <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                     <Users className="w-4 h-4" />
                     {countLoading ? (
-                      <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Counting recipients…</span>
+                      <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Counting…</span>
                     ) : recipientCount !== null ? (
                       <span>Estimated <strong className="text-gray-900 dark:text-white">{recipientCount.toLocaleString()}</strong> recipients</span>
-                    ) : (
-                      <span>—</span>
-                    )}
+                    ) : <span>—</span>}
                   </div>
                 )}
               </div>
@@ -316,38 +420,77 @@ export default function AdminEmailBlastPage() {
                 </div>
                 <textarea
                   id="body"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 dark:bg-card dark:border-white/10 min-h-[220px] resize-y font-mono"
-                  placeholder={"Hi {{name}},\n\nWe have an exciting update for you...\n\n**New Feature:** ...\n\nBest,\nThe Content Flywheel Team"}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 dark:bg-card dark:border-white/10 min-h-[180px] resize-y font-mono"
+                  placeholder={"Hi {{name}},\n\nWe have an exciting update for you...\n\nBest,\nThe Content Flywheel Team"}
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                 />
               </div>
 
+              {/* Send mode toggle */}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">When to send</Label>
+                <div className="flex rounded-lg border border-input overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setSendMode("now")}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium transition-colors ${sendMode === "now" ? "bg-orange-500 text-white" : "bg-background text-muted-foreground hover:bg-muted dark:bg-card"}`}
+                  >
+                    <Send className="w-3.5 h-3.5" /> Send Now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSendMode("scheduled")}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium transition-colors ${sendMode === "scheduled" ? "bg-orange-500 text-white" : "bg-background text-muted-foreground hover:bg-muted dark:bg-card"}`}
+                  >
+                    <Clock className="w-3.5 h-3.5" /> Schedule
+                  </button>
+                </div>
+
+                {sendMode === "scheduled" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Date &amp; time *</Label>
+                    <Input
+                      type="datetime-local"
+                      value={scheduledFor}
+                      onChange={(e) => setScheduledFor(e.target.value)}
+                      min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                      className="dark:[color-scheme:dark]"
+                    />
+                  </div>
+                )}
+              </div>
+
               {/* Send / Confirm */}
               {!confirmStep ? (
-                <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={!canSend || sending} onClick={() => setConfirmStep(true)}>
-                  <Send className="w-4 h-4 mr-2" />
-                  Send Email Blast
+                <Button
+                  className={`w-full text-white ${sendMode === "scheduled" ? "bg-blue-500 hover:bg-blue-600" : "bg-orange-500 hover:bg-orange-600"}`}
+                  disabled={!canSend || sending}
+                  onClick={() => setConfirmStep(true)}
+                >
+                  {sendMode === "scheduled"
+                    ? <><Calendar className="w-4 h-4 mr-2" />Schedule Email Blast</>
+                    : <><Send className="w-4 h-4 mr-2" />Send Email Blast</>}
                 </Button>
               ) : (
                 <div className="rounded-lg border border-orange-400/50 bg-orange-50 dark:bg-orange-950/30 p-4 space-y-3">
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-sm text-orange-900 dark:text-orange-200">Confirm Send</p>
+                      <p className="font-semibold text-sm text-orange-900 dark:text-orange-200">
+                        {sendMode === "scheduled" ? "Confirm Schedule" : "Confirm Send"}
+                      </p>
                       <p className="text-sm text-orange-700 dark:text-orange-300 mt-0.5">
-                        Send <strong>{`"${subject}"`}</strong> to{" "}
-                        <strong>
-                          {audience === "specific"
-                            ? selectedUser?.email
-                            : recipientCount !== null ? `${recipientCount.toLocaleString()} users` : audienceLabel}
-                        </strong>? This cannot be undone.
+                        {sendMode === "scheduled"
+                          ? <>Schedule <strong>{`"${subject}"`}</strong> to <strong>{audienceLabel}</strong> for <strong>{new Date(scheduledFor).toLocaleString()}</strong>?</>
+                          : <>Send <strong>{`"${subject}"`}</strong> to <strong>{audience === "specific" ? selectedUser?.email : recipientCount !== null ? `${recipientCount.toLocaleString()} users` : audienceLabel}</strong>? This cannot be undone.</>
+                        }
                       </p>
                     </div>
                   </div>
                   <div className="flex gap-2">
                     <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white" disabled={sending} onClick={() => void handleSend()}>
-                      {sending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Sending…</> : <><Send className="w-4 h-4 mr-2" />Yes, Send Now</>}
+                      {sending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Processing…</> : <><Send className="w-4 h-4 mr-2" />Yes, Confirm</>}
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setConfirmStep(false)} disabled={sending}>Cancel</Button>
                   </div>
@@ -359,7 +502,7 @@ export default function AdminEmailBlastPage() {
 
         {/* Right: Preview */}
         <div className="space-y-5">
-          <Card className="h-full">
+          <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Mail className="w-4 h-4 text-muted-foreground" />
@@ -383,22 +526,26 @@ export default function AdminEmailBlastPage() {
                       {subject || <span className="text-muted-foreground italic font-normal">Your subject here…</span>}
                     </span>
                   </div>
+                  {sendMode === "scheduled" && scheduledFor && (
+                    <div className="flex items-center gap-2 text-xs text-blue-500">
+                      <Clock className="w-3 h-3" />
+                      <span>Scheduled: {new Date(scheduledFor).toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="bg-white dark:bg-card p-5 min-h-[300px]">
+                <div className="bg-white dark:bg-card p-5 min-h-[240px]">
                   <div className="flex items-center gap-2 mb-5 pb-4 border-b border-gray-100 dark:border-white/10">
                     <div className="w-7 h-7 rounded-md bg-orange-500 flex items-center justify-center">
                       <span className="text-white text-xs font-bold">CF</span>
                     </div>
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">Content Flywheel</span>
                   </div>
-
                   {body ? (
                     <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: renderPreview(body) }} />
                   ) : (
                     <p className="text-sm text-muted-foreground italic">Your email body will appear here…</p>
                   )}
-
                   <div className="mt-8 pt-4 border-t border-gray-100 dark:border-white/10 text-xs text-gray-400 dark:text-gray-600">
                     <p>Content Flywheel · You&apos;re receiving this because you signed up for an account.</p>
                     <p className="mt-1">
@@ -412,19 +559,102 @@ export default function AdminEmailBlastPage() {
 
               <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
                 <Users className="w-4 h-4" />
-                <span>
-                  Will be sent to{" "}
-                  <strong className="text-gray-900 dark:text-white">
-                    {audience === "specific"
-                      ? (selectedUser ? "1 recipient" : "—")
-                      : recipientCount !== null ? `${recipientCount.toLocaleString()} recipients` : "—"}
-                  </strong>
-                </span>
+                <span>Will be sent to <strong className="text-gray-900 dark:text-white">
+                  {audience === "specific" ? (selectedUser ? "1 recipient" : "—") : recipientCount !== null ? `${recipientCount.toLocaleString()} recipients` : "—"}
+                </strong></span>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Scheduled Blasts */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-orange-500" />
+              Scheduled &amp; Sent Blasts
+            </CardTitle>
+            <Button variant="outline" size="sm" onClick={() => void loadScheduledBlasts()} disabled={blastsLoading}>
+              <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${blastsLoading ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {blastsLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+          ) : scheduledBlasts.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No scheduled blasts yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {/* Pending */}
+              {pendingBlasts.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Upcoming</p>
+                  <div className="space-y-2">
+                    {pendingBlasts.map(b => (
+                      <div key={b.id} className="flex items-center justify-between gap-4 p-3 rounded-lg border border-blue-200 dark:border-blue-800/40 bg-blue-50/50 dark:bg-blue-900/10">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{b.subject}</p>
+                          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Clock className="w-3 h-3" /> {new Date(b.scheduledFor).toLocaleString()}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              → {b.audience === "specific" ? b.targetEmail : AUDIENCE_LABELS[b.audience] ?? b.audience}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge className={`text-[10px] ${STATUS_COLORS[b.status]}`}>{b.status}</Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive h-7 w-7 p-0"
+                            disabled={cancellingId === b.id}
+                            onClick={() => void cancelBlast(b.id)}
+                          >
+                            {cancellingId === b.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Past */}
+              {pastBlasts.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">History</p>
+                  <div className="space-y-2">
+                    {pastBlasts.map(b => (
+                      <div key={b.id} className="flex items-center justify-between gap-4 p-3 rounded-lg border border-[#E5E7EB] dark:border-white/10">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{b.subject}</p>
+                          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                            <span className="text-xs text-muted-foreground">
+                              {b.sentAt ? `Sent ${new Date(b.sentAt).toLocaleString()}` : new Date(b.scheduledFor).toLocaleString()}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              → {b.audience === "specific" ? b.targetEmail : AUDIENCE_LABELS[b.audience] ?? b.audience}
+                            </span>
+                            {b.recipientCount != null && (
+                              <span className="text-xs text-muted-foreground">{b.recipientCount} recipients</span>
+                            )}
+                          </div>
+                        </div>
+                        <Badge className={`text-[10px] shrink-0 ${STATUS_COLORS[b.status] ?? ""}`}>{b.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

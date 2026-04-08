@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { db } from "@/db/db";
 import { emailCampaignsTable, emailContactsTable } from "@/db/schema/email-marketing-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
-import { eq, and, lte, isNull } from "drizzle-orm";
+import { scheduledBlastsTable } from "@/db/schema/scheduled-blasts-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
+import { eq, and, lte, isNull, gte, lt } from "drizzle-orm";
 import { Resend } from "resend";
 
 export const dynamic = "force-dynamic";
@@ -100,5 +102,61 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ sent: totalSent, campaigns: dueCampaigns.length });
+  // ── Scheduled admin email blasts ──────────────────────────────────────────
+  let blastsSent = 0;
+  try {
+    const dueBlasts = await db
+      .select()
+      .from(scheduledBlastsTable)
+      .where(and(eq(scheduledBlastsTable.status, "pending"), lte(scheduledBlastsTable.scheduledFor, now)));
+
+    for (const blast of dueBlasts) {
+      try {
+        let emails: string[] = [];
+
+        if (blast.audience === "specific" && blast.targetEmail) {
+          emails = [blast.targetEmail];
+        } else {
+          const day7  = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000);
+          const day30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          let filter;
+          if (blast.audience === "active_7d") {
+            filter = and(eq(profilesTable.membership, "pro"), gte(profilesTable.lastActiveAt, day7));
+          } else if (blast.audience === "active_30d") {
+            filter = and(eq(profilesTable.membership, "pro"), gte(profilesTable.lastActiveAt, day30));
+          } else if (blast.audience === "inactive_30d") {
+            filter = and(eq(profilesTable.membership, "pro"), lt(profilesTable.lastActiveAt, day30), isNull(profilesTable.lastActiveAt));
+          } else {
+            filter = eq(profilesTable.membership, "pro");
+          }
+          const rows = await db.select({ email: profilesTable.email }).from(profilesTable).where(filter);
+          emails = rows.map((r) => r.email).filter(Boolean) as string[];
+        }
+
+        const from = process.env.RESEND_FROM_EMAIL ?? "Content Flywheel <hello@contentflywheel.co.uk>";
+        const BATCH = 50;
+        let sent = 0;
+        for (let i = 0; i < emails.length; i += BATCH) {
+          const chunk = emails.slice(i, i + BATCH);
+          await resend.emails.send({ from, to: chunk, subject: blast.subject, html: blast.htmlBody });
+          sent += chunk.length;
+        }
+
+        await db.update(scheduledBlastsTable)
+          .set({ status: "sent", sentAt: now, recipientCount: sent })
+          .where(eq(scheduledBlastsTable.id, blast.id));
+
+        blastsSent += sent;
+      } catch (err) {
+        console.error(`[cron] Scheduled blast ${blast.id} failed:`, err);
+        await db.update(scheduledBlastsTable)
+          .set({ status: "failed" })
+          .where(eq(scheduledBlastsTable.id, blast.id));
+      }
+    }
+  } catch (err) {
+    console.error("[cron] Error processing scheduled blasts:", err);
+  }
+
+  return NextResponse.json({ sent: totalSent, campaigns: dueCampaigns.length, blastsSent });
 }
