@@ -11,13 +11,14 @@ import { videoJobsTable } from "@/db/schema/video-jobs-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { emailContactsTable, emailCampaignsTable } from "@/db/schema/email-marketing-schema";
 import { goalsTable } from "@/db/schema/goals-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, desc, isNull, and, count, gte } from "drizzle-orm";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Package, ShoppingBag, CheckSquare, Video, Play, ExternalLink, AlertCircle,
-  ArrowRight, Package2, TrendingUp, Mail, Target, Send, BarChart2,
+  ArrowRight, Package2, TrendingUp, Mail, Target, Send, BarChart2, Film,
 } from "lucide-react";
 import { SyncOnboardingSteps } from "@/components/onboarding/sync-onboarding-steps";
 import { ReferralCapture } from "@/components/ReferralCapture";
@@ -341,7 +342,7 @@ function ActionCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default async function DashboardPage() {
   const { userId } = auth();
-  const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers, activeGoals, campaignsSent] = userId
+  const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers, activeGoals, campaignsSent, profileRow] = userId
     ? await Promise.all([
         getVideoStats(userId),
         getIncompleteProducts(userId),
@@ -350,13 +351,16 @@ export default async function DashboardPage() {
         getEmailSubscriberCount(userId),
         getActiveGoalsCount(userId),
         getCampaignsSentCount(userId),
+        db.select({ videoCredits: profilesTable.videoCredits }).from(profilesTable).where(eq(profilesTable.userId, userId)).limit(1).then(r => r[0] ?? null).catch(() => null),
       ])
     : [
         { digitalProductsCount: 0, tiktokShopCount: 0, totalLibraryVideos: 0, recent: [] as RecentVideoItem[] },
         [] as IncompleteProduct[],
         { hasBrandVoice: false, hasProduct: false, hasThumbnail: false, hasPromoVideo: false },
-        0, 0, 0, 0,
+        0, 0, 0, 0, null,
       ];
+
+  const videoCredits = (profileRow as { videoCredits?: number | null } | null)?.videoCredits ?? 0;
 
   const hasSubscriber = emailSubscribers > 0;
   const hasCampaign = campaignsSent > 0;
@@ -401,6 +405,17 @@ export default async function DashboardPage() {
           <h2 className="text-lg font-bold text-gray-900 dark:text-white">Overview</h2>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="Video Credits"
+            value={videoCredits}
+            sub={videoCredits === 0 ? "Buy credits to generate videos" : `${videoCredits} video${videoCredits !== 1 ? "s" : ""} ready to generate`}
+            icon={Film}
+            iconBg="bg-orange-50 dark:bg-orange-950/30"
+            iconColor="text-orange-500"
+            href="/dashboard/video-credits"
+            cta={videoCredits === 0 ? "Buy credits" : undefined}
+            accent={videoCredits > 0}
+          />
           <StatCard
             label="Digital Products"
             value={videoStats.digitalProductsCount}
