@@ -93,8 +93,8 @@ export async function GET(request: Request) {
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr>
-          <td style="background:#0B0B0F;padding:24px 32px;text-align:center;">
-            <img src="https://contentflywheel.co.uk/logo.png" alt="${fromName}" width="160" style="display:inline-block;height:auto;" />
+          <td style="background:#0B0B0F;padding:16px 32px;text-align:center;">
+            <img src="https://contentflywheel.co.uk/logo.png" alt="${fromName}" width="130" style="display:inline-block;height:auto;" />
           </td>
         </tr>
         <tr>
