@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: { userId: str
     return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
   }
 
-  const profile = await db.query.profilesTable.findFirst({ where: eq(profilesTable.userId, userId) });
+  const [profile] = await db.select().from(profilesTable).where(eq(profilesTable.userId, userId));
   if (!profile) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   const newBalance = Math.max(0, (profile.videoCredits ?? 0) + amount);

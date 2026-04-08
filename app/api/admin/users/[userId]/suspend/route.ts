@@ -19,9 +19,7 @@ export async function POST(
   };
   const { suspend = true, reason } = body;
 
-  const profile = await db.query.profilesTable.findFirst({
-    where: eq(profilesTable.userId, userId),
-  });
+  const [profile] = await db.select().from(profilesTable).where(eq(profilesTable.userId, userId));
   if (!profile) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
