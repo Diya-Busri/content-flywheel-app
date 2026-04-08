@@ -33,3 +33,5 @@ export * from "./creator-applications-schema";
 export * from "./video-credit-transactions-schema";
 export * from "./feature-flags-schema";
 export * from "./admin-health-logs-schema";
+export * from "./user-events-schema";
+export * from "./user-feedback-schema";

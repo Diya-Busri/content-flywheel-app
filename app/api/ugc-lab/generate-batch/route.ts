@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { logEvent } from "@/lib/log-event";
 import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { db } from "@/db/db";
 import { videoJobsTable } from "@/db/schema/video-jobs-schema";
@@ -204,6 +205,7 @@ export async function POST(request: Request) {
     }
 
     await deductVideoCredit("avatarVideo").catch((e) => console.error("[generate-batch] credit deduction failed:", e));
+      void logEvent(userId, "video_generated", { type: "generate-batch" }).catch(() => {});
     return NextResponse.json({ batchId, jobIds });
   } catch (err) {
     console.error("[generate-batch] Error:", err);

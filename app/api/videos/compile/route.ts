@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
+import { logEvent } from "@/lib/log-event";
 import { db } from "@/db/db";
 import { savedScriptsTable, videosTable } from "@/db/schema/library-schema";
 import { goalsTable } from "@/db/schema/goals-schema";
@@ -324,6 +325,7 @@ export async function POST(request: NextRequest) {
       }
 
       await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[videos/compile] credit deduction failed:", e));
+      void logEvent(userId, "video_compiled", { url: publicUrl });
       return NextResponse.json({ url: publicUrl });
     } finally {
       await cleanupWorkDir(workDir);

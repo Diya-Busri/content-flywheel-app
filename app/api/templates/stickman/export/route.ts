@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { logEvent } from "@/lib/log-event";
 import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
@@ -365,6 +366,7 @@ export async function POST(request: NextRequest) {
       if (uploaded.error) return NextResponse.json({ error: uploaded.error.message }, { status: 500 });
       const { data } = supabase.storage.from(BUCKET).getPublicUrl(uploaded.data.path);
       await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[templates/stickman/export] credit deduction failed:", e));
+      void logEvent(userId, "video_generated", { type: "export" }).catch(() => {});
       return NextResponse.json({ url: data.publicUrl });
     } finally {
       await cleanupWorkDir(workDir);

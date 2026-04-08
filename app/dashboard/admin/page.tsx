@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Users, CreditCard, Flag, Activity, FileCheck, TrendingUp, AlertCircle, Loader2 } from "lucide-react";
+import { Users, CreditCard, Flag, Activity, FileCheck, TrendingUp, AlertCircle, Loader2, BarChart2, Inbox } from "lucide-react";
 
 type QuickStats = {
   totalUsers: number;
@@ -69,6 +69,22 @@ export default function AdminOverviewPage() {
       stat: stats ? `${stats.pendingApplications} pending` : null,
       color: "text-orange-500",
       badge: stats?.pendingApplications ? stats.pendingApplications : undefined,
+    },
+    {
+      href: "/dashboard/admin/analytics",
+      icon: <BarChart2 className="w-6 h-6" />,
+      label: "Analytics",
+      description: "DAU/WAU/MAU, top features, most active users, engagement trends",
+      stat: null,
+      color: "text-cyan-500",
+    },
+    {
+      href: "/dashboard/admin/feedback",
+      icon: <Inbox className="w-6 h-6" />,
+      label: "Feedback Inbox",
+      description: "User-submitted bugs, ideas, and praise with status tracking",
+      stat: null,
+      color: "text-indigo-500",
     },
     {
       href: "/dashboard/admin/feature-flags",

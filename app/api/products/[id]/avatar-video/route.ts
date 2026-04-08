@@ -18,6 +18,7 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { logEvent } from "@/lib/log-event";
 import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { detectProvider } from "@/lib/avatar-video/types";
 import { startFalVideo, FAL_FACE_PRESETS, FAL_TTS_VOICES } from "@/lib/avatar-video/fal-provider";
@@ -151,6 +152,7 @@ export async function POST(
         updatedAt: new Date(),
       }).where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId), isNull(productsTable.deletedAt)));
       await deductVideoCredit("avatarVideo").catch((e) => console.error("[avatar-video] credit deduction failed:", e));
+      void logEvent(userId, "video_generated", { type: "avatar-video" }).catch(() => {});
       return NextResponse.json({ jobId: "heygen-sync", provider: "heygen", script, videoUrl });
     }
 
@@ -167,6 +169,7 @@ export async function POST(
     }).where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId), isNull(productsTable.deletedAt)));
 
     await deductVideoCredit("avatarVideo").catch((e) => console.error("[avatar-video] credit deduction failed:", e));
+      void logEvent(userId, "video_generated", { type: "avatar-video" }).catch(() => {});
     return NextResponse.json({ jobId: result.jobId, provider, script });
   } catch (err) {
     console.error("[avatar-video POST]", err);

@@ -7,6 +7,7 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { coachSettingsTable } from "@/db/schema/coach-settings-schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { logEvent } from "@/lib/log-event";
 
 export const runtime = "nodejs";
 
@@ -313,6 +314,7 @@ export async function POST(req: Request) {
       },
     });
 
+    if (userId) void logEvent(userId, "ai_coach_used").catch(() => {});
     return new Response(readable, {
       headers: {
         "Content-Type": "text/event-stream; charset=utf-8",

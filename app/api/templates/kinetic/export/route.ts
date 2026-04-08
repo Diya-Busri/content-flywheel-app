@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { logEvent } from "@/lib/log-event";
 import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 import { compileVideoToFile, cleanupWorkDir, type CompileScene } from "@/lib/videos/compile";
@@ -306,6 +307,7 @@ export async function POST(request: NextRequest) {
 
       const buffer = await readFile(finalPath);
       await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[templates/kinetic/export] credit deduction failed:", e));
+      void logEvent(userId, "video_generated", { type: "export" }).catch(() => {});
       return new NextResponse(buffer, {
         status: 200,
         headers: {

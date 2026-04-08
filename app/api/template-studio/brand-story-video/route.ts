@@ -11,6 +11,7 @@ import { randomUUID } from "crypto";
 import { tmpdir } from "os";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { logEvent } from "@/lib/log-event";
 import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 import { getSupabaseAdmin } from "@/lib/supabase/server";

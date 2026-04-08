@@ -8,6 +8,7 @@ import Sidebar from "@/components/sidebar";
 import { DashboardReviewPopup } from "@/components/dashboard-review-popup";
 import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
 import { VideoNotificationWatcher } from "@/components/video-notification-watcher";
+import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { SelectProfile } from "@/db/schema/profiles-schema";
 
 interface DashboardLayoutClientProps {
@@ -39,6 +40,7 @@ export function DashboardLayoutClient({ profile, userEmail, children }: Dashboar
           style={{ minWidth: 0, minHeight: 0, flex: "1 1 0%" }}
         >
           {children}
+          <FeedbackWidget />
         </main>
         </OnboardingProvider>
       </SidebarProvider>

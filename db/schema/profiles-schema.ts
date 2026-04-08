@@ -26,6 +26,8 @@ export const profilesTable = pgTable("profiles", {
   videoCredits: integer("video_credits").default(0).notNull(),
   // Subscription status tracking
   status: text("status").default("active"),
+  // Activity tracking
+  lastActiveAt: timestamp("last_active_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
