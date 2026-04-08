@@ -61,8 +61,9 @@ export async function POST(req: NextRequest) {
     subject?: string;
     htmlBody?: string;
     audience?: string;
+    targetEmail?: string;
   };
-  const { subject, htmlBody, audience = "all" } = body;
+  const { subject, htmlBody, audience = "all", targetEmail } = body;
 
   if (!subject || !htmlBody) {
     return NextResponse.json(
@@ -71,12 +72,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const users = await db
-    .select({ email: profilesTable.email })
-    .from(profilesTable)
-    .where(getAudienceFilter(audience));
+  let emails: string[] = [];
 
-  const emails = users.map((u) => u.email).filter(Boolean) as string[];
+  if (audience === "specific") {
+    if (!targetEmail) return NextResponse.json({ error: "targetEmail required for specific audience" }, { status: 400 });
+    emails = [targetEmail];
+  } else {
+    const users = await db
+      .select({ email: profilesTable.email })
+      .from(profilesTable)
+      .where(getAudienceFilter(audience));
+    emails = users.map((u) => u.email).filter(Boolean) as string[];
+  }
   if (emails.length === 0) {
     return NextResponse.json({ sent: 0, errors: [] });
   }

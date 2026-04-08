@@ -1,27 +1,107 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertTriangle, Mail, Users, Send, X, CheckCircle2 } from "lucide-react";
+import { Loader2, AlertTriangle, Mail, Users, Send, X, CheckCircle2, User, Search, ChevronDown } from "lucide-react";
 
-type Audience = "all" | "active_7d" | "active_30d" | "inactive_30d";
+type Audience = "all" | "active_7d" | "active_30d" | "inactive_30d" | "specific";
 
 const AUDIENCE_OPTIONS: { value: Audience; label: string; description: string }[] = [
-  { value: "all",          label: "All Users",               description: "Every registered user" },
-  { value: "active_7d",    label: "Active Last 7 Days",       description: "Users who logged in recently" },
-  { value: "active_30d",   label: "Active Last 30 Days",      description: "Users active this month" },
-  { value: "inactive_30d", label: "Inactive 30+ Days",        description: "Re-engagement targets" },
+  { value: "all",          label: "All Users",           description: "Every registered user" },
+  { value: "active_7d",    label: "Active Last 7 Days",   description: "Users who logged in recently" },
+  { value: "active_30d",   label: "Active Last 30 Days",  description: "Users active this month" },
+  { value: "inactive_30d", label: "Inactive 30+ Days",    description: "Re-engagement targets" },
+  { value: "specific",     label: "Specific User",        description: "Send to one person" },
 ];
 
+type UserRow = { userId: string; email: string; firstName?: string; lastName?: string };
 type Toast = { msg: string; ok: boolean };
+
+function UserPicker({ users, selected, onSelect }: {
+  users: UserRow[];
+  selected: UserRow | null;
+  onSelect: (u: UserRow) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const filtered = users.filter(u =>
+    u.email.toLowerCase().includes(search.toLowerCase()) ||
+    `${u.firstName ?? ""} ${u.lastName ?? ""}`.toLowerCase().includes(search.toLowerCase())
+  );
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-md border border-input bg-background text-sm hover:bg-muted transition-colors text-left"
+      >
+        {selected ? (
+          <span className="truncate font-medium">{selected.email}</span>
+        ) : (
+          <span className="text-muted-foreground">Select a user…</span>
+        )}
+        <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border border-border bg-popover shadow-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+            <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <input
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by email or name…"
+              className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
+            />
+            {search && <button onClick={() => setSearch("")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>}
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-4 py-3 text-sm text-muted-foreground text-center">No users found</p>
+            ) : filtered.map(u => (
+              <button
+                key={u.userId}
+                type="button"
+                onClick={() => { onSelect(u); setOpen(false); setSearch(""); }}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-muted transition-colors ${selected?.userId === u.userId ? "bg-orange-500/5" : ""}`}
+              >
+                <div className="min-w-0">
+                  {(u.firstName || u.lastName) && (
+                    <p className="text-sm font-medium truncate">{[u.firstName, u.lastName].filter(Boolean).join(" ")}</p>
+                  )}
+                  <p className={`truncate ${(u.firstName || u.lastName) ? "text-xs text-muted-foreground" : "text-sm font-medium"}`}>{u.email}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AdminEmailBlastPage() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState<Audience>("all");
+  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [countLoading, setCountLoading] = useState(false);
@@ -36,7 +116,20 @@ export default function AdminEmailBlastPage() {
     setTimeout(() => setToast(null), 4000);
   }
 
+  // Load users when Specific User is selected
+  useEffect(() => {
+    if (audience === "specific" && users.length === 0) {
+      setLoadingUsers(true);
+      fetch("/api/admin/user-list")
+        .then(r => r.json())
+        .then((d: { users?: UserRow[] }) => setUsers(d.users ?? []))
+        .catch(() => {})
+        .finally(() => setLoadingUsers(false));
+    }
+  }, [audience, users.length]);
+
   const fetchCount = useCallback(async (aud: Audience) => {
+    if (aud === "specific") { setRecipientCount(null); return; }
     setCountLoading(true);
     setRecipientCount(null);
     try {
@@ -54,19 +147,25 @@ export default function AdminEmailBlastPage() {
 
   async function handleSend() {
     if (!subject.trim() || !body.trim()) return;
+    if (audience === "specific" && !selectedUser) return;
     setSending(true);
     try {
       const res = await fetch("/api/admin/email-blast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: subject.trim(), htmlBody: body.trim(), audience }),
+        body: JSON.stringify({
+          subject: subject.trim(),
+          htmlBody: body.trim(),
+          audience,
+          targetEmail: audience === "specific" ? selectedUser?.email : undefined,
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as { sent?: number; error?: string };
       if (data.sent !== undefined) {
         setSentResult({ count: data.sent });
-        setSubject(""); setBody(""); setAudience("all");
+        setSubject(""); setBody(""); setAudience("all"); setSelectedUser(null);
         setConfirmStep(false);
-        showToast(`Email blast sent to ${data.sent} users`, true);
+        showToast(`Email blast sent to ${data.sent} user${data.sent !== 1 ? "s" : ""}`, true);
       } else {
         showToast(data.error ?? "Failed to send email blast", false);
         setConfirmStep(false);
@@ -79,10 +178,13 @@ export default function AdminEmailBlastPage() {
     }
   }
 
-  const audienceLabel = AUDIENCE_OPTIONS.find((o) => o.value === audience)?.label ?? audience;
-  const canSend = subject.trim().length > 0 && body.trim().length > 0;
+  const audienceLabel = audience === "specific"
+    ? (selectedUser?.email ?? "Specific User")
+    : (AUDIENCE_OPTIONS.find((o) => o.value === audience)?.label ?? audience);
 
-  // Simple markdown-like preview renderer
+  const canSend = subject.trim().length > 0 && body.trim().length > 0 &&
+    (audience !== "specific" || !!selectedUser);
+
   function renderPreview(text: string): string {
     return text
       .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
@@ -98,11 +200,7 @@ export default function AdminEmailBlastPage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Toast */}
       {toast && (
-        <div
-          className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
-            toast.ok ? "bg-green-500 text-white" : "bg-red-500 text-white"
-          }`}
-        >
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${toast.ok ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}>
           {toast.msg}
           <button onClick={() => setToast(null)}><X className="w-4 h-4" /></button>
         </div>
@@ -155,55 +253,65 @@ export default function AdminEmailBlastPage() {
                     <button
                       key={opt.value}
                       type="button"
-                      onClick={() => setAudience(opt.value)}
-                      className={`text-left px-3 py-2.5 rounded-lg border text-sm transition-all ${
+                      onClick={() => { setAudience(opt.value); setSelectedUser(null); }}
+                      className={`text-left px-3 py-2.5 rounded-lg border text-sm transition-all flex items-start gap-2 ${
                         audience === opt.value
                           ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300"
                           : "border-[#E5E7EB] dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 text-gray-700 dark:text-gray-300"
                       }`}
                     >
-                      <div className="font-medium text-[13px]">{opt.label}</div>
-                      <div className="text-xs opacity-60 mt-0.5">{opt.description}</div>
+                      {opt.value === "specific" && <User className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+                      <div>
+                        <div className="font-medium text-[13px]">{opt.label}</div>
+                        <div className="text-xs opacity-60 mt-0.5">{opt.description}</div>
+                      </div>
                     </button>
                   ))}
                 </div>
 
+                {/* Specific user picker */}
+                {audience === "specific" && (
+                  <div className="mt-2">
+                    {loadingUsers ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                        <Loader2 className="w-4 h-4 animate-spin" /> Loading users…
+                      </div>
+                    ) : (
+                      <UserPicker users={users} selected={selectedUser} onSelect={setSelectedUser} />
+                    )}
+                    {selectedUser && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Sending to: <span className="font-medium text-foreground">{selectedUser.email}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Recipient count */}
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                  <Users className="w-4 h-4" />
-                  {countLoading ? (
-                    <span className="flex items-center gap-1.5">
-                      <Loader2 className="w-3 h-3 animate-spin" /> Counting recipients…
-                    </span>
-                  ) : recipientCount !== null ? (
-                    <span>
-                      Estimated <strong className="text-gray-900 dark:text-white">{recipientCount.toLocaleString()}</strong> recipients
-                    </span>
-                  ) : (
-                    <span>—</span>
-                  )}
-                </div>
+                {audience !== "specific" && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                    <Users className="w-4 h-4" />
+                    {countLoading ? (
+                      <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Counting recipients…</span>
+                    ) : recipientCount !== null ? (
+                      <span>Estimated <strong className="text-gray-900 dark:text-white">{recipientCount.toLocaleString()}</strong> recipients</span>
+                    ) : (
+                      <span>—</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Subject */}
               <div className="space-y-1.5">
-                <Label htmlFor="subject" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Subject *
-                </Label>
-                <Input
-                  id="subject"
-                  placeholder="Your email subject line"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                />
+                <Label htmlFor="subject" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Subject *</Label>
+                <Input id="subject" placeholder="Your email subject line" value={subject} onChange={(e) => setSubject(e.target.value)} />
               </div>
 
               {/* Body */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="body" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Body *
-                  </Label>
+                  <Label htmlFor="body" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Body *</Label>
                   <span className="text-[11px] text-muted-foreground">Markdown supported</span>
                 </div>
                 <textarea
@@ -217,11 +325,7 @@ export default function AdminEmailBlastPage() {
 
               {/* Send / Confirm */}
               {!confirmStep ? (
-                <Button
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-                  disabled={!canSend || sending}
-                  onClick={() => setConfirmStep(true)}
-                >
+                <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={!canSend || sending} onClick={() => setConfirmStep(true)}>
                   <Send className="w-4 h-4 mr-2" />
                   Send Email Blast
                 </Button>
@@ -234,28 +338,18 @@ export default function AdminEmailBlastPage() {
                       <p className="text-sm text-orange-700 dark:text-orange-300 mt-0.5">
                         Send <strong>{`"${subject}"`}</strong> to{" "}
                         <strong>
-                          {recipientCount !== null ? `${recipientCount.toLocaleString()} users` : audienceLabel}
-                        </strong>
-                        ? This cannot be undone.
+                          {audience === "specific"
+                            ? selectedUser?.email
+                            : recipientCount !== null ? `${recipientCount.toLocaleString()} users` : audienceLabel}
+                        </strong>? This cannot be undone.
                       </p>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      className="bg-orange-500 hover:bg-orange-600 text-white"
-                      disabled={sending}
-                      onClick={() => void handleSend()}
-                    >
-                      {sending ? (
-                        <><Loader2 className="w-4 h-4 animate-spin mr-2" />Sending…</>
-                      ) : (
-                        <><Send className="w-4 h-4 mr-2" />Yes, Send Now</>
-                      )}
+                    <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white" disabled={sending} onClick={() => void handleSend()}>
+                      {sending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Sending…</> : <><Send className="w-4 h-4 mr-2" />Yes, Send Now</>}
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => setConfirmStep(false)} disabled={sending}>
-                      Cancel
-                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setConfirmStep(false)} disabled={sending}>Cancel</Button>
                   </div>
                 </div>
               )}
@@ -273,9 +367,7 @@ export default function AdminEmailBlastPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {/* Mock email frame */}
               <div className="rounded-lg border border-[#E5E7EB] dark:border-white/10 overflow-hidden">
-                {/* Email header bar */}
                 <div className="bg-gray-50 dark:bg-white/5 px-4 py-3 border-b border-[#E5E7EB] dark:border-white/10 space-y-1">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="font-medium w-12 shrink-0">From:</span>
@@ -293,9 +385,7 @@ export default function AdminEmailBlastPage() {
                   </div>
                 </div>
 
-                {/* Email body */}
                 <div className="bg-white dark:bg-card p-5 min-h-[300px]">
-                  {/* Header branding */}
                   <div className="flex items-center gap-2 mb-5 pb-4 border-b border-gray-100 dark:border-white/10">
                     <div className="w-7 h-7 rounded-md bg-orange-500 flex items-center justify-center">
                       <span className="text-white text-xs font-bold">CF</span>
@@ -303,17 +393,12 @@ export default function AdminEmailBlastPage() {
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">Content Flywheel</span>
                   </div>
 
-                  {/* Body content */}
                   {body ? (
-                    <div
-                      className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: renderPreview(body) }}
-                    />
+                    <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: renderPreview(body) }} />
                   ) : (
                     <p className="text-sm text-muted-foreground italic">Your email body will appear here…</p>
                   )}
 
-                  {/* Footer */}
                   <div className="mt-8 pt-4 border-t border-gray-100 dark:border-white/10 text-xs text-gray-400 dark:text-gray-600">
                     <p>Content Flywheel · You&apos;re receiving this because you signed up for an account.</p>
                     <p className="mt-1">
@@ -325,17 +410,17 @@ export default function AdminEmailBlastPage() {
                 </div>
               </div>
 
-              {/* Recipient count badge */}
-              {recipientCount !== null && (
-                <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-                  <Users className="w-4 h-4" />
-                  <span>
-                    Will be sent to{" "}
-                    <strong className="text-gray-900 dark:text-white">{recipientCount.toLocaleString()}</strong>{" "}
-                    recipients
-                  </span>
-                </div>
-              )}
+              <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                <Users className="w-4 h-4" />
+                <span>
+                  Will be sent to{" "}
+                  <strong className="text-gray-900 dark:text-white">
+                    {audience === "specific"
+                      ? (selectedUser ? "1 recipient" : "—")
+                      : recipientCount !== null ? `${recipientCount.toLocaleString()} recipients` : "—"}
+                  </strong>
+                </span>
+              </div>
             </CardContent>
           </Card>
         </div>
