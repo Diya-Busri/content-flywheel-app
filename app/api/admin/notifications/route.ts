@@ -3,7 +3,7 @@ import { isAdmin } from "@/lib/is-admin";
 import { db } from "@/db/db";
 import { notificationsTable } from "@/db/schema/notifications-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 // GET — list recently sent notifications (admin view, latest 50)
 export async function GET() {
@@ -63,7 +63,19 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    userIds = [targetUserId];
+    // If it looks like an email, resolve to userId via profiles table
+    if (targetUserId.includes("@")) {
+      const [profile] = await db
+        .select({ userId: profilesTable.userId })
+        .from(profilesTable)
+        .where(eq(profilesTable.email, targetUserId.trim().toLowerCase()));
+      if (!profile) {
+        return NextResponse.json({ error: "No user found with that email" }, { status: 404 });
+      }
+      userIds = [profile.userId];
+    } else {
+      userIds = [targetUserId];
+    }
   } else {
     const profiles = await db
       .select({ userId: profilesTable.userId })
