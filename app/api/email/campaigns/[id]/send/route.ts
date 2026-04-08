@@ -44,7 +44,10 @@ export async function POST(
       .where(eq(brandVoiceTable.userId, userId))
       .limit(1);
     const fromName = bv?.brandName?.trim() || "Content Flywheel";
-    const from = `${fromName} <onboarding@resend.dev>`;
+    const fromEmail = process.env.RESEND_FROM_EMAIL?.match(/<(.+)>/)?.[1]
+      ?? process.env.RESEND_FROM_EMAIL
+      ?? "hello@contentflywheel.co.uk";
+    const from = `${fromName} <${fromEmail}>`;
 
     // Fetch all subscribed contacts (not unsubscribed)
     let contacts = await db

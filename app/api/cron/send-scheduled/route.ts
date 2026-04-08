@@ -49,7 +49,7 @@ export async function GET(request: Request) {
         .where(eq(brandVoiceTable.userId, campaign.userId))
         .limit(1);
       const fromName = bv?.brandName?.trim() || "Content Flywheel";
-      const from = `${fromName} <onboarding@resend.dev>`;
+      const from = `${fromName} <hello@contentflywheel.co.uk>`;
 
       // Fetch subscribed contacts
       const contacts = await db

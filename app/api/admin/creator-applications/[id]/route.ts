@@ -19,7 +19,7 @@ import type { ApplicationStatus } from "@/db/schema/creator-applications-schema"
 export const dynamic = "force-dynamic";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = "Content Flywheel <onboarding@resend.dev>";
+const FROM = "Content Flywheel <hello@contentflywheel.co.uk>";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
 const VALID_STATUSES: ApplicationStatus[] = ["accepted", "waitlisted", "rejected"];
 

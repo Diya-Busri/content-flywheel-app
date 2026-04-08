@@ -42,7 +42,7 @@ export async function POST(
       .where(eq(brandVoiceTable.userId, userId))
       .limit(1);
     const fromName = bv?.brandName?.trim() || "Content Flywheel";
-    const from = `${fromName} <onboarding@resend.dev>`;
+    const from = `${fromName} <hello@contentflywheel.co.uk>`;
 
     const testFooter = `
       <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;color:#9ca3af;">

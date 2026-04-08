@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
 
     try {
       await resend.emails.send({
-        from: "Content Flywheel <onboarding@resend.dev>",
+        from: "Content Flywheel <hello@contentflywheel.co.uk>",
         to: email.toLowerCase().trim(),
         subject: "You're subscribed! 🎉",
         html: buildWelcomeHtml(creatorName),
