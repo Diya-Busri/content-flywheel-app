@@ -1,21 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { isAdmin } from "@/lib/is-admin";
 import { db } from "@/db/db";
 import { abTestsTable, abTestAssignmentsTable } from "@/db/schema/ab-tests-schema";
 import { eq, desc, count } from "drizzle-orm";
 
 export async function GET() {
-  const { userId } = auth();
-  if (!userId || !(await isAdmin(userId))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await isAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const tests = await db.select().from(abTestsTable).orderBy(desc(abTestsTable.createdAt));
   return NextResponse.json({ tests });
 }
 
 export async function POST(req: NextRequest) {
-  const { userId } = auth();
-  if (!userId || !(await isAdmin(userId))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await isAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
   const { key, name, description, variants = [] } = body;
@@ -26,8 +23,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { userId } = auth();
-  if (!userId || !(await isAdmin(userId))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await isAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
   const { id, ...updates } = body;

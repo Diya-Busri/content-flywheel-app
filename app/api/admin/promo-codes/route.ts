@@ -1,31 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { isAdmin } from "@/lib/is-admin";
 import { db } from "@/db/db";
-import { promoCodesTable, promoCodeUsesTable } from "@/db/schema/promo-codes-schema";
-import { eq, desc, count } from "drizzle-orm";
+import { promoCodesTable } from "@/db/schema/promo-codes-schema";
+import { desc } from "drizzle-orm";
 
 export async function GET() {
-  const { userId } = auth();
-  if (!userId || !(await isAdmin(userId))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await isAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const codes = await db.select().from(promoCodesTable).orderBy(desc(promoCodesTable.createdAt));
   return NextResponse.json({ codes });
 }
 
 export async function POST(req: NextRequest) {
-  const { userId } = auth();
-  if (!userId || !(await isAdmin(userId))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await isAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { code, description, discountPercent = 0, discountAmount = 0, maxUses, expiresAt } = body;
+  const { code, description, discountType, discountValue, maxUses, expiresAt } = body;
   if (!code) return NextResponse.json({ error: "code required" }, { status: 400 });
+
+  const isPercent = discountType === "percent";
 
   const [promo] = await db.insert(promoCodesTable).values({
     code: code.toUpperCase().trim(),
-    description,
-    discountPercent,
-    discountAmount,
+    description: description ?? null,
+    discountPercent: isPercent ? Math.round(discountValue ?? 0) : 0,
+    discountAmount: !isPercent ? Math.round((discountValue ?? 0) * 100) : 0, // store in cents
     maxUses: maxUses || null,
     expiresAt: expiresAt ? new Date(expiresAt) : null,
     active: true,
