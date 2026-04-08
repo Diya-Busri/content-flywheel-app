@@ -77,15 +77,8 @@ function buildHtml(rawBody: string, name: string): string {
 
         <!-- Header -->
         <tr>
-          <td style="background:#0f0f0f;padding:24px 32px;">
-            <table cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="background:#f97316;border-radius:8px;width:36px;height:36px;text-align:center;vertical-align:middle;">
-                  <span style="color:#fff;font-weight:700;font-size:14px;">CF</span>
-                </td>
-                <td style="padding-left:12px;color:#ffffff;font-weight:600;font-size:16px;">Content Flywheel</td>
-              </tr>
-            </table>
+          <td style="background:#0f0f0f;padding:20px 32px;text-align:center;">
+            <img src="https://contentflywheel.co.uk/logo.png" alt="Content Flywheel" width="180" style="display:block;margin:0 auto;max-width:180px;" />
           </td>
         </tr>
 
