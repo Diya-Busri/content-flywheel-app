@@ -25,6 +25,8 @@ export default function AdminUsersPage() {
   const [grantingId, setGrantingId] = useState<string | null>(null);
   const [grantAmount, setGrantAmount] = useState<Record<string, string>>({});
   const [grantNote, setGrantNote] = useState<Record<string, string>>({});
+  const [suspending, setSuspending] = useState<string | null>(null);
+  const [suspendReason, setSuspendReason] = useState("");
   const { toast } = useToast();
 
   async function load() {
@@ -41,6 +43,25 @@ export default function AdminUsersPage() {
     u.email.toLowerCase().includes(search.toLowerCase()) ||
     u.userId.toLowerCase().includes(search.toLowerCase())
   );
+
+  async function handleSuspend(userId: string, currentlySuspended: boolean) {
+    setSuspending(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/suspend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suspend: !currentlySuspended, reason: suspendReason || undefined }),
+      });
+      if (res.ok) {
+        setUsers(prev => prev.map(u => u.userId === userId
+          ? { ...u, status: !currentlySuspended ? "suspended" : "active" }
+          : u
+        ));
+        setSuspendReason("");
+      }
+    } catch {}
+    setSuspending(null);
+  }
 
   async function handleGrant(userId: string, amount: number) {
     setGrantingId(userId);
@@ -135,6 +156,20 @@ export default function AdminUsersPage() {
                       {grantingId === user.userId ? <Loader2 className="w-3 h-3 animate-spin" /> : <CreditCard className="w-3 h-3" />}
                       <span className="ml-1">Apply</span>
                     </Button>
+                    <button
+                      className={`text-xs px-2 py-1 rounded font-medium transition-colors disabled:opacity-50 ${
+                        user.status === "suspended"
+                          ? "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50"
+                          : "bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:hover:bg-rose-900/50"
+                      }`}
+                      disabled={suspending === user.userId}
+                      onClick={() => void handleSuspend(user.userId, user.status === "suspended")}
+                    >
+                      {suspending === user.userId
+                        ? <Loader2 className="w-3 h-3 animate-spin inline" />
+                        : user.status === "suspended" ? "Unsuspend" : "Suspend"
+                      }
+                    </button>
                   </div>
                 </div>
               </CardContent>

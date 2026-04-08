@@ -59,7 +59,7 @@ export default function AdminEmailBlastPage() {
       const res = await fetch("/api/admin/email-blast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: subject.trim(), body: body.trim(), audience }),
+        body: JSON.stringify({ subject: subject.trim(), htmlBody: body.trim(), audience }),
       });
       const data = (await res.json().catch(() => ({}))) as { sent?: number; error?: string };
       if (data.sent !== undefined) {

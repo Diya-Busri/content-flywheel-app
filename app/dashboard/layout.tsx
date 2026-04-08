@@ -60,6 +60,22 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     }
   }
 
+  // Block suspended users
+  if (profile.status === "suspended") {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center">
+        <div className="text-5xl">🚫</div>
+        <h2 className="text-lg font-semibold">Account Suspended</h2>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          Your account has been suspended. Please contact support if you think this is a mistake.
+        </p>
+        <a href="mailto:support@contentflywheel.co.uk" className="text-sm text-orange-500 underline hover:no-underline">
+          Contact Support
+        </a>
+      </div>
+    );
+  }
+
   const user = await currentUser();
   const userEmail = user?.emailAddresses?.[0]?.emailAddress || "";
 
