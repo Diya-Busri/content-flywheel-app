@@ -20,6 +20,8 @@ import {
   ArrowRight,
   BookOpen,
   Paintbrush,
+  Upload,
+  Plus,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -385,16 +387,27 @@ export function StoreClient({ userId }: StoreClientProps) {
             Sell your digital products directly to your audience.
           </p>
         </div>
-        <Link href="/dashboard/store/customize">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 border-orange-500/30 text-orange-400 hover:text-orange-300 hover:border-orange-500/50 hover:bg-orange-500/5 h-9"
-          >
-            <Paintbrush className="w-4 h-4" />
-            Customise Store
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/digital-products/upload">
+            <Button
+              size="sm"
+              className="gap-2 bg-orange-500 hover:bg-orange-600 text-white h-9"
+            >
+              <Upload className="w-4 h-4" />
+              Upload Product
+            </Button>
+          </Link>
+          <Link href="/dashboard/store/customize">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-orange-500/30 text-orange-400 hover:text-orange-300 hover:border-orange-500/50 hover:bg-orange-500/5 h-9"
+            >
+              <Paintbrush className="w-4 h-4" />
+              Customise Store
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Store URL card */}
@@ -515,18 +528,30 @@ export function StoreClient({ userId }: StoreClientProps) {
                   <ShoppingBag className="w-6 h-6 text-orange-400" />
                 </div>
                 <p className="text-sm font-medium text-gray-300 mb-1">No products published yet</p>
-                <p className="text-xs text-gray-500 mb-4 max-w-xs mx-auto">
-                  Go to My Library to publish your first product and start selling.
+                <p className="text-xs text-gray-500 mb-5 max-w-xs mx-auto">
+                  Upload a product you&apos;ve already made, or go to your library to publish an AI-generated one.
                 </p>
-                <Link href="/dashboard/library">
-                  <Button
-                    size="sm"
-                    className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
-                  >
-                    <Package className="w-3.5 h-3.5" />
-                    Go to My Library
-                  </Button>
-                </Link>
+                <div className="flex items-center justify-center gap-3 flex-wrap">
+                  <Link href="/dashboard/digital-products/upload">
+                    <Button
+                      size="sm"
+                      className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      Upload a product
+                    </Button>
+                  </Link>
+                  <Link href="/dashboard/library">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-white/10 text-gray-300 hover:text-white hover:border-white/20 gap-2"
+                    >
+                      <Package className="w-3.5 h-3.5" />
+                      My Library
+                    </Button>
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -561,6 +586,22 @@ export function StoreClient({ userId }: StoreClientProps) {
               </div>
             </section>
           )}
+
+          {/* Add product CTA */}
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <Link href="/dashboard/digital-products/upload">
+              <Button variant="outline" size="sm" className="gap-2 border-white/10 text-gray-400 hover:text-orange-400 hover:border-orange-500/30 h-8 text-xs">
+                <Upload className="w-3.5 h-3.5" />
+                Upload a product
+              </Button>
+            </Link>
+            <Link href="/dashboard/digital-products">
+              <Button variant="outline" size="sm" className="gap-2 border-white/10 text-gray-400 hover:text-orange-400 hover:border-orange-500/30 h-8 text-xs">
+                <Plus className="w-3.5 h-3.5" />
+                Create with AI
+              </Button>
+            </Link>
+          </div>
         </>
       )}
     </div>
