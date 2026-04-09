@@ -78,7 +78,7 @@ export default function DiscountCodesClient({ initialCodes }: { initialCodes: Pr
             <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Type</label>
             <select
               value={form.type}
-              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value })}
+              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
               style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box", background: "#fff" }}
             >
               <option value="percent">% Off</option>
