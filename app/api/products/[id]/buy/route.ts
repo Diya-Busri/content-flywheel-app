@@ -20,6 +20,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: productId } = await params;
+  // Parse ref code from query string for affiliate tracking
+  const url = new URL(request.url);
+  const refCode = url.searchParams.get("ref") ?? null;
 
   try {
     const [product] = await db
@@ -145,6 +148,7 @@ export async function POST(
         vatEnabled: vatEnabled ? "true" : "false",
         ...(promoCode ? { promoCode } : {}),
         ...(appliedPromoCodeId ? { promoCodeId: appliedPromoCodeId } : {}),
+        ...(refCode ? { affiliateRef: refCode } : {}),
       },
       // Only allow Stripe promotion codes when no native promo code was applied
       allow_promotion_codes: discountedUnitAmount === null,

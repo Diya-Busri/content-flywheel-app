@@ -8,7 +8,9 @@ import { productSalesTable } from "@/db/schema/product-sales-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { emailAutomationsTable } from "@/db/schema/email-automations-schema";
 import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
-import { eq, and, sql } from "drizzle-orm";
+import { productBundlesTable } from "@/db/schema/product-bundles-schema";
+import { affiliateLinksTable, affiliateCommissionsTable } from "@/db/schema/affiliate-links-schema";
+import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -113,6 +115,12 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
   // Handle native product purchases
   if (session.metadata?.type === "product_purchase") {
     await handleProductPurchase(session);
+    return;
+  }
+
+  // Handle bundle purchases
+  if (session.metadata?.type === "bundle_purchase") {
+    await handleBundlePurchase(session);
     return;
   }
 
@@ -303,6 +311,27 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
     console.warn("[stripe-webhook] Failed to log product sale:", err);
   });
 
+  // Track affiliate commission if a ref code was used
+  const affiliateRef = session.metadata?.affiliateRef;
+  if (affiliateRef && creatorUserId) {
+    const [link] = await db
+      .select({ id: affiliateLinksTable.id, commissionPercent: affiliateLinksTable.commissionPercent })
+      .from(affiliateLinksTable)
+      .where(and(eq(affiliateLinksTable.code, affiliateRef), eq(affiliateLinksTable.creatorUserId, creatorUserId), eq(affiliateLinksTable.active, true)))
+      .limit(1);
+    if (link) {
+      const commissionCents = Math.round(amountCents * link.commissionPercent / 100);
+      await db.insert(affiliateCommissionsTable).values({
+        affiliateLinkId: link.id,
+        creatorUserId,
+        orderSessionId: session.id,
+        productTitle: productTitle,
+        amountCents,
+        commissionCents,
+      }).catch(() => null);
+    }
+  }
+
   // Increment promo code usedCount if one was applied
   const promoCodeId = session.metadata?.promoCodeId;
   if (promoCodeId) {
@@ -319,6 +348,122 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
         console.warn("[stripe-webhook] Failed to increment promo code usedCount:", err);
       });
   }
+}
+
+async function handleBundlePurchase(session: Stripe.Checkout.Session) {
+  const bundleId = session.metadata?.bundleId;
+  const creatorUserId = session.metadata?.creatorUserId;
+  const productIdsRaw = session.metadata?.productIds ?? "";
+
+  if (!bundleId || !creatorUserId) {
+    console.error("[stripe-webhook] bundle_purchase missing metadata", session.metadata);
+    return;
+  }
+
+  const buyerEmail = session.customer_details?.email ?? "";
+  const buyerName = session.customer_details?.name ?? null;
+  const amountCents = session.amount_total ?? 0;
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
+
+  // Fetch bundle for its title
+  const [bundle] = await db
+    .select({ title: productBundlesTable.title, productIds: productBundlesTable.productIds })
+    .from(productBundlesTable)
+    .where(eq(productBundlesTable.id, bundleId))
+    .limit(1);
+
+  const bundleTitle = bundle?.title ?? "Bundle";
+  const productIds = productIdsRaw ? productIdsRaw.split(",").filter(Boolean) : (bundle?.productIds ?? []);
+
+  // Fetch all products in the bundle
+  const products =
+    productIds.length > 0
+      ? await db
+          .select({ id: productsTable.id, title: productsTable.title })
+          .from(productsTable)
+          .where(and(inArray(productsTable.id, productIds), isNull(productsTable.deletedAt)))
+      : [];
+
+  // Create one order record per product with shared download tokens
+  const downloadTokens: { productId: string; title: string; token: string }[] = [];
+  const downloadExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  for (const product of products) {
+    const downloadToken = crypto.randomUUID();
+    downloadTokens.push({ productId: product.id, title: product.title, token: downloadToken });
+
+    await db.insert(productOrdersTable).values({
+      productId: product.id,
+      creatorUserId,
+      buyerEmail,
+      buyerName,
+      amountCents: Math.round(amountCents / Math.max(products.length, 1)),
+      currency: session.currency ?? "gbp",
+      stripeSessionId: `${session.id}_${product.id}`,
+      status: "completed",
+      downloadToken,
+      downloadExpiresAt,
+      emailSent: false,
+    }).catch(() => {/* ignore duplicate */});
+  }
+
+  // Send single combined download email
+  if (buyerEmail && downloadTokens.length > 0) {
+    const linksHtml = downloadTokens
+      .map(
+        (dt) =>
+          `<tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
+            <span style="font-size:14px;color:#1a1a1a;">${dt.title}</span><br/>
+            <a href="${appUrl}/api/products/${dt.productId}/download?token=${dt.token}" style="font-size:13px;color:#f97316;text-decoration:none;font-weight:600;">Download →</a>
+          </td></tr>`
+      )
+      .join("");
+
+    try {
+      await resend.emails.send({
+        from: "hello@contentflywheel.co.uk",
+        to: buyerEmail,
+        subject: `Your bundle is ready: ${bundleTitle}`,
+        html: `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:#0B0B0F;padding:16px 32px;text-align:center;">
+          <img src="https://contentflywheel.co.uk/logo.png" alt="Content Flywheel" width="130" style="display:inline-block;height:auto;"/>
+        </td></tr>
+        <tr><td style="padding:36px 40px;color:#1a1a1a;">
+          <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;">Your bundle is ready! 🎉</h2>
+          <p style="margin:0 0 24px;font-size:15px;color:#555;">Hi ${buyerName ?? "there"}, thank you for purchasing <strong>${bundleTitle}</strong>. Here are your download links:</p>
+          <table width="100%" cellpadding="0" cellspacing="0">${linksHtml}</table>
+          <p style="margin:24px 0 0;font-size:13px;color:#888;">Links expire in 7 days. Reply to this email if you need help.</p>
+        </td></tr>
+        <tr><td style="background:#F5C97A;padding:20px 40px;text-align:center;">
+          <p style="margin:0;font-size:13px;color:#0B0B0F;font-weight:600;">Content Flywheel</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`,
+      });
+    } catch (err) {
+      console.error("[stripe-webhook] Failed to send bundle email:", err);
+    }
+  }
+
+  // Log one sale entry for the bundle total
+  await db.insert(productSalesTable).values({
+    userId: creatorUserId,
+    productId: productIds[0] ?? bundleId,
+    platform: "content-flywheel",
+    amountCents,
+    currency: session.currency ?? "gbp",
+    soldAt: new Date(),
+  }).catch((err) => {
+    console.warn("[stripe-webhook] Failed to log bundle sale:", err);
+  });
 }
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {

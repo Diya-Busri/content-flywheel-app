@@ -1,10 +1,14 @@
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
+import { productReviewsTable } from "@/db/schema/product-reviews-schema";
+import { productBundlesTable } from "@/db/schema/product-bundles-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { BuyButton } from "./BuyButton";
+import { WaitlistForm } from "./WaitlistForm";
+import { ReviewForm } from "./ReviewForm";
 
 type MarketingAssets = {
   productTitle?: string;
@@ -21,6 +25,7 @@ type MarketingAssets = {
   stripeProductId?: string;
   stripePriceId?: string;
   testimonials?: Array<{ name: string; text: string; rating?: number }>;
+  comingSoon?: boolean;
 };
 
 type ProductContent = {
@@ -80,12 +85,42 @@ export default async function ProductSalesPage({
 
   if (!product) notFound();
 
-  const [bv] = await db
-    .select({ brandName: brandVoiceTable.brandName, targetAudience: brandVoiceTable.targetAudience })
-    .from(brandVoiceTable)
-    .where(eq(brandVoiceTable.userId, product.userId))
-    .limit(1)
-    .catch(() => [undefined]);
+  const [bv, reviews, upsellProducts, upsellBundles] = await Promise.all([
+    db
+      .select({ brandName: brandVoiceTable.brandName, targetAudience: brandVoiceTable.targetAudience })
+      .from(brandVoiceTable)
+      .where(eq(brandVoiceTable.userId, product.userId))
+      .limit(1)
+      .then((r) => r[0])
+      .catch(() => undefined),
+    db
+      .select({
+        id: productReviewsTable.id,
+        buyerName: productReviewsTable.buyerName,
+        rating: productReviewsTable.rating,
+        reviewText: productReviewsTable.reviewText,
+        createdAt: productReviewsTable.createdAt,
+      })
+      .from(productReviewsTable)
+      .where(and(eq(productReviewsTable.productId, id), eq(productReviewsTable.approved, true)))
+      .orderBy(productReviewsTable.createdAt)
+      .limit(20)
+      .catch(() => [] as typeof productReviewsTable.$inferSelect[]),
+    // Other products by same creator (exclude this one)
+    db
+      .select({ id: productsTable.id, title: productsTable.title, marketingAssets: productsTable.marketingAssets })
+      .from(productsTable)
+      .where(and(eq(productsTable.userId, product.userId), isNull(productsTable.deletedAt)))
+      .limit(6)
+      .then((r) => r.filter((p) => p.id !== id && ((p.marketingAssets as MarketingAssets)?.isNativePublished || (p.marketingAssets as MarketingAssets)?.checkoutUrl)).slice(0, 3))
+      .catch(() => [] as typeof productsTable.$inferSelect[]),
+    db
+      .select({ id: productBundlesTable.id, title: productBundlesTable.title, bundlePrice: productBundlesTable.bundlePrice, productIds: productBundlesTable.productIds })
+      .from(productBundlesTable)
+      .where(and(eq(productBundlesTable.creatorUserId, product.userId), eq(productBundlesTable.active, true)))
+      .limit(2)
+      .catch(() => [] as typeof productBundlesTable.$inferSelect[]),
+  ]);
 
   const ma = (product.marketingAssets ?? {}) as MarketingAssets;
   const content = (product.content ?? {}) as ProductContent;
@@ -107,6 +142,8 @@ export default async function ProductSalesPage({
     : "Digital Product";
   const isNativePublished = !!(ma.isNativePublished && ma.nativePrice);
   const nativePriceLabel = ma.nativePrice ? `£${(ma.nativePrice / 100).toFixed(2)}` : null;
+  const isComingSoon = !!(ma.comingSoon);
+  const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1) : null;
 
   // Parse description into paragraphs
   const descParagraphs = fullDescription
@@ -116,6 +153,7 @@ export default async function ProductSalesPage({
   const creatorInitials = creatorName
     ? creatorName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()
     : "CF";
+  const hasUpsell = (upsellProducts.length > 0 || upsellBundles.length > 0) && purchased;
 
   return (
     <main style={{ minHeight: "100vh", background: "#f5f4f0", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
@@ -229,6 +267,40 @@ export default async function ProductSalesPage({
               ))}
             </div>
           )}
+
+          {/* Verified Reviews */}
+          {reviews.length > 0 && (
+            <div style={{ background: "#fff", borderRadius: "20px", padding: "28px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginTop: "24px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
+                <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#111827" }}>Reviews</h2>
+                {avgRating && (
+                  <span style={{ fontSize: "14px", color: "#f97316", fontWeight: 700 }}>★ {avgRating}</span>
+                )}
+                <span style={{ fontSize: "13px", color: "#9ca3af" }}>({reviews.length})</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {reviews.map((r) => (
+                  <div key={r.id} style={{ padding: "16px", background: "#fafafa", borderRadius: "12px", border: "1px solid #f3f4f6" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                      <span style={{ color: "#f59e0b", fontSize: "14px" }}>{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</span>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#111827" }}>{r.buyerName || "Verified buyer"}</span>
+                    </div>
+                    {r.reviewText && (
+                      <p style={{ margin: 0, fontSize: "14px", color: "#374151", lineHeight: 1.6 }}>{r.reviewText}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Leave a review (after purchase) */}
+          {purchased && (
+            <div style={{ background: "#fff", borderRadius: "20px", padding: "28px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginTop: "24px" }}>
+              <h2 style={{ margin: "0 0 16px", fontSize: "16px", fontWeight: 700, color: "#111827" }}>Leave a review</h2>
+              <ReviewForm productId={product.id} />
+            </div>
+          )}
         </div>
 
         {/* RIGHT COLUMN — Purchase card */}
@@ -252,7 +324,15 @@ export default async function ProductSalesPage({
             )}
 
             {/* Price + CTA */}
-            {isNativePublished ? (
+            {isComingSoon ? (
+              <div>
+                <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "12px", padding: "16px 20px", marginBottom: "16px", textAlign: "center" }}>
+                  <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: "15px", color: "#c2410c" }}>🚀 Coming Soon</p>
+                  <p style={{ margin: 0, fontSize: "13px", color: "#9a3412" }}>Join the waitlist to be the first to know when this launches.</p>
+                </div>
+                <WaitlistForm productId={product.id} />
+              </div>
+            ) : isNativePublished ? (
               <>
                 <div style={{ margin: "0 0 16px" }}>
                   <span style={{ fontSize: "38px", fontWeight: 800, color: "#111827", letterSpacing: "-1.5px" }}>
@@ -328,6 +408,50 @@ export default async function ProductSalesPage({
           )}
         </div>
       </div>
+
+      {/* Post-purchase upsell */}
+      {hasUpsell && (
+        <div style={{ background: "#fff", borderTop: "1px solid #f3f4f6", padding: "48px 16px" }}>
+          <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+            <h2 style={{ margin: "0 0 24px", fontSize: "18px", fontWeight: 800, color: "#111827", textAlign: "center" }}>
+              You might also like
+            </h2>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: "16px" }}>
+              {upsellProducts.map((p) => {
+                const pma = (p.marketingAssets ?? {}) as MarketingAssets;
+                const thumb = pma.bookMockupUrl ?? pma.coverThumbnailUrl ?? pma.thumbnailUrl;
+                const href = pma.isNativePublished ? `/product/${p.id}` : (pma.checkoutUrl ?? `/product/${p.id}`);
+                return (
+                  <a key={p.id} href={href} style={{ display: "block", background: "#fafafa", border: "1px solid #f3f4f6", borderRadius: "16px", overflow: "hidden", textDecoration: "none" }}>
+                    {thumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={thumb} alt={p.title} style={{ width: "100%", aspectRatio: "16/10", objectFit: "cover", display: "block" }} />
+                    ) : (
+                      <div style={{ width: "100%", aspectRatio: "16/10", background: "linear-gradient(135deg,#fff7ed,#fed7aa)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px" }}>📦</div>
+                    )}
+                    <div style={{ padding: "14px 16px" }}>
+                      <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: "14px", color: "#111827", lineHeight: 1.3 }}>{p.title}</p>
+                      {pma.nativePrice && (
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: "15px", color: "#f97316" }}>£{(pma.nativePrice / 100).toFixed(2)}</p>
+                      )}
+                    </div>
+                  </a>
+                );
+              })}
+              {upsellBundles.map((b) => (
+                <a key={b.id} href={`/bundle/${b.id}`} style={{ display: "block", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "16px", overflow: "hidden", textDecoration: "none" }}>
+                  <div style={{ width: "100%", aspectRatio: "16/10", background: "linear-gradient(135deg,#fff7ed,#fed7aa)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px" }}>📦</div>
+                  <div style={{ padding: "14px 16px" }}>
+                    <span style={{ display: "inline-block", padding: "2px 8px", background: "#fed7aa", borderRadius: "999px", fontSize: "10px", fontWeight: 700, color: "#c2410c", marginBottom: "6px" }}>BUNDLE · {b.productIds.length} products</span>
+                    <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: "14px", color: "#111827", lineHeight: 1.3 }}>{b.title}</p>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: "15px", color: "#f97316" }}>£{(b.bundlePrice / 100).toFixed(2)}</p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

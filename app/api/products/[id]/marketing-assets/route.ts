@@ -11,6 +11,34 @@ import { getBrandVoice } from "@/lib/brand-voice";
 
 type Section = { id: string; title: string; content?: string };
 
+// PATCH — update individual marketing asset fields (e.g. comingSoon toggle)
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: productId } = await params;
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const [product] = await db
+    .select({ marketingAssets: productsTable.marketingAssets })
+    .from(productsTable)
+    .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId), isNull(productsTable.deletedAt)));
+
+  if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
+
+  const body = await request.json().catch(() => ({}));
+  const allowedFields = ["comingSoon"] as const;
+  const updates: Record<string, unknown> = {};
+  for (const field of allowedFields) {
+    if (field in body) updates[field] = body[field];
+  }
+
+  const updatedAssets = { ...(product.marketingAssets as MarketingAssets ?? {}), ...updates };
+  await db.update(productsTable).set({ marketingAssets: updatedAssets, updatedAt: new Date() }).where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId)));
+  return NextResponse.json(updatedAssets);
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

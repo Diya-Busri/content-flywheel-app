@@ -25,6 +25,8 @@ import {
   Mail,
   Tag,
   X,
+  Layers,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -346,6 +348,8 @@ function UnpublishedProductRow({
 }
 
 type PromoCode = { id: string; code: string; discountPercent: number | null; discountAmount: number | null; maxUses: number | null; usedCount: number; active: boolean; expiresAt: string | null };
+type Bundle = { id: string; title: string; description: string | null; bundlePrice: number; productIds: string[]; active: boolean };
+type AffiliateLink = { id: string; affiliateName: string; affiliateEmail: string | null; code: string; commissionPercent: number; salesCount: number; totalCommissionCents: number; referralUrl: string };
 
 export function StoreClient({ userId }: StoreClientProps) {
   const storeUrl = `${STORE_BASE}/${userId}`;
@@ -374,6 +378,45 @@ export function StoreClient({ userId }: StoreClientProps) {
   }, []);
 
   useEffect(() => { fetchPromoCodes(); }, [fetchPromoCodes]);
+
+  // Bundles state
+  const [bundles, setBundles] = useState<Bundle[]>([]);
+  const [bundlesLoading, setBundlesLoading] = useState(true);
+  const [showBundleForm, setShowBundleForm] = useState(false);
+  const [bundleTitle, setBundleTitle] = useState("");
+  const [bundleDescription, setBundleDescription] = useState("");
+  const [bundlePrice, setBundlePrice] = useState("");
+  const [bundleProductIds, setBundleProductIds] = useState<string[]>([]);
+  const [savingBundle, setSavingBundle] = useState(false);
+
+  const fetchBundles = useCallback(async () => {
+    setBundlesLoading(true);
+    try {
+      const res = await fetch("/api/bundles");
+      if (res.ok) setBundles(await res.json());
+    } catch {} finally { setBundlesLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchBundles(); }, [fetchBundles]);
+
+  // Affiliates state
+  const [affiliates, setAffiliates] = useState<AffiliateLink[]>([]);
+  const [affiliatesLoading, setAffiliatesLoading] = useState(true);
+  const [showAffiliateForm, setShowAffiliateForm] = useState(false);
+  const [affiliateName, setAffiliateName] = useState("");
+  const [affiliateEmail, setAffiliateEmail] = useState("");
+  const [affiliateCommission, setAffiliateCommission] = useState("20");
+  const [savingAffiliate, setSavingAffiliate] = useState(false);
+
+  const fetchAffiliates = useCallback(async () => {
+    setAffiliatesLoading(true);
+    try {
+      const res = await fetch("/api/affiliates");
+      if (res.ok) setAffiliates(await res.json());
+    } catch {} finally { setAffiliatesLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchAffiliates(); }, [fetchAffiliates]);
 
   const fetchLibrary = useCallback(async () => {
     setLoading(true);
@@ -638,6 +681,124 @@ export function StoreClient({ userId }: StoreClientProps) {
             </Link>
           </div>
 
+          {/* Bundles */}
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-orange-400" />
+                <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Product Bundles</h2>
+              </div>
+              <Button size="sm" variant="outline" className="h-7 text-xs border-white/10 text-gray-300 hover:text-white gap-1.5" onClick={() => setShowBundleForm(!showBundleForm)}>
+                <Plus className="w-3 h-3" />New bundle
+              </Button>
+            </div>
+
+            {showBundleForm && (
+              <div className="rounded-2xl bg-card border border-white/8 p-5 mb-4 space-y-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Create bundle</p>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">Bundle title</p>
+                    <Input value={bundleTitle} onChange={(e) => setBundleTitle(e.target.value)} placeholder="Ultimate Creator Pack" className="h-8 text-sm bg-white/5 border-white/10 text-white" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">Description (optional)</p>
+                    <Input value={bundleDescription} onChange={(e) => setBundleDescription(e.target.value)} placeholder="Everything you need to get started..." className="h-8 text-sm bg-white/5 border-white/10 text-white" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">Bundle price (£)</p>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium select-none">£</span>
+                      <Input type="number" min="1" step="0.01" value={bundlePrice} onChange={(e) => setBundlePrice(e.target.value)} placeholder="19.99" className="pl-7 h-8 text-sm bg-white/5 border-white/10 text-white" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">Select products to include (choose at least 2)</p>
+                    <div className="rounded-xl border border-white/8 divide-y divide-white/5 max-h-48 overflow-y-auto">
+                      {items.filter((i) => i.isNativePublished).length === 0 ? (
+                        <p className="text-xs text-gray-500 p-3">No published products yet — publish some products first.</p>
+                      ) : (
+                        items.filter((i) => i.isNativePublished).map((item) => (
+                          <label key={item.id} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-white/5">
+                            <input
+                              type="checkbox"
+                              checked={bundleProductIds.includes(item.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) setBundleProductIds((prev) => [...prev, item.id]);
+                                else setBundleProductIds((prev) => prev.filter((id) => id !== item.id));
+                              }}
+                              className="accent-orange-500"
+                            />
+                            <span className="text-sm text-gray-200">{item.title}</span>
+                            {item.nativePrice != null && (
+                              <span className="text-xs text-gray-500 ml-auto">{formatPrice(item.nativePrice)}</span>
+                            )}
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white h-8 text-xs" disabled={savingBundle}
+                    onClick={async () => {
+                      if (!bundleTitle.trim()) { toast({ title: "Title is required", variant: "destructive" }); return; }
+                      if (!bundlePrice || parseFloat(bundlePrice) < 1) { toast({ title: "Price must be at least £1", variant: "destructive" }); return; }
+                      if (bundleProductIds.length < 2) { toast({ title: "Select at least 2 products", variant: "destructive" }); return; }
+                      setSavingBundle(true);
+                      try {
+                        const res = await fetch("/api/bundles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: bundleTitle, description: bundleDescription || null, bundlePrice: Math.round(parseFloat(bundlePrice) * 100), productIds: bundleProductIds }) });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || "Failed");
+                        toast({ title: "Bundle created!" });
+                        setBundleTitle(""); setBundleDescription(""); setBundlePrice(""); setBundleProductIds([]); setShowBundleForm(false);
+                        await fetchBundles();
+                      } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+                      finally { setSavingBundle(false); }
+                    }}>
+                    {savingBundle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Create Bundle"}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 text-xs text-gray-400" onClick={() => setShowBundleForm(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
+
+            {bundlesLoading ? (
+              <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-orange-400" /></div>
+            ) : bundles.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center">
+                <p className="text-sm text-gray-500">No bundles yet — group your products together and sell them at a special price.</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-card border border-white/8 divide-y divide-white/5">
+                {bundles.map((b) => (
+                  <div key={b.id} className="flex items-center justify-between px-5 py-3 gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Layers className="w-4 h-4 text-orange-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{b.title}</p>
+                        <p className="text-xs text-gray-500">{b.productIds.length} products · {formatPrice(b.bundlePrice)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button size="sm" variant="outline" className="h-7 text-xs border-white/10 text-gray-300 hover:text-white gap-1" onClick={() => window.open(`/bundle/${b.id}`, "_blank")}>
+                        <Eye className="w-3 h-3" />View
+                      </Button>
+                      <button className="text-gray-500 hover:text-red-400 transition-colors" onClick={async () => {
+                        try {
+                          await fetch(`/api/bundles/${b.id}`, { method: "DELETE" });
+                          toast({ title: "Bundle removed" }); fetchBundles();
+                        } catch { toast({ title: "Failed", variant: "destructive" }); }
+                      }}>
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
           {/* Promo Codes */}
           <section>
             <div className="flex items-center justify-between mb-4">
@@ -719,6 +880,96 @@ export function StoreClient({ userId }: StoreClientProps) {
                     }}>
                       <X className="w-4 h-4" />
                     </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+          {/* Affiliates */}
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-orange-400" />
+                <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Affiliate Links</h2>
+              </div>
+              <Button size="sm" variant="outline" className="h-7 text-xs border-white/10 text-gray-300 hover:text-white gap-1.5" onClick={() => setShowAffiliateForm(!showAffiliateForm)}>
+                <Plus className="w-3 h-3" />Add affiliate
+              </Button>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">Give affiliates a unique link to your store. When they drive a sale, you can see it here and pay them manually.</p>
+
+            {showAffiliateForm && (
+              <div className="rounded-2xl bg-card border border-white/8 p-5 mb-4 space-y-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Create affiliate link</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">Affiliate name</p>
+                    <Input value={affiliateName} onChange={(e) => setAffiliateName(e.target.value)} placeholder="Jane Smith" className="h-8 text-sm bg-white/5 border-white/10 text-white" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">Their email (optional)</p>
+                    <Input value={affiliateEmail} onChange={(e) => setAffiliateEmail(e.target.value)} placeholder="jane@example.com" className="h-8 text-sm bg-white/5 border-white/10 text-white" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">Commission % (for your reference)</p>
+                    <Input type="number" min="1" max="100" value={affiliateCommission} onChange={(e) => setAffiliateCommission(e.target.value)} placeholder="20" className="h-8 text-sm bg-white/5 border-white/10 text-white" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white h-8 text-xs" disabled={savingAffiliate}
+                    onClick={async () => {
+                      if (!affiliateName.trim()) { toast({ title: "Name is required", variant: "destructive" }); return; }
+                      setSavingAffiliate(true);
+                      try {
+                        const res = await fetch("/api/affiliates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ affiliateName, affiliateEmail, commissionPercent: affiliateCommission }) });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || "Failed");
+                        toast({ title: "Affiliate link created!" });
+                        setAffiliateName(""); setAffiliateEmail(""); setAffiliateCommission("20"); setShowAffiliateForm(false);
+                        await fetchAffiliates();
+                      } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+                      finally { setSavingAffiliate(false); }
+                    }}>
+                    {savingAffiliate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Create"}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 text-xs text-gray-400" onClick={() => setShowAffiliateForm(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
+
+            {affiliatesLoading ? (
+              <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-orange-400" /></div>
+            ) : affiliates.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center">
+                <p className="text-sm text-gray-500">No affiliates yet — create a link to share with partners who promote your products.</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-card border border-white/8 divide-y divide-white/5">
+                {affiliates.map((a) => (
+                  <div key={a.id} className="px-5 py-4">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{a.affiliateName}</p>
+                        {a.affiliateEmail && <p className="text-xs text-gray-500">{a.affiliateEmail}</p>}
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs text-gray-400">{a.salesCount} sales · {a.commissionPercent}% commission</span>
+                        <button className="text-gray-500 hover:text-red-400 transition-colors" onClick={async () => {
+                          try {
+                            await fetch("/api/affiliates", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: a.id }) });
+                            toast({ title: "Affiliate removed" }); fetchAffiliates();
+                          } catch { toast({ title: "Failed", variant: "destructive" }); }
+                        }}>
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2">
+                      <p className="text-xs text-gray-400 font-mono flex-1 truncate">{a.referralUrl}</p>
+                      <button className="text-gray-500 hover:text-orange-400 transition-colors shrink-0" onClick={() => { navigator.clipboard.writeText(a.referralUrl); toast({ title: "Link copied!" }); }}>
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

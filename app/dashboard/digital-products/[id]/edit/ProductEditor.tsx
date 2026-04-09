@@ -6483,6 +6483,32 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     <EmailSequenceCard productId={productId} />
                     <SalesPageCard productId={productId} initialCheckoutUrl={(marketingAssets as { checkoutUrl?: string | null; priceLabel?: string | null }).checkoutUrl} initialPriceLabel={(marketingAssets as { checkoutUrl?: string | null; priceLabel?: string | null }).priceLabel} />
 
+                    {/* Coming Soon toggle */}
+                    {(() => {
+                      const isComingSoon = !!(marketingAssets as { comingSoon?: boolean }).comingSoon;
+                      const toggleComingSoon = async () => {
+                        if (!productId) return;
+                        const newVal = !isComingSoon;
+                        await fetch(`/api/products/${productId}/marketing-assets`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ comingSoon: newVal }) }).catch(() => null);
+                        setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, comingSoon: newVal } } : null);
+                      };
+                      return (
+                        <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                          <div>
+                            <p className="text-xs font-semibold text-gray-700">Coming Soon mode</p>
+                            <p className="text-xs text-gray-400 mt-0.5">Show a waitlist form instead of the buy button on your product page.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={toggleComingSoon}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isComingSoon ? "bg-orange-500" : "bg-gray-200"}`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${isComingSoon ? "translate-x-6" : "translate-x-1"}`} />
+                          </button>
+                        </div>
+                      );
+                    })()}
+
                     {/* Testimonials */}
                     {(() => {
                       const testimonials: Array<{ name: string; text: string; rating?: number }> = marketingAssets.testimonials ?? [];

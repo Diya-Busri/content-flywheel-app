@@ -2,6 +2,7 @@ import { db } from "@/db/db";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
+import { productBundlesTable } from "@/db/schema/product-bundles-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import Link from "next/link";
 import type { MarketingAssets } from "@/db/schema/products-schema";
@@ -41,15 +42,29 @@ export default async function CreatorProfilePage({
       .catch(() => undefined),
   ]);
 
-  const products = await db
-    .select({
-      id: productsTable.id,
-      title: productsTable.title,
-      marketingAssets: productsTable.marketingAssets,
-    })
-    .from(productsTable)
-    .where(and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt)))
-    .limit(20);
+  const [products, activeBundles] = await Promise.all([
+    db
+      .select({
+        id: productsTable.id,
+        title: productsTable.title,
+        marketingAssets: productsTable.marketingAssets,
+      })
+      .from(productsTable)
+      .where(and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt)))
+      .limit(20),
+    db
+      .select({
+        id: productBundlesTable.id,
+        title: productBundlesTable.title,
+        description: productBundlesTable.description,
+        bundlePrice: productBundlesTable.bundlePrice,
+        productIds: productBundlesTable.productIds,
+      })
+      .from(productBundlesTable)
+      .where(and(eq(productBundlesTable.creatorUserId, userId), eq(productBundlesTable.active, true)))
+      .limit(10)
+      .catch(() => [] as { id: string; title: string; description: string | null; bundlePrice: number; productIds: string[] }[]),
+  ]);
 
   const brandName = brandVoice?.brandName?.trim() || "Creator";
   const initials = brandName
@@ -521,6 +536,114 @@ export default async function CreatorProfilePage({
                 )}
               </div>
             )}
+          </>
+        )}
+
+        {/* Bundles */}
+        {activeBundles.length > 0 && (
+          <>
+            <h2
+              style={{
+                fontSize: "13px",
+                fontWeight: "700",
+                color: isDark ? "rgba(255,255,255,0.4)" : "#9ca3af",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                margin: "24px 0 12px 4px",
+              }}
+            >
+              Bundles
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {activeBundles.map((b) => (
+                <a
+                  key={b.id}
+                  href={`/bundle/${b.id}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "16px",
+                    backgroundColor: themeStyle.cardBg,
+                    borderRadius: "16px",
+                    overflow: "hidden",
+                    textDecoration: "none",
+                    border: `1px solid ${cardBorderColor}`,
+                    boxShadow: cardShadow,
+                    padding: "16px 20px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "48px",
+                      height: "48px",
+                      borderRadius: "12px",
+                      background: `linear-gradient(135deg, ${accentColor}22, ${accentColor}44)`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      fontSize: "22px",
+                    }}
+                  >
+                    📦
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "15px",
+                          fontWeight: "700",
+                          color: themeStyle.text,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {b.title}
+                      </p>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: "600",
+                          color: accentColor,
+                          backgroundColor: `${accentColor}18`,
+                          padding: "2px 8px",
+                          borderRadius: "20px",
+                          flexShrink: 0,
+                        }}
+                      >
+                        Bundle
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: "13px", color: themeStyle.subText }}>
+                      {b.productIds.length} products included
+                      {b.description ? ` · ${b.description}` : ""}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
+                    <span style={{ fontSize: "17px", fontWeight: "800", color: accentColor }}>
+                      £{(b.bundlePrice / 100).toFixed(2)}
+                    </span>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "50%",
+                        backgroundColor: `${accentColor}18`,
+                        color: accentColor,
+                        fontSize: "16px",
+                      }}
+                    >
+                      →
+                    </span>
+                  </div>
+                </a>
+              ))}
+            </div>
           </>
         )}
 
