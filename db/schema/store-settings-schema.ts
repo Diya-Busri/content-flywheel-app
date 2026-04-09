@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
 
 export const storeSettingsTable = pgTable("store_settings", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -16,6 +16,12 @@ export const storeSettingsTable = pgTable("store_settings", {
   // Display options
   showSocialLinks: boolean("show_social_links").default(false),
   socialLinks: text("social_links"), // JSON string of {twitter, instagram, youtube, tiktok}
+  // Tax / VAT
+  vatEnabled: boolean("vat_enabled").default(false),
+  vatRate: integer("vat_rate").default(20), // percentage e.g. 20 for 20%
+  vatNumber: text("vat_number"),
+  businessName: text("business_name"),
+  businessAddress: text("business_address"),
   // Timestamps
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

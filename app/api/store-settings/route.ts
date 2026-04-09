@@ -17,6 +17,11 @@ function getDefaults(userId: string) {
     bio: null,
     showSocialLinks: false,
     socialLinks: null,
+    vatEnabled: false,
+    vatRate: 20,
+    vatNumber: null,
+    businessName: null,
+    businessAddress: null,
     createdAt: null,
     updatedAt: null,
   };
@@ -62,6 +67,11 @@ export async function PATCH(req: NextRequest) {
       "bio",
       "showSocialLinks",
       "socialLinks",
+      "vatEnabled",
+      "vatRate",
+      "vatNumber",
+      "businessName",
+      "businessAddress",
     ] as const;
 
     const updates: Record<string, unknown> = {};

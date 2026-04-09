@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
+import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { eq, and, isNull } from "drizzle-orm";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -51,7 +52,20 @@ export async function POST(
       );
     }
 
-    const session = await stripe.checkout.sessions.create({
+    // Fetch store settings to check VAT
+    const [storeSettings] = await db
+      .select({
+        vatEnabled: storeSettingsTable.vatEnabled,
+        vatRate: storeSettingsTable.vatRate,
+      })
+      .from(storeSettingsTable)
+      .where(eq(storeSettingsTable.userId, product.userId))
+      .limit(1);
+
+    const vatEnabled = storeSettings?.vatEnabled ?? false;
+
+    // Build checkout session params
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "payment",
       line_items: [{ price: ma.stripePriceId, quantity: 1 }],
       success_url: `${baseUrl}/product/${productId}?purchased=true&session_id={CHECKOUT_SESSION_ID}`,
@@ -60,11 +74,19 @@ export async function POST(
         type: "product_purchase",
         productId: product.id,
         creatorUserId: product.userId,
+        vatEnabled: vatEnabled ? "true" : "false",
       },
       allow_promotion_codes: true,
       billing_address_collection: "auto",
       customer_creation: "always",
-    });
+    };
+
+    // If VAT is enabled, collect tax IDs and note that price is VAT-inclusive
+    if (vatEnabled) {
+      sessionParams.tax_id_collection = { enabled: true };
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
