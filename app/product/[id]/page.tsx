@@ -18,6 +18,12 @@ type MarketingAssets = {
   priceLabel?: string | null;
   isNativePublished?: boolean;
   nativePrice?: number;
+  stripeProductId?: string;
+  stripePriceId?: string;
+};
+
+type ProductContent = {
+  sections?: Array<{ id: string; title: string; content: string; order: number }>;
 };
 
 export async function generateMetadata({
@@ -38,6 +44,11 @@ export async function generateMetadata({
   return {
     title: `${title} — Digital Product`,
     description: ma.productDescription ?? undefined,
+    openGraph: {
+      title: `${title} — Digital Product`,
+      description: ma.productDescription ?? undefined,
+      images: ma.bookMockupUrl ? [ma.bookMockupUrl] : ma.coverThumbnailUrl ? [ma.coverThumbnailUrl] : [],
+    },
   };
 }
 
@@ -60,6 +71,7 @@ export default async function ProductSalesPage({
       format: productsTable.format,
       userId: productsTable.userId,
       marketingAssets: productsTable.marketingAssets,
+      content: productsTable.content,
     })
     .from(productsTable)
     .where(and(eq(productsTable.id, id), isNull(productsTable.deletedAt)))
@@ -68,279 +80,232 @@ export default async function ProductSalesPage({
   if (!product) notFound();
 
   const [bv] = await db
-    .select({ brandName: brandVoiceTable.brandName })
+    .select({ brandName: brandVoiceTable.brandName, targetAudience: brandVoiceTable.targetAudience })
     .from(brandVoiceTable)
     .where(eq(brandVoiceTable.userId, product.userId))
-    .limit(1);
+    .limit(1)
+    .catch(() => [undefined]);
 
   const ma = (product.marketingAssets ?? {}) as MarketingAssets;
+  const content = (product.content ?? {}) as ProductContent;
+  const sections = (content.sections ?? []).sort((a, b) => a.order - b.order);
+
   const displayTitle = ma.productTitle || product.title;
-  const description = ma.productDescription ?? null;
+  const fullDescription = ma.productDescription ?? null;
+  // First paragraph as tagline
+  const tagline = fullDescription
+    ? fullDescription.split(/\n\n+/)[0].replace(/\*\*/g, "").slice(0, 180)
+    : null;
   const coverImage = ma.bookMockupUrl ?? ma.coverThumbnailUrl ?? ma.thumbnailUrl ?? null;
-  const hashtags: string[] = ma.hashtags ?? [];
+  const hashtags: string[] = (ma.hashtags ?? []).slice(0, 8);
   const creatorName = bv?.brandName ?? null;
   const checkoutUrl = ma.checkoutUrl?.trim() || null;
   const priceLabel = ma.priceLabel?.trim() || null;
   const formatLabel = product.format
     ? product.format.charAt(0).toUpperCase() + product.format.slice(1).replace(/_/g, " ")
     : "Digital Product";
-
-  // Native selling
   const isNativePublished = !!(ma.isNativePublished && ma.nativePrice);
-  const nativePriceLabel = ma.nativePrice
-    ? `£${(ma.nativePrice / 100).toFixed(2)}`
-    : null;
+  const nativePriceLabel = ma.nativePrice ? `£${(ma.nativePrice / 100).toFixed(2)}` : null;
+
+  // Parse description into paragraphs
+  const descParagraphs = fullDescription
+    ? fullDescription.split(/\n\n+/).filter(Boolean)
+    : [];
+
+  const creatorInitials = creatorName
+    ? creatorName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()
+    : "CF";
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "linear-gradient(160deg, #fff7ed 0%, #fffbf7 50%, #fff 100%)",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-        padding: "40px 16px 80px",
-      }}
-    >
-      <div style={{ maxWidth: "700px", margin: "0 auto" }}>
-        {/* Purchase success banner */}
-        {purchased && (
-          <div
-            style={{
-              marginBottom: "28px",
-              padding: "16px 24px",
-              borderRadius: "12px",
-              background: "#f0fdf4",
-              border: "1px solid #86efac",
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-            }}
-          >
-            <span style={{ fontSize: "22px" }}>✅</span>
-            <div>
-              <p style={{ margin: 0, fontWeight: 700, fontSize: "15px", color: "#166534" }}>
-                Purchase complete!
-              </p>
-              <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#16a34a" }}>
-                Check your email for your download link. It&apos;s valid for 7 days.
-              </p>
-            </div>
-          </div>
-        )}
+    <main style={{ minHeight: "100vh", background: "#f5f4f0", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+      <style>{`
+        .product-grid { display: grid; grid-template-columns: 1fr; gap: 32px; max-width: 1100px; margin: 0 auto; padding: 32px 16px 80px; }
+        @media (min-width: 768px) { .product-grid { grid-template-columns: 1fr 420px; padding: 48px 32px 80px; align-items: start; } }
+        .purchase-card { background: #fff; border-radius: 20px; padding: 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); position: sticky; top: 24px; }
+        .buy-btn { display: block; width: 100%; padding: 16px 24px; border-radius: 12px; background: linear-gradient(135deg,#f97316 0%,#ea580c 100%); color: #fff; font-size: 17px; font-weight: 700; text-align: center; text-decoration: none; border: none; cursor: pointer; box-shadow: 0 4px 20px rgba(249,115,22,0.4); letter-spacing: -0.2px; transition: opacity 0.15s; }
+        .buy-btn:hover { opacity: 0.92; }
+        .trust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+        .trust-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6b7280; font-weight: 500; }
+        .section-list { display: flex; flex-direction: column; gap: 10px; }
+        .section-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; background: #fff; border-radius: 12px; border: 1px solid #f3f4f6; }
+        .desc-para { margin: 0 0 16px; font-size: 15px; color: #374151; line-height: 1.75; }
+        .desc-para:last-child { margin-bottom: 0; }
+        @media (max-width: 767px) { .purchase-card { position: static; } }
+      `}</style>
 
-        {/* Creator badge */}
-        {creatorName && (
-          <div style={{ marginBottom: "20px", textAlign: "center" }}>
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                fontSize: "13px",
-                fontWeight: 600,
-                color: "#6b7280",
-                letterSpacing: "0.02em",
-              }}
-            >
-              by {creatorName}
-            </span>
-          </div>
+      {/* Top nav */}
+      <nav style={{ background: "#fff", borderBottom: "1px solid #f3f4f6", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        {creatorName ? (
+          <a href={`/c/${product.userId}`} style={{ fontWeight: 700, fontSize: "15px", color: "#111827", textDecoration: "none" }}>
+            {creatorName}
+          </a>
+        ) : (
+          <span style={{ fontWeight: 700, fontSize: "15px", color: "#111827" }}>Digital Product</span>
         )}
+        <span style={{ fontSize: "12px", color: "#9ca3af" }}>
+          Powered by <span style={{ color: "#f97316", fontWeight: 600 }}>Content Flywheel</span>
+        </span>
+      </nav>
 
-        {/* Cover image */}
-        {coverImage && (
-          <div
-            style={{
-              marginBottom: "36px",
-              borderRadius: "20px",
-              overflow: "hidden",
-              boxShadow: "0 8px 40px rgba(0,0,0,0.10)",
-              lineHeight: 0,
-              maxWidth: "480px",
-              margin: "0 auto 36px",
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={coverImage}
-              alt={displayTitle}
-              style={{ width: "100%", display: "block" }}
-            />
+      {/* Purchase success banner */}
+      {purchased && (
+        <div style={{ background: "#f0fdf4", borderBottom: "1px solid #86efac", padding: "14px 24px", display: "flex", alignItems: "center", gap: "12px", justifyContent: "center" }}>
+          <span style={{ fontSize: "18px" }}>✅</span>
+          <div>
+            <span style={{ fontWeight: 700, fontSize: "14px", color: "#166534" }}>Purchase complete! </span>
+            <span style={{ fontSize: "14px", color: "#16a34a" }}>Check your email for your download link (valid 7 days).</span>
           </div>
-        )}
-
-        {/* Format badge */}
-        <div style={{ textAlign: "center", marginBottom: "12px" }}>
-          <span
-            style={{
-              display: "inline-block",
-              padding: "4px 12px",
-              borderRadius: "999px",
-              background: "#fff7ed",
-              border: "1px solid #fed7aa",
-              fontSize: "12px",
-              fontWeight: 700,
-              color: "#c2410c",
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-            }}
-          >
-            {formatLabel}
-          </span>
         </div>
+      )}
 
-        {/* Title */}
-        <h1
-          style={{
-            margin: "0 0 16px",
-            fontSize: "clamp(26px, 5vw, 40px)",
-            fontWeight: 800,
-            color: "#111827",
-            lineHeight: 1.15,
-            letterSpacing: "-0.5px",
-            textAlign: "center",
-          }}
-        >
-          {displayTitle}
-        </h1>
+      <div className="product-grid">
+        {/* LEFT COLUMN */}
+        <div>
+          {/* Cover image */}
+          {coverImage && (
+            <div style={{ borderRadius: "20px", overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.12)", marginBottom: "28px", lineHeight: 0 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={coverImage} alt={displayTitle} style={{ width: "100%", display: "block" }} />
+            </div>
+          )}
 
-        {/* Description */}
-        {description && (
-          <p
-            style={{
-              margin: "0 0 36px",
-              fontSize: "16px",
-              color: "#4b5563",
-              lineHeight: 1.75,
-              textAlign: "center",
-              maxWidth: "560px",
-              marginLeft: "auto",
-              marginRight: "auto",
-            }}
-          >
-            {description}
-          </p>
-        )}
-
-        {/* CTA */}
-        <div style={{ textAlign: "center", marginBottom: "40px" }}>
-          {isNativePublished ? (
-            <>
-              <div style={{ marginBottom: "16px" }}>
-                <span
-                  style={{
-                    fontSize: "36px",
-                    fontWeight: 800,
-                    color: "#111827",
-                    letterSpacing: "-1px",
-                  }}
-                >
-                  {nativePriceLabel}
-                </span>
+          {/* What's inside */}
+          {sections.length > 0 && (
+            <div style={{ background: "#fff", borderRadius: "20px", padding: "28px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginBottom: "24px" }}>
+              <h2 style={{ margin: "0 0 20px", fontSize: "16px", fontWeight: 700, color: "#111827" }}>
+                What&apos;s inside
+              </h2>
+              <div className="section-list">
+                {sections.map((s, i) => (
+                  <div key={s.id ?? i} className="section-item">
+                    <div style={{ width: "22px", height: "22px", borderRadius: "50%", background: "#fff7ed", border: "1.5px solid #fed7aa", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: "11px", fontWeight: 700, color: "#f97316" }}>
+                      {i + 1}
+                    </div>
+                    <span style={{ fontSize: "14px", fontWeight: 600, color: "#374151", lineHeight: 1.4 }}>{s.title}</span>
+                  </div>
+                ))}
               </div>
-              <BuyButton productId={product.id} priceLabel={nativePriceLabel!} />
-              <p style={{ margin: "12px 0 0", fontSize: "13px", color: "#9ca3af" }}>
-                Instant digital download — delivered to your inbox
-              </p>
-            </>
-          ) : (
-            <>
-              {priceLabel && (
-                <div style={{ marginBottom: "12px" }}>
-                  <span
-                    style={{
-                      fontSize: "32px",
-                      fontWeight: 800,
-                      color: "#111827",
-                      letterSpacing: "-1px",
-                    }}
-                  >
-                    {priceLabel}
-                  </span>
-                </div>
-              )}
-              <a
-                href={checkoutUrl ?? `mailto:?subject=Interested in ${encodeURIComponent(displayTitle)}`}
-                target={checkoutUrl ? "_blank" : undefined}
-                rel={checkoutUrl ? "noopener noreferrer" : undefined}
-                style={{
-                  display: "inline-block",
-                  padding: "14px 36px",
-                  borderRadius: "12px",
-                  background: "linear-gradient(135deg,#f97316 0%,#ea6c0a 100%)",
-                  color: "#ffffff",
-                  fontSize: "16px",
-                  fontWeight: 700,
-                  textDecoration: "none",
-                  boxShadow: "0 4px 20px rgba(249,115,22,0.35)",
-                  letterSpacing: "-0.2px",
-                }}
-              >
-                Get this product
-              </a>
-              <p style={{ margin: "12px 0 0", fontSize: "13px", color: "#9ca3af" }}>
-                Instant digital download
-              </p>
-            </>
+            </div>
+          )}
+
+          {/* Full description */}
+          {descParagraphs.length > 0 && (
+            <div style={{ background: "#fff", borderRadius: "20px", padding: "28px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginBottom: "24px" }}>
+              <h2 style={{ margin: "0 0 16px", fontSize: "16px", fontWeight: 700, color: "#111827" }}>About this product</h2>
+              {descParagraphs.map((para, i) => (
+                <p key={i} className="desc-para">{para.replace(/\*\*/g, "")}</p>
+              ))}
+            </div>
+          )}
+
+          {/* Hashtags */}
+          {hashtags.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {hashtags.map((tag) => (
+                <span key={tag} style={{ display: "inline-block", padding: "4px 12px", borderRadius: "999px", background: "#fff", border: "1px solid #e5e7eb", fontSize: "12px", color: "#6b7280" }}>
+                  {tag.startsWith("#") ? tag : `#${tag}`}
+                </span>
+              ))}
+            </div>
           )}
         </div>
 
-        {/* What you get */}
-        {product.niche && (
-          <div
-            style={{
-              background: "#fff",
-              border: "1px solid #f3f4f6",
-              borderRadius: "16px",
-              padding: "24px 28px",
-              marginBottom: "28px",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
-            }}
-          >
-            <h2
-              style={{
-                margin: "0 0 12px",
-                fontSize: "13px",
-                fontWeight: 700,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: "#9ca3af",
-              }}
-            >
-              About this product
-            </h2>
-            <p style={{ margin: 0, fontSize: "15px", color: "#374151", lineHeight: 1.6 }}>
-              A {formatLabel.toLowerCase()} for <strong>{product.niche}</strong> — everything you need to get started, in one place.
-            </p>
-          </div>
-        )}
+        {/* RIGHT COLUMN — Purchase card */}
+        <div>
+          <div className="purchase-card">
+            {/* Format badge */}
+            <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: "999px", background: "#fff7ed", border: "1px solid #fed7aa", fontSize: "11px", fontWeight: 700, color: "#c2410c", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "14px" }}>
+              {formatLabel}
+            </span>
 
-        {/* Hashtags */}
-        {hashtags.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "center", marginBottom: "40px" }}>
-            {hashtags.map((tag) => (
-              <span
-                key={tag}
-                style={{
-                  display: "inline-block",
-                  padding: "4px 12px",
-                  borderRadius: "999px",
-                  background: "#f9fafb",
-                  border: "1px solid #e5e7eb",
-                  fontSize: "13px",
-                  color: "#6b7280",
-                }}
-              >
-                {tag.startsWith("#") ? tag : `#${tag}`}
-              </span>
-            ))}
-          </div>
-        )}
+            {/* Title */}
+            <h1 style={{ margin: "0 0 10px", fontSize: "clamp(20px,4vw,26px)", fontWeight: 800, color: "#111827", lineHeight: 1.2, letterSpacing: "-0.5px" }}>
+              {displayTitle}
+            </h1>
 
-        {/* Footer */}
-        <p style={{ textAlign: "center", fontSize: "12px", color: "#d1d5db" }}>
-          Made with{" "}
-          <span style={{ color: "#f97316", fontWeight: 600 }}>Content Flywheel</span>
-        </p>
+            {/* Tagline */}
+            {tagline && (
+              <p style={{ margin: "0 0 24px", fontSize: "14px", color: "#6b7280", lineHeight: 1.6 }}>
+                {tagline}{tagline.length >= 180 ? "…" : ""}
+              </p>
+            )}
+
+            {/* Price + CTA */}
+            {isNativePublished ? (
+              <>
+                <div style={{ margin: "0 0 16px" }}>
+                  <span style={{ fontSize: "38px", fontWeight: 800, color: "#111827", letterSpacing: "-1.5px" }}>
+                    {nativePriceLabel}
+                  </span>
+                  <span style={{ fontSize: "14px", color: "#9ca3af", marginLeft: "6px" }}>one-time</span>
+                </div>
+                <BuyButton productId={product.id} priceLabel={nativePriceLabel!} />
+              </>
+            ) : (
+              <>
+                {priceLabel && (
+                  <div style={{ margin: "0 0 16px" }}>
+                    <span style={{ fontSize: "38px", fontWeight: 800, color: "#111827", letterSpacing: "-1.5px" }}>{priceLabel}</span>
+                    <span style={{ fontSize: "14px", color: "#9ca3af", marginLeft: "6px" }}>one-time</span>
+                  </div>
+                )}
+                <a
+                  href={checkoutUrl ?? `mailto:?subject=Interested in ${encodeURIComponent(displayTitle)}`}
+                  target={checkoutUrl ? "_blank" : undefined}
+                  rel={checkoutUrl ? "noopener noreferrer" : undefined}
+                  className="buy-btn"
+                >
+                  Get this product {priceLabel ? `— ${priceLabel}` : ""}
+                </a>
+              </>
+            )}
+
+            {/* Trust badges */}
+            <div className="trust-grid">
+              <div className="trust-item"><span>🔒</span> Secure checkout</div>
+              <div className="trust-item"><span>📥</span> Instant download</div>
+              <div className="trust-item"><span>✉️</span> Email delivery</div>
+              <div className="trust-item"><span>💳</span> Stripe payments</div>
+            </div>
+
+            {/* Divider */}
+            <div style={{ borderTop: "1px solid #f3f4f6", margin: "20px 0" }} />
+
+            {/* Includes summary */}
+            {sections.length > 0 && (
+              <div>
+                <p style={{ margin: "0 0 10px", fontSize: "12px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Includes</p>
+                {sections.slice(0, 4).map((s, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "7px" }}>
+                    <span style={{ color: "#f97316", fontSize: "14px" }}>✓</span>
+                    <span style={{ fontSize: "13px", color: "#374151" }}>{s.title}</span>
+                  </div>
+                ))}
+                {sections.length > 4 && (
+                  <p style={{ margin: "6px 0 0", fontSize: "12px", color: "#9ca3af" }}>+ {sections.length - 4} more sections</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Creator card */}
+          {creatorName && (
+            <div style={{ background: "#fff", borderRadius: "16px", padding: "20px 24px", marginTop: "16px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", display: "flex", alignItems: "center", gap: "14px" }}>
+              <div style={{ width: "44px", height: "44px", borderRadius: "50%", background: "linear-gradient(135deg,#f97316,#fb923c)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", fontWeight: 800, color: "#fff", flexShrink: 0 }}>
+                {creatorInitials}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: "14px", color: "#111827" }}>{creatorName}</p>
+                {bv?.targetAudience && (
+                  <p style={{ margin: 0, fontSize: "12px", color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bv.targetAudience}</p>
+                )}
+              </div>
+              <a href={`/c/${product.userId}`} style={{ fontSize: "12px", color: "#f97316", fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>
+                More →
+              </a>
+            </div>
+          )}
+        </div>
       </div>
     </main>
   );
