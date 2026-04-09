@@ -232,6 +232,7 @@ export default async function CreatorProfilePage({
                 {publishedProducts.map((p) => {
                   const ma = p.marketingAssets as MarketingAssets | null;
                   const href = ma?.checkoutUrl || `/product/${p.id}`;
+                  const coverImg = ma?.bookMockupUrl ?? ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? null;
                   return (
                     <a
                       key={p.id}
@@ -243,40 +244,39 @@ export default async function CreatorProfilePage({
                         flexDirection: "column",
                         backgroundColor: themeStyle.cardBg,
                         borderRadius: "16px",
-                        padding: "18px 20px",
+                        overflow: "hidden",
                         textDecoration: "none",
                         border: `1px solid ${cardBorderColor}`,
                         boxShadow: cardShadow,
                       }}
                     >
-                      <p
-                        style={{
-                          margin: "0 0 6px",
-                          fontSize: "14px",
-                          fontWeight: "700",
-                          color: themeStyle.text,
-                        }}
-                      >
-                        {p.title}
-                      </p>
-                      {ma?.productDescription && (
+                      {/* Cover image or gradient placeholder */}
+                      {coverImg ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={coverImg} alt={p.title} style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }} />
+                      ) : (
+                        <div style={{ width: "100%", aspectRatio: "4/3", background: `linear-gradient(135deg, ${accentColor}22, ${accentColor}44)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontSize: "28px", opacity: 0.5 }}>📄</span>
+                        </div>
+                      )}
+                      <div style={{ padding: "14px 16px", flex: 1, display: "flex", flexDirection: "column" }}>
                         <p
                           style={{
-                            margin: "0 0 12px",
-                            fontSize: "12px",
-                            color: themeStyle.subText,
-                            lineHeight: "1.5",
-                            flex: 1,
+                            margin: "0 0 4px",
+                            fontSize: "13px",
+                            fontWeight: "700",
+                            color: themeStyle.text,
+                            lineHeight: "1.3",
                           }}
                         >
-                          {ma.productDescription}
+                          {p.title}
                         </p>
-                      )}
-                      {ma?.priceLabel && (
-                        <span style={{ fontSize: "16px", fontWeight: "800", color: accentColor }}>
-                          {ma.priceLabel}
-                        </span>
-                      )}
+                        {ma?.priceLabel && (
+                          <span style={{ fontSize: "15px", fontWeight: "800", color: accentColor, marginTop: "auto", paddingTop: "8px", display: "block" }}>
+                            {ma.priceLabel}
+                          </span>
+                        )}
+                      </div>
                     </a>
                   );
                 })}
@@ -289,6 +289,7 @@ export default async function CreatorProfilePage({
                 {publishedProducts.map((p) => {
                   const ma = p.marketingAssets as MarketingAssets | null;
                   const href = ma?.checkoutUrl || `/product/${p.id}`;
+                  const coverImg = ma?.bookMockupUrl ?? ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? null;
                   return (
                     <a
                       key={p.id}
@@ -298,16 +299,25 @@ export default async function CreatorProfilePage({
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "space-between",
+                        gap: "16px",
                         backgroundColor: themeStyle.cardBg,
                         borderRadius: "16px",
-                        padding: "18px 24px",
+                        overflow: "hidden",
                         textDecoration: "none",
                         border: `1px solid ${cardBorderColor}`,
                         boxShadow: cardShadow,
                       }}
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Thumbnail */}
+                      {coverImg ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={coverImg} alt={p.title} style={{ width: "80px", height: "80px", objectFit: "cover", flexShrink: 0, display: "block" }} />
+                      ) : (
+                        <div style={{ width: "80px", height: "80px", flexShrink: 0, background: `linear-gradient(135deg, ${accentColor}22, ${accentColor}44)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontSize: "22px", opacity: 0.5 }}>📄</span>
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0, padding: "16px 0" }}>
                         <p
                           style={{
                             margin: "0 0 4px",
@@ -336,7 +346,7 @@ export default async function CreatorProfilePage({
                           </p>
                         )}
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0, marginLeft: "16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0, paddingRight: "20px" }}>
                         {ma?.priceLabel && (
                           <span style={{ fontSize: "16px", fontWeight: "800", color: accentColor }}>
                             {ma.priceLabel}
@@ -372,6 +382,7 @@ export default async function CreatorProfilePage({
                   const p = publishedProducts[0];
                   const ma = p.marketingAssets as MarketingAssets | null;
                   const href = ma?.checkoutUrl || `/product/${p.id}`;
+                  const coverImg = ma?.bookMockupUrl ?? ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? null;
                   return (
                     <a
                       href={href}
@@ -381,74 +392,85 @@ export default async function CreatorProfilePage({
                         display: "block",
                         backgroundColor: themeStyle.cardBg,
                         borderRadius: "20px",
-                        padding: "28px 28px",
+                        overflow: "hidden",
                         textDecoration: "none",
                         border: `2px solid ${accentColor}40`,
-                        borderLeft: `4px solid ${accentColor}`,
                         boxShadow: `0 8px 32px ${accentColor}22`,
                       }}
                     >
-                      <div
-                        style={{
-                          display: "inline-block",
-                          padding: "3px 10px",
-                          borderRadius: "20px",
-                          background: `${accentColor}18`,
-                          color: accentColor,
-                          fontSize: "11px",
-                          fontWeight: "700",
-                          marginBottom: "12px",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                        }}
-                      >
-                        Featured
-                      </div>
-                      <h3
-                        style={{
-                          margin: "0 0 8px",
-                          fontSize: "20px",
-                          fontWeight: "800",
-                          color: themeStyle.text,
-                        }}
-                      >
-                        {p.title}
-                      </h3>
-                      {ma?.productDescription && (
-                        <p style={{ margin: "0 0 16px", fontSize: "14px", color: themeStyle.subText, lineHeight: "1.6" }}>
-                          {ma.productDescription}
-                        </p>
+                      {/* Hero image */}
+                      {coverImg ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={coverImg} alt={p.title} style={{ width: "100%", height: "200px", objectFit: "cover", display: "block" }} />
+                      ) : (
+                        <div style={{ width: "100%", height: "160px", background: `linear-gradient(135deg, ${accentColor}33, ${accentColor}66)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontSize: "40px", opacity: 0.6 }}>📄</span>
+                        </div>
                       )}
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                        {ma?.priceLabel && (
-                          <span style={{ fontSize: "22px", fontWeight: "800", color: accentColor }}>
-                            {ma.priceLabel}
-                          </span>
-                        )}
+                      <div style={{ padding: "24px 24px 24px" }}>
                         <div
                           style={{
                             display: "inline-block",
-                            padding: "10px 20px",
-                            borderRadius: "10px",
-                            background: accentColor,
-                            color: "#fff",
-                            fontSize: "14px",
+                            padding: "3px 10px",
+                            borderRadius: "20px",
+                            background: `${accentColor}18`,
+                            color: accentColor,
+                            fontSize: "11px",
                             fontWeight: "700",
+                            marginBottom: "10px",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em",
                           }}
                         >
-                          Get it now →
+                          Featured
+                        </div>
+                        <h3
+                          style={{
+                            margin: "0 0 8px",
+                            fontSize: "20px",
+                            fontWeight: "800",
+                            color: themeStyle.text,
+                          }}
+                        >
+                          {p.title}
+                        </h3>
+                        {ma?.productDescription && (
+                          <p style={{ margin: "0 0 16px", fontSize: "14px", color: themeStyle.subText, lineHeight: "1.6" }}>
+                            {ma.productDescription.slice(0, 120)}{ma.productDescription.length > 120 ? "…" : ""}
+                          </p>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          {ma?.priceLabel && (
+                            <span style={{ fontSize: "22px", fontWeight: "800", color: accentColor }}>
+                              {ma.priceLabel}
+                            </span>
+                          )}
+                          <div
+                            style={{
+                              display: "inline-block",
+                              padding: "10px 20px",
+                              borderRadius: "10px",
+                              background: accentColor,
+                              color: "#fff",
+                              fontSize: "14px",
+                              fontWeight: "700",
+                            }}
+                          >
+                            Get it now →
+                          </div>
                         </div>
                       </div>
                     </a>
                   );
                 })()}
 
-                {/* Remaining products in 2-col grid */}
+                {/* Remaining products in 2-col grid with thumbnails */}
                 {publishedProducts.length > 1 && (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                     {publishedProducts.slice(1).map((p) => {
                       const ma = p.marketingAssets as MarketingAssets | null;
                       const href = ma?.checkoutUrl || `/product/${p.id}`;
+                      const coverImg = ma?.bookMockupUrl ?? ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? null;
                       return (
                         <a
                           key={p.id}
@@ -460,40 +482,38 @@ export default async function CreatorProfilePage({
                             flexDirection: "column",
                             backgroundColor: themeStyle.cardBg,
                             borderRadius: "16px",
-                            padding: "18px 20px",
+                            overflow: "hidden",
                             textDecoration: "none",
                             border: `1px solid ${cardBorderColor}`,
                             boxShadow: cardShadow,
                           }}
                         >
-                          <p
-                            style={{
-                              margin: "0 0 6px",
-                              fontSize: "14px",
-                              fontWeight: "700",
-                              color: themeStyle.text,
-                            }}
-                          >
-                            {p.title}
-                          </p>
-                          {ma?.productDescription && (
+                          {coverImg ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={coverImg} alt={p.title} style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }} />
+                          ) : (
+                            <div style={{ width: "100%", aspectRatio: "4/3", background: `linear-gradient(135deg, ${accentColor}22, ${accentColor}44)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <span style={{ fontSize: "24px", opacity: 0.5 }}>📄</span>
+                            </div>
+                          )}
+                          <div style={{ padding: "14px 16px" }}>
                             <p
                               style={{
-                                margin: "0 0 12px",
-                                fontSize: "12px",
-                                color: themeStyle.subText,
-                                lineHeight: "1.5",
-                                flex: 1,
+                                margin: "0 0 4px",
+                                fontSize: "13px",
+                                fontWeight: "700",
+                                color: themeStyle.text,
+                                lineHeight: "1.3",
                               }}
                             >
-                              {ma.productDescription}
+                              {p.title}
                             </p>
-                          )}
-                          {ma?.priceLabel && (
-                            <span style={{ fontSize: "16px", fontWeight: "800", color: accentColor }}>
-                              {ma.priceLabel}
-                            </span>
-                          )}
+                            {ma?.priceLabel && (
+                              <span style={{ fontSize: "15px", fontWeight: "800", color: accentColor }}>
+                                {ma.priceLabel}
+                              </span>
+                            )}
+                          </div>
                         </a>
                       );
                     })}

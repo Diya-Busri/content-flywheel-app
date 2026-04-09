@@ -1091,6 +1091,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const [coverThumbnailCaptureTrigger, setCoverThumbnailCaptureTrigger] = useState(0);
   const savedPageIndexRef = useRef<number | null>(null);
+  const coverImageInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedTextMeta, setSelectedTextMeta] = useState<SelectedTextMeta | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([]);
@@ -3832,6 +3833,29 @@ export default function ProductEditor({ productId }: { productId: string }) {
     [toast]
   );
 
+  const handleCoverImageUpload = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Image files only", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Max 5MB", variant: "destructive" });
+      return;
+    }
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("type", "product-cover");
+      const res = await fetch("/api/upload/store-image", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      saveMarketingEdits({ coverThumbnailUrl: data.url });
+      toast({ title: "Cover image uploaded!" });
+    } catch (err) {
+      toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    }
+  }, [saveMarketingEdits, toast]);
+
   const hasDalleThumbnail = !!marketingAssets.thumbnailUrl;
   const effectiveOrientation = (marketingAssets as { thumbnailOrientation?: "horizontal" | "vertical" }).thumbnailOrientation ?? thumbnailOrientation;
   const thumbCaptureWidth = effectiveOrientation === "vertical" ? 1024 : hasDalleThumbnail ? 1792 : 1600;
@@ -6361,6 +6385,60 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         }}
                       />
                     </div>
+
+                    {/* Sales page cover image upload */}
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <Label className="text-xs font-medium text-gray-700">Sales page cover image</Label>
+                          <p className="text-xs text-gray-400 mt-0.5">Shown at the top of your public product page &amp; store</p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1.5 shrink-0 border-gray-200 text-xs"
+                          onClick={() => coverImageInputRef.current?.click()}
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          Upload image
+                        </Button>
+                        <input
+                          ref={coverImageInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleCoverImageUpload(f);
+                            e.target.value = "";
+                          }}
+                        />
+                      </div>
+                      {marketingAssets.coverThumbnailUrl ? (
+                        <div className="relative rounded-lg overflow-hidden border border-gray-200">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={marketingAssets.coverThumbnailUrl} alt="Cover" className="w-full object-cover max-h-48" />
+                          <button
+                            type="button"
+                            onClick={() => saveMarketingEdits({ coverThumbnailUrl: null })}
+                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors text-xs"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                          className="rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 p-6 text-center cursor-pointer hover:border-orange-300 hover:bg-orange-50 transition-colors"
+                          onClick={() => coverImageInputRef.current?.click()}
+                        >
+                          <ImageIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                          <p className="text-xs text-gray-400">Click to upload a cover image</p>
+                          <p className="text-xs text-gray-300 mt-0.5">JPG, PNG, WEBP · max 5MB</p>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Label className="text-xs font-medium text-gray-700">Product title</Label>
