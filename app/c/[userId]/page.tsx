@@ -2,7 +2,6 @@ import { db } from "@/db/db";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
-import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { MarketingAssets } from "@/db/schema/products-schema";
 
@@ -11,9 +10,9 @@ export const dynamic = "force-dynamic";
 export default async function CreatorProfilePage({
   params,
 }: {
-  params: { userId: string };
+  params: Promise<{ userId: string }>;
 }) {
-  const { userId } = params;
+  const { userId } = await params;
 
   const [brandVoice] = await db
     .select()
