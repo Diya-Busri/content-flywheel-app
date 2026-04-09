@@ -71,7 +71,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: Next
     case "tiktok": {
       const clientKey = process.env.TIKTOK_CLIENT_KEY?.trim() ?? "";
       if (!clientKey) return null;
-      const scopes = "user.info.basic,user.info.profile,user.info.stats,video.list";
+      const scopes = "user.info.basic,user.info.profile,user.info.stats,video.list,video.publish";
       const params = new URLSearchParams({
         client_key: clientKey,
         scope: scopes,
