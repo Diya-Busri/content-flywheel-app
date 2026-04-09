@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, Save, ArrowLeft, Palette, Layout, User, Image as ImageIcon } from "lucide-react";
+import { Loader2, Save, ArrowLeft, Palette, Layout, User, Image as ImageIcon, Upload, X } from "lucide-react";
 import Link from "next/link";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -360,6 +360,30 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingProfile, setUploadingProfile] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const profileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadImage = useCallback(async (file: File, type: "banner" | "profile") => {
+    const setUploading = type === "banner" ? setUploadingBanner : setUploadingProfile;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("type", type);
+      const res = await fetch("/api/upload/store-image", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      const key = type === "banner" ? "bannerImageUrl" : "profileImageUrl";
+      setSettings((prev) => ({ ...prev, [key]: data.url }));
+      toast({ title: `${type === "banner" ? "Banner" : "Profile"} image uploaded!` });
+    } catch (err) {
+      toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  }, [toast]);
   const [settings, setSettings] = useState<StoreSettings>({
     theme: "warm",
     accentColor: "#f97316",
@@ -588,13 +612,27 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
             <SectionHeader icon={<User size={14} />} label="Profile" />
             <div className="space-y-3">
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5">Profile Image URL</label>
-                <Input
-                  value={settings.profileImageUrl ?? ""}
-                  onChange={(e) => set("profileImageUrl", e.target.value || null)}
-                  className="h-9 text-sm bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-orange-500/50"
-                  placeholder="https://example.com/avatar.jpg"
-                />
+                <label className="block text-xs text-gray-400 mb-1.5">Profile Image</label>
+                <input ref={profileInputRef} type="file" accept="image/*" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "profile"); e.target.value = ""; }} />
+                {settings.profileImageUrl ? (
+                  <div className="flex items-center gap-2">
+                    <img src={settings.profileImageUrl} alt="Profile" className="w-10 h-10 rounded-full object-cover border border-white/10 flex-shrink-0" />
+                    <span className="text-xs text-gray-400 flex-1 truncate">{settings.profileImageUrl.split("/").pop()}</span>
+                    <button onClick={() => set("profileImageUrl", null)} className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0"><X size={14} /></button>
+                  </div>
+                ) : (
+                  <Button type="button" variant="outline" size="sm" onClick={() => profileInputRef.current?.click()}
+                    disabled={uploadingProfile}
+                    className="w-full border-white/10 text-gray-300 hover:text-white hover:border-orange-500/50 bg-white/5">
+                    {uploadingProfile ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Upload size={14} className="mr-1.5" />}
+                    {uploadingProfile ? "Uploading…" : "Upload from device"}
+                  </Button>
+                )}
+                <p className="text-xs text-gray-600 mt-1.5">Or paste a URL:</p>
+                <Input value={settings.profileImageUrl ?? ""} onChange={(e) => set("profileImageUrl", e.target.value || null)}
+                  className="h-8 text-xs bg-white/5 border-white/10 text-white placeholder:text-gray-600 focus:border-orange-500/50 mt-1"
+                  placeholder="https://example.com/avatar.jpg" />
               </div>
               <div>
                 <label className="block text-xs text-gray-400 mb-1.5">
@@ -621,15 +659,30 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
             <div className="space-y-4">
               <div>
                 <label className="block text-xs text-gray-400 mb-1.5">
-                  Banner Image URL{" "}
-                  <span className="text-gray-600 font-normal">(takes priority over gradient)</span>
+                  Banner Image <span className="text-gray-600 font-normal">(takes priority over gradient)</span>
                 </label>
-                <Input
-                  value={settings.bannerImageUrl ?? ""}
-                  onChange={(e) => set("bannerImageUrl", e.target.value || null)}
-                  className="h-9 text-sm bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-orange-500/50"
-                  placeholder="https://example.com/banner.jpg"
-                />
+                <input ref={bannerInputRef} type="file" accept="image/*" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "banner"); e.target.value = ""; }} />
+                {settings.bannerImageUrl ? (
+                  <div className="relative rounded-lg overflow-hidden border border-white/10 mb-2">
+                    <img src={settings.bannerImageUrl} alt="Banner" className="w-full h-20 object-cover" />
+                    <button onClick={() => set("bannerImageUrl", null)}
+                      className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors">
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <Button type="button" variant="outline" size="sm" onClick={() => bannerInputRef.current?.click()}
+                    disabled={uploadingBanner}
+                    className="w-full border-white/10 text-gray-300 hover:text-white hover:border-orange-500/50 bg-white/5 mb-2">
+                    {uploadingBanner ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Upload size={14} className="mr-1.5" />}
+                    {uploadingBanner ? "Uploading…" : "Upload from device"}
+                  </Button>
+                )}
+                <p className="text-xs text-gray-600 mt-1.5">Or paste a URL:</p>
+                <Input value={settings.bannerImageUrl ?? ""} onChange={(e) => set("bannerImageUrl", e.target.value || null)}
+                  className="h-8 text-xs bg-white/5 border-white/10 text-white placeholder:text-gray-600 focus:border-orange-500/50 mt-1"
+                  placeholder="https://example.com/banner.jpg" />
               </div>
               <div>
                 <label className="block text-xs text-gray-400 mb-2">Or choose a gradient</label>
