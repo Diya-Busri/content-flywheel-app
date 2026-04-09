@@ -1,12 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { SignedIn, SignedOut, SignOutButton } from "@clerk/nextjs";
+import { usePathname } from "next/navigation";
 
 const NAV_OFFSET_PX = 80;
 
@@ -17,132 +15,125 @@ function scrollToSection(id: string) {
   window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
 }
 
+const NAV_LINKS = [
+  { label: "Features", id: "features", href: "/#features" },
+  { label: "How it Works", id: "how-it-works", href: "/#how-it-works" },
+  { label: "Pricing", id: null, href: "/pricing" },
+];
+
 export function LandingNavbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const pathname = usePathname();
+  const isHome = pathname === "/";
 
-  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
-    e.preventDefault();
-    scrollToSection(id);
-    setMobileOpen(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, id: string | null, href: string) => {
+    if (isHome && id) {
+      e.preventDefault();
+      scrollToSection(id);
+      setMobileOpen(false);
+    }
   };
 
-  const navLinks = [
-    { label: "Features", id: "features" },
-    { label: "How it Works", id: "how-it-works" },
-    { label: "Pricing", id: "pricing-preview" },
-  ];
-
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
+    <header
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        scrolled
+          ? "bg-black/80 backdrop-blur-xl border-b border-white/10 shadow-xl shadow-black/20"
+          : "bg-transparent"
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
         {/* Logo */}
-        <Link
-          href="/"
-          className="flex items-center shrink-0 text-xl font-bold text-foreground"
-          aria-label="Content Flywheel home"
-        >
-          Content <span className="text-orange-500">Flywheel</span>
+        <Link href="/" className="flex items-center shrink-0 text-xl font-extrabold text-white" aria-label="Content Flywheel home">
+          Content<span className="text-orange-500">Flywheel</span>
         </Link>
 
-        {/* Desktop nav - more spacing */}
-        <nav className="hidden md:flex items-center gap-10">
-          {navLinks.map(({ label, id }) => (
+        {/* Desktop nav */}
+        <nav className="hidden md:flex items-center gap-8">
+          {NAV_LINKS.map(({ label, id, href }) => (
             <a
-              key={id}
-              href={`#${id}`}
-              onClick={(e) => handleNavClick(e, id)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
+              key={label}
+              href={href}
+              onClick={(e) => handleNavClick(e, id, href)}
+              className="text-white/60 hover:text-white transition-colors text-sm font-medium"
             >
               {label}
             </a>
           ))}
         </nav>
 
-        {/* Desktop CTA + theme - more spacing */}
-        <div className="hidden md:flex items-center gap-6">
-          <ThemeToggle />
+        {/* Desktop CTAs */}
+        <div className="hidden md:flex items-center gap-4">
           <SignedOut>
-            <Link
-              href="/sign-in"
-              className="text-muted-foreground hover:text-foreground transition-colors hidden sm:block"
-            >
+            <Link href="/sign-in" className="text-white/60 hover:text-white transition-colors text-sm font-medium">
               Sign In
             </Link>
-            <Link
-              href="/sign-up"
-              className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold text-sm text-white transition-all hover:scale-105"
-            >
-              Start Creating Free
+            <Link href="/sign-up" className="px-5 py-2.5 bg-orange-500 hover:bg-orange-400 rounded-xl font-bold text-sm text-white transition-all hover:scale-105 shadow-lg shadow-orange-500/25">
+              Start free →
             </Link>
           </SignedOut>
           <SignedIn>
-            <Link href="/dashboard" className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold text-sm text-white transition-all hover:scale-105">
+            <Link href="/dashboard" className="px-5 py-2.5 bg-orange-500 hover:bg-orange-400 rounded-xl font-bold text-sm text-white transition-all hover:scale-105 shadow-lg shadow-orange-500/25">
               Go to Dashboard
             </Link>
             <SignOutButton redirectUrl="/">
-              <button className="text-muted-foreground hover:text-foreground transition-colors text-sm">
+              <button className="text-white/60 hover:text-white transition-colors text-sm font-medium">
                 Sign Out
               </button>
             </SignOutButton>
           </SignedIn>
         </div>
 
-        {/* Mobile: theme + menu */}
-        <div className="flex items-center gap-2 md:hidden">
-          <ThemeToggle />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() => setMobileOpen((o) => !o)}
-            aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          >
-            {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </Button>
-        </div>
+        {/* Mobile hamburger */}
+        <button
+          className="flex items-center justify-center md:hidden w-9 h-9 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+          onClick={() => setMobileOpen((o) => !o)}
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+        >
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
       </div>
 
-      {/* Mobile dropdown */}
+      {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-border bg-background px-4 py-4 flex flex-col gap-2">
-          {navLinks.map(({ label, id }) => (
+        <div className="md:hidden bg-black/95 backdrop-blur-xl border-t border-white/10 px-4 py-4 flex flex-col gap-1">
+          {NAV_LINKS.map(({ label, id, href }) => (
             <a
-              key={id}
-              href={`#${id}`}
-              onClick={(e) => handleNavClick(e, id)}
-              className={cn(
-                "rounded-lg px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-accent"
-              )}
+              key={label}
+              href={href}
+              onClick={(e) => { handleNavClick(e, id, href); setMobileOpen(false); }}
+              className="rounded-xl px-4 py-3 text-white/60 hover:text-white hover:bg-white/5 transition-colors text-sm font-medium"
             >
               {label}
             </a>
           ))}
-          <SignedOut>
-            <Link
-              href="/sign-in"
-              onClick={() => setMobileOpen(false)}
-              className="rounded-lg px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-accent"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/sign-up"
-              onClick={() => setMobileOpen(false)}
-              className="rounded-lg px-4 py-3 bg-orange-500 hover:bg-orange-600 font-semibold text-center text-white"
-            >
-              Start Creating Free
-            </Link>
-          </SignedOut>
-          <SignedIn>
-            <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="rounded-lg px-4 py-3 bg-orange-500 hover:bg-orange-600 font-semibold text-center text-white">
-              Go to Dashboard
-            </Link>
-            <SignOutButton redirectUrl="/">
-              <button className="rounded-lg px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-accent text-left w-full">
-                Sign Out
-              </button>
-            </SignOutButton>
-          </SignedIn>
+          <div className="mt-2 pt-2 border-t border-white/10 flex flex-col gap-2">
+            <SignedOut>
+              <Link href="/sign-in" onClick={() => setMobileOpen(false)} className="rounded-xl px-4 py-3 text-white/60 hover:text-white hover:bg-white/5 transition-colors text-sm font-medium">
+                Sign In
+              </Link>
+              <Link href="/sign-up" onClick={() => setMobileOpen(false)} className="rounded-xl px-4 py-3 bg-orange-500 hover:bg-orange-400 font-bold text-center text-white text-sm transition-colors">
+                Start free →
+              </Link>
+            </SignedOut>
+            <SignedIn>
+              <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="rounded-xl px-4 py-3 bg-orange-500 hover:bg-orange-400 font-bold text-center text-white text-sm transition-colors">
+                Go to Dashboard
+              </Link>
+              <SignOutButton redirectUrl="/">
+                <button className="rounded-xl px-4 py-3 text-white/60 hover:text-white hover:bg-white/5 text-left w-full text-sm transition-colors">
+                  Sign Out
+                </button>
+              </SignOutButton>
+            </SignedIn>
+          </div>
         </div>
       )}
     </header>
