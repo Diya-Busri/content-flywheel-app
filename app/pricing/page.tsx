@@ -1,50 +1,57 @@
 /**
- * Content Flywheel Pro — Pricing (paywall)
- * Monthly £69.99/month, Yearly £671.90/year (£55.99/month billed annually). Subscribe via Stripe Checkout.
+ * Content Flywheel Pro — Pricing
+ * Monthly: £29/mo | Annual: £228/yr (£19/mo, save 34%)
+ *
+ * NOTE: Update Stripe price IDs in /api/stripe-checkout to match these amounts.
  */
 "use client";
 
 import { useState } from "react";
-import { Check, Tag, Loader2, X } from "lucide-react";
-import { motion, useReducedMotion } from "framer-motion";
+import { Check, Tag, Loader2, X, Zap, Shield, Star } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { LightNavbar } from "@/components/marketing/light-navbar";
 import { LightFooter } from "@/components/marketing/light-footer";
 import { useToast } from "@/components/ui/use-toast";
 
-const ACCENT = "#F5B942";
-const CONTAINER = "mx-auto max-w-6xl";
-
 const FEATURES = [
-  "Unlimited digital product creation",
-  "Unlimited TikTok Shop scripts",
-  "AI-powered video creation guides",
-  "Script compliance checker",
-  "Goal tracking",
-  "My Library storage",
+  { text: "AI digital product creator (ebooks, planners, workbooks)", highlight: true },
+  { text: "Branded creator store with custom URL" },
+  { text: "Stripe payments — 0% platform fees" },
+  { text: "Unlimited digital products" },
+  { text: "Order management & automatic download delivery" },
+  { text: "Email marketing & subscriber list" },
+  { text: "Automated drip sequences" },
+  { text: "Affiliate programme with referral tracking" },
+  { text: "Discount codes with expiry & usage limits" },
+  { text: "Product reviews & testimonials" },
+  { text: "Product page analytics & view tracking" },
+  { text: "TikTok Shop scripts & video creation guides" },
+  { text: "Script compliance checker" },
+  { text: "Goal tracker & content calendar" },
 ];
 
 const PLANS = [
   {
     name: "Monthly",
-    price: "£69.99",
+    price: "£29",
     period: "/month",
-    baseAmount: 6999, // pence
-    description: "Flexible month-to-month access.",
-    cta: "Subscribe",
+    subtext: "Billed monthly. Cancel anytime.",
+    baseAmount: 2900,
     plan: "monthly" as const,
     highlighted: false,
     badge: null as string | null,
+    saving: null as string | null,
   },
   {
-    name: "Yearly",
-    price: "£671.90",
-    period: "/year",
-    baseAmount: 67190, // pence
-    description: "£55.99/month billed annually. Save 20% when you commit for a year.",
-    cta: "Subscribe",
+    name: "Annual",
+    price: "£19",
+    period: "/month",
+    subtext: "£228 billed annually.",
+    baseAmount: 22800,
     plan: "yearly" as const,
     highlighted: true,
-    badge: "Save 20%",
+    badge: "Most popular",
+    saving: "Save 34% — 4 months free",
   },
 ];
 
@@ -56,21 +63,30 @@ interface PromoResult {
   error?: string;
 }
 
-function formatDiscount(result: PromoResult, baseAmount: number): string {
+function formatDiscountedPrice(result: PromoResult, baseAmount: number, isAnnual: boolean): string {
   if (result.discountPercent && result.discountPercent > 0) {
     const saved = Math.round((baseAmount * result.discountPercent) / 100);
-    const final = baseAmount - saved;
-    return `£${(final / 100).toFixed(2)} (save ${result.discountPercent}%)`;
+    const final = (baseAmount - saved) / 100;
+    const monthly = isAnnual ? (final / 12).toFixed(2) : final.toFixed(2);
+    return `£${monthly}`;
   }
   if (result.discountAmount && result.discountAmount > 0) {
-    const final = Math.max(0, baseAmount - result.discountAmount);
-    return `£${(final / 100).toFixed(2)} (save £${(result.discountAmount / 100).toFixed(2)})`;
+    const final = Math.max(0, baseAmount - result.discountAmount) / 100;
+    const monthly = isAnnual ? (final / 12).toFixed(2) : final.toFixed(2);
+    return `£${monthly}`;
   }
   return "";
 }
 
+const COMPARISON = [
+  { tool: "Stan Store", price: "£23/mo", features: "Store only" },
+  { tool: "Gumroad", price: "10% per sale", features: "Store only" },
+  { tool: "ConvertKit", price: "£29/mo", features: "Email only" },
+  { tool: "Kajabi", price: "£119/mo", features: "All-in-one" },
+  { tool: "Content Flywheel", price: "£29/mo", features: "All-in-one + AI", highlight: true },
+];
+
 export default function PricingPage() {
-  const reduceMotion = useReducedMotion();
   const [loadingPlan, setLoadingPlan] = useState<"monthly" | "yearly" | null>(null);
   const [promoInput, setPromoInput] = useState("");
   const [promoApplied, setPromoApplied] = useState("");
@@ -98,39 +114,24 @@ export default function PricingPage() {
     setPromoLoading(false);
   };
 
-  const clearPromo = () => {
-    setPromoInput("");
-    setPromoApplied("");
-    setPromoResult(null);
-  };
+  const clearPromo = () => { setPromoInput(""); setPromoApplied(""); setPromoResult(null); };
 
   const handleSubscribe = async (plan: "monthly" | "yearly") => {
     setLoadingPlan(plan);
     try {
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const apiUrl = `${origin}/api/stripe-checkout`;
-      const res = await fetch(apiUrl, {
+      const res = await fetch(`${window.location.origin}/api/stripe-checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan, promoCode: promoApplied || undefined }),
         credentials: "same-origin",
       });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-
-      if (res.status === 401) {
-        window.location.href = "/sign-in";
-        return;
-      }
-
+      const data = await res.json().catch(() => ({})) as { url?: string; error?: string };
+      if (res.status === 401) { window.location.href = "/sign-in"; return; }
       if (res.ok && typeof data.url === "string" && data.url.startsWith("http")) {
-        window.location.assign(data.url);
-        return;
+        window.location.assign(data.url); return;
       }
-
-      const message = data.error || "Checkout failed. Please try again.";
-      toast({ title: "Checkout failed", description: message, variant: "destructive" });
+      toast({ title: "Checkout failed", description: data.error || "Please try again.", variant: "destructive" });
     } catch (e) {
-      console.error(e);
       toast({ title: "Checkout failed", description: e instanceof Error ? e.message : "Something went wrong.", variant: "destructive" });
     } finally {
       setLoadingPlan(null);
@@ -138,160 +139,264 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] text-[#0F172A]">
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
       <LightNavbar />
 
-      <main className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-        <div className={CONTAINER}>
+      <main className="px-4 py-24 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl">
+
+          {/* Header */}
           <motion.div
-            className="mb-16 text-center"
-            initial={{ opacity: 0, y: 20 }}
+            className="text-center mb-16"
+            initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           >
-            <h1 className="text-3xl font-bold tracking-tight text-[#0F172A] sm:text-4xl">
-              Content Flywheel Pro
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-sm font-semibold mb-6">
+              <Zap className="w-3.5 h-3.5" /> Simple, transparent pricing
+            </div>
+            <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tight text-white">
+              One plan.{" "}
+              <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
+                Everything included.
+              </span>
             </h1>
-            <p className="mx-auto mt-4 max-w-xl text-slate-600">
-              One subscription. Full access. Cancel anytime.
+            <p className="mx-auto mt-5 max-w-xl text-lg text-white/40">
+              No per-sale fees. No hidden charges. No extra tools to pay for.
             </p>
 
-            {/* Promo Code Input */}
+            {/* Promo code */}
             <div className="mx-auto mt-8 max-w-sm">
-              {!promoResult?.valid ? (
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={promoInput}
-                      onChange={e => setPromoInput(e.target.value.toUpperCase())}
-                      onKeyDown={e => e.key === "Enter" && applyPromo()}
-                      placeholder="Promo code"
-                      className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2.5 text-sm text-[#0F172A] placeholder:text-slate-400 focus:border-[#F5B942] focus:outline-none focus:ring-2 focus:ring-[#F5B942]/20"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={applyPromo}
-                    disabled={promoLoading || !promoInput.trim()}
-                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-[#0F172A] hover:bg-slate-50 disabled:opacity-50 transition-colors"
-                  >
-                    {promoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
-                  </button>
-                </div>
-              ) : null}
-
-              {promoResult && !promoResult.valid && (
-                <p className="mt-2 text-sm text-red-500">{promoResult.error}</p>
-              )}
-
-              {promoResult?.valid && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-4 py-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-600">✅</span>
-                    <div className="text-left">
-                      <p className="text-sm font-semibold text-green-700">
-                        {promoApplied} applied!
-                      </p>
-                      {promoResult.description && (
-                        <p className="text-xs text-green-600">{promoResult.description}</p>
-                      )}
+              <AnimatePresence mode="wait">
+                {!promoResult?.valid ? (
+                  <motion.div key="input" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+                      <input
+                        type="text"
+                        value={promoInput}
+                        onChange={e => setPromoInput(e.target.value.toUpperCase())}
+                        onKeyDown={e => e.key === "Enter" && applyPromo()}
+                        placeholder="Promo code"
+                        className="w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:border-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                      />
                     </div>
-                  </div>
-                  <button onClick={clearPromo} className="text-green-500 hover:text-green-700">
-                    <X className="h-4 w-4" />
-                  </button>
-                </motion.div>
+                    <button
+                      onClick={applyPromo}
+                      disabled={promoLoading || !promoInput.trim()}
+                      className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40 transition-colors"
+                    >
+                      {promoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+                    </button>
+                  </motion.div>
+                ) : (
+                  <motion.div key="success" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                    className="flex items-center justify-between rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-400">✅</span>
+                      <p className="text-sm font-semibold text-green-400">{promoApplied} applied!</p>
+                    </div>
+                    <button onClick={clearPromo} className="text-green-500/60 hover:text-green-400"><X className="h-4 w-4" /></button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              {promoResult && !promoResult.valid && (
+                <p className="mt-2 text-sm text-red-400">{promoResult.error}</p>
               )}
             </div>
           </motion.div>
 
-          <div className="grid gap-8 lg:grid-cols-2 lg:gap-10">
+          {/* Pricing cards */}
+          <div className="grid gap-6 lg:grid-cols-2 max-w-4xl mx-auto mb-20">
             {PLANS.map((p, i) => {
               const discountedPrice = promoResult?.valid
-                ? formatDiscount(promoResult, p.baseAmount)
+                ? formatDiscountedPrice(promoResult, p.baseAmount, p.plan === "yearly")
                 : null;
 
               return (
                 <motion.div
                   key={p.name}
-                  initial={{ opacity: 0, y: 24 }}
+                  initial={{ opacity: 0, y: 28 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{
-                    duration: 0.5,
-                    delay: i * 0.1,
-                    ease: [0.25, 0.46, 0.45, 0.94],
-                  }}
-                  whileHover={
-                    reduceMotion ? undefined : { scale: 1.02, transition: { duration: 0.2 } }
-                  }
-                  className={`rounded-xl border bg-white p-8 shadow-sm transition-shadow ${
+                  transition={{ duration: 0.5, delay: i * 0.1, ease: [0.22, 1, 0.36, 1] }}
+                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                  className={`relative rounded-2xl p-8 transition-shadow ${
                     p.highlighted
-                      ? "border-[#F5B942] ring-2 ring-[#F5B942]/20"
-                      : "border-slate-200"
+                      ? "border-2 border-orange-500 bg-gradient-to-b from-orange-500/10 to-white/[0.02] shadow-2xl shadow-orange-500/20"
+                      : "border border-white/10 bg-white/[0.03]"
                   }`}
                 >
                   {p.badge && (
-                    <p
-                      className="mb-4 inline-block rounded-full px-3 py-1 text-xs font-semibold"
-                      style={{ backgroundColor: `${ACCENT}20`, color: ACCENT }}
-                    >
-                      {p.badge}
-                    </p>
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                      <span className="px-4 py-1.5 rounded-full bg-orange-500 text-white text-xs font-bold shadow-lg shadow-orange-500/30">
+                        ⭐ {p.badge}
+                      </span>
+                    </div>
                   )}
-                  <h2 className="text-xl font-semibold text-[#0F172A]">{p.name}</h2>
-                  <p className="mt-2 text-slate-600">{p.description}</p>
-                  <div className="mt-6 flex items-baseline gap-1">
-                    {discountedPrice ? (
-                      <div>
-                        <span className="text-2xl font-bold text-slate-400 line-through mr-2">{p.price}</span>
-                        <span className="text-4xl font-bold text-green-600">{discountedPrice.split(" ")[0]}</span>
-                        <span className="ml-1.5 text-sm font-medium text-green-500">
-                          {discountedPrice.slice(discountedPrice.indexOf("("))}
-                        </span>
-                      </div>
-                    ) : (
-                      <>
-                        <span className="text-4xl font-bold text-[#0F172A]">{p.price}</span>
-                        <span className="text-slate-500">{p.period}</span>
-                      </>
+
+                  <div className="mb-6">
+                    <h2 className="text-lg font-bold text-white">{p.name}</h2>
+                    {p.saving && (
+                      <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-semibold">
+                        {p.saving}
+                      </span>
                     )}
                   </div>
-                  <ul className="mt-6 space-y-3">
-                    {FEATURES.map((f) => (
-                      <li key={f} className="flex items-center gap-3 text-slate-600">
-                        <Check className="h-5 w-5 shrink-0" style={{ color: ACCENT }} />
-                        <span>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <motion.div
-                    className="mt-8"
-                    whileHover={reduceMotion ? undefined : { scale: 1.02 }}
-                    whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+
+                  {/* Price */}
+                  <div className="flex items-baseline gap-1 mb-1">
+                    <AnimatePresence mode="wait">
+                      {discountedPrice ? (
+                        <motion.div key="discounted" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-baseline gap-2">
+                          <span className="text-3xl font-bold text-white/30 line-through">{p.price}</span>
+                          <span className="text-5xl font-extrabold text-green-400">{discountedPrice}</span>
+                        </motion.div>
+                      ) : (
+                        <motion.span key="normal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-5xl font-extrabold text-white">
+                          {p.price}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                    <span className="text-white/40 text-base">{p.period}</span>
+                  </div>
+                  <p className="text-white/30 text-sm mb-8">{p.subtext}</p>
+
+                  <motion.button
+                    type="button"
+                    disabled={loadingPlan !== null}
+                    onClick={() => handleSubscribe(p.plan)}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-60 ${
+                      p.highlighted
+                        ? "bg-orange-500 hover:bg-orange-400 text-white shadow-lg shadow-orange-500/30"
+                        : "bg-white/10 hover:bg-white/15 text-white border border-white/10"
+                    }`}
                   >
-                    <button
-                      type="button"
-                      disabled={loadingPlan !== null}
-                      onClick={() => handleSubscribe(p.plan)}
-                      className={`inline-flex w-full justify-center rounded-xl px-5 py-3.5 text-sm font-semibold shadow-sm transition-colors disabled:opacity-70 ${
-                        p.highlighted
-                          ? "bg-[#F5B942] text-[#0F172A] hover:bg-[#e5a832]"
-                          : "border border-slate-200 bg-white text-[#0F172A] hover:border-slate-300 hover:bg-slate-50"
-                      }`}
-                    >
-                      {loadingPlan === p.plan ? "Redirecting…" : p.cta}
-                    </button>
-                  </motion.div>
+                    {loadingPlan === p.plan ? (
+                      <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Redirecting…</span>
+                    ) : (
+                      "Get started →"
+                    )}
+                  </motion.button>
+
+                  <p className="text-center text-xs text-white/20 mt-3">No credit card required to try</p>
                 </motion.div>
               );
             })}
           </div>
+
+          {/* Features list */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="max-w-2xl mx-auto mb-20"
+          >
+            <h2 className="text-2xl font-bold text-white text-center mb-8">Everything included in every plan</h2>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {FEATURES.map((f, i) => (
+                <motion.div
+                  key={f.text}
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.35 + i * 0.04 }}
+                  className={`flex items-start gap-3 px-4 py-3 rounded-xl ${f.highlight ? "bg-orange-500/10 border border-orange-500/20" : "bg-white/[0.03] border border-white/5"}`}
+                >
+                  <Check className={`w-4 h-4 shrink-0 mt-0.5 ${f.highlight ? "text-orange-400" : "text-orange-500"}`} />
+                  <span className={`text-sm ${f.highlight ? "text-orange-300 font-semibold" : "text-white/60"}`}>{f.text}</span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Comparison table */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="max-w-2xl mx-auto mb-20"
+          >
+            <h2 className="text-2xl font-bold text-white text-center mb-8">How we compare</h2>
+            <div className="rounded-2xl border border-white/10 overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/5 bg-white/[0.02]">
+                    <th className="text-left px-5 py-3.5 text-xs font-bold uppercase tracking-widest text-white/30">Platform</th>
+                    <th className="text-left px-5 py-3.5 text-xs font-bold uppercase tracking-widest text-white/30">Price</th>
+                    <th className="text-left px-5 py-3.5 text-xs font-bold uppercase tracking-widest text-white/30">What you get</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {COMPARISON.map((c, i) => (
+                    <tr
+                      key={c.tool}
+                      className={`border-b border-white/5 last:border-0 ${c.highlight ? "bg-orange-500/10" : ""}`}
+                    >
+                      <td className="px-5 py-4">
+                        <span className={`font-semibold text-sm ${c.highlight ? "text-orange-400" : "text-white/50"}`}>
+                          {c.highlight && "⭐ "}{c.tool}
+                        </span>
+                      </td>
+                      <td className={`px-5 py-4 text-sm font-bold ${c.highlight ? "text-orange-400" : "text-white/40"}`}>{c.price}</td>
+                      <td className={`px-5 py-4 text-sm ${c.highlight ? "text-orange-300" : "text-white/30"}`}>{c.features}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+
+          {/* Trust badges */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="grid sm:grid-cols-3 gap-4 max-w-2xl mx-auto mb-20"
+          >
+            {[
+              { icon: Shield, title: "Secure checkout", desc: "Powered by Stripe. Bank-level encryption." },
+              { icon: Zap, title: "Instant access", desc: "Your account is live the moment you subscribe." },
+              { icon: Star, title: "Cancel anytime", desc: "No lock-in. Cancel from your dashboard in seconds." },
+            ].map((t) => (
+              <div key={t.title} className="text-center px-4 py-5 rounded-2xl bg-white/[0.03] border border-white/5">
+                <t.icon className="w-6 h-6 text-orange-500 mx-auto mb-3" />
+                <p className="font-bold text-white text-sm mb-1">{t.title}</p>
+                <p className="text-white/30 text-xs leading-relaxed">{t.desc}</p>
+              </div>
+            ))}
+          </motion.div>
+
+          {/* FAQ */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="max-w-2xl mx-auto"
+          >
+            <h2 className="text-2xl font-bold text-white text-center mb-8">Questions</h2>
+            <div className="space-y-3">
+              {[
+                { q: "Is there a free trial?", a: "Yes — you get full access to try the platform before subscribing. No credit card required." },
+                { q: "Are there per-sale fees?", a: "No. We charge a flat subscription. You keep everything Stripe pays you, minus Stripe's standard card fee (~1.4% + 20p)." },
+                { q: "What happens if I cancel?", a: "Your subscription stays active until the end of the billing period. After that, no further charges." },
+                { q: "Can I switch between monthly and annual?", a: "Yes. Contact us and we'll sort it out, or manage it directly from your billing portal." },
+              ].map((item, i) => (
+                <motion.div
+                  key={item.q}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.55 + i * 0.07 }}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] px-5 py-4"
+                >
+                  <p className="font-semibold text-white text-sm mb-1.5">{item.q}</p>
+                  <p className="text-white/40 text-sm leading-relaxed">{item.a}</p>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
         </div>
       </main>
 
