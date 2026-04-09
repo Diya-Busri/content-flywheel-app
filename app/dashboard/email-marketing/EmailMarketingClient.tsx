@@ -723,6 +723,12 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
   const [savingAutomation, setSavingAutomation] = useState(false);
   const [togglingAutomation, setTogglingAutomation] = useState<string | null>(null);
 
+  // --- Email settings / lead magnet state ---
+  type EmailSettings = { leadMagnetProductId: string | null; leadMagnetEnabled: boolean } | null;
+  const [emailSettings, setEmailSettings] = useState<EmailSettings>(null);
+  const [savingLeadMagnet, setSavingLeadMagnet] = useState(false);
+  const [selectedLeadMagnetId, setSelectedLeadMagnetId] = useState<string>("");
+
   // Fetch published products for buyer audience picker
   useEffect(() => {
     fetch("/api/library?type=products")
@@ -754,10 +760,16 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
   const fetchAutomations = useCallback(async () => {
     setAutomationsLoading(true);
     try {
-      const res = await fetch("/api/email/automations");
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to fetch");
-      setAutomations(Array.isArray(data) ? data : []);
+      const [autoRes, settingsRes] = await Promise.all([
+        fetch("/api/email/automations"),
+        fetch("/api/email/settings"),
+      ]);
+      const autoData = await autoRes.json();
+      const settingsData = await settingsRes.json();
+      if (!autoRes.ok) throw new Error(autoData.error ?? "Failed to fetch");
+      setAutomations(Array.isArray(autoData) ? autoData : []);
+      setEmailSettings(settingsData);
+      setSelectedLeadMagnetId(settingsData?.leadMagnetProductId ?? "");
     } catch (err) {
       console.error(err);
     } finally {
@@ -1639,10 +1651,175 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
                 );
               })()}
 
+              {/* Post-Purchase Email card */}
+              {(() => {
+                const postAuto = automations.find((a) => a.type === "post_purchase");
+                const isEditing = editingAutomation === "post_purchase";
+                return (
+                  <div className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-2xl p-6 space-y-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
+                          <Package className="h-5 w-5 text-orange-500" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-white">Post-Purchase Email</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                            Sent automatically after someone buys your product — great for thank-yous, upsells, or next steps.
+                          </p>
+                          {postAuto && (
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                              Subject: <span className="text-gray-600 dark:text-gray-300 italic">{postAuto.subject}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {postAuto && (
+                          <button
+                            type="button"
+                            disabled={togglingAutomation === "post_purchase"}
+                            onClick={async () => {
+                              setTogglingAutomation("post_purchase");
+                              try {
+                                const res = await fetch("/api/email/automations", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "post_purchase", enabled: !postAuto.enabled }) });
+                                if (!res.ok) throw new Error("Failed");
+                                await fetchAutomations();
+                                toast({ title: postAuto.enabled ? "Post-purchase email paused" : "Post-purchase email activated! 🎉" });
+                              } catch { toast({ title: "Failed to update", variant: "destructive" }); }
+                              finally { setTogglingAutomation(null); }
+                            }}
+                            className="flex items-center gap-1.5 text-sm font-medium transition-colors"
+                          >
+                            {togglingAutomation === "post_purchase" ? <Loader2 className="h-5 w-5 animate-spin text-gray-400" /> : postAuto.enabled ? <ToggleRight className="h-7 w-7 text-green-500" /> : <ToggleLeft className="h-7 w-7 text-gray-400" />}
+                            <span className={postAuto.enabled ? "text-green-500" : "text-gray-400"}>{postAuto.enabled ? "On" : "Off"}</span>
+                          </button>
+                        )}
+                        <Button size="sm" variant="outline" className="h-8 text-xs border-gray-200 dark:border-white/10"
+                          onClick={() => {
+                            setEditingAutomation(isEditing ? null : "post_purchase");
+                            setAutomationDraft({ subject: postAuto?.subject ?? "Thanks for your purchase! 🎉", bodyHtml: postAuto?.bodyHtml ?? "Hey!\n\nThank you so much for buying [product name]. It really means a lot.\n\nIf you have any questions about getting started, just reply to this email — I'm here to help.\n\n[Your name]" });
+                          }}>
+                          <Pencil className="h-3.5 w-3.5 mr-1.5" />{postAuto ? "Edit" : "Set up"}
+                        </Button>
+                      </div>
+                    </div>
+                    {isEditing && (
+                      <div className="border-t border-gray-100 dark:border-white/5 pt-4 space-y-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Subject line</Label>
+                          <Input value={automationDraft.subject} onChange={(e) => setAutomationDraft((d) => ({ ...d, subject: e.target.value }))} className="border-gray-200 dark:border-white/10 focus-visible:ring-orange-500" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email body</Label>
+                          <p className="text-xs text-gray-400">This is sent after the download link email. Use it for a personal thank-you, tips, or next steps.</p>
+                          <Textarea value={automationDraft.bodyHtml} onChange={(e) => setAutomationDraft((d) => ({ ...d, bodyHtml: e.target.value }))} className="min-h-40 border-gray-200 dark:border-white/10 focus-visible:ring-orange-500 resize-y text-sm" />
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5" disabled={savingAutomation}
+                            onClick={async () => {
+                              if (!automationDraft.subject.trim() || !automationDraft.bodyHtml.trim()) { toast({ title: "Subject and body are required", variant: "destructive" }); return; }
+                              setSavingAutomation(true);
+                              try {
+                                const res = await fetch("/api/email/automations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "post_purchase", subject: automationDraft.subject, bodyHtml: automationDraft.bodyHtml, enabled: postAuto?.enabled ?? true }) });
+                                if (!res.ok) throw new Error("Failed");
+                                await fetchAutomations(); setEditingAutomation(null);
+                                toast({ title: "Post-purchase email saved! 🎉", description: "Buyers will receive this email after every purchase." });
+                              } catch { toast({ title: "Failed to save", variant: "destructive" }); }
+                              finally { setSavingAutomation(false); }
+                            }}>
+                            {savingAutomation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Save & Activate
+                          </Button>
+                          <Button size="sm" variant="ghost" className="text-xs text-gray-400" onClick={() => setEditingAutomation(null)}>Cancel</Button>
+                        </div>
+                      </div>
+                    )}
+                    {!postAuto && !isEditing && (
+                      <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-xl">
+                        <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                        <p className="text-xs text-amber-700 dark:text-amber-400">Not set up. Click <strong>Set up</strong> to write a personal thank-you for your buyers.</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Lead Magnet card */}
+              <div className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-2xl p-6 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                      <Gift className="h-5 w-5 text-red-500" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900 dark:text-white">Free Lead Magnet</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                        Offer a free product download to anyone who subscribes — great for growing your list fast.
+                      </p>
+                      {emailSettings?.leadMagnetEnabled && emailSettings.leadMagnetProductId && (
+                        <p className="text-xs text-green-600 dark:text-green-400 font-medium mt-1">
+                          ✓ Active — subscribers get a free download on sign-up
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {emailSettings?.leadMagnetEnabled && (
+                    <button type="button"
+                      onClick={async () => {
+                        setSavingLeadMagnet(true);
+                        try {
+                          await fetch("/api/email/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ leadMagnetProductId: emailSettings.leadMagnetProductId, leadMagnetEnabled: false }) });
+                          await fetchAutomations();
+                          toast({ title: "Lead magnet disabled" });
+                        } catch { toast({ title: "Failed", variant: "destructive" }); }
+                        finally { setSavingLeadMagnet(false); }
+                      }}
+                      className="flex items-center gap-1.5 text-sm font-medium transition-colors shrink-0">
+                      {savingLeadMagnet ? <Loader2 className="h-5 w-5 animate-spin text-gray-400" /> : <ToggleRight className="h-7 w-7 text-green-500" />}
+                      <span className="text-green-500">On</span>
+                    </button>
+                  )}
+                </div>
+                {publishedProducts.length === 0 ? (
+                  <p className="text-xs text-gray-400 bg-gray-50 dark:bg-white/5 rounded-xl p-3">Publish a product to your store first, then come back to set it as a lead magnet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Choose which product to give away free</Label>
+                      <div className="space-y-1.5">
+                        {publishedProducts.map((p) => (
+                          <button key={p.id} type="button" onClick={() => setSelectedLeadMagnetId(p.id)}
+                            className={`w-full text-left px-3 py-2.5 rounded-xl border transition-colors text-sm ${selectedLeadMagnetId === p.id ? "border-orange-400 bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 font-medium" : "border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:border-orange-200"}`}>
+                            <div className="flex items-center justify-between">
+                              <span className="truncate pr-2">{p.title}</span>
+                              {selectedLeadMagnetId === p.id && <Check className="h-4 w-4 text-orange-500 shrink-0" />}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5" disabled={!selectedLeadMagnetId || savingLeadMagnet}
+                      onClick={async () => {
+                        if (!selectedLeadMagnetId) return;
+                        setSavingLeadMagnet(true);
+                        try {
+                          await fetch("/api/email/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ leadMagnetProductId: selectedLeadMagnetId, leadMagnetEnabled: true }) });
+                          await fetchAutomations();
+                          toast({ title: "Lead magnet activated! 🎁", description: "New subscribers will receive a free download link." });
+                        } catch { toast({ title: "Failed to save", variant: "destructive" }); }
+                        finally { setSavingLeadMagnet(false); }
+                      }}>
+                      {savingLeadMagnet ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Gift className="h-3.5 w-3.5" />}
+                      {emailSettings?.leadMagnetEnabled ? "Update lead magnet" : "Activate lead magnet"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               {/* Coming soon cards */}
               {[
-                { icon: <Package className="h-5 w-5 text-blue-400" />, bg: "bg-blue-500/10 border-blue-500/20", title: "New Product Announcement", desc: "Auto-email your list when you publish a new product to your store." },
-                { icon: <Gift className="h-5 w-5 text-red-400" />, bg: "bg-red-500/10 border-red-500/20", title: "Re-engagement Campaign", desc: "Automatically reach out to subscribers who haven't opened an email in 30 days." },
+                { icon: <Megaphone className="h-5 w-5 text-blue-400" />, bg: "bg-blue-500/10 border-blue-500/20", title: "New Product Announcement", desc: "Auto-email your list when you publish a new product to your store." },
+                { icon: <Users className="h-5 w-5 text-red-400" />, bg: "bg-red-500/10 border-red-500/20", title: "Re-engagement Campaign", desc: "Automatically reach out to subscribers who haven't opened an email in 30 days." },
               ].map((card) => (
                 <div key={card.title} className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-2xl p-6 opacity-60">
                   <div className="flex items-start gap-3">
@@ -2004,6 +2181,49 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
               </div>
             </div>
           )}
+
+          {/* Grow your list */}
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-2xl p-5 space-y-4">
+            <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 text-sm">
+              <Megaphone className="h-4 w-4 text-orange-500" />
+              Grow your list
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Subscribe page link */}
+              <div className="p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 space-y-2">
+                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">Subscribe page</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Share this link anywhere to grow your list.</p>
+                <div className="flex items-center gap-2">
+                  <code className="text-xs bg-gray-100 dark:bg-white/10 px-2 py-1 rounded text-gray-600 dark:text-gray-400 truncate flex-1">
+                    {typeof window !== "undefined" ? `${window.location.origin}/subscribe/${userId}` : `/subscribe/${userId}`}
+                  </code>
+                  <Button size="sm" variant="outline" className="h-7 text-xs border-gray-200 dark:border-white/10 shrink-0"
+                    onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/subscribe/${userId}`); toast({ title: "Copied!" }); }}>
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+              {/* Embed widget */}
+              <div className="p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 space-y-2">
+                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">Embed on your website</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Paste this into any website or Notion page.</p>
+                <div className="flex items-center gap-2">
+                  <code className="text-xs bg-gray-100 dark:bg-white/10 px-2 py-1 rounded text-gray-600 dark:text-gray-400 truncate flex-1">
+                    {`<iframe src="...embed/subscribe/${userId}" ...>`}
+                  </code>
+                  <Button size="sm" variant="outline" className="h-7 text-xs border-gray-200 dark:border-white/10 shrink-0"
+                    onClick={() => {
+                      const origin = typeof window !== "undefined" ? window.location.origin : "https://contentflywheel.co.uk";
+                      const snippet = `<iframe src="${origin}/embed/subscribe/${userId}" width="100%" height="220" frameborder="0" style="border-radius:12px;max-width:420px;"></iframe>`;
+                      navigator.clipboard.writeText(snippet);
+                      toast({ title: "Embed code copied!" });
+                    }}>
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
 

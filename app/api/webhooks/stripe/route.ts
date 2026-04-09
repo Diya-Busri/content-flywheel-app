@@ -6,7 +6,9 @@ import { db } from "@/db/db";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { productSalesTable } from "@/db/schema/product-sales-schema";
 import { productsTable } from "@/db/schema/products-schema";
-import { eq } from "drizzle-orm";
+import { emailAutomationsTable } from "@/db/schema/email-automations-schema";
+import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
+import { eq, and, sql } from "drizzle-orm";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -233,6 +235,62 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
     console.error("[stripe-webhook] Failed to send delivery email:", emailErr);
   }
 
+  // Send creator's custom post-purchase email if configured
+  try {
+    const [postPurchaseAuto] = await db
+      .select({ subject: emailAutomationsTable.subject, bodyHtml: emailAutomationsTable.bodyHtml })
+      .from(emailAutomationsTable)
+      .where(
+        and(
+          eq(emailAutomationsTable.userId, creatorUserId),
+          eq(emailAutomationsTable.type, "post_purchase"),
+          eq(emailAutomationsTable.enabled, true)
+        )
+      )
+      .limit(1);
+
+    if (postPurchaseAuto) {
+      // Fetch creator brand name
+      let fromName = "Content Flywheel";
+      try {
+        const { brandVoiceTable } = await import("@/db/schema/brand-voice-schema");
+        const [bv] = await db.select({ brandName: brandVoiceTable.brandName }).from(brandVoiceTable).where(eq(brandVoiceTable.userId, creatorUserId)).limit(1);
+        if (bv?.brandName?.trim()) fromName = bv.brandName.trim();
+      } catch { /* ignore */ }
+
+      const formattedBody = postPurchaseAuto.bodyHtml.includes("<")
+        ? postPurchaseAuto.bodyHtml
+        : postPurchaseAuto.bodyHtml.split(/\n\n+/).map((p) => `<p style="margin:0 0 16px 0;">${p.replace(/\n/g, "<br/>")}</p>`).join("");
+
+      const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0B0B0F;padding:16px 32px;text-align:center;">
+          <img src="https://contentflywheel.co.uk/logo.png" alt="${fromName}" width="130" style="display:inline-block;height:auto;"/>
+        </td></tr>
+        <tr><td style="padding:36px 40px;color:#1a1a1a;font-size:16px;line-height:1.7;">${formattedBody}</td></tr>
+        <tr><td style="background:#F5C97A;padding:20px 40px;text-align:center;">
+          <p style="margin:0 0 6px;font-size:13px;color:#0B0B0F;font-weight:600;">${fromName}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+      await resend.emails.send({
+        from: `${fromName} <hello@contentflywheel.co.uk>`,
+        to: buyerEmail,
+        subject: postPurchaseAuto.subject,
+        html,
+      });
+      console.log(`[stripe-webhook] Post-purchase automation sent to ${buyerEmail}`);
+    }
+  } catch (err) {
+    console.error("[stripe-webhook] Post-purchase automation error:", err);
+  }
+
   // Log the sale in product_sales table (best-effort)
   await db.insert(productSalesTable).values({
     userId: creatorUserId,
@@ -244,6 +302,23 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
   }).catch((err) => {
     console.warn("[stripe-webhook] Failed to log product sale:", err);
   });
+
+  // Increment promo code usedCount if one was applied
+  const promoCodeId = session.metadata?.promoCodeId;
+  if (promoCodeId) {
+    await db
+      .update(creatorPromoCodesTable)
+      .set({ usedCount: sql`${creatorPromoCodesTable.usedCount} + 1` })
+      .where(
+        and(
+          eq(creatorPromoCodesTable.id, promoCodeId),
+          eq(creatorPromoCodesTable.creatorUserId, creatorUserId)
+        )
+      )
+      .catch((err) => {
+        console.warn("[stripe-webhook] Failed to increment promo code usedCount:", err);
+      });
+  }
 }
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {

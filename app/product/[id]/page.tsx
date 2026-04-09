@@ -20,6 +20,7 @@ type MarketingAssets = {
   nativePrice?: number;
   stripeProductId?: string;
   stripePriceId?: string;
+  testimonials?: Array<{ name: string; text: string; rating?: number }>;
 };
 
 type ProductContent = {
@@ -198,6 +199,26 @@ export default async function ProductSalesPage({
             </div>
           )}
 
+          {/* Testimonials */}
+          {ma.testimonials && ma.testimonials.length > 0 && (
+            <div style={{ background: "#fff", borderRadius: "20px", padding: "28px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginBottom: "24px" }}>
+              <h2 style={{ margin: "0 0 20px", fontSize: "16px", fontWeight: 700, color: "#111827" }}>What customers say</h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                {ma.testimonials.map((t, i) => (
+                  <div key={i} style={{ padding: "16px", background: "#fafafa", borderRadius: "12px", border: "1px solid #f3f4f6" }}>
+                    {t.rating && (
+                      <div style={{ marginBottom: "8px" }}>
+                        {"★".repeat(t.rating)}{"☆".repeat(5 - t.rating)}
+                      </div>
+                    )}
+                    <p style={{ margin: "0 0 10px", fontSize: "14px", color: "#374151", lineHeight: 1.6, fontStyle: "italic" }}>&ldquo;{t.text}&rdquo;</p>
+                    <p style={{ margin: 0, fontSize: "13px", fontWeight: 600, color: "#111827" }}>— {t.name}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Hashtags */}
           {hashtags.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -239,7 +260,7 @@ export default async function ProductSalesPage({
                   </span>
                   <span style={{ fontSize: "14px", color: "#9ca3af", marginLeft: "6px" }}>one-time</span>
                 </div>
-                <BuyButton productId={product.id} priceLabel={nativePriceLabel!} />
+                <BuyButton productId={product.id} priceLabel={nativePriceLabel!} creatorUserId={product.userId} />
               </>
             ) : (
               <>

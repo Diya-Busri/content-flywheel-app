@@ -23,6 +23,8 @@ import {
   Upload,
   Plus,
   Mail,
+  Tag,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -343,6 +345,8 @@ function UnpublishedProductRow({
   );
 }
 
+type PromoCode = { id: string; code: string; discountPercent: number | null; discountAmount: number | null; maxUses: number | null; usedCount: number; active: boolean; expiresAt: string | null };
+
 export function StoreClient({ userId }: StoreClientProps) {
   const storeUrl = `${STORE_BASE}/${userId}`;
   const [items, setItems] = useState<LibraryItem[]>([]);
@@ -350,6 +354,26 @@ export function StoreClient({ userId }: StoreClientProps) {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
+
+  // Promo codes state
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [promoLoading, setPromoLoading] = useState(true);
+  const [showPromoForm, setShowPromoForm] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoDiscount, setPromoDiscount] = useState("");
+  const [promoMaxUses, setPromoMaxUses] = useState("");
+  const [promoExpiry, setPromoExpiry] = useState("");
+  const [savingPromo, setSavingPromo] = useState(false);
+
+  const fetchPromoCodes = useCallback(async () => {
+    setPromoLoading(true);
+    try {
+      const res = await fetch("/api/creator/promo-codes");
+      if (res.ok) setPromoCodes(await res.json());
+    } catch {} finally { setPromoLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchPromoCodes(); }, [fetchPromoCodes]);
 
   const fetchLibrary = useCallback(async () => {
     setLoading(true);
@@ -613,6 +637,93 @@ export function StoreClient({ userId }: StoreClientProps) {
               </Button>
             </Link>
           </div>
+
+          {/* Promo Codes */}
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-orange-400" />
+                <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Promo Codes</h2>
+              </div>
+              <Button size="sm" variant="outline" className="h-7 text-xs border-white/10 text-gray-300 hover:text-white gap-1.5" onClick={() => setShowPromoForm(!showPromoForm)}>
+                <Plus className="w-3 h-3" />New code
+              </Button>
+            </div>
+
+            {showPromoForm && (
+              <div className="rounded-2xl bg-card border border-white/8 p-5 mb-4 space-y-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Create promo code</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">Code</p>
+                    <Input value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} placeholder="SUMMER20" className="h-8 text-sm bg-white/5 border-white/10 text-white uppercase" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">Discount % (e.g. 20)</p>
+                    <Input type="number" min="1" max="100" value={promoDiscount} onChange={(e) => setPromoDiscount(e.target.value)} placeholder="20" className="h-8 text-sm bg-white/5 border-white/10 text-white" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">Max uses (blank = unlimited)</p>
+                    <Input type="number" min="1" value={promoMaxUses} onChange={(e) => setPromoMaxUses(e.target.value)} placeholder="∞" className="h-8 text-sm bg-white/5 border-white/10 text-white" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">Expires (optional)</p>
+                    <Input type="date" value={promoExpiry} onChange={(e) => setPromoExpiry(e.target.value)} className="h-8 text-sm bg-white/5 border-white/10 text-white" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white h-8 text-xs" disabled={savingPromo}
+                    onClick={async () => {
+                      if (!promoCode.trim() || !promoDiscount) { toast({ title: "Code and discount are required", variant: "destructive" }); return; }
+                      setSavingPromo(true);
+                      try {
+                        const res = await fetch("/api/creator/promo-codes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: promoCode, discountPercent: parseInt(promoDiscount), maxUses: promoMaxUses || null, expiresAt: promoExpiry || null }) });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || "Failed");
+                        toast({ title: "Code created!" });
+                        setPromoCode(""); setPromoDiscount(""); setPromoMaxUses(""); setPromoExpiry(""); setShowPromoForm(false);
+                        await fetchPromoCodes();
+                      } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+                      finally { setSavingPromo(false); }
+                    }}>
+                    {savingPromo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Create"}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 text-xs text-gray-400" onClick={() => setShowPromoForm(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
+
+            {promoLoading ? (
+              <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-orange-400" /></div>
+            ) : promoCodes.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center">
+                <p className="text-sm text-gray-500">No promo codes yet — create one to offer discounts to your audience.</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-card border border-white/8 divide-y divide-white/5">
+                {promoCodes.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between px-5 py-3 gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <code className="text-sm font-bold text-orange-400">{c.code}</code>
+                      <span className="text-xs text-gray-400">
+                        {c.discountPercent ? `${c.discountPercent}% off` : c.discountAmount ? `£${(c.discountAmount / 100).toFixed(2)} off` : ""}
+                      </span>
+                      {c.maxUses && <span className="text-xs text-gray-500">{c.usedCount}/{c.maxUses} uses</span>}
+                      {c.expiresAt && <span className="text-xs text-gray-500">expires {new Date(c.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
+                    </div>
+                    <button className="text-gray-500 hover:text-red-400 transition-colors" onClick={async () => {
+                      try {
+                        await fetch("/api/creator/promo-codes", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: c.id }) });
+                        toast({ title: "Code deleted" }); fetchPromoCodes();
+                      } catch { toast({ title: "Failed", variant: "destructive" }); }
+                    }}>
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </>
       )}
     </div>

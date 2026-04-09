@@ -3654,6 +3654,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     promoVideoUrl?: string | null;
     promoVideoStatus?: string | null;
     promoVideoId?: string | null;
+    testimonials?: Array<{ name: string; text: string; rating?: number }>;
   };
 
   const handleGenerateThumbnail = useCallback(async () => {
@@ -6481,6 +6482,45 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     <SocialCaptionsCard productId={productId} productTitle={product?.title ?? "Digital Product"} />
                     <EmailSequenceCard productId={productId} />
                     <SalesPageCard productId={productId} initialCheckoutUrl={(marketingAssets as { checkoutUrl?: string | null; priceLabel?: string | null }).checkoutUrl} initialPriceLabel={(marketingAssets as { checkoutUrl?: string | null; priceLabel?: string | null }).priceLabel} />
+
+                    {/* Testimonials */}
+                    {(() => {
+                      const testimonials: Array<{ name: string; text: string; rating?: number }> = marketingAssets.testimonials ?? [];
+                      const saveTestimonials = async (updated: typeof testimonials) => {
+                        if (!productId) return;
+                        await fetch(`/api/products/${productId}/testimonials`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ testimonials: updated }) });
+                        setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, testimonials: updated } } : null);
+                      };
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <Label className="text-xs font-medium text-gray-700">Customer testimonials</Label>
+                            <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1"
+                              onClick={() => saveTestimonials([...testimonials, { name: "", text: "", rating: 5 }])}>
+                              <Plus className="w-3 h-3" /> Add
+                            </Button>
+                          </div>
+                          {testimonials.length === 0 && (
+                            <p className="text-xs text-gray-400 bg-gray-50 rounded-lg p-3 text-center">No testimonials yet. Add a few customer quotes to boost conversions on your product page.</p>
+                          )}
+                          {testimonials.map((t, i) => (
+                            <div key={i} className="rounded-lg border border-gray-200 p-3 space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <Input value={t.name} onChange={(e) => { const u = [...testimonials]; u[i] = { ...u[i], name: e.target.value }; setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, testimonials: u } } : null); }} onBlur={() => saveTestimonials(testimonials)} placeholder="Customer name" className="text-xs h-7 flex-1" />
+                                <select value={t.rating ?? 5} onChange={async (e) => { const u = [...testimonials]; u[i] = { ...u[i], rating: parseInt(e.target.value) }; await saveTestimonials(u); }} className="h-7 text-xs border border-gray-200 rounded px-1">
+                                  {[5,4,3,2,1].map((r) => <option key={r} value={r}>{"★".repeat(r)}</option>)}
+                                </select>
+                                <button type="button" onClick={() => saveTestimonials(testimonials.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500 transition-colors">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                              <Textarea value={t.text} onChange={(e) => { const u = [...testimonials]; u[i] = { ...u[i], text: e.target.value }; setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, testimonials: u } } : null); }} onBlur={() => saveTestimonials(testimonials)} placeholder="What did they say about your product?" rows={2} className="text-xs resize-none" />
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Label className="text-xs font-medium text-gray-700">Hashtags / tags</Label>

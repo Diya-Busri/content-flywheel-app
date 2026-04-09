@@ -166,6 +166,7 @@ export async function GET(request: Request) {
       </table>
     </td></tr>
   </table>
+<img src="${baseUrl}/api/email/track?c=${campaign.id}" width="1" height="1" style="display:block;border:0;" alt="" />
 </body>
 </html>`;
       };

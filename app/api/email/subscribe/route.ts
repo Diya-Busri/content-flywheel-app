@@ -4,6 +4,8 @@ import { emailContactsTable } from "@/db/schema/email-marketing-schema";
 import { emailAutomationsTable } from "@/db/schema/email-automations-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
+import { creatorEmailSettingsTable } from "@/db/schema/creator-email-settings-schema";
+import { productsTable } from "@/db/schema/products-schema";
 import { eq, and } from "drizzle-orm";
 import { Resend } from "resend";
 
@@ -214,6 +216,75 @@ export async function POST(request: NextRequest) {
     } catch (emailErr) {
       // Log but don't fail the whole request — contact is already saved.
       console.error("Welcome email send error:", emailErr);
+    }
+
+    // --- Send lead magnet download if creator has one enabled ---
+    try {
+      const [emailSettings] = await db
+        .select()
+        .from(creatorEmailSettingsTable)
+        .where(and(eq(creatorEmailSettingsTable.userId, userId), eq(creatorEmailSettingsTable.leadMagnetEnabled, true)))
+        .limit(1);
+
+      if (emailSettings?.leadMagnetProductId) {
+        const [lmProduct] = await db
+          .select({ id: productsTable.id, title: productsTable.title })
+          .from(productsTable)
+          .where(eq(productsTable.id, emailSettings.leadMagnetProductId))
+          .limit(1);
+
+        if (lmProduct) {
+          const lmToken = crypto.randomUUID();
+          const lmExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
+          const lmDownloadUrl = `${appUrl}/api/products/${lmProduct.id}/download?token=${lmToken}`;
+
+          // Store a free order record for the lead magnet
+          const { productOrdersTable } = await import("@/db/schema/product-orders-schema");
+          await db.insert(productOrdersTable).values({
+            productId: lmProduct.id,
+            creatorUserId: userId,
+            buyerEmail: email.toLowerCase().trim(),
+            buyerName: name ? String(name).trim() : null,
+            amountCents: 0,
+            currency: "gbp",
+            stripeSessionId: `lead_magnet_${crypto.randomUUID()}`,
+            status: "completed",
+            downloadToken: lmToken,
+            downloadExpiresAt: lmExpiry,
+            emailSent: true,
+          }).catch(() => {}); // ignore if fails (e.g. duplicate)
+
+          await resend.emails.send({
+            from,
+            to: email.toLowerCase().trim(),
+            subject: `Here's your free copy of "${lmProduct.title}" 🎁`,
+            html: `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0B0B0F;padding:16px 32px;text-align:center;">
+          <img src="https://contentflywheel.co.uk/logo.png" alt="${fromName}" width="130" style="display:inline-block;height:auto;"/>
+        </td></tr>
+        <tr><td style="padding:36px 40px;color:#1a1a1a;font-size:16px;line-height:1.7;">
+          <h2 style="margin:0 0 16px;font-size:22px;color:#111827;">Here&apos;s your free gift! 🎁</h2>
+          <p style="margin:0 0 16px;">As promised, here&apos;s your free copy of <strong>${lmProduct.title}</strong>.</p>
+          <p style="margin:0 0 24px;">Click the button below to download it. The link is valid for 30 days.</p>
+          <a href="${lmDownloadUrl}" style="display:inline-block;padding:14px 32px;background:#f97316;color:#fff;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px;">Download Your Freebie &rarr;</a>
+        </td></tr>
+        <tr><td style="background:#F5C97A;padding:20px 40px;text-align:center;">
+          <p style="margin:0;font-size:13px;color:#0B0B0F;font-weight:600;">${fromName}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`,
+          });
+        }
+      }
+    } catch (lmErr) {
+      console.error("[subscribe] Lead magnet delivery error:", lmErr);
     }
 
     return NextResponse.json({ success: true }, { status: 201 });
