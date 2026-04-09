@@ -5,7 +5,6 @@ import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
 import { SignedIn, SignedOut, SignOutButton } from "@clerk/nextjs";
 import { usePathname } from "next/navigation";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV_OFFSET_PX = 80;
 
@@ -72,7 +71,6 @@ export function LandingNavbar() {
 
         {/* Desktop CTAs */}
         <div className="hidden md:flex items-center gap-4">
-          <ThemeToggle />
           <SignedOut>
             <Link href="/sign-in" className="text-white/60 hover:text-white transition-colors text-sm font-medium">
               Sign In
