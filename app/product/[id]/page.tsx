@@ -11,6 +11,7 @@ import { WaitlistForm } from "./WaitlistForm";
 import { ReviewForm } from "./ReviewForm";
 import { ShareButtons } from "./ShareButtons";
 import ViewTracker from "./ViewTracker";
+import { DiscountInput } from "./DiscountInput";
 
 type MarketingAssets = {
   productTitle?: string;
@@ -376,6 +377,7 @@ export default async function ProductSalesPage({
                   <span style={{ fontSize: "14px", color: "#9ca3af", marginLeft: "6px" }}>one-time</span>
                 </div>
                 <BuyButton productId={product.id} priceLabel={hasSalePrice ? salePriceLabel! : nativePriceLabel!} creatorUserId={product.userId} />
+                <DiscountInput productId={product.id} onApply={() => {}} />
               </>
             ) : (
               <>

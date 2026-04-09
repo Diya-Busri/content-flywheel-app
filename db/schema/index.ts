@@ -41,3 +41,8 @@ export * from "./promo-codes-schema";
 export * from "./ab-tests-schema";
 export * from "./product-orders-schema";
 export * from "./store-settings-schema";
+export * from "./product-views-schema";
+export * from "./creator-promo-codes-schema";
+export * from "./email-sequences-schema";
+export * from "./affiliate-links-schema";
+export * from "./product-reviews-schema";
