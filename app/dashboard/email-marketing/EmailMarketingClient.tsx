@@ -44,6 +44,9 @@ import {
   Copy,
   Link2,
   ExternalLink,
+  Zap,
+  Clock,
+  CalendarClock,
 } from "lucide-react";
 import { useRef } from "react";
 
@@ -70,6 +73,8 @@ type Campaign = {
   scheduledFor: string | null;
   openCount: number;
   recipientCount: number;
+  audienceTag: string | null;
+  specificEmail: string | null;
   createdAt: string;
 };
 
@@ -689,6 +694,17 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
   const [savingTagsId, setSavingTagsId] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
+  // --- Quick Blast state ---
+  type AudienceType = "all" | "tag" | "specific";
+  const [blastSubject, setBlastSubject] = useState("");
+  const [blastBody, setBlastBody] = useState("");
+  const [blastAudience, setBlastAudience] = useState<AudienceType>("all");
+  const [blastTag, setBlastTag] = useState("");
+  const [blastEmail, setBlastEmail] = useState("");
+  const [blastTiming, setBlastTiming] = useState<"now" | "schedule">("now");
+  const [blastScheduledFor, setBlastScheduledFor] = useState("");
+  const [blastSending, setBlastSending] = useState(false);
+
   // ---------------------------------------------------------------------------
   // Data fetchers
   // ---------------------------------------------------------------------------
@@ -880,6 +896,56 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
     }
   };
 
+  const handleSendBlast = async () => {
+    if (!blastSubject.trim()) { toast({ title: "Subject is required", variant: "destructive" }); return; }
+    if (!blastBody.trim()) { toast({ title: "Message body is required", variant: "destructive" }); return; }
+    if (blastAudience === "tag" && !blastTag.trim()) { toast({ title: "Please select a tag", variant: "destructive" }); return; }
+    if (blastAudience === "specific" && !blastEmail.trim()) { toast({ title: "Please enter an email address", variant: "destructive" }); return; }
+    if (blastTiming === "schedule" && !blastScheduledFor) { toast({ title: "Please pick a send time", variant: "destructive" }); return; }
+
+    setBlastSending(true);
+    try {
+      // Create campaign
+      const payload: Record<string, string | null> = {
+        subject: blastSubject.trim(),
+        bodyHtml: blastBody.trim(),
+        scheduledFor: blastTiming === "schedule" ? blastScheduledFor : null,
+        audienceTag: blastAudience === "tag" ? blastTag.trim() : null,
+        specificEmail: blastAudience === "specific" ? blastEmail.trim() : null,
+      };
+      const createRes = await fetch("/api/email/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const campaign = await createRes.json();
+      if (!createRes.ok) throw new Error(campaign.error ?? "Failed to create blast");
+
+      if (blastTiming === "now") {
+        // Send immediately
+        const sendRes = await fetch(`/api/email/campaigns/${campaign.id}/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tagFilter: blastAudience === "tag" ? blastTag.trim() : null }),
+        });
+        const sendData = await sendRes.json();
+        if (!sendRes.ok) throw new Error(sendData.detail ?? sendData.error ?? "Send failed");
+        toast({ title: "Blast sent! 🚀", description: `Delivered to ${sendData.sent} subscriber${sendData.sent !== 1 ? "s" : ""}.` });
+      } else {
+        toast({ title: "Blast scheduled! ⏰", description: `Will send on ${new Date(blastScheduledFor).toLocaleString()}.` });
+      }
+
+      // Reset form
+      setBlastSubject(""); setBlastBody(""); setBlastAudience("all");
+      setBlastTag(""); setBlastEmail(""); setBlastTiming("now"); setBlastScheduledFor("");
+      await fetchCampaigns();
+    } catch (err) {
+      toast({ title: "Failed", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
+    } finally {
+      setBlastSending(false);
+    }
+  };
+
   const filteredContacts = contacts.filter((c) => {
     const q = contactSearch.toLowerCase();
     if (!q) return true;
@@ -966,8 +1032,15 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="campaigns" className="w-full">
+      <Tabs defaultValue="blast" className="w-full">
         <TabsList className="bg-gray-100 dark:bg-white/5 rounded-xl p-1 mb-6">
+          <TabsTrigger
+            value="blast"
+            className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-white/10 data-[state=active]:text-orange-500 data-[state=active]:shadow-sm font-medium"
+          >
+            <Zap className="h-4 w-4 mr-1.5" />
+            Quick Blast
+          </TabsTrigger>
           <TabsTrigger
             value="campaigns"
             className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-white/10 data-[state=active]:text-orange-500 data-[state=active]:shadow-sm font-medium"
@@ -983,6 +1056,262 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
             Contacts
           </TabsTrigger>
         </TabsList>
+
+        {/* ------------------------------------------------------------------ */}
+        {/* Quick Blast Tab */}
+        {/* ------------------------------------------------------------------ */}
+        <TabsContent value="blast" className="space-y-5">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            {/* Compose panel */}
+            <div className="lg:col-span-3 space-y-5">
+              <div className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-2xl p-6 space-y-5">
+                <div>
+                  <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-lg">
+                    <Zap className="h-5 w-5 text-orange-500" />
+                    Send a quick email
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                    Write, target, and send an email blast to your subscribers in seconds.
+                  </p>
+                </div>
+
+                {/* Subject */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Subject <span className="text-orange-500">*</span>
+                  </Label>
+                  <Input
+                    placeholder="What's this email about?"
+                    value={blastSubject}
+                    onChange={(e) => setBlastSubject(e.target.value)}
+                    className="border-gray-200 dark:border-white/10 focus-visible:ring-orange-500"
+                  />
+                </div>
+
+                {/* Body */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Message <span className="text-orange-500">*</span>
+                  </Label>
+                  <Textarea
+                    placeholder="Write your message here... Plain text or HTML both work."
+                    value={blastBody}
+                    onChange={(e) => setBlastBody(e.target.value)}
+                    className="min-h-48 border-gray-200 dark:border-white/10 focus-visible:ring-orange-500 resize-y text-sm"
+                  />
+                  <p className="text-xs text-gray-400">
+                    HTML supported — e.g. <code className="bg-gray-100 dark:bg-white/10 px-1 rounded">&lt;b&gt;bold&lt;/b&gt;</code>, <code className="bg-gray-100 dark:bg-white/10 px-1 rounded">&lt;a href=&quot;...&quot;&gt;&lt;/a&gt;</code>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Settings panel */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* Audience */}
+              <div className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-2xl p-5 space-y-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 text-sm">
+                  <Users className="h-4 w-4 text-orange-500" />
+                  Audience
+                </h3>
+
+                <div className="space-y-2">
+                  {(["all", "tag", "specific"] as const).map((opt) => {
+                    const labels = { all: "All Subscribers", tag: "By Tag", specific: "Specific Email" };
+                    const descs = {
+                      all: `${contacts.filter((c) => !c.unsubscribedAt).length} subscriber${contacts.filter((c) => !c.unsubscribedAt).length !== 1 ? "s" : ""}`,
+                      tag: "Send to a tagged segment",
+                      specific: "Send to one address",
+                    };
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setBlastAudience(opt)}
+                        className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+                          blastAudience === opt
+                            ? "border-orange-400 bg-orange-50 dark:bg-orange-500/10"
+                            : "border-gray-200 dark:border-white/10 hover:border-orange-200 dark:hover:border-orange-500/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm font-medium ${blastAudience === opt ? "text-orange-600 dark:text-orange-400" : "text-gray-700 dark:text-gray-300"}`}>
+                            {labels[opt]}
+                          </span>
+                          {blastAudience === opt && <Check className="h-4 w-4 text-orange-500" />}
+                        </div>
+                        <span className="text-xs text-gray-400 dark:text-gray-500">{descs[opt]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Tag picker */}
+                {blastAudience === "tag" && (() => {
+                  const allTags = Array.from(new Set(contacts.flatMap((c) => c.tags))).sort();
+                  return (
+                    <div className="space-y-2">
+                      {allTags.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {allTags.map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => setBlastTag(blastTag === tag ? "" : tag)}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                                blastTag === tag
+                                  ? "bg-orange-500 text-white border-orange-500"
+                                  : "border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:border-orange-300"
+                              }`}
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400">No tags yet — add tags to contacts first.</p>
+                      )}
+                      {blastTag && (
+                        <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">
+                          Sending to {contacts.filter((c) => !c.unsubscribedAt && c.tags.includes(blastTag)).length} subscriber{contacts.filter((c) => !c.unsubscribedAt && c.tags.includes(blastTag)).length !== 1 ? "s" : ""} with tag &quot;{blastTag}&quot;
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Specific email input */}
+                {blastAudience === "specific" && (
+                  <Input
+                    type="email"
+                    placeholder="recipient@example.com"
+                    value={blastEmail}
+                    onChange={(e) => setBlastEmail(e.target.value)}
+                    className="border-gray-200 dark:border-white/10 focus-visible:ring-orange-500 text-sm"
+                  />
+                )}
+              </div>
+
+              {/* Timing */}
+              <div className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-2xl p-5 space-y-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 text-sm">
+                  <Clock className="h-4 w-4 text-orange-500" />
+                  When to send
+                </h3>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setBlastTiming("now")}
+                    className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+                      blastTiming === "now"
+                        ? "border-orange-400 bg-orange-50 dark:bg-orange-500/10"
+                        : "border-gray-200 dark:border-white/10 hover:border-orange-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-sm font-medium ${blastTiming === "now" ? "text-orange-600 dark:text-orange-400" : "text-gray-700 dark:text-gray-300"}`}>
+                        Send now
+                      </span>
+                      {blastTiming === "now" && <Check className="h-4 w-4 text-orange-500" />}
+                    </div>
+                    <span className="text-xs text-gray-400">Goes out immediately</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBlastTiming("schedule")}
+                    className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+                      blastTiming === "schedule"
+                        ? "border-orange-400 bg-orange-50 dark:bg-orange-500/10"
+                        : "border-gray-200 dark:border-white/10 hover:border-orange-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-sm font-medium ${blastTiming === "schedule" ? "text-orange-600 dark:text-orange-400" : "text-gray-700 dark:text-gray-300"}`}>
+                        Schedule for later
+                      </span>
+                      {blastTiming === "schedule" && <Check className="h-4 w-4 text-orange-500" />}
+                    </div>
+                    <span className="text-xs text-gray-400">Pick a date &amp; time</span>
+                  </button>
+                </div>
+
+                {blastTiming === "schedule" && (
+                  <input
+                    type="datetime-local"
+                    value={blastScheduledFor}
+                    onChange={(e) => setBlastScheduledFor(e.target.value)}
+                    min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                    className="flex h-9 w-full rounded-md border border-gray-200 dark:border-white/10 bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-orange-500 dark:text-white"
+                  />
+                )}
+              </div>
+
+              {/* Send button */}
+              <Button
+                onClick={handleSendBlast}
+                disabled={blastSending}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white rounded-xl h-11 text-sm font-semibold"
+              >
+                {blastSending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : blastTiming === "schedule" ? (
+                  <CalendarClock className="mr-2 h-4 w-4" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                {blastSending ? "Sending..." : blastTiming === "schedule" ? "Schedule blast" : "Send blast now"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Blast history */}
+          {campaigns.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-orange-400" />
+                Recent blasts &amp; campaigns
+              </h3>
+              <div className="space-y-2">
+                {campaigns.slice(0, 5).map((c) => (
+                  <div key={c.id} className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{c.subject}</p>
+                      <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5 flex-wrap">
+                        <StatusBadge status={c.status} />
+                        {c.status === "sent" && <span>{c.recipientCount} sent · {formatDate(c.sentAt)}</span>}
+                        {c.status === "scheduled" && <span><CalendarClock className="h-3 w-3 inline mr-0.5" />{formatDate(c.scheduledFor)}</span>}
+                        {c.audienceTag && <span className="text-orange-500">tag: {c.audienceTag}</span>}
+                        {c.specificEmail && <span className="text-orange-500">{c.specificEmail}</span>}
+                      </div>
+                    </div>
+                    {c.status === "sent" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2.5 text-xs border-gray-200 dark:border-white/10 hover:border-orange-300 hover:text-orange-600 flex-shrink-0"
+                        onClick={() => setViewingCampaign(c)}
+                      >
+                        <Mail className="h-3 w-3 mr-1" />
+                        View
+                      </Button>
+                    )}
+                    {c.status === "scheduled" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 flex-shrink-0"
+                        onClick={() => handleDeleteCampaign(c.id)}
+                        disabled={deletingCampaignId === c.id}
+                      >
+                        {deletingCampaignId === c.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </TabsContent>
 
         {/* ------------------------------------------------------------------ */}
         {/* Campaigns Tab */}

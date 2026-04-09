@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json();
-    const { subject, previewText, bodyHtml, scheduledFor } = body;
+    const { subject, previewText, bodyHtml, scheduledFor, audienceTag, specificEmail } = body;
 
     if (!subject || typeof subject !== "string") {
       return NextResponse.json({ error: "Subject is required" }, { status: 400 });
@@ -51,6 +51,8 @@ export async function POST(request: NextRequest) {
         bodyHtml: bodyHtml.trim(),
         status: isScheduled ? "scheduled" : "draft",
         scheduledFor: scheduledDate ?? undefined,
+        audienceTag: audienceTag ? String(audienceTag).trim() : null,
+        specificEmail: specificEmail ? String(specificEmail).trim().toLowerCase() : null,
       })
       .returning();
 

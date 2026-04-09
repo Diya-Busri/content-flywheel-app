@@ -23,6 +23,9 @@ export const emailCampaignsTable = pgTable("email_campaigns", {
   scheduledFor: timestamp("scheduled_for"),
   openCount: integer("open_count").default(0).notNull(),
   recipientCount: integer("recipient_count").default(0).notNull(),
+  // Audience targeting for quick blasts
+  audienceTag: text("audience_tag"),      // filter by this tag (null = all subscribers)
+  specificEmail: text("specific_email"),  // send only to this email (null = use contacts list)
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

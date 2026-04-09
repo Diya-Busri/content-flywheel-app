@@ -20,7 +20,7 @@ export async function POST(
 
     const { id } = params;
 
-    // Optional tag filter from request body
+    // Optional tag filter from request body (overrides campaign-level audienceTag)
     const body = await request.json().catch(() => ({}));
     const tagFilter: string | null = typeof body.tagFilter === "string" && body.tagFilter.trim()
       ? body.tagFilter.trim()
@@ -51,21 +51,6 @@ export async function POST(
       ?? process.env.RESEND_FROM_EMAIL
       ?? "hello@contentflywheel.co.uk";
     const from = `${fromName} <${fromEmail}>`;
-
-    // Fetch all subscribed contacts (not unsubscribed)
-    let contacts = await db
-      .select({ id: emailContactsTable.id, email: emailContactsTable.email, name: emailContactsTable.name, tags: emailContactsTable.tags })
-      .from(emailContactsTable)
-      .where(and(eq(emailContactsTable.userId, userId), isNull(emailContactsTable.unsubscribedAt)));
-
-    // Apply tag filter if requested
-    if (tagFilter) {
-      contacts = contacts.filter((c) => c.tags.includes(tagFilter));
-    }
-
-    if (contacts.length === 0) {
-      return NextResponse.json({ error: "No active contacts to send to" }, { status: 400 });
-    }
 
     // Build batch messages, chunked at 100 per Resend batch limits
     const BATCH_SIZE = 100;
@@ -118,6 +103,36 @@ export async function POST(
 </body>
 </html>`;
     };
+
+    // Resolve effective audience tag (body override takes priority over campaign field)
+    const effectiveTag = tagFilter ?? (campaign as { audienceTag?: string | null }).audienceTag ?? null;
+    const specificEmail = (campaign as { specificEmail?: string | null }).specificEmail ?? null;
+
+    // If campaign targets a specific email, bypass contacts table
+    if (specificEmail) {
+      const html = buildEmailHtml({ id: campaign.id, name: null }, campaign.bodyHtml);
+      await resend.emails.send({ from, to: specificEmail, subject: campaign.subject, html });
+      await db
+        .update(emailCampaignsTable)
+        .set({ status: "sent", sentAt: new Date(), recipientCount: 1 })
+        .where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.userId, userId)));
+      return NextResponse.json({ success: true, sent: 1 });
+    }
+
+    // Fetch all subscribed contacts (not unsubscribed)
+    let contacts = await db
+      .select({ id: emailContactsTable.id, email: emailContactsTable.email, name: emailContactsTable.name, tags: emailContactsTable.tags })
+      .from(emailContactsTable)
+      .where(and(eq(emailContactsTable.userId, userId), isNull(emailContactsTable.unsubscribedAt)));
+
+    // Apply tag filter if requested
+    if (effectiveTag) {
+      contacts = contacts.filter((c) => c.tags.includes(effectiveTag));
+    }
+
+    if (contacts.length === 0) {
+      return NextResponse.json({ error: "No active contacts to send to" }, { status: 400 });
+    }
 
     for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
       const chunk = contacts.slice(i, i + BATCH_SIZE);
