@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import EmailMarketingClient from "./EmailMarketingClient";
 
 export const metadata: Metadata = {
@@ -12,5 +13,9 @@ export default async function EmailMarketingPage() {
   const { userId } = auth();
   if (!userId) redirect("/sign-in");
 
-  return <EmailMarketingClient userId={userId} />;
+  return (
+    <Suspense>
+      <EmailMarketingClient userId={userId} />
+    </Suspense>
+  );
 }

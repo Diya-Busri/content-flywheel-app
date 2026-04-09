@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { emailCampaignsTable, emailContactsTable } from "@/db/schema/email-marketing-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
+import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { Resend } from "resend";
 
@@ -117,6 +118,50 @@ export async function POST(
         .set({ status: "sent", sentAt: new Date(), recipientCount: 1 })
         .where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.userId, userId)));
       return NextResponse.json({ success: true, sent: 1 });
+    }
+
+    // ── Buyer audience (product_orders) ──────────────────────────────────
+    if (effectiveTag?.startsWith("buyers:")) {
+      const productId = effectiveTag.slice("buyers:".length); // "all" or a UUID
+      const orderRows = await db
+        .select({ buyerEmail: productOrdersTable.buyerEmail, buyerName: productOrdersTable.buyerName, id: productOrdersTable.id })
+        .from(productOrdersTable)
+        .where(
+          and(
+            eq(productOrdersTable.creatorUserId, userId),
+            eq(productOrdersTable.status, "completed"),
+            ...(productId !== "all" ? [eq(productOrdersTable.productId, productId as string)] : [])
+          )
+        );
+
+      // Deduplicate by email
+      const seen = new Set<string>();
+      const buyers = orderRows.filter((r) => {
+        if (seen.has(r.buyerEmail)) return false;
+        seen.add(r.buyerEmail);
+        return true;
+      });
+
+      if (buyers.length === 0) {
+        return NextResponse.json({ error: "No customers found for this product yet" }, { status: 400 });
+      }
+
+      for (let i = 0; i < buyers.length; i += BATCH_SIZE) {
+        const chunk = buyers.slice(i, i + BATCH_SIZE);
+        const messages = chunk.map((b) => ({
+          from,
+          to: b.buyerEmail,
+          subject: campaign.subject,
+          html: buildEmailHtml({ id: b.id, name: b.buyerName ?? null }, campaign.bodyHtml),
+        }));
+        await resend.batch.send(messages);
+        totalSent += chunk.length;
+      }
+
+      await db.update(emailCampaignsTable)
+        .set({ status: "sent", sentAt: new Date(), recipientCount: totalSent })
+        .where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.userId, userId)));
+      return NextResponse.json({ success: true, sent: totalSent });
     }
 
     // Fetch all subscribed contacts (not unsubscribed)

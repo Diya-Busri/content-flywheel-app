@@ -4,6 +4,7 @@ import { emailCampaignsTable, emailContactsTable } from "@/db/schema/email-marke
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { scheduledBlastsTable } from "@/db/schema/scheduled-blasts-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
+import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { eq, and, lte, isNull, gte, lt } from "drizzle-orm";
 import { Resend } from "resend";
 
@@ -75,6 +76,36 @@ export async function GET(request: Request) {
 
       // Fetch subscribed contacts (including tags for audience filtering)
       const audienceTag = (campaign as { audienceTag?: string | null }).audienceTag ?? null;
+
+      // ── Buyer audience ──────────────────────────────────────────────────
+      if (audienceTag?.startsWith("buyers:")) {
+        const productId = audienceTag.slice("buyers:".length);
+        const orderRows = await db
+          .select({ buyerEmail: productOrdersTable.buyerEmail, buyerName: productOrdersTable.buyerName, id: productOrdersTable.id })
+          .from(productOrdersTable)
+          .where(and(
+            eq(productOrdersTable.creatorUserId, campaign.userId),
+            eq(productOrdersTable.status, "completed"),
+            ...(productId !== "all" ? [eq(productOrdersTable.productId, productId as string)] : [])
+          ));
+        const seen = new Set<string>();
+        const buyers = orderRows.filter((r) => { if (seen.has(r.buyerEmail)) return false; seen.add(r.buyerEmail); return true; });
+        if (buyers.length === 0) {
+          await db.update(emailCampaignsTable).set({ status: "sent", sentAt: now, recipientCount: 0 }).where(eq(emailCampaignsTable.id, campaign.id));
+          continue;
+        }
+        const batchSend = new Resend(process.env.RESEND_API_KEY);
+        let bSent = 0;
+        for (let i = 0; i < buyers.length; i += BATCH_SIZE) {
+          const chunk = buyers.slice(i, i + BATCH_SIZE);
+          const messages = chunk.map((b) => ({ from, to: b.buyerEmail, subject: campaign.subject, html: buildCampaignHtml(b.id, campaign.bodyHtml) }));
+          await batchSend.batch.send(messages);
+          bSent += chunk.length;
+        }
+        await db.update(emailCampaignsTable).set({ status: "sent", sentAt: now, recipientCount: bSent }).where(eq(emailCampaignsTable.id, campaign.id));
+        totalSent += bSent;
+        continue;
+      }
       const allContacts = await db
         .select({ id: emailContactsTable.id, email: emailContactsTable.email, tags: emailContactsTable.tags })
         .from(emailContactsTable)

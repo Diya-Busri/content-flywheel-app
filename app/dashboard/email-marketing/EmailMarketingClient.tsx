@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Tabs,
   TabsList,
@@ -48,8 +49,6 @@ import {
   Clock,
   CalendarClock,
 } from "lucide-react";
-import { useRef } from "react";
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -695,15 +694,42 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   // --- Quick Blast state ---
-  type AudienceType = "all" | "tag" | "specific";
+  type AudienceType = "all" | "tag" | "specific" | "buyers";
   const [blastSubject, setBlastSubject] = useState("");
   const [blastBody, setBlastBody] = useState("");
   const [blastAudience, setBlastAudience] = useState<AudienceType>("all");
   const [blastTag, setBlastTag] = useState("");
   const [blastEmail, setBlastEmail] = useState("");
+  const [blastBuyerProductId, setBlastBuyerProductId] = useState("all");
   const [blastTiming, setBlastTiming] = useState<"now" | "schedule">("now");
   const [blastScheduledFor, setBlastScheduledFor] = useState("");
   const [blastSending, setBlastSending] = useState(false);
+  const [publishedProducts, setPublishedProducts] = useState<{ id: string; title: string }[]>([]);
+  const [activeTab, setActiveTab] = useState("blast");
+
+  // Fetch published products for buyer audience picker
+  useEffect(() => {
+    fetch("/api/library?type=products")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setPublishedProducts(data.filter((p: { isNativePublished?: boolean; title: string; id: string }) => p.isNativePublished).map((p: { id: string; title: string }) => ({ id: p.id, title: p.title })));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Pre-fill Quick Blast from URL params (e.g. ?blast=buyers&product=xxx)
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const blast = searchParams.get("blast");
+    const product = searchParams.get("product");
+    if (blast === "buyers") {
+      setActiveTab("blast");
+      setBlastAudience("buyers");
+      if (product) setBlastBuyerProductId(product);
+    }
+  }, [searchParams]);
 
   // ---------------------------------------------------------------------------
   // Data fetchers
@@ -903,6 +929,12 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
     if (blastAudience === "specific" && !blastEmail.trim()) { toast({ title: "Please enter an email address", variant: "destructive" }); return; }
     if (blastTiming === "schedule" && !blastScheduledFor) { toast({ title: "Please pick a send time", variant: "destructive" }); return; }
 
+    // Resolve the audienceTag to store on the campaign
+    const resolvedAudienceTag =
+      blastAudience === "tag" ? blastTag.trim() :
+      blastAudience === "buyers" ? `buyers:${blastBuyerProductId}` :
+      null;
+
     setBlastSending(true);
     try {
       // Create campaign
@@ -910,7 +942,7 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
         subject: blastSubject.trim(),
         bodyHtml: blastBody.trim(),
         scheduledFor: blastTiming === "schedule" ? blastScheduledFor : null,
-        audienceTag: blastAudience === "tag" ? blastTag.trim() : null,
+        audienceTag: resolvedAudienceTag,
         specificEmail: blastAudience === "specific" ? blastEmail.trim() : null,
       };
       const createRes = await fetch("/api/email/campaigns", {
@@ -922,22 +954,24 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
       if (!createRes.ok) throw new Error(campaign.error ?? "Failed to create blast");
 
       if (blastTiming === "now") {
-        // Send immediately
+        // Send immediately (audienceTag already stored on campaign)
         const sendRes = await fetch(`/api/email/campaigns/${campaign.id}/send`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tagFilter: blastAudience === "tag" ? blastTag.trim() : null }),
+          body: JSON.stringify({}),
         });
         const sendData = await sendRes.json();
         if (!sendRes.ok) throw new Error(sendData.detail ?? sendData.error ?? "Send failed");
-        toast({ title: "Blast sent! 🚀", description: `Delivered to ${sendData.sent} subscriber${sendData.sent !== 1 ? "s" : ""}.` });
+        const recipientWord = blastAudience === "buyers" ? "customer" : "subscriber";
+        toast({ title: "Blast sent! 🚀", description: `Delivered to ${sendData.sent} ${recipientWord}${sendData.sent !== 1 ? "s" : ""}.` });
       } else {
         toast({ title: "Blast scheduled! ⏰", description: `Will send on ${new Date(blastScheduledFor).toLocaleString()}.` });
       }
 
       // Reset form
       setBlastSubject(""); setBlastBody(""); setBlastAudience("all");
-      setBlastTag(""); setBlastEmail(""); setBlastTiming("now"); setBlastScheduledFor("");
+      setBlastTag(""); setBlastEmail(""); setBlastBuyerProductId("all");
+      setBlastTiming("now"); setBlastScheduledFor("");
       await fetchCampaigns();
     } catch (err) {
       toast({ title: "Failed", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
@@ -1032,7 +1066,7 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="blast" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="bg-gray-100 dark:bg-white/5 rounded-xl p-1 mb-6">
           <TabsTrigger
             value="blast"
@@ -1116,11 +1150,12 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
                 </h3>
 
                 <div className="space-y-2">
-                  {(["all", "tag", "specific"] as const).map((opt) => {
-                    const labels = { all: "All Subscribers", tag: "By Tag", specific: "Specific Email" };
-                    const descs = {
+                  {(["all", "tag", "buyers", "specific"] as const).map((opt) => {
+                    const labels = { all: "All Subscribers", tag: "By Tag", buyers: "Product Buyers", specific: "Specific Email" };
+                    const descs: Record<string, string> = {
                       all: `${contacts.filter((c) => !c.unsubscribedAt).length} subscriber${contacts.filter((c) => !c.unsubscribedAt).length !== 1 ? "s" : ""}`,
                       tag: "Send to a tagged segment",
+                      buyers: "Email people who bought your products",
                       specific: "Send to one address",
                     };
                     return (
@@ -1179,6 +1214,49 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
                     </div>
                   );
                 })()}
+
+                {/* Product buyers picker */}
+                {blastAudience === "buyers" && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Choose which product&apos;s customers to email:</p>
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setBlastBuyerProductId("all")}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl border transition-colors text-sm ${
+                          blastBuyerProductId === "all"
+                            ? "border-orange-400 bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 font-medium"
+                            : "border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:border-orange-200 dark:hover:border-orange-500/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span>All Products</span>
+                          {blastBuyerProductId === "all" && <Check className="h-4 w-4 text-orange-500" />}
+                        </div>
+                        <span className="text-xs text-gray-400">Everyone who has bought from you</span>
+                      </button>
+                      {publishedProducts.length > 0 ? publishedProducts.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setBlastBuyerProductId(p.id)}
+                          className={`w-full text-left px-3 py-2.5 rounded-xl border transition-colors text-sm ${
+                            blastBuyerProductId === p.id
+                              ? "border-orange-400 bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 font-medium"
+                              : "border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:border-orange-200 dark:hover:border-orange-500/30"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="truncate pr-2">{p.title}</span>
+                            {blastBuyerProductId === p.id && <Check className="h-4 w-4 text-orange-500 shrink-0" />}
+                          </div>
+                        </button>
+                      )) : (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 px-1">No published products yet.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Specific email input */}
                 {blastAudience === "specific" && (

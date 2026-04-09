@@ -22,6 +22,7 @@ import {
   Paintbrush,
   Upload,
   Plus,
+  Mail,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -262,6 +263,16 @@ function PublishedProductCard({
             <PencilLine className="w-3.5 h-3.5" />
             Edit Price
           </Button>
+          <Link href={`/dashboard/email-marketing?blast=buyers&product=${item.id}`}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs border-white/10 text-blue-400 hover:text-blue-300 hover:border-blue-500/30 gap-1.5"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              Email Customers
+            </Button>
+          </Link>
           <Button
             size="sm"
             variant="outline"
