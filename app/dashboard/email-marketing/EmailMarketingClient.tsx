@@ -700,6 +700,23 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
   const [savingTagsId, setSavingTagsId] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
+  // --- Subscriber growth (12 weeks) ---
+  type WeeklyGrowth = { week: string; count: number };
+  const [weeklyGrowth, setWeeklyGrowth] = useState<WeeklyGrowth[]>([]);
+  const [growthTotal, setGrowthTotal] = useState(0);
+  const [growthLoading, setGrowthLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/email/subscribers/growth")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data.weekly)) setWeeklyGrowth(data.weekly);
+        if (typeof data.total === "number") setGrowthTotal(data.total);
+      })
+      .catch(() => {})
+      .finally(() => setGrowthLoading(false));
+  }, []);
+
   // --- Quick Blast state ---
   type AudienceType = "all" | "tag" | "specific" | "buyers";
   const [blastSubject, setBlastSubject] = useState("");
@@ -2021,27 +2038,47 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
             </div>
           </div>
 
-          {/* Growth sparkline */}
-          {!contactsLoading && contacts.length > 0 && growthData.some((v) => v > 0) && (
+          {/* Growth chart — 12 weeks */}
+          {!growthLoading && weeklyGrowth.length > 0 && (
             <div className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-2xl p-5">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-3">New subscribers — last 30 days</p>
-              <div className="flex items-end gap-0.5 h-12">
-                {growthData.map((val, i) => {
-                  const max = Math.max(...growthData, 1);
-                  const height = Math.max((val / max) * 100, val > 0 ? 8 : 2);
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Subscriber Growth</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">New subscribers per week — last 12 weeks</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-orange-500">{growthTotal}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">total subscribers</p>
+                </div>
+              </div>
+              <div className="flex items-end gap-1.5 h-20">
+                {weeklyGrowth.map((w, i) => {
+                  const max = Math.max(...weeklyGrowth.map((x) => x.count), 1);
+                  const height = Math.max((w.count / max) * 100, w.count > 0 ? 6 : 2);
+                  const isLatest = i === weeklyGrowth.length - 1;
                   return (
-                    <div
-                      key={i}
-                      title={`${val} subscriber${val !== 1 ? "s" : ""}`}
-                      style={{ height: `${height}%` }}
-                      className={`flex-1 rounded-sm transition-all ${
-                        val > 0
-                          ? "bg-orange-400 dark:bg-orange-500"
-                          : "bg-gray-100 dark:bg-white/5"
-                      }`}
-                    />
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <div
+                        title={`${w.count} new subscriber${w.count !== 1 ? "s" : ""} (week of ${w.week})`}
+                        style={{ height: `${height}%` }}
+                        className={`w-full rounded-t transition-all ${
+                          isLatest
+                            ? "bg-orange-500"
+                            : w.count > 0
+                            ? "bg-orange-300 dark:bg-orange-500/60"
+                            : "bg-gray-100 dark:bg-white/5"
+                        }`}
+                      />
+                      {w.count > 0 && (
+                        <span className="text-[9px] text-gray-400 tabular-nums">{w.count}</span>
+                      )}
+                    </div>
                   );
                 })}
+              </div>
+              <div className="flex justify-between mt-2">
+                <span className="text-[10px] text-gray-400">{weeklyGrowth[0]?.week ?? ""}</span>
+                <span className="text-[10px] text-gray-400">This week</span>
               </div>
             </div>
           )}
