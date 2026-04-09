@@ -48,6 +48,13 @@ import {
   Zap,
   Clock,
   CalendarClock,
+  Bot,
+  ToggleLeft,
+  ToggleRight,
+  Sparkles,
+  Gift,
+  Package,
+  Megaphone,
 } from "lucide-react";
 // ---------------------------------------------------------------------------
 // Types
@@ -707,6 +714,15 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
   const [publishedProducts, setPublishedProducts] = useState<{ id: string; title: string }[]>([]);
   const [activeTab, setActiveTab] = useState("blast");
 
+  // --- Automations state ---
+  type Automation = { id: string; type: string; subject: string; bodyHtml: string; enabled: boolean };
+  const [automations, setAutomations] = useState<Automation[]>([]);
+  const [automationsLoading, setAutomationsLoading] = useState(true);
+  const [editingAutomation, setEditingAutomation] = useState<string | null>(null); // type string e.g. "welcome"
+  const [automationDraft, setAutomationDraft] = useState<{ subject: string; bodyHtml: string }>({ subject: "", bodyHtml: "" });
+  const [savingAutomation, setSavingAutomation] = useState(false);
+  const [togglingAutomation, setTogglingAutomation] = useState<string | null>(null);
+
   // Fetch published products for buyer audience picker
   useEffect(() => {
     fetch("/api/library?type=products")
@@ -734,6 +750,20 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
   // ---------------------------------------------------------------------------
   // Data fetchers
   // ---------------------------------------------------------------------------
+
+  const fetchAutomations = useCallback(async () => {
+    setAutomationsLoading(true);
+    try {
+      const res = await fetch("/api/email/automations");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to fetch");
+      setAutomations(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAutomationsLoading(false);
+    }
+  }, []);
 
   const fetchCampaigns = useCallback(async () => {
     setCampaignsLoading(true);
@@ -768,7 +798,8 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
   useEffect(() => {
     fetchCampaigns();
     fetchContacts();
-  }, [fetchCampaigns, fetchContacts]);
+    fetchAutomations();
+  }, [fetchCampaigns, fetchContacts, fetchAutomations]);
 
   // ---------------------------------------------------------------------------
   // Campaign actions
@@ -1076,6 +1107,13 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
             Quick Blast
           </TabsTrigger>
           <TabsTrigger
+            value="automations"
+            className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-white/10 data-[state=active]:text-orange-500 data-[state=active]:shadow-sm font-medium"
+          >
+            <Bot className="h-4 w-4 mr-1.5" />
+            Automations
+          </TabsTrigger>
+          <TabsTrigger
             value="campaigns"
             className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-white/10 data-[state=active]:text-orange-500 data-[state=active]:shadow-sm font-medium"
           >
@@ -1107,6 +1145,49 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                     Write, target, and send an email blast to your subscribers in seconds.
                   </p>
+                </div>
+
+                {/* Templates */}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Start from a template</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      {
+                        icon: <Sparkles className="h-4 w-4 text-purple-500" />,
+                        label: "Welcome",
+                        subject: "Welcome — so glad you're here! 👋",
+                        body: "Hey!\n\nJust wanted to personally say welcome and thank you for subscribing.\n\nI share [what you share — tips, products, updates] and I'm really glad to have you here.\n\nIf you ever have questions or just want to say hi, just reply to this email — I read every one.\n\nTalk soon,\n[Your name]",
+                      },
+                      {
+                        icon: <Package className="h-4 w-4 text-blue-500" />,
+                        label: "New Product",
+                        subject: "Something new just dropped 🎉",
+                        body: "Hey!\n\nExciting news — I just launched [product name]!\n\n[One or two sentences about what it is and who it's for.]\n\nHere's what you get:\n→ [Benefit 1]\n→ [Benefit 2]\n→ [Benefit 3]\n\nGrab it here: [link]\n\nAs always, reply if you have any questions.\n\n[Your name]",
+                      },
+                      {
+                        icon: <Gift className="h-4 w-4 text-red-500" />,
+                        label: "Discount",
+                        subject: "Here's a little treat for you 🎁",
+                        body: "Hey!\n\nI'm running a limited offer — [X]% off [product/everything in my store] for the next [timeframe].\n\nUse code: [CODE] at checkout.\n\nLink: [your store link]\n\nThis deal expires [date], so don't sleep on it!\n\n[Your name]",
+                      },
+                      {
+                        icon: <Megaphone className="h-4 w-4 text-orange-500" />,
+                        label: "Announcement",
+                        subject: "Quick update from me 📣",
+                        body: "Hey!\n\nI wanted to drop a quick note to let you know about [announcement].\n\n[2-3 sentences with the key details.]\n\n[Call to action — link, reply, etc.]\n\nThanks for being here.\n[Your name]",
+                      },
+                    ].map((tpl) => (
+                      <button
+                        key={tpl.label}
+                        type="button"
+                        onClick={() => { setBlastSubject(tpl.subject); setBlastBody(tpl.body); }}
+                        className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-orange-300 dark:hover:border-orange-500/40 hover:bg-orange-50 dark:hover:bg-orange-500/5 transition-colors text-center"
+                      >
+                        {tpl.icon}
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{tpl.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Subject */}
@@ -1387,6 +1468,197 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ------------------------------------------------------------------ */}
+        {/* Automations Tab */}
+        {/* ------------------------------------------------------------------ */}
+        <TabsContent value="automations" className="space-y-6">
+          <div>
+            <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-lg">
+              <Bot className="h-5 w-5 text-orange-500" />
+              Email Automations
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              Set up emails that send automatically — no manual work needed.
+            </p>
+          </div>
+
+          {automationsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-orange-400" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Welcome Email card */}
+              {(() => {
+                const welcomeAuto = automations.find((a) => a.type === "welcome");
+                const isEditing = editingAutomation === "welcome";
+                return (
+                  <div className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-2xl p-6 space-y-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
+                          <Sparkles className="h-5 w-5 text-purple-500" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-white">Welcome Email</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                            Automatically sent to new subscribers when they sign up to your list.
+                          </p>
+                          {welcomeAuto && (
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                              Subject: <span className="text-gray-600 dark:text-gray-300 italic">{welcomeAuto.subject}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {welcomeAuto && (
+                          <button
+                            type="button"
+                            disabled={togglingAutomation === "welcome"}
+                            onClick={async () => {
+                              setTogglingAutomation("welcome");
+                              try {
+                                const res = await fetch("/api/email/automations", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ type: "welcome", enabled: !welcomeAuto.enabled }),
+                                });
+                                if (!res.ok) throw new Error("Failed");
+                                await fetchAutomations();
+                                toast({ title: welcomeAuto.enabled ? "Welcome email paused" : "Welcome email activated! 🎉" });
+                              } catch {
+                                toast({ title: "Failed to update", variant: "destructive" });
+                              } finally {
+                                setTogglingAutomation(null);
+                              }
+                            }}
+                            className="flex items-center gap-1.5 text-sm font-medium transition-colors"
+                          >
+                            {togglingAutomation === "welcome" ? (
+                              <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                            ) : welcomeAuto.enabled ? (
+                              <ToggleRight className="h-7 w-7 text-green-500" />
+                            ) : (
+                              <ToggleLeft className="h-7 w-7 text-gray-400" />
+                            )}
+                            <span className={welcomeAuto.enabled ? "text-green-500" : "text-gray-400"}>
+                              {welcomeAuto.enabled ? "On" : "Off"}
+                            </span>
+                          </button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs border-gray-200 dark:border-white/10"
+                          onClick={() => {
+                            setEditingAutomation(isEditing ? null : "welcome");
+                            setAutomationDraft({
+                              subject: welcomeAuto?.subject ?? "Welcome — so glad you're here! 👋",
+                              bodyHtml: welcomeAuto?.bodyHtml ?? "Hey!\n\nThank you so much for subscribing. I'm really glad to have you here.\n\nI'll be sharing [what you share], and I can't wait to get started.\n\nIf you ever have questions, just hit reply — I read every email.\n\nTalk soon,\n[Your name]",
+                            });
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                          {welcomeAuto ? "Edit" : "Set up"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Edit form */}
+                    {isEditing && (
+                      <div className="border-t border-gray-100 dark:border-white/5 pt-4 space-y-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Subject line</Label>
+                          <Input
+                            value={automationDraft.subject}
+                            onChange={(e) => setAutomationDraft((d) => ({ ...d, subject: e.target.value }))}
+                            placeholder="Welcome — so glad you're here! 👋"
+                            className="border-gray-200 dark:border-white/10 focus-visible:ring-orange-500"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email body</Label>
+                          <p className="text-xs text-gray-400">Write naturally — line breaks become paragraphs. HTML supported.</p>
+                          <Textarea
+                            value={automationDraft.bodyHtml}
+                            onChange={(e) => setAutomationDraft((d) => ({ ...d, bodyHtml: e.target.value }))}
+                            className="min-h-48 border-gray-200 dark:border-white/10 focus-visible:ring-orange-500 resize-y text-sm"
+                            placeholder="Hey!\n\nThank you for subscribing..."
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+                            disabled={savingAutomation}
+                            onClick={async () => {
+                              if (!automationDraft.subject.trim() || !automationDraft.bodyHtml.trim()) {
+                                toast({ title: "Subject and body are required", variant: "destructive" });
+                                return;
+                              }
+                              setSavingAutomation(true);
+                              try {
+                                const res = await fetch("/api/email/automations", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ type: "welcome", subject: automationDraft.subject, bodyHtml: automationDraft.bodyHtml, enabled: welcomeAuto?.enabled ?? true }),
+                                });
+                                if (!res.ok) throw new Error("Failed");
+                                await fetchAutomations();
+                                setEditingAutomation(null);
+                                toast({ title: "Welcome email saved! 🎉", description: "New subscribers will receive this email automatically." });
+                              } catch {
+                                toast({ title: "Failed to save", variant: "destructive" });
+                              } finally {
+                                setSavingAutomation(false);
+                              }
+                            }}
+                          >
+                            {savingAutomation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                            Save & Activate
+                          </Button>
+                          <Button size="sm" variant="ghost" className="text-xs text-gray-400" onClick={() => setEditingAutomation(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {!welcomeAuto && !isEditing && (
+                      <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-xl">
+                        <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                        <p className="text-xs text-amber-700 dark:text-amber-400">No custom welcome email set. A default email is sent. Click <strong>Set up</strong> to personalise it.</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Coming soon cards */}
+              {[
+                { icon: <Package className="h-5 w-5 text-blue-400" />, bg: "bg-blue-500/10 border-blue-500/20", title: "New Product Announcement", desc: "Auto-email your list when you publish a new product to your store." },
+                { icon: <Gift className="h-5 w-5 text-red-400" />, bg: "bg-red-500/10 border-red-500/20", title: "Re-engagement Campaign", desc: "Automatically reach out to subscribers who haven't opened an email in 30 days." },
+              ].map((card) => (
+                <div key={card.title} className="bg-white dark:bg-card border border-gray-200 dark:border-white/10 rounded-2xl p-6 opacity-60">
+                  <div className="flex items-start gap-3">
+                    <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${card.bg}`}>
+                      {card.icon}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-gray-900 dark:text-white">{card.title}</p>
+                        <Badge className="text-[10px] bg-gray-100 dark:bg-white/5 text-gray-500 border border-gray-200 dark:border-white/10 hover:bg-gray-100">Coming soon</Badge>
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{card.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </TabsContent>

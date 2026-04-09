@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/db";
 import { emailContactsTable } from "@/db/schema/email-marketing-schema";
+import { emailAutomationsTable } from "@/db/schema/email-automations-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { eq, and } from "drizzle-orm";
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
     });
 
     // --- Send welcome email via Resend ---
-    // Fetch creator's brand name for personalised welcome email.
+    // Fetch creator's brand name and check for custom welcome automation.
     let creatorName: string | null = null;
     try {
       const [bv] = await db
@@ -148,13 +149,68 @@ export async function POST(request: NextRequest) {
       // Non-fatal — fall back to generic copy
     }
 
+    // Check if creator has a custom welcome automation enabled
+    let customWelcome: { subject: string; bodyHtml: string } | null = null;
     try {
-      await resend.emails.send({
-        from: "Content Flywheel <hello@contentflywheel.co.uk>",
-        to: email.toLowerCase().trim(),
-        subject: "You're subscribed! 🎉",
-        html: buildWelcomeHtml(creatorName),
-      });
+      const [automation] = await db
+        .select({ subject: emailAutomationsTable.subject, bodyHtml: emailAutomationsTable.bodyHtml })
+        .from(emailAutomationsTable)
+        .where(
+          and(
+            eq(emailAutomationsTable.userId, userId),
+            eq(emailAutomationsTable.type, "welcome"),
+            eq(emailAutomationsTable.enabled, true)
+          )
+        )
+        .limit(1);
+      if (automation) customWelcome = automation;
+    } catch {
+      // Non-fatal — fall back to default welcome
+    }
+
+    const fromName = creatorName ?? "Content Flywheel";
+    const from = `${fromName} <hello@contentflywheel.co.uk>`;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
+
+    try {
+      if (customWelcome) {
+        // Use the creator's custom welcome email
+        const formattedBody = customWelcome.bodyHtml.includes("<")
+          ? customWelcome.bodyHtml
+          : customWelcome.bodyHtml
+              .split(/\n\n+/)
+              .map((p) => `<p style="margin:0 0 16px 0;">${p.replace(/\n/g, "<br/>")}</p>`)
+              .join("");
+        const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0B0B0F;padding:16px 32px;text-align:center;">
+          <img src="https://contentflywheel.co.uk/logo.png" alt="${fromName}" width="130" style="display:inline-block;height:auto;"/>
+        </td></tr>
+        <tr><td style="padding:36px 40px;color:#1a1a1a;font-size:16px;line-height:1.7;">${formattedBody}</td></tr>
+        <tr><td style="background:#F5C97A;padding:20px 40px;text-align:center;">
+          <p style="margin:0 0 6px;font-size:13px;color:#0B0B0F;font-weight:600;">${fromName}</p>
+          <p style="margin:0;font-size:12px;color:#0B0B0F80;">
+            You received this because you subscribed to updates from this creator.<br/>
+            <a href="${baseUrl}/api/email/unsubscribe" style="color:#0B0B0F;text-decoration:underline;">Unsubscribe</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+        await resend.emails.send({ from, to: email.toLowerCase().trim(), subject: customWelcome.subject, html });
+      } else {
+        // Fall back to default welcome email
+        await resend.emails.send({
+          from,
+          to: email.toLowerCase().trim(),
+          subject: "You're subscribed! 🎉",
+          html: buildWelcomeHtml(creatorName),
+        });
+      }
     } catch (emailErr) {
       // Log but don't fail the whole request — contact is already saved.
       console.error("Welcome email send error:", emailErr);
