@@ -19,6 +19,7 @@ import {
   BarChart2,
   ArrowRight,
   BookOpen,
+  Paintbrush,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -374,14 +375,26 @@ export function StoreClient({ userId }: StoreClientProps) {
   return (
     <div className="min-h-screen bg-background p-6 md:p-8 max-w-4xl mx-auto space-y-8">
       {/* Page header */}
-      <div>
-        <div className="flex items-center gap-2.5 mb-1">
-          <Store className="w-5 h-5 text-orange-400" />
-          <h1 className="text-2xl font-bold text-white tracking-tight">My Store</h1>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2.5 mb-1">
+            <Store className="w-5 h-5 text-orange-400" />
+            <h1 className="text-2xl font-bold text-white tracking-tight">My Store</h1>
+          </div>
+          <p className="text-sm text-gray-400">
+            Sell your digital products directly to your audience.
+          </p>
         </div>
-        <p className="text-sm text-gray-400">
-          Sell your digital products directly to your audience.
-        </p>
+        <Link href="/dashboard/store/customize">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-orange-500/30 text-orange-400 hover:text-orange-300 hover:border-orange-500/50 hover:bg-orange-500/5 h-9"
+          >
+            <Paintbrush className="w-4 h-4" />
+            Customise Store
+          </Button>
+        </Link>
       </div>
 
       {/* Store URL card */}
