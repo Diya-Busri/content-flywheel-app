@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import Link from "next/link";
 import Image from "next/image";
@@ -71,6 +71,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       items: [
         { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦", featureKey: "digital_products" },
         { href: "/dashboard/digital-products/selling-guide", icon: <Package size={18} />, label: "Selling Guide", emoji: "🛒", subItem: true, featureKey: "digital_products" },
+        { href: "/dashboard/store", icon: <Store size={18} />, label: "My Store", emoji: "🏪", activeWhenStartsWith: true },
         { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️", featureKey: "tiktok_shop" },
         { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯", featureKey: "goal_tracker" },
         { href: "/dashboard/referral", icon: <Gift size={18} />, label: "Invite Creators", emoji: "🎁", featureKey: "invite_creators" },
