@@ -68,6 +68,28 @@ export async function GET(
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
+    const ma = (product.marketingAssets ?? {}) as {
+      uploadedFileUrl?: string | null;
+      uploadedFileName?: string | null;
+    };
+
+    // ── Uploaded product: proxy the original file ──────────────────────────
+    if (ma.uploadedFileUrl) {
+      const fileRes = await fetch(ma.uploadedFileUrl);
+      if (!fileRes.ok) {
+        return NextResponse.json({ error: "Could not retrieve product file" }, { status: 502 });
+      }
+      const contentType = fileRes.headers.get("content-type") ?? "application/octet-stream";
+      const rawName = ma.uploadedFileName ?? "product";
+      const safeName = rawName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 100);
+      return new NextResponse(fileRes.body, {
+        headers: {
+          "Content-Type": contentType,
+          "Content-Disposition": `attachment; filename="${safeName}"`,
+        },
+      });
+    }
+
     const content = product.content as {
       sections?: Array<{ id: string; title: string; content: string; order: number; imageUrl?: string }>;
     };

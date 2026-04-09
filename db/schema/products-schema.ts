@@ -22,6 +22,10 @@ export type MarketingAssets = {
   checkoutUrl?: string | null;
   /** Display price shown on the public sales page (e.g. "$27", "£15", "Free"). */
   priceLabel?: string | null;
+  /** Vercel Blob URL of the uploaded product file (PDF, ZIP, etc.) — for manually-uploaded products. */
+  uploadedFileUrl?: string | null;
+  /** Original filename of the uploaded product file. */
+  uploadedFileName?: string | null;
   updatedAt?: string;
 };
 

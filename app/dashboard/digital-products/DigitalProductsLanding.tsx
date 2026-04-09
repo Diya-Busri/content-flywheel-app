@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Package, Sparkles, Check, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, RefreshCw, Package2, Pencil, ExternalLink, Repeat2 } from "lucide-react";
+import { Package, Sparkles, Check, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, RefreshCw, Package2, Pencil, ExternalLink, Repeat2, Upload } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { RepurposeDialog } from "@/components/RepurposeDialog";
 
@@ -326,7 +326,7 @@ export default function DigitalProductsLanding() {
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 gap-6 items-stretch">
+        <div className="grid md:grid-cols-3 gap-6 items-stretch">
           {/* LEFT CARD */}
           <Card className={CARD_CLASS}>
             <CardHeader className="pb-4">
@@ -404,6 +404,52 @@ export default function DigitalProductsLanding() {
               >
                 <Link href="/dashboard/digital-products/discover">
                   Start Discovery
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* UPLOAD CARD */}
+          <Card className={CARD_CLASS}>
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-2 text-orange-500 mb-3">
+                <Upload className="w-7 h-7" />
+                <CardTitle className="text-xl text-gray-900 dark:text-white">Upload Existing</CardTitle>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-[#A0A0A0]">Perfect if you:</p>
+            </CardHeader>
+            <CardContent className="flex flex-col flex-1 space-y-6">
+              <ul className="space-y-2 text-sm text-gray-700 dark:text-[#E0E0E0]">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500 shrink-0" />
+                  Already made a product in Canva
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500 shrink-0" />
+                  Have a Notion template or PDF
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500 shrink-0" />
+                  Want to sell your own files
+                </li>
+              </ul>
+              <div>
+                <p className="text-sm text-gray-600 dark:text-[#A0A0A0] mb-2">What you&apos;ll do:</p>
+                <ul className="text-sm text-gray-700 dark:text-[#E0E0E0] space-y-1">
+                  <li>→ Upload your file (PDF, ZIP, etc.)</li>
+                  <li>→ Add title, description & cover</li>
+                  <li>→ Set price &amp; collect payments</li>
+                  <li>→ List on your store instantly</li>
+                </ul>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-[#A0A0A0]">Time: ~2 minutes</p>
+              <Button
+                asChild
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold h-12 text-base gap-2 mt-auto"
+              >
+                <Link href="/dashboard/digital-products/upload">
+                  Upload Product
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </Button>
