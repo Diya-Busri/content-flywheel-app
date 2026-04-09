@@ -10,6 +10,7 @@ import { BuyButton } from "./BuyButton";
 import { WaitlistForm } from "./WaitlistForm";
 import { ReviewForm } from "./ReviewForm";
 import { ShareButtons } from "./ShareButtons";
+import ViewTracker from "./ViewTracker";
 
 type MarketingAssets = {
   productTitle?: string;
@@ -175,6 +176,8 @@ export default async function ProductSalesPage({
         .desc-para:last-child { margin-bottom: 0; }
         @media (max-width: 767px) { .purchase-card { position: static; } }
       `}</style>
+
+      <ViewTracker productId={id} />
 
       {/* Top nav */}
       <nav style={{ background: "#fff", borderBottom: "1px solid #f3f4f6", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
