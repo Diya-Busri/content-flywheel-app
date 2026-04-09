@@ -67,6 +67,7 @@ import TemplatesClient from "@/app/dashboard/templates/TemplatesClient";
 import HistoryClient from "@/app/dashboard/history/HistoryClient";
 import { FeaturePreviewGate } from "@/components/feature-preview-gate";
 import { QuickSellSheet } from "@/components/product-editor/QuickSellSheet";
+import { SellOnCFButton } from "@/components/product-editor/SellOnCFButton";
 
 type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "trash";
 
@@ -115,6 +116,10 @@ type LibraryItem = {
   hasThumbnail?: boolean;
   /** 0–100 completion score. */
   completionScore?: number;
+  /** True when product is published natively on Content Flywheel. */
+  isNativePublished?: boolean;
+  /** Native price in pence (GBP). */
+  nativePrice?: number;
   /** Video: timeline project metadata (scenes, template, etc.). */
   metadata?: Record<string, unknown>;
   /** Video: platforms array, e.g. ['video-timeline']. */
@@ -1147,6 +1152,14 @@ export default function LibraryFlow() {
                             </Link>
                           </Button>
                           {item.type === "product" && (
+                            <SellOnCFButton
+                              productId={item.id}
+                              productTitle={item.title}
+                              isNativePublished={item.isNativePublished}
+                              nativePrice={item.nativePrice}
+                            />
+                          )}
+                          {item.type === "product" && (
                             <QuickSellSheet productId={item.id} productTitle={item.title} />
                           )}
                           {item.type === "product" && (
@@ -1321,6 +1334,14 @@ export default function LibraryFlow() {
                             {isTimelineVideoItem(item) ? "Open Editor" : "Open"}
                           </Link>
                         </Button>
+                        {item.type === "product" && (
+                          <SellOnCFButton
+                            productId={item.id}
+                            productTitle={item.title}
+                            isNativePublished={item.isNativePublished}
+                            nativePrice={item.nativePrice}
+                          />
+                        )}
                         {item.type === "product" && (
                           <QuickSellSheet productId={item.id} productTitle={item.title} />
                         )}

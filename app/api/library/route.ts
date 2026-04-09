@@ -43,6 +43,10 @@ type LibraryItem = {
   hasThumbnail?: boolean;
   /** 0–100 completion score: content + thumbnail + mockup + marketing + video = 20pts each. */
   completionScore?: number;
+  /** True when product is published natively on Content Flywheel. */
+  isNativePublished?: boolean;
+  /** Native price in pence (GBP). */
+  nativePrice?: number;
   /** Video: timeline project metadata (scenes, template, etc.). */
   metadata?: Record<string, unknown>;
   /** Video: platforms array, e.g. ['video-timeline']. */
@@ -140,6 +144,8 @@ export async function GET(request: NextRequest) {
         bookMockupUrl?: string | null;
         productTitle?: string | null;
         productDescription?: string | null;
+        isNativePublished?: boolean;
+        nativePrice?: number;
       } | null;
       const thumbnail = ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? undefined;
       const row = p as { designSource?: "ai" | "brand" | null; status?: string };
@@ -169,6 +175,8 @@ export async function GET(request: NextRequest) {
         hasThumbnail,
         hasMarketingAssets,
         completionScore,
+        isNativePublished: !!(ma?.isNativePublished),
+        nativePrice: ma?.nativePrice ?? undefined,
         ...(showDeleted && p.deletedAt && { deletedAt: (p.deletedAt as Date)?.toISOString?.() ?? String(p.deletedAt) }),
       };
     });

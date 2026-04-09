@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { updateProfile, updateProfileByStripeCustomerId } from "@/db/queries/profiles-queries";
 import { checkApiRateLimit, getClientIp } from "@/lib/rate-limit-api";
+import { db } from "@/db/db";
+import { productOrdersTable } from "@/db/schema/product-orders-schema";
+import { productSalesTable } from "@/db/schema/product-sales-schema";
+import { productsTable } from "@/db/schema/products-schema";
+import { eq } from "drizzle-orm";
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -100,6 +108,12 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+  // Handle native product purchases
+  if (session.metadata?.type === "product_purchase") {
+    await handleProductPurchase(session);
+    return;
+  }
+
   if (session.mode !== "subscription" || !session.subscription || !session.customer) return;
 
   const userId = session.client_reference_id as string | null;
@@ -133,6 +147,103 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       billingCycleEnd,
     });
   }
+}
+
+async function handleProductPurchase(session: Stripe.Checkout.Session) {
+  const productId = session.metadata?.productId;
+  const creatorUserId = session.metadata?.creatorUserId;
+
+  if (!productId || !creatorUserId) {
+    console.error("[stripe-webhook] product_purchase missing metadata", session.metadata);
+    return;
+  }
+
+  const buyerEmail = session.customer_details?.email ?? "";
+  const buyerName = session.customer_details?.name ?? null;
+  const amountCents = session.amount_total ?? 0;
+
+  const downloadToken = crypto.randomUUID();
+  const downloadExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
+
+  // Insert order record
+  await db.insert(productOrdersTable).values({
+    productId,
+    creatorUserId,
+    buyerEmail,
+    buyerName,
+    amountCents,
+    currency: session.currency ?? "gbp",
+    stripeSessionId: session.id,
+    status: "completed",
+    downloadToken,
+    downloadExpiresAt,
+    emailSent: false,
+  });
+
+  // Fetch product title for the email
+  const [product] = await db
+    .select({ title: productsTable.title, id: productsTable.id })
+    .from(productsTable)
+    .where(eq(productsTable.id, productId))
+    .limit(1);
+
+  const downloadUrl = `${appUrl}/api/products/${productId}/download?token=${downloadToken}`;
+  const productTitle = product?.title ?? "Digital Product";
+
+  // Send delivery email
+  try {
+    await resend.emails.send({
+      from: "hello@contentflywheel.co.uk",
+      to: buyerEmail,
+      subject: `Your download is ready: ${productTitle}`,
+      html: `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:#0B0B0F;padding:16px 32px;text-align:center;">
+          <img src="https://contentflywheel.co.uk/logo.png" alt="Content Flywheel" width="130" style="display:inline-block;height:auto;" />
+        </td></tr>
+        <tr><td style="padding:36px 40px;color:#1a1a1a;font-size:16px;line-height:1.7;">
+          <h2 style="margin:0 0 16px;font-size:22px;color:#111827;">Your download is ready!</h2>
+          <p style="margin:0 0 16px;">Hi${buyerName ? ` ${buyerName}` : ""},</p>
+          <p style="margin:0 0 24px;">Thank you for your purchase. Your download link is ready below and will be active for 7 days.</p>
+          <p style="margin:0 0 24px;"><strong>${productTitle}</strong></p>
+          <a href="${downloadUrl}" style="display:inline-block;padding:14px 32px;background:#f97316;color:#ffffff;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px;">Download Now &rarr;</a>
+          <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">This link expires in 7 days. If you need a new link, reply to this email.</p>
+        </td></tr>
+        <tr><td style="background:#F5C97A;padding:20px 40px;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#0B0B0F;">Powered by Content Flywheel</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`,
+    });
+
+    // Mark email as sent
+    await db
+      .update(productOrdersTable)
+      .set({ emailSent: true })
+      .where(eq(productOrdersTable.stripeSessionId, session.id));
+  } catch (emailErr) {
+    console.error("[stripe-webhook] Failed to send delivery email:", emailErr);
+  }
+
+  // Log the sale in product_sales table (best-effort)
+  await db.insert(productSalesTable).values({
+    userId: creatorUserId,
+    productId,
+    platform: "content-flywheel",
+    amountCents,
+    currency: session.currency ?? "gbp",
+    soldAt: new Date(),
+  }).catch((err) => {
+    console.warn("[stripe-webhook] Failed to log product sale:", err);
+  });
 }
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {

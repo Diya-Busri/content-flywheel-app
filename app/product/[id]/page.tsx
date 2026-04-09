@@ -4,6 +4,7 @@ import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { BuyButton } from "./BuyButton";
 
 type MarketingAssets = {
   productTitle?: string;
@@ -15,6 +16,8 @@ type MarketingAssets = {
   bookMockupUrl?: string | null;
   checkoutUrl?: string | null;
   priceLabel?: string | null;
+  isNativePublished?: boolean;
+  nativePrice?: number;
 };
 
 export async function generateMetadata({
@@ -40,10 +43,14 @@ export async function generateMetadata({
 
 export default async function ProductSalesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ purchased?: string; session_id?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const purchased = sp?.purchased === "true";
 
   const [product] = await db
     .select({
@@ -78,6 +85,12 @@ export default async function ProductSalesPage({
     ? product.format.charAt(0).toUpperCase() + product.format.slice(1).replace(/_/g, " ")
     : "Digital Product";
 
+  // Native selling
+  const isNativePublished = !!(ma.isNativePublished && ma.nativePrice);
+  const nativePriceLabel = ma.nativePrice
+    ? `£${(ma.nativePrice / 100).toFixed(2)}`
+    : null;
+
   return (
     <main
       style={{
@@ -88,6 +101,32 @@ export default async function ProductSalesPage({
       }}
     >
       <div style={{ maxWidth: "700px", margin: "0 auto" }}>
+        {/* Purchase success banner */}
+        {purchased && (
+          <div
+            style={{
+              marginBottom: "28px",
+              padding: "16px 24px",
+              borderRadius: "12px",
+              background: "#f0fdf4",
+              border: "1px solid #86efac",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+            }}
+          >
+            <span style={{ fontSize: "22px" }}>✅</span>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: "15px", color: "#166534" }}>
+                Purchase complete!
+              </p>
+              <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#16a34a" }}>
+                Check your email for your download link. It&apos;s valid for 7 days.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Creator badge */}
         {creatorName && (
           <div style={{ marginBottom: "20px", textAlign: "center" }}>
@@ -184,42 +223,65 @@ export default async function ProductSalesPage({
 
         {/* CTA */}
         <div style={{ textAlign: "center", marginBottom: "40px" }}>
-          {priceLabel && (
-            <div style={{ marginBottom: "12px" }}>
-              <span
+          {isNativePublished ? (
+            <>
+              <div style={{ marginBottom: "16px" }}>
+                <span
+                  style={{
+                    fontSize: "36px",
+                    fontWeight: 800,
+                    color: "#111827",
+                    letterSpacing: "-1px",
+                  }}
+                >
+                  {nativePriceLabel}
+                </span>
+              </div>
+              <BuyButton productId={product.id} priceLabel={nativePriceLabel!} />
+              <p style={{ margin: "12px 0 0", fontSize: "13px", color: "#9ca3af" }}>
+                Instant digital download — delivered to your inbox
+              </p>
+            </>
+          ) : (
+            <>
+              {priceLabel && (
+                <div style={{ marginBottom: "12px" }}>
+                  <span
+                    style={{
+                      fontSize: "32px",
+                      fontWeight: 800,
+                      color: "#111827",
+                      letterSpacing: "-1px",
+                    }}
+                  >
+                    {priceLabel}
+                  </span>
+                </div>
+              )}
+              <a
+                href={checkoutUrl ?? `mailto:?subject=Interested in ${encodeURIComponent(displayTitle)}`}
+                target={checkoutUrl ? "_blank" : undefined}
+                rel={checkoutUrl ? "noopener noreferrer" : undefined}
                 style={{
-                  fontSize: "32px",
-                  fontWeight: 800,
-                  color: "#111827",
-                  letterSpacing: "-1px",
+                  display: "inline-block",
+                  padding: "14px 36px",
+                  borderRadius: "12px",
+                  background: "linear-gradient(135deg,#f97316 0%,#ea6c0a 100%)",
+                  color: "#ffffff",
+                  fontSize: "16px",
+                  fontWeight: 700,
+                  textDecoration: "none",
+                  boxShadow: "0 4px 20px rgba(249,115,22,0.35)",
+                  letterSpacing: "-0.2px",
                 }}
               >
-                {priceLabel}
-              </span>
-            </div>
+                Get this product
+              </a>
+              <p style={{ margin: "12px 0 0", fontSize: "13px", color: "#9ca3af" }}>
+                Instant digital download
+              </p>
+            </>
           )}
-          <a
-            href={checkoutUrl ?? `mailto:?subject=Interested in ${encodeURIComponent(displayTitle)}`}
-            target={checkoutUrl ? "_blank" : undefined}
-            rel={checkoutUrl ? "noopener noreferrer" : undefined}
-            style={{
-              display: "inline-block",
-              padding: "14px 36px",
-              borderRadius: "12px",
-              background: "linear-gradient(135deg,#f97316 0%,#ea6c0a 100%)",
-              color: "#ffffff",
-              fontSize: "16px",
-              fontWeight: 700,
-              textDecoration: "none",
-              boxShadow: "0 4px 20px rgba(249,115,22,0.35)",
-              letterSpacing: "-0.2px",
-            }}
-          >
-            Get this product
-          </a>
-          <p style={{ margin: "12px 0 0", fontSize: "13px", color: "#9ca3af" }}>
-            Instant digital download
-          </p>
         </div>
 
         {/* What you get */}

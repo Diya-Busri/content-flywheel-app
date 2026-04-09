@@ -39,3 +39,4 @@ export * from "./notifications-schema";
 export * from "./announcements-schema";
 export * from "./promo-codes-schema";
 export * from "./ab-tests-schema";
+export * from "./product-orders-schema";
