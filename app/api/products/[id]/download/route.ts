@@ -129,8 +129,7 @@ export async function GET(
       niche: product.niche ?? "",
       sections,
       designSettings: (product.designSettings as Record<string, unknown>) ?? undefined,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      placedElementsByPage: (product.placedElements as any[][] | null) ?? undefined,
+      placedElementsByPage: (product.placedElements as unknown[][] | null) ?? undefined,
     }) as ArrayBuffer;
 
     return new NextResponse(buffer, {
