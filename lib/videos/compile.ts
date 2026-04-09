@@ -19,9 +19,10 @@ import { BGM_MIX_VOLUME } from "@/lib/bgm-tracks";
 
 const FPS = 25;
 
-function compileDimensions(outputAspect: "16:9" | "9:16" | undefined): { width: number; height: number } {
-  if (outputAspect === "9:16") return { width: 1080, height: 1920 };
-  return { width: 1920, height: 1080 };
+function compileDimensions(outputAspect: "16:9" | "9:16" | undefined, resolution?: "1080p" | "720p"): { width: number; height: number } {
+  const is720 = resolution === "720p";
+  if (outputAspect === "9:16") return is720 ? { width: 720, height: 1280 } : { width: 1080, height: 1920 };
+  return is720 ? { width: 1280, height: 720 } : { width: 1920, height: 1080 };
 }
 
 function resolveDrawtextFontFile(): string | null {
@@ -308,6 +309,17 @@ export type CompileVideoOptions = {
   outputAspect?: "16:9" | "9:16";
   /** Optional x264 preset override for faster exports on some flows. */
   videoPreset?: "ultrafast" | "superfast" | "veryfast" | "faster" | "fast" | "medium";
+  /**
+   * Output resolution. "720p" = 1280×720 (landscape) / 720×1280 (portrait).
+   * Defaults to "1080p" (1920×1080 or 1080×1920).
+   * Use "720p" for long-form videos (>20 scenes) to keep file size under Supabase limits.
+   */
+  resolution?: "1080p" | "720p";
+  /**
+   * x264 CRF value (0–51). Lower = better quality + larger file. Default 23.
+   * Use 28–30 for large documentary exports to keep file size manageable.
+   */
+  crf?: number;
 };
 
 /**
@@ -326,7 +338,7 @@ export async function compileVideoToFile(
   compileOpts?: CompileVideoOptions
 ): Promise<string> {
   void transition;
-  const { width, height } = compileDimensions(compileOpts?.outputAspect);
+  const { width, height } = compileDimensions(compileOpts?.outputAspect, compileOpts?.resolution);
   const voicePath = join(workDir, "voiceover.mp3");
   if (existingVoicePath) {
     try {
@@ -415,6 +427,9 @@ export async function compileVideoToFile(
   }
 
   const preset = compileOpts?.videoPreset ?? "medium";
+  const crfValue = typeof compileOpts?.crf === "number" && compileOpts.crf >= 0 && compileOpts.crf <= 51
+    ? compileOpts.crf
+    : 23;
 
   const args = [
     "-y",
@@ -427,6 +442,7 @@ export async function compileVideoToFile(
     // Do not use -shortest: if total VO duration > sum(scene video durations), -shortest trims the audio tail (often the last scene).
     "-c:v", "libx264",
     "-preset", preset,
+    "-crf", String(crfValue),
     "-c:a", "aac",
     "-movflags", "+faststart",
     finalPath,

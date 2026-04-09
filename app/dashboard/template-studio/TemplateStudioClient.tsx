@@ -71,8 +71,18 @@ import {
   TEMPLATE_STUDIO_STORY_GENERATE_ROUTES,
   type CreationMode,
   type TemplateStudioStoryTemplateId,
+  FINANCE_DOC_NICHE_OPTIONS,
+  FINANCE_DOC_STYLE_OPTIONS,
+  FINANCE_DOC_TONE_OPTIONS,
+  FINANCE_DOC_LENGTH_OPTIONS,
+  FINANCE_DOC_HOOK_OPTIONS,
+  FINANCE_DOC_CTA_OPTIONS,
+  FINANCE_DOC_AFFILIATE_PLATFORMS,
+  FINANCE_DOC_TOPIC_SUGGESTIONS,
 } from "./template-studio-shared";
 import { ELEVENLABS_VOICES, getDefaultVoiceId, setDefaultVoiceId } from "@/lib/elevenlabs-voices";
+import { toSpeakable } from "@/lib/to-speakable";
+import { deductVideoCredit } from "@/actions/video-credits-actions";
 import { normalizeRawQuizRound } from "@/lib/viral-quiz-shuffle";
 import { resolveViralVisualTheme } from "@/lib/viral-visual-themes";
 import {
@@ -168,6 +178,8 @@ const FONT_OPTIONS: { value: FontStyle; label: string }[] = [
 const LIBRARY_DRAFT_STORAGE_KEY = "content-flywheel-template-studio-library-draft-id";
 const STICKMAN_LIBRARY_DRAFT_STORAGE_KEY = "content-flywheel-stickman-library-draft-id";
 const TIMELINE_SCENE_DURATION = 5;
+/** Mode 17 Finance Documentary — ~12s per scene, volume from scene count not duration */
+const FINANCE_DOC_SCENE_DURATION = 12;
 /** AI Story generate route returns exactly 8 scenes. */
 const AI_STORY_SCENE_COUNT = 8;
 const SCENE_COLOR_HEX = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
@@ -182,10 +194,11 @@ function buildTimelineContentFromAiStory(
   aiStoryScenes: { sceneNumber: number; dialogue: string }[],
   sceneImageUrls: Record<number, string>,
   sceneVideoUrls: Record<number, string>,
-  voiceoverUrls: Record<number, string>
+  voiceoverUrls: Record<number, string>,
+  sceneDuration?: number
 ): { scenes: unknown[]; captions: unknown[]; totalDuration: number } {
   const scenes = aiStoryScenes.map((scene, i) => {
-    const duration = TIMELINE_SCENE_DURATION;
+    const duration = sceneDuration ?? TIMELINE_SCENE_DURATION;
     const startTime = i * duration;
     const title = (scene.dialogue?.trim() || `Scene ${i + 1}`).slice(0, 80);
     const videoUrl = sceneVideoUrls[scene.sceneNumber];
@@ -232,12 +245,19 @@ function buildTemplateStudioLibraryTitle(params: {
   dishName: string;
   /** Story Video (mode 15) topic line for library title. */
   storyVideoTopic?: string;
+  /** Finance Documentary (mode 17) topic line for library title. */
+  financeDocTopic?: string;
   /** When set, titles become `Show · Ep N: …` for My Library grouping. */
   seriesShowTitle?: string;
 }): string {
   const ep = params.episodeNumber >= 1 ? params.episodeNumber : 1;
   let core: string;
-  if (params.mode === "15") {
+  if (params.mode === "17") {
+    const t = (params.financeDocTopic ?? "").trim();
+    core = t
+      ? `Finance Doc - ${t.slice(0, 65)}${t.length > 65 ? "…" : ""} - Ep ${ep}`
+      : `Finance Documentary - Episode ${ep}`;
+  } else if (params.mode === "15") {
     const t = (params.storyVideoTopic ?? "").trim();
     core = t
       ? `Story Video - ${t.slice(0, 70)}${t.length > 70 ? "…" : ""} - Episode ${ep}`
@@ -333,6 +353,20 @@ export default function TemplateStudioClient() {
   const [brandStoryThemeLine, setBrandStoryThemeLine] = useState("");
   const [brandStoryVoiceId, setBrandStoryVoiceId] = useState("pNInz6obpgDQGcFmaJgB");
   const [brandStoryVideoLoading, setBrandStoryVideoLoading] = useState(false);
+  // Mode 17 — Finance / Business Documentary
+  const [financeDocTopic, setFinanceDocTopic] = useState("");
+  const [financeDocNiche, setFinanceDocNiche] = useState("Personal Finance");
+  const [financeDocStyle, setFinanceDocStyle] = useState("Dark Luxury");
+  const [financeDocTone, setFinanceDocTone] = useState("Documentary");
+  const [financeDocLength, setFinanceDocLength] = useState<"short" | "medium" | "long">("medium");
+  const [financeDocHookStyle, setFinanceDocHookStyle] = useState("shocking_stat");
+  const [financeDocCtaGoal, setFinanceDocCtaGoal] = useState("subscribe");
+  const [financeDocChannelName, setFinanceDocChannelName] = useState("");
+  const [financeDocProductName, setFinanceDocProductName] = useState("");
+  const [financeDocAffiliatePlatform, setFinanceDocAffiliatePlatform] = useState("trading212");
+  const [financeDocAffiliateCustomName, setFinanceDocAffiliateCustomName] = useState("");
+  const [financeDocAffiliateOffer, setFinanceDocAffiliateOffer] = useState("");
+
   // Mode 16 — AI Animation Video Prompts
   const [animCharacterName, setAnimCharacterName] = useState("");
   const [animCharacterDescription, setAnimCharacterDescription] = useState("");
@@ -360,6 +394,13 @@ export default function TemplateStudioClient() {
   const [sceneImageUrls, setSceneImageUrls] = useState<Record<number, string>>({});
   const [sceneImageLoadingScene, setSceneImageLoadingScene] = useState<number | null>(null);
   const [sceneVideoUrls, setSceneVideoUrls] = useState<Record<number, string>>({});
+  const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
+  const [allImagesGenerating, setAllImagesGenerating] = useState(false);
+  const [allImagesProgress, setAllImagesProgress] = useState<{ done: number; total: number } | null>(null);
+  const [allVoiceoversGenerating, setAllVoiceoversGenerating] = useState(false);
+  const [allVoiceoversProgress, setAllVoiceoversProgress] = useState<{ done: number; total: number } | null>(null);
+  const [allAnimationsGenerating, setAllAnimationsGenerating] = useState(false);
+  const [allAnimationsProgress, setAllAnimationsProgress] = useState<{ done: number; total: number } | null>(null);
 
   /** Mode 9: single photoreal chef reference portrait for identity anchoring (FLUX img2img). */
   const [cookingChefReferenceUrl, setCookingChefReferenceUrl] = useState<string>("");
@@ -479,8 +520,10 @@ export default function TemplateStudioClient() {
           ? "ai_cooking_video"
           : mode === "15"
             ? "story_video"
-            : undefined;
-  const isStoryTemplateMode = mode === "7" || mode === "8" || mode === "9" || mode === "15";
+            : mode === "17"
+              ? "finance_documentary"
+              : undefined;
+  const isStoryTemplateMode = mode === "7" || mode === "8" || mode === "9" || mode === "15" || mode === "17";
   const isAiStoryMode = mode === "7";
   const isStickmanMode = mode === "11";
   const isViralMode = mode === "12";
@@ -494,7 +537,8 @@ export default function TemplateStudioClient() {
     mode === "11" ||
     mode === "12" ||
     mode === "13" ||
-    mode === "15";
+    mode === "15" ||
+    mode === "17";
   const isSeriesLibrarySetupMode = mode === "14";
 
   useEffect(() => {
@@ -852,6 +896,8 @@ export default function TemplateStudioClient() {
                   ? kineticTopic.trim().length > 0
                   : mode === "16"
                     ? animCharacterDescription.trim().length > 0
+                  : mode === "17"
+                    ? financeDocTopic.trim().length > 0
                   : mode === "1" || mode === "4"
                 ? niche.trim().length > 0
                 : mode === "2" || mode === "6"
@@ -1004,7 +1050,9 @@ export default function TemplateStudioClient() {
               ? TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.satisfying_build
               : mode === "15"
                 ? TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.story_video
-                : TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.ai_cooking_video;
+                : mode === "17"
+                  ? TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.finance_documentary
+                  : TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.ai_cooking_video;
         const res = await fetch(generateUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1036,7 +1084,23 @@ export default function TemplateStudioClient() {
                     scene_count: storyVideoSceneCount,
                     episode_number: episodeForApi,
                   }
-                : {
+                : mode === "17"
+                  ? {
+                      topic: financeDocTopic.trim(),
+                      niche: financeDocNiche,
+                      style: financeDocStyle,
+                      tone: financeDocTone,
+                      length: financeDocLength,
+                      hookStyle: financeDocHookStyle,
+                      ctaGoal: financeDocCtaGoal,
+                      channelName: financeDocChannelName.trim(),
+                      productName: financeDocProductName.trim(),
+                      affiliatePlatform: financeDocCtaGoal === "affiliate"
+                        ? (financeDocAffiliatePlatform === "other" ? financeDocAffiliateCustomName.trim() : financeDocAffiliatePlatform)
+                        : undefined,
+                      affiliateOffer: financeDocCtaGoal === "affiliate" ? financeDocAffiliateOffer.trim() : undefined,
+                    }
+                  : {
                     ...(mode === "8"
                       ? {
                           character_type: satisfyingCharacterType,
@@ -1151,6 +1215,7 @@ export default function TemplateStudioClient() {
           whatBuilding,
           dishName: cookingDishName,
           storyVideoTopic,
+          financeDocTopic,
           seriesShowTitle,
         });
         void fetch("/api/video-timeline/save", {
@@ -2037,7 +2102,8 @@ export default function TemplateStudioClient() {
       aiStoryScenes,
       sceneImageUrls,
       sceneVideoUrls,
-      effectiveVoiceoverUrls
+      effectiveVoiceoverUrls,
+      mode === "17" ? FINANCE_DOC_SCENE_DURATION : undefined
     );
     try {
       const draftTitle = buildTemplateStudioLibraryTitle({
@@ -2220,7 +2286,7 @@ export default function TemplateStudioClient() {
       setAutoGeneratePhase("Animating scenes");
       setAutoGenerateProgress({ done: 0, total });
       const latestVideoUrls: Record<number, string> = { ...sceneVideoUrls };
-      const aspectRatio = mode === "15" ? "16:9" : "9:16";
+      const aspectRatio = (mode === "15" || mode === "17") ? "16:9" : "9:16";
 
       for (let i = 0; i < ordered.length; i++) {
         const scene = ordered[i]!;
@@ -2278,7 +2344,7 @@ export default function TemplateStudioClient() {
         try {
           const voiceRes = await fetch("/api/ai-coach/voice-over", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ script: speakable, voiceId: defaultVoiceId, maxDurationSeconds: TIMELINE_SCENE_DURATION }),
+            body: JSON.stringify({ script: speakable, voiceId: defaultVoiceId, maxDurationSeconds: mode === "17" ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION }),
           });
           const voiceData = (await voiceRes.json().catch(() => ({}))) as { url?: string; publicUrl?: string; audioUrl?: string };
           const voiceUrl = voiceData.url ?? voiceData.publicUrl ?? voiceData.audioUrl ?? "";
@@ -2297,10 +2363,12 @@ export default function TemplateStudioClient() {
       setAutoGenerateProgress(null);
       const scenes_json = ordered.map((scene) => ({
         scene_number: scene.sceneNumber,
-        duration: TIMELINE_SCENE_DURATION,
+        duration: mode === "17" ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION,
         script_text: scene.dialogue?.trim() ?? "",
         image_url: latestImageUrls[scene.sceneNumber] ?? null,
-        video_url: latestVideoUrls[scene.sceneNumber] ?? null,
+        // Mode 17 documentary: use image (Ken Burns) not Kling clip — Kling clips are 5s fixed
+        // which makes a 35-scene video only 3 mins. Ken Burns fills the full voiceover duration.
+        video_url: mode === "17" ? null : (latestVideoUrls[scene.sceneNumber] ?? null),
         voiceover_url: latestVoiceoverUrls[scene.sceneNumber] ?? null,
         caption: scene.dialogue?.trim() ?? null,
         animation_type: "video",
@@ -2309,7 +2377,7 @@ export default function TemplateStudioClient() {
       const saveRes = await fetch("/api/saved-scripts", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: buildTemplateStudioLibraryTitle({ mode, episodeNumber, theme, whatBuilding, dishName: cookingDishName, storyVideoTopic, seriesShowTitle }),
+          title: buildTemplateStudioLibraryTitle({ mode, episodeNumber, theme, whatBuilding, dishName: cookingDishName, storyVideoTopic, financeDocTopic, seriesShowTitle }),
           scenes_json,
         }),
       });
@@ -2322,7 +2390,7 @@ export default function TemplateStudioClient() {
           scriptId: saveData.id,
           transition: "fade",
           backgroundMusic: storyBackgroundMusic,
-          ...(mode === "15" && storyVideoFormat === "long" ? { outputAspect: "16:9" } : {}),
+          ...((mode === "15" && storyVideoFormat === "long") || mode === "17" ? { outputAspect: "16:9" } : {}),
         }),
       });
       const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; error?: string; code?: string };
@@ -2377,10 +2445,11 @@ export default function TemplateStudioClient() {
         const dialogue = scene.dialogue?.trim() ?? "";
         return {
           scene_number: scene.sceneNumber,
-          duration: TIMELINE_SCENE_DURATION,
+          duration: mode === "17" ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION,
           script_text: dialogue,
           image_url: image_url && isHttpUrl(image_url) ? image_url : null,
-          video_url: video_url && isHttpUrl(video_url) ? video_url : null,
+          // Mode 17: use image (Ken Burns) not Kling clip — Kling is 5s fixed, voiceover is 12-15s
+          video_url: mode === "17" ? null : (video_url && isHttpUrl(video_url) ? video_url : null),
           caption: dialogue || null,
           animation_type: "video",
           voiceover_url: voiceover_url && isHttpUrl(voiceover_url) ? voiceover_url : null,
@@ -2419,7 +2488,7 @@ export default function TemplateStudioClient() {
           scriptId,
           transition: "fade",
           backgroundMusic: storyBackgroundMusic,
-          ...(mode === "15" && storyVideoFormat === "long" ? { outputAspect: "16:9" } : {}),
+          ...((mode === "15" && storyVideoFormat === "long") || mode === "17" ? { outputAspect: "16:9" } : {}),
         }),
       });
       const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; error?: string };
@@ -2554,7 +2623,8 @@ export default function TemplateStudioClient() {
       aiStoryScenes,
       sceneImageUrls,
       sceneVideoUrls,
-      voiceoverUrls
+      voiceoverUrls,
+      mode === "17" ? FINANCE_DOC_SCENE_DURATION : undefined
     );
     const draftTitle = buildTemplateStudioLibraryTitle({
       mode,
@@ -2563,6 +2633,7 @@ export default function TemplateStudioClient() {
       whatBuilding,
       dishName: cookingDishName,
       storyVideoTopic,
+      financeDocTopic,
       seriesShowTitle,
     });
     const metaBase = {
@@ -2766,6 +2837,275 @@ export default function TemplateStudioClient() {
     setVoiceoverUrls({});
   }, [voiceoverEnabled]);
 
+  // ── LocalStorage persistence ────────────────────────────────────────────────
+  const TS_DRAFT_KEY = "cf:ts:draft";
+
+  // RESTORE: on mount, reload all saved state from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(TS_DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof d.mode === "string") setMode(d.mode as CreationMode);
+      if (typeof d.step === "number") setStep(d.step as 1 | 2 | 3);
+      // Finance Documentary fields
+      if (typeof d.financeDocTopic === "string") setFinanceDocTopic(d.financeDocTopic);
+      if (typeof d.financeDocNiche === "string") setFinanceDocNiche(d.financeDocNiche);
+      if (typeof d.financeDocStyle === "string") setFinanceDocStyle(d.financeDocStyle);
+      if (typeof d.financeDocTone === "string") setFinanceDocTone(d.financeDocTone);
+      if (typeof d.financeDocLength === "string") setFinanceDocLength(d.financeDocLength as "short" | "medium" | "long");
+      if (typeof d.financeDocHookStyle === "string") setFinanceDocHookStyle(d.financeDocHookStyle);
+      if (typeof d.financeDocCtaGoal === "string") setFinanceDocCtaGoal(d.financeDocCtaGoal);
+      if (typeof d.financeDocChannelName === "string") setFinanceDocChannelName(d.financeDocChannelName);
+      if (typeof d.financeDocProductName === "string") setFinanceDocProductName(d.financeDocProductName);
+      // Generated content
+      if (Array.isArray(d.aiStoryScenes) && d.aiStoryScenes.length > 0) setAiStoryScenes(d.aiStoryScenes as typeof aiStoryScenes);
+      if (d.sceneImageUrls && typeof d.sceneImageUrls === "object") setSceneImageUrls(d.sceneImageUrls as Record<number, string>);
+      if (d.sceneVideoUrls && typeof d.sceneVideoUrls === "object") setSceneVideoUrls(d.sceneVideoUrls as Record<number, string>);
+      if (d.voiceoverUrls && typeof d.voiceoverUrls === "object") setVoiceoverUrls(d.voiceoverUrls as Record<number, string>);
+      if (d.socialMediaPack) setSocialMediaPack(d.socialMediaPack as SocialMediaPack);
+      // Other commonly-used fields
+      if (typeof d.storyVideoTopic === "string") setStoryVideoTopic(d.storyVideoTopic);
+      if (typeof d.storyVideoTargetAudience === "string") setStoryVideoTargetAudience(d.storyVideoTargetAudience);
+      if (typeof d.stickmanTopic === "string") setStickmanTopic(d.stickmanTopic);
+      if (typeof d.viralTopic === "string") setViralTopic(d.viralTopic);
+      if (typeof d.kineticTopic === "string") setKineticTopic(d.kineticTopic);
+    } catch {
+      // ignore corrupt data
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // SAVE: debounced 1s — persist all key state to localStorage on every change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        // Filter out data: URLs (too large for localStorage) — only keep https:// URLs
+        const filteredImageUrls = Object.fromEntries(
+          Object.entries(sceneImageUrls).filter(([, v]) => typeof v === "string" && (v.startsWith("https://") || v.startsWith("http://")))
+        );
+        localStorage.setItem(TS_DRAFT_KEY, JSON.stringify({
+          mode,
+          step,
+          financeDocTopic,
+          financeDocNiche,
+          financeDocStyle,
+          financeDocTone,
+          financeDocLength,
+          financeDocHookStyle,
+          financeDocCtaGoal,
+          financeDocChannelName,
+          financeDocProductName,
+          aiStoryScenes,
+          sceneImageUrls: filteredImageUrls,
+          sceneVideoUrls,
+          voiceoverUrls,
+          socialMediaPack,
+          storyVideoTopic,
+          storyVideoTargetAudience,
+          stickmanTopic,
+          viralTopic,
+          kineticTopic,
+          savedAt: Date.now(),
+        }));
+      } catch {
+        // localStorage full or unavailable — ignore
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [
+    mode, step,
+    financeDocTopic, financeDocNiche, financeDocStyle, financeDocTone,
+    financeDocLength, financeDocHookStyle, financeDocCtaGoal,
+    financeDocChannelName, financeDocProductName,
+    aiStoryScenes, sceneImageUrls, sceneVideoUrls, voiceoverUrls,
+    socialMediaPack, storyVideoTopic, storyVideoTargetAudience,
+    stickmanTopic, viralTopic, kineticTopic,
+  ]);
+  // ── End LocalStorage persistence ─────────────────────────────────────────────
+
+  // Fetch video credits balance once on mount
+  // null = loading/unknown (don't gate), 0 = confirmed zero, >0 = has credits
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/video-credits/balance");
+        if (!res.ok) {
+          // If the request fails, leave as null so we never incorrectly block users
+          return;
+        }
+        const data = await res.json().catch(() => ({})) as { balance?: number };
+        setCreditsBalance(typeof data.balance === "number" ? data.balance : null);
+      } catch {
+        // On error, leave as null — don't show the no-credits gate
+      }
+    })();
+  }, []);
+
+  const handleGenerateAllImages = useCallback(async () => {
+    if (allImagesGenerating || aiStoryScenes.length === 0) return;
+    setAllImagesGenerating(true);
+    const ordered = [...aiStoryScenes].sort((a, b) => a.sceneNumber - b.sceneNumber);
+    setAllImagesProgress({ done: 0, total: ordered.length });
+    for (let i = 0; i < ordered.length; i++) {
+      const scene = ordered[i]!;
+      // Skip scenes that already have a valid image
+      const existing = sceneImageUrls[scene.sceneNumber];
+      if (existing && (existing.startsWith("https://") || existing.startsWith("http://") || existing.startsWith("data:image/"))) {
+        setAllImagesProgress({ done: i + 1, total: ordered.length });
+        continue;
+      }
+      try {
+        const imageBody: Record<string, unknown> = { prompt: scene.imagePrompt };
+        if (mode === "15") imageBody.storyVideoFormat = storyVideoFormat;
+        if (mode === "17") imageBody.storyVideoFormat = "long"; // 16:9 landscape for YouTube documentary
+        const res = await fetch("/api/generate-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(imageBody),
+        });
+        const data = await res.json().catch(() => ({})) as { url?: string; imageUrl?: string; data?: { url?: string }[] };
+        const url =
+          (typeof data?.url === "string" ? data.url.trim() : "") ||
+          (typeof data?.imageUrl === "string" ? data.imageUrl.trim() : "") ||
+          (Array.isArray(data?.data) && typeof data.data[0]?.url === "string" ? data.data[0].url.trim() : "");
+        if (url && (url.startsWith("https://") || url.startsWith("http://") || url.startsWith("data:image/"))) {
+          setSceneImageUrls((prev) => ({ ...prev, [scene.sceneNumber]: url }));
+        }
+      } catch {
+        // continue to next scene on error
+      }
+      setAllImagesProgress({ done: i + 1, total: ordered.length });
+    }
+    setAllImagesGenerating(false);
+    setAllImagesProgress(null);
+  }, [allImagesGenerating, aiStoryScenes, sceneImageUrls, mode, storyVideoFormat]);
+
+  const handleGenerateAllVoiceovers = useCallback(async () => {
+    if (allVoiceoversGenerating || aiStoryScenes.length === 0) return;
+    setAllVoiceoversGenerating(true);
+    const ordered = [...aiStoryScenes].sort((a, b) => a.sceneNumber - b.sceneNumber);
+    setAllVoiceoversProgress({ done: 0, total: ordered.length });
+    for (let i = 0; i < ordered.length; i++) {
+      const scene = ordered[i]!;
+      // Skip if already has voiceover
+      if (voiceoverUrls[scene.sceneNumber]) {
+        setAllVoiceoversProgress({ done: i + 1, total: ordered.length });
+        continue;
+      }
+      // Resolve the voice ID for this scene (same logic as per-scene card)
+      const characterNameMatch = scene.dialogue.match(/^([^:]+):/);
+      const characterName = characterNameMatch ? characterNameMatch[1].trim() : null;
+      const voiceId = characterName && characterVoices[characterName]
+        ? characterVoices[characterName]
+        : characterName
+          ? getDefaultVoiceIdForCharacter(characterName)
+          : elevenLabsVoices[0]?.voice_id ?? "";
+      if (!voiceId) {
+        setAllVoiceoversProgress({ done: i + 1, total: ordered.length });
+        continue;
+      }
+      // Build the speakable script (strip "Name:" prefix)
+      const scriptText = scene.dialogue.includes(":")
+        ? scene.dialogue.slice(scene.dialogue.indexOf(":") + 1).trim()
+        : scene.dialogue;
+      const speakableText = toSpeakable(scriptText);
+      try {
+        const res = await fetch("/api/ai-coach/voice-over", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ script: speakableText, voiceId, maxDurationSeconds: mode === "17" ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION }),
+        });
+        const data = await res.json().catch(() => ({})) as { url?: string; publicUrl?: string; audioUrl?: string };
+        const voUrl =
+          (typeof data.url === "string" ? data.url : "") ||
+          (typeof data.publicUrl === "string" ? data.publicUrl : "") ||
+          (typeof data.audioUrl === "string" ? data.audioUrl : "");
+        if (voUrl.trim()) {
+          setVoiceoverUrls((prev) => ({ ...prev, [scene.sceneNumber]: voUrl.trim() }));
+        }
+      } catch {
+        // continue to next scene on error
+      }
+      setAllVoiceoversProgress({ done: i + 1, total: ordered.length });
+    }
+    setAllVoiceoversGenerating(false);
+    setAllVoiceoversProgress(null);
+  }, [allVoiceoversGenerating, aiStoryScenes, voiceoverUrls, characterVoices, elevenLabsVoices]);
+
+  const handleGenerateAllAnimations = useCallback(async () => {
+    if (allAnimationsGenerating || aiStoryScenes.length === 0) return;
+    // Only animate scenes that have an image but no video
+    const scenesToAnimate = aiStoryScenes
+      .filter((s) => {
+        const img = sceneImageUrls[s.sceneNumber];
+        const vid = sceneVideoUrls[s.sceneNumber];
+        return img && (img.startsWith("https://") || img.startsWith("http://")) && !vid;
+      })
+      .sort((a, b) => a.sceneNumber - b.sceneNumber);
+    if (scenesToAnimate.length === 0) return;
+    setAllAnimationsGenerating(true);
+    setAllAnimationsProgress({ done: 0, total: scenesToAnimate.length });
+    const aspectRatio = (mode === "15" || mode === "17") ? "16:9" : "9:16";
+    // Step 1: Fire all animation requests in parallel to get requestIds
+    const pending: { scene: typeof scenesToAnimate[0]; requestId: string }[] = [];
+    await Promise.all(
+      scenesToAnimate.map(async (scene) => {
+        try {
+          const res = await fetch("/api/content-studio/ai-story/animate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              imageUrl: sceneImageUrls[scene.sceneNumber],
+              motionPrompt: scene.motionPrompt || scene.imagePrompt,
+              aspectRatio,
+            }),
+          });
+          const data = await res.json().catch(() => ({})) as { requestId?: string; request_id?: string; videoUrl?: string };
+          if (data.videoUrl) {
+            // Synchronous result — save immediately
+            setSceneVideoUrls((prev) => ({ ...prev, [scene.sceneNumber]: data.videoUrl! }));
+            setAllAnimationsProgress((p) => p ? { done: p.done + 1, total: p.total } : null);
+          } else {
+            const reqId = data.requestId ?? data.request_id ?? null;
+            if (reqId) pending.push({ scene, requestId: reqId });
+          }
+        } catch {
+          // skip scene on error
+        }
+      })
+    );
+    // Step 2: Poll all pending requestIds until each one completes
+    const pollOne = async (requestId: string): Promise<string | null> => {
+      for (let attempt = 0; attempt < 120; attempt++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        try {
+          const res = await fetch(`/api/content-studio/ai-story/animate/status?requestId=${encodeURIComponent(requestId)}`);
+          const data = await res.json().catch(() => ({})) as { status?: string; videoUrl?: string };
+          if (data.status === "COMPLETED" && data.videoUrl) return data.videoUrl;
+          if (data.status === "FAILED") return null;
+        } catch {
+          // keep polling
+        }
+      }
+      return null; // timed out
+    };
+    // Poll all pending in parallel
+    await Promise.all(
+      pending.map(async ({ scene, requestId }) => {
+        const videoUrl = await pollOne(requestId);
+        if (videoUrl) {
+          setSceneVideoUrls((prev) => ({ ...prev, [scene.sceneNumber]: videoUrl }));
+        }
+        setAllAnimationsProgress((p) => p ? { done: p.done + 1, total: p.total } : null);
+      })
+    );
+    setAllAnimationsGenerating(false);
+    setAllAnimationsProgress(null);
+    // Deduct 1 credit for the animation batch (Kling AI costs per scene)
+    await deductVideoCredit("brandStoryVideo").catch((e) => console.warn("[animations] credit deduction failed:", e));
+  }, [allAnimationsGenerating, aiStoryScenes, sceneImageUrls, sceneVideoUrls, mode]);
+
   useEffect(() => {
     const value = stickmanTopic.trim();
     if (!value) return;
@@ -2793,8 +3133,8 @@ export default function TemplateStudioClient() {
   const handleCreationModeChange = useCallback(
     (next: CreationMode) => {
       if (next !== mode) {
-        const storyM = mode === "7" || mode === "8" || mode === "9" || mode === "15";
-        const storyN = next === "7" || next === "8" || next === "9" || next === "15";
+        const storyM = mode === "7" || mode === "8" || mode === "9" || mode === "15" || mode === "17";
+        const storyN = next === "7" || next === "8" || next === "9" || next === "15" || next === "17";
         const brandM = mode === "10";
         const brandN = next === "10";
         const skipPipelineReset = mode === "14" || next === "14";
@@ -3577,6 +3917,178 @@ export default function TemplateStudioClient() {
               </>
             )}
 
+            {selectedTemplate === "finance_documentary" && (
+              <>
+                {/* Niche */}
+                <div className="space-y-2">
+                  <Label>Niche / Channel type</Label>
+                  <Select value={financeDocNiche} onValueChange={setFinanceDocNiche}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {FINANCE_DOC_NICHE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Topic */}
+                <div className="space-y-2">
+                  <Label htmlFor="finance-topic">Video topic *</Label>
+                  <Input
+                    id="finance-topic"
+                    placeholder="e.g. How to build a £100k portfolio from scratch"
+                    value={financeDocTopic}
+                    onChange={(e) => setFinanceDocTopic(e.target.value)}
+                  />
+                  {FINANCE_DOC_TOPIC_SUGGESTIONS[financeDocNiche] && (
+                    <div className="flex flex-col gap-1 pt-1">
+                      <p className="text-xs text-muted-foreground">Quick ideas — click to use:</p>
+                      {FINANCE_DOC_TOPIC_SUGGESTIONS[financeDocNiche].map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setFinanceDocTopic(s)}
+                          className="text-left text-xs px-3 py-1.5 rounded-lg border border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-100 transition-colors"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Visual style */}
+                <div className="space-y-2">
+                  <Label>Visual style</Label>
+                  <Select value={financeDocStyle} onValueChange={setFinanceDocStyle}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {FINANCE_DOC_STYLE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">This controls how every image in your video looks.</p>
+                </div>
+
+                {/* Tone */}
+                <div className="space-y-2">
+                  <Label>Narrator tone</Label>
+                  <Select value={financeDocTone} onValueChange={setFinanceDocTone}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {FINANCE_DOC_TONE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Length */}
+                <div className="space-y-2">
+                  <Label>Video length</Label>
+                  <Select value={financeDocLength} onValueChange={(v) => setFinanceDocLength(v as "short" | "medium" | "long")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {FINANCE_DOC_LENGTH_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Hook style */}
+                <div className="space-y-2">
+                  <Label>Opening hook style</Label>
+                  <Select value={financeDocHookStyle} onValueChange={setFinanceDocHookStyle}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {FINANCE_DOC_HOOK_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* CTA goal */}
+                <div className="space-y-2">
+                  <Label>Video CTA goal</Label>
+                  <Select value={financeDocCtaGoal} onValueChange={setFinanceDocCtaGoal}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {FINANCE_DOC_CTA_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Channel name */}
+                <div className="space-y-2">
+                  <Label htmlFor="finance-channel">Channel name <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Input
+                    id="finance-channel"
+                    placeholder="e.g. Smart Income Circle"
+                    value={financeDocChannelName}
+                    onChange={(e) => setFinanceDocChannelName(e.target.value)}
+                  />
+                </div>
+
+                {/* Product name (only if CTA = sell product) */}
+                {financeDocCtaGoal === "sell_product" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="finance-product">Product name</Label>
+                    <Input
+                      id="finance-product"
+                      placeholder="e.g. The Wealth Blueprint Course"
+                      value={financeDocProductName}
+                      onChange={(e) => setFinanceDocProductName(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {/* Affiliate / referral fields */}
+                {financeDocCtaGoal === "affiliate" && (
+                  <div className="space-y-3 rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30 p-3">
+                    <p className="text-sm font-medium text-green-800 dark:text-green-200">💰 Affiliate / Referral details</p>
+                    <p className="text-xs text-green-700 dark:text-green-300">The script will naturally mention your referral link at the right moment — where the topic connects to the platform.</p>
+                    <div className="space-y-2">
+                      <Label>Platform</Label>
+                      <Select value={financeDocAffiliatePlatform} onValueChange={setFinanceDocAffiliatePlatform}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {FINANCE_DOC_AFFILIATE_PLATFORMS.map((p) => (
+                            <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {financeDocAffiliatePlatform === "other" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="finance-affiliate-custom">Platform name</Label>
+                        <Input
+                          id="finance-affiliate-custom"
+                          placeholder="e.g. Stake, InvestEngine..."
+                          value={financeDocAffiliateCustomName}
+                          onChange={(e) => setFinanceDocAffiliateCustomName(e.target.value)}
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="finance-affiliate-offer">What does your referral offer? <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                      <Input
+                        id="finance-affiliate-offer"
+                        placeholder="e.g. Free share worth up to £100 when you deposit £1"
+                        value={financeDocAffiliateOffer}
+                        onChange={(e) => setFinanceDocAffiliateOffer(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
             {mode === "16" && (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
@@ -3960,7 +4472,7 @@ export default function TemplateStudioClient() {
                         return;
                       }
                       await runCharacterStylePreview();
-                    } else if (mode === "8" || mode === "9" || mode === "15") {
+                    } else if (mode === "8" || mode === "9" || mode === "15" || mode === "17") {
                       await runGenerateAiStory();
                     } else if (isViralMode) {
                       setViralLoading(true);
@@ -4139,7 +4651,7 @@ export default function TemplateStudioClient() {
                   disabled={
                     !canProceedStep1 ||
                     (isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
-                    ((mode === "8" || mode === "9" || mode === "15") && aiStoryLoading) ||
+                    ((mode === "8" || mode === "9" || mode === "15" || mode === "17") && aiStoryLoading) ||
                     (mode === "10" && brandStoryVideoLoading) ||
                     (mode === "16" && animPromptsLoading) ||
                     (isStickmanMode && stickmanLoading) ||
@@ -4163,6 +4675,10 @@ export default function TemplateStudioClient() {
                           ? aiStoryScenes.length > 0
                             ? "Regenerate story"
                             : "Generate episode"
+                          : mode === "17"
+                            ? aiStoryScenes.length > 0
+                              ? "Regenerate documentary"
+                              : "Generate documentary"
                           : mode === "10"
                           ? "Generate 9:16 Brand Story video"
                           : mode === "16"
@@ -4179,7 +4695,7 @@ export default function TemplateStudioClient() {
                                     : "Generate whiteboard video"
                                 : "Next — Generate content"}
                   {(isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
-                  ((mode === "8" || mode === "9" || mode === "15") && aiStoryLoading) ||
+                  ((mode === "8" || mode === "9" || mode === "15" || mode === "17") && aiStoryLoading) ||
                   (mode === "10" && brandStoryVideoLoading) ||
                   (mode === "16" && animPromptsLoading) ||
                   (isStickmanMode && stickmanLoading) ||
@@ -4535,16 +5051,111 @@ export default function TemplateStudioClient() {
         )}
         <Card>
           <CardHeader>
-            <CardTitle>Scenes</CardTitle>
-            <CardDescription>
-              {mode === "8"
-                ? "Generated scenes for your Satisfying Build."
-                : mode === "9"
-                  ? "Generated scenes for your AI Cooking Video."
-                  : mode === "15"
-                    ? "Generated scenes for your Story Video."
-                    : "Generated scenes for your AI Story."}
-            </CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div>
+                <CardTitle>Scenes</CardTitle>
+                <CardDescription className="mt-1">
+                  {mode === "8"
+                    ? "Generated scenes for your Satisfying Build."
+                    : mode === "9"
+                      ? "Generated scenes for your AI Cooking Video."
+                      : mode === "15"
+                        ? "Generated scenes for your Story Video."
+                        : mode === "17"
+                          ? "Your Finance Documentary storyboard. Generate images to bring each scene to life."
+                          : "Generated scenes for your AI Story."}
+                </CardDescription>
+              </div>
+              {creditsBalance !== null && creditsBalance > 0 && (
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                    disabled={allImagesGenerating || allVoiceoversGenerating || allAnimationsGenerating}
+                    onClick={() => void handleGenerateAllImages()}
+                  >
+                    {allImagesGenerating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        {allImagesProgress ? `Images ${allImagesProgress.done}/${allImagesProgress.total}…` : "Generating…"}
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        All Images
+                      </>
+                    )}
+                  </Button>
+                  {voiceoverEnabled && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950"
+                      disabled={allVoiceoversGenerating || allImagesGenerating || allAnimationsGenerating}
+                      onClick={() => void handleGenerateAllVoiceovers()}
+                    >
+                      {allVoiceoversGenerating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          {allVoiceoversProgress ? `Voiceovers ${allVoiceoversProgress.done}/${allVoiceoversProgress.total}…` : "Generating…"}
+                        </>
+                      ) : (
+                        <>🎙 All Voiceovers</>
+                      )}
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-purple-400 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950"
+                    disabled={allAnimationsGenerating || allImagesGenerating || allVoiceoversGenerating || Object.keys(sceneImageUrls).length === 0}
+                    onClick={() => void handleGenerateAllAnimations()}
+                    title={Object.keys(sceneImageUrls).length === 0 ? "Generate images first" : "Animate all scenes (2–10 mins each, runs in parallel)"}
+                  >
+                    {allAnimationsGenerating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        {allAnimationsProgress ? `Animating ${allAnimationsProgress.done}/${allAnimationsProgress.total}…` : "Animating…"}
+                      </>
+                    ) : (
+                      <>🎬 All Animations</>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+            {/* No-credits guide banner */}
+            {creditsBalance !== null && creditsBalance === 0 && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🎬</span>
+                  <p className="font-semibold text-amber-900 dark:text-amber-200">You have 0 video credits</p>
+                </div>
+                <p className="text-sm text-amber-800 dark:text-amber-300">
+                  Your script and image prompts are ready! You can use them to create your video manually with free tools — or buy credits to let Content Flywheel generate everything automatically.
+                </p>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 uppercase tracking-wide">How to make your video manually:</p>
+                  <ol className="text-sm text-amber-800 dark:text-amber-300 space-y-1.5 list-none">
+                    <li className="flex gap-2"><span className="font-bold">1.</span><span>Copy each scene&apos;s <strong>Dialogue</strong> — this is your video script / voiceover text.</span></li>
+                    <li className="flex gap-2"><span className="font-bold">2.</span><span>Paste the <strong>Image prompt</strong> into <a href="https://www.midjourney.com" target="_blank" rel="noopener noreferrer" className="underline font-medium">Midjourney</a>, <a href="https://leonardo.ai" target="_blank" rel="noopener noreferrer" className="underline font-medium">Leonardo.ai</a>, or <a href="https://openai.com/dall-e-3" target="_blank" rel="noopener noreferrer" className="underline font-medium">DALL·E</a> to generate each scene image.</span></li>
+                    <li className="flex gap-2"><span className="font-bold">3.</span><span>Record your voiceover or use <a href="https://elevenlabs.io" target="_blank" rel="noopener noreferrer" className="underline font-medium">ElevenLabs</a> / <a href="https://murf.ai" target="_blank" rel="noopener noreferrer" className="underline font-medium">Murf.ai</a> to generate AI narration.</span></li>
+                    <li className="flex gap-2"><span className="font-bold">4.</span><span>Assemble in <a href="https://www.capcut.com" target="_blank" rel="noopener noreferrer" className="underline font-medium">CapCut</a> (free) or <a href="https://www.blackmagicdesign.com/products/davinciresolve" target="_blank" rel="noopener noreferrer" className="underline font-medium">DaVinci Resolve</a> — add your images, voiceover, and background music.</span></li>
+                    <li className="flex gap-2"><span className="font-bold">5.</span><span>Add captions with CapCut&apos;s auto-caption feature or copy the dialogue as text overlays.</span></li>
+                  </ol>
+                </div>
+                <a
+                  href="/dashboard/video-credits"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-3 py-1.5 transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Buy video credits to automate this
+                </a>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -4583,15 +5194,16 @@ export default function TemplateStudioClient() {
                         alt={`Scene ${scene.sceneNumber}`}
                         className={cn(
                           "w-full rounded-md object-cover",
-                          mode === "15" ? "aspect-video" : "aspect-square"
+                          mode === "15" || mode === "17" ? "aspect-video" : "aspect-square"
                         )}
                       />
                     ) : null}
+                    {creditsBalance !== null && creditsBalance === 0 ? null : (
                     <Button
                       variant="outline"
                       size="sm"
                       className="w-full"
-                      disabled={imageLoading}
+                      disabled={imageLoading || allImagesGenerating}
                       onClick={async () => {
                         setSceneImageLoadingScene(scene.sceneNumber);
                         try {
@@ -4648,6 +5260,10 @@ export default function TemplateStudioClient() {
                             if (mode === "15") {
                               imageBody.storyVideoFormat = storyVideoFormat;
                             }
+                            if (mode === "17") {
+                              // Finance Documentary = YouTube long-form = landscape 16:9
+                              imageBody.storyVideoFormat = "long";
+                            }
                             if (hasEmbeddedSeed) {
                               if (mode === "7") {
                                 imageBody.aiStoryLocked = true;
@@ -4697,6 +5313,7 @@ export default function TemplateStudioClient() {
                       {imageLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                       Generate Image
                     </Button>
+                    )}
                     {sceneImageUrl ? (
                       <AiStoryAnimateSceneBlock
                         imageUrl={sceneImageUrl}
@@ -4705,7 +5322,7 @@ export default function TemplateStudioClient() {
                         onVideoUrl={(url) =>
                           setSceneVideoUrls((prev) => ({ ...prev, [scene.sceneNumber]: url }))
                         }
-                        {...(mode === "15"
+                        {...(mode === "15" || mode === "17"
                           ? {
                               aspectRatio: "16:9" as const,
                               videoClassName:
@@ -4718,7 +5335,7 @@ export default function TemplateStudioClient() {
                     <p className="text-muted-foreground whitespace-pre-wrap">{scene.dialogue}</p>
                     <p className="font-medium">Image prompt</p>
                     <p className="text-muted-foreground whitespace-pre-wrap">{displayImagePrompt}</p>
-                    {voiceoverEnabled && (
+                    {voiceoverEnabled && creditsBalance !== 0 && (
                       <AiStorySceneVoiceover
                         voiceId={voiceId}
                         dialogueLine={scene.dialogue}
@@ -5142,7 +5759,7 @@ export default function TemplateStudioClient() {
         </>
       )}
 
-      {step === 2 && mode !== "16" && (
+      {step === 2 && mode !== "16" && !isStoryTemplateMode && (
         <>
           <Card>
             <CardHeader>

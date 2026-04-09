@@ -130,8 +130,11 @@ export async function POST(request: NextRequest) {
         };
       });
 
+      // Large documentaries (>20 scenes) produce 200-400 MB at 1080p — too large for Supabase.
+      const isLargeVideo = scenes.length > 20;
       const finalPath = await compileVideoToFile(workDir, scenes, "", existingVoicePath, undefined, {
         outputAspect,
+        ...(isLargeVideo ? { resolution: "720p", crf: 28 } : {}),
       });
       const buffer = await readFile(finalPath);
       const fileName = `story-video-${Date.now()}.mp4`;

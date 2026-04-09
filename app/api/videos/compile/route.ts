@@ -248,10 +248,15 @@ export async function POST(request: NextRequest) {
           { status: 503 }
         );
       }
+      // Large documentaries (>20 scenes) would produce 200-400 MB at 1080p,
+      // exceeding Supabase's storage limit. Downscale to 720p + CRF 28 to keep
+      // files under ~50 MB while maintaining good visual quality.
+      const isLargeVideo = scenes.length > 20;
       const finalPath = await compileVideoToFile(workDir, scenes, voiceoverInput, existingVoicePath, transition, {
         bgmPath,
         bgmVolume: BGM_MIX_VOLUME,
         ...(outputAspect ? { outputAspect } : {}),
+        ...(isLargeVideo ? { resolution: "720p", crf: 28 } : {}),
       });
       const buffer = await readFile(finalPath);
       const fileName = `compiled-${Date.now()}.mp4`;
