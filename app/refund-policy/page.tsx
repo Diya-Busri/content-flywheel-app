@@ -12,80 +12,70 @@ export default function RefundPolicyPage() {
         Refund Policy
       </h1>
       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-        Last updated: February 2026
+        Last updated: April 2026
       </p>
 
       <div className="mt-10 space-y-8 text-slate-600 dark:text-slate-400">
-        <section className="rounded-xl border-2 border-slate-300 bg-slate-100 p-6 dark:border-slate-600 dark:bg-slate-800/50">
-          <h2 className="text-2xl font-bold uppercase tracking-tight text-slate-900 dark:text-white">
-            No Refund Policy
+        <section className="rounded-xl border-2 border-orange-200 bg-orange-50 p-6 dark:border-orange-500/30 dark:bg-orange-500/10">
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            14-Day Money-Back Guarantee
           </h2>
           <p className="mt-4 text-lg font-medium leading-relaxed text-slate-900 dark:text-white">
-            Content Flywheel operates a strict no-refund policy. All sales are final.
+            If you&apos;re not happy within the first 14 days of your subscription, contact us and we&apos;ll refund you — no questions asked.
           </p>
         </section>
 
         <section>
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
-            Why No Refunds?
-          </h2>
-          <ul className="mt-3 list-disc space-y-2 pl-6 leading-relaxed">
-            <li>AI video generation costs are incurred immediately when you generate content</li>
-            <li>You receive instant value—all generated videos are yours to keep</li>
-            <li>A free trial (3 videos) is available so you can test the service before purchase</li>
-          </ul>
-        </section>
-
-        <section>
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
-            What This Means
-          </h2>
-          <ul className="mt-3 list-disc space-y-2 pl-6 leading-relaxed">
-            <li><strong className="text-slate-900 dark:text-white">Subscription fees</strong> are non-refundable once paid</li>
-            <li><strong className="text-slate-900 dark:text-white">Credit purchases</strong> are non-refundable</li>
-            <li><strong className="text-slate-900 dark:text-white">Canceling</strong> your subscription stops future charges but does not refund past payments</li>
-          </ul>
-        </section>
-
-        <section>
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
-            Exceptions
+            How to Request a Refund
           </h2>
           <p className="mt-3 leading-relaxed">
-            We may make exceptions in limited circumstances:
+            Email us at{" "}
+            <a href="mailto:hello@contentflywheel.co.uk" className="font-medium text-orange-500 hover:text-orange-400">
+              hello@contentflywheel.co.uk
+            </a>{" "}
+            within 14 days of your initial subscription payment. Include the email address on your account and we&apos;ll process your refund within 5 business days.
           </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+            After 14 Days
+          </h2>
           <ul className="mt-3 list-disc space-y-2 pl-6 leading-relaxed">
-            <li><strong className="text-slate-900 dark:text-white">Technical issues</strong> that prevented you from accessing the service (evaluated case-by-case)</li>
-            <li><strong className="text-slate-900 dark:text-white">Duplicate charges</strong> (refunded within 48 hours once verified)</li>
+            <li><strong className="text-slate-900 dark:text-white">Subscription renewals</strong> are non-refundable once charged</li>
+            <li><strong className="text-slate-900 dark:text-white">Cancellation</strong> stops future charges but does not refund the current period — you keep access until the period ends</li>
+            <li>We do not offer pro-rata refunds for unused time within a billing period</li>
           </ul>
         </section>
 
         <section>
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
-            Before You Subscribe
+            Exceptions (Always Refunded)
           </h2>
           <ul className="mt-3 list-disc space-y-2 pl-6 leading-relaxed">
-            <li>Test our free tier first (3 videos, no credit card required)</li>
-            <li>Review our features and limits on the pricing page</li>
-            <li>Contact us with any questions:{" "}
-              <a
-                href="mailto:contentflywheel@gmail.com"
-                className="font-medium text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300"
-              >
-                contentflywheel@gmail.com
-              </a>
-            </li>
+            <li><strong className="text-slate-900 dark:text-white">Duplicate charges</strong> — if you were charged twice in error, we will refund the duplicate immediately</li>
+            <li><strong className="text-slate-900 dark:text-white">Extended service outage</strong> — if the platform is unavailable for more than 24 consecutive hours, you may request a pro-rata credit</li>
           </ul>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+            Digital Products Sold by Creators
+          </h2>
+          <p className="mt-3 leading-relaxed">
+            Content Flywheel is a platform that enables creators to sell their own digital products. Refund policies for individual products are set by the creator who sold them. If you purchased a digital product from a creator&apos;s store, please contact them directly. Content Flywheel is not responsible for refunds on third-party creator products.
+          </p>
         </section>
 
         <section className="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
           <p className="text-center text-slate-600 dark:text-slate-400">
-            Questions about refunds? Contact us at{" "}
+            Questions? We&apos;re happy to help.{" "}
             <a
-              href="mailto:contentflywheel@gmail.com"
-              className="font-semibold text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300"
+              href="mailto:hello@contentflywheel.co.uk"
+              className="font-semibold text-orange-500 hover:text-orange-400"
             >
-              contentflywheel@gmail.com
+              hello@contentflywheel.co.uk
             </a>
           </p>
         </section>
