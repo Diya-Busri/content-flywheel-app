@@ -81,6 +81,7 @@ function formatDiscountedPrice(result: PromoResult, baseAmount: number, isAnnual
 const COMPARISON = [
   { tool: "Stan Store", price: "£23/mo", features: "Store only" },
   { tool: "Gumroad", price: "10% per sale", features: "Store only" },
+  { tool: "Beacons", price: "£24/mo", features: "Link-in-bio + store" },
   { tool: "ConvertKit", price: "£29/mo", features: "Email only" },
   { tool: "Kajabi", price: "£119/mo", features: "All-in-one" },
   { tool: "Content Flywheel", price: "£29/mo", features: "All-in-one + AI", highlight: true },
