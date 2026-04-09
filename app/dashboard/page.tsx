@@ -12,7 +12,8 @@ import { productsTable } from "@/db/schema/products-schema";
 import { emailContactsTable, emailCampaignsTable } from "@/db/schema/email-marketing-schema";
 import { goalsTable } from "@/db/schema/goals-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
-import { eq, desc, isNull, and, count, gte } from "drizzle-orm";
+import { eq, desc, isNull, and, count, gte, sql } from "drizzle-orm";
+import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -108,6 +109,21 @@ async function getActiveGoalsCount(userId: string): Promise<number> {
     return Number(row?.count ?? 0);
   } catch {
     return 0;
+  }
+}
+
+async function getActualRevenue(userId: string): Promise<{ totalCents: number; totalOrders: number }> {
+  try {
+    const [row] = await db
+      .select({
+        totalCents: sql<number>`COALESCE(SUM(${productOrdersTable.amountCents}), 0)`,
+        totalOrders: sql<number>`COUNT(*)`,
+      })
+      .from(productOrdersTable)
+      .where(and(eq(productOrdersTable.creatorUserId, userId), eq(productOrdersTable.status, "completed")));
+    return { totalCents: Number(row?.totalCents ?? 0), totalOrders: Number(row?.totalOrders ?? 0) };
+  } catch {
+    return { totalCents: 0, totalOrders: 0 };
   }
 }
 
@@ -342,7 +358,7 @@ function ActionCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default async function DashboardPage() {
   const { userId } = auth();
-  const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers, activeGoals, campaignsSent, profileRow] = userId
+  const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers, activeGoals, campaignsSent, profileRow, revenue] = userId
     ? await Promise.all([
         getVideoStats(userId),
         getIncompleteProducts(userId),
@@ -352,15 +368,18 @@ export default async function DashboardPage() {
         getActiveGoalsCount(userId),
         getCampaignsSentCount(userId),
         db.select({ videoCredits: profilesTable.videoCredits }).from(profilesTable).where(eq(profilesTable.userId, userId)).limit(1).then(r => r[0] ?? null).catch(() => null),
+        getActualRevenue(userId),
       ])
     : [
         { digitalProductsCount: 0, tiktokShopCount: 0, totalLibraryVideos: 0, recent: [] as RecentVideoItem[] },
         [] as IncompleteProduct[],
         { hasBrandVoice: false, hasProduct: false, hasThumbnail: false, hasPromoVideo: false },
-        0, 0, 0, 0, null,
+        0, 0, 0, 0, null, { totalCents: 0, totalOrders: 0 },
       ];
 
   const videoCredits = (profileRow as { videoCredits?: number | null } | null)?.videoCredits ?? 0;
+  const { totalCents, totalOrders } = revenue as { totalCents: number; totalOrders: number };
+  const revenueLabel = totalCents > 0 ? `£${(totalCents / 100).toFixed(2)}` : "£0.00";
 
   const hasSubscriber = emailSubscribers > 0;
   const hasCampaign = campaignsSent > 0;
@@ -447,19 +466,15 @@ export default async function DashboardPage() {
             cta={activeGoals === 0 ? "Set first goal" : undefined}
           />
           <StatCard
-            label="Revenue Potential"
-            value={`£${estimatedRevenue}`}
-            sub={
-              videoStats.digitalProductsCount > 0
-                ? `${videoStats.digitalProductsCount} product${videoStats.digitalProductsCount > 1 ? "s" : ""} × avg £15`
-                : "Create a product to unlock"
-            }
+            label="Store Revenue"
+            value={revenueLabel}
+            sub={totalOrders > 0 ? `${totalOrders} order${totalOrders !== 1 ? "s" : ""} completed` : "Make your first sale"}
             icon={TrendingUp}
             iconBg="bg-orange-50 dark:bg-orange-950/30"
             iconColor="text-orange-500"
-            href="/dashboard/digital-products"
-            accent
-            cta="See products"
+            href="/dashboard/orders"
+            accent={totalOrders > 0}
+            cta={totalOrders === 0 ? "Set up store" : "View orders"}
           />
         </div>
       </section>

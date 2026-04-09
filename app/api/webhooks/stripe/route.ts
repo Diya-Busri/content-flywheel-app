@@ -199,7 +199,7 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
     .where(eq(productsTable.id, productId))
     .limit(1);
 
-  const downloadUrl = `${appUrl}/api/products/${productId}/download?token=${downloadToken}`;
+  const downloadUrl = `${appUrl}/download/${productId}?token=${downloadToken}`;
   const productTitle = product?.title ?? "Digital Product";
 
   // Send delivery email

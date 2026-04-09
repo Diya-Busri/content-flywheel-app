@@ -45,7 +45,7 @@ async function run() {
 
   // Paginate through all checkout sessions
   let hasMore = true;
-  let startingAfter: string | undefined = undefined;
+  let startingAfter = undefined;
 
   while (hasMore) {
     const sessions = await stripe.checkout.sessions.list({
