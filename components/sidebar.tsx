@@ -105,6 +105,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       { href: "/dashboard/admin/email-blast", icon: <Send size={18} />, label: "Email Blast", emoji: "✉️", activeWhenStartsWith: true },
       { href: "/dashboard/admin/ab-tests", icon: <FlaskConical size={18} />, label: "A/B Tests", emoji: "🧪", activeWhenStartsWith: true },
       { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧" },
+      { href: "/dashboard/admin/finances", icon: <Wallet size={18} />, label: "Finance Tracker", emoji: "💰", activeWhenStartsWith: true },
     ]});
   }
 
