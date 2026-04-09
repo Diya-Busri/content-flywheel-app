@@ -26,6 +26,18 @@ export type MarketingAssets = {
   uploadedFileUrl?: string | null;
   /** Original filename of the uploaded product file. */
   uploadedFileName?: string | null;
+  /** Whether this product is published via the native Content Flywheel store. */
+  isNativePublished?: boolean;
+  /** Native store price in pence (e.g. 1500 = £15.00). */
+  nativePrice?: number;
+  /** Stripe product ID for the native store listing. */
+  stripeProductId?: string;
+  /** Stripe price ID for the native store listing. */
+  stripePriceId?: string;
+  /** Testimonials for the public sales page. */
+  testimonials?: Array<{ name: string; text: string; rating?: number }>;
+  /** Whether this product is coming soon (shows waitlist instead of buy button). */
+  comingSoon?: boolean;
   updatedAt?: string;
 };
 

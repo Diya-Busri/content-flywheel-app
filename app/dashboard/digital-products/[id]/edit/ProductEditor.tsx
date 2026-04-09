@@ -6509,6 +6509,34 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       );
                     })()}
 
+                    {/* Sale Price */}
+                    {(() => {
+                      const currentSalePrice = (marketingAssets as { salePrice?: number | null }).salePrice;
+                      const salePriceDisplay = typeof currentSalePrice === "number" ? (currentSalePrice / 100).toFixed(2) : "";
+                      const saveSalePrice = async (rawVal: string) => {
+                        if (!productId) return;
+                        const val = parseFloat(rawVal);
+                        const body = rawVal === "" || isNaN(val) ? { salePrice: null } : { salePrice: Math.round(val * 100) };
+                        await fetch(`/api/products/${productId}/marketing-assets`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+                        setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, salePrice: body.salePrice } } : null);
+                      };
+                      return (
+                        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
+                          <Label className="text-xs font-semibold text-gray-700">Sale Price (£)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            defaultValue={salePriceDisplay}
+                            placeholder="e.g. 4.99"
+                            className="h-8 text-sm"
+                            onBlur={(e) => saveSalePrice(e.target.value.trim())}
+                          />
+                          <p className="text-xs text-gray-400">Set a sale price to show a strikethrough on the product page</p>
+                        </div>
+                      );
+                    })()}
+
                     {/* Testimonials */}
                     {(() => {
                       const testimonials: Array<{ name: string; text: string; rating?: number }> = marketingAssets.testimonials ?? [];

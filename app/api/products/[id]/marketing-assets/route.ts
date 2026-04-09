@@ -28,7 +28,7 @@ export async function PATCH(
   if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
   const body = await request.json().catch(() => ({}));
-  const allowedFields = ["comingSoon"] as const;
+  const allowedFields = ["comingSoon", "salePrice"] as const;
   const updates: Record<string, unknown> = {};
   for (const field of allowedFields) {
     if (field in body) updates[field] = body[field];

@@ -975,6 +975,47 @@ export function StoreClient({ userId }: StoreClientProps) {
               </div>
             )}
           </section>
+
+          {/* Email Branding */}
+          <section className="bg-white/3 border border-white/8 rounded-2xl p-6">
+            <div className="flex items-center gap-2 mb-1">
+              <Mail className="w-4 h-4 text-orange-400" />
+              <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Email Branding</h2>
+            </div>
+            <p className="text-xs text-gray-500 mb-5">Purchase confirmation emails are sent automatically when a buyer checks out through your native store.</p>
+
+            {/* Mini email preview */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-5">
+              <div className="flex items-center gap-2 mb-3 pb-3 border-b border-white/10">
+                <div className="w-6 h-6 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 text-[10px] font-bold shrink-0">
+                  CF
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-white leading-none mb-0.5">Your Brand Name</p>
+                  <p className="text-[11px] text-gray-500 leading-none">via Content Flywheel · no-reply@contentflywheel.co.uk</p>
+                </div>
+              </div>
+              <p className="text-xs font-semibold text-white mb-1">Your purchase is confirmed 🎉</p>
+              <p className="text-xs text-gray-400 leading-relaxed">Hi [Buyer name], thank you for your purchase of <span className="text-orange-400">[Product name]</span>. Here&apos;s your download link — it&apos;s valid for 7 days...</p>
+              <div className="mt-3 pt-3 border-t border-white/10">
+                <p className="text-[11px] text-gray-600 italic">Your brand name from Brand Voice is used as the sender display name.</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 bg-orange-500/8 border border-orange-500/20 rounded-xl">
+              <span className="text-orange-400 text-sm shrink-0 mt-0.5">✏️</span>
+              <div>
+                <p className="text-xs font-semibold text-orange-300 mb-0.5">Update your sender name</p>
+                <p className="text-xs text-gray-400">
+                  Your brand name is used as the email sender. Update it in{" "}
+                  <Link href="/dashboard/brand-voice" className="text-orange-400 hover:text-orange-300 underline underline-offset-2">
+                    Brand Voice settings
+                  </Link>
+                  .
+                </p>
+              </div>
+            </div>
+          </section>
         </>
       )}
     </div>

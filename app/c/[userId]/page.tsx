@@ -76,7 +76,7 @@ export default async function CreatorProfilePage({
 
   const publishedProducts = products.filter((p) => {
     const ma = p.marketingAssets as MarketingAssets | null;
-    return ma?.checkoutUrl || ma?.priceLabel;
+    return ma?.isNativePublished || ma?.checkoutUrl || ma?.priceLabel;
   });
 
   // ─── Resolve settings ─────────────────────────────────────────────────────
@@ -246,14 +246,17 @@ export default async function CreatorProfilePage({
               >
                 {publishedProducts.map((p) => {
                   const ma = p.marketingAssets as MarketingAssets | null;
-                  const href = ma?.checkoutUrl || `/product/${p.id}`;
+                  const isNative = !!ma?.isNativePublished;
+                  const href = isNative ? `/product/${p.id}` : (ma?.checkoutUrl || `/product/${p.id}`);
                   const coverImg = ma?.bookMockupUrl ?? ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? null;
+                  const priceDisplay = ma?.nativePrice
+                    ? `£${(ma.nativePrice / 100).toFixed(2)}`
+                    : ma?.priceLabel ?? null;
                   return (
                     <a
                       key={p.id}
                       href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      {...(!isNative && ma?.checkoutUrl ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                       style={{
                         display: "flex",
                         flexDirection: "column",
@@ -286,9 +289,9 @@ export default async function CreatorProfilePage({
                         >
                           {p.title}
                         </p>
-                        {ma?.priceLabel && (
+                        {priceDisplay && (
                           <span style={{ fontSize: "15px", fontWeight: "800", color: accentColor, marginTop: "auto", paddingTop: "8px", display: "block" }}>
-                            {ma.priceLabel}
+                            {priceDisplay}
                           </span>
                         )}
                       </div>
@@ -303,14 +306,17 @@ export default async function CreatorProfilePage({
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {publishedProducts.map((p) => {
                   const ma = p.marketingAssets as MarketingAssets | null;
-                  const href = ma?.checkoutUrl || `/product/${p.id}`;
+                  const isNative = !!ma?.isNativePublished;
+                  const href = isNative ? `/product/${p.id}` : (ma?.checkoutUrl || `/product/${p.id}`);
                   const coverImg = ma?.bookMockupUrl ?? ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? null;
+                  const priceDisplay = ma?.nativePrice
+                    ? `£${(ma.nativePrice / 100).toFixed(2)}`
+                    : ma?.priceLabel ?? null;
                   return (
                     <a
                       key={p.id}
                       href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      {...(!isNative && ma?.checkoutUrl ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -362,9 +368,9 @@ export default async function CreatorProfilePage({
                         )}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0, paddingRight: "20px" }}>
-                        {ma?.priceLabel && (
+                        {priceDisplay && (
                           <span style={{ fontSize: "16px", fontWeight: "800", color: accentColor }}>
-                            {ma.priceLabel}
+                            {priceDisplay}
                           </span>
                         )}
                         <span
@@ -396,13 +402,16 @@ export default async function CreatorProfilePage({
                 {publishedProducts[0] && (() => {
                   const p = publishedProducts[0];
                   const ma = p.marketingAssets as MarketingAssets | null;
-                  const href = ma?.checkoutUrl || `/product/${p.id}`;
+                  const isNative = !!ma?.isNativePublished;
+                  const href = isNative ? `/product/${p.id}` : (ma?.checkoutUrl || `/product/${p.id}`);
                   const coverImg = ma?.bookMockupUrl ?? ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? null;
+                  const priceDisplay = ma?.nativePrice
+                    ? `£${(ma.nativePrice / 100).toFixed(2)}`
+                    : ma?.priceLabel ?? null;
                   return (
                     <a
                       href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      {...(!isNative && ma?.checkoutUrl ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                       style={{
                         display: "block",
                         backgroundColor: themeStyle.cardBg,
@@ -455,9 +464,9 @@ export default async function CreatorProfilePage({
                           </p>
                         )}
                         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          {ma?.priceLabel && (
+                          {priceDisplay && (
                             <span style={{ fontSize: "22px", fontWeight: "800", color: accentColor }}>
-                              {ma.priceLabel}
+                              {priceDisplay}
                             </span>
                           )}
                           <div
@@ -484,14 +493,17 @@ export default async function CreatorProfilePage({
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                     {publishedProducts.slice(1).map((p) => {
                       const ma = p.marketingAssets as MarketingAssets | null;
-                      const href = ma?.checkoutUrl || `/product/${p.id}`;
+                      const isNative = !!ma?.isNativePublished;
+                      const href = isNative ? `/product/${p.id}` : (ma?.checkoutUrl || `/product/${p.id}`);
                       const coverImg = ma?.bookMockupUrl ?? ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? null;
+                      const priceDisplay = ma?.nativePrice
+                        ? `£${(ma.nativePrice / 100).toFixed(2)}`
+                        : ma?.priceLabel ?? null;
                       return (
                         <a
                           key={p.id}
                           href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          {...(!isNative && ma?.checkoutUrl ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                           style={{
                             display: "flex",
                             flexDirection: "column",
@@ -523,9 +535,9 @@ export default async function CreatorProfilePage({
                             >
                               {p.title}
                             </p>
-                            {ma?.priceLabel && (
+                            {priceDisplay && (
                               <span style={{ fontSize: "15px", fontWeight: "800", color: accentColor }}>
-                                {ma.priceLabel}
+                                {priceDisplay}
                               </span>
                             )}
                           </div>

@@ -13,6 +13,7 @@ type ExtendedMarketingAssets = {
   isNativePublished?: boolean;
   stripePriceId?: string;
   nativePrice?: number;
+  salePrice?: number;
 };
 
 export async function POST(
@@ -116,7 +117,7 @@ export async function POST(
       // If body parse or promo lookup fails, proceed without discount
     }
 
-    // Build line items — use inline price if a discount was applied
+    // Build line items — use inline price if a discount or sale price was applied
     let lineItems: Stripe.Checkout.SessionCreateParams.LineItem[];
     if (discountedUnitAmount !== null) {
       // Fetch currency from the original Stripe price
@@ -131,6 +132,23 @@ export async function POST(
           quantity: 1,
         },
       ];
+    } else if (typeof ma.salePrice === "number") {
+      // Check if sale price is less than the Stripe price before applying
+      const stripePrice = await stripe.prices.retrieve(ma.stripePriceId);
+      if (ma.salePrice < (stripePrice.unit_amount ?? 0)) {
+        lineItems = [
+          {
+            price_data: {
+              currency: stripePrice.currency,
+              product_data: { name: product.title },
+              unit_amount: ma.salePrice,
+            },
+            quantity: 1,
+          },
+        ];
+      } else {
+        lineItems = [{ price: ma.stripePriceId, quantity: 1 }];
+      }
     } else {
       lineItems = [{ price: ma.stripePriceId, quantity: 1 }];
     }

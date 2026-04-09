@@ -9,6 +9,7 @@ import type { Metadata } from "next";
 import { BuyButton } from "./BuyButton";
 import { WaitlistForm } from "./WaitlistForm";
 import { ReviewForm } from "./ReviewForm";
+import { ShareButtons } from "./ShareButtons";
 
 type MarketingAssets = {
   productTitle?: string;
@@ -22,6 +23,7 @@ type MarketingAssets = {
   priceLabel?: string | null;
   isNativePublished?: boolean;
   nativePrice?: number;
+  salePrice?: number;
   stripeProductId?: string;
   stripePriceId?: string;
   testimonials?: Array<{ name: string; text: string; rating?: number }>;
@@ -142,6 +144,8 @@ export default async function ProductSalesPage({
     : "Digital Product";
   const isNativePublished = !!(ma.isNativePublished && ma.nativePrice);
   const nativePriceLabel = ma.nativePrice ? `£${(ma.nativePrice / 100).toFixed(2)}` : null;
+  const hasSalePrice = typeof ma.salePrice === "number" && ma.nativePrice !== undefined && ma.salePrice < ma.nativePrice;
+  const salePriceLabel = hasSalePrice ? `£${(ma.salePrice! / 100).toFixed(2)}` : null;
   const isComingSoon = !!(ma.comingSoon);
   const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1) : null;
 
@@ -268,6 +272,12 @@ export default async function ProductSalesPage({
             </div>
           )}
 
+          {/* Share buttons */}
+          <ShareButtons
+            url={`https://contentflywheel.co.uk/product/${id}`}
+            title={displayTitle}
+          />
+
           {/* Verified Reviews */}
           {reviews.length > 0 && (
             <div style={{ background: "#fff", borderRadius: "20px", padding: "28px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginTop: "24px" }}>
@@ -335,12 +345,34 @@ export default async function ProductSalesPage({
             ) : isNativePublished ? (
               <>
                 <div style={{ margin: "0 0 16px" }}>
-                  <span style={{ fontSize: "38px", fontWeight: 800, color: "#111827", letterSpacing: "-1.5px" }}>
-                    {nativePriceLabel}
+                  {hasSalePrice ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "4px" }}>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                          background: "#fef2f2",
+                          color: "#b91c1c",
+                          fontSize: "11px",
+                          fontWeight: 800,
+                          letterSpacing: "0.06em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        SALE
+                      </span>
+                      <span style={{ fontSize: "22px", fontWeight: 700, color: "#9ca3af", textDecoration: "line-through", letterSpacing: "-0.5px" }}>
+                        {nativePriceLabel}
+                      </span>
+                    </div>
+                  ) : null}
+                  <span style={{ fontSize: "38px", fontWeight: 800, color: hasSalePrice ? "#f97316" : "#111827", letterSpacing: "-1.5px" }}>
+                    {hasSalePrice ? salePriceLabel : nativePriceLabel}
                   </span>
                   <span style={{ fontSize: "14px", color: "#9ca3af", marginLeft: "6px" }}>one-time</span>
                 </div>
-                <BuyButton productId={product.id} priceLabel={nativePriceLabel!} creatorUserId={product.userId} />
+                <BuyButton productId={product.id} priceLabel={hasSalePrice ? salePriceLabel! : nativePriceLabel!} creatorUserId={product.userId} />
               </>
             ) : (
               <>
