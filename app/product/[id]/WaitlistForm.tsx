@@ -33,7 +33,7 @@ export function WaitlistForm({ productId }: { productId: string }) {
     return (
       <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "12px", padding: "16px 20px", textAlign: "center" }}>
         <p style={{ margin: 0, fontWeight: 600, fontSize: "14px", color: "#166534" }}>
-          ✅ You're on the list! We'll email you when it launches.
+          ✅ You&apos;re on the list! We&apos;ll email you when it launches.
         </p>
       </div>
     );
