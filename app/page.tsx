@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Check, ArrowRight, Package, Video, ShoppingBag, ShieldCheck, Upload, Sparkles, Download, Youtube } from "lucide-react";
+import { Check, ArrowRight, Star, Zap, ShoppingBag, Mail, BarChart2, Youtube } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -12,12 +12,11 @@ import { LandingNavbar } from "@/components/marketing/landing-navbar";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "Content Flywheel - AI Video Generation for Social Media",
+  title: "Content Flywheel — Create & Sell Digital Products with AI",
   description:
-    "Turn products into sales-driving videos for TikTok, Instagram, and YouTube. AI-powered video creation focused on conversion, not vanity metrics.",
+    "Build ebooks, planners and templates with AI. Sell them from your own store. Market with email sequences, affiliates and discount codes. All in one platform.",
 };
 
-/** Fetches reviews server-side for the landing page. Only is_public = true. */
 async function getPublicReviews(): Promise<{ text: string; name: string; rating?: number }[]> {
   const supabase = getSupabaseAdmin();
   if (!supabase) return [];
@@ -39,516 +38,512 @@ async function getPublicReviews(): Promise<{ text: string; name: string; rating?
 
 export default async function HomePage() {
   const reviews = await getPublicReviews();
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 overflow-x-hidden">
+    <div className="min-h-screen bg-white dark:bg-slate-950 overflow-x-hidden">
       <LandingNavbar />
 
       <main className="pt-16">
-        {/* Hero - breathing room */}
-        <section className="relative min-h-[85vh] sm:min-h-screen flex items-center bg-slate-50 dark:bg-slate-950">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-24 pb-12 sm:py-16 w-full">
-            <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-center">
-              {/* Left - Text content */}
-              <div className="space-y-5 pt-24 sm:pt-32">
-                <h1 className="text-5xl lg:text-6xl font-bold leading-tight text-slate-900 dark:text-white">
-                  Build, Package & Market
+
+        {/* ── HERO ── */}
+        <section className="relative min-h-[92vh] flex items-center bg-white dark:bg-slate-950 overflow-hidden">
+          {/* Background glow */}
+          <div className="absolute inset-0 pointer-events-none" aria-hidden>
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] bg-orange-400/10 rounded-full blur-3xl" />
+            <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-orange-300/5 rounded-full blur-3xl" />
+          </div>
+
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 w-full py-24 lg:py-32">
+            <div className="grid lg:grid-cols-2 gap-16 items-center">
+
+              {/* Left */}
+              <div className="space-y-7">
+                {/* Badge */}
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 text-orange-600 dark:text-orange-400 text-sm font-semibold">
+                  <Zap className="w-3.5 h-3.5" />
+                  AI-Powered Digital Product Platform
+                </div>
+
+                <h1 className="text-5xl lg:text-6xl font-extrabold leading-[1.08] tracking-tight text-slate-900 dark:text-white">
+                  Create, sell & market
                   <br />
-                  <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
-                    Digital Products
+                  <span className="bg-gradient-to-r from-orange-500 to-orange-400 bg-clip-text text-transparent">
+                    digital products
                   </span>
                   <br />
-                  in Minutes
+                  in minutes.
                 </h1>
-                <p className="text-sm sm:text-base lg:text-lg text-slate-600 dark:text-gray-400 leading-relaxed max-w-xl">
-                  Generate ebooks, planners, workbooks, AI voiceovers, video scripts, and multi-platform marketing content — all from one platform.
+
+                <p className="text-lg text-slate-600 dark:text-slate-400 leading-relaxed max-w-lg">
+                  Build ebooks, planners & templates with AI. Sell from your own branded store. Grow with email marketing, affiliates, and discount codes — all from one place.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+
+                <div className="flex flex-col sm:flex-row gap-3 pt-1">
                   <Link
                     href="/sign-up"
-                    className="px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold text-base inline-flex items-center justify-center gap-2 transition-all hover:scale-105 text-white"
+                    className="px-7 py-3.5 bg-orange-500 hover:bg-orange-600 rounded-xl font-bold text-base inline-flex items-center justify-center gap-2 transition-all hover:scale-105 text-white shadow-lg shadow-orange-500/25"
                   >
-                    Start Creating Free <ArrowRight className="h-4 w-4" />
+                    Start for free <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
                     href="#how-it-works"
-                    className="px-6 py-3 bg-slate-200 dark:bg-card hover:bg-slate-300 dark:hover:bg-gray-700 rounded-lg font-semibold text-base inline-flex items-center justify-center transition-all text-slate-900 dark:text-white"
+                    className="px-7 py-3.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl font-bold text-base inline-flex items-center justify-center transition-all text-slate-900 dark:text-white"
                   >
-                    See How It Works
+                    See how it works
                   </Link>
                 </div>
-                <div className="pt-6 space-y-3">
-                  <p className="text-sm text-slate-600 dark:text-gray-400">
-                    Everything you need in one platform
-                  </p>
-                  <div className="flex flex-wrap gap-6 text-sm text-slate-600 dark:text-gray-400">
-                    <span className="flex items-center gap-2">
-                      <Check className="w-5 h-5 text-green-500 shrink-0" />
-                      No credit card required
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <Check className="w-5 h-5 text-green-500 shrink-0" />
-                      Cancel anytime
-                    </span>
-                  </div>
+
+                {/* Trust signals */}
+                <div className="flex flex-wrap gap-5 pt-2 text-sm text-slate-500 dark:text-slate-400">
+                  <span className="flex items-center gap-1.5"><Check className="w-4 h-4 text-green-500" /> No credit card required</span>
+                  <span className="flex items-center gap-1.5"><Check className="w-4 h-4 text-green-500" /> Free trial included</span>
+                  <span className="flex items-center gap-1.5"><Check className="w-4 h-4 text-green-500" /> Cancel anytime</span>
                 </div>
               </div>
-              {/* Right - Visual demo */}
-              <div className="relative">
-                <div className="flex items-center justify-center gap-4 sm:gap-6">
-                  <div className="relative group">
-                    <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-gray-800 dark:to-gray-900 rounded-xl shadow-xl flex flex-col items-center justify-center border border-slate-300 dark:border-border transition-all group-hover:scale-105">
-                      <Package className="w-10 h-10 sm:w-12 sm:h-12 text-slate-500 dark:text-gray-500 mb-1" />
-                      <p className="text-xs text-slate-600 dark:text-gray-400 font-medium">BEFORE</p>
-                      <p className="text-[10px] text-slate-500 dark:text-gray-500">Product photo</p>
-                    </div>
+
+              {/* Right — mock dashboard cards */}
+              <div className="relative hidden lg:block">
+                {/* Main card */}
+                <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 p-6 space-y-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-slate-900 dark:text-white text-sm">My Store</span>
+                    <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded-full font-semibold">Live ✓</span>
                   </div>
-                  <div className="text-2xl sm:text-3xl text-orange-500 animate-pulse" aria-hidden>
-                    →
-                  </div>
-                  <div className="relative group">
-                    <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 bg-gradient-to-br from-orange-900/20 to-orange-600/20 rounded-xl shadow-xl flex flex-col items-center justify-center border border-orange-500/30 transition-all group-hover:scale-105">
-                      <Video className="w-10 h-10 sm:w-12 sm:h-12 text-orange-400 mb-1" />
-                      <p className="text-xs text-orange-400 font-medium">AFTER</p>
-                      <p className="text-[10px] text-gray-400">AI Video</p>
+
+                  {/* Product rows */}
+                  {[
+                    { title: "90-Day Content Planner", price: "£19", sales: 47, color: "bg-orange-100 dark:bg-orange-900/20" },
+                    { title: "Instagram Caption Guide", price: "£12", sales: 83, color: "bg-blue-100 dark:bg-blue-900/20" },
+                    { title: "Viral Hook Workbook", price: "£27", sales: 31, color: "bg-purple-100 dark:bg-purple-900/20" },
+                  ].map((p) => (
+                    <div key={p.title} className={`flex items-center justify-between rounded-xl px-4 py-3 ${p.color}`}>
+                      <div>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{p.title}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{p.sales} sales</p>
+                      </div>
+                      <span className="font-bold text-orange-600 dark:text-orange-400 text-sm">{p.price}</span>
                     </div>
+                  ))}
+
+                  {/* Mini stats */}
+                  <div className="grid grid-cols-3 gap-3 pt-2">
+                    {[
+                      { label: "Revenue", value: "£1,847" },
+                      { label: "Orders", value: "161" },
+                      { label: "Subscribers", value: "924" },
+                    ].map((s) => (
+                      <div key={s.label} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-center">
+                        <p className="font-bold text-slate-900 dark:text-white text-base">{s.value}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{s.label}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className="mt-8 text-center">
-                  <p className="text-sm text-slate-600 dark:text-gray-400">
-                    Works for: <span className="text-slate-900 dark:text-white">Digital products</span> • <span className="text-slate-900 dark:text-white">TikTok Shop</span> • <span className="text-slate-900 dark:text-white">Affiliate links</span> • <span className="text-slate-900 dark:text-white">Script fixing</span>
-                  </p>
+
+                {/* Floating badge */}
+                <div className="absolute -top-4 -right-4 bg-orange-500 text-white rounded-2xl px-4 py-2.5 shadow-lg shadow-orange-500/30 text-sm font-bold rotate-3">
+                  🚀 AI-generated in 2 mins
+                </div>
+                <div className="absolute -bottom-4 -left-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-2.5 shadow-lg text-sm font-semibold text-slate-900 dark:text-white -rotate-2">
+                  💳 Stripe payments built-in
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Built for conversion - dedicated section with spacing */}
-        <section className="py-16 lg:py-24 bg-slate-100 dark:bg-muted/50/50">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white mb-4">
-              Built for conversion, not views
-            </h2>
-            <p className="text-base sm:text-lg lg:text-xl text-slate-600 dark:text-gray-400 leading-relaxed">
-              Three sales-focused tools to turn any product into videos that drive revenue
-            </p>
+        {/* ── STATS BAR ── */}
+        <section className="border-y border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 py-10">
+          <div className="max-w-5xl mx-auto px-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+              {[
+                { value: "2,500+", label: "Creators" },
+                { value: "50,000+", label: "Products Built" },
+                { value: "£500k+", label: "Creator Revenue" },
+                { value: "4.9 ★", label: "Average Rating" },
+              ].map((s) => (
+                <div key={s.label}>
+                  <p className="text-3xl font-extrabold text-slate-900 dark:text-white">{s.value}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{s.label}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
-        {/* Features - cards with spacing */}
-        <section id="features" className="py-24">
+        {/* ── FEATURES ── */}
+        <section id="features" className="py-24 lg:py-32">
           <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                Everything you need to sell digital products
+              </h2>
+              <p className="mt-4 text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+                From idea to first sale in one afternoon. No tech skills needed.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[
+                {
+                  icon: "📦",
+                  title: "AI Product Creator",
+                  desc: "Describe your idea, and Content Flywheel builds a full ebook, planner, or workbook — complete with cover design and sales copy.",
+                  badge: "Most popular",
+                },
+                {
+                  icon: "🏪",
+                  title: "Branded Store",
+                  desc: "Get your own store at contentflywheel.co.uk/c/you — with Stripe checkout, download delivery, and a buyer email system built in.",
+                },
+                {
+                  icon: "📧",
+                  title: "Email Marketing",
+                  desc: "Build your list, send broadcasts, and automate drip sequences. All from your dashboard, no third-party tools needed.",
+                },
+                {
+                  icon: "🎟️",
+                  title: "Discount Codes",
+                  desc: "Create promo codes with expiry dates and usage limits. Perfect for launches, collaborations, and seasonal sales.",
+                },
+                {
+                  icon: "🔗",
+                  title: "Affiliate Programme",
+                  desc: "Give partners their own referral links and set custom commission rates. Track clicks and earnings automatically.",
+                },
+                {
+                  icon: "⭐",
+                  title: "Reviews & Social Proof",
+                  desc: "Collect reviews after each sale. Approve the best ones and they go live on your product pages instantly.",
+                },
+              ].map((f) => (
+                <div
+                  key={f.title}
+                  className="relative group p-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-orange-300 dark:hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5 transition-all"
+                >
+                  {f.badge && (
+                    <span className="absolute -top-3 left-6 px-3 py-1 rounded-full bg-orange-500 text-white text-xs font-bold shadow">
+                      {f.badge}
+                    </span>
+                  )}
+                  <div className="text-4xl mb-4">{f.icon}</div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{f.title}</h3>
+                  <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── HOW IT WORKS ── */}
+        <section id="how-it-works" className="py-24 lg:py-32 bg-slate-50 dark:bg-slate-900">
+          <div className="max-w-5xl mx-auto px-6">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                From idea to selling in 3 steps
+              </h2>
+              <p className="mt-4 text-lg text-slate-600 dark:text-slate-400">
+                No design skills, no technical setup, no third-party tools.
+              </p>
+            </div>
+
             <div className="grid md:grid-cols-3 gap-8">
-              <div className="p-8 bg-white dark:bg-card/50 rounded-2xl border border-slate-200 dark:border-border hover:border-orange-500/50 transition-all hover:scale-105 shadow-sm dark:shadow-none">
-                <div className="text-5xl mb-6">📱</div>
-                <h3 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">Digital Product Creator</h3>
-                <p className="text-slate-600 dark:text-gray-400 leading-relaxed">
-                  Transform your expertise into professional digital products. Workbooks, guides, templates - all AI-generated and ready to sell.
-                </p>
-              </div>
-              <div className="p-8 bg-white dark:bg-card/50 rounded-2xl border border-slate-200 dark:border-border hover:border-orange-500/50 transition-all hover:scale-105 shadow-sm dark:shadow-none">
-                <div className="text-5xl mb-6">🛍️</div>
-                <h3 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">TikTok Shop Videos</h3>
-                <p className="text-slate-600 dark:text-gray-400 leading-relaxed">
-                  Upload any product photo and get scroll-stopping TikTok Shop videos that convert browsers into buyers.
-                </p>
-              </div>
-              <div className="p-8 bg-white dark:bg-card/50 rounded-2xl border border-slate-200 dark:border-border hover:border-orange-500/50 transition-all hover:scale-105 shadow-sm dark:shadow-none">
-                <div className="text-5xl mb-6">✅</div>
-                <h3 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">Script Compliance</h3>
-                <p className="text-slate-600 dark:text-gray-400 leading-relaxed">
-                  Ensure your marketing videos meet platform guidelines. Auto-check for banned phrases and compliance issues.
-                </p>
-              </div>
+              {[
+                {
+                  step: "01",
+                  title: "Describe your product",
+                  desc: "Tell our AI what topic or niche you want to target. It writes, designs, and packages your digital product automatically.",
+                  icon: "✍️",
+                },
+                {
+                  step: "02",
+                  title: "Publish to your store",
+                  desc: "Set your price, add a cover image, and go live. Your Stripe checkout and download delivery are already connected.",
+                  icon: "🚀",
+                },
+                {
+                  step: "03",
+                  title: "Market & grow",
+                  desc: "Use email sequences, affiliate links, and discount codes to drive sales. Track everything in your dashboard.",
+                  icon: "📈",
+                },
+              ].map((s, i) => (
+                <div key={s.step} className="relative">
+                  {i < 2 && (
+                    <div className="hidden md:block absolute top-12 left-full w-full h-px border-t-2 border-dashed border-orange-200 dark:border-orange-500/20 z-0" style={{ width: "calc(100% - 48px)", left: "calc(50% + 24px)" }} />
+                  )}
+                  <div className="relative bg-white dark:bg-slate-800 rounded-2xl p-7 border border-slate-200 dark:border-slate-700 text-center shadow-sm">
+                    <div className="text-4xl mb-4">{s.icon}</div>
+                    <div className="inline-block px-3 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs font-bold mb-3">
+                      Step {s.step}
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{s.title}</h3>
+                    <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">{s.desc}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* How it works */}
-        <section id="how-it-works" className="py-24">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-                From product to posted in 3 steps
-              </h2>
-              <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-600 dark:text-slate-400">
-                No video editing skills required. Our AI handles the heavy lifting
-              </p>
-            </div>
-            <div className="mx-auto mt-14 max-w-2xl space-y-10">
-            {/* Step 1 */}
-            <div className="flex gap-6">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-500 dark:bg-amber-500/20">
-                <Upload className="h-6 w-6" strokeWidth={2} />
-              </div>
-              <div>
-                <span className="text-sm font-semibold text-amber-500">Step 1</span>
-                <h3 className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">
-                  Upload product image or paste link
-                </h3>
-                <p className="mt-2 text-slate-600 dark:text-slate-400">
-                  Drop your product photo or paste a TikTok Shop, Amazon, or affiliate link
-                </p>
-              </div>
-            </div>
-            {/* Step 2 */}
-            <div className="flex gap-6">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-500 dark:bg-amber-500/20">
-                <Sparkles className="h-6 w-6" strokeWidth={2} />
-              </div>
-              <div>
-                <span className="text-sm font-semibold text-amber-500">Step 2</span>
-                <h3 className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">
-                  AI generates conversion-focused scripts and videos
-                </h3>
-                <p className="mt-2 text-slate-600 dark:text-slate-400">
-                  Our AI optimizes for sales, not engagement theater. Every script is built to drive clicks and purchases.
-                </p>
-              </div>
-            </div>
-            {/* Step 3 */}
-            <div className="flex gap-6">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-500 dark:bg-amber-500/20">
-                <Download className="h-6 w-6" strokeWidth={2} />
-              </div>
-              <div>
-                <span className="text-sm font-semibold text-amber-500">Step 3</span>
-                <h3 className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">
-                  Download with ready-to-paste captions
-                </h3>
-                <p className="mt-2 text-slate-600 dark:text-slate-400">
-                  Get video files and platform-ready captions for TikTok, Reels, and Shorts
-                </p>
-              </div>
-            </div>
-            </div>
-          </div>
-        </section>
-
-        {/* What Our Users Say */}
-        <section id="reviews" className="py-24 bg-slate-100 dark:bg-muted/50/30">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-              What Our Users Say
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-lg text-slate-600 dark:text-slate-400">
-              Real results from creators using Content Flywheel
-            </p>
-            </div>
-            <div className="mt-14">
-              <ReviewsCarousel reviews={reviews} />
-            </div>
-          </div>
-        </section>
-
-        {/* Why Generic AI Tools Miss Sales */}
-        <section id="why-us" className="py-24">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-              Most tools optimize for the wrong metrics. We optimize for revenue.
-            </h2>
-          </div>
-          <div className="mt-14 grid gap-8 lg:grid-cols-2 lg:gap-10">
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 dark:border-slate-800 dark:bg-slate-900">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                Generic AI Tools
-              </h3>
-              <ul className="mt-5 space-y-3 text-slate-600 dark:text-slate-400">
-                <li className="flex items-start gap-2">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
-                  Optimize for views and likes
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
-                  Engagement theater, not revenue
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
-                  One-size-fits-all scripts
-                </li>
-              </ul>
-            </div>
-            <div className="rounded-2xl border-2 border-amber-500 bg-white p-8 shadow-sm dark:bg-slate-900">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                Content Flywheel
-              </h3>
-              <ul className="mt-5 space-y-3 text-slate-700 dark:text-slate-300">
-                <li className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Revenue-focused video scripts
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Conversion psychology built-in
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Product-specific optimization
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  A/B tested hooks and CTAs
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Buyer objection handling
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  Platform-specific strategies that sell
-                </li>
-              </ul>
-            </div>
-          </div>
-          </div>
-        </section>
-
-        {/* Platforms */}
-        <section id="platforms" className="py-24 bg-slate-100 dark:bg-muted/50/30">
-          <div className="max-w-7xl mx-auto px-6">
-            <h2 className="text-center text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-              Works with all major platforms
-            </h2>
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-12">
-            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-8 py-4 dark:border-slate-800 dark:bg-slate-900">
-              <span className="text-xl font-bold text-slate-900 dark:text-white">TikTok</span>
-            </div>
-            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-8 py-4 dark:border-slate-800 dark:bg-slate-900">
-              <span className="text-xl font-bold text-slate-900 dark:text-white">Instagram</span>
-            </div>
-            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-8 py-4 dark:border-slate-800 dark:bg-slate-900">
-              <Youtube className="h-8 w-8 text-red-600 dark:text-red-500" />
-              <span className="text-xl font-bold text-slate-900 dark:text-white">YouTube</span>
-            </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Pricing preview */}
-        <section id="pricing-preview" className="py-24">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-              Simple, transparent pricing
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-lg text-slate-600 dark:text-slate-400">
-              Start free, upgrade when it&apos;s working for you.
-            </p>
-            <Link
-              href="/pricing"
-              className="mt-8 inline-flex items-center gap-2 rounded-xl bg-amber-500 px-6 py-3.5 text-sm font-semibold text-slate-900 hover:bg-amber-400"
-            >
-              View pricing <ArrowRight className="h-4 w-4" />
-            </Link>
-            </div>
-          </div>
-        </section>
-
-        {/* FAQ */}
-        <section id="faq" className="py-24 bg-slate-100 dark:bg-muted/50/30">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-              Frequently Asked Questions
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-lg text-slate-600 dark:text-slate-400">
-              Quick answers to common questions
-            </p>
-            </div>
-            <div className="mx-auto mt-14 max-w-3xl">
-              <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="formats" className="border-slate-200 dark:border-slate-700 [&[data-state=open]]:border-l-4 [&[data-state=open]]:border-l-amber-500 [&[data-state=open]]:pl-4">
-                <AccordionTrigger className="text-left text-slate-900 hover:text-amber-600 hover:no-underline dark:text-white dark:hover:text-amber-400">
-                  What video formats and platforms do you support?
-                </AccordionTrigger>
-                <AccordionContent className="text-slate-600 dark:text-slate-400">
-                  We generate videos optimized for TikTok (9:16), Instagram Reels (9:16), and YouTube Shorts (9:16). Videos include platform-specific captions, hashtags, and descriptions ready to copy/paste.
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="time" className="border-slate-200 dark:border-slate-700 [&[data-state=open]]:border-l-4 [&[data-state=open]]:border-l-amber-500 [&[data-state=open]]:pl-4">
-                <AccordionTrigger className="text-left text-slate-900 hover:text-amber-600 hover:no-underline dark:text-white dark:hover:text-amber-400">
-                  How long does it take to generate a video?
-                </AccordionTrigger>
-                <AccordionContent className="text-slate-600 dark:text-slate-400">
-                  Most videos are generated in 2-5 minutes. You&apos;ll receive the video file plus ready-to-use captions for each platform.
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="own" className="border-slate-200 dark:border-slate-700 [&[data-state=open]]:border-l-4 [&[data-state=open]]:border-l-amber-500 [&[data-state=open]]:pl-4">
-                <AccordionTrigger className="text-left text-slate-900 hover:text-amber-600 hover:no-underline dark:text-white dark:hover:text-amber-400">
-                  Do I own the videos I create?
-                </AccordionTrigger>
-                <AccordionContent className="text-slate-600 dark:text-slate-400">
-                  Yes! All videos you generate are 100% yours. Use them however you want—post, download, edit, or repurpose.
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="edit" className="border-slate-200 dark:border-slate-700 [&[data-state=open]]:border-l-4 [&[data-state=open]]:border-l-amber-500 [&[data-state=open]]:pl-4">
-                <AccordionTrigger className="text-left text-slate-900 hover:text-amber-600 hover:no-underline dark:text-white dark:hover:text-amber-400">
-                  Can I edit the AI-generated scripts before creating videos?
-                </AccordionTrigger>
-                <AccordionContent className="text-slate-600 dark:text-slate-400">
-                  Absolutely. You can review and customize scripts before generating videos. Our AI gives you a strong starting point, but you have full control.
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="trial" className="border-slate-200 dark:border-slate-700 [&[data-state=open]]:border-l-4 [&[data-state=open]]:border-l-amber-500 [&[data-state=open]]:pl-4">
-                <AccordionTrigger className="text-left text-slate-900 hover:text-amber-600 hover:no-underline dark:text-white dark:hover:text-amber-400">
-                  What&apos;s included in the free trial?
-                </AccordionTrigger>
-                <AccordionContent className="text-slate-600 dark:text-slate-400">
-                  3 free video generations. No credit card required. Test the full platform before deciding to upgrade.
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="refunds" className="border-slate-200 dark:border-slate-700 [&[data-state=open]]:border-l-4 [&[data-state=open]]:border-l-amber-500 [&[data-state=open]]:pl-4">
-                <AccordionTrigger className="text-left text-slate-900 hover:text-amber-600 hover:no-underline dark:text-white dark:hover:text-amber-400">
-                  Do you offer refunds?
-                </AccordionTrigger>
-                <AccordionContent className="text-slate-600 dark:text-slate-400">
-                  No. We operate a strict no-refunds policy because AI processing costs are incurred immediately. Test with our free trial (3 videos) before purchasing. See our <Link href="/refund-policy" className="text-amber-500 underline hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300">Refund Policy</Link> for details.
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="cancel" className="border-slate-200 dark:border-slate-700 [&[data-state=open]]:border-l-4 [&[data-state=open]]:border-l-amber-500 [&[data-state=open]]:pl-4">
-                <AccordionTrigger className="text-left text-slate-900 hover:text-amber-600 hover:no-underline dark:text-white dark:hover:text-amber-400">
-                  Can I cancel my subscription anytime?
-                </AccordionTrigger>
-                <AccordionContent className="text-slate-600 dark:text-slate-400">
-                  Yes. Cancel anytime from your dashboard. Your subscription remains active until the end of your billing period, then no further charges occur.
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-            </div>
-          </div>
-        </section>
-
-        {/* Final CTA */}
+        {/* ── COMPARISON ── */}
         <section className="py-24 lg:py-32">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500/20 via-slate-100 to-amber-600/10 dark:from-amber-500/15 dark:via-slate-900 dark:to-amber-600/10">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-400/10 via-transparent to-transparent dark:from-amber-500/10" aria-hidden />
-            <div className="relative px-8 py-16 text-center sm:px-12 lg:py-20">
-              <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl lg:text-5xl">
-                Ready to turn products into sales?
+          <div className="max-w-5xl mx-auto px-6">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                Why creators choose Content Flywheel
               </h2>
-              <p className="mx-auto mt-4 max-w-lg text-lg text-slate-600 dark:text-slate-400">
-                Start free. No credit card required.
-              </p>
-              <Link
-                href="/sign-up"
-                className="mt-8 inline-flex items-center gap-2 rounded-xl bg-amber-500 px-8 py-4 text-base font-semibold text-slate-900 shadow-lg transition-all hover:bg-amber-400 hover:shadow-xl"
-              >
-                Start Creating Free <ArrowRight className="h-5 w-5" />
-              </Link>
-              <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">
-                First 3 videos free • Cancel anytime
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Without */}
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 font-bold text-sm">✕</div>
+                  <h3 className="font-bold text-slate-700 dark:text-slate-300">Without Content Flywheel</h3>
+                </div>
+                <ul className="space-y-3 text-slate-600 dark:text-slate-400 text-sm">
+                  {[
+                    "Hours writing and formatting ebooks manually",
+                    "Paying for Gumroad, Stan Store, or Kajabi",
+                    "Separate email tool (Mailchimp, ConvertKit)",
+                    "No built-in affiliate tracking",
+                    "Manual order management",
+                    "No analytics on your product pages",
+                  ].map((t) => (
+                    <li key={t} className="flex items-start gap-2.5">
+                      <span className="mt-0.5 text-slate-400">—</span>
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* With */}
+              <div className="rounded-2xl border-2 border-orange-500 bg-white dark:bg-slate-900 p-8 shadow-lg shadow-orange-500/10">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold text-sm">✓</div>
+                  <h3 className="font-bold text-slate-900 dark:text-white">With Content Flywheel</h3>
+                </div>
+                <ul className="space-y-3 text-slate-700 dark:text-slate-300 text-sm">
+                  {[
+                    "AI builds your product in minutes",
+                    "Built-in store with Stripe — zero platform fees",
+                    "Email marketing & sequences included",
+                    "Affiliate programme with referral tracking",
+                    "Orders dashboard with download delivery",
+                    "Product view analytics per page",
+                  ].map((t) => (
+                    <li key={t} className="flex items-start gap-2.5">
+                      <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── REVIEWS ── */}
+        <section id="reviews" className="py-24 bg-slate-50 dark:bg-slate-900">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center mb-16">
+              <div className="flex items-center justify-center gap-1 mb-4">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} className="w-5 h-5 fill-orange-400 text-orange-400" />
+                ))}
+              </div>
+              <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                Loved by creators
+              </h2>
+              <p className="mt-4 text-lg text-slate-600 dark:text-slate-400">
+                Real results from real people building real income.
               </p>
             </div>
+            <ReviewsCarousel reviews={reviews} />
+          </div>
+        </section>
+
+        {/* ── PLATFORMS ── */}
+        <section className="py-20 border-y border-slate-100 dark:border-slate-800">
+          <div className="max-w-4xl mx-auto px-6 text-center">
+            <p className="text-sm font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-8">
+              Market your products across
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-6">
+              {["TikTok", "Instagram", "YouTube", "Twitter / X", "Facebook"].map((p) => (
+                <span
+                  key={p}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm"
+                >
+                  {p}
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── PRICING PREVIEW ── */}
+        <section id="pricing-preview" className="py-24 lg:py-32">
+          <div className="max-w-4xl mx-auto px-6">
+            <div className="rounded-3xl bg-gradient-to-br from-orange-500 to-orange-600 p-px shadow-2xl shadow-orange-500/30">
+              <div className="rounded-3xl bg-white dark:bg-slate-900 px-10 py-14 text-center">
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-sm font-semibold mb-6">
+                  🎉 Simple pricing
+                </div>
+                <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  One plan. Everything included.
+                </h2>
+                <p className="mt-4 text-lg text-slate-600 dark:text-slate-400 max-w-xl mx-auto">
+                  No per-sale fees. No extra tools. No hidden charges. Everything you need to create, sell, and market digital products.
+                </p>
+                <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+                  <Link
+                    href="/pricing"
+                    className="inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 px-8 py-4 text-base font-bold text-white shadow-lg shadow-orange-500/25 transition-all hover:scale-105"
+                  >
+                    See pricing <ArrowRight className="h-4 w-4" />
+                  </Link>
+                  <Link
+                    href="/sign-up"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 px-8 py-4 text-base font-bold text-slate-900 dark:text-white transition-all"
+                  >
+                    Start free trial
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── FAQ ── */}
+        <section id="faq" className="py-24 bg-slate-50 dark:bg-slate-900">
+          <div className="max-w-3xl mx-auto px-6">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                Frequently asked questions
+              </h2>
+            </div>
+            <Accordion type="single" collapsible className="w-full space-y-3">
+              {[
+                {
+                  value: "what",
+                  q: "What kind of digital products can I create?",
+                  a: "Ebooks, planners, workbooks, guides, templates, checklists — anything text and design based. You describe the topic and our AI generates the full product including a cover.",
+                },
+                {
+                  value: "sell",
+                  q: "How do I sell products and get paid?",
+                  a: "Your store is connected to Stripe. Buyers pay by card, Stripe sends the money to your account, and we automatically email the buyer their download link. No extra steps.",
+                },
+                {
+                  value: "fees",
+                  q: "Are there any per-sale fees?",
+                  a: "No. We charge a flat monthly subscription. You keep everything Stripe sends you (minus Stripe's standard card processing fee of ~1.4% + 20p).",
+                },
+                {
+                  value: "email",
+                  q: "Is email marketing included?",
+                  a: "Yes. You can collect subscribers, send broadcasts, and build automated drip sequences. All built in — no Mailchimp or ConvertKit required.",
+                },
+                {
+                  value: "trial",
+                  q: "What's included in the free trial?",
+                  a: "Full access to the platform. No credit card required. Test everything before deciding to subscribe.",
+                },
+                {
+                  value: "cancel",
+                  q: "Can I cancel anytime?",
+                  a: "Yes. Cancel from your dashboard settings at any time. Your subscription stays active until the end of the billing period, then stops — no further charges.",
+                },
+                {
+                  value: "refunds",
+                  q: "Do you offer refunds?",
+                  a: "We operate a no-refunds policy because AI processing costs are incurred immediately. Use the free trial to make sure Content Flywheel is right for you before subscribing.",
+                },
+              ].map((item) => (
+                <AccordionItem
+                  key={item.value}
+                  value={item.value}
+                  className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-6 [&[data-state=open]]:border-orange-300 dark:[&[data-state=open]]:border-orange-500/50"
+                >
+                  <AccordionTrigger className="text-left text-slate-900 hover:text-orange-600 hover:no-underline dark:text-white dark:hover:text-orange-400 font-semibold py-5">
+                    {item.q}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-slate-600 dark:text-slate-400 pb-5 leading-relaxed">
+                    {item.a}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </section>
+
+        {/* ── FINAL CTA ── */}
+        <section className="py-24 lg:py-32">
+          <div className="max-w-4xl mx-auto px-6 text-center">
+            <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 px-8 py-20 shadow-2xl">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-orange-500/20 via-transparent to-transparent pointer-events-none" aria-hidden />
+              <div className="relative">
+                <div className="text-5xl mb-6">🚀</div>
+                <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
+                  Your first product could be
+                  <br />
+                  <span className="text-orange-400">live today.</span>
+                </h2>
+                <p className="mt-5 text-lg text-slate-400 max-w-lg mx-auto">
+                  Join thousands of creators building real income with digital products. Start free — no credit card needed.
+                </p>
+                <Link
+                  href="/sign-up"
+                  className="mt-8 inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-10 py-4 text-base font-bold text-white shadow-xl shadow-orange-500/30 transition-all hover:scale-105"
+                >
+                  Start creating for free <ArrowRight className="h-5 w-5" />
+                </Link>
+                <p className="mt-5 text-sm text-slate-500">Free trial • No credit card • Cancel anytime</p>
+              </div>
             </div>
           </div>
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
+      {/* ── FOOTER ── */}
+      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="mx-auto max-w-6xl px-6 py-14">
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="col-span-1 sm:col-span-2 lg:col-span-1">
+              <span className="text-lg font-extrabold text-slate-900 dark:text-white">
+                Content<span className="text-orange-500">Flywheel</span>
+              </span>
+              <p className="mt-3 text-sm text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed">
+                The all-in-one platform for creators who want to build and sell digital products without the faff.
+              </p>
+            </div>
             <div>
-              <h4 className="text-sm font-semibold uppercase tracking-wider text-slate-900 dark:text-white">
-                Product
-              </h4>
-              <ul className="mt-4 space-y-2">
-                <li>
-                  <Link href="/#features" className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
-                    Features
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/#how-it-works" className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
-                    How it Works
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/#pricing-preview" className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
-                    Pricing
-                  </Link>
-                </li>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">Product</h4>
+              <ul className="space-y-2.5 text-sm">
+                {[["Features", "/#features"], ["How it Works", "/#how-it-works"], ["Pricing", "/pricing"]].map(([label, href]) => (
+                  <li key={label}><Link href={href} className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors">{label}</Link></li>
+                ))}
               </ul>
             </div>
             <div>
-              <h4 className="text-sm font-semibold uppercase tracking-wider text-slate-900 dark:text-white">
-                Legal
-              </h4>
-              <ul className="mt-4 space-y-2">
-                <li>
-                  <Link href="/terms" className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
-                    Terms
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/privacy" className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
-                    Privacy
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/refund-policy" className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
-                    Refund Policy
-                  </Link>
-                </li>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">Legal</h4>
+              <ul className="space-y-2.5 text-sm">
+                {[["Terms", "/terms"], ["Privacy", "/privacy"], ["Refund Policy", "/refund-policy"]].map(([label, href]) => (
+                  <li key={label}><Link href={href} className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors">{label}</Link></li>
+                ))}
               </ul>
             </div>
             <div>
-              <h4 className="text-sm font-semibold uppercase tracking-wider text-slate-900 dark:text-white">
-                Connect
-              </h4>
-              <ul className="mt-4 flex gap-4">
-                <li>
-                  <a
-                    href="https://x.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-900 dark:border-slate-600 dark:text-slate-400 dark:hover:text-white"
-                    aria-label="X (Twitter)"
-                  >
-                    <span className="text-sm font-bold">X</span>
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="https://instagram.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-900 dark:border-slate-600 dark:text-slate-400 dark:hover:text-white"
-                    aria-label="Instagram"
-                  >
-                    <span className="text-sm font-bold">IG</span>
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="https://youtube.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-900 dark:border-slate-600 dark:text-slate-400 dark:hover:text-white"
-                    aria-label="YouTube"
-                  >
-                    <Youtube className="h-5 w-5" />
-                  </a>
-                </li>
-              </ul>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">Contact</h4>
+              <a href="mailto:hello@contentflywheel.co.uk" className="text-sm text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
+                hello@contentflywheel.co.uk
+              </a>
             </div>
           </div>
-          <div className="mt-12 border-t border-slate-200 pt-8 dark:border-slate-700">
-            <p className="text-center text-sm text-slate-500 dark:text-slate-400">
-              © 2026 Content Flywheel. All rights reserved.
-            </p>
-            <p className="mt-2 text-center text-sm text-slate-500 dark:text-slate-400">
-              Contact:{" "}
-              <a
-                href="mailto:contentflywheel@gmail.com"
-                className="text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300"
-              >
-                contentflywheel@gmail.com
-              </a>
-            </p>
+          <div className="mt-12 border-t border-slate-100 dark:border-slate-800 pt-8 text-center text-sm text-slate-400 dark:text-slate-500">
+            © 2026 Content Flywheel. All rights reserved.
           </div>
         </div>
       </footer>
