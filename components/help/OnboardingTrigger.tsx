@@ -8,6 +8,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import { startFullAppTour, getTourState } from "./TourRunner";
 
 const ONBOARDING_KEY = "cf_onboarding_done";
@@ -27,8 +28,12 @@ export function resetOnboarding() {
 
 export function OnboardingTrigger() {
   const router = useRouter();
+  const { isSignedIn } = useAuth();
 
   useEffect(() => {
+    // Only trigger for authenticated users — prevents redirecting landing page visitors
+    if (!isSignedIn) return;
+
     // Don't interrupt if a tour is already in progress
     const existing = getTourState();
     if (existing?.active) return;
@@ -45,7 +50,7 @@ export function OnboardingTrigger() {
 
     return () => clearTimeout(tid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isSignedIn]);
 
   return null;
 }
