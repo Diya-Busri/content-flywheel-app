@@ -29,7 +29,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const BUCKET = "timeline-media";
-const MAX_SCENES = 50;
+const MAX_SCENES = 450; // Supports up to 400-scene full-length documentaries
 const STORY_KEN_BURNS_ZOOM_MAX = 1.05;
 
 function isHttpUrl(s: string): boolean {

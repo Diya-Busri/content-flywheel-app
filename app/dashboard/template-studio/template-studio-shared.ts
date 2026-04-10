@@ -1,11 +1,12 @@
-export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15" | "16";
+export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15" | "16" | "17";
 
 /** Story-style Template Studio modes that share the scene pipeline */
 export type TemplateStudioStoryTemplateId =
   | "ai_story"
   | "satisfying_build"
   | "ai_cooking_video"
-  | "story_video";
+  | "story_video"
+  | "finance_documentary";
 
 export const TEMPLATE_STUDIO_STORY_GENERATE_ROUTES: Record<
   TemplateStudioStoryTemplateId,
@@ -15,6 +16,7 @@ export const TEMPLATE_STUDIO_STORY_GENERATE_ROUTES: Record<
   satisfying_build: "/api/generate/satisfying-build",
   ai_cooking_video: "/api/generate/ai-cooking-video",
   story_video: "/api/generate/story-video",
+  finance_documentary: "/api/generate/finance-documentary",
 };
 export type TemplateType = "quotes" | "tips" | "affirmations";
 export type FontStyle = "modern" | "elegant" | "bold" | "minimal";
@@ -45,6 +47,12 @@ export const CREATION_MODE_OPTION_GROUPS: {
       { value: "2", label: "Promote My App or Business" },
       { value: "3", label: "Promote My Clothing Brand" },
       { value: "6", label: "Sales/Product Launch Carousel" },
+    ],
+  },
+  {
+    label: "Faceless Channels",
+    options: [
+      { value: "17", label: "💰 Finance / Business Documentary" },
     ],
   },
   {
@@ -175,6 +183,107 @@ export const AI_COOKING_VIDEO_SCENE_COUNT_SELECT: { value: string; label: string
     label: `${n} scenes (fixed)`,
   })),
 ];
+
+// ── Finance / Business Documentary (Mode 17) ──────────────────────────────
+export const FINANCE_DOC_NICHE_OPTIONS = [
+  { value: "Personal Finance", label: "💵 Personal Finance" },
+  { value: "Investing & Stocks", label: "📈 Investing & Stocks" },
+  { value: "Entrepreneurship", label: "🚀 Entrepreneurship" },
+  { value: "Real Estate", label: "🏠 Real Estate" },
+  { value: "Crypto & Web3", label: "₿ Crypto & Web3" },
+  { value: "Side Hustles", label: "💼 Side Hustles" },
+  { value: "Business Strategy", label: "♟️ Business Strategy" },
+  { value: "Wealth Mindset", label: "🧠 Wealth Mindset" },
+  { value: "Financial Freedom", label: "🌍 Financial Freedom" },
+  { value: "Passive Income", label: "💤 Passive Income" },
+] as const;
+
+export const FINANCE_DOC_STYLE_OPTIONS = [
+  { value: "Dark Luxury", label: "🖤 Dark Luxury — premium black & gold aesthetic" },
+  { value: "Clean Minimal", label: "⬜ Clean Minimal — white, sharp, professional" },
+  { value: "Cinematic Dramatic", label: "🎬 Cinematic Dramatic — moody, high contrast" },
+  { value: "Bold Modern", label: "⚡ Bold Modern — vibrant, energetic" },
+] as const;
+
+export const FINANCE_DOC_TONE_OPTIONS = [
+  { value: "Documentary", label: "🎙️ Documentary — authoritative narrator" },
+  { value: "Educational", label: "📚 Educational — clear & informative" },
+  { value: "Motivational", label: "🔥 Motivational — inspiring & energetic" },
+  { value: "Investigative", label: "🔍 Investigative — revealing hidden truths" },
+] as const;
+
+export const FINANCE_DOC_LENGTH_OPTIONS = [
+  { value: "short",    label: "Quick · 75 scenes · ~21 min" },
+  { value: "medium",   label: "Standard · 150 scenes · ~42 min" },
+  { value: "long",     label: "Extended · 250 scenes · ~70 min" },
+  { value: "epic",     label: "Full-Length · 400 scenes · ~110 min" },
+] as const;
+
+export const FINANCE_DOC_TOPIC_SUGGESTIONS: Record<string, string[]> = {
+  "Personal Finance": [
+    "The 50/30/20 rule that changed how I handle money",
+    "Why most people never build wealth (and how to fix it)",
+    "The hidden cost of your daily habits on your net worth",
+    "How to go from £0 savings to a 6-month emergency fund",
+    "The 5 money mistakes keeping you broke in your 20s",
+  ],
+  "Investing & Stocks": [
+    "How index funds quietly make millionaires",
+    "Warren Buffett's secret that Wall Street doesn't want you to know",
+    "The truth about compound interest that schools never taught you",
+    "Why timing the market always loses to time in the market",
+    "How to build a £100k portfolio starting with £50/month",
+  ],
+  "Entrepreneurship": [
+    "The business model that made 1000 people millionaires last year",
+    "Why 90% of businesses fail in year one (and how to be the 10%)",
+    "How to start a business with £0 and scale to 6 figures",
+    "The faceless brand strategy outperforming personal brands right now",
+    "What nobody tells you about running a business alone",
+  ],
+  "Side Hustles": [
+    "5 side hustles that actually pay life-changing money",
+    "How I built a £5k/month income stream without showing my face",
+    "The digital product business model anyone can start today",
+    "Why content creation is the most underrated business in 2025",
+    "From 9–5 to financial freedom: the realistic roadmap",
+  ],
+  "Passive Income": [
+    "7 passive income streams ranked by effort vs reward",
+    "How to make money while you sleep (the real way)",
+    "The truth about passive income that gurus won't tell you",
+    "How to turn one skill into multiple income streams",
+    "Building digital assets that pay you forever",
+  ],
+};
+
+export const FINANCE_DOC_HOOK_OPTIONS = [
+  { value: "shocking_stat", label: "Shocking statistic opener" },
+  { value: "contrarian", label: "Contrarian take (\"Everything you know is wrong\")" },
+  { value: "story", label: "Story-led (\"In 2020, one decision changed everything...\")" },
+  { value: "question", label: "Direct question (\"Why are 80% of people still broke?\")" },
+  { value: "reveal", label: "Big reveal (\"The truth about X that banks hide\")" },
+] as const;
+
+export const FINANCE_DOC_CTA_OPTIONS = [
+  { value: "subscribe", label: "Subscribe for more (grow channel)" },
+  { value: "affiliate", label: "💰 Referral / Affiliate link (earn per signup)" },
+  { value: "sell_product", label: "Sell digital product" },
+  { value: "email_list", label: "Join email list / free resource" },
+  { value: "comment", label: "Drive comments (boost algorithm)" },
+] as const;
+
+export const FINANCE_DOC_AFFILIATE_PLATFORMS = [
+  { value: "trading212", label: "Trading 212 (free share on signup)" },
+  { value: "freetrade", label: "Freetrade (free share on signup)" },
+  { value: "etoro", label: "eToro (copy trading platform)" },
+  { value: "coinbase", label: "Coinbase (crypto - earn on signup)" },
+  { value: "revolut", label: "Revolut (premium banking)" },
+  { value: "moneyfarm", label: "Moneyfarm (investment management)" },
+  { value: "wealthify", label: "Wealthify (ethical investing)" },
+  { value: "moneybox", label: "Moneybox (round-up investing app)" },
+  { value: "other", label: "Other (I'll type the name)" },
+] as const;
 
 export const OPENING_HOOK_STYLE_PRESETS = [
   { value: "Stop scrolling: this changes everything.", label: "Pattern interrupt" },

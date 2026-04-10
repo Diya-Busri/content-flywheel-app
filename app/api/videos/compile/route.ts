@@ -40,7 +40,7 @@ import { randomUUID } from "crypto";
 import { tmpdir } from "os";
 
 const BUCKET = "timeline-media";
-const MAX_GUIDE_SCENES = 40;
+const MAX_GUIDE_SCENES = 450; // Supports up to 400-scene full-length documentaries
 
 type SceneRow = {
   duration?: number;

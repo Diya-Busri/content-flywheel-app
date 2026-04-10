@@ -178,8 +178,8 @@ const FONT_OPTIONS: { value: FontStyle; label: string }[] = [
 const LIBRARY_DRAFT_STORAGE_KEY = "content-flywheel-template-studio-library-draft-id";
 const STICKMAN_LIBRARY_DRAFT_STORAGE_KEY = "content-flywheel-stickman-library-draft-id";
 const TIMELINE_SCENE_DURATION = 5;
-/** Mode 17 Finance Documentary — ~12s per scene, volume from scene count not duration */
-const FINANCE_DOC_SCENE_DURATION = 12;
+/** Mode 17 Finance Documentary — ~11s per scene (3-4 sentences). Volume comes from scene count. */
+const FINANCE_DOC_SCENE_DURATION = 11;
 /** AI Story generate route returns exactly 8 scenes. */
 const AI_STORY_SCENE_COUNT = 8;
 const SCENE_COLOR_HEX = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
