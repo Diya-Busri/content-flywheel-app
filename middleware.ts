@@ -21,13 +21,14 @@ const isPublicRoute = createRouteMatcher([
   "/api(.*)",
 ]);
 
-const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
+const isAuthRoute = createRouteMatcher(["/sign-in(.*)"]);
 
 export default clerkMiddleware(async (auth, req) => {
   const { userId } = await auth();
   const url = req.nextUrl;
 
-  // Authenticated users hitting sign-in/sign-up → redirect immediately to dashboard (no blank page)
+  // Authenticated users hitting sign-in → redirect immediately to dashboard (no blank page)
+  // Note: sign-up is excluded so the email-verification step (pending session) is not interrupted
   if (userId && isAuthRoute(req)) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
