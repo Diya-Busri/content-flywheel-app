@@ -45,5 +45,6 @@ export * from "./product-views-schema";
 export * from "./creator-promo-codes-schema";
 export * from "./email-sequences-schema";
 export * from "./affiliate-links-schema";
+export * from "./referrals-schema";
 export * from "./product-reviews-schema";
 export * from "./admin-finances-schema";
