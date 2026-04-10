@@ -9,7 +9,8 @@ const POLL_INTERVAL_MS = 5000;
 const MAX_POLLS = 120;
 
 /**
- * Animate Scene control from Template Studio AI Story cards: `/api/content-studio/ai-story/animate` + status polling.
+ * Animate Scene control from Template Studio AI Story cards.
+ * Costs 1 video credit per animation (Kling AI via Fal).
  */
 export function AiStoryAnimateSceneBlock({
   imageUrl,
@@ -144,7 +145,24 @@ export function AiStoryAnimateSceneBlock({
                 request_id?: string | null;
                 videoUrl?: string;
                 error?: string;
+                code?: string;
+                redirectTo?: string;
               };
+
+              // No credits — redirect to purchase page
+              if (res.status === 402) {
+                toast({
+                  title: "No video credits",
+                  description: "Each animation costs 1 credit. Buy credits to continue.",
+                  variant: "destructive",
+                });
+                setLoading(false);
+                setTimeout(() => {
+                  window.location.href = data.redirectTo ?? "/dashboard/video-credits";
+                }, 1500);
+                return;
+              }
+
               if (!res.ok) throw new Error(data?.error ?? "Failed");
               const reqId = data.requestId ?? data.request_id ?? null;
               if (data.videoUrl) {
@@ -174,12 +192,12 @@ export function AiStoryAnimateSceneBlock({
             <span className="flex items-center gap-2">
               <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
               <span>
-                Generating animation… (may take 2–10 mins)
+                Generating animation… (2–10 mins)
                 {status ? ` — ${status.replace("_", " ")}` : ""}
               </span>
             </span>
           ) : (
-            "Animate Scene"
+            "Animate Scene · 1 credit"
           )}
         </Button>
       )}

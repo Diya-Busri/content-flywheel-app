@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Submit only; no long wait
@@ -9,9 +10,10 @@ export const maxDuration = 60; // Submit only; no long wait
 const FAL_QUEUE_URL = "https://queue.fal.run/fal-ai/kling-video/v1.6/standard/image-to-video";
 
 /**
- * POST: Submit animation job to Fal Kling. Returns immediately with request_id.
+ * POST: Submit animation job to Fal Kling. Costs 1 video credit per animation.
+ * Returns immediately with request_id.
  * Client polls GET /api/content-studio/ai-story/animate/status?requestId=... every 5s.
- * Body: { imageUrl: string, motionPrompt: string, aspectRatio?: "9:16" | "16:9" } (default 9:16)
+ * Body: { imageUrl: string, motionPrompt: string, aspectRatio?: "9:16" | "16:9" }
  * Returns: { requestId: string }
  */
 export async function POST(request: NextRequest) {
@@ -24,6 +26,20 @@ export async function POST(request: NextRequest) {
     if (apiRl) return apiRl;
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
+
+    // Gate behind video credits — 1 credit per animation (Kling AI costs ~£0.35/clip)
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        {
+          error: "You need 1 video credit to animate a scene.",
+          code: "NO_VIDEO_CREDITS",
+          balance,
+          redirectTo: "/dashboard/video-credits",
+        },
+        { status: 402 }
+      );
+    }
 
     const apiKey = process.env.FAL_API_KEY?.trim();
     if (!apiKey) {
@@ -66,7 +82,7 @@ export async function POST(request: NextRequest) {
     let initData: Record<string, unknown>;
     try {
       initData = JSON.parse(responseText) as Record<string, unknown>;
-    } catch (e) {
+    } catch {
       return NextResponse.json(
         { error: "Fal API error: " + responseText.slice(0, 200) },
         { status: 500 }
@@ -86,7 +102,12 @@ export async function POST(request: NextRequest) {
     }
 
     const requestId = (initData.request_id ?? initData.requestId) as string | undefined;
+
     if (requestId) {
+      // Deduct 1 credit — job submitted successfully to Kling
+      await deductVideoCredit("brandStoryVideo").catch((e) =>
+        console.error("[animate] credit deduction failed:", e)
+      );
       console.log("[animate] Returning requestId to client:", requestId);
       return NextResponse.json({ requestId });
     }
@@ -97,6 +118,10 @@ export async function POST(request: NextRequest) {
       (initData as { video_url?: string })?.video_url ??
       (initData as { url?: string })?.url;
     if (videoUrl && typeof videoUrl === "string") {
+      // Deduct credit for synchronous response too
+      await deductVideoCredit("brandStoryVideo").catch((e) =>
+        console.error("[animate] credit deduction failed:", e)
+      );
       return NextResponse.json({ videoUrl });
     }
 

@@ -3102,8 +3102,7 @@ export default function TemplateStudioClient() {
     );
     setAllAnimationsGenerating(false);
     setAllAnimationsProgress(null);
-    // Deduct 1 credit for the animation batch (Kling AI costs per scene)
-    await deductVideoCredit("brandStoryVideo").catch((e) => console.warn("[animations] credit deduction failed:", e));
+    // Credits are deducted per-animation in the API route — no batch deduction needed here
   }, [allAnimationsGenerating, aiStoryScenes, sceneImageUrls, sceneVideoUrls, mode]);
 
   useEffect(() => {
@@ -5121,7 +5120,7 @@ export default function TemplateStudioClient() {
                         {allAnimationsProgress ? `Animating ${allAnimationsProgress.done}/${allAnimationsProgress.total}…` : "Animating…"}
                       </>
                     ) : (
-                      <>🎬 All Animations</>
+                      <>🎬 All Animations · 1 credit/scene</>
                     )}
                   </Button>
                 </div>
