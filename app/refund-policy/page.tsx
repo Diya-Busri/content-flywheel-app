@@ -31,8 +31,8 @@ export default function RefundPolicyPage() {
           </h2>
           <p className="mt-3 leading-relaxed">
             Email us at{" "}
-            <a href="mailto:hello@contentflywheel.co.uk" className="font-medium text-orange-500 hover:text-orange-400">
-              hello@contentflywheel.co.uk
+            <a href="mailto:contentflywheel@gmail.com" className="font-medium text-orange-500 hover:text-orange-400">
+              contentflywheel@gmail.com
             </a>{" "}
             within 14 days of your initial subscription payment. Include the email address on your account and we&apos;ll process your refund within 5 business days.
           </p>
@@ -72,10 +72,10 @@ export default function RefundPolicyPage() {
           <p className="text-center text-slate-600 dark:text-slate-400">
             Questions? We&apos;re happy to help.{" "}
             <a
-              href="mailto:hello@contentflywheel.co.uk"
+              href="mailto:contentflywheel@gmail.com"
               className="font-semibold text-orange-500 hover:text-orange-400"
             >
-              hello@contentflywheel.co.uk
+              contentflywheel@gmail.com
             </a>
           </p>
         </section>

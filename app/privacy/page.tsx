@@ -94,8 +94,8 @@ export default function PrivacyPage() {
           </ul>
           <p className="mt-3 leading-relaxed">
             To exercise any of these rights, email us at{" "}
-            <a href="mailto:hello@contentflywheel.co.uk" className="text-orange-500 hover:text-orange-400">
-              hello@contentflywheel.co.uk
+            <a href="mailto:contentflywheel@gmail.com" className="text-orange-500 hover:text-orange-400">
+              contentflywheel@gmail.com
             </a>.
           </p>
         </section>
@@ -133,8 +133,8 @@ export default function PrivacyPage() {
           </h2>
           <p className="mt-3 leading-relaxed">
             Privacy questions or concerns? Contact us at{" "}
-            <a href="mailto:hello@contentflywheel.co.uk" className="text-orange-500 hover:text-orange-400">
-              hello@contentflywheel.co.uk
+            <a href="mailto:contentflywheel@gmail.com" className="text-orange-500 hover:text-orange-400">
+              contentflywheel@gmail.com
             </a>.
           </p>
         </section>

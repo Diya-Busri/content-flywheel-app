@@ -134,8 +134,8 @@ export default function TermsPage() {
           </h2>
           <p className="mt-3 leading-relaxed">
             Questions about these terms? Contact us at{" "}
-            <a href="mailto:hello@contentflywheel.co.uk" className="text-orange-500 hover:text-orange-400">
-              hello@contentflywheel.co.uk
+            <a href="mailto:contentflywheel@gmail.com" className="text-orange-500 hover:text-orange-400">
+              contentflywheel@gmail.com
             </a>.
           </p>
         </section>
