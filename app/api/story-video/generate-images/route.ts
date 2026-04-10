@@ -4,6 +4,7 @@ import { fal } from "@fal-ai/client";
 import { put } from "@vercel/blob";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import {
   STORY_VIDEO_DEFAULT_ART_STYLE,
   parseStoryVideoFormatFromBody,
@@ -112,6 +113,14 @@ export async function POST(request: NextRequest) {
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
 
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need 1 video credit to generate images.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
+
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const format = parseStoryVideoFormatFromBody(body);
     const rawScenes = Array.isArray(body.scenes) ? body.scenes : [];
@@ -181,6 +190,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[story-video/generate-images] credit deduction failed:", e));
     return NextResponse.json(urls);
   } catch (e) {
     console.error("[story-video/generate-images]", e);

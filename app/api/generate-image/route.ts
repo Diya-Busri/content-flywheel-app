@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import { put } from "@vercel/blob";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { STORY_VIDEO_IMAGE_ANIME_STYLE_CORE } from "@/lib/story-video";
 
 export const maxDuration = 60;
@@ -24,6 +25,14 @@ export async function POST(request: Request) {
 
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
+
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need 1 video credit to generate an image.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
 
     const body = await request.json().catch(() => ({}));
     let prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
@@ -84,16 +93,45 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
 
     const openai = new OpenAI({ apiKey });
     const useBlob = !!process.env.BLOB_READ_WRITE_TOKEN;
+
+    // Helper: strip phrases that commonly trigger DALL-E content filters
+    const sanitizePrompt = (p: string) =>
+      p
+        .replace(/empty wallet|broke|poverty|debt trap|paycheck to paycheck|financially struggling|bankrupt/gi, "minimalist")
+        .replace(/wealth gap|inequality|poor|homeless/gi, "contrast")
+        .replace(/nearly empty|desperately/gi, "simple")
+        .slice(0, 900); // DALL-E works best under 1000 chars
+
     // Always request b64_json so we never have to fetch DALL-E's temp URL (often fails with ENOTFOUND).
-    const response = await openai.images.generate({
-      model: "dall-e-3",
-      prompt: dallE3Prompt,
-      n: 1,
-      size: storyVideoImage ? "1792x1024" : "1024x1024",
-      quality: "standard", // always standard — hd costs 2× and is barely noticeable for video backgrounds
-      style: "natural",
-      response_format: "b64_json",
-    });
+    const imageSize = storyVideoImage ? "1792x1024" : "1024x1024";
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    let response;
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const attemptPrompt = attempt === 0 ? dallE3Prompt : sanitizePrompt(dallE3Prompt);
+        if (attempt > 0) {
+          console.warn(`[generate-image] Retry attempt ${attempt} with ${attempt === 1 ? "sanitized" : "simplified"} prompt`);
+          await sleep(attempt * 1500); // 1.5s, 3s backoff
+        }
+        response = await openai.images.generate({
+          model: "dall-e-3",
+          prompt: attemptPrompt,
+          n: 1,
+          size: imageSize,
+          quality: "standard",
+          style: "natural",
+          response_format: "b64_json",
+        });
+        break; // success
+      } catch (err) {
+        lastErr = err;
+        console.warn(`[generate-image] Attempt ${attempt + 1} failed:`, err instanceof Error ? err.message : err);
+        // Always retry — content filter, server error, rate limit
+      }
+    }
+    if (!response) throw lastErr;
 
     const first = response.data[0];
     if (!first) {
@@ -122,13 +160,16 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
           contentType: "image/png",
           addRandomSuffix: false,
         });
+        await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[generate-image] credit deduction failed:", e));
         return NextResponse.json({ url: blob.url });
       } catch (blobErr) {
         console.error("[generate-image] Blob upload failed, returning data URL:", blobErr);
+        await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[generate-image] credit deduction failed:", e));
         return NextResponse.json({ url: dataUrl });
       }
     }
 
+    await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[generate-image] credit deduction failed:", e));
     return NextResponse.json({ url: dataUrl });
   } catch (err) {
     console.error("[generate-image]", err);

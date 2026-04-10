@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { fetchOpenAIWithRetry } from "@/lib/openai-with-retry";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,14 @@ export async function POST(request: NextRequest) {
 
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
+
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need 1 video credit to generate slides.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
 
     const body = await request.json().catch(() => ({}));
     const mode = ["1", "2", "3", "4", "5", "6"].includes(String(body.mode)) ? String(body.mode) : "1";
@@ -222,6 +231,7 @@ Return only valid JSON: { "slides": [{ "heading": "...", "body": "..." }] }`;
       })
       .filter((s) => s.heading || s.body);
 
+    await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[generate-slides] credit deduction failed:", e));
     return NextResponse.json({
       slides,
       regenerateIndex,

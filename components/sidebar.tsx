@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import Link from "next/link";
 import Image from "next/image";
@@ -56,6 +56,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true, featureKey: "template_studio" },
         { href: "/dashboard/video-timeline", icon: <Film size={18} />, label: "Video Timeline", emoji: "🎬", featureKey: "video_timeline" },
         { href: "/dashboard/video-credits", icon: <Film size={18} />, label: "Video Credits", emoji: "🎥", featureKey: "video_credits" },
+        { href: "/dashboard/content-studio/youtube-upload", icon: <Youtube size={18} />, label: "Upload to YouTube", emoji: "▶️", activeWhenStartsWith: true },
       ],
     },
     {

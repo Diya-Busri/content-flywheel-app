@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { fetchOpenAIWithRetry } from "@/lib/openai-with-retry";
 import { sanitizeAiStorySceneImagePrompt } from "@/lib/ai-story-character-style";
 import { prependCharacterSeedToSceneImagePrompts } from "@/lib/story-character-seed";
@@ -175,6 +176,14 @@ export async function POST(request: NextRequest) {
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
 
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need 1 video credit to generate a story video script.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
+
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const format = parseStoryVideoFormatFromBody(body);
     const videoStructure = parseStoryVideoStructureFromBody(body);
@@ -316,6 +325,7 @@ Generate ${sceneCount} scenes now.`;
       youtubeDescription: `Episode ${episodeNumber}: a ${tone} story-style video on "${topic}" for ${targetAudience}. ${sceneCount} scenes with voiceover-friendly pacing.`,
     };
 
+    await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[story-video] credit deduction failed:", e));
     return NextResponse.json({
       scenes,
       socialMediaPack,

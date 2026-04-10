@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { fetchOpenAIWithRetry } from "@/lib/openai-with-retry";
 import {
   STORY_VIDEO_VISUAL_CHARACTER_FRAMING_RULE,
@@ -65,6 +66,14 @@ export async function POST(request: NextRequest) {
     if (apiRl) return apiRl;
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
+
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need 1 video credit to generate a video script.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const format = parseStoryVideoFormatFromBody(body);
@@ -252,6 +261,7 @@ Number of scenes: ${sceneCount}`;
       sceneNumber: idx + 1,
     }));
 
+    await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[story-video/generate-script] credit deduction failed:", e));
     return NextResponse.json(normalized);
   } catch (e) {
     console.error("[story-video/generate-script]", e);

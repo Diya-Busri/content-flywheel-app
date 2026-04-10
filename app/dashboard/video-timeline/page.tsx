@@ -1335,6 +1335,18 @@ export default function VideoTimelinePage() {
   const [compileLoading, setCompileLoading] = useState(false);
   const [compileDownloadUrl, setCompileDownloadUrl] = useState<string | null>(null);
   const [compileError, setCompileError] = useState<string | null>(null);
+
+  /** YouTube post modal state */
+  const [ytModalOpen, setYtModalOpen] = useState(false);
+  const [ytAccounts, setYtAccounts] = useState<{ id: string; platformUsername: string | null }[]>([]);
+  const [ytAccountId, setYtAccountId] = useState("");
+  const [ytTitle, setYtTitle] = useState("");
+  const [ytDescription, setYtDescription] = useState("");
+  const [ytKeywords, setYtKeywords] = useState("");
+  const [ytScheduledAt, setYtScheduledAt] = useState("");
+  const [ytPosting, setYtPosting] = useState(false);
+  const [ytResult, setYtResult] = useState<{ watchUrl: string; studioUrl: string } | null>(null);
+  const [ytError, setYtError] = useState<string | null>(null);
   const [compileTestLoading, setCompileTestLoading] = useState(false);
 
   /** Generate subtitles from voiceover (Whisper transcription) */
@@ -5236,13 +5248,40 @@ export default function VideoTimelinePage() {
                     </p>
                   )}
                   {compileDownloadUrl && !compileLoading && (
-                    <a
-                      href={compileDownloadUrl}
-                      download
-                      className="block text-center text-xs text-emerald-400 hover:text-emerald-300 underline"
-                    >
-                      ↓ Download exported video
-                    </a>
+                    <>
+                      <a
+                        href={compileDownloadUrl}
+                        download
+                        className="block text-center text-xs text-emerald-400 hover:text-emerald-300 underline"
+                      >
+                        ↓ Download exported video
+                      </a>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          // Pre-fill title from scriptName
+                          setYtTitle(scriptName || "");
+                          // Default schedule to 1 hour from now
+                          const d = new Date();
+                          d.setHours(d.getHours() + 1);
+                          setYtScheduledAt(d.toISOString().slice(0, 16));
+                          setYtResult(null);
+                          setYtError(null);
+                          // Load YouTube accounts
+                          try {
+                            const res = await fetch("/api/connected-accounts");
+                            const data = await res.json();
+                            const yt = (data.connected ?? []).filter((c: { platform: string; id: string; platformUsername: string | null }) => c.platform === "youtube");
+                            setYtAccounts(yt);
+                            if (yt.length === 1) setYtAccountId(yt[0].id);
+                          } catch { setYtAccounts([]); }
+                          setYtModalOpen(true);
+                        }}
+                        className="block w-full text-center text-xs bg-red-600/20 hover:bg-red-600/30 text-red-400 hover:text-red-300 border border-red-600/30 rounded-lg px-3 py-2 transition-colors"
+                      >
+                        ▶ Post to YouTube
+                      </button>
+                    </>
                   )}
                 </div>
               </>
@@ -6120,6 +6159,142 @@ export default function VideoTimelinePage() {
       </main>
         </div>
       </div>
+
+      {/* ── YouTube Post Modal ── */}
+      {ytModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !ytPosting && setYtModalOpen(false)} />
+          <div className="relative w-full max-w-md bg-[#111] border border-[#2a2a2a] rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">▶</span>
+              <h2 className="text-base font-semibold text-white">Post to YouTube</h2>
+              <button type="button" onClick={() => !ytPosting && setYtModalOpen(false)} className="ml-auto text-[#505050] hover:text-white text-xl leading-none">×</button>
+            </div>
+
+            {ytResult ? (
+              <div className="space-y-3">
+                <p className="text-sm text-emerald-400 font-medium">✅ Uploaded to YouTube!</p>
+                <div className="flex flex-col gap-2">
+                  <a href={ytResult.studioUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-400 hover:underline">Edit in YouTube Studio →</a>
+                  <a href={ytResult.watchUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline">View on YouTube →</a>
+                </div>
+                <button type="button" onClick={() => setYtModalOpen(false)} className="w-full text-sm text-[#a0a0a0] hover:text-white mt-2">Close</button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Account */}
+                {ytAccounts.length === 0 ? (
+                  <p className="text-xs text-amber-400">No YouTube account connected. <a href="/dashboard/settings" className="underline">Connect one in Settings →</a></p>
+                ) : (
+                  <div>
+                    <label className="text-xs text-[#a0a0a0] block mb-1">YouTube channel</label>
+                    <select
+                      value={ytAccountId}
+                      onChange={(e) => setYtAccountId(e.target.value)}
+                      className="w-full rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] text-white text-sm px-3 py-2"
+                    >
+                      {ytAccounts.map((a) => (
+                        <option key={a.id} value={a.id}>{a.platformUsername ?? "YouTube channel"}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Title */}
+                <div>
+                  <label className="text-xs text-[#a0a0a0] block mb-1">Title *</label>
+                  <input
+                    type="text"
+                    value={ytTitle}
+                    onChange={(e) => setYtTitle(e.target.value)}
+                    maxLength={100}
+                    placeholder="Video title"
+                    className="w-full rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] text-white text-sm px-3 py-2 placeholder:text-[#505050]"
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="text-xs text-[#a0a0a0] block mb-1">Description</label>
+                  <textarea
+                    value={ytDescription}
+                    onChange={(e) => setYtDescription(e.target.value)}
+                    rows={3}
+                    placeholder="Video description…"
+                    className="w-full rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] text-white text-sm px-3 py-2 placeholder:text-[#505050] resize-none"
+                  />
+                </div>
+
+                {/* Tags */}
+                <div>
+                  <label className="text-xs text-[#a0a0a0] block mb-1">Tags (comma separated)</label>
+                  <input
+                    type="text"
+                    value={ytKeywords}
+                    onChange={(e) => setYtKeywords(e.target.value)}
+                    placeholder="content creation, tips, social media"
+                    className="w-full rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] text-white text-sm px-3 py-2 placeholder:text-[#505050]"
+                  />
+                </div>
+
+                {/* Schedule */}
+                <div>
+                  <label className="text-xs text-[#a0a0a0] block mb-1">Publish date & time *</label>
+                  <input
+                    type="datetime-local"
+                    value={ytScheduledAt}
+                    onChange={(e) => setYtScheduledAt(e.target.value)}
+                    className="w-full rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] text-white text-sm px-3 py-2"
+                  />
+                  <p className="text-xs text-[#505050] mt-0.5">Past/now = post immediately. Future = scheduled.</p>
+                </div>
+
+                {ytError && (
+                  <p className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 rounded-lg px-2.5 py-2">{ytError}</p>
+                )}
+
+                <button
+                  type="button"
+                  disabled={ytPosting || !ytAccountId || !ytTitle || !ytScheduledAt || !compileDownloadUrl}
+                  onClick={async () => {
+                    if (!compileDownloadUrl) return;
+                    setYtPosting(true);
+                    setYtError(null);
+                    try {
+                      const res = await fetch("/api/youtube/post-from-url", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          youtubeAccountId: ytAccountId,
+                          videoUrl: compileDownloadUrl,
+                          title: ytTitle,
+                          description: ytDescription,
+                          keywords: ytKeywords,
+                          scheduledAt: new Date(ytScheduledAt).toISOString(),
+                        }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) { setYtError(data.error ?? "Upload failed"); return; }
+                      setYtResult({ watchUrl: data.watchUrl, studioUrl: data.studioUrl });
+                    } catch (e) {
+                      setYtError(e instanceof Error ? e.message : "Upload failed");
+                    } finally {
+                      setYtPosting(false);
+                    }
+                  }}
+                  className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl px-4 py-2.5 transition-colors flex items-center justify-center gap-2"
+                >
+                  {ytPosting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Uploading… keep this tab open</>
+                  ) : (
+                    <>▶ Upload & Schedule to YouTube</>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

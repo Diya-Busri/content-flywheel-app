@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { fetchOpenAIWithRetry } from "@/lib/openai-with-retry";
 import {
   AI_STORY_GLOBAL_VISUAL_STYLE,
@@ -48,6 +49,14 @@ export async function POST(request: NextRequest) {
     if (apiRl) return apiRl;
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
+
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need 1 video credit to generate an AI story.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
 
     const body = await request.json().catch(() => ({}));
     const characters =
@@ -301,6 +310,7 @@ Generate 8 scenes that tell a cohesive micro-story in this tone and style. Every
           }))
         : scenesWithSeed;
 
+    await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[ai-story/generate] credit deduction failed:", e));
     return NextResponse.json({
       scenes: scenesWithLocks,
       socialMediaPack,

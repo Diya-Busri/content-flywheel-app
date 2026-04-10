@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import OpenAI from "openai";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 min — large scene counts need parallel batch expansion
@@ -57,6 +58,14 @@ export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need 1 video credit to generate a documentary script.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
 
     const body = await request.json().catch(() => ({})) as {
       topic?: string;
@@ -281,6 +290,7 @@ Return ONLY valid JSON:
       return NextResponse.json({ error: "No scenes generated. Please try again." }, { status: 500 });
     }
 
+    await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[finance-documentary] credit deduction failed:", e));
     return NextResponse.json({
       scenes: allScenes,
       socialMediaPack: outlineParsed.socialMediaPack ?? null,

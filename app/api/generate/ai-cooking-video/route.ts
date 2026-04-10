@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { fetchOpenAIWithRetry } from "@/lib/openai-with-retry";
 import { sanitizeAiStorySceneImagePrompt } from "@/lib/ai-story-character-style";
 import {
@@ -145,6 +146,14 @@ export async function POST(request: NextRequest) {
     if (apiRl) return apiRl;
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
+
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need 1 video credit to generate a cooking video script.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const autoSceneCount = isAutoSceneCount(body);
@@ -375,6 +384,7 @@ Generate exactly ${fixedSceneCount} scenes now.`;
       youtubeDescription: `A ${tone.toLowerCase()} AI cooking short featuring ${dishName} in ${cookingStyle} style with a ${chefType.toLowerCase()} lead. ${scenes.length} scenes walking through real recipe steps from prep to the final plated reveal.`,
     };
 
+    await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[ai-cooking-video] credit deduction failed:", e));
     return NextResponse.json({
       scenes,
       socialMediaPack,

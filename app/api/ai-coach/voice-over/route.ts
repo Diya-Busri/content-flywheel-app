@@ -10,6 +10,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
+import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { db } from "@/db/db";
 import { myLibraryTable } from "@/db/schema/library-schema";
@@ -103,6 +104,14 @@ export async function POST(request: NextRequest) {
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
 
+    const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
+    if (!hasCredits) {
+      return NextResponse.json(
+        { error: "You need 1 video credit to generate a voice-over.", code: "NO_VIDEO_CREDITS", balance, redirectTo: "/dashboard/video-credits" },
+        { status: 402 }
+      );
+    }
+
     const apiKey = getElevenLabsApiKey();
     if (!apiKey) {
       return NextResponse.json(
@@ -180,6 +189,7 @@ export async function POST(request: NextRequest) {
       if (row) libraryId = row.id;
     }
 
+    await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[ai-coach/voice-over] credit deduction failed:", e));
     return NextResponse.json({ url, libraryId });
   } catch (e) {
     console.error("[ai-coach/voice-over]", e);
