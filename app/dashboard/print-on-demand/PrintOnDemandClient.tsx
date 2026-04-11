@@ -634,18 +634,21 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
 
                   {/* Preview */}
                   {designPreview && !generatingDesign && (
-                    <div className="flex items-start gap-4">
-                      <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#2A2A2A] w-40 h-40 shrink-0 flex items-center justify-center">
+                    <div className="space-y-3">
+                      <div className="relative rounded-2xl overflow-hidden border border-gray-200 dark:border-[#2A2A2A] bg-[#f8f8f8] dark:bg-[#2A2A2A] aspect-square w-full">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={designPreview} alt="Generated design" className="w-full h-full object-contain p-3" />
-                      </div>
-                      <div className="space-y-2 pt-1">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Design generated. Not quite right? Refine your prompt and regenerate.</p>
-                        <button type="button" onClick={() => { setDesignPreview(null); setDesignUrl(null); }}
-                          className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
-                          <X className="w-3 h-3" /> Clear
+                        <img src={designPreview} alt="Generated design" className="w-full h-full object-contain p-6" />
+                        <button
+                          type="button"
+                          onClick={() => { setDesignPreview(null); setDesignUrl(null); }}
+                          className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
+                      <p className="text-xs text-center text-gray-400 dark:text-gray-500">
+                        Not quite right? Tweak the prompt or style and regenerate.
+                      </p>
                     </div>
                   )}
                 </div>
