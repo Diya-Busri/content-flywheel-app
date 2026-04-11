@@ -635,8 +635,9 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                   {/* Preview */}
                   {designPreview && !generatingDesign && (
                     <div className="flex items-start gap-4">
-                      <div className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#2A2A2A] w-40 h-40 shrink-0">
-                        <Image src={designPreview} alt="Generated design" fill className="object-contain p-3" />
+                      <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#2A2A2A] w-40 h-40 shrink-0 flex items-center justify-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={designPreview} alt="Generated design" className="w-full h-full object-contain p-3" />
                       </div>
                       <div className="space-y-2 pt-1">
                         <p className="text-xs text-gray-500 dark:text-gray-400">Design generated. Not quite right? Refine your prompt and regenerate.</p>

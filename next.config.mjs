@@ -1,6 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: { ignoreBuildErrors: true },
+  images: {
+    remotePatterns: [
+      // Vercel Blob — used for all uploaded/generated assets
+      { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
+      // fal.ai CDN — generated images before re-hosting (fallback)
+      { protocol: "https", hostname: "v2.fal.media" },
+      { protocol: "https", hostname: "fal.media" },
+      // Printify product images
+      { protocol: "https", hostname: "images.printify.com" },
+      // Unsplash (used elsewhere in the app)
+      { protocol: "https", hostname: "images.unsplash.com" },
+    ],
+  },
   async rewrites() {
     return [{ source: "/favicon.ico", destination: "/icon.svg" }];
   },
