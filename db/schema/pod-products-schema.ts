@@ -13,6 +13,7 @@ export const podProductsTable = pgTable("pod_products", {
   // Product type from Printify catalog
   blueprintId: integer("blueprint_id"),         // Printify blueprint ID (e.g. 5 = t-shirt)
   blueprintTitle: text("blueprint_title"),       // e.g. "Unisex Staple T-Shirt"
+  blueprintImageUrl: text("blueprint_image_url"), // first product image from catalog (for 3D preview)
   printProviderId: integer("print_provider_id"),
   printProviderTitle: text("print_provider_title"),
 

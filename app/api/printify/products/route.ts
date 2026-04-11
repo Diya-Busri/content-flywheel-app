@@ -37,6 +37,7 @@ export async function POST(req: Request) {
       designFileName,
       blueprintId,
       blueprintTitle,
+      blueprintImageUrl,
       printProviderId,
       printProviderTitle,
       placements,
@@ -53,6 +54,7 @@ export async function POST(req: Request) {
         designFileName: designFileName ?? null,
         blueprintId: blueprintId ?? null,
         blueprintTitle: blueprintTitle ?? null,
+        blueprintImageUrl: blueprintImageUrl ?? null,
         printProviderId: printProviderId ?? null,
         printProviderTitle: printProviderTitle ?? null,
         placements: placements ?? [],
@@ -92,8 +94,24 @@ export async function PATCH(req: Request) {
       .where(eq(userSettingsTable.userId, userId))
       .limit(1);
 
-    if (!settings?.printifyApiKey || !settings?.printifyShopId) {
-      return NextResponse.json({ error: "Printify not connected or no shop selected" }, { status: 400 });
+    if (!settings?.printifyApiKey) {
+      return NextResponse.json({ error: "Printify not connected. Add your API key in Settings." }, { status: 400 });
+    }
+
+    // Auto-heal: if shop ID was never saved, fetch the user's first shop and save it
+    if (!settings.printifyShopId) {
+      try {
+        const shops = await printifyFetch("/shops.json", settings.printifyApiKey) as Array<{ id: number | string }>;
+        const firstShopId = shops?.[0]?.id ? String(shops[0].id) : null;
+        if (firstShopId) {
+          await db.update(userSettingsTable).set({ printifyShopId: firstShopId }).where(eq(userSettingsTable.userId, userId));
+          settings.printifyShopId = firstShopId;
+        }
+      } catch { /* continue — will fail with clearer error below */ }
+    }
+
+    if (!settings.printifyShopId) {
+      return NextResponse.json({ error: "No Printify shop found. Make sure you have a shop in your Printify account." }, { status: 400 });
     }
 
     const [localProduct] = await db

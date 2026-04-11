@@ -582,6 +582,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
           designFileName: designFile?.name,
           blueprintId: selectedBlueprint?.id,
           blueprintTitle: selectedBlueprint?.title,
+          blueprintImageUrl: selectedBlueprint?.images?.[0] ?? null,
           printProviderId: selectedProvider?.id,
           printProviderTitle: selectedProvider?.title,
           placements: placementsForDb,
@@ -1468,15 +1469,131 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       {view === "product" && selectedProduct && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-4">
+            {/* 3D design-on-product preview (if we have blueprint image) or flat design */}
             {selectedProduct.designFileUrl && (
               <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Design File</p>
-                <div className="aspect-square w-full bg-gray-50 dark:bg-[#2A2A2A] rounded-xl flex items-center justify-center overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={selectedProduct.designFileUrl} alt="Design" className="w-full h-full object-contain p-6" />
-                </div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+                  {selectedProduct.blueprintImageUrl ? "Product Preview" : "Design File"}
+                </p>
+                {selectedProduct.blueprintImageUrl ? (
+                  <DesignOnProductPreview
+                    blueprintImage={selectedProduct.blueprintImageUrl}
+                    designUrl={selectedProduct.designFileUrl}
+                    blueprintTitle={selectedProduct.blueprintTitle}
+                    className="w-full"
+                  />
+                ) : (
+                  <div className="aspect-square w-full bg-gray-50 dark:bg-[#2A2A2A] rounded-xl flex items-center justify-center overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={selectedProduct.designFileUrl} alt="Design" className="w-full h-full object-contain p-6" />
+                  </div>
+                )}
               </div>
             )}
+
+            {/* Print areas — manage placements */}
+            {(() => {
+              const productPlacements = (selectedProduct.placements as Array<{ position: string; designFileUrl: string; designFileName?: string }> | null) ?? [];
+              const placementFileRefs: Record<string, HTMLInputElement | null> = {};
+
+              const handlePlacementUpload = async (position: string, file: File) => {
+                try {
+                  const fd = new FormData();
+                  fd.append("file", file);
+                  const uploadRes = await fetch("/api/upload/store-image", { method: "POST", body: fd });
+                  if (!uploadRes.ok) throw new Error("Upload failed");
+                  const { url } = await uploadRes.json() as { url: string };
+
+                  const patchRes = await fetch("/api/pod/placements", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ productId: selectedProduct.id, position, designFileUrl: url, designFileName: file.name }),
+                  });
+                  if (!patchRes.ok) throw new Error("Failed to save placement");
+                  const { placements: updated } = await patchRes.json() as { placements: typeof productPlacements };
+                  const updatedProduct = { ...selectedProduct, placements: updated } as SelectPodProduct;
+                  setSelectedProduct(updatedProduct);
+                  setProducts((prev) => prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
+                  toast({ title: `${PLACEMENTS.find(p => p.id === position)?.label ?? position} design saved!` });
+                } catch (err) {
+                  toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+                }
+              };
+
+              const handleRemovePlacement = async (position: string) => {
+                try {
+                  const res = await fetch("/api/pod/placements", {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ productId: selectedProduct.id, position }),
+                  });
+                  const { placements: updated } = await res.json() as { placements: typeof productPlacements };
+                  const updatedProduct = { ...selectedProduct, placements: updated } as SelectPodProduct;
+                  setSelectedProduct(updatedProduct);
+                  setProducts((prev) => prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
+                } catch {
+                  toast({ title: "Remove failed", variant: "destructive" });
+                }
+              };
+
+              // Only show the extra placements section (Back, Sleeve, Label — Front is shown above)
+              const extraPlacements = PLACEMENTS.filter(p => p.id !== "front");
+              return (
+                <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5" /> Print Areas
+                  </p>
+                  <div className="space-y-2">
+                    {extraPlacements.map((pl) => {
+                      const existing = productPlacements.find(p => p.position === pl.id);
+                      return (
+                        <div key={pl.id} className="flex items-center gap-3 rounded-xl border border-gray-100 dark:border-[#2A2A2A] p-3">
+                          <input
+                            type="file"
+                            accept="image/png,image/svg+xml,image/jpeg"
+                            className="hidden"
+                            ref={(el) => { placementFileRefs[pl.id] = el; }}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handlePlacementUpload(pl.id, file);
+                            }}
+                          />
+                          {existing?.designFileUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={existing.designFileUrl} alt={pl.label} className="w-10 h-10 object-contain rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#2A2A2A] shrink-0" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] shrink-0 flex items-center justify-center">
+                              <Upload className="w-4 h-4 text-gray-300" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{pl.label}</p>
+                            <p className="text-[11px] text-gray-400 truncate">{existing ? "Design uploaded" : pl.hint}</p>
+                          </div>
+                          {existing ? (
+                            <div className="flex gap-1.5 shrink-0">
+                              <button type="button" onClick={() => placementFileRefs[pl.id]?.click()}
+                                className="text-xs text-orange-500 hover:text-orange-600 font-medium px-2 py-1 rounded-lg border border-orange-200 dark:border-orange-900/40">
+                                Replace
+                              </button>
+                              <button type="button" onClick={() => handleRemovePlacement(pl.id)}
+                                className="text-xs text-gray-400 hover:text-red-500 px-1.5 py-1 rounded-lg border border-gray-200 dark:border-[#2A2A2A]">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => placementFileRefs[pl.id]?.click()}
+                              className="shrink-0 text-xs text-orange-500 hover:text-orange-600 font-medium px-3 py-1.5 rounded-lg border border-orange-200 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-950/20">
+                              + Add
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">AI Mockups</p>

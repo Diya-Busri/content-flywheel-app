@@ -57,6 +57,25 @@ function getProductPrompt(blueprintTitle: string | null, flat = false): string {
   return fallback;
 }
 
+// ─── Extract dominant garment colour from variant titles ─────────────────────
+const GARMENT_COLORS = [
+  "black", "white", "navy", "grey", "gray", "charcoal", "dark heather",
+  "heather grey", "red", "burgundy", "maroon", "forest green", "olive",
+  "green", "blue", "royal blue", "sky blue", "yellow", "mustard",
+  "orange", "pink", "purple", "lavender", "brown", "tan", "beige",
+  "cream", "sand", "coral", "teal", "mint", "light blue", "ash",
+];
+
+function extractDominantColor(variants: unknown): string | null {
+  const list = Array.isArray(variants) ? (variants as Array<{ title?: string }>) : [];
+  if (!list.length) return null;
+  const allText = list.map((v) => (v.title ?? "").toLowerCase()).join(" ");
+  for (const color of GARMENT_COLORS) {
+    if (allText.includes(color)) return color;
+  }
+  return null;
+}
+
 // ─── Diverse model descriptors ───────────────────────────────────────────────
 const MODEL_DESCRIPTORS = [
   "a young Black woman",
@@ -201,13 +220,24 @@ export async function POST(req: Request) {
 
     // ── Build prompt ──────────────────────────────────────────────────────────
     const placementSuffix = PLACEMENT_SUFFIX[placement] ?? "";
+    // Extract the garment colour from the product's variants so mockups match
+    const garmentColor = extractDominantColor(product.variants);
+    const colorPrefix = garmentColor ? `${garmentColor} ` : "";
     let basePrompt: string;
 
     if (isFlat) {
-      basePrompt = getProductPrompt(product.blueprintTitle, true);
+      const flatBase = getProductPrompt(product.blueprintTitle, true);
+      // Insert colour before the garment noun (e.g. "flat lay … of a black pullover hoodie")
+      basePrompt = garmentColor
+        ? flatBase.replace(/(of an? )/, `$1${colorPrefix}`)
+        : flatBase;
     } else {
       const model = randomModel();
-      const productContext = getProductPrompt(product.blueprintTitle, false).replace("person", model);
+      const productBase = getProductPrompt(product.blueprintTitle, false).replace("person", model);
+      // Insert colour before the garment type (e.g. "… wearing a black custom printed hoodie")
+      const productContext = garmentColor
+        ? productBase.replace(/(wearing an? )/, `$1${colorPrefix}`)
+        : productBase;
       const brandContext = product.title ? `, design themed around "${product.title}"` : "";
       basePrompt = `${productContext}${brandContext}${placementSuffix}`;
     }
