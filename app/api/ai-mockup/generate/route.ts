@@ -37,6 +37,23 @@ function getProductPrompt(blueprintTitle: string | null): string {
   return "person wearing custom branded merchandise";
 }
 
+const MODEL_DESCRIPTORS = [
+  "a young Black woman",
+  "a young white man",
+  "a young South Asian woman",
+  "a young Latino man",
+  "a young East Asian woman",
+  "a young mixed-race man",
+  "a young white woman",
+  "a young Black man",
+  "a young Middle Eastern woman",
+  "a young South Asian man",
+];
+
+function randomModel(): string {
+  return MODEL_DESCRIPTORS[Math.floor(Math.random() * MODEL_DESCRIPTORS.length)];
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -53,7 +70,8 @@ export async function POST(req: Request) {
 
     if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
-    const productContext = getProductPrompt(product.blueprintTitle);
+    const model = randomModel();
+    const productContext = getProductPrompt(product.blueprintTitle).replace("person", model);
     const brandContext = product.title ? `, design themed around "${product.title}"` : "";
 
     const styleMap: Record<string, string> = {
