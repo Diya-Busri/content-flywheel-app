@@ -51,6 +51,20 @@ const DESIGN_PROMPTS = [
   { label: "Desert cactus", prompt: "A single saguaro cactus under a starry desert night sky, minimal", style: "minimalist" },
 ];
 
+// ─── Design Studio fonts (loaded from Google Fonts) ─────────────────────────
+const STUDIO_FONTS = [
+  { label: "Bebas Neue",   value: "Bebas Neue",        google: "Bebas+Neue" },
+  { label: "Anton",        value: "Anton",             google: "Anton" },
+  { label: "Oswald",       value: "Oswald",            google: "Oswald:wght@700" },
+  { label: "Cinzel",       value: "Cinzel",            google: "Cinzel:wght@700;900" },
+  { label: "Playfair",     value: "Playfair Display",  google: "Playfair+Display:wght@700;900" },
+  { label: "Cormorant",    value: "Cormorant",         google: "Cormorant:wght@700" },
+  { label: "Space Grotesk",value: "Space Grotesk",     google: "Space+Grotesk:wght@700" },
+  { label: "DM Serif",     value: "DM Serif Display",  google: "DM+Serif+Display" },
+  { label: "Raleway",      value: "Raleway",           google: "Raleway:wght@700;900" },
+  { label: "Italiana",     value: "Italiana",          google: "Italiana" },
+] as const;
+
 const MOCKUP_STYLES = [
   { id: "lifestyle", label: "Lifestyle", desc: "Candid street / outdoor" },
   { id: "studio", label: "Studio", desc: "Clean white background" },
@@ -562,7 +576,17 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const extraFileRefs = useRef<Partial<Record<PlacementId, HTMLInputElement>>>({});
 
   // ── AI design generator state ────────────────────────────────────────────────
-  const [designTab, setDesignTab] = useState<"upload" | "generate">("upload");
+  const [designTab, setDesignTab] = useState<"upload" | "generate" | "studio">("upload");
+
+  // ── Design Studio state ──────────────────────────────────────────────────────
+  const [studioText, setStudioText] = useState("");
+  const [studioFont, setStudioFont] = useState("Bebas Neue");
+  const [studioSize, setStudioSize] = useState(72);
+  const [studioSpacing, setStudioSpacing] = useState(0.08);
+  const [studioColor, setStudioColor] = useState("#FFFFFF");
+  const [studioBg, setStudioBg] = useState("#000000");
+  const [studioUppercase, setStudioUppercase] = useState(true);
+  const [studioExporting, setStudioExporting] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiStyle, setAiStyle] = useState("bold");
   const [generatingDesign, setGeneratingDesign] = useState(false);
@@ -678,6 +702,77 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       setGeneratingDesign(false);
     }
   };
+
+  // ── Design Studio: load Google Fonts when studio tab is active ──────────────
+  useEffect(() => {
+    if (designTab !== "studio") return;
+    const id = "pod-studio-fonts";
+    if (document.getElementById(id)) return;
+    const families = STUDIO_FONTS.map((f) => f.google).join("&family=");
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = `https://fonts.googleapis.com/css2?family=${families}&display=swap`;
+    document.head.appendChild(link);
+  }, [designTab]);
+
+  // ── Design Studio: export canvas design as PNG ────────────────────────────
+  const handleUseStudioDesign = useCallback(async () => {
+    if (!studioText.trim()) return;
+    setStudioExporting(true);
+    try {
+      await document.fonts.ready;
+      try { await document.fonts.load(`700 48px "${studioFont}"`); } catch { /* ignore */ }
+
+      const SIZE = 1200;
+      const canvas = document.createElement("canvas");
+      canvas.width = SIZE;
+      canvas.height = SIZE;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas not supported");
+
+      ctx.fillStyle = studioBg;
+      ctx.fillRect(0, 0, SIZE, SIZE);
+
+      const text = studioUppercase ? studioText.toUpperCase() : studioText;
+      const fontPx = Math.round((studioSize / 100) * SIZE * 0.55);
+      ctx.font = `700 ${fontPx}px "${studioFont}", serif`;
+      ctx.fillStyle = studioColor;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      // Manual letter spacing (draw char by char)
+      if (studioSpacing > 0) {
+        const spacing = studioSpacing * fontPx;
+        const chars = [...text];
+        const totalWidth = chars.reduce((w, c) => w + ctx.measureText(c).width, 0) + spacing * (chars.length - 1);
+        let x = SIZE / 2 - totalWidth / 2;
+        for (const char of chars) {
+          const cw = ctx.measureText(char).width;
+          ctx.fillText(char, x + cw / 2, SIZE / 2);
+          x += cw + spacing;
+        }
+      } else {
+        ctx.fillText(text, SIZE / 2, SIZE / 2);
+      }
+
+      await new Promise<void>((resolve) => {
+        canvas.toBlob((blob) => {
+          if (!blob) { resolve(); return; }
+          const file = new File([blob], "studio-design.png", { type: "image/png" });
+          setDesignFile(file);
+          setDesignPreview(URL.createObjectURL(blob));
+          setDesignUrl(null);
+          resolve();
+        }, "image/png");
+      });
+      toast({ title: "Design ready! Hit Next to continue." });
+    } catch (err) {
+      toast({ title: "Export failed", description: String(err), variant: "destructive" });
+    } finally {
+      setStudioExporting(false);
+    }
+  }, [studioText, studioFont, studioSize, studioSpacing, studioColor, studioBg, studioUppercase, toast]);
 
   // Step 1 → 2: upload design (or use AI-generated URL), then load catalog
   const handleStep1Next = async () => {
@@ -1218,21 +1313,28 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                   {designPreview && <CheckCircle2 className="w-3.5 h-3.5 text-green-500 ml-auto" />}
                 </div>
 
-                {/* Tab switcher — Upload / Generate */}
+                {/* Tab switcher — Upload / Design / Generate */}
                 <div className="flex rounded-xl bg-gray-100 dark:bg-[#2A2A2A] p-1 gap-1">
                   <button
                     type="button"
                     onClick={() => { setDesignTab("upload"); setDesignPreview(null); setDesignUrl(null); setDesignFile(null); }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium py-1.5 rounded-lg transition-all ${designTab === "upload" ? "bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                    className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-lg transition-all ${designTab === "upload" ? "bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
                   >
-                    <Upload className="w-3.5 h-3.5" /> Upload
+                    <Upload className="w-3 h-3" /> Upload
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDesignTab("studio"); setDesignPreview(null); setDesignUrl(null); setDesignFile(null); }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-lg transition-all ${designTab === "studio" ? "bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                  >
+                    <Layers className="w-3 h-3" /> Design
                   </button>
                   <button
                     type="button"
                     onClick={() => { setDesignTab("generate"); setDesignPreview(null); setDesignUrl(null); setDesignFile(null); setAiStyle("typography"); }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium py-1.5 rounded-lg transition-all ${designTab === "generate" ? "bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                    className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-lg transition-all ${designTab === "generate" ? "bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
                   >
-                    <Wand2 className="w-3.5 h-3.5" /> Generate with AI
+                    <Wand2 className="w-3 h-3" /> AI Generate
                   </button>
                 </div>
               </div>
@@ -1257,6 +1359,136 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                       <span className="text-xs">PNG with transparent background recommended</span>
                     </button>
                   )}
+                </div>
+              )}
+
+              {/* ── Design Studio tab ── */}
+              {designTab === "studio" && (
+                <div className="space-y-4">
+                  {/* Font picker */}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-2 font-semibold">Font</p>
+                    <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                      {STUDIO_FONTS.map((f) => (
+                        <button
+                          key={f.value}
+                          type="button"
+                          onClick={() => setStudioFont(f.value)}
+                          className={`shrink-0 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${studioFont === f.value ? "border-orange-500 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}
+                          style={{ fontFamily: f.value }}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Text input */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Text</p>
+                      <button
+                        type="button"
+                        onClick={() => setStudioUppercase((u) => !u)}
+                        className={`text-[10px] px-2 py-0.5 rounded border font-semibold transition-all ${studioUppercase ? "border-gray-900 dark:border-white bg-gray-900 dark:bg-white text-white dark:text-black" : "border-gray-200 dark:border-[#2A2A2A] text-gray-400"}`}
+                      >
+                        AA / aa
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="e.g. VOID HOURS"
+                      value={studioText}
+                      onChange={(e) => setStudioText(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F] px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    />
+                  </div>
+
+                  {/* Size + Spacing sliders */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Size</p>
+                        <span className="text-[10px] text-gray-400">{studioSize}</span>
+                      </div>
+                      <input type="range" min={30} max={120} value={studioSize} onChange={(e) => setStudioSize(Number(e.target.value))}
+                        className="w-full accent-orange-500" />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Spacing</p>
+                        <span className="text-[10px] text-gray-400">{studioSpacing.toFixed(2)}</span>
+                      </div>
+                      <input type="range" min={0} max={0.5} step={0.01} value={studioSpacing} onChange={(e) => setStudioSpacing(Number(e.target.value))}
+                        className="w-full accent-orange-500" />
+                    </div>
+                  </div>
+
+                  {/* Colour pickers */}
+                  <div className="flex gap-4 items-center">
+                    <div className="flex items-center gap-2">
+                      <label className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold whitespace-nowrap">Text</label>
+                      <input type="color" value={studioColor} onChange={(e) => setStudioColor(e.target.value)}
+                        className="w-8 h-8 rounded-lg border border-gray-200 dark:border-[#2A2A2A] cursor-pointer p-0.5 bg-white dark:bg-[#1A1A1A]" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold whitespace-nowrap">Background</label>
+                      <input type="color" value={studioBg === "transparent" ? "#000000" : studioBg} onChange={(e) => setStudioBg(e.target.value)}
+                        className="w-8 h-8 rounded-lg border border-gray-200 dark:border-[#2A2A2A] cursor-pointer p-0.5 bg-white dark:bg-[#1A1A1A]" />
+                    </div>
+                    {/* Quick colour presets */}
+                    <div className="flex gap-1.5 ml-auto">
+                      {["#000000", "#FFFFFF", "#1A1A2E", "#2D2D2D"].map((c) => (
+                        <button key={c} type="button" onClick={() => setStudioBg(c)}
+                          title={c}
+                          className={`w-5 h-5 rounded-full border-2 transition-all ${studioBg === c ? "border-orange-500 scale-110" : "border-gray-300 dark:border-[#444]"}`}
+                          style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Live preview */}
+                  <div
+                    className="w-full rounded-xl overflow-hidden flex items-center justify-center"
+                    style={{ background: studioBg, minHeight: 140 }}
+                  >
+                    <span
+                      className="px-4 py-6 text-center leading-tight select-none"
+                      style={{
+                        fontFamily: `"${studioFont}", serif`,
+                        fontSize: `${Math.round(studioSize * 0.5)}px`,
+                        letterSpacing: `${studioSpacing}em`,
+                        color: studioColor,
+                        fontWeight: 700,
+                        textTransform: studioUppercase ? "uppercase" : "none",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {studioText || "Your text here"}
+                    </span>
+                  </div>
+
+                  {/* Exported preview */}
+                  {designPreview && (
+                    <div className="flex items-center gap-3 p-2 rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={designPreview} alt="Exported design" className="w-12 h-12 object-contain rounded-lg bg-gray-100 dark:bg-[#2A2A2A] p-1 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-green-700 dark:text-green-400">Design exported ✓</p>
+                        <p className="text-[10px] text-gray-500">Hit &ldquo;Next&rdquo; to continue, or adjust and re-export</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <Button
+                    onClick={handleUseStudioDesign}
+                    disabled={studioExporting || !studioText.trim()}
+                    className="w-full bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-black gap-2"
+                  >
+                    {studioExporting
+                      ? <><Loader2 className="w-4 h-4 animate-spin" />Exporting...</>
+                      : <><CheckCircle2 className="w-4 h-4" />Use this design</>}
+                  </Button>
                 </div>
               )}
 
