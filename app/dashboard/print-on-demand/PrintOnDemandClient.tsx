@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   Plus, Shirt, Upload, Sparkles, ExternalLink, Loader2,
   CheckCircle2, AlertCircle, X, ChevronRight, Settings,
-  ArrowLeft, RefreshCw, ChevronDown, ChevronUp, Wand2,
+  ArrowLeft, RefreshCw, ChevronDown, ChevronUp, Wand2, Shuffle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,21 @@ type Props = {
 type Blueprint = { id: number; title: string; brand: string; images: string[] };
 type Provider = { id: number; title: string; location: { country: string } };
 type Variant = { id: number; title: string; options: Record<string, string>; placeholders: Array<{ position: string }> };
+
+const DESIGN_PROMPTS = [
+  { label: "Wolf & moon", prompt: "A lone wolf howling at a full moon with a geometric mountain landscape", style: "bold" },
+  { label: "Snake & roses", prompt: "A coiled snake wrapped around a blooming rose, detailed illustration", style: "lineart" },
+  { label: "Sunset mountains", prompt: "Layered mountain range silhouette at sunset with gradient sky", style: "minimalist" },
+  { label: "Skull floral", prompt: "A decorative skull surrounded by intricate flowers and vines", style: "vintage" },
+  { label: "Tiger face", prompt: "A fierce symmetrical tiger face, bold and graphic, frontal view", style: "bold" },
+  { label: "Celestial eye", prompt: "An all-seeing eye surrounded by moon phases, stars and celestial symbols", style: "lineart" },
+  { label: "City skyline", prompt: "Minimal city skyline silhouette at night with a large moon behind it", style: "minimalist" },
+  { label: "Retro surf", prompt: "Retro 70s surf graphic with waves, sun and tropical palms", style: "vintage" },
+  { label: "Geometric bear", prompt: "Low-poly geometric bear face with triangular facets and bold colors", style: "abstract" },
+  { label: "Koi fish", prompt: "Two koi fish swimming in a yin-yang circle surrounded by waves", style: "lineart" },
+  { label: "Eagle wings", prompt: "Spread eagle wings with a bold banner, American eagle style graphic", style: "bold" },
+  { label: "Desert cactus", prompt: "A single saguaro cactus under a starry desert night sky, minimal", style: "minimalist" },
+];
 
 const MOCKUP_STYLES = [
   { id: "lifestyle", label: "Lifestyle", desc: "Candid street / outdoor" },
@@ -541,15 +556,43 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               {designTab === "generate" && (
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="ai-prompt">Describe your design</Label>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label htmlFor="ai-prompt">Describe your design</Label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const pick = DESIGN_PROMPTS[Math.floor(Math.random() * DESIGN_PROMPTS.length)];
+                          setAiPrompt(pick.prompt);
+                          setAiStyle(pick.style);
+                        }}
+                        className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-600 font-medium"
+                      >
+                        <Shuffle className="w-3 h-3" /> Inspire me
+                      </button>
+                    </div>
                     <textarea
                       id="ai-prompt"
                       rows={3}
                       placeholder="e.g. A wolf howling at the moon with a geometric mountain landscape..."
                       value={aiPrompt}
                       onChange={(e) => setAiPrompt(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F] px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+                      className="w-full rounded-xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F] px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
                     />
+                    {/* Quick idea chips */}
+                    {!aiPrompt && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {DESIGN_PROMPTS.slice(0, 6).map((idea) => (
+                          <button
+                            key={idea.label}
+                            type="button"
+                            onClick={() => { setAiPrompt(idea.prompt); setAiStyle(idea.style); }}
+                            className="text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-[#2A2A2A] text-gray-600 dark:text-gray-400 hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-950/20 dark:hover:text-orange-400 border border-transparent hover:border-orange-200 dark:hover:border-orange-900/40 transition-all"
+                          >
+                            {idea.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Style presets */}
