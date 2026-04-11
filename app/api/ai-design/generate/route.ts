@@ -57,7 +57,7 @@ async function generateWithIdeogram(prompt: string, style: string): Promise<stri
     },
     body: JSON.stringify({
       prompt: fullPrompt,
-      aspect_ratio: "ASPECT_1_1",
+      aspect_ratio: "1:1",
       style_type: ideogramStyle,
       magic_prompt_option: "AUTO",
     }),
