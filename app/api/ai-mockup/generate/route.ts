@@ -227,16 +227,16 @@ export async function POST(req: Request) {
 
     if (isFlat) {
       const flatBase = getProductPrompt(product.blueprintTitle, true);
-      // Insert colour before the garment noun (e.g. "flat lay … of a black pullover hoodie")
+      // Insert colour before the garment noun — match "of a " or "of an "
       basePrompt = garmentColor
-        ? flatBase.replace(/(of an? )/, `$1${colorPrefix}`)
+        ? flatBase.replace(/\bof (a|an) /i, `of $1 ${colorPrefix}`)
         : flatBase;
     } else {
       const model = randomModel();
       const productBase = getProductPrompt(product.blueprintTitle, false).replace("person", model);
-      // Insert colour before the garment type (e.g. "… wearing a black custom printed hoodie")
+      // Insert colour before the garment type — match "wearing a " or "wearing an "
       const productContext = garmentColor
-        ? productBase.replace(/(wearing an? )/, `$1${colorPrefix}`)
+        ? productBase.replace(/\b(wearing (?:a|an)) /i, `$1 ${colorPrefix}`)
         : productBase;
       const brandContext = product.title ? `, design themed around "${product.title}"` : "";
       basePrompt = `${productContext}${brandContext}${placementSuffix}`;

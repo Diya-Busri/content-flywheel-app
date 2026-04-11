@@ -98,19 +98,20 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Printify not connected. Add your API key in Settings." }, { status: 400 });
     }
 
-    // Auto-heal: if shop ID was never saved, fetch the user's first shop and save it
-    if (!settings.printifyShopId) {
+    // Resolve shop ID — auto-heal if it was never saved
+    let resolvedShopId = settings.printifyShopId ?? null;
+    if (!resolvedShopId) {
       try {
         const shops = await printifyFetch("/shops.json", settings.printifyApiKey) as Array<{ id: number | string }>;
         const firstShopId = shops?.[0]?.id ? String(shops[0].id) : null;
         if (firstShopId) {
           await db.update(userSettingsTable).set({ printifyShopId: firstShopId }).where(eq(userSettingsTable.userId, userId));
-          settings.printifyShopId = firstShopId;
+          resolvedShopId = firstShopId;
         }
       } catch { /* continue — will fail with clearer error below */ }
     }
 
-    if (!settings.printifyShopId) {
+    if (!resolvedShopId) {
       return NextResponse.json({ error: "No Printify shop found. Make sure you have a shop in your Printify account." }, { status: 400 });
     }
 
@@ -122,6 +123,13 @@ export async function PATCH(req: Request) {
 
     if (!localProduct) return NextResponse.json({ error: "Product not found" }, { status: 404 });
     if (!localProduct.designFileUrl) return NextResponse.json({ error: "Upload a design first" }, { status: 400 });
+
+    // Save variants to DB immediately (even if Printify sync fails later, variants are preserved)
+    if (variants && variants.length > 0) {
+      await db.update(podProductsTable)
+        .set({ variants: variants as typeof localProduct.variants })
+        .where(eq(podProductsTable.id, productId));
+    }
 
     // Build Printify product payload
     const variantList = (variants ?? localProduct.variants ?? []) as Array<{ id: number; price: number; enabled: boolean }>;
@@ -167,14 +175,14 @@ export async function PATCH(req: Request) {
     if (printifyProductId) {
       // Update existing Printify product
       await printifyFetch(
-        `/shops/${settings.printifyShopId}/products/${printifyProductId}.json`,
+        `/shops/${resolvedShopId}/products/${printifyProductId}.json`,
         settings.printifyApiKey,
         { method: "PUT", body: JSON.stringify(printifyPayload) }
       );
     } else {
       // Create new Printify product
       const created = await printifyFetch(
-        `/shops/${settings.printifyShopId}/products.json`,
+        `/shops/${resolvedShopId}/products.json`,
         settings.printifyApiKey,
         { method: "POST", body: JSON.stringify(printifyPayload) }
       );
