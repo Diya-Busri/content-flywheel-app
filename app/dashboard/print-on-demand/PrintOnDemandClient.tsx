@@ -475,13 +475,15 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               return (
                 <button key={product.id} type="button" onClick={() => { setSelectedProduct(product); setView("product"); }}
                   className="group rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-orange-300 dark:hover:border-orange-700 hover:shadow-md transition-all overflow-hidden text-left">
-                  <div className="aspect-square bg-gray-50 dark:bg-[#2A2A2A] relative overflow-hidden">
+                  <div className="aspect-square bg-gray-50 dark:bg-[#2A2A2A] relative overflow-hidden flex items-center justify-center">
                     {mockups[0] ? (
-                      <Image src={mockups[0]} alt={product.title} fill className="object-cover" />
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={mockups[0]} alt={product.title} className="w-full h-full object-cover" />
                     ) : product.designFileUrl ? (
-                      <Image src={product.designFileUrl} alt={product.title} fill className="object-contain p-6" />
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={product.designFileUrl} alt={product.title} className="w-full h-full object-contain p-6" />
                     ) : (
-                      <div className="absolute inset-0 flex items-center justify-center"><Shirt className="w-12 h-12 text-gray-300 dark:text-gray-600" /></div>
+                      <Shirt className="w-12 h-12 text-gray-300 dark:text-gray-600" />
                     )}
                   </div>
                   <div className="p-4">
@@ -863,8 +865,9 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
             {selectedProduct.designFileUrl && (
               <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Design File</p>
-                <div className="aspect-square max-w-[160px] mx-auto relative">
-                  <Image src={selectedProduct.designFileUrl} alt="Design" fill className="object-contain" />
+                <div className="aspect-square w-full bg-gray-50 dark:bg-[#2A2A2A] rounded-xl flex items-center justify-center overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={selectedProduct.designFileUrl} alt="Design" className="w-full h-full object-contain p-6" />
                 </div>
               </div>
             )}
@@ -887,7 +890,8 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 <div className="grid grid-cols-2 gap-2 mt-4">
                   {((selectedProduct.mockupUrls as string[]) ?? []).map((url, i) => (
                     <div key={i} className="aspect-square rounded-xl overflow-hidden relative border border-gray-100 dark:border-[#2A2A2A]">
-                      <Image src={url} alt={`Mockup ${i + 1}`} fill className="object-cover" />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`Mockup ${i + 1}`} className="w-full h-full object-cover" />
                       <a href={url} target="_blank" rel="noreferrer"
                         className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70">
                         <ExternalLink className="w-3 h-3" />
