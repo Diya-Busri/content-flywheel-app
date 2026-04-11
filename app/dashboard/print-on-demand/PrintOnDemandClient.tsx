@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import type { SelectPodProduct } from "@/db/schema/pod-products-schema";
 
 type Props = {
@@ -68,6 +69,82 @@ const PLACEMENTS = [
 type PlacementId = typeof PLACEMENTS[number]["id"];
 
 type ExtraDesign = { file: File | null; preview: string | null; url: string | null };
+
+// ─── Design-on-product overlay positions per product type ────────────────────
+function getDesignOverlay(blueprintTitle: string | null): React.CSSProperties {
+  const t = (blueprintTitle ?? "").toLowerCase();
+  if (t.includes("mug"))                      return { top: "10%", left: "30%", width: "38%", height: "72%" };
+  if (t.includes("poster") || t.includes("print")) return { top: "7%",  left: "10%", width: "80%", height: "84%" };
+  if (t.includes("hat") || t.includes("cap")) return { top: "28%", left: "16%", width: "68%", height: "38%" };
+  if (t.includes("tote"))                     return { top: "16%", left: "20%", width: "60%", height: "60%" };
+  if (t.includes("phone"))                    return { top: "12%", left: "20%", width: "60%", height: "64%" };
+  // Default: apparel chest print area (t-shirts, hoodies, sweatshirts)
+  return { top: "20%", left: "27%", width: "46%", height: "44%" };
+}
+
+// ─── 3D design-on-product preview ─────────────────────────────────────────────
+function DesignOnProductPreview({
+  blueprintImage,
+  designUrl,
+  blueprintTitle,
+  className = "",
+}: {
+  blueprintImage: string;
+  designUrl: string;
+  blueprintTitle: string | null;
+  className?: string;
+}) {
+  const overlay = getDesignOverlay(blueprintTitle);
+
+  return (
+    <div className={`relative select-none ${className}`}>
+      {/* Product base image */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={blueprintImage}
+        alt={blueprintTitle ?? "Product"}
+        className="w-full rounded-xl"
+        draggable={false}
+      />
+
+      {/* Design overlay — blended onto the product fabric */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          ...overlay,
+          /* Subtle 3-D perspective tilt so it looks printed on fabric */
+          transform: "perspective(420px) rotateX(4deg) rotateY(-2deg)",
+          transformOrigin: "50% 0%",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={designUrl}
+          alt="Your design"
+          className="w-full h-full object-contain"
+          draggable={false}
+          style={{
+            /* Multiply blends white areas away — looks like screen print */
+            mixBlendMode: "multiply",
+            opacity: 0.88,
+            filter: "contrast(1.08) saturate(0.96)",
+          }}
+        />
+      </div>
+
+      {/* Subtle vignette so design edges fade naturally into fabric */}
+      <div
+        className="absolute pointer-events-none rounded-xl"
+        style={{
+          ...overlay,
+          background: "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.08) 100%)",
+          transform: "perspective(420px) rotateX(4deg) rotateY(-2deg)",
+          transformOrigin: "50% 0%",
+        }}
+      />
+    </div>
+  );
+}
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 function Steps({ current, steps }: { current: number; steps: string[] }) {
@@ -221,6 +298,8 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [selectedBlueprint, setSelectedBlueprint] = useState<Blueprint | null>(null);
   const [blueprintSearch, setBlueprintSearch] = useState("");
+  // Blueprint preview dialog — shown before confirming product choice
+  const [previewBlueprint, setPreviewBlueprint] = useState<Blueprint | null>(null);
 
   // ── Provider state ───────────────────────────────────────────────────────────
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -393,14 +472,14 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     setCreateStep(2);
   };
 
-  // Step 2 → 3: pick blueprint, load providers
+  // Step 2: pick blueprint — open 3D preview dialog, load providers in background
   const handleSelectBlueprint = async (bp: Blueprint) => {
-    setSelectedBlueprint(bp);
+    setPreviewBlueprint(bp);
     setSelectedProvider(null);
     setVariants([]);
     setSelectedVariants(new Set());
+    // Pre-fetch providers in the background so Step 3 is instant when user confirms
     setLoadingProviders(true);
-    setCreateStep(3);
     try {
       const res = await fetch(`/api/printify/catalog?blueprintId=${bp.id}`);
       const data = await res.json();
@@ -410,6 +489,14 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     } finally {
       setLoadingProviders(false);
     }
+  };
+
+  // User confirms product choice from preview dialog → proceed to Step 3
+  const handleConfirmBlueprint = () => {
+    if (!previewBlueprint) return;
+    setSelectedBlueprint(previewBlueprint);
+    setPreviewBlueprint(null);
+    setCreateStep(3);
   };
 
   // Step 3 → 4: pick provider, load variants
@@ -1073,6 +1160,38 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
             </div>
           )}
 
+          {/* Sticky mini design preview — shown in Steps 3, 4, 5 */}
+          {createStep >= 3 && selectedBlueprint && designPreview && (
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-gray-100 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-3">
+              <div className="relative w-14 h-14 shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={selectedBlueprint.images[0]} alt="" className="w-full h-full object-contain rounded-lg" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={designPreview}
+                  alt="design"
+                  className="absolute"
+                  style={{
+                    ...getDesignOverlay(selectedBlueprint.title),
+                    mixBlendMode: "multiply" as React.CSSProperties["mixBlendMode"],
+                    opacity: 0.85,
+                  }}
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{title}</p>
+                <p className="text-[11px] text-gray-400 truncate">{selectedBlueprint.title}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateStep(2)}
+                className="ml-auto shrink-0 text-[11px] text-orange-500 hover:text-orange-600 font-medium whitespace-nowrap"
+              >
+                Change
+              </button>
+            </div>
+          )}
+
           {/* Step 2: Blueprint catalog */}
           {createStep === 2 && (
             <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-6 space-y-4">
@@ -1250,6 +1369,100 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
           )}
         </div>
       )}
+
+      {/* ── 3D PRODUCT PREVIEW DIALOG ── */}
+      <Dialog open={!!previewBlueprint} onOpenChange={(open) => { if (!open) setPreviewBlueprint(null); }}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden rounded-2xl">
+          {previewBlueprint && (
+            <div className="flex flex-col sm:flex-row">
+              {/* Left: design-on-product preview */}
+              <div className="sm:w-[55%] bg-gray-50 dark:bg-[#1A1A1A] p-5 flex items-center justify-center">
+                {designPreview ? (
+                  <DesignOnProductPreview
+                    blueprintImage={previewBlueprint.images[0]}
+                    designUrl={designPreview}
+                    blueprintTitle={previewBlueprint.title}
+                    className="w-full max-w-xs"
+                  />
+                ) : (
+                  // No design yet — just show the blank product image
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={previewBlueprint.images[0]}
+                    alt={previewBlueprint.title}
+                    className="w-full max-w-xs rounded-xl"
+                  />
+                )}
+                <p className="absolute bottom-3 left-0 right-0 text-center text-[10px] text-gray-400">
+                  Preview — final print position may vary slightly
+                </p>
+              </div>
+
+              {/* Right: product info + actions */}
+              <div className="sm:w-[45%] p-6 flex flex-col justify-between gap-4">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-orange-500 font-semibold mb-1">
+                    {previewBlueprint.brand}
+                  </p>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">
+                    {previewBlueprint.title}
+                  </h2>
+
+                  {designPreview ? (
+                    <div className="mt-3 flex items-start gap-2 rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/40 px-3 py-2.5">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-green-700 dark:text-green-400">
+                        Your design is composited on the product above. The print position and scale will be finalised in Printify.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 px-3 py-2.5">
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        No design uploaded yet — you&apos;ll see the preview once you add one in Step 1.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Quick product images strip */}
+                  {previewBlueprint.images.length > 1 && (
+                    <div className="mt-4 flex gap-1.5 overflow-x-auto pb-1">
+                      {previewBlueprint.images.slice(0, 4).map((img, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={i}
+                          src={img}
+                          alt=""
+                          className="w-14 h-14 object-contain rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#2A2A2A] shrink-0"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Button
+                    onClick={handleConfirmBlueprint}
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                  >
+                    {loadingProviders ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" />Loading providers...</>
+                    ) : (
+                      <>Use this product <ChevronRight className="w-4 h-4" /></>
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setPreviewBlueprint(null)}
+                    className="w-full text-gray-500"
+                  >
+                    Choose a different product
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ── PRODUCT DETAIL ── */}
       {view === "product" && selectedProduct && (
