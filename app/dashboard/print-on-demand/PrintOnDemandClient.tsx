@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   Plus, Shirt, Upload, Sparkles, ExternalLink, Loader2,
   CheckCircle2, AlertCircle, X, ChevronRight, Settings,
-  ArrowLeft, RefreshCw, ChevronDown, ChevronUp,
+  ArrowLeft, RefreshCw, ChevronDown, ChevronUp, Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,6 +87,12 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [variantPrices, setVariantPrices] = useState<Record<number, string>>({});
   const [variantsExpanded, setVariantsExpanded] = useState(false);
 
+  // ── AI design generator state ────────────────────────────────────────────────
+  const [designTab, setDesignTab] = useState<"upload" | "generate">("upload");
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiStyle, setAiStyle] = useState("bold");
+  const [generatingDesign, setGeneratingDesign] = useState(false);
+
   // ── Mockup state ─────────────────────────────────────────────────────────────
   const [generatingMockup, setGeneratingMockup] = useState(false);
   const [mockupStyle, setMockupStyle] = useState("lifestyle");
@@ -113,6 +119,9 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     setSelectedVariants(new Set());
     setVariantPrices({});
     setBlueprintSearch("");
+    setDesignTab("upload");
+    setAiPrompt("");
+    setAiStyle("bold");
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,25 +131,55 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     setDesignPreview(URL.createObjectURL(file));
   };
 
-  // Step 1 → 2: upload design, then load catalog
+  // AI design generation
+  const handleGenerateDesign = async () => {
+    if (!aiPrompt.trim()) { toast({ title: "Enter a prompt first", variant: "destructive" }); return; }
+    setGeneratingDesign(true);
+    setDesignPreview(null);
+    setDesignUrl(null);
+    setDesignFile(null);
+    try {
+      const res = await fetch("/api/ai-design/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiPrompt.trim(), style: aiStyle }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Generation failed");
+      setDesignPreview(data.url!);
+      setDesignUrl(data.url!);
+    } catch (err) {
+      toast({ title: "Generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setGeneratingDesign(false);
+    }
+  };
+
+  // Step 1 → 2: upload design (or use AI-generated URL), then load catalog
   const handleStep1Next = async () => {
     if (!title.trim()) { toast({ title: "Name required", variant: "destructive" }); return; }
-    if (!designFile) { toast({ title: "Upload a design first", variant: "destructive" }); return; }
+    if (!designPreview) { toast({ title: designTab === "generate" ? "Generate a design first" : "Upload a design first", variant: "destructive" }); return; }
 
-    setUploadingDesign(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", designFile);
-      const res = await fetch("/api/upload/store-image", { method: "POST", body: formData });
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
-      setDesignUrl(data.url);
-    } catch {
-      toast({ title: "Upload failed", variant: "destructive" });
+    // AI path: designUrl already set from generation
+    if (designUrl) {
+      // Skip upload, go straight to catalog
+    } else {
+      if (!designFile) { toast({ title: "Upload a design first", variant: "destructive" }); return; }
+      setUploadingDesign(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", designFile);
+        const res = await fetch("/api/upload/store-image", { method: "POST", body: formData });
+        if (!res.ok) throw new Error("Upload failed");
+        const data = await res.json() as { url?: string };
+        setDesignUrl(data.url!);
+      } catch {
+        toast({ title: "Upload failed", variant: "destructive" });
+        setUploadingDesign(false);
+        return;
+      }
       setUploadingDesign(false);
-      return;
     }
-    setUploadingDesign(false);
 
     // Load catalog
     if (blueprints.length === 0 && connected) {
@@ -438,33 +477,130 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
           {/* Step 1: Design + name */}
           {createStep === 1 && (
             <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-6 space-y-5">
-              <h2 className="font-bold text-gray-900 dark:text-white">Upload your design</h2>
+              <h2 className="font-bold text-gray-900 dark:text-white">Your design</h2>
+
+              {/* Product name */}
               <div>
                 <Label htmlFor="pod-title">Product name</Label>
                 <Input id="pod-title" placeholder="e.g. Void Hours Classic Tee" value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1" />
               </div>
-              <div>
-                <Label>Design file</Label>
-                <input ref={fileInputRef} type="file" accept="image/png,image/svg+xml,image/jpeg" className="hidden" onChange={handleFileChange} />
-                {designPreview ? (
-                  <div className="mt-1 relative rounded-xl overflow-hidden border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#2A2A2A] w-40 h-40">
-                    <Image src={designPreview} alt="Design" fill className="object-contain p-3" />
-                    <button type="button" onClick={() => { setDesignFile(null); setDesignPreview(null); }}
-                      className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-black/50 text-white flex items-center justify-center">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => fileInputRef.current?.click()}
-                    className="mt-1 w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] py-8 text-gray-400 hover:border-orange-300 hover:text-orange-500 transition-colors">
-                    <Upload className="w-6 h-6" />
-                    <span className="text-sm">Click to upload design</span>
-                    <span className="text-xs">PNG with transparent background recommended</span>
-                  </button>
-                )}
+
+              {/* Tab switcher */}
+              <div className="flex rounded-xl bg-gray-100 dark:bg-[#2A2A2A] p-1 gap-1">
+                <button
+                  type="button"
+                  onClick={() => { setDesignTab("upload"); setDesignPreview(null); setDesignUrl(null); setDesignFile(null); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium py-1.5 rounded-lg transition-all ${designTab === "upload" ? "bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                >
+                  <Upload className="w-3.5 h-3.5" /> Upload
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setDesignTab("generate"); setDesignPreview(null); setDesignUrl(null); setDesignFile(null); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium py-1.5 rounded-lg transition-all ${designTab === "generate" ? "bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                >
+                  <Wand2 className="w-3.5 h-3.5" /> Generate with AI
+                </button>
               </div>
-              <Button onClick={handleStep1Next} disabled={uploadingDesign || !title.trim() || !designFile}
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+
+              {/* Upload tab */}
+              {designTab === "upload" && (
+                <div>
+                  <input ref={fileInputRef} type="file" accept="image/png,image/svg+xml,image/jpeg" className="hidden" onChange={handleFileChange} />
+                  {designPreview ? (
+                    <div className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#2A2A2A] w-40 h-40">
+                      <Image src={designPreview} alt="Design" fill className="object-contain p-3" />
+                      <button type="button" onClick={() => { setDesignFile(null); setDesignPreview(null); setDesignUrl(null); }}
+                        className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-black/50 text-white flex items-center justify-center">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => fileInputRef.current?.click()}
+                      className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] py-8 text-gray-400 hover:border-orange-300 hover:text-orange-500 transition-colors">
+                      <Upload className="w-6 h-6" />
+                      <span className="text-sm">Click to upload design</span>
+                      <span className="text-xs">PNG with transparent background recommended</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Generate tab */}
+              {designTab === "generate" && (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="ai-prompt">Describe your design</Label>
+                    <textarea
+                      id="ai-prompt"
+                      rows={3}
+                      placeholder="e.g. A wolf howling at the moon with a geometric mountain landscape..."
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F] px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+                    />
+                  </div>
+
+                  {/* Style presets */}
+                  <div>
+                    <Label>Style</Label>
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      {[
+                        { id: "bold", label: "Bold Graphic" },
+                        { id: "vintage", label: "Vintage" },
+                        { id: "minimalist", label: "Minimalist" },
+                        { id: "lineart", label: "Line Art" },
+                        { id: "abstract", label: "Abstract" },
+                      ].map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setAiStyle(s.id)}
+                          className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${aiStyle === s.id ? "bg-orange-500 border-orange-500 text-white" : "border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-gray-400 hover:border-orange-300"}`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Generate button */}
+                  <Button
+                    type="button"
+                    onClick={handleGenerateDesign}
+                    disabled={generatingDesign || !aiPrompt.trim()}
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    {generatingDesign ? (
+                      <><Loader2 className="w-4 h-4 animate-spin mr-2" />Generating...</>
+                    ) : (
+                      <><Sparkles className="w-4 h-4 mr-2" />{designPreview ? "Regenerate" : "Generate design"}</>
+                    )}
+                  </Button>
+
+                  {/* Preview */}
+                  {designPreview && !generatingDesign && (
+                    <div className="flex items-start gap-4">
+                      <div className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#2A2A2A] w-40 h-40 shrink-0">
+                        <Image src={designPreview} alt="Generated design" fill className="object-contain p-3" />
+                      </div>
+                      <div className="space-y-2 pt-1">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Design generated. Not quite right? Refine your prompt and regenerate.</p>
+                        <button type="button" onClick={() => { setDesignPreview(null); setDesignUrl(null); }}
+                          className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+                          <X className="w-3 h-3" /> Clear
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Button
+                onClick={handleStep1Next}
+                disabled={uploadingDesign || !title.trim() || !designPreview}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+              >
                 {uploadingDesign ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Uploading...</> : <>Next: Pick product type <ChevronRight className="w-4 h-4 ml-1" /></>}
               </Button>
             </div>
