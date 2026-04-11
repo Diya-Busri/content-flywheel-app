@@ -1634,8 +1634,10 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                     <div key={pos} className="rounded-xl border border-gray-100 dark:border-[#2A2A2A] overflow-hidden">
                       <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-[#111]">
                         <div className="flex items-center gap-2">
-                          {data?.preview
+                          {data?.preview && data.preview !== "loading"
                             ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                            : data?.preview === "loading"
+                            ? <Loader2 className="w-3.5 h-3.5 text-orange-400 animate-spin" />
                             : <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 dark:border-[#444]" />}
                           <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{p.label}</span>
                           <span className="text-[10px] text-gray-400">{p.hint}</span>
@@ -1656,22 +1658,81 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                           setExtraDesigns(prev => ({ ...prev, [pos]: { file, preview: URL.createObjectURL(file), url: null } }));
                         }}
                       />
-                      {data?.preview ? (
+                      {data?.preview && data.preview !== "loading" ? (
                         <div className="flex items-center gap-3 px-3 py-2">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={data.preview} alt={p.label} className="w-12 h-12 object-contain rounded-lg bg-gray-100 dark:bg-[#2A2A2A] p-1" />
-                          <button type="button" onClick={() => extraFileRefs.current[pos]?.click()}
-                            className="text-xs text-orange-500 hover:text-orange-600 font-medium">
-                            Replace design
-                          </button>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => extraFileRefs.current[pos]?.click()}
+                              className="text-xs text-orange-500 hover:text-orange-600 font-medium">
+                              Replace
+                            </button>
+                            <button type="button" onClick={() => setExtraDesigns(prev => ({ ...prev, [pos]: { file: null, preview: null, url: null } }))}
+                              className="text-xs text-gray-400 hover:text-red-500 font-medium">
+                              Remove
+                            </button>
+                          </div>
                         </div>
                       ) : (
-                        <button type="button" onClick={() => extraFileRefs.current[pos]?.click()}
-                          className="w-full flex items-center gap-2 px-3 py-3 text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/10 transition-colors">
-                          <Upload className="w-4 h-4 flex-shrink-0" />
-                          <span className="text-xs">Upload {p.label} design</span>
-                          <span className="text-[10px] text-gray-300 dark:text-gray-600 ml-auto">PNG recommended</span>
-                        </button>
+                        <div className="flex flex-col divide-y divide-gray-100 dark:divide-[#2A2A2A]">
+                          {/* Upload row */}
+                          <button type="button" onClick={() => extraFileRefs.current[pos]?.click()}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-gray-500 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/10 transition-colors text-left">
+                            <Upload className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span className="text-xs font-medium">Upload my own design</span>
+                          </button>
+                          {/* Use front design */}
+                          {designPreview && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!designFile && !designPreview) return;
+                                // Copy front design (file or preview URL) to this placement
+                                if (designFile) {
+                                  setExtraDesigns(prev => ({ ...prev, [pos]: { file: designFile, preview: designPreview, url: designUrl } }));
+                                } else if (designPreview) {
+                                  // AI-generated URL — store as url with no file
+                                  setExtraDesigns(prev => ({ ...prev, [pos]: { file: null, preview: designPreview, url: designUrl } }));
+                                }
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-gray-500 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/10 transition-colors text-left"
+                            >
+                              <Copy className="w-3.5 h-3.5 flex-shrink-0" />
+                              <span className="text-xs font-medium">Use front design</span>
+                            </button>
+                          )}
+                          {/* AI Generate shortcut */}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!aiPrompt.trim() && !title.trim()) {
+                                toast({ title: "Add a product name or AI prompt first" });
+                                return;
+                              }
+                              // Use the product title as prompt if no AI prompt set
+                              const prompt = aiPrompt.trim() || `Logo design for "${title}" brand, minimal, transparent background`;
+                              setExtraDesigns(prev => ({ ...prev, [pos]: { file: null, preview: "loading", url: null } }));
+                              try {
+                                const res = await fetch("/api/ai-design/generate", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ prompt, style: aiStyle }),
+                                });
+                                const data2 = await res.json() as { imageUrl?: string; error?: string };
+                                if (!res.ok || !data2.imageUrl) throw new Error(data2.error ?? "Failed");
+                                setExtraDesigns(prev => ({ ...prev, [pos]: { file: null, preview: data2.imageUrl!, url: data2.imageUrl! } }));
+                              } catch (err) {
+                                setExtraDesigns(prev => ({ ...prev, [pos]: { file: null, preview: null, url: null } }));
+                                toast({ title: "AI generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+                              }
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-gray-500 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/10 transition-colors text-left"
+                          >
+                            {extraDesigns[pos]?.preview === "loading"
+                              ? <><Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" /><span className="text-xs font-medium">Generating...</span></>
+                              : <><Wand2 className="w-3.5 h-3.5 flex-shrink-0" /><span className="text-xs font-medium">Generate with AI</span></>}
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
