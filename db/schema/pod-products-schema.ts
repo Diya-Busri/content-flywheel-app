@@ -16,6 +16,13 @@ export const podProductsTable = pgTable("pod_products", {
   printProviderId: integer("print_provider_id"),
   printProviderTitle: text("print_provider_title"),
 
+  // Multi-placement designs (back, sleeves, label — front is designFileUrl above)
+  placements: jsonb("placements").$type<Array<{
+    position: string;        // "back" | "left_sleeve" | "right_sleeve" | "label"
+    designFileUrl: string;
+    designFileName?: string;
+  }>>().default([]),
+
   // AI Mockups (lifestyle photos of people wearing the product)
   mockupUrls: jsonb("mockup_urls").$type<string[]>().default([]),
   aiMockupPrompt: text("ai_mockup_prompt"),

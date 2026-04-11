@@ -8,7 +8,7 @@ import {
   Plus, Shirt, Upload, Sparkles, ExternalLink, Loader2,
   CheckCircle2, AlertCircle, X, ChevronRight, Settings,
   ArrowLeft, RefreshCw, ChevronDown, ChevronUp, Wand2, Shuffle,
-  Download, Share2, Copy, Check,
+  Download, Share2, Copy, Check, Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,7 +54,20 @@ const MOCKUP_STYLES = [
   { id: "lifestyle", label: "Lifestyle", desc: "Candid street / outdoor" },
   { id: "studio", label: "Studio", desc: "Clean white background" },
   { id: "outdoor", label: "Outdoor", desc: "Golden hour editorial" },
+  { id: "flat", label: "Flat Lay", desc: "Product only, top-down" },
 ];
+
+// Print placement positions supported
+const PLACEMENTS = [
+  { id: "front",         label: "Front",      hint: "Required — the primary print area" },
+  { id: "back",          label: "Back",        hint: "Optional — back of the garment" },
+  { id: "left_sleeve",   label: "L. Sleeve",   hint: "Optional — left sleeve print" },
+  { id: "right_sleeve",  label: "R. Sleeve",   hint: "Optional — right sleeve print" },
+  { id: "label",         label: "Tag/Label",   hint: "Optional — neck label inside garment" },
+] as const;
+type PlacementId = typeof PLACEMENTS[number]["id"];
+
+type ExtraDesign = { file: File | null; preview: string | null; url: string | null };
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 function Steps({ current, steps }: { current: number; steps: string[] }) {
@@ -221,6 +234,11 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [variantPrices, setVariantPrices] = useState<Record<number, string>>({});
   const [variantsExpanded, setVariantsExpanded] = useState(false);
 
+  // ── Multi-placement state ────────────────────────────────────────────────────
+  const [activePlacement, setActivePlacement] = useState<PlacementId>("front");
+  const [extraDesigns, setExtraDesigns] = useState<Partial<Record<PlacementId, ExtraDesign>>>({});
+  const extraFileRefs = useRef<Partial<Record<PlacementId, HTMLInputElement>>>({});
+
   // ── AI design generator state ────────────────────────────────────────────────
   const [designTab, setDesignTab] = useState<"upload" | "generate">("upload");
   const [aiPrompt, setAiPrompt] = useState("");
@@ -230,6 +248,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   // ── Mockup state ─────────────────────────────────────────────────────────────
   const [generatingMockup, setGeneratingMockup] = useState(false);
   const [mockupStyle, setMockupStyle] = useState("lifestyle");
+  const [mockupPlacement, setMockupPlacement] = useState("front");
 
   // ── Caption state ─────────────────────────────────────────────────────────────
   const [generatingCaptions, setGeneratingCaptions] = useState(false);
@@ -261,6 +280,8 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     setDesignTab("upload");
     setAiPrompt("");
     setAiStyle("bold");
+    setActivePlacement("front");
+    setExtraDesigns({});
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -335,6 +356,27 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       setUploadingDesign(false);
     }
 
+    // Upload any extra placement files that haven't been uploaded yet
+    const pendingExtras = Object.entries(extraDesigns).filter(
+      ([, d]) => d?.file && !d.url
+    ) as Array<[PlacementId, ExtraDesign]>;
+
+    if (pendingExtras.length > 0) {
+      const updated = { ...extraDesigns };
+      for (const [position, extra] of pendingExtras) {
+        try {
+          const fd = new FormData();
+          fd.append("file", extra.file!);
+          const r = await fetch("/api/upload/store-image", { method: "POST", body: fd });
+          if (r.ok) {
+            const d = await r.json() as { url?: string };
+            updated[position] = { ...extra, url: d.url ?? null };
+          }
+        } catch { /* non-blocking — placement upload failure shouldn't block progress */ }
+      }
+      setExtraDesigns(updated);
+    }
+
     // Load catalog
     if (blueprints.length === 0 && connected) {
       setLoadingCatalog(true);
@@ -405,8 +447,9 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const handleFinish = async () => {
     setCreating(true);
     try {
-      // 1. Upload design to Printify image library
-      let printifyImageId: string | null = null;
+      // 1. Upload all placement designs to Printify image library
+      const placementImages: Array<{ position: string; printifyImageId: string }> = [];
+
       if (designUrl) {
         try {
           const imgRes = await fetch("/api/printify/upload-image", {
@@ -414,12 +457,33 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ imageUrl: designUrl, fileName: designFile?.name ?? "design.png" }),
           });
-          const imgData = await imgRes.json();
-          printifyImageId = imgData.imageId ?? null;
-        } catch {
-          // Non-blocking — sync will still work without image
+          const imgData = await imgRes.json() as { imageId?: string };
+          if (imgData.imageId) placementImages.push({ position: "front", printifyImageId: imgData.imageId });
+        } catch { /* Non-blocking */ }
+      }
+
+      // Upload extra placements (back, sleeves, label)
+      for (const [position, extra] of Object.entries(extraDesigns)) {
+        if (extra?.url) {
+          try {
+            const imgRes = await fetch("/api/printify/upload-image", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ imageUrl: extra.url, fileName: extra.file?.name ?? `${position}-design.png` }),
+            });
+            const imgData = await imgRes.json() as { imageId?: string };
+            if (imgData.imageId) placementImages.push({ position, printifyImageId: imgData.imageId });
+          } catch { /* Non-blocking */ }
         }
       }
+
+      // Build placements array for DB (all positions that have a design)
+      const placementsForDb = [
+        ...(designUrl ? [{ position: "front", designFileUrl: designUrl, designFileName: designFile?.name }] : []),
+        ...Object.entries(extraDesigns)
+          .filter(([, d]) => d?.url)
+          .map(([pos, d]) => ({ position: pos, designFileUrl: d!.url!, designFileName: d?.file?.name })),
+      ];
 
       // 2. Create local product record
       const createRes = await fetch("/api/printify/products", {
@@ -433,6 +497,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
           blueprintTitle: selectedBlueprint?.title,
           printProviderId: selectedProvider?.id,
           printProviderTitle: selectedProvider?.title,
+          placements: placementsForDb,
         }),
       });
       const createData = await createRes.json();
@@ -453,7 +518,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
         await fetch("/api/printify/products", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ productId, variants: variantPayload, printifyImageId }),
+          body: JSON.stringify({ productId, variants: variantPayload, placementImages }),
         });
       }
 
@@ -503,7 +568,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       const res = await fetch("/api/ai-mockup/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: selectedProduct.id, style: mockupStyle }),
+        body: JSON.stringify({ productId: selectedProduct.id, style: mockupStyle, placement: mockupPlacement }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -722,7 +787,44 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 <Input id="pod-title" placeholder="e.g. Void Hours Classic Tee" value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1" />
               </div>
 
-              {/* Tab switcher */}
+              {/* Placement tabs */}
+              <div>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Layers className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Print placement</span>
+                </div>
+                <div className="flex gap-1.5 overflow-x-auto pb-1">
+                  {PLACEMENTS.map((p) => {
+                    const hasDesign = p.id === "front" ? !!designPreview : !!extraDesigns[p.id]?.preview;
+                    const isActive = activePlacement === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        title={p.hint}
+                        onClick={() => setActivePlacement(p.id)}
+                        className={`flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full border whitespace-nowrap transition-all ${
+                          isActive
+                            ? "bg-orange-500 border-orange-500 text-white"
+                            : hasDesign
+                            ? "border-green-400 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/20"
+                            : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300 dark:hover:border-orange-700"
+                        }`}
+                      >
+                        {hasDesign && !isActive && <CheckCircle2 className="w-3 h-3" />}
+                        {p.label}
+                        {p.id === "front" && !hasDesign && <span className="text-orange-400 ml-0.5">*</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">
+                  {PLACEMENTS.find(p => p.id === activePlacement)?.hint}
+                </p>
+              </div>
+
+              {/* Tab switcher — only for Front placement */}
+              {activePlacement === "front" && (
               <div className="flex rounded-xl bg-gray-100 dark:bg-[#2A2A2A] p-1 gap-1">
                 <button
                   type="button"
@@ -739,9 +841,71 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                   <Wand2 className="w-3.5 h-3.5" /> Generate with AI
                 </button>
               </div>
+              )}
+
+              {/* ── Extra placement upload (Back / Sleeve / Label) ── */}
+              {activePlacement !== "front" && (
+                <div>
+                  {(() => {
+                    const pos = activePlacement as PlacementId;
+                    const data = extraDesigns[pos];
+                    const label = PLACEMENTS.find(p => p.id === pos)?.label ?? pos;
+                    return (
+                      <>
+                        <input
+                          type="file"
+                          accept="image/png,image/svg+xml,image/jpeg"
+                          className="hidden"
+                          ref={(el) => { if (el) extraFileRefs.current[pos] = el; }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setExtraDesigns((prev) => ({
+                              ...prev,
+                              [pos]: { file, preview: URL.createObjectURL(file), url: null },
+                            }));
+                          }}
+                        />
+                        {data?.preview ? (
+                          <div className="space-y-2">
+                            <div className="relative rounded-2xl overflow-hidden border border-gray-200 dark:border-[#2A2A2A] bg-[#f8f8f8] dark:bg-[#2A2A2A] aspect-square w-full">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={data.preview} alt={`${label} design`} className="w-full h-full object-contain p-6" />
+                              <button
+                                type="button"
+                                onClick={() => setExtraDesigns((prev) => ({ ...prev, [pos]: { file: null, preview: null, url: null } }))}
+                                className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => extraFileRefs.current[pos]?.click()}
+                              className="w-full text-xs text-center text-orange-500 hover:text-orange-600 font-medium py-1"
+                            >
+                              Replace {label} design
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => extraFileRefs.current[pos]?.click()}
+                            className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] py-10 text-gray-400 hover:border-orange-300 hover:text-orange-500 transition-colors"
+                          >
+                            <Upload className="w-6 h-6" />
+                            <span className="text-sm font-medium">Upload {label} design</span>
+                            <span className="text-xs">PNG with transparent background recommended</span>
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Upload tab */}
-              {designTab === "upload" && (
+              {activePlacement === "front" && designTab === "upload" && (
                 <div>
                   <input ref={fileInputRef} type="file" accept="image/png,image/svg+xml,image/jpeg" className="hidden" onChange={handleFileChange} />
                   {designPreview ? (
@@ -764,7 +928,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               )}
 
               {/* Generate tab */}
-              {designTab === "generate" && (
+              {activePlacement === "front" && designTab === "generate" && (
                 <div className="space-y-4">
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -1103,15 +1267,43 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
 
             <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">AI Mockups</p>
-              <div className="flex gap-2 mb-3">
+              {/* Mockup style selector */}
+              <div className="grid grid-cols-2 gap-1.5 mb-3">
                 {MOCKUP_STYLES.map((s) => (
                   <button key={s.id} type="button" onClick={() => setMockupStyle(s.id)}
-                    className={`flex-1 rounded-lg border p-2 text-center text-xs font-medium transition-all ${mockupStyle === s.id ? "border-orange-500 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
+                    className={`rounded-lg border p-2 text-center text-xs font-medium transition-all ${mockupStyle === s.id ? "border-orange-500 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
                     <span className="block font-semibold">{s.label}</span>
                     <span className="text-gray-400 text-[10px]">{s.desc}</span>
                   </button>
                 ))}
               </div>
+
+              {/* Placement selector — show when product has extra placements */}
+              {(() => {
+                const productPlacements = (selectedProduct.placements as Array<{ position: string }> | null) ?? [];
+                const availablePlacements = [
+                  { id: "front", label: "Front" },
+                  ...productPlacements.map((p) => ({
+                    id: p.position,
+                    label: PLACEMENTS.find((pl) => pl.id === p.position)?.label ?? p.position,
+                  })),
+                ];
+                if (availablePlacements.length <= 1) return null;
+                return (
+                  <div className="mb-3">
+                    <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-1.5">Mockup view</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {availablePlacements.map((p) => (
+                        <button key={p.id} type="button" onClick={() => setMockupPlacement(p.id)}
+                          className={`text-xs px-3 py-1 rounded-full border transition-all ${mockupPlacement === p.id ? "bg-orange-500 border-orange-500 text-white" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <Button onClick={handleGenerateMockup} disabled={generatingMockup} className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2">
                 {generatingMockup ? <><Loader2 className="w-4 h-4 animate-spin" />Generating...</> : <><Sparkles className="w-4 h-4" />Generate AI Mockup</>}
               </Button>

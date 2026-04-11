@@ -11,7 +11,8 @@ const FAL_API_KEY = () => {
   return key;
 };
 
-// Order matters — more specific terms must come before generic ones
+// ─── Product prompts (lifestyle — person wearing the product) ────────────────
+// Order matters: more specific terms must come before generic ones
 const PRODUCT_PROMPTS: Array<{ key: string; prompt: string }> = [
   { key: "hooded sweatshirt", prompt: "person wearing a custom printed pullover hoodie with hood up" },
   { key: "hoodie",            prompt: "person wearing a custom printed pullover hoodie with hood up" },
@@ -27,15 +28,36 @@ const PRODUCT_PROMPTS: Array<{ key: string; prompt: string }> = [
   { key: "cap",               prompt: "person wearing a custom printed baseball cap" },
 ];
 
-function getProductPrompt(blueprintTitle: string | null): string {
-  if (!blueprintTitle) return "person wearing custom branded merchandise";
+// ─── Flat lay prompts (product only, no person) ──────────────────────────────
+const PRODUCT_FLAT_PROMPTS: Array<{ key: string; prompt: string }> = [
+  { key: "hooded sweatshirt", prompt: "flat lay overhead photo of a pullover hoodie with a custom printed graphic on the front" },
+  { key: "hoodie",            prompt: "flat lay overhead photo of a pullover hoodie with a custom printed graphic on the front" },
+  { key: "zip",               prompt: "flat lay overhead photo of a zip-up hoodie with a custom printed graphic" },
+  { key: "t-shirt",           prompt: "flat lay overhead photo of a t-shirt with a custom printed graphic on the front" },
+  { key: "tee",               prompt: "flat lay overhead photo of a t-shirt with a custom printed graphic on the front" },
+  { key: "sweatshirt",        prompt: "flat lay overhead photo of a crewneck sweatshirt with a custom printed graphic" },
+  { key: "mug",               prompt: "overhead product photo of a custom printed ceramic mug on a white marble surface" },
+  { key: "poster",            prompt: "overhead product photo of a custom printed art poster on a clean surface" },
+  { key: "tote",              prompt: "flat lay overhead photo of a custom printed canvas tote bag" },
+  { key: "phone case",        prompt: "flat lay overhead product photo of a custom printed phone case" },
+  { key: "hat",               prompt: "flat lay overhead photo of a custom printed baseball cap" },
+  { key: "cap",               prompt: "flat lay overhead photo of a custom printed baseball cap" },
+];
+
+function getProductPrompt(blueprintTitle: string | null, flat = false): string {
+  const list = flat ? PRODUCT_FLAT_PROMPTS : PRODUCT_PROMPTS;
+  const fallback = flat
+    ? "flat lay overhead photo of custom branded merchandise"
+    : "person wearing custom branded merchandise";
+  if (!blueprintTitle) return fallback;
   const lower = blueprintTitle.toLowerCase();
-  for (const { key, prompt } of PRODUCT_PROMPTS) {
+  for (const { key, prompt } of list) {
     if (lower.includes(key)) return prompt;
   }
-  return "person wearing custom branded merchandise";
+  return fallback;
 }
 
+// ─── Diverse model descriptors ───────────────────────────────────────────────
 const MODEL_DESCRIPTORS = [
   "a young Black woman",
   "a young white man",
@@ -53,23 +75,34 @@ function randomModel(): string {
   return MODEL_DESCRIPTORS[Math.floor(Math.random() * MODEL_DESCRIPTORS.length)];
 }
 
+// ─── Lighting/context per mockup style ──────────────────────────────────────
 const STYLE_MAP: Record<string, string> = {
   lifestyle: "natural daylight, urban street photography, candid lifestyle shot",
   studio:    "clean white studio background, professional product photography",
   outdoor:   "golden hour outdoor lighting, nature background, editorial fashion",
+  flat:      "white background, overhead studio lighting, clean product photography",
 };
 
-/**
- * Image-to-image mockup — uses the actual design as the reference image.
- * FLUX dev img2img carries the design colours/shapes into the lifestyle photo.
- */
+// ─── Placement-aware prompt suffix ──────────────────────────────────────────
+const PLACEMENT_SUFFIX: Record<string, string> = {
+  front:         "",
+  back:          ", photographed from behind showing the back of the garment with the design visible",
+  left_sleeve:   ", arm raised showing the left sleeve design",
+  right_sleeve:  ", arm raised showing the right sleeve design",
+  label:         ", collar folded to clearly show the neck label/tag inside the garment",
+};
+
+// ─── img2img — uses the real design as reference ─────────────────────────────
 async function generateImg2ImgMockup(
   designUrl: string,
   prompt: string,
-  style: string
+  style: string,
+  flat = false
 ): Promise<string> {
   const lightingStyle = STYLE_MAP[style] ?? STYLE_MAP.lifestyle;
-  const fullPrompt = `${prompt}. The design printed on the garment matches this graphic exactly — same colours, same artwork. ${lightingStyle}. Design is clearly visible on the front. Photorealistic, 8K, commercial product photography.`;
+  const fullPrompt = flat
+    ? `${prompt}. ${lightingStyle}. The design printed on the product matches this graphic exactly. No person in shot. Photorealistic, 8K, commercial product photography.`
+    : `${prompt}. The design printed on the garment matches this graphic exactly — same colours, same artwork. ${lightingStyle}. Design clearly visible. Photorealistic, 8K, commercial product photography.`;
 
   const res = await fetch("https://fal.run/fal-ai/flux/dev/image-to-image", {
     method: "POST",
@@ -80,8 +113,8 @@ async function generateImg2ImgMockup(
     body: JSON.stringify({
       prompt: fullPrompt,
       image_url: designUrl,
-      strength: 0.85,           // high strength so the lifestyle context dominates but design colours/shapes carry through
-      image_size: "portrait_4_3",
+      strength: flat ? 0.80 : 0.85,
+      image_size: flat ? "square_hd" : "portrait_4_3",
       num_inference_steps: 28,
       guidance_scale: 3.5,
       num_images: 1,
@@ -100,12 +133,12 @@ async function generateImg2ImgMockup(
   return url;
 }
 
-/**
- * Text-only fallback — used when no design file is available yet.
- */
-async function generateTextMockup(prompt: string, style: string): Promise<string> {
+// ─── Text-only fallback ───────────────────────────────────────────────────────
+async function generateTextMockup(prompt: string, style: string, flat = false): Promise<string> {
   const lightingStyle = STYLE_MAP[style] ?? STYLE_MAP.lifestyle;
-  const fullPrompt = `High quality photo of ${prompt}. ${lightingStyle}. The design is clearly visible. Photorealistic, 8K quality, commercial product photography.`;
+  const fullPrompt = flat
+    ? `${prompt}. ${lightingStyle}. No person in shot. Photorealistic, 8K, commercial product photography.`
+    : `High quality photo of ${prompt}. ${lightingStyle}. The design is clearly visible. Photorealistic, 8K, commercial product photography.`;
 
   const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
     method: "POST",
@@ -115,7 +148,7 @@ async function generateTextMockup(prompt: string, style: string): Promise<string
     },
     body: JSON.stringify({
       prompt: fullPrompt,
-      image_size: "portrait_4_3",
+      image_size: flat ? "square_hd" : "portrait_4_3",
       num_inference_steps: 4,
       num_images: 1,
       enable_safety_checker: true,
@@ -138,7 +171,12 @@ export async function POST(req: Request) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { productId, style = "lifestyle" } = await req.json() as { productId?: string; style?: string };
+    const {
+      productId,
+      style = "lifestyle",
+      placement = "front",
+    } = await req.json() as { productId?: string; style?: string; placement?: string };
+
     if (!productId) return NextResponse.json({ error: "productId required" }, { status: 400 });
 
     const [product] = await db
@@ -149,20 +187,40 @@ export async function POST(req: Request) {
 
     if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
-    const model = randomModel();
-    const productContext = getProductPrompt(product.blueprintTitle).replace("person", model);
-    const brandContext = product.title ? `, design themed around "${product.title}"` : "";
-    const basePrompt = `${productContext}${brandContext}`;
+    const isFlat = style === "flat";
 
-    // Use img2img when we have the actual design file — this makes mockups show the real design
-    let imageUrl: string;
-    if (product.designFileUrl) {
-      imageUrl = await generateImg2ImgMockup(product.designFileUrl, basePrompt, style);
-    } else {
-      imageUrl = await generateTextMockup(basePrompt, style);
+    // ── Resolve which design to use for this placement ────────────────────────
+    let designFileUrl: string | null = product.designFileUrl ?? null;
+    if (placement !== "front") {
+      const allPlacements = (product.placements as Array<{ position: string; designFileUrl: string }> | null) ?? [];
+      const placementData = allPlacements.find((p) => p.position === placement);
+      if (placementData?.designFileUrl) {
+        designFileUrl = placementData.designFileUrl;
+      }
     }
 
-    // Persist to Vercel Blob
+    // ── Build prompt ──────────────────────────────────────────────────────────
+    const placementSuffix = PLACEMENT_SUFFIX[placement] ?? "";
+    let basePrompt: string;
+
+    if (isFlat) {
+      basePrompt = getProductPrompt(product.blueprintTitle, true);
+    } else {
+      const model = randomModel();
+      const productContext = getProductPrompt(product.blueprintTitle, false).replace("person", model);
+      const brandContext = product.title ? `, design themed around "${product.title}"` : "";
+      basePrompt = `${productContext}${brandContext}${placementSuffix}`;
+    }
+
+    // ── Generate ──────────────────────────────────────────────────────────────
+    let imageUrl: string;
+    if (designFileUrl) {
+      imageUrl = await generateImg2ImgMockup(designFileUrl, basePrompt, style, isFlat);
+    } else {
+      imageUrl = await generateTextMockup(basePrompt, style, isFlat);
+    }
+
+    // ── Persist to Vercel Blob ────────────────────────────────────────────────
     const imageRes = await fetch(imageUrl);
     const buffer = Buffer.from(await imageRes.arrayBuffer());
     const blob = await put(
@@ -171,7 +229,7 @@ export async function POST(req: Request) {
       { access: "public", contentType: "image/jpeg" }
     );
 
-    // Append to product's mockupUrls
+    // ── Append to product's mockupUrls ────────────────────────────────────────
     const currentMockups = (product.mockupUrls as string[] | null) ?? [];
     await db
       .update(podProductsTable)
