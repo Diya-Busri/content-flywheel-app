@@ -3,10 +3,13 @@ import { db } from "@/db/db";
 import { podProductsTable } from "@/db/schema/pod-products-schema";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { fal } from "@fal-ai/client";
 import { put } from "@vercel/blob";
 
-fal.config({ credentials: process.env.FAL_API_KEY });
+const FAL_API_KEY = () => {
+  const key = process.env.FAL_API_KEY?.trim();
+  if (!key) throw new Error("FAL_API_KEY is not set");
+  return key;
+};
 
 const PRODUCT_PROMPTS: Record<string, string> = {
   "t-shirt": "person wearing a custom printed t-shirt",
@@ -29,11 +32,11 @@ function getProductPrompt(blueprintTitle: string | null): string {
 }
 
 export async function POST(req: Request) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { productId, style = "lifestyle" } = await req.json();
+    const { productId, style = "lifestyle" } = await req.json() as { productId?: string; style?: string };
     if (!productId) return NextResponse.json({ error: "productId required" }, { status: 400 });
 
     const [product] = await db
@@ -56,18 +59,29 @@ export async function POST(req: Request) {
 
     const prompt = `High quality photo of a ${productContext}${brandContext}. ${lightingStyle}. The design is clearly visible. Photorealistic, 8K quality, commercial product photography.`;
 
-    const result = await fal.subscribe("fal-ai/flux/dev", {
-      input: {
+    // Use raw fetch — same pattern as the working ai-design/generate route
+    const falRes = await fetch("https://fal.run/fal-ai/flux/schnell", {
+      method: "POST",
+      headers: {
+        Authorization: `Key ${FAL_API_KEY()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
         prompt,
         image_size: "portrait_4_3",
-        num_inference_steps: 28,
-        guidance_scale: 3.5,
+        num_inference_steps: 4,
         num_images: 1,
         enable_safety_checker: true,
-      },
-    }) as { images: Array<{ url: string }> };
+      }),
+    });
 
-    const imageUrl = result?.images?.[0]?.url;
+    if (!falRes.ok) {
+      const text = await falRes.text();
+      throw new Error(`fal.ai error: ${text.slice(0, 200)}`);
+    }
+
+    const falData = await falRes.json() as { images?: Array<{ url: string }> };
+    const imageUrl = falData.images?.[0]?.url;
     if (!imageUrl) throw new Error("No image generated");
 
     // Persist to Vercel Blob
@@ -89,6 +103,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ mockupUrl: blob.url });
   } catch (err) {
     console.error("[ai-mockup/generate]", err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to generate mockup" }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to generate mockup" },
+      { status: 500 }
+    );
   }
 }
