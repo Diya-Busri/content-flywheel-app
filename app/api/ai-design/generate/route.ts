@@ -10,6 +10,7 @@ const FAL_API_KEY = () => {
 };
 
 const STYLE_SUFFIXES: Record<string, string> = {
+  typography: "clean typographic design, elegant lettering, professional logo, isolated on white, high contrast",
   bold: "bold graphic design, thick outlines, high contrast, vector art, t-shirt print style, solid colors",
   vintage: "vintage retro graphic, distressed texture, worn look, aged colors, screen print style",
   minimalist: "minimalist flat design, simple clean shapes, limited color palette, modern",
@@ -18,6 +19,7 @@ const STYLE_SUFFIXES: Record<string, string> = {
 };
 
 const IDEOGRAM_STYLE_MAP: Record<string, string> = {
+  typography: "DESIGN",
   bold: "DESIGN",
   vintage: "DESIGN",
   minimalist: "DESIGN",
@@ -159,8 +161,8 @@ export async function POST(request: Request) {
 
   if (!prompt) return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
 
-  // Route to best model based on prompt content
-  const useIdeogram = promptHasText(prompt);
+  // Route to best model — typography style always uses Ideogram (best text rendering)
+  const useIdeogram = style === "typography" || promptHasText(prompt);
   let rawImageUrl: string;
   try {
     rawImageUrl = useIdeogram

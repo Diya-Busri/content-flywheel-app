@@ -24,6 +24,16 @@ type Blueprint = { id: number; title: string; brand: string; images: string[] };
 type Provider = { id: number; title: string; location: { country: string } };
 type Variant = { id: number; title: string; options: Record<string, string>; placeholders: Array<{ position: string }> };
 
+// Brand / typography chips shown when user has no prompt
+const BRAND_PROMPTS = [
+  { label: "Brand name", prompt: `"Your Brand" elegant luxury brand name, serif lettering, fashion label style`, style: "typography" },
+  { label: "Initials / monogram", prompt: `"VH" luxury monogram initials, elegant interlocking letters, high-end fashion logo`, style: "typography" },
+  { label: "Script logo", prompt: `"Your Brand" flowing cursive script signature logo, elegant handwritten style`, style: "typography" },
+  { label: "Gothic type", prompt: `"Your Brand" blackletter gothic typography, dark dramatic font, premium streetwear`, style: "typography" },
+  { label: "Stacked wordmark", prompt: `"YOUR BRAND" bold stacked uppercase wordmark, clean modern sans-serif, minimalist logo`, style: "typography" },
+  { label: "Retro badge", prompt: `"Your Brand" vintage badge logo with ornate border, est. 2024, retro crest style`, style: "vintage" },
+];
+
 const DESIGN_PROMPTS = [
   { label: "Wolf & moon", prompt: "A lone wolf howling at a full moon with a geometric mountain landscape", style: "bold" },
   { label: "Snake & roses", prompt: "A coiled snake wrapped around a blooming rose, detailed illustration", style: "lineart" },
@@ -588,17 +598,42 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                     />
                     {/* Quick idea chips */}
                     {!aiPrompt && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {DESIGN_PROMPTS.slice(0, 6).map((idea) => (
-                          <button
-                            key={idea.label}
-                            type="button"
-                            onClick={() => { setAiPrompt(idea.prompt); setAiStyle(idea.style); }}
-                            className="text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-[#2A2A2A] text-gray-600 dark:text-gray-400 hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-950/20 dark:hover:text-orange-400 border border-transparent hover:border-orange-200 dark:hover:border-orange-900/40 transition-all"
-                          >
-                            {idea.label}
-                          </button>
-                        ))}
+                      <div className="mt-2 space-y-2">
+                        {/* Brand / text row */}
+                        <div>
+                          <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-1.5">Brand &amp; text</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {BRAND_PROMPTS.map((idea) => (
+                              <button
+                                key={idea.label}
+                                type="button"
+                                onClick={() => { setAiPrompt(idea.prompt); setAiStyle(idea.style); }}
+                                className="text-xs px-2.5 py-1 rounded-full bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/40 hover:bg-orange-100 dark:hover:bg-orange-950/30 transition-all"
+                              >
+                                {idea.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {/* Graphics row */}
+                        <div>
+                          <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-1.5">Graphics</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {DESIGN_PROMPTS.slice(0, 6).map((idea) => (
+                              <button
+                                key={idea.label}
+                                type="button"
+                                onClick={() => { setAiPrompt(idea.prompt); setAiStyle(idea.style); }}
+                                className="text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-[#2A2A2A] text-gray-600 dark:text-gray-400 hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-950/20 dark:hover:text-orange-400 border border-transparent hover:border-orange-200 dark:hover:border-orange-900/40 transition-all"
+                              >
+                                {idea.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                          💡 Put text in <span className="font-mono bg-gray-100 dark:bg-[#2A2A2A] px-1 rounded">"quotes"</span> for accurate lettering — e.g. <em>"Void Hours"</em>
+                        </p>
                       </div>
                     )}
                   </div>
@@ -608,6 +643,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                     <Label>Style</Label>
                     <div className="mt-1.5 flex flex-wrap gap-2">
                       {[
+                        { id: "typography", label: "Typography" },
                         { id: "bold", label: "Bold Graphic" },
                         { id: "vintage", label: "Vintage" },
                         { id: "minimalist", label: "Minimalist" },
