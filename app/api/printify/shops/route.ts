@@ -4,6 +4,7 @@ import { userSettingsTable } from "@/db/schema/user-settings-schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { printifyFetch } from "@/lib/printify";
+import { alertPrintifyError } from "@/lib/printify-alert";
 
 /** GET — verify connection and return shops */
 export async function GET() {
@@ -25,6 +26,7 @@ export async function GET() {
     return NextResponse.json({ connected: true, shops, selectedShopId: settings.printifyShopId });
   } catch (err) {
     console.error("[printify/shops] GET:", err);
+    await alertPrintifyError({ route: "/api/printify/shops GET", message: err instanceof Error ? err.message : "Connection check failed", userId });
     return NextResponse.json({ connected: false, error: "Invalid API key or connection failed" });
   }
 }
@@ -52,6 +54,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ connected: true, shops });
   } catch (err) {
     console.error("[printify/shops] POST:", err);
+    await alertPrintifyError({ route: "/api/printify/shops POST", message: err instanceof Error ? err.message : "Failed to connect Printify", userId });
     return NextResponse.json({ error: "Invalid API key or connection failed" }, { status: 400 });
   }
 }

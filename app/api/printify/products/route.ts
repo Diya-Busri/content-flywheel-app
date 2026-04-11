@@ -5,6 +5,7 @@ import { podProductsTable } from "@/db/schema/pod-products-schema";
 import { eq, isNull, and, desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { printifyFetch } from "@/lib/printify";
+import { alertPrintifyError } from "@/lib/printify-alert";
 
 export async function GET() {
   const { userId } = auth();
@@ -144,6 +145,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ success: true, printifyProductId });
   } catch (err) {
     console.error("[printify/products] PATCH:", err);
+    await alertPrintifyError({ route: "/api/printify/products PATCH", message: err instanceof Error ? err.message : "Sync failed", userId, metadata: { productId } });
     return NextResponse.json({ error: err instanceof Error ? err.message : "Sync failed" }, { status: 500 });
   }
 }

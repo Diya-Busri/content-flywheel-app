@@ -4,6 +4,7 @@ import { userSettingsTable } from "@/db/schema/user-settings-schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { printifyFetch } from "@/lib/printify";
+import { alertPrintifyError } from "@/lib/printify-alert";
 
 /** Upload a design image to Printify's image library and return the Printify image ID */
 export async function POST(req: Request) {
@@ -36,6 +37,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ imageId: result.id, preview: result.preview_url });
   } catch (err) {
     console.error("[printify/upload-image]", err);
+    await alertPrintifyError({ route: "/api/printify/upload-image", message: err instanceof Error ? err.message : "Image upload failed", userId });
     return NextResponse.json({ error: err instanceof Error ? err.message : "Upload failed" }, { status: 500 });
   }
 }

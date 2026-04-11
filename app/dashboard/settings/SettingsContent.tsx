@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, AlertTriangle, Link2, ChevronRight, Youtube, Tv, Copy, Check, Users, Sliders, Shirt, CheckCircle2 } from "lucide-react";
+import { Loader2, AlertTriangle, Link2, ChevronRight, Youtube, Tv, Copy, Check, Users, Sliders, Shirt, CheckCircle2, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { USE_CASES } from "@/lib/use-cases";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -749,12 +749,20 @@ export default function SettingsContent({
   );
 }
 
+const PRINTIFY_STEPS = [
+  { step: 1, title: "Create a free Printify account", detail: "Sign up at printify.com if you don't have one yet. It's free." },
+  { step: 2, title: "Open your API settings", detail: 'In Printify, go to My Account → Connections → API. Click "Generate new token".' },
+  { step: 3, title: "Copy your API key", detail: 'Give the token a name (e.g. "Content Flywheel") and copy the key that starts with "pat.".' },
+  { step: 4, title: "Paste it below and connect", detail: "Paste your key into the field below, hit Connect, then select which shop to use." },
+];
+
 function PrintifySettingsCard({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [apiKey, setApiKey] = useState("");
   const [connected, setConnected] = useState<boolean | null>(null);
   const [shops, setShops] = useState<Array<{ id: number; title: string }>>([]);
   const [selectedShop, setSelectedShop] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   // Check current connection on mount
   useState(() => {
@@ -837,6 +845,40 @@ function PrintifySettingsCard({ toast }: { toast: ReturnType<typeof useToast>["t
             </p>
           </div>
         ) : null}
+        {/* Setup guide */}
+        <div className="rounded-lg border border-gray-100 dark:border-[#2A2A2A] overflow-hidden">
+          <button
+            onClick={() => setShowGuide((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#222] transition-colors"
+          >
+            <span>How to set up Printify</span>
+            {showGuide ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          {showGuide && (
+            <div className="px-4 pb-4 space-y-3 border-t border-gray-100 dark:border-[#2A2A2A] pt-3">
+              {PRINTIFY_STEPS.map(({ step, title, detail }) => (
+                <div key={step} className="flex gap-3">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 text-xs font-bold flex items-center justify-center">
+                    {step}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{title}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{detail}</p>
+                  </div>
+                </div>
+              ))}
+              <a
+                href="https://printify.com/app/account/api"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-orange-500 hover:text-orange-600 font-medium mt-1"
+              >
+                Open Printify API settings <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          )}
+        </div>
+
         <div className="space-y-2">
           <Label htmlFor="printify-key">
             {connected ? "Update API key" : "Printify API key"}
@@ -859,10 +901,7 @@ function PrintifySettingsCard({ toast }: { toast: ReturnType<typeof useToast>["t
             </Button>
           </div>
           <p className="text-xs text-gray-400">
-            Get your key at{" "}
-            <a href="https://printify.com/app/account/api" target="_blank" rel="noreferrer" className="text-orange-500 underline">
-              printify.com/app/account/api
-            </a>
+            Still stuck? Contact support and we&apos;ll help you get set up.
           </p>
         </div>
       </CardContent>
