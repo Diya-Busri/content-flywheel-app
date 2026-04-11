@@ -231,6 +231,11 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [generatingMockup, setGeneratingMockup] = useState(false);
   const [mockupStyle, setMockupStyle] = useState("lifestyle");
 
+  // ── Caption state ─────────────────────────────────────────────────────────────
+  const [generatingCaptions, setGeneratingCaptions] = useState(false);
+  const [captions, setCaptions] = useState<string[]>([]);
+  const [copiedCaptionIdx, setCopiedCaptionIdx] = useState<number | null>(null);
+
   // ── Sync state ───────────────────────────────────────────────────────────────
   const [syncing, setSyncing] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -532,6 +537,65 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     } finally {
       setConnecting(false);
     }
+  };
+
+  const handleGenerateCaptions = async () => {
+    if (!selectedProduct) return;
+    setGeneratingCaptions(true);
+    setCaptions([]);
+    try {
+      const res = await fetch("/api/pod/captions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: selectedProduct.id }),
+      });
+      const data = await res.json() as { captions?: string[]; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Generation failed");
+      setCaptions(data.captions ?? []);
+    } catch (err) {
+      toast({ title: "Caption generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setGeneratingCaptions(false);
+    }
+  };
+
+  const handleCopyCaption = async (text: string, idx: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedCaptionIdx(idx);
+      toast({ title: "Caption copied!" });
+      setTimeout(() => setCopiedCaptionIdx(null), 2000);
+    } catch {
+      toast({ title: "Copy failed", variant: "destructive" });
+    }
+  };
+
+  const handleReuseDesign = async () => {
+    if (!selectedProduct?.designFileUrl) return;
+    setDesignUrl(selectedProduct.designFileUrl);
+    setDesignPreview(selectedProduct.designFileUrl);
+    setTitle(selectedProduct.title + " v2");
+    setDesignTab("upload");
+    // Load catalog if not already loaded
+    if (blueprints.length === 0 && connected) {
+      setLoadingCatalog(true);
+      try {
+        const res = await fetch("/api/printify/catalog");
+        const data = await res.json();
+        setBlueprints(data.blueprints ?? []);
+      } catch {
+        toast({ title: "Could not load catalog", variant: "destructive" });
+      } finally {
+        setLoadingCatalog(false);
+      }
+    }
+    setSelectedBlueprint(null);
+    setSelectedProvider(null);
+    setVariants([]);
+    setSelectedVariants(new Set());
+    setVariantPrices({});
+    setCreateStep(2);
+    setView("create");
   };
 
   const filteredBlueprints = blueprints.filter((b) =>
@@ -1063,11 +1127,20 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">{selectedProduct.title}</h2>
               {selectedProduct.blueprintTitle && <p className="text-sm text-gray-500">{selectedProduct.blueprintTitle}</p>}
               {selectedProduct.printProviderTitle && <p className="text-xs text-gray-400 mt-0.5">{selectedProduct.printProviderTitle}</p>}
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className={`text-xs font-medium px-2 py-1 rounded-full ${selectedProduct.printifyStatus === "synced" ? "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400" : "bg-gray-100 text-gray-500 dark:bg-[#2A2A2A] dark:text-gray-400"}`}>
                   {selectedProduct.printifyStatus === "synced" ? "✓ Synced to Printify" : "Draft"}
                 </span>
               </div>
+              {selectedProduct.designFileUrl && (
+                <button
+                  type="button"
+                  onClick={handleReuseDesign}
+                  className="mt-4 w-full flex items-center justify-center gap-2 text-sm font-medium border border-gray-200 dark:border-[#2A2A2A] rounded-xl py-2.5 text-gray-600 dark:text-gray-400 hover:border-orange-300 hover:text-orange-500 dark:hover:border-orange-700 dark:hover:text-orange-400 transition-all"
+                >
+                  <RefreshCw className="w-4 h-4" /> Use this design for another product
+                </button>
+              )}
             </div>
 
             <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
@@ -1104,6 +1177,50 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 Generate 3–5 AI mockups in different styles, then use them in TikTok videos and your email list to drive sales.
               </p>
+            </div>
+
+            {/* TikTok Caption Generator */}
+            <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">TikTok Captions</p>
+              </div>
+              <Button
+                onClick={handleGenerateCaptions}
+                disabled={generatingCaptions}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2"
+              >
+                {generatingCaptions ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />Generating captions...</>
+                ) : (
+                  <><Sparkles className="w-4 h-4" />Generate TikTok Captions</>
+                )}
+              </Button>
+
+              {captions.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  {captions.map((caption, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-2xl bg-gray-50 dark:bg-[#0F0F0F] border border-gray-100 dark:border-[#2A2A2A] p-4"
+                    >
+                      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                        {caption}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCaption(caption, idx)}
+                        className="mt-3 flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-orange-500 transition-colors"
+                      >
+                        {copiedCaptionIdx === idx ? (
+                          <><Check className="w-3.5 h-3.5 text-green-500" /> Copied!</>
+                        ) : (
+                          <><Copy className="w-3.5 h-3.5" /> Copy caption</>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
