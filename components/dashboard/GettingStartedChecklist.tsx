@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { CheckCircle2, Circle, X, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useOnboarding } from "@/components/onboarding/onboarding-provider";
 
 const DISMISS_KEY = "cf_getting_started_dismissed";
 const COLLAPSE_KEY = "cf_getting_started_collapsed";
@@ -26,6 +27,7 @@ type Props = {
 };
 
 export function GettingStartedChecklist({ hasBrandVoice, hasProduct, hasThumbnail, hasPromoVideo, hasSubscriber = false, hasCampaign = false }: Props) {
+  const { modalActive } = useOnboarding();
   const [dismissed, setDismissed] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -49,7 +51,7 @@ export function GettingStartedChecklist({ hasBrandVoice, hasProduct, hasThumbnai
     try { localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0"); } catch {}
   };
 
-  if (!mounted || dismissed) return null;
+  if (!mounted || dismissed || modalActive) return null;
 
   const steps: Step[] = [
     {

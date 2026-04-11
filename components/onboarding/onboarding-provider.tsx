@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import confetti from "canvas-confetti";
 import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import type { OnboardingSteps } from "@/app/api/onboarding/route";
+
+type OnboardingContextValue = { modalActive: boolean };
+const OnboardingContext = createContext<OnboardingContextValue>({ modalActive: false });
+export function useOnboarding() { return useContext(OnboardingContext); }
 
 const BRAND_ORANGE = "#F59E0B";
 
@@ -112,14 +116,14 @@ export function OnboardingProvider({
   }, [steps]);
 
   return (
-    <>
+    <OnboardingContext.Provider value={{ modalActive: showModal }}>
       <OnboardingModal show={showModal} onComplete={handleModalComplete} onStepComplete={handleStepComplete} />
       {children}
-      {!loading && !onboardingCompleted && (
+      {!loading && !onboardingCompleted && !showModal && (
         <div className="fixed bottom-6 right-6 z-40 w-80 max-w-[calc(100vw-3rem)]">
           <OnboardingChecklist steps={steps} onStepsChange={fetchOnboarding} />
         </div>
       )}
-    </>
+    </OnboardingContext.Provider>
   );
 }

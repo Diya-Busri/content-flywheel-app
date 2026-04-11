@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
+import { useOnboarding } from "@/components/onboarding/onboarding-provider";
 
 const DISMISS_KEY = "cf_first_video_dismissed";
 
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function FirstVideoNudge({ totalVideos }: Props) {
+  const { modalActive } = useOnboarding();
   const [dismissed, setDismissed] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -34,7 +36,7 @@ export function FirstVideoNudge({ totalVideos }: Props) {
   };
 
   // Only show when: mounted (client), not dismissed, and truly 0 videos
-  if (!mounted || dismissed || totalVideos !== 0) return null;
+  if (!mounted || dismissed || totalVideos !== 0 || modalActive) return null;
 
   return (
     <section className="mb-10">
