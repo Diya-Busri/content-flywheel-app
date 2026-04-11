@@ -961,6 +961,29 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     }
   };
 
+  const handleFetchPrintifyMockups = async () => {
+    if (!selectedProduct) return;
+    setGeneratingMockup(true);
+    try {
+      const res = await fetch(`/api/printify/product-images?productId=${selectedProduct.id}`, { cache: "no-store" });
+      const data = await res.json() as { mockupUrls?: string[]; message?: string; error?: string };
+      if (!res.ok) throw new Error(data.error);
+      const mockupUrls = data.mockupUrls ?? [];
+      if (mockupUrls.length === 0) {
+        toast({ title: "No mockups yet", description: data.message ?? "Printify may still be generating them — try again in a moment." });
+        return;
+      }
+      const updated = { ...selectedProduct, mockupUrls } as SelectPodProduct;
+      setSelectedProduct(updated);
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      toast({ title: `${mockupUrls.length} Printify mockups loaded!` });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setGeneratingMockup(false);
+    }
+  };
+
   const handleGenerateMockup = async () => {
     if (!selectedProduct) return;
     setGeneratingMockup(true);
@@ -1812,50 +1835,77 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
             />
 
             <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">AI Mockups</p>
-              {/* Mockup style selector */}
-              <div className="grid grid-cols-2 gap-1.5 mb-3">
-                {MOCKUP_STYLES.map((s) => (
-                  <button key={s.id} type="button" onClick={() => setMockupStyle(s.id)}
-                    className={`rounded-lg border p-2 text-center text-xs font-medium transition-all ${mockupStyle === s.id ? "border-orange-500 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
-                    <span className="block font-semibold">{s.label}</span>
-                    <span className="text-gray-400 text-[10px]">{s.desc}</span>
-                  </button>
-                ))}
-              </div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Mockups</p>
 
-              {/* Placement selector — show when product has extra placements */}
-              {(() => {
-                const productPlacements = (selectedProduct.placements as Array<{ position: string }> | null) ?? [];
-                const availablePlacements = [
-                  { id: "front", label: "Front" },
-                  // Exclude "front" from stored placements — it's already added above
-                  ...productPlacements
-                    .filter((p) => p.position !== "front")
-                    .map((p) => ({
-                      id: p.position,
-                      label: PLACEMENTS.find((pl) => pl.id === p.position)?.label ?? p.position,
-                    })),
-                ];
-                if (availablePlacements.length <= 1) return null;
-                return (
-                  <div className="mb-3">
-                    <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-1.5">Mockup view</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {availablePlacements.map((p) => (
-                        <button key={p.id} type="button" onClick={() => setMockupPlacement(p.id)}
-                          className={`text-xs px-3 py-1 rounded-full border transition-all ${mockupPlacement === p.id ? "bg-orange-500 border-orange-500 text-white" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
+              {/* ── Primary: Printify mockups (when synced) ── */}
+              {selectedProduct.printifyProductId && (
+                <div className="mb-3">
+                  <Button
+                    onClick={handleFetchPrintifyMockups}
+                    disabled={generatingMockup}
+                    className="w-full bg-[#18181B] hover:bg-[#27272A] dark:bg-white dark:hover:bg-gray-100 text-white dark:text-black gap-2 font-semibold"
+                  >
+                    {generatingMockup
+                      ? <><Loader2 className="w-4 h-4 animate-spin" />Loading...</>
+                      : <><RefreshCw className="w-4 h-4" />Get Printify Mockups</>}
+                  </Button>
+                  <p className="text-[10px] text-gray-400 text-center mt-1.5">Professional renders — person wearing it, flat lay, folded &amp; more</p>
+                </div>
+              )}
+
+              {/* ── Secondary: AI mockups ── */}
+              <details className={selectedProduct.printifyProductId ? "mt-1" : ""}>
+                {selectedProduct.printifyProductId && (
+                  <summary className="text-[10px] uppercase tracking-widest text-gray-400 cursor-pointer select-none mb-2 hover:text-gray-600 transition-colors">
+                    ✦ AI Mockup (alternative)
+                  </summary>
+                )}
+                <div>
+                  {/* Mockup style selector */}
+                  <div className="grid grid-cols-2 gap-1.5 mb-3">
+                    {MOCKUP_STYLES.map((s) => (
+                      <button key={s.id} type="button" onClick={() => setMockupStyle(s.id)}
+                        className={`rounded-lg border p-2 text-center text-xs font-medium transition-all ${mockupStyle === s.id ? "border-orange-500 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
+                        <span className="block font-semibold">{s.label}</span>
+                        <span className="text-gray-400 text-[10px]">{s.desc}</span>
+                      </button>
+                    ))}
                   </div>
-                );
-              })()}
 
-              <Button onClick={handleGenerateMockup} disabled={generatingMockup} className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2">
-                {generatingMockup ? <><Loader2 className="w-4 h-4 animate-spin" />Generating...</> : <><Sparkles className="w-4 h-4" />Generate AI Mockup</>}
-              </Button>
+                  {/* Placement selector — show when product has extra placements */}
+                  {(() => {
+                    const productPlacements = (selectedProduct.placements as Array<{ position: string }> | null) ?? [];
+                    const availablePlacements = [
+                      { id: "front", label: "Front" },
+                      ...productPlacements
+                        .filter((p) => p.position !== "front")
+                        .map((p) => ({
+                          id: p.position,
+                          label: PLACEMENTS.find((pl) => pl.id === p.position)?.label ?? p.position,
+                        })),
+                    ];
+                    if (availablePlacements.length <= 1) return null;
+                    return (
+                      <div className="mb-3">
+                        <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-1.5">Mockup view</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {availablePlacements.map((p) => (
+                            <button key={p.id} type="button" onClick={() => setMockupPlacement(p.id)}
+                              className={`text-xs px-3 py-1 rounded-full border transition-all ${mockupPlacement === p.id ? "bg-orange-500 border-orange-500 text-white" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
+                              {p.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <Button onClick={handleGenerateMockup} disabled={generatingMockup} className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2">
+                    {generatingMockup ? <><Loader2 className="w-4 h-4 animate-spin" />Generating...</> : <><Sparkles className="w-4 h-4" />Generate AI Mockup</>}
+                  </Button>
+                </div>
+              </details>
+
               {((selectedProduct.mockupUrls as string[]) ?? []).length > 0 && (
                 <MockupGrid mockups={(selectedProduct.mockupUrls as string[]) ?? []} productTitle={selectedProduct.title} />
               )}

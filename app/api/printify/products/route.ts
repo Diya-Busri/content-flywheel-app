@@ -189,6 +189,24 @@ export async function PATCH(req: Request) {
       printifyProductId = created.id;
     }
 
+    // Auto-fetch Printify's generated mockup images straight after sync
+    let printifyMockupUrls: string[] = [];
+    try {
+      const printifyProduct = await printifyFetch(
+        `/shops/${resolvedShopId}/products/${printifyProductId}.json`,
+        settings.printifyApiKey
+      ) as { images?: Array<{ src: string }> };
+      const seen = new Set<string>();
+      for (const img of printifyProduct.images ?? []) {
+        if (img.src && !seen.has(img.src)) {
+          seen.add(img.src);
+          printifyMockupUrls.push(img.src);
+        }
+      }
+    } catch {
+      // Non-fatal — mockups can be fetched later via /api/printify/product-images
+    }
+
     await db
       .update(podProductsTable)
       .set({
@@ -196,10 +214,11 @@ export async function PATCH(req: Request) {
         printifyStatus: "synced",
         printifyLastSyncedAt: new Date(),
         variants: (variants ?? localProduct.variants) as typeof localProduct.variants,
+        ...(printifyMockupUrls.length > 0 ? { mockupUrls: printifyMockupUrls } : {}),
       })
       .where(eq(podProductsTable.id, productId));
 
-    return NextResponse.json({ success: true, printifyProductId });
+    return NextResponse.json({ success: true, printifyProductId, mockupUrls: printifyMockupUrls });
   } catch (err) {
     console.error("[printify/products] PATCH:", err);
     await alertPrintifyError({ route: "/api/printify/products PATCH", message: err instanceof Error ? err.message : "Sync failed", userId, metadata: { productId: parsedProductId } });
