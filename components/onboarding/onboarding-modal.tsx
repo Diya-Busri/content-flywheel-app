@@ -2,11 +2,73 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { X, ArrowRight, Loader2, BookOpen, Video, Sparkles } from "lucide-react";
+import { X, ArrowRight, Loader2, BookOpen, Video, Sparkles, Shirt, Mail, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { USE_CASES } from "@/lib/use-cases";
+
+type StepContent = {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  bullets: string[];
+  cta: string;
+  href: string;
+};
+
+const STEP_CONTENT: Record<string, StepContent> = {
+  videos: {
+    icon: <Video className="w-7 h-7 text-amber-500" />,
+    title: "Create your first video",
+    description: "Generate TikTok, Reels, or YouTube Shorts with an AI avatar in your brand voice — no camera needed.",
+    bullets: ["AI avatar reads your script", "Auto-captions and hooks", "Ready to post in minutes"],
+    cta: "Get video ideas",
+    href: "/dashboard/video-ideas",
+  },
+  physical_products: {
+    icon: <Shirt className="w-7 h-7 text-amber-500" />,
+    title: "Set up your first print-on-demand product",
+    description: "Upload a design, pick a product from the Printify catalog, and start selling merch — no stock needed.",
+    bullets: ["Upload your design", "Choose from 1000+ products", "Printify handles fulfilment"],
+    cta: "Create a product",
+    href: "/dashboard/print-on-demand",
+  },
+  digital_products: {
+    icon: <BookOpen className="w-7 h-7 text-amber-500" />,
+    title: "Create your first digital product",
+    description: "Generate an eBook, planner, or workbook in minutes. AI writes the content using your brand voice — you just pick the topic.",
+    bullets: ["AI-written chapters based on your niche", "Professional cover design", "Ready-to-sell on Gumroad, Etsy, or Stan Store"],
+    cta: "Create my first product",
+    href: "/dashboard/digital-products/create",
+  },
+  email_marketing: {
+    icon: <Mail className="w-7 h-7 text-amber-500" />,
+    title: "Build your email list",
+    description: "Create a landing page and start collecting subscribers. Send campaigns directly from Content Flywheel.",
+    bullets: ["Custom opt-in pages", "Automated welcome sequences", "Track open and click rates"],
+    cta: "Set up email marketing",
+    href: "/dashboard/email",
+  },
+  goals: {
+    icon: <Target className="w-7 h-7 text-amber-500" />,
+    title: "Set your first goal",
+    description: "Define revenue and content milestones. Content Flywheel breaks them into daily tasks and tracks your progress.",
+    bullets: ["Revenue and follower milestones", "AI-generated daily task plan", "Progress tracking dashboard"],
+    cta: "Set a goal",
+    href: "/dashboard/goals",
+  },
+};
+
+const PRIORITY_ORDER = ["videos", "physical_products", "digital_products", "email_marketing", "goals"];
+
+function getStepContent(selectedUseCases: string[], stepIndex: 0 | 1): StepContent {
+  const ordered = PRIORITY_ORDER.filter((id) => selectedUseCases.includes(id));
+  const fallback = STEP_CONTENT.digital_products;
+  if (stepIndex === 0) return STEP_CONTENT[ordered[0]] ?? fallback;
+  // Step 2: show second priority, or a generic "you're set" with videos fallback
+  return STEP_CONTENT[ordered[1]] ?? STEP_CONTENT.videos;
+}
 
 const TOTAL_STEPS = 5;
 
@@ -332,68 +394,61 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
           </div>
         )}
 
-        {/* Step 4: Create first product */}
-        {step === 4 && (
-          <div className="max-w-lg text-center space-y-6">
-            <div className="flex justify-center">
-              <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center">
-                <BookOpen className="w-7 h-7 text-amber-500" />
+        {/* Step 4: Primary action based on use case */}
+        {step === 4 && (() => {
+          const content = getStepContent(selectedUseCases, 0);
+          return (
+            <div className="max-w-lg text-center space-y-6">
+              <div className="flex justify-center">
+                <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center">
+                  {content.icon}
+                </div>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
+                {content.title}
+              </h2>
+              <p className="text-slate-600 dark:text-slate-400">{content.description}</p>
+              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 text-left text-sm text-slate-600 dark:text-slate-400 space-y-2">
+                <p className="font-medium text-slate-900 dark:text-white">What you&apos;ll get:</p>
+                {content.bullets.map((b) => <p key={b}>✅ {b}</p>)}
+              </div>
+              <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
+                <Button asChild className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold">
+                  <Link href={content.href} onClick={handleComplete}>{content.cta}</Link>
+                </Button>
+                <Button variant="ghost" onClick={handleNext}>I&apos;ll do this later</Button>
               </div>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
-              Create your first digital product
-            </h2>
-            <p className="text-slate-600 dark:text-slate-400">
-              Generate an eBook, planner, or workbook in minutes. AI writes the content using your brand voice — you just pick the topic.
-            </p>
-            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 text-left text-sm text-slate-600 dark:text-slate-400 space-y-2">
-              <p className="font-medium text-slate-900 dark:text-white">What you&apos;ll get:</p>
-              <p>✅ AI-written chapters based on your niche</p>
-              <p>✅ Professional cover design</p>
-              <p>✅ Ready-to-sell on Gumroad, Etsy, or Stan Store</p>
-            </div>
-            <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
-              <Button asChild className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold">
-                <Link href="/dashboard/digital-products/create" onClick={handleComplete}>
-                  Create my first product
-                </Link>
-              </Button>
-              <Button variant="ghost" onClick={handleNext}>
-                I&apos;ll do this later
-              </Button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
-        {/* Step 5: Generate promo video */}
-        {step === 5 && (
-          <div className="max-w-lg text-center space-y-6">
-            <div className="flex justify-center">
-              <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center">
-                <Video className="w-7 h-7 text-amber-500" />
+        {/* Step 5: Secondary action based on use case */}
+        {step === 5 && (() => {
+          const content = getStepContent(selectedUseCases, 1);
+          return (
+            <div className="max-w-lg text-center space-y-6">
+              <div className="flex justify-center">
+                <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center">
+                  {content.icon}
+                </div>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
+                {content.title}
+              </h2>
+              <p className="text-slate-600 dark:text-slate-400">{content.description}</p>
+              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 text-left text-sm text-slate-600 dark:text-slate-400 space-y-2">
+                <p className="font-medium text-slate-900 dark:text-white">What you&apos;ll get:</p>
+                {content.bullets.map((b) => <p key={b}>✅ {b}</p>)}
+              </div>
+              <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
+                <Button asChild className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold">
+                  <Link href={content.href} onClick={handleComplete}>{content.cta}</Link>
+                </Button>
+                <Button variant="ghost" onClick={handleComplete}>Got it, thanks!</Button>
               </div>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
-              Turn it into a promo video
-            </h2>
-            <p className="text-slate-600 dark:text-slate-400">
-              An AI avatar reads your script in your brand voice. Ready to post on TikTok, Reels, or YouTube Shorts.
-            </p>
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-300">
-              💡 Go to any product → <strong>Videos tab</strong> → click <strong>Generate Avatar Video</strong>
-            </div>
-            <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
-              <Button asChild className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold">
-                <Link href="/dashboard/digital-products" onClick={handleComplete}>
-                  Go to my products
-                </Link>
-              </Button>
-              <Button variant="ghost" onClick={handleComplete}>
-                Got it, thanks!
-              </Button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Skip button - top right */}
