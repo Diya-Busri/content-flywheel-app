@@ -12,7 +12,6 @@ const FAL_API_KEY = () => {
 };
 
 // Order matters — more specific terms must come before generic ones
-// e.g. "hooded sweatshirt" must match "hooded" before it falls through to "sweatshirt"
 const PRODUCT_PROMPTS: Array<{ key: string; prompt: string }> = [
   { key: "hooded sweatshirt", prompt: "person wearing a custom printed pullover hoodie with hood up" },
   { key: "hoodie",            prompt: "person wearing a custom printed pullover hoodie with hood up" },
@@ -54,6 +53,86 @@ function randomModel(): string {
   return MODEL_DESCRIPTORS[Math.floor(Math.random() * MODEL_DESCRIPTORS.length)];
 }
 
+const STYLE_MAP: Record<string, string> = {
+  lifestyle: "natural daylight, urban street photography, candid lifestyle shot",
+  studio:    "clean white studio background, professional product photography",
+  outdoor:   "golden hour outdoor lighting, nature background, editorial fashion",
+};
+
+/**
+ * Image-to-image mockup — uses the actual design as the reference image.
+ * FLUX dev img2img carries the design colours/shapes into the lifestyle photo.
+ */
+async function generateImg2ImgMockup(
+  designUrl: string,
+  prompt: string,
+  style: string
+): Promise<string> {
+  const lightingStyle = STYLE_MAP[style] ?? STYLE_MAP.lifestyle;
+  const fullPrompt = `${prompt}. The design printed on the garment matches this graphic exactly — same colours, same artwork. ${lightingStyle}. Design is clearly visible on the front. Photorealistic, 8K, commercial product photography.`;
+
+  const res = await fetch("https://fal.run/fal-ai/flux/dev/image-to-image", {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${FAL_API_KEY()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt: fullPrompt,
+      image_url: designUrl,
+      strength: 0.85,           // high strength so the lifestyle context dominates but design colours/shapes carry through
+      image_size: "portrait_4_3",
+      num_inference_steps: 28,
+      guidance_scale: 3.5,
+      num_images: 1,
+      enable_safety_checker: true,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`fal.ai img2img error: ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json() as { images?: Array<{ url: string }> };
+  const url = data.images?.[0]?.url;
+  if (!url) throw new Error("No image returned from img2img");
+  return url;
+}
+
+/**
+ * Text-only fallback — used when no design file is available yet.
+ */
+async function generateTextMockup(prompt: string, style: string): Promise<string> {
+  const lightingStyle = STYLE_MAP[style] ?? STYLE_MAP.lifestyle;
+  const fullPrompt = `High quality photo of ${prompt}. ${lightingStyle}. The design is clearly visible. Photorealistic, 8K quality, commercial product photography.`;
+
+  const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${FAL_API_KEY()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt: fullPrompt,
+      image_size: "portrait_4_3",
+      num_inference_steps: 4,
+      num_images: 1,
+      enable_safety_checker: true,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`fal.ai text mockup error: ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json() as { images?: Array<{ url: string }> };
+  const url = data.images?.[0]?.url;
+  if (!url) throw new Error("No image returned from text mockup");
+  return url;
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -73,40 +152,15 @@ export async function POST(req: Request) {
     const model = randomModel();
     const productContext = getProductPrompt(product.blueprintTitle).replace("person", model);
     const brandContext = product.title ? `, design themed around "${product.title}"` : "";
+    const basePrompt = `${productContext}${brandContext}`;
 
-    const styleMap: Record<string, string> = {
-      lifestyle: "natural daylight, urban street photography, candid lifestyle shot",
-      studio: "clean white studio background, professional product photography",
-      outdoor: "golden hour outdoor lighting, nature background, editorial fashion",
-    };
-    const lightingStyle = styleMap[style] ?? styleMap.lifestyle;
-
-    const prompt = `High quality photo of a ${productContext}${brandContext}. ${lightingStyle}. The design is clearly visible. Photorealistic, 8K quality, commercial product photography.`;
-
-    // Use raw fetch — same pattern as the working ai-design/generate route
-    const falRes = await fetch("https://fal.run/fal-ai/flux/schnell", {
-      method: "POST",
-      headers: {
-        Authorization: `Key ${FAL_API_KEY()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        prompt,
-        image_size: "portrait_4_3",
-        num_inference_steps: 4,
-        num_images: 1,
-        enable_safety_checker: true,
-      }),
-    });
-
-    if (!falRes.ok) {
-      const text = await falRes.text();
-      throw new Error(`fal.ai error: ${text.slice(0, 200)}`);
+    // Use img2img when we have the actual design file — this makes mockups show the real design
+    let imageUrl: string;
+    if (product.designFileUrl) {
+      imageUrl = await generateImg2ImgMockup(product.designFileUrl, basePrompt, style);
+    } else {
+      imageUrl = await generateTextMockup(basePrompt, style);
     }
-
-    const falData = await falRes.json() as { images?: Array<{ url: string }> };
-    const imageUrl = falData.images?.[0]?.url;
-    if (!imageUrl) throw new Error("No image generated");
 
     // Persist to Vercel Blob
     const imageRes = await fetch(imageUrl);
@@ -121,7 +175,7 @@ export async function POST(req: Request) {
     const currentMockups = (product.mockupUrls as string[] | null) ?? [];
     await db
       .update(podProductsTable)
-      .set({ mockupUrls: [...currentMockups, blob.url], aiMockupPrompt: prompt })
+      .set({ mockupUrls: [...currentMockups, blob.url], aiMockupPrompt: basePrompt })
       .where(eq(podProductsTable.id, productId));
 
     return NextResponse.json({ mockupUrl: blob.url });
