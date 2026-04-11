@@ -60,6 +60,7 @@ export const VIDEO_CREDIT_COST = {
   brandStoryVideo: 1,
   cookingVideo: 1,
   avatarVideo: 1,
+  aiDesign: 1,
 } as const;
 
 export type VideoType = keyof typeof VIDEO_CREDIT_COST;
