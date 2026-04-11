@@ -168,8 +168,28 @@ export default function ContentStudioLanding() {
           </Card>
         </div>
 
+        {/* Faceless Content Planner highlight */}
+        <div className="mt-8 rounded-2xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-gray-400 font-semibold mb-1">No face required</p>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">Faceless Content Planner</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              7-day TikTok + Instagram plan — text scripts, product reveals, teasers &amp; captions. All faceless.
+            </p>
+          </div>
+          <Button
+            asChild
+            className="shrink-0 bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-black font-semibold gap-2"
+          >
+            <Link href="/dashboard/content-studio/faceless-planner">
+              <Sparkles className="w-4 h-4" />
+              Plan my content
+            </Link>
+          </Button>
+        </div>
+
         {/* Bottom: Generate 3 Video Scripts (orange button) */}
-        <div className="mt-8 flex flex-col items-center">
+        <div className="mt-4 flex flex-col items-center">
           <Button
             asChild
             className="bg-orange-500 hover:bg-orange-600 text-white font-semibold h-12 px-6 gap-2"
