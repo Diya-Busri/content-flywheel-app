@@ -6,8 +6,9 @@ import { X, ArrowRight, Loader2, BookOpen, Video, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { USE_CASES } from "@/lib/use-cases";
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 type OnboardingModalProps = {
   show: boolean;
@@ -26,11 +27,33 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
   const [step, setStep] = useState(1);
   const [mounted, setMounted] = useState(false);
 
-  // Brand voice capture (step 2)
+  // Step 2: Use case selection
+  const [selectedUseCases, setSelectedUseCases] = useState<string[]>([]);
+
+  // Step 3: Brand voice capture
   const [brandName, setBrandName] = useState("");
   const [niche, setNiche] = useState("");
   const [tone, setTone] = useState("friendly");
   const [savingBrand, setSavingBrand] = useState(false);
+
+  const toggleUseCase = (id: string) => {
+    setSelectedUseCases((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSaveUseCases = async () => {
+    try {
+      await fetch("/api/user-features", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabledFeatures: selectedUseCases }),
+      });
+    } catch {
+      // non-blocking
+    }
+    handleNext();
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -161,8 +184,70 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
           </div>
         )}
 
-        {/* Step 2: Brand voice quick setup */}
+        {/* Step 2: Use case selection */}
         {step === 2 && (
+          <div className="max-w-lg w-full space-y-6">
+            <div className="text-center space-y-2">
+              <div className="flex justify-center mb-4">
+                <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center">
+                  <Sparkles className="w-7 h-7 text-amber-500" />
+                </div>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
+                What will you use Content Flywheel for?
+              </h2>
+              <p className="text-slate-600 dark:text-slate-400 text-sm">
+                Pick everything that applies — we&apos;ll customise your sidebar to show only what you need.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3">
+              {USE_CASES.map((uc) => {
+                const selected = selectedUseCases.includes(uc.id);
+                return (
+                  <button
+                    key={uc.id}
+                    type="button"
+                    onClick={() => toggleUseCase(uc.id)}
+                    className={`flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${
+                      selected
+                        ? "border-amber-500 bg-amber-500/10"
+                        : "border-slate-200 dark:border-slate-700 hover:border-amber-300"
+                    }`}
+                  >
+                    <span className="text-2xl shrink-0">{uc.emoji}</span>
+                    <div className="min-w-0">
+                      <p className={`font-semibold text-sm ${selected ? "text-amber-700 dark:text-amber-400" : "text-slate-900 dark:text-white"}`}>
+                        {uc.label}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{uc.description}</p>
+                    </div>
+                    <div className={`ml-auto shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                      selected ? "border-amber-500 bg-amber-500" : "border-slate-300 dark:border-slate-600"
+                    }`}>
+                      {selected && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <Button
+                onClick={handleSaveUseCases}
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold"
+              >
+                Continue <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <Button variant="ghost" onClick={handleNext} className="text-slate-500 hover:text-slate-700">
+                Skip — show everything
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Brand voice quick setup */}
+        {step === 3 && (
           <div className="max-w-md w-full space-y-6">
             <div className="text-center space-y-2">
               <div className="flex justify-center mb-4">
@@ -247,8 +332,8 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
           </div>
         )}
 
-        {/* Step 3: Create first product */}
-        {step === 3 && (
+        {/* Step 4: Create first product */}
+        {step === 4 && (
           <div className="max-w-lg text-center space-y-6">
             <div className="flex justify-center">
               <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center">
@@ -280,8 +365,8 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
           </div>
         )}
 
-        {/* Step 4: Generate promo video */}
-        {step === 4 && (
+        {/* Step 5: Generate promo video */}
+        {step === 5 && (
           <div className="max-w-lg text-center space-y-6">
             <div className="flex justify-center">
               <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center">

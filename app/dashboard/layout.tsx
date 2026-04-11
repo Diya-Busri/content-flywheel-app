@@ -11,6 +11,7 @@ import { redirect } from "next/navigation";
 import { DashboardLayoutClient } from "@/components/dashboard-layout-client";
 import { DashboardSetupError } from "@/components/dashboard-setup-error";
 import { getDisabledFeatures } from "@/lib/feature-flags";
+import { getHiddenFeaturesByUseCases } from "@/lib/use-cases";
 
 /** Paywall: user must have an active subscription to access the dashboard. */
 function hasActiveSubscription(profile: any | null): boolean {
@@ -88,8 +89,15 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   const disabledFeatures = await getDisabledFeatures(userId);
 
+  // Apply user's use-case preferences on top of admin feature flags
+  const selectedUseCases: string[] | null = profile.enabledFeatures
+    ? JSON.parse(profile.enabledFeatures)
+    : null;
+  const userHidden = getHiddenFeaturesByUseCases(selectedUseCases);
+  const allDisabled = [...new Set([...disabledFeatures, ...userHidden])];
+
   return (
-    <DashboardLayoutClient profile={profile} userEmail={userEmail} disabledFeatures={[...disabledFeatures]}>
+    <DashboardLayoutClient profile={profile} userEmail={userEmail} disabledFeatures={allDisabled}>
       {children}
     </DashboardLayoutClient>
   );
