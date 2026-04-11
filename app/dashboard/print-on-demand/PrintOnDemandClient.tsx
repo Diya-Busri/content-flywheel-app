@@ -739,7 +739,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                           </div>
                         </div>
                         <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                          💡 Put text in <span className="font-mono bg-gray-100 dark:bg-[#2A2A2A] px-1 rounded">"quotes"</span> for accurate lettering — e.g. <em>"Void Hours"</em>
+                          💡 Put text in <span className="font-mono bg-gray-100 dark:bg-[#2A2A2A] px-1 rounded">&quot;quotes&quot;</span> for accurate lettering — e.g. <em>&quot;Void Hours&quot;</em>
                         </p>
                       </div>
                     )}
