@@ -290,7 +290,27 @@ function PlacementManager({
   toast: ReturnType<typeof useToast>["toast"];
 }) {
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [generatingFor, setGeneratingFor] = useState<string | null>(null);
+  const [generatePrompts, setGeneratePrompts] = useState<Record<string, string>>({});
+  const [generatedPreviews, setGeneratedPreviews] = useState<Record<string, string>>({});
+  const [savingFor, setSavingFor] = useState<string | null>(null);
+  const [openPanels, setOpenPanels] = useState<Record<string, "generate" | null>>({});
+
   const productPlacements = (selectedProduct.placements as Array<{ position: string; designFileUrl: string; designFileName?: string }> | null) ?? [];
+
+  const savePlacement = useCallback(async (position: string, url: string, fileName?: string) => {
+    const patchRes = await fetch("/api/pod/placements", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productId: selectedProduct.id, position, designFileUrl: url, designFileName: fileName }),
+    });
+    if (!patchRes.ok) throw new Error("Failed to save placement");
+    const { placements: updated } = await patchRes.json() as { placements: typeof productPlacements };
+    const updatedProduct = { ...selectedProduct, placements: updated } as SelectPodProduct;
+    setSelectedProduct(updatedProduct);
+    setProducts((prev) => prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
+    return updatedProduct;
+  }, [selectedProduct, setSelectedProduct, setProducts, productPlacements]);
 
   const handlePlacementUpload = async (position: string, file: File) => {
     try {
@@ -299,20 +319,61 @@ function PlacementManager({
       const uploadRes = await fetch("/api/upload/store-image", { method: "POST", body: fd });
       if (!uploadRes.ok) throw new Error("Upload failed");
       const { url } = await uploadRes.json() as { url: string };
-
-      const patchRes = await fetch("/api/pod/placements", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: selectedProduct.id, position, designFileUrl: url, designFileName: file.name }),
-      });
-      if (!patchRes.ok) throw new Error("Failed to save placement");
-      const { placements: updated } = await patchRes.json() as { placements: typeof productPlacements };
-      const updatedProduct = { ...selectedProduct, placements: updated } as SelectPodProduct;
-      setSelectedProduct(updatedProduct);
-      setProducts((prev) => prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
+      await savePlacement(position, url, file.name);
       toast({ title: `${PLACEMENTS.find((p) => p.id === position)?.label ?? position} design saved!` });
     } catch (err) {
       toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    }
+  };
+
+  const handleUseFrontDesign = async (position: string) => {
+    const frontUrl = selectedProduct.designFileUrl;
+    if (!frontUrl) { toast({ title: "No front design set", variant: "destructive" }); return; }
+    setSavingFor(position);
+    try {
+      await savePlacement(position, frontUrl, selectedProduct.designFileName ?? "front-design.png");
+      toast({ title: `${PLACEMENTS.find((p) => p.id === position)?.label ?? position} — front design applied!` });
+    } catch (err) {
+      toast({ title: "Failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setSavingFor(null);
+    }
+  };
+
+  const handleGenerateForPlacement = async (position: string) => {
+    const prompt = generatePrompts[position]?.trim();
+    if (!prompt) { toast({ title: "Enter a prompt first", variant: "destructive" }); return; }
+    setGeneratingFor(position);
+    setGeneratedPreviews((prev) => ({ ...prev, [position]: "" }));
+    try {
+      const res = await fetch("/api/ai-design/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, style: "bold" }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Generation failed");
+      setGeneratedPreviews((prev) => ({ ...prev, [position]: data.url! }));
+    } catch (err) {
+      toast({ title: "Generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setGeneratingFor(null);
+    }
+  };
+
+  const handleUseGeneratedDesign = async (position: string) => {
+    const url = generatedPreviews[position];
+    if (!url) return;
+    setSavingFor(position);
+    try {
+      await savePlacement(position, url, `${position}-ai-design.png`);
+      setGeneratedPreviews((prev) => ({ ...prev, [position]: "" }));
+      setOpenPanels((prev) => ({ ...prev, [position]: null }));
+      toast({ title: `${PLACEMENTS.find((p) => p.id === position)?.label ?? position} — AI design saved!` });
+    } catch (err) {
+      toast({ title: "Failed to save", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setSavingFor(null);
     }
   };
 
@@ -340,60 +401,117 @@ function PlacementManager({
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3 flex items-center gap-1.5">
         <Layers className="w-3.5 h-3.5" /> Print Areas
       </p>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {extraPlacements.map((pl) => {
           const existing = productPlacements.find((p) => p.position === pl.id);
+          const isGenerating = generatingFor === pl.id;
+          const isSaving = savingFor === pl.id;
+          const generatedPreview = generatedPreviews[pl.id];
+          const panelOpen = openPanels[pl.id] === "generate";
+
           return (
-            <div key={pl.id} className="flex items-center gap-3 rounded-xl border border-gray-100 dark:border-[#2A2A2A] p-3">
-              <input
-                key={`file-${pl.id}`}
-                type="file"
-                accept="image/png,image/svg+xml,image/jpeg"
-                className="hidden"
-                ref={(el) => { fileInputRefs.current[pl.id] = el; }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handlePlacementUpload(pl.id, file);
-                  e.target.value = "";
-                }}
-              />
-              {existing?.designFileUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={existing.designFileUrl} alt={pl.label} className="w-10 h-10 object-contain rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#2A2A2A] shrink-0" />
-              ) : (
-                <div className="w-10 h-10 rounded-lg border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] shrink-0 flex items-center justify-center">
-                  <Upload className="w-4 h-4 text-gray-300" />
+            <div key={pl.id} className="rounded-xl border border-gray-100 dark:border-[#2A2A2A] overflow-hidden">
+              {/* Main row */}
+              <div className="flex items-center gap-3 p-3">
+                <input
+                  key={`file-${pl.id}`}
+                  type="file"
+                  accept="image/png,image/svg+xml,image/jpeg"
+                  className="hidden"
+                  ref={(el) => { fileInputRefs.current[pl.id] = el; }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handlePlacementUpload(pl.id, file);
+                    e.target.value = "";
+                  }}
+                />
+                {existing?.designFileUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={existing.designFileUrl} alt={pl.label} className="w-10 h-10 object-contain rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#2A2A2A] shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-lg border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] shrink-0 flex items-center justify-center">
+                    <Upload className="w-4 h-4 text-gray-300" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{pl.label}</p>
+                  <p className="text-[11px] text-gray-400 truncate">{existing ? "Design added" : pl.hint}</p>
                 </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{pl.label}</p>
-                <p className="text-[11px] text-gray-400 truncate">{existing ? "Design uploaded" : pl.hint}</p>
+                {existing ? (
+                  <div className="flex gap-1.5 shrink-0">
+                    <button type="button" onClick={() => fileInputRefs.current[pl.id]?.click()}
+                      className="text-xs text-orange-500 hover:text-orange-600 font-medium px-2 py-1 rounded-lg border border-orange-200 dark:border-orange-900/40">
+                      Replace
+                    </button>
+                    <button type="button" onClick={() => handleRemovePlacement(pl.id)}
+                      className="text-xs text-gray-400 hover:text-red-500 px-1.5 py-1 rounded-lg border border-gray-200 dark:border-[#2A2A2A]">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-1.5 shrink-0 flex-wrap justify-end">
+                    {/* Upload */}
+                    <button type="button" onClick={() => fileInputRefs.current[pl.id]?.click()}
+                      className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium px-2 py-1.5 rounded-lg border border-gray-200 dark:border-[#2A2A2A] flex items-center gap-1">
+                      <Upload className="w-3 h-3" /> Upload
+                    </button>
+                    {/* Use front design */}
+                    {selectedProduct.designFileUrl && (
+                      <button type="button" onClick={() => handleUseFrontDesign(pl.id)} disabled={isSaving}
+                        className="text-xs text-orange-500 hover:text-orange-600 font-medium px-2 py-1.5 rounded-lg border border-orange-200 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-950/20 flex items-center gap-1">
+                        {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
+                        Use front
+                      </button>
+                    )}
+                    {/* AI Generate */}
+                    <button type="button"
+                      onClick={() => setOpenPanels((prev) => ({ ...prev, [pl.id]: prev[pl.id] === "generate" ? null : "generate" }))}
+                      className={`text-xs font-medium px-2 py-1.5 rounded-lg border flex items-center gap-1 transition-all ${panelOpen ? "bg-orange-500 border-orange-500 text-white" : "border-orange-200 dark:border-orange-900/40 text-orange-500 hover:text-orange-600 bg-orange-50 dark:bg-orange-950/20"}`}>
+                      <Wand2 className="w-3 h-3" /> AI
+                    </button>
+                  </div>
+                )}
               </div>
-              {existing ? (
-                <div className="flex gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRefs.current[pl.id]?.click()}
-                    className="text-xs text-orange-500 hover:text-orange-600 font-medium px-2 py-1 rounded-lg border border-orange-200 dark:border-orange-900/40"
-                  >
-                    Replace
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemovePlacement(pl.id)}
-                    className="text-xs text-gray-400 hover:text-red-500 px-1.5 py-1 rounded-lg border border-gray-200 dark:border-[#2A2A2A]"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+
+              {/* AI Generate panel — slides open below the row */}
+              {panelOpen && !existing && (
+                <div className="border-t border-gray-100 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F] p-3 space-y-2">
+                  <p className="text-[11px] text-gray-400">Describe a design for the {pl.label.toLowerCase()}</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder={`e.g. small logo, "VOID" text, minimalist icon...`}
+                      value={generatePrompts[pl.id] ?? ""}
+                      onChange={(e) => setGeneratePrompts((prev) => ({ ...prev, [pl.id]: e.target.value }))}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleGenerateForPlacement(pl.id); }}
+                      className="flex-1 text-xs rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] px-3 py-2 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    />
+                    <button type="button" onClick={() => handleGenerateForPlacement(pl.id)} disabled={isGenerating}
+                      className="shrink-0 text-xs font-medium bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded-lg flex items-center gap-1 disabled:opacity-60">
+                      {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      {isGenerating ? "Generating..." : "Generate"}
+                    </button>
+                  </div>
+
+                  {/* Generated preview */}
+                  {generatedPreview && (
+                    <div className="flex items-start gap-3 mt-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={generatedPreview} alt="Generated design" className="w-20 h-20 object-contain rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] shrink-0" />
+                      <div className="flex flex-col gap-1.5 pt-1">
+                        <button type="button" onClick={() => handleUseGeneratedDesign(pl.id)} disabled={isSaving}
+                          className="text-xs font-medium bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 disabled:opacity-60">
+                          {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                          Use this design
+                        </button>
+                        <button type="button" onClick={() => handleGenerateForPlacement(pl.id)} disabled={isGenerating}
+                          className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-1">
+                          <RefreshCw className="w-3 h-3" /> Regenerate
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => fileInputRefs.current[pl.id]?.click()}
-                  className="shrink-0 text-xs text-orange-500 hover:text-orange-600 font-medium px-3 py-1.5 rounded-lg border border-orange-200 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-950/20"
-                >
-                  + Add
-                </button>
               )}
             </div>
           );
