@@ -27,6 +27,17 @@ export async function GET(req: Request) {
     const blueprintId = searchParams.get("blueprintId");
 
     if (blueprintId) {
+      const providerId = searchParams.get("providerId");
+
+      if (providerId) {
+        // Get variants for a specific blueprint + provider
+        const variants = await printifyFetch(
+          `/catalog/blueprints/${blueprintId}/print_providers/${providerId}/variants.json`,
+          settings.printifyApiKey
+        );
+        return NextResponse.json({ variants });
+      }
+
       // Get print providers for a specific blueprint
       const providers = await printifyFetch(
         `/catalog/blueprints/${blueprintId}/print_providers.json`,

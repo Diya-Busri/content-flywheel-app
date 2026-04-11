@@ -63,7 +63,7 @@ export async function PATCH(req: Request) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { productId, variants } = await req.json();
+    const { productId, variants, printifyImageId } = await req.json();
 
     const [settings] = await db
       .select({ printifyApiKey: userSettingsTable.printifyApiKey, printifyShopId: userSettingsTable.printifyShopId })
@@ -85,30 +85,27 @@ export async function PATCH(req: Request) {
     if (!localProduct.designFileUrl) return NextResponse.json({ error: "Upload a design first" }, { status: 400 });
 
     // Build Printify product payload
-    const printifyPayload = {
+    const variantList = (variants ?? localProduct.variants ?? []) as Array<{ id: number; price: number; enabled: boolean }>;
+    const enabledVariantIds = variantList.filter((v) => v.enabled !== false).map((v) => v.id);
+
+    const printifyPayload: Record<string, unknown> = {
       title: localProduct.title,
       blueprint_id: localProduct.blueprintId,
       print_provider_id: localProduct.printProviderId,
-      variants: (variants ?? localProduct.variants ?? []).map((v: { id: number; price: number; enabled: boolean }) => ({
+      variants: variantList.map((v) => ({
         id: v.id,
-        price: v.price,
-        is_enabled: v.enabled,
+        price: v.price ?? 2000, // default £20.00 in pence
+        is_enabled: v.enabled !== false,
       })),
       print_areas: [
         {
-          variant_ids: (variants ?? localProduct.variants ?? []).map((v: { id: number }) => v.id),
+          variant_ids: enabledVariantIds,
           placeholders: [
             {
               position: "front",
-              images: [
-                {
-                  id: null, // Printify image upload handled separately
-                  x: 0.5,
-                  y: 0.5,
-                  scale: 1,
-                  angle: 0,
-                },
-              ],
+              images: printifyImageId
+                ? [{ id: printifyImageId, x: 0.5, y: 0.5, scale: 1, angle: 0 }]
+                : [],
             },
           ],
         },
