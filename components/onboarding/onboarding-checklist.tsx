@@ -28,15 +28,25 @@ const ITEMS: ChecklistItem[] = [
 
 type OnboardingChecklistProps = {
   steps: OnboardingSteps | null;
+  enabledFeatures?: string[] | null;
   onStepsChange?: () => void;
 };
 
-export function OnboardingChecklist({ steps, onStepsChange }: OnboardingChecklistProps) {
+export function OnboardingChecklist({ steps, enabledFeatures, onStepsChange }: OnboardingChecklistProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [demoModalOpen, setDemoModalOpen] = useState(false);
 
-  const completed = ITEMS.filter((item) => steps?.[item.key] === true).length;
-  const total = ITEMS.length;
+  // Filter items based on what the user selected during onboarding.
+  // If enabledFeatures is set and doesn't include "digital_products", hide the firstProduct step.
+  const visibleItems = ITEMS.filter((item) => {
+    if (item.key === "firstProduct" && enabledFeatures != null) {
+      return enabledFeatures.includes("digital_products");
+    }
+    return true;
+  });
+
+  const completed = visibleItems.filter((item) => steps?.[item.key] === true).length;
+  const total = visibleItems.length;
   const allDone = completed >= total;
 
   const handleCloseDemoModal = () => {
@@ -72,7 +82,7 @@ export function OnboardingChecklist({ steps, onStepsChange }: OnboardingChecklis
         </button>
         {!collapsed && (
           <ul className="mt-4 space-y-2">
-            {ITEMS.map((item) => {
+            {visibleItems.map((item) => {
               const { key, label, href, openDemoModal } = item;
               const done = steps?.[key] === true;
               const baseClass = "flex items-center gap-3 rounded-lg py-2 px-2 -mx-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors w-full text-left";

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, createContext, useContext } from "react";
+import { usePathname } from "next/navigation";
 import confetti from "canvas-confetti";
 import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
@@ -38,17 +39,27 @@ export function OnboardingProvider({
   markDashboardSeen = false,
   hasProduct = false,
 }: OnboardingProviderProps) {
+  const pathname = usePathname();
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [steps, setSteps] = useState<OnboardingSteps | null>(null);
+  const [enabledFeatures, setEnabledFeatures] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchOnboarding = useCallback(async () => {
     try {
-      const res = await fetch("/api/onboarding");
-      const data = await res.json();
-      if (res.ok) {
-        setOnboardingCompleted(data.onboardingCompleted === true);
-        setSteps(data.onboardingSteps ?? {});
+      // Fetch onboarding status + user's selected features in parallel
+      const [onboardingRes, featuresRes] = await Promise.all([
+        fetch("/api/onboarding"),
+        fetch("/api/user-features"),
+      ]);
+      const onboardingData = await onboardingRes.json();
+      const featuresData = await featuresRes.json();
+      if (onboardingRes.ok) {
+        setOnboardingCompleted(onboardingData.onboardingCompleted === true);
+        setSteps(onboardingData.onboardingSteps ?? {});
+      }
+      if (featuresRes.ok) {
+        setEnabledFeatures(featuresData.enabledFeatures ?? null);
       }
     } catch {
       setOnboardingCompleted(false);
@@ -58,17 +69,36 @@ export function OnboardingProvider({
     }
   }, []);
 
+  // Initial fetch
   useEffect(() => {
     fetchOnboarding();
   }, [fetchOnboarding]);
 
-  // Mark steps when dashboard is seen or user has a product (only when something new to set)
+  // Re-fetch on every route change — picks up changes made on other pages
+  // (e.g. settings page marks brandProfile done; we catch it when user navigates away)
+  useEffect(() => {
+    if (!loading) {
+      fetchOnboarding();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  // Mark steps when dashboard is seen, user has a product, or digital products wasn't selected
   useEffect(() => {
     if (loading || onboardingCompleted || steps === null) return;
     const updates: Partial<OnboardingSteps> = {};
     if (markDashboardSeen && !steps.createAccount) updates.createAccount = true;
     if (markDashboardSeen && !steps.exploreDashboard) updates.exploreDashboard = true;
     if (hasProduct && !steps.firstProduct) updates.firstProduct = true;
+    // If user didn't select "digital_products" during onboarding, auto-complete firstProduct
+    // so it doesn't block overall completion and isn't shown in the checklist
+    if (
+      enabledFeatures !== null &&
+      !enabledFeatures.includes("digital_products") &&
+      !steps.firstProduct
+    ) {
+      updates.firstProduct = true;
+    }
     if (Object.keys(updates).length === 0) return;
     const next = { ...steps, ...updates };
     setSteps(next);
@@ -77,7 +107,7 @@ export function OnboardingProvider({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ steps: next }),
     }).catch(() => {});
-  }, [loading, markDashboardSeen, hasProduct, onboardingCompleted, steps]);
+  }, [loading, markDashboardSeen, hasProduct, onboardingCompleted, steps, enabledFeatures]);
 
   const handleModalComplete = useCallback(() => {
     try {
@@ -121,7 +151,7 @@ export function OnboardingProvider({
       {children}
       {!loading && !onboardingCompleted && !showModal && (
         <div className="fixed bottom-6 right-6 z-40 w-80 max-w-[calc(100vw-3rem)]">
-          <OnboardingChecklist steps={steps} onStepsChange={fetchOnboarding} />
+          <OnboardingChecklist steps={steps} enabledFeatures={enabledFeatures} onStepsChange={fetchOnboarding} />
         </div>
       )}
     </OnboardingContext.Provider>
