@@ -97,7 +97,7 @@ function DesignOnProductPreview({
   const overlay = getDesignOverlay(blueprintTitle);
 
   return (
-    <div className={`relative select-none ${className}`}>
+    <div className={`relative select-none mx-auto ${className}`} style={{ maxWidth: "320px" }}>
       {/* Product base image */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -747,6 +747,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       const productId = createData.product.id;
 
       // 3. Sync to Printify if connected
+      let syncedOk = false;
       if (connected && selectedBlueprint && selectedProvider) {
         const variantPayload = variants
           .filter((v) => selectedVariants.has(v.id))
@@ -756,23 +757,40 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
             enabled: true,
           }));
 
-        await fetch("/api/printify/products", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ productId, variants: variantPayload, placementImages }),
-        });
+        try {
+          const patchRes = await fetch("/api/printify/products", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId, variants: variantPayload, placementImages }),
+          });
+          syncedOk = patchRes.ok;
+        } catch { /* non-blocking — show product even if sync fails */ }
       }
 
-      // 4. Fetch updated product and show it
-      const listRes = await fetch("/api/printify/products");
+      // 4. Fetch updated product list (bypass cache) and show it
+      const listRes = await fetch("/api/printify/products", { cache: "no-store" });
       const listData = await listRes.json();
-      const newProduct = (listData.products ?? []).find((p: SelectPodProduct) => p.id === productId) ?? createData.product;
+      const foundProduct = (listData.products ?? []).find((p: SelectPodProduct) => p.id === productId);
 
-      setProducts(listData.products ?? [createData.product]);
+      // Enrich product state with data we know from the wizard (blueprint image, sync status)
+      // This ensures 3D preview and correct status show immediately even if DB hasn't flushed
+      const baseProduct = foundProduct ?? createData.product;
+      const newProduct: SelectPodProduct = {
+        ...baseProduct,
+        blueprintImageUrl: baseProduct.blueprintImageUrl ?? selectedBlueprint?.images?.[0] ?? null,
+        printifyStatus: (syncedOk ? "synced" : baseProduct.printifyStatus) as string,
+      } as SelectPodProduct;
+
+      setProducts((listData.products ?? [createData.product]).map((p: SelectPodProduct) =>
+        p.id === productId ? newProduct : p
+      ));
       setSelectedProduct(newProduct);
       setView("product");
       resetCreate();
-      toast({ title: "Product created!", description: connected ? "Synced to Printify." : "Generate mockups next." });
+      toast({
+        title: "Product created!",
+        description: syncedOk ? "Synced to Printify ✓" : connected ? "Sync to Printify from the product page." : "Generate mockups next.",
+      });
     } catch (err) {
       toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
     } finally {
@@ -1633,12 +1651,12 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                     blueprintImage={selectedProduct.blueprintImageUrl}
                     designUrl={selectedProduct.designFileUrl}
                     blueprintTitle={selectedProduct.blueprintTitle}
-                    className="w-full"
+                    className="w-full max-h-72 object-contain"
                   />
                 ) : (
-                  <div className="aspect-square w-full bg-gray-50 dark:bg-[#2A2A2A] rounded-xl flex items-center justify-center overflow-hidden">
+                  <div className="w-full max-h-64 bg-gray-50 dark:bg-[#2A2A2A] rounded-xl flex items-center justify-center overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={selectedProduct.designFileUrl} alt="Design" className="w-full h-full object-contain p-6" />
+                    <img src={selectedProduct.designFileUrl} alt="Design" className="max-h-64 w-auto object-contain p-4" />
                   </div>
                 )}
               </div>
