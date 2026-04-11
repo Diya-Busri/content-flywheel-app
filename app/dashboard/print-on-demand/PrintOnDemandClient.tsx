@@ -647,7 +647,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setDesignTab("generate"); setDesignPreview(null); setDesignUrl(null); setDesignFile(null); }}
+                  onClick={() => { setDesignTab("generate"); setDesignPreview(null); setDesignUrl(null); setDesignFile(null); setAiStyle("typography"); }}
                   className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium py-1.5 rounded-lg transition-all ${designTab === "generate" ? "bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
                 >
                   <Wand2 className="w-3.5 h-3.5" /> Generate with AI
@@ -708,7 +708,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                       <div className="mt-2 space-y-2">
                         {/* Brand / text row */}
                         <div>
-                          <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-1.5">Brand &amp; text</p>
+                          <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-1.5">Brand &amp; text <span className="normal-case tracking-normal text-orange-400">→ auto-selects Typography style</span></p>
                           <div className="flex flex-wrap gap-1.5">
                             {BRAND_PROMPTS.map((idea) => (
                               <button
