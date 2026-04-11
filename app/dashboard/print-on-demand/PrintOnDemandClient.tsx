@@ -1688,10 +1688,13 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 const productPlacements = (selectedProduct.placements as Array<{ position: string }> | null) ?? [];
                 const availablePlacements = [
                   { id: "front", label: "Front" },
-                  ...productPlacements.map((p) => ({
-                    id: p.position,
-                    label: PLACEMENTS.find((pl) => pl.id === p.position)?.label ?? p.position,
-                  })),
+                  // Exclude "front" from stored placements — it's already added above
+                  ...productPlacements
+                    .filter((p) => p.position !== "front")
+                    .map((p) => ({
+                      id: p.position,
+                      label: PLACEMENTS.find((pl) => pl.id === p.position)?.label ?? p.position,
+                    })),
                 ];
                 if (availablePlacements.length <= 1) return null;
                 return (
