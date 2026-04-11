@@ -469,6 +469,28 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     }
   };
 
+  const handleSyncToPrintify = async () => {
+    if (!selectedProduct) return;
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/printify/products", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: selectedProduct.id, variants: [], printifyImageId: null }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Sync failed");
+      const updated = { ...selectedProduct, printifyStatus: "synced" } as SelectPodProduct;
+      setSelectedProduct(updated);
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      toast({ title: "Synced to Printify!", description: "Your product is now live in Printify." });
+    } catch (err) {
+      toast({ title: "Sync failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleGenerateMockup = async () => {
     if (!selectedProduct) return;
     setGeneratingMockup(true);
@@ -1061,13 +1083,18 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                   </a>
                 </div>
               ) : (
-                <div className="space-y-2 text-sm text-gray-500">
-                  <p>Not yet synced to Printify.</p>
-                  <Link href="https://printify.com/app/store/products" target="_blank" rel="noreferrer">
-                    <Button variant="outline" size="sm" className="gap-2 border-orange-200 text-orange-600 hover:bg-orange-50">
-                      Open Printify <ExternalLink className="w-3.5 h-3.5" />
-                    </Button>
-                  </Link>
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-500">Not yet synced to Printify.</p>
+                  <Button
+                    onClick={handleSyncToPrintify}
+                    disabled={syncing || !connected}
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                  >
+                    {syncing ? <><Loader2 className="w-4 h-4 animate-spin" />Syncing...</> : <><RefreshCw className="w-4 h-4" />Sync to Printify now</>}
+                  </Button>
+                  {!connected && (
+                    <p className="text-xs text-amber-600">Connect Printify above to enable sync.</p>
+                  )}
                 </div>
               )}
             </div>
