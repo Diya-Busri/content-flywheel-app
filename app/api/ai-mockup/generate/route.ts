@@ -119,9 +119,12 @@ async function generateImg2ImgMockup(
   flat = false
 ): Promise<string> {
   const lightingStyle = STYLE_MAP[style] ?? STYLE_MAP.lifestyle;
+  // Low strength (0.35–0.45) forces the model to generate a real product photo
+  // and use the design image only as a loose style/colour reference.
+  // High strength kept the dark background of the logo and produced a mess.
   const fullPrompt = flat
-    ? `${prompt}. ${lightingStyle}. The design printed on the product matches this graphic exactly. No person in shot. Photorealistic, 8K, commercial product photography.`
-    : `${prompt}. The design printed on the garment matches this graphic exactly — same colours, same artwork. ${lightingStyle}. Design clearly visible. Photorealistic, 8K, commercial product photography.`;
+    ? `${prompt}. ${lightingStyle}. Artwork printed on the product inspired by the reference image. No person in shot. Clean, sharp, professional. Photorealistic, 8K, commercial product photography.`
+    : `${prompt}. ${lightingStyle}. Graphic design printed on the garment inspired by the reference image — artwork clearly visible on the fabric. Sharp focus, professional. Photorealistic, 8K, commercial product photography.`;
 
   const res = await fetch("https://fal.run/fal-ai/flux/dev/image-to-image", {
     method: "POST",
@@ -132,10 +135,10 @@ async function generateImg2ImgMockup(
     body: JSON.stringify({
       prompt: fullPrompt,
       image_url: designUrl,
-      strength: flat ? 0.80 : 0.85,
+      strength: flat ? 0.45 : 0.38,
       image_size: flat ? "square_hd" : "portrait_4_3",
-      num_inference_steps: 28,
-      guidance_scale: 3.5,
+      num_inference_steps: 32,
+      guidance_scale: 4.5,
       num_images: 1,
       enable_safety_checker: true,
     }),
@@ -156,8 +159,8 @@ async function generateImg2ImgMockup(
 async function generateTextMockup(prompt: string, style: string, flat = false): Promise<string> {
   const lightingStyle = STYLE_MAP[style] ?? STYLE_MAP.lifestyle;
   const fullPrompt = flat
-    ? `${prompt}. ${lightingStyle}. No person in shot. Photorealistic, 8K, commercial product photography.`
-    : `High quality photo of ${prompt}. ${lightingStyle}. The design is clearly visible. Photorealistic, 8K, commercial product photography.`;
+    ? `${prompt}. ${lightingStyle}. No person in shot. Clean background, sharp product photo. Photorealistic, 8K, commercial product photography.`
+    : `High quality lifestyle photo of ${prompt}. ${lightingStyle}. Bold graphic clearly printed on the garment. Photorealistic, 8K, commercial product photography.`;
 
   const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
     method: "POST",
