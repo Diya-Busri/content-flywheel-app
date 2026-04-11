@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Plus, Shirt, Upload, Sparkles, ExternalLink, Loader2,
   CheckCircle2, AlertCircle, X, ChevronRight, Settings,
@@ -56,6 +57,7 @@ const CREATE_STEPS = ["Design", "Product type", "Provider", "Variants", "Review"
 
 export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Props) {
   const { toast } = useToast();
+  const router = useRouter();
   const [products, setProducts] = useState<SelectPodProduct[]>(initialProducts);
   const [view, setView] = useState<"list" | "create" | "product">("list");
   const [selectedProduct, setSelectedProduct] = useState<SelectPodProduct | null>(null);
@@ -144,7 +146,16 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: aiPrompt.trim(), style: aiStyle }),
       });
-      const data = await res.json() as { url?: string; error?: string };
+      const data = await res.json() as { url?: string; error?: string; code?: string; redirectTo?: string };
+      if (res.status === 402) {
+        toast({
+          title: "No credits",
+          description: "You need 1 video credit to generate a design.",
+          variant: "destructive",
+        });
+        router.push(data.redirectTo ?? "/dashboard/video-credits");
+        return;
+      }
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
       setDesignPreview(data.url!);
       setDesignUrl(data.url!);
