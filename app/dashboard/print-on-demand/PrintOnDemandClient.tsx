@@ -580,6 +580,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
 
   // ── Sync state ───────────────────────────────────────────────────────────────
   const [syncing, setSyncing] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [creating, setCreating] = useState(false);
 
   // ── Printify connect state ───────────────────────────────────────────────────
@@ -935,6 +936,28 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       toast({ title: "Sync failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!selectedProduct) return;
+    setPublishing(true);
+    try {
+      const res = await fetch("/api/printify/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: selectedProduct.id }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Publish failed");
+      const updated = { ...selectedProduct, status: "published", printifyStatus: "published" } as SelectPodProduct;
+      setSelectedProduct(updated);
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      toast({ title: "🎉 Published!", description: "Your product is now live in your store." });
+    } catch (err) {
+      toast({ title: "Publish failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -1865,9 +1888,30 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Printify</p>
               {selectedProduct.printifyProductId ? (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                    <CheckCircle2 className="w-4 h-4" /> Synced to Printify
-                  </div>
+                  {/* Status */}
+                  {selectedProduct.printifyStatus === "published" ? (
+                    <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                      <CheckCircle2 className="w-4 h-4" /> Live in your store
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                      <AlertCircle className="w-4 h-4" /> Synced but not yet published
+                    </div>
+                  )}
+
+                  {/* Publish button — shown when synced but not published */}
+                  {selectedProduct.printifyStatus !== "published" && (
+                    <Button
+                      onClick={handlePublish}
+                      disabled={publishing}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white gap-2"
+                    >
+                      {publishing
+                        ? <><Loader2 className="w-4 h-4 animate-spin" />Publishing...</>
+                        : <><CheckCircle2 className="w-4 h-4" />Publish to store</>}
+                    </Button>
+                  )}
+
                   <a href={`https://printify.com/app/store/products/${selectedProduct.printifyProductId}/edit`} target="_blank" rel="noreferrer"
                     className="inline-flex items-center gap-2 text-sm text-orange-500 hover:text-orange-600">
                     Edit in Printify <ExternalLink className="w-3.5 h-3.5" />
