@@ -8,6 +8,7 @@ import {
   Plus, Shirt, Upload, Sparkles, ExternalLink, Loader2,
   CheckCircle2, AlertCircle, X, ChevronRight, Settings,
   ArrowLeft, RefreshCw, ChevronDown, ChevronUp, Wand2, Shuffle,
+  Download, Share2, Copy, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,6 +80,112 @@ function Steps({ current, steps }: { current: number; steps: string[] }) {
 }
 
 const CREATE_STEPS = ["Design", "Product type", "Provider", "Variants", "Review"];
+
+// ─── Mockup grid with download + share ───────────────────────────────────────
+function MockupGrid({ mockups, productTitle }: { mockups: string[]; productTitle: string }) {
+  const { toast } = useToast();
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+
+  const handleDownload = async (url: string, idx: number) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${productTitle.replace(/\s+/g, "-").toLowerCase()}-mockup-${idx + 1}.jpg`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      toast({ title: "Download failed", variant: "destructive" });
+    }
+  };
+
+  const handleShare = async (url: string, idx: number) => {
+    const text = `Check out my new merch design: ${productTitle} 🔥`;
+    // Try native Web Share API first (mobile)
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: productTitle, text, url });
+        return;
+      } catch { /* user cancelled */ return; }
+    }
+    // Fallback: copy link
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedIdx(idx);
+      toast({ title: "Link copied!" });
+      setTimeout(() => setCopiedIdx(null), 2000);
+    } catch {
+      toast({ title: "Copy failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        {mockups.map((url, i) => (
+          <div key={i} className="group relative rounded-xl overflow-hidden border border-gray-100 dark:border-[#2A2A2A] aspect-square bg-gray-50 dark:bg-[#2A2A2A]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt={`Mockup ${i + 1}`} className="w-full h-full object-cover" />
+
+            {/* Action overlay — appears on hover */}
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-200" />
+            <div className="absolute bottom-0 left-0 right-0 p-2 flex gap-1.5 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-200">
+              <button
+                type="button"
+                onClick={() => handleDownload(url, i)}
+                className="flex-1 flex items-center justify-center gap-1 text-xs font-medium bg-white/90 hover:bg-white text-gray-900 rounded-lg py-1.5 transition-colors"
+              >
+                <Download className="w-3 h-3" /> Save
+              </button>
+              <button
+                type="button"
+                onClick={() => handleShare(url, i)}
+                className="flex-1 flex items-center justify-center gap-1 text-xs font-medium bg-white/90 hover:bg-white text-gray-900 rounded-lg py-1.5 transition-colors"
+              >
+                {copiedIdx === i ? <><Check className="w-3 h-3 text-green-600" /> Copied</> : <><Share2 className="w-3 h-3" /> Share</>}
+              </button>
+            </div>
+
+            {/* Open full size */}
+            <a href={url} target="_blank" rel="noreferrer"
+              className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity">
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        ))}
+      </div>
+
+      {/* Bulk actions */}
+      {mockups.length > 0 && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(mockups.join("\n"));
+                toast({ title: "All links copied!" });
+              } catch {
+                toast({ title: "Copy failed", variant: "destructive" });
+              }
+            }}
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium border border-gray-200 dark:border-[#2A2A2A] rounded-xl py-2 text-gray-600 dark:text-gray-400 hover:border-orange-300 hover:text-orange-500 transition-all"
+          >
+            <Copy className="w-3 h-3" /> Copy all links
+          </button>
+          <a
+            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Just designed new merch for ${productTitle} 🔥`)}&url=${encodeURIComponent(mockups[0] ?? "")}`}
+            target="_blank"
+            rel="noreferrer"
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium border border-gray-200 dark:border-[#2A2A2A] rounded-xl py-2 text-gray-600 dark:text-gray-400 hover:border-orange-300 hover:text-orange-500 transition-all"
+          >
+            <Share2 className="w-3 h-3" /> Post to X
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Props) {
   const { toast } = useToast();
@@ -923,18 +1030,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 {generatingMockup ? <><Loader2 className="w-4 h-4 animate-spin" />Generating...</> : <><Sparkles className="w-4 h-4" />Generate AI Mockup</>}
               </Button>
               {((selectedProduct.mockupUrls as string[]) ?? []).length > 0 && (
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                  {((selectedProduct.mockupUrls as string[]) ?? []).map((url, i) => (
-                    <div key={i} className="aspect-square rounded-xl overflow-hidden relative border border-gray-100 dark:border-[#2A2A2A]">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt={`Mockup ${i + 1}`} className="w-full h-full object-cover" />
-                      <a href={url} target="_blank" rel="noreferrer"
-                        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70">
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
-                  ))}
-                </div>
+                <MockupGrid mockups={(selectedProduct.mockupUrls as string[]) ?? []} productTitle={selectedProduct.title} />
               )}
             </div>
           </div>
