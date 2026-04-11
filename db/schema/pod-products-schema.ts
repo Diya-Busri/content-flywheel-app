@@ -13,8 +13,16 @@ export const podProductsTable = pgTable("pod_products", {
   // Product type from Printify catalog
   blueprintId: integer("blueprint_id"),         // Printify blueprint ID (e.g. 5 = t-shirt)
   blueprintTitle: text("blueprint_title"),       // e.g. "Unisex Staple T-Shirt"
+  blueprintImageUrl: text("blueprint_image_url"), // first product image from catalog (for 3D preview)
   printProviderId: integer("print_provider_id"),
   printProviderTitle: text("print_provider_title"),
+
+  // Multi-placement designs (back, sleeves, label — front is designFileUrl above)
+  placements: jsonb("placements").$type<Array<{
+    position: string;        // "back" | "left_sleeve" | "right_sleeve" | "label"
+    designFileUrl: string;
+    designFileName?: string;
+  }>>().default([]),
 
   // AI Mockups (lifestyle photos of people wearing the product)
   mockupUrls: jsonb("mockup_urls").$type<string[]>().default([]),

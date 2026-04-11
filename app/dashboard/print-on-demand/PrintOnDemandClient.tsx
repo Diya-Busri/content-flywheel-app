@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -8,12 +8,13 @@ import {
   Plus, Shirt, Upload, Sparkles, ExternalLink, Loader2,
   CheckCircle2, AlertCircle, X, ChevronRight, Settings,
   ArrowLeft, RefreshCw, ChevronDown, ChevronUp, Wand2, Shuffle,
-  Download, Share2, Copy, Check,
+  Download, Share2, Copy, Check, Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import type { SelectPodProduct } from "@/db/schema/pod-products-schema";
 
 type Props = {
@@ -54,7 +55,96 @@ const MOCKUP_STYLES = [
   { id: "lifestyle", label: "Lifestyle", desc: "Candid street / outdoor" },
   { id: "studio", label: "Studio", desc: "Clean white background" },
   { id: "outdoor", label: "Outdoor", desc: "Golden hour editorial" },
+  { id: "flat", label: "Flat Lay", desc: "Product only, top-down" },
 ];
+
+// Print placement positions supported
+const PLACEMENTS = [
+  { id: "front",         label: "Front",      hint: "Required — the primary print area" },
+  { id: "back",          label: "Back",        hint: "Optional — back of the garment" },
+  { id: "left_sleeve",   label: "L. Sleeve",   hint: "Optional — left sleeve print" },
+  { id: "right_sleeve",  label: "R. Sleeve",   hint: "Optional — right sleeve print" },
+  { id: "label",         label: "Tag/Label",   hint: "Optional — neck label inside garment" },
+] as const;
+type PlacementId = typeof PLACEMENTS[number]["id"];
+
+type ExtraDesign = { file: File | null; preview: string | null; url: string | null };
+
+// ─── Design-on-product overlay positions per product type ────────────────────
+function getDesignOverlay(blueprintTitle: string | null): React.CSSProperties {
+  const t = (blueprintTitle ?? "").toLowerCase();
+  if (t.includes("mug"))                      return { top: "10%", left: "30%", width: "38%", height: "72%" };
+  if (t.includes("poster") || t.includes("print")) return { top: "7%",  left: "10%", width: "80%", height: "84%" };
+  if (t.includes("hat") || t.includes("cap")) return { top: "28%", left: "16%", width: "68%", height: "38%" };
+  if (t.includes("tote"))                     return { top: "16%", left: "20%", width: "60%", height: "60%" };
+  if (t.includes("phone"))                    return { top: "12%", left: "20%", width: "60%", height: "64%" };
+  // Default: apparel chest print area (t-shirts, hoodies, sweatshirts)
+  return { top: "20%", left: "27%", width: "46%", height: "44%" };
+}
+
+// ─── 3D design-on-product preview ─────────────────────────────────────────────
+function DesignOnProductPreview({
+  blueprintImage,
+  designUrl,
+  blueprintTitle,
+  className = "",
+}: {
+  blueprintImage: string;
+  designUrl: string;
+  blueprintTitle: string | null;
+  className?: string;
+}) {
+  const overlay = getDesignOverlay(blueprintTitle);
+
+  return (
+    <div className={`relative select-none mx-auto ${className}`} style={{ maxWidth: "320px" }}>
+      {/* Product base image */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={blueprintImage}
+        alt={blueprintTitle ?? "Product"}
+        className="w-full rounded-xl"
+        draggable={false}
+      />
+
+      {/* Design overlay — blended onto the product fabric */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          ...overlay,
+          /* Subtle 3-D perspective tilt so it looks printed on fabric */
+          transform: "perspective(420px) rotateX(4deg) rotateY(-2deg)",
+          transformOrigin: "50% 0%",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={designUrl}
+          alt="Your design"
+          className="w-full h-full object-contain"
+          draggable={false}
+          style={{
+            /* Multiply blends white areas away — looks like screen print */
+            mixBlendMode: "multiply",
+            opacity: 0.88,
+            filter: "contrast(1.08) saturate(0.96)",
+          }}
+        />
+      </div>
+
+      {/* Subtle vignette so design edges fade naturally into fabric */}
+      <div
+        className="absolute pointer-events-none rounded-xl"
+        style={{
+          ...overlay,
+          background: "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.08) 100%)",
+          transform: "perspective(420px) rotateX(4deg) rotateY(-2deg)",
+          transformOrigin: "50% 0%",
+        }}
+      />
+    </div>
+  );
+}
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 function Steps({ current, steps }: { current: number; steps: string[] }) {
@@ -187,6 +277,132 @@ function MockupGrid({ mockups, productTitle }: { mockups: string[]; productTitle
   );
 }
 
+// ─── Placement manager — proper component with stable refs ───────────────────
+function PlacementManager({
+  selectedProduct,
+  setSelectedProduct,
+  setProducts,
+  toast,
+}: {
+  selectedProduct: SelectPodProduct;
+  setSelectedProduct: React.Dispatch<React.SetStateAction<SelectPodProduct | null>>;
+  setProducts: React.Dispatch<React.SetStateAction<SelectPodProduct[]>>;
+  toast: ReturnType<typeof useToast>["toast"];
+}) {
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const productPlacements = (selectedProduct.placements as Array<{ position: string; designFileUrl: string; designFileName?: string }> | null) ?? [];
+
+  const handlePlacementUpload = async (position: string, file: File) => {
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const uploadRes = await fetch("/api/upload/store-image", { method: "POST", body: fd });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      const { url } = await uploadRes.json() as { url: string };
+
+      const patchRes = await fetch("/api/pod/placements", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: selectedProduct.id, position, designFileUrl: url, designFileName: file.name }),
+      });
+      if (!patchRes.ok) throw new Error("Failed to save placement");
+      const { placements: updated } = await patchRes.json() as { placements: typeof productPlacements };
+      const updatedProduct = { ...selectedProduct, placements: updated } as SelectPodProduct;
+      setSelectedProduct(updatedProduct);
+      setProducts((prev) => prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
+      toast({ title: `${PLACEMENTS.find((p) => p.id === position)?.label ?? position} design saved!` });
+    } catch (err) {
+      toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    }
+  };
+
+  const handleRemovePlacement = async (position: string) => {
+    try {
+      const res = await fetch("/api/pod/placements", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: selectedProduct.id, position }),
+      });
+      if (!res.ok) throw new Error("Remove failed");
+      const { placements: updated } = await res.json() as { placements: typeof productPlacements };
+      const updatedProduct = { ...selectedProduct, placements: updated } as SelectPodProduct;
+      setSelectedProduct(updatedProduct);
+      setProducts((prev) => prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
+    } catch {
+      toast({ title: "Remove failed", variant: "destructive" });
+    }
+  };
+
+  const extraPlacements = PLACEMENTS.filter((p) => p.id !== "front");
+
+  return (
+    <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3 flex items-center gap-1.5">
+        <Layers className="w-3.5 h-3.5" /> Print Areas
+      </p>
+      <div className="space-y-2">
+        {extraPlacements.map((pl) => {
+          const existing = productPlacements.find((p) => p.position === pl.id);
+          return (
+            <div key={pl.id} className="flex items-center gap-3 rounded-xl border border-gray-100 dark:border-[#2A2A2A] p-3">
+              <input
+                key={`file-${pl.id}`}
+                type="file"
+                accept="image/png,image/svg+xml,image/jpeg"
+                className="hidden"
+                ref={(el) => { fileInputRefs.current[pl.id] = el; }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handlePlacementUpload(pl.id, file);
+                  e.target.value = "";
+                }}
+              />
+              {existing?.designFileUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={existing.designFileUrl} alt={pl.label} className="w-10 h-10 object-contain rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#2A2A2A] shrink-0" />
+              ) : (
+                <div className="w-10 h-10 rounded-lg border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] shrink-0 flex items-center justify-center">
+                  <Upload className="w-4 h-4 text-gray-300" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{pl.label}</p>
+                <p className="text-[11px] text-gray-400 truncate">{existing ? "Design uploaded" : pl.hint}</p>
+              </div>
+              {existing ? (
+                <div className="flex gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRefs.current[pl.id]?.click()}
+                    className="text-xs text-orange-500 hover:text-orange-600 font-medium px-2 py-1 rounded-lg border border-orange-200 dark:border-orange-900/40"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePlacement(pl.id)}
+                    className="text-xs text-gray-400 hover:text-red-500 px-1.5 py-1 rounded-lg border border-gray-200 dark:border-[#2A2A2A]"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRefs.current[pl.id]?.click()}
+                  className="shrink-0 text-xs text-orange-500 hover:text-orange-600 font-medium px-3 py-1.5 rounded-lg border border-orange-200 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-950/20"
+                >
+                  + Add
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Props) {
   const { toast } = useToast();
   const router = useRouter();
@@ -208,6 +424,8 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [selectedBlueprint, setSelectedBlueprint] = useState<Blueprint | null>(null);
   const [blueprintSearch, setBlueprintSearch] = useState("");
+  // Blueprint preview dialog — shown before confirming product choice
+  const [previewBlueprint, setPreviewBlueprint] = useState<Blueprint | null>(null);
 
   // ── Provider state ───────────────────────────────────────────────────────────
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -221,6 +439,11 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [variantPrices, setVariantPrices] = useState<Record<number, string>>({});
   const [variantsExpanded, setVariantsExpanded] = useState(false);
 
+  // ── Multi-placement state ────────────────────────────────────────────────────
+  const [activePlacement, setActivePlacement] = useState<PlacementId>("front");
+  const [extraDesigns, setExtraDesigns] = useState<Partial<Record<PlacementId, ExtraDesign>>>({});
+  const extraFileRefs = useRef<Partial<Record<PlacementId, HTMLInputElement>>>({});
+
   // ── AI design generator state ────────────────────────────────────────────────
   const [designTab, setDesignTab] = useState<"upload" | "generate">("upload");
   const [aiPrompt, setAiPrompt] = useState("");
@@ -230,6 +453,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   // ── Mockup state ─────────────────────────────────────────────────────────────
   const [generatingMockup, setGeneratingMockup] = useState(false);
   const [mockupStyle, setMockupStyle] = useState("lifestyle");
+  const [mockupPlacement, setMockupPlacement] = useState("front");
 
   // ── Caption state ─────────────────────────────────────────────────────────────
   const [generatingCaptions, setGeneratingCaptions] = useState(false);
@@ -244,6 +468,33 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [apiKey, setApiKey] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(isPrintifyConnected);
+
+  // ── Auto-fetch blueprint image for existing products that are missing it ──────
+  useEffect(() => {
+    if (!selectedProduct || !selectedProduct.blueprintId || selectedProduct.blueprintImageUrl || !connected) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/printify/blueprint?blueprintId=${selectedProduct.blueprintId}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json() as { images?: string[] };
+        const imageUrl = data.images?.[0];
+        if (!imageUrl || cancelled) return;
+        // Update local state immediately
+        const withImage = { ...selectedProduct, blueprintImageUrl: imageUrl } as SelectPodProduct;
+        setSelectedProduct(withImage);
+        setProducts((prev) => prev.map((p) => p.id === selectedProduct.id ? withImage : p));
+        // Persist to DB so it's not re-fetched next time
+        await fetch("/api/pod/update-product", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId: selectedProduct.id, blueprintImageUrl: imageUrl }),
+        });
+      } catch { /* non-blocking */ }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProduct?.id, connected]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
   const resetCreate = () => {
@@ -261,6 +512,8 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     setDesignTab("upload");
     setAiPrompt("");
     setAiStyle("bold");
+    setActivePlacement("front");
+    setExtraDesigns({});
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -335,6 +588,27 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       setUploadingDesign(false);
     }
 
+    // Upload any extra placement files that haven't been uploaded yet
+    const pendingExtras = Object.entries(extraDesigns).filter(
+      ([, d]) => d?.file && !d.url
+    ) as Array<[PlacementId, ExtraDesign]>;
+
+    if (pendingExtras.length > 0) {
+      const updated = { ...extraDesigns };
+      for (const [position, extra] of pendingExtras) {
+        try {
+          const fd = new FormData();
+          fd.append("file", extra.file!);
+          const r = await fetch("/api/upload/store-image", { method: "POST", body: fd });
+          if (r.ok) {
+            const d = await r.json() as { url?: string };
+            updated[position] = { ...extra, url: d.url ?? null };
+          }
+        } catch { /* non-blocking — placement upload failure shouldn't block progress */ }
+      }
+      setExtraDesigns(updated);
+    }
+
     // Load catalog
     if (blueprints.length === 0 && connected) {
       setLoadingCatalog(true);
@@ -351,14 +625,14 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     setCreateStep(2);
   };
 
-  // Step 2 → 3: pick blueprint, load providers
+  // Step 2: pick blueprint — open 3D preview dialog, load providers in background
   const handleSelectBlueprint = async (bp: Blueprint) => {
-    setSelectedBlueprint(bp);
+    setPreviewBlueprint(bp);
     setSelectedProvider(null);
     setVariants([]);
     setSelectedVariants(new Set());
+    // Pre-fetch providers in the background so Step 3 is instant when user confirms
     setLoadingProviders(true);
-    setCreateStep(3);
     try {
       const res = await fetch(`/api/printify/catalog?blueprintId=${bp.id}`);
       const data = await res.json();
@@ -368,6 +642,14 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     } finally {
       setLoadingProviders(false);
     }
+  };
+
+  // User confirms product choice from preview dialog → proceed to Step 3
+  const handleConfirmBlueprint = () => {
+    if (!previewBlueprint) return;
+    setSelectedBlueprint(previewBlueprint);
+    setPreviewBlueprint(null);
+    setCreateStep(3);
   };
 
   // Step 3 → 4: pick provider, load variants
@@ -405,8 +687,9 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const handleFinish = async () => {
     setCreating(true);
     try {
-      // 1. Upload design to Printify image library
-      let printifyImageId: string | null = null;
+      // 1. Upload all placement designs to Printify image library
+      const placementImages: Array<{ position: string; printifyImageId: string }> = [];
+
       if (designUrl) {
         try {
           const imgRes = await fetch("/api/printify/upload-image", {
@@ -414,12 +697,33 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ imageUrl: designUrl, fileName: designFile?.name ?? "design.png" }),
           });
-          const imgData = await imgRes.json();
-          printifyImageId = imgData.imageId ?? null;
-        } catch {
-          // Non-blocking — sync will still work without image
+          const imgData = await imgRes.json() as { imageId?: string };
+          if (imgData.imageId) placementImages.push({ position: "front", printifyImageId: imgData.imageId });
+        } catch { /* Non-blocking */ }
+      }
+
+      // Upload extra placements (back, sleeves, label)
+      for (const [position, extra] of Object.entries(extraDesigns)) {
+        if (extra?.url) {
+          try {
+            const imgRes = await fetch("/api/printify/upload-image", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ imageUrl: extra.url, fileName: extra.file?.name ?? `${position}-design.png` }),
+            });
+            const imgData = await imgRes.json() as { imageId?: string };
+            if (imgData.imageId) placementImages.push({ position, printifyImageId: imgData.imageId });
+          } catch { /* Non-blocking */ }
         }
       }
+
+      // Build placements array for DB (all positions that have a design)
+      const placementsForDb = [
+        ...(designUrl ? [{ position: "front", designFileUrl: designUrl, designFileName: designFile?.name }] : []),
+        ...Object.entries(extraDesigns)
+          .filter(([, d]) => d?.url)
+          .map(([pos, d]) => ({ position: pos, designFileUrl: d!.url!, designFileName: d?.file?.name })),
+      ];
 
       // 2. Create local product record
       const createRes = await fetch("/api/printify/products", {
@@ -431,8 +735,10 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
           designFileName: designFile?.name,
           blueprintId: selectedBlueprint?.id,
           blueprintTitle: selectedBlueprint?.title,
+          blueprintImageUrl: selectedBlueprint?.images?.[0] ?? null,
           printProviderId: selectedProvider?.id,
           printProviderTitle: selectedProvider?.title,
+          placements: placementsForDb,
         }),
       });
       const createData = await createRes.json();
@@ -441,6 +747,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       const productId = createData.product.id;
 
       // 3. Sync to Printify if connected
+      let syncedOk = false;
       if (connected && selectedBlueprint && selectedProvider) {
         const variantPayload = variants
           .filter((v) => selectedVariants.has(v.id))
@@ -450,23 +757,40 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
             enabled: true,
           }));
 
-        await fetch("/api/printify/products", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ productId, variants: variantPayload, printifyImageId }),
-        });
+        try {
+          const patchRes = await fetch("/api/printify/products", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId, variants: variantPayload, placementImages }),
+          });
+          syncedOk = patchRes.ok;
+        } catch { /* non-blocking — show product even if sync fails */ }
       }
 
-      // 4. Fetch updated product and show it
-      const listRes = await fetch("/api/printify/products");
+      // 4. Fetch updated product list (bypass cache) and show it
+      const listRes = await fetch("/api/printify/products", { cache: "no-store" });
       const listData = await listRes.json();
-      const newProduct = (listData.products ?? []).find((p: SelectPodProduct) => p.id === productId) ?? createData.product;
+      const foundProduct = (listData.products ?? []).find((p: SelectPodProduct) => p.id === productId);
 
-      setProducts(listData.products ?? [createData.product]);
+      // Enrich product state with data we know from the wizard (blueprint image, sync status)
+      // This ensures 3D preview and correct status show immediately even if DB hasn't flushed
+      const baseProduct = foundProduct ?? createData.product;
+      const newProduct: SelectPodProduct = {
+        ...baseProduct,
+        blueprintImageUrl: baseProduct.blueprintImageUrl ?? selectedBlueprint?.images?.[0] ?? null,
+        printifyStatus: (syncedOk ? "synced" : baseProduct.printifyStatus) as string,
+      } as SelectPodProduct;
+
+      setProducts((listData.products ?? [createData.product]).map((p: SelectPodProduct) =>
+        p.id === productId ? newProduct : p
+      ));
       setSelectedProduct(newProduct);
       setView("product");
       resetCreate();
-      toast({ title: "Product created!", description: connected ? "Synced to Printify." : "Generate mockups next." });
+      toast({
+        title: "Product created!",
+        description: syncedOk ? "Synced to Printify ✓" : connected ? "Sync to Printify from the product page." : "Generate mockups next.",
+      });
     } catch (err) {
       toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
     } finally {
@@ -503,7 +827,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       const res = await fetch("/api/ai-mockup/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: selectedProduct.id, style: mockupStyle }),
+        body: JSON.stringify({ productId: selectedProduct.id, style: mockupStyle, placement: mockupPlacement }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -722,7 +1046,44 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 <Input id="pod-title" placeholder="e.g. Void Hours Classic Tee" value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1" />
               </div>
 
-              {/* Tab switcher */}
+              {/* Placement tabs */}
+              <div>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Layers className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Print placement</span>
+                </div>
+                <div className="flex gap-1.5 overflow-x-auto pb-1">
+                  {PLACEMENTS.map((p) => {
+                    const hasDesign = p.id === "front" ? !!designPreview : !!extraDesigns[p.id]?.preview;
+                    const isActive = activePlacement === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        title={p.hint}
+                        onClick={() => setActivePlacement(p.id)}
+                        className={`flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full border whitespace-nowrap transition-all ${
+                          isActive
+                            ? "bg-orange-500 border-orange-500 text-white"
+                            : hasDesign
+                            ? "border-green-400 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/20"
+                            : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300 dark:hover:border-orange-700"
+                        }`}
+                      >
+                        {hasDesign && !isActive && <CheckCircle2 className="w-3 h-3" />}
+                        {p.label}
+                        {p.id === "front" && !hasDesign && <span className="text-orange-400 ml-0.5">*</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">
+                  {PLACEMENTS.find(p => p.id === activePlacement)?.hint}
+                </p>
+              </div>
+
+              {/* Tab switcher — only for Front placement */}
+              {activePlacement === "front" && (
               <div className="flex rounded-xl bg-gray-100 dark:bg-[#2A2A2A] p-1 gap-1">
                 <button
                   type="button"
@@ -739,9 +1100,71 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                   <Wand2 className="w-3.5 h-3.5" /> Generate with AI
                 </button>
               </div>
+              )}
+
+              {/* ── Extra placement upload (Back / Sleeve / Label) ── */}
+              {activePlacement !== "front" && (
+                <div>
+                  {(() => {
+                    const pos = activePlacement as PlacementId;
+                    const data = extraDesigns[pos];
+                    const label = PLACEMENTS.find(p => p.id === pos)?.label ?? pos;
+                    return (
+                      <>
+                        <input
+                          type="file"
+                          accept="image/png,image/svg+xml,image/jpeg"
+                          className="hidden"
+                          ref={(el) => { if (el) extraFileRefs.current[pos] = el; }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setExtraDesigns((prev) => ({
+                              ...prev,
+                              [pos]: { file, preview: URL.createObjectURL(file), url: null },
+                            }));
+                          }}
+                        />
+                        {data?.preview ? (
+                          <div className="space-y-2">
+                            <div className="relative rounded-2xl overflow-hidden border border-gray-200 dark:border-[#2A2A2A] bg-[#f8f8f8] dark:bg-[#2A2A2A] aspect-square w-full">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={data.preview} alt={`${label} design`} className="w-full h-full object-contain p-6" />
+                              <button
+                                type="button"
+                                onClick={() => setExtraDesigns((prev) => ({ ...prev, [pos]: { file: null, preview: null, url: null } }))}
+                                className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => extraFileRefs.current[pos]?.click()}
+                              className="w-full text-xs text-center text-orange-500 hover:text-orange-600 font-medium py-1"
+                            >
+                              Replace {label} design
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => extraFileRefs.current[pos]?.click()}
+                            className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] py-10 text-gray-400 hover:border-orange-300 hover:text-orange-500 transition-colors"
+                          >
+                            <Upload className="w-6 h-6" />
+                            <span className="text-sm font-medium">Upload {label} design</span>
+                            <span className="text-xs">PNG with transparent background recommended</span>
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Upload tab */}
-              {designTab === "upload" && (
+              {activePlacement === "front" && designTab === "upload" && (
                 <div>
                   <input ref={fileInputRef} type="file" accept="image/png,image/svg+xml,image/jpeg" className="hidden" onChange={handleFileChange} />
                   {designPreview ? (
@@ -764,7 +1187,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               )}
 
               {/* Generate tab */}
-              {designTab === "generate" && (
+              {activePlacement === "front" && designTab === "generate" && (
                 <div className="space-y-4">
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -906,6 +1329,38 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                   <>Next: Pick product type <ChevronRight className="w-4 h-4 ml-1" /></>
                 )}
               </Button>
+            </div>
+          )}
+
+          {/* Sticky mini design preview — shown in Steps 3, 4, 5 */}
+          {createStep >= 3 && selectedBlueprint && designPreview && (
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-gray-100 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-3">
+              <div className="relative w-14 h-14 shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={selectedBlueprint.images[0]} alt="" className="w-full h-full object-contain rounded-lg" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={designPreview}
+                  alt="design"
+                  className="absolute"
+                  style={{
+                    ...getDesignOverlay(selectedBlueprint.title),
+                    mixBlendMode: "multiply" as React.CSSProperties["mixBlendMode"],
+                    opacity: 0.85,
+                  }}
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{title}</p>
+                <p className="text-[11px] text-gray-400 truncate">{selectedBlueprint.title}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateStep(2)}
+                className="ml-auto shrink-0 text-[11px] text-orange-500 hover:text-orange-600 font-medium whitespace-nowrap"
+              >
+                Change
+              </button>
             </div>
           )}
 
@@ -1087,31 +1542,173 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
         </div>
       )}
 
+      {/* ── 3D PRODUCT PREVIEW DIALOG ── */}
+      <Dialog open={!!previewBlueprint} onOpenChange={(open) => { if (!open) setPreviewBlueprint(null); }}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden rounded-2xl">
+          {previewBlueprint && (
+            <div className="flex flex-col sm:flex-row">
+              {/* Left: design-on-product preview */}
+              <div className="sm:w-[55%] bg-gray-50 dark:bg-[#1A1A1A] p-5 flex items-center justify-center">
+                {designPreview ? (
+                  <DesignOnProductPreview
+                    blueprintImage={previewBlueprint.images[0]}
+                    designUrl={designPreview}
+                    blueprintTitle={previewBlueprint.title}
+                    className="w-full max-w-xs"
+                  />
+                ) : (
+                  // No design yet — just show the blank product image
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={previewBlueprint.images[0]}
+                    alt={previewBlueprint.title}
+                    className="w-full max-w-xs rounded-xl"
+                  />
+                )}
+                <p className="absolute bottom-3 left-0 right-0 text-center text-[10px] text-gray-400">
+                  Preview — final print position may vary slightly
+                </p>
+              </div>
+
+              {/* Right: product info + actions */}
+              <div className="sm:w-[45%] p-6 flex flex-col justify-between gap-4">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-orange-500 font-semibold mb-1">
+                    {previewBlueprint.brand}
+                  </p>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">
+                    {previewBlueprint.title}
+                  </h2>
+
+                  {designPreview ? (
+                    <div className="mt-3 flex items-start gap-2 rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/40 px-3 py-2.5">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-green-700 dark:text-green-400">
+                        Your design is composited on the product above. The print position and scale will be finalised in Printify.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 px-3 py-2.5">
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        No design uploaded yet — you&apos;ll see the preview once you add one in Step 1.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Quick product images strip */}
+                  {previewBlueprint.images.length > 1 && (
+                    <div className="mt-4 flex gap-1.5 overflow-x-auto pb-1">
+                      {previewBlueprint.images.slice(0, 4).map((img, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={i}
+                          src={img}
+                          alt=""
+                          className="w-14 h-14 object-contain rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#2A2A2A] shrink-0"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Button
+                    onClick={handleConfirmBlueprint}
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                  >
+                    {loadingProviders ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" />Loading providers...</>
+                    ) : (
+                      <>Use this product <ChevronRight className="w-4 h-4" /></>
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setPreviewBlueprint(null)}
+                    className="w-full text-gray-500"
+                  >
+                    Choose a different product
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* ── PRODUCT DETAIL ── */}
       {view === "product" && selectedProduct && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-4">
+            {/* 3D design-on-product preview (if we have blueprint image) or flat design */}
             {selectedProduct.designFileUrl && (
               <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Design File</p>
-                <div className="aspect-square w-full bg-gray-50 dark:bg-[#2A2A2A] rounded-xl flex items-center justify-center overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={selectedProduct.designFileUrl} alt="Design" className="w-full h-full object-contain p-6" />
-                </div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+                  {selectedProduct.blueprintImageUrl ? "Product Preview" : "Design File"}
+                </p>
+                {selectedProduct.blueprintImageUrl ? (
+                  <DesignOnProductPreview
+                    blueprintImage={selectedProduct.blueprintImageUrl}
+                    designUrl={selectedProduct.designFileUrl}
+                    blueprintTitle={selectedProduct.blueprintTitle}
+                    className="w-full max-h-72 object-contain"
+                  />
+                ) : (
+                  <div className="w-full max-h-64 bg-gray-50 dark:bg-[#2A2A2A] rounded-xl flex items-center justify-center overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={selectedProduct.designFileUrl} alt="Design" className="max-h-64 w-auto object-contain p-4" />
+                  </div>
+                )}
               </div>
             )}
 
+            {/* Print areas — manage placements (Back, Sleeves, Label) */}
+            <PlacementManager
+              selectedProduct={selectedProduct}
+              setSelectedProduct={setSelectedProduct}
+              setProducts={setProducts}
+              toast={toast}
+            />
+
             <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">AI Mockups</p>
-              <div className="flex gap-2 mb-3">
+              {/* Mockup style selector */}
+              <div className="grid grid-cols-2 gap-1.5 mb-3">
                 {MOCKUP_STYLES.map((s) => (
                   <button key={s.id} type="button" onClick={() => setMockupStyle(s.id)}
-                    className={`flex-1 rounded-lg border p-2 text-center text-xs font-medium transition-all ${mockupStyle === s.id ? "border-orange-500 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
+                    className={`rounded-lg border p-2 text-center text-xs font-medium transition-all ${mockupStyle === s.id ? "border-orange-500 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
                     <span className="block font-semibold">{s.label}</span>
                     <span className="text-gray-400 text-[10px]">{s.desc}</span>
                   </button>
                 ))}
               </div>
+
+              {/* Placement selector — show when product has extra placements */}
+              {(() => {
+                const productPlacements = (selectedProduct.placements as Array<{ position: string }> | null) ?? [];
+                const availablePlacements = [
+                  { id: "front", label: "Front" },
+                  ...productPlacements.map((p) => ({
+                    id: p.position,
+                    label: PLACEMENTS.find((pl) => pl.id === p.position)?.label ?? p.position,
+                  })),
+                ];
+                if (availablePlacements.length <= 1) return null;
+                return (
+                  <div className="mb-3">
+                    <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-1.5">Mockup view</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {availablePlacements.map((p) => (
+                        <button key={p.id} type="button" onClick={() => setMockupPlacement(p.id)}
+                          className={`text-xs px-3 py-1 rounded-full border transition-all ${mockupPlacement === p.id ? "bg-orange-500 border-orange-500 text-white" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <Button onClick={handleGenerateMockup} disabled={generatingMockup} className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2">
                 {generatingMockup ? <><Loader2 className="w-4 h-4 animate-spin" />Generating...</> : <><Sparkles className="w-4 h-4" />Generate AI Mockup</>}
               </Button>

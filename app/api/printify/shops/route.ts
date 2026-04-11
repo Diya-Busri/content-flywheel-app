@@ -41,14 +41,19 @@ export async function POST(req: Request) {
     if (!apiKey?.trim()) return NextResponse.json({ error: "API key required" }, { status: 400 });
 
     // Verify key works before saving
-    const shops = await printifyFetch("/shops.json", apiKey.trim());
+    const shops = await printifyFetch("/shops.json", apiKey.trim()) as Array<{ id: number | string; title?: string }>;
+
+    // Auto-select first shop if none explicitly provided
+    const resolvedShopId = shopId
+      ? String(shopId)
+      : (shops?.[0]?.id ? String(shops[0].id) : null);
 
     await db
       .insert(userSettingsTable)
-      .values({ userId, printifyApiKey: apiKey.trim(), printifyShopId: shopId ? String(shopId) : null })
+      .values({ userId, printifyApiKey: apiKey.trim(), printifyShopId: resolvedShopId })
       .onConflictDoUpdate({
         target: userSettingsTable.userId,
-        set: { printifyApiKey: apiKey.trim(), printifyShopId: shopId ? String(shopId) : null },
+        set: { printifyApiKey: apiKey.trim(), printifyShopId: resolvedShopId },
       });
 
     return NextResponse.json({ connected: true, shops });

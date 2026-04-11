@@ -11,8 +11,8 @@ const FAL_API_KEY = () => {
   return key;
 };
 
-// Order matters — more specific terms must come before generic ones
-// e.g. "hooded sweatshirt" must match "hooded" before it falls through to "sweatshirt"
+// ─── Product prompts (lifestyle — person wearing the product) ────────────────
+// Order matters: more specific terms must come before generic ones
 const PRODUCT_PROMPTS: Array<{ key: string; prompt: string }> = [
   { key: "hooded sweatshirt", prompt: "person wearing a custom printed pullover hoodie with hood up" },
   { key: "hoodie",            prompt: "person wearing a custom printed pullover hoodie with hood up" },
@@ -28,15 +28,55 @@ const PRODUCT_PROMPTS: Array<{ key: string; prompt: string }> = [
   { key: "cap",               prompt: "person wearing a custom printed baseball cap" },
 ];
 
-function getProductPrompt(blueprintTitle: string | null): string {
-  if (!blueprintTitle) return "person wearing custom branded merchandise";
+// ─── Flat lay prompts (product only, no person) ──────────────────────────────
+const PRODUCT_FLAT_PROMPTS: Array<{ key: string; prompt: string }> = [
+  { key: "hooded sweatshirt", prompt: "flat lay overhead photo of a pullover hoodie with a custom printed graphic on the front" },
+  { key: "hoodie",            prompt: "flat lay overhead photo of a pullover hoodie with a custom printed graphic on the front" },
+  { key: "zip",               prompt: "flat lay overhead photo of a zip-up hoodie with a custom printed graphic" },
+  { key: "t-shirt",           prompt: "flat lay overhead photo of a t-shirt with a custom printed graphic on the front" },
+  { key: "tee",               prompt: "flat lay overhead photo of a t-shirt with a custom printed graphic on the front" },
+  { key: "sweatshirt",        prompt: "flat lay overhead photo of a crewneck sweatshirt with a custom printed graphic" },
+  { key: "mug",               prompt: "overhead product photo of a custom printed ceramic mug on a white marble surface" },
+  { key: "poster",            prompt: "overhead product photo of a custom printed art poster on a clean surface" },
+  { key: "tote",              prompt: "flat lay overhead photo of a custom printed canvas tote bag" },
+  { key: "phone case",        prompt: "flat lay overhead product photo of a custom printed phone case" },
+  { key: "hat",               prompt: "flat lay overhead photo of a custom printed baseball cap" },
+  { key: "cap",               prompt: "flat lay overhead photo of a custom printed baseball cap" },
+];
+
+function getProductPrompt(blueprintTitle: string | null, flat = false): string {
+  const list = flat ? PRODUCT_FLAT_PROMPTS : PRODUCT_PROMPTS;
+  const fallback = flat
+    ? "flat lay overhead photo of custom branded merchandise"
+    : "person wearing custom branded merchandise";
+  if (!blueprintTitle) return fallback;
   const lower = blueprintTitle.toLowerCase();
-  for (const { key, prompt } of PRODUCT_PROMPTS) {
+  for (const { key, prompt } of list) {
     if (lower.includes(key)) return prompt;
   }
-  return "person wearing custom branded merchandise";
+  return fallback;
 }
 
+// ─── Extract dominant garment colour from variant titles ─────────────────────
+const GARMENT_COLORS = [
+  "black", "white", "navy", "grey", "gray", "charcoal", "dark heather",
+  "heather grey", "red", "burgundy", "maroon", "forest green", "olive",
+  "green", "blue", "royal blue", "sky blue", "yellow", "mustard",
+  "orange", "pink", "purple", "lavender", "brown", "tan", "beige",
+  "cream", "sand", "coral", "teal", "mint", "light blue", "ash",
+];
+
+function extractDominantColor(variants: unknown): string | null {
+  const list = Array.isArray(variants) ? (variants as Array<{ title?: string }>) : [];
+  if (!list.length) return null;
+  const allText = list.map((v) => (v.title ?? "").toLowerCase()).join(" ");
+  for (const color of GARMENT_COLORS) {
+    if (allText.includes(color)) return color;
+  }
+  return null;
+}
+
+// ─── Diverse model descriptors ───────────────────────────────────────────────
 const MODEL_DESCRIPTORS = [
   "a young Black woman",
   "a young white man",
@@ -54,12 +94,108 @@ function randomModel(): string {
   return MODEL_DESCRIPTORS[Math.floor(Math.random() * MODEL_DESCRIPTORS.length)];
 }
 
+// ─── Lighting/context per mockup style ──────────────────────────────────────
+const STYLE_MAP: Record<string, string> = {
+  lifestyle: "natural daylight, urban street photography, candid lifestyle shot",
+  studio:    "clean white studio background, professional product photography",
+  outdoor:   "golden hour outdoor lighting, nature background, editorial fashion",
+  flat:      "white background, overhead studio lighting, clean product photography",
+};
+
+// ─── Placement-aware prompt suffix ──────────────────────────────────────────
+const PLACEMENT_SUFFIX: Record<string, string> = {
+  front:         "",
+  back:          ", photographed from behind showing the back of the garment with the design visible",
+  left_sleeve:   ", arm raised showing the left sleeve design",
+  right_sleeve:  ", arm raised showing the right sleeve design",
+  label:         ", collar folded to clearly show the neck label/tag inside the garment",
+};
+
+// ─── img2img — uses the real design as reference ─────────────────────────────
+async function generateImg2ImgMockup(
+  designUrl: string,
+  prompt: string,
+  style: string,
+  flat = false
+): Promise<string> {
+  const lightingStyle = STYLE_MAP[style] ?? STYLE_MAP.lifestyle;
+  const fullPrompt = flat
+    ? `${prompt}. ${lightingStyle}. The design printed on the product matches this graphic exactly. No person in shot. Photorealistic, 8K, commercial product photography.`
+    : `${prompt}. The design printed on the garment matches this graphic exactly — same colours, same artwork. ${lightingStyle}. Design clearly visible. Photorealistic, 8K, commercial product photography.`;
+
+  const res = await fetch("https://fal.run/fal-ai/flux/dev/image-to-image", {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${FAL_API_KEY()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt: fullPrompt,
+      image_url: designUrl,
+      strength: flat ? 0.80 : 0.85,
+      image_size: flat ? "square_hd" : "portrait_4_3",
+      num_inference_steps: 28,
+      guidance_scale: 3.5,
+      num_images: 1,
+      enable_safety_checker: true,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`fal.ai img2img error: ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json() as { images?: Array<{ url: string }> };
+  const url = data.images?.[0]?.url;
+  if (!url) throw new Error("No image returned from img2img");
+  return url;
+}
+
+// ─── Text-only fallback ───────────────────────────────────────────────────────
+async function generateTextMockup(prompt: string, style: string, flat = false): Promise<string> {
+  const lightingStyle = STYLE_MAP[style] ?? STYLE_MAP.lifestyle;
+  const fullPrompt = flat
+    ? `${prompt}. ${lightingStyle}. No person in shot. Photorealistic, 8K, commercial product photography.`
+    : `High quality photo of ${prompt}. ${lightingStyle}. The design is clearly visible. Photorealistic, 8K, commercial product photography.`;
+
+  const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${FAL_API_KEY()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt: fullPrompt,
+      image_size: flat ? "square_hd" : "portrait_4_3",
+      num_inference_steps: 4,
+      num_images: 1,
+      enable_safety_checker: true,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`fal.ai text mockup error: ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json() as { images?: Array<{ url: string }> };
+  const url = data.images?.[0]?.url;
+  if (!url) throw new Error("No image returned from text mockup");
+  return url;
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { productId, style = "lifestyle" } = await req.json() as { productId?: string; style?: string };
+    const {
+      productId,
+      style = "lifestyle",
+      placement = "front",
+    } = await req.json() as { productId?: string; style?: string; placement?: string };
+
     if (!productId) return NextResponse.json({ error: "productId required" }, { status: 400 });
 
     const [product] = await db
@@ -70,45 +206,51 @@ export async function POST(req: Request) {
 
     if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
-    const model = randomModel();
-    const productContext = getProductPrompt(product.blueprintTitle).replace("person", model);
-    const brandContext = product.title ? `, design themed around "${product.title}"` : "";
+    const isFlat = style === "flat";
 
-    const styleMap: Record<string, string> = {
-      lifestyle: "natural daylight, urban street photography, candid lifestyle shot",
-      studio: "clean white studio background, professional product photography",
-      outdoor: "golden hour outdoor lighting, nature background, editorial fashion",
-    };
-    const lightingStyle = styleMap[style] ?? styleMap.lifestyle;
-
-    const prompt = `High quality photo of a ${productContext}${brandContext}. ${lightingStyle}. The design is clearly visible. Photorealistic, 8K quality, commercial product photography.`;
-
-    // Use raw fetch — same pattern as the working ai-design/generate route
-    const falRes = await fetch("https://fal.run/fal-ai/flux/schnell", {
-      method: "POST",
-      headers: {
-        Authorization: `Key ${FAL_API_KEY()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        prompt,
-        image_size: "portrait_4_3",
-        num_inference_steps: 4,
-        num_images: 1,
-        enable_safety_checker: true,
-      }),
-    });
-
-    if (!falRes.ok) {
-      const text = await falRes.text();
-      throw new Error(`fal.ai error: ${text.slice(0, 200)}`);
+    // ── Resolve which design to use for this placement ────────────────────────
+    let designFileUrl: string | null = product.designFileUrl ?? null;
+    if (placement !== "front") {
+      const allPlacements = (product.placements as Array<{ position: string; designFileUrl: string }> | null) ?? [];
+      const placementData = allPlacements.find((p) => p.position === placement);
+      if (placementData?.designFileUrl) {
+        designFileUrl = placementData.designFileUrl;
+      }
     }
 
-    const falData = await falRes.json() as { images?: Array<{ url: string }> };
-    const imageUrl = falData.images?.[0]?.url;
-    if (!imageUrl) throw new Error("No image generated");
+    // ── Build prompt ──────────────────────────────────────────────────────────
+    const placementSuffix = PLACEMENT_SUFFIX[placement] ?? "";
+    // Extract the garment colour from the product's variants so mockups match
+    const garmentColor = extractDominantColor(product.variants);
+    const colorPrefix = garmentColor ? `${garmentColor} ` : "";
+    let basePrompt: string;
 
-    // Persist to Vercel Blob
+    if (isFlat) {
+      const flatBase = getProductPrompt(product.blueprintTitle, true);
+      // Insert colour before the garment noun — match "of a " or "of an "
+      basePrompt = garmentColor
+        ? flatBase.replace(/\bof (a|an) /i, `of $1 ${colorPrefix}`)
+        : flatBase;
+    } else {
+      const model = randomModel();
+      const productBase = getProductPrompt(product.blueprintTitle, false).replace("person", model);
+      // Insert colour before the garment type — match "wearing a " or "wearing an "
+      const productContext = garmentColor
+        ? productBase.replace(/\b(wearing (?:a|an)) /i, `$1 ${colorPrefix}`)
+        : productBase;
+      const brandContext = product.title ? `, design themed around "${product.title}"` : "";
+      basePrompt = `${productContext}${brandContext}${placementSuffix}`;
+    }
+
+    // ── Generate ──────────────────────────────────────────────────────────────
+    let imageUrl: string;
+    if (designFileUrl) {
+      imageUrl = await generateImg2ImgMockup(designFileUrl, basePrompt, style, isFlat);
+    } else {
+      imageUrl = await generateTextMockup(basePrompt, style, isFlat);
+    }
+
+    // ── Persist to Vercel Blob ────────────────────────────────────────────────
     const imageRes = await fetch(imageUrl);
     const buffer = Buffer.from(await imageRes.arrayBuffer());
     const blob = await put(
@@ -117,11 +259,11 @@ export async function POST(req: Request) {
       { access: "public", contentType: "image/jpeg" }
     );
 
-    // Append to product's mockupUrls
+    // ── Append to product's mockupUrls ────────────────────────────────────────
     const currentMockups = (product.mockupUrls as string[] | null) ?? [];
     await db
       .update(podProductsTable)
-      .set({ mockupUrls: [...currentMockups, blob.url], aiMockupPrompt: prompt })
+      .set({ mockupUrls: [...currentMockups, blob.url], aiMockupPrompt: basePrompt })
       .where(eq(podProductsTable.id, productId));
 
     return NextResponse.json({ mockupUrl: blob.url });
