@@ -11,7 +11,7 @@ import { WaitlistForm } from "./WaitlistForm";
 import { ReviewForm } from "./ReviewForm";
 import { ShareButtons } from "./ShareButtons";
 import ViewTracker from "./ViewTracker";
-import { DiscountInput } from "./DiscountInput";
+import DiscountInput from "./DiscountInput";
 
 type MarketingAssets = {
   productTitle?: string;

@@ -3,7 +3,7 @@ import { db } from "@/db/db";
 import { podProductsTable } from "@/db/schema/pod-products-schema";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import * as fal from "@fal-ai/client";
+import { fal } from "@fal-ai/client";
 import { put } from "@vercel/blob";
 
 fal.config({ credentials: process.env.FAL_API_KEY });
