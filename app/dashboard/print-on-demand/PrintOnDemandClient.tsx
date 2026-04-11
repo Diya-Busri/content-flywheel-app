@@ -558,7 +558,6 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [variantsExpanded, setVariantsExpanded] = useState(false);
 
   // ── Multi-placement state ────────────────────────────────────────────────────
-  const [activePlacement, setActivePlacement] = useState<PlacementId>("front");
   const [extraDesigns, setExtraDesigns] = useState<Partial<Record<PlacementId, ExtraDesign>>>({});
   const extraFileRefs = useRef<Partial<Record<PlacementId, HTMLInputElement>>>({});
 
@@ -631,7 +630,6 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     setDesignTab("upload");
     setAiPrompt("");
     setAiStyle("bold");
-    setActivePlacement("front");
     setExtraDesigns({});
   };
 
@@ -1211,124 +1209,36 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               </div>
 
               {/* Placement tabs */}
-              <div>
-                <div className="flex items-center gap-1.5 mb-1.5">
+              {/* ── FRONT placement (required) ── */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
                   <Layers className="w-3.5 h-3.5 text-gray-400" />
-                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Print placement</span>
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Front <span className="text-orange-400">*</span></span>
+                  <span className="text-[10px] text-gray-400">Required — primary print area</span>
+                  {designPreview && <CheckCircle2 className="w-3.5 h-3.5 text-green-500 ml-auto" />}
                 </div>
-                <div className="flex gap-1.5 overflow-x-auto pb-1">
-                  {PLACEMENTS.map((p) => {
-                    const hasDesign = p.id === "front" ? !!designPreview : !!extraDesigns[p.id]?.preview;
-                    const isActive = activePlacement === p.id;
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        title={p.hint}
-                        onClick={() => setActivePlacement(p.id)}
-                        className={`flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full border whitespace-nowrap transition-all ${
-                          isActive
-                            ? "bg-orange-500 border-orange-500 text-white"
-                            : hasDesign
-                            ? "border-green-400 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/20"
-                            : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300 dark:hover:border-orange-700"
-                        }`}
-                      >
-                        {hasDesign && !isActive && <CheckCircle2 className="w-3 h-3" />}
-                        {p.label}
-                        {p.id === "front" && !hasDesign && <span className="text-orange-400 ml-0.5">*</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">
-                  {PLACEMENTS.find(p => p.id === activePlacement)?.hint}
-                </p>
-              </div>
 
-              {/* Tab switcher — only for Front placement */}
-              {activePlacement === "front" && (
-              <div className="flex rounded-xl bg-gray-100 dark:bg-[#2A2A2A] p-1 gap-1">
-                <button
-                  type="button"
-                  onClick={() => { setDesignTab("upload"); setDesignPreview(null); setDesignUrl(null); setDesignFile(null); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium py-1.5 rounded-lg transition-all ${designTab === "upload" ? "bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
-                >
-                  <Upload className="w-3.5 h-3.5" /> Upload
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setDesignTab("generate"); setDesignPreview(null); setDesignUrl(null); setDesignFile(null); setAiStyle("typography"); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium py-1.5 rounded-lg transition-all ${designTab === "generate" ? "bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
-                >
-                  <Wand2 className="w-3.5 h-3.5" /> Generate with AI
-                </button>
-              </div>
-              )}
-
-              {/* ── Extra placement upload (Back / Sleeve / Label) ── */}
-              {activePlacement !== "front" && (
-                <div>
-                  {(() => {
-                    const pos = activePlacement as PlacementId;
-                    const data = extraDesigns[pos];
-                    const label = PLACEMENTS.find(p => p.id === pos)?.label ?? pos;
-                    return (
-                      <>
-                        <input
-                          type="file"
-                          accept="image/png,image/svg+xml,image/jpeg"
-                          className="hidden"
-                          ref={(el) => { if (el) extraFileRefs.current[pos] = el; }}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            setExtraDesigns((prev) => ({
-                              ...prev,
-                              [pos]: { file, preview: URL.createObjectURL(file), url: null },
-                            }));
-                          }}
-                        />
-                        {data?.preview ? (
-                          <div className="space-y-2">
-                            <div className="relative rounded-2xl overflow-hidden border border-gray-200 dark:border-[#2A2A2A] bg-[#f8f8f8] dark:bg-[#2A2A2A] aspect-square w-full">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={data.preview} alt={`${label} design`} className="w-full h-full object-contain p-6" />
-                              <button
-                                type="button"
-                                onClick={() => setExtraDesigns((prev) => ({ ...prev, [pos]: { file: null, preview: null, url: null } }))}
-                                className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => extraFileRefs.current[pos]?.click()}
-                              className="w-full text-xs text-center text-orange-500 hover:text-orange-600 font-medium py-1"
-                            >
-                              Replace {label} design
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => extraFileRefs.current[pos]?.click()}
-                            className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] py-10 text-gray-400 hover:border-orange-300 hover:text-orange-500 transition-colors"
-                          >
-                            <Upload className="w-6 h-6" />
-                            <span className="text-sm font-medium">Upload {label} design</span>
-                            <span className="text-xs">PNG with transparent background recommended</span>
-                          </button>
-                        )}
-                      </>
-                    );
-                  })()}
+                {/* Tab switcher — Upload / Generate */}
+                <div className="flex rounded-xl bg-gray-100 dark:bg-[#2A2A2A] p-1 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => { setDesignTab("upload"); setDesignPreview(null); setDesignUrl(null); setDesignFile(null); }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium py-1.5 rounded-lg transition-all ${designTab === "upload" ? "bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                  >
+                    <Upload className="w-3.5 h-3.5" /> Upload
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDesignTab("generate"); setDesignPreview(null); setDesignUrl(null); setDesignFile(null); setAiStyle("typography"); }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium py-1.5 rounded-lg transition-all ${designTab === "generate" ? "bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                  >
+                    <Wand2 className="w-3.5 h-3.5" /> Generate with AI
+                  </button>
                 </div>
-              )}
+              </div>
 
               {/* Upload tab */}
-              {activePlacement === "front" && designTab === "upload" && (
+              {designTab === "upload" && (
                 <div>
                   <input ref={fileInputRef} type="file" accept="image/png,image/svg+xml,image/jpeg" className="hidden" onChange={handleFileChange} />
                   {designPreview ? (
@@ -1351,7 +1261,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               )}
 
               {/* Generate tab */}
-              {activePlacement === "front" && designTab === "generate" && (
+              {designTab === "generate" && (
                 <div className="space-y-4">
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -1477,6 +1387,64 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                   )}
                 </div>
               )}
+
+              {/* ── Optional placements — all shown at once ── */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-px flex-1 bg-gray-100 dark:bg-[#2A2A2A]" />
+                  <span className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold whitespace-nowrap">Optional print areas</span>
+                  <div className="h-px flex-1 bg-gray-100 dark:bg-[#2A2A2A]" />
+                </div>
+                {PLACEMENTS.filter(p => p.id !== "front").map((p) => {
+                  const pos = p.id as PlacementId;
+                  const data = extraDesigns[pos];
+                  return (
+                    <div key={pos} className="rounded-xl border border-gray-100 dark:border-[#2A2A2A] overflow-hidden">
+                      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-[#111]">
+                        <div className="flex items-center gap-2">
+                          {data?.preview
+                            ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                            : <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 dark:border-[#444]" />}
+                          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{p.label}</span>
+                          <span className="text-[10px] text-gray-400">{p.hint}</span>
+                        </div>
+                        {data?.preview && (
+                          <button type="button" onClick={() => setExtraDesigns(prev => ({ ...prev, [pos]: { file: null, preview: null, url: null } }))}
+                            className="text-[10px] text-gray-400 hover:text-red-500 transition-colors">Remove</button>
+                        )}
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/png,image/svg+xml,image/jpeg"
+                        className="hidden"
+                        ref={(el) => { if (el) extraFileRefs.current[pos] = el; }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setExtraDesigns(prev => ({ ...prev, [pos]: { file, preview: URL.createObjectURL(file), url: null } }));
+                        }}
+                      />
+                      {data?.preview ? (
+                        <div className="flex items-center gap-3 px-3 py-2">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={data.preview} alt={p.label} className="w-12 h-12 object-contain rounded-lg bg-gray-100 dark:bg-[#2A2A2A] p-1" />
+                          <button type="button" onClick={() => extraFileRefs.current[pos]?.click()}
+                            className="text-xs text-orange-500 hover:text-orange-600 font-medium">
+                            Replace design
+                          </button>
+                        </div>
+                      ) : (
+                        <button type="button" onClick={() => extraFileRefs.current[pos]?.click()}
+                          className="w-full flex items-center gap-2 px-3 py-3 text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/10 transition-colors">
+                          <Upload className="w-4 h-4 flex-shrink-0" />
+                          <span className="text-xs">Upload {p.label} design</span>
+                          <span className="text-[10px] text-gray-300 dark:text-gray-600 ml-auto">PNG recommended</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
               <Button
                 onClick={handleStep1Next}
