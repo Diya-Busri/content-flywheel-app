@@ -174,6 +174,12 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
       setDesignPreview(data.url!);
       setDesignUrl(data.url!);
+      // Auto-fill product name from prompt if user hasn't typed one yet
+      if (!title.trim()) {
+        const words = aiPrompt.trim().split(/\s+/).slice(0, 4).join(" ");
+        const suggested = words.charAt(0).toUpperCase() + words.slice(1);
+        setTitle(suggested);
+      }
     } catch (err) {
       toast({ title: "Generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
     } finally {
@@ -659,7 +665,15 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 disabled={uploadingDesign || !title.trim() || !designPreview}
                 className="w-full bg-orange-500 hover:bg-orange-600 text-white"
               >
-                {uploadingDesign ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Uploading...</> : <>Next: Pick product type <ChevronRight className="w-4 h-4 ml-1" /></>}
+                {uploadingDesign ? (
+                  <><Loader2 className="w-4 h-4 animate-spin mr-2" />Uploading...</>
+                ) : !designPreview ? (
+                  <>Add a design to continue</>
+                ) : !title.trim() ? (
+                  <>Add a product name to continue</>
+                ) : (
+                  <>Next: Pick product type <ChevronRight className="w-4 h-4 ml-1" /></>
+                )}
               </Button>
             </div>
           )}
