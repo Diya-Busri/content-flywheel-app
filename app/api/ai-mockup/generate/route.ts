@@ -11,24 +11,30 @@ const FAL_API_KEY = () => {
   return key;
 };
 
-const PRODUCT_PROMPTS: Record<string, string> = {
-  "t-shirt": "person wearing a custom printed t-shirt",
-  "hoodie": "person wearing a custom printed hoodie",
-  "sweatshirt": "person wearing a custom printed sweatshirt",
-  "mug": "lifestyle photo of a custom printed ceramic mug on a wooden desk",
-  "poster": "framed poster print on a modern apartment wall",
-  "tote bag": "person carrying a custom printed canvas tote bag",
-  "phone case": "person holding a smartphone with a custom printed case",
-  default: "person wearing custom branded merchandise",
-};
+// Order matters — more specific terms must come before generic ones
+// e.g. "hooded sweatshirt" must match "hooded" before it falls through to "sweatshirt"
+const PRODUCT_PROMPTS: Array<{ key: string; prompt: string }> = [
+  { key: "hooded sweatshirt", prompt: "person wearing a custom printed pullover hoodie with hood up" },
+  { key: "hoodie",            prompt: "person wearing a custom printed pullover hoodie with hood up" },
+  { key: "zip",               prompt: "person wearing a custom printed zip-up hoodie" },
+  { key: "t-shirt",           prompt: "person wearing a custom printed t-shirt" },
+  { key: "tee",               prompt: "person wearing a custom printed t-shirt" },
+  { key: "sweatshirt",        prompt: "person wearing a custom printed crewneck sweatshirt" },
+  { key: "mug",               prompt: "lifestyle photo of a custom printed ceramic mug on a wooden desk" },
+  { key: "poster",            prompt: "framed poster print on a modern apartment wall" },
+  { key: "tote",              prompt: "person carrying a custom printed canvas tote bag" },
+  { key: "phone case",        prompt: "person holding a smartphone with a custom printed case" },
+  { key: "hat",               prompt: "person wearing a custom printed baseball cap" },
+  { key: "cap",               prompt: "person wearing a custom printed baseball cap" },
+];
 
 function getProductPrompt(blueprintTitle: string | null): string {
-  if (!blueprintTitle) return PRODUCT_PROMPTS.default;
+  if (!blueprintTitle) return "person wearing custom branded merchandise";
   const lower = blueprintTitle.toLowerCase();
-  for (const [key, prompt] of Object.entries(PRODUCT_PROMPTS)) {
+  for (const { key, prompt } of PRODUCT_PROMPTS) {
     if (lower.includes(key)) return prompt;
   }
-  return PRODUCT_PROMPTS.default;
+  return "person wearing custom branded merchandise";
 }
 
 export async function POST(req: Request) {
