@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, AlertTriangle, Link2, ChevronRight, Youtube, Tv, Copy, Check, Users, Sliders } from "lucide-react";
+import { Loader2, AlertTriangle, Link2, ChevronRight, Youtube, Tv, Copy, Check, Users, Sliders, Shirt, CheckCircle2 } from "lucide-react";
 import { USE_CASES } from "@/lib/use-cases";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -630,6 +630,9 @@ export default function SettingsContent({
         </Card>
       )}
 
+      {/* PRINTIFY */}
+      <PrintifySettingsCard toast={toast} />
+
       {/* FEATURES */}
       <Card className="border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
         <CardHeader>
@@ -743,5 +746,126 @@ export default function SettingsContent({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function PrintifySettingsCard({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
+  const [apiKey, setApiKey] = useState("");
+  const [connected, setConnected] = useState<boolean | null>(null);
+  const [shops, setShops] = useState<Array<{ id: number; title: string }>>([]);
+  const [selectedShop, setSelectedShop] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+
+  // Check current connection on mount
+  useState(() => {
+    fetch("/api/printify/shops")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (!d) return;
+        setConnected(d.connected);
+        if (d.shops) setShops(d.shops);
+        if (d.selectedShopId) setSelectedShop(String(d.selectedShopId));
+      })
+      .catch(() => {});
+  });
+
+  const handleConnect = async () => {
+    if (!apiKey.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/printify/shops", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: apiKey.trim(), shopId: selectedShop || null }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.connected) throw new Error(data.error ?? "Connection failed");
+      setConnected(true);
+      setShops(data.shops ?? []);
+      setApiKey("");
+      toast({ title: "Printify connected!", description: `Found ${data.shops?.length ?? 0} shop(s).` });
+    } catch (err) {
+      toast({ title: "Connection failed", description: err instanceof Error ? err.message : "Check your API key", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+      <CardHeader>
+        <CardTitle className="text-lg text-gray-900 dark:text-white flex items-center gap-2">
+          <Shirt className="w-5 h-5 text-orange-500" />
+          Printify
+        </CardTitle>
+        <CardDescription className="text-gray-600 dark:text-gray-400">
+          Connect your Printify account to sync print-on-demand products for fulfilment.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {connected === true ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+              <CheckCircle2 className="w-4 h-4" />
+              Printify account connected
+            </div>
+            {shops.length > 0 && (
+              <div>
+                <Label className="text-sm">Active shop</Label>
+                <select
+                  value={selectedShop}
+                  onChange={(e) => setSelectedShop(e.target.value)}
+                  className="mt-1 w-full max-w-sm rounded-md border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F] text-sm px-3 py-2"
+                >
+                  <option value="">Select a shop</option>
+                  {shops.map((s) => (
+                    <option key={s.id} value={String(s.id)}>{s.title}</option>
+                  ))}
+                </select>
+                <Button
+                  onClick={handleConnect}
+                  disabled={saving}
+                  size="sm"
+                  className="mt-2 bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save shop"}
+                </Button>
+              </div>
+            )}
+            <p className="text-xs text-gray-400">
+              To update your API key, enter a new one below and save.
+            </p>
+          </div>
+        ) : null}
+        <div className="space-y-2">
+          <Label htmlFor="printify-key">
+            {connected ? "Update API key" : "Printify API key"}
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              id="printify-key"
+              type="password"
+              placeholder="pat.xxxxxxxx..."
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="max-w-sm"
+            />
+            <Button
+              onClick={handleConnect}
+              disabled={saving || !apiKey.trim()}
+              className="bg-orange-500 hover:bg-orange-600 text-white shrink-0"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : connected ? "Update" : "Connect"}
+            </Button>
+          </div>
+          <p className="text-xs text-gray-400">
+            Get your key at{" "}
+            <a href="https://printify.com/app/account/api" target="_blank" rel="noreferrer" className="text-orange-500 underline">
+              printify.com/app/account/api
+            </a>
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

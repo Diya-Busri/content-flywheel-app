@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import Link from "next/link";
 import Image from "next/image";
@@ -85,6 +85,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️", featureKey: "tiktok_shop" },
         { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯", featureKey: "goal_tracker" },
         { href: "/dashboard/referral", icon: <Gift size={18} />, label: "Invite Creators", emoji: "🎁", featureKey: "invite_creators" },
+        { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", emoji: "👕", activeWhenStartsWith: true, featureKey: "print_on_demand" },
       ],
     },
   ].map((group) => ({ ...group, items: group.items.filter((item) => !item.featureKey || !disabled.has(item.featureKey)) }));
