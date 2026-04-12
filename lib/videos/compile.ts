@@ -496,3 +496,149 @@ export async function cleanupWorkDir(workDir: string): Promise<void> {
     // ignore
   }
 }
+
+/**
+ * Render a single scene to a self-contained segment MP4.
+ * Used by the pre-render pipeline: called once per scene when media is added.
+ * The output is H.264/yuv420p at the requested resolution — compatible for
+ * concat with compileFastFromSegments (no re-encoding at export time).
+ */
+export async function renderSceneSegmentOnly(
+  workDir: string,
+  scene: CompileScene,
+  segPath: string,
+  width: number,
+  height: number,
+): Promise<void> {
+  const imageUrl = scene.image_url?.trim() || null;
+  const videoUrl = scene.video_url?.trim() || null;
+  const localImg = scene.localImagePath?.trim() || null;
+  const dur = typeof scene.duration === "number" && scene.duration > 0 ? scene.duration : 5;
+
+  if (localImg && !videoUrl) {
+    await access(localImg);
+    await renderImageSegment(localImg, dur, segPath, width, height, scene.dialogue, {
+      staticShot: Boolean(scene.disableKenBurns),
+      kenBurnsZoomMax: scene.kenBurnsZoomMax,
+    });
+  } else if (videoUrl && isHttpUrl(videoUrl)) {
+    const inputPath = await downloadAsset(videoUrl, workDir, 0, false);
+    await renderVideoSegment(inputPath, dur, segPath, width, height, scene.dialogue);
+  } else if (imageUrl && isHttpUrl(imageUrl)) {
+    const inputPath = await downloadAsset(imageUrl, workDir, 0, true);
+    await renderImageSegment(inputPath, dur, segPath, width, height, scene.dialogue, {
+      staticShot: Boolean(scene.disableKenBurns),
+      kenBurnsZoomMax: scene.kenBurnsZoomMax,
+    });
+  } else {
+    throw new Error("Scene must have image_url, video_url, or localImagePath");
+  }
+}
+
+/**
+ * Fast compile: download pre-rendered segment MP4s, concat with -c copy (no re-encoding),
+ * mux voiceover audio. Returns path to final.mp4 in workDir.
+ *
+ * This is O(n_segments * download_time) + O(total_duration / 100x) for audio mux only.
+ * A 30-minute video with 150 pre-rendered segments finishes in under 30 seconds.
+ *
+ * All segments MUST be H.264 + yuv420p at the same resolution (guaranteed when created
+ * by renderSceneSegmentOnly with identical options).
+ */
+export async function compileFastFromSegments(
+  workDir: string,
+  segmentUrls: string[],
+  voiceoverInput: string,
+  existingVoicePath?: string,
+  opts?: {
+    bgmPath?: string | null;
+    bgmVolume?: number;
+    outputAspect?: "16:9" | "9:16";
+  }
+): Promise<string> {
+  if (segmentUrls.length === 0) throw new Error("At least one segment URL required");
+
+  // 1. Download all segments in parallel
+  const CONCURRENCY = 12;
+  const segPaths: string[] = new Array(segmentUrls.length).fill("");
+  for (let qi = 0; qi < segmentUrls.length; qi += CONCURRENCY) {
+    const batch = segmentUrls.slice(qi, qi + CONCURRENCY);
+    await Promise.all(
+      batch.map(async (url, bi) => {
+        const idx = qi + bi;
+        const p = join(workDir, `seg_${idx}.mp4`);
+        await downloadToFile(url, p);
+        segPaths[idx] = p;
+      })
+    );
+  }
+
+  // 2. Download / copy voiceover
+  const voicePath = join(workDir, "voiceover.mp3");
+  if (existingVoicePath) {
+    try {
+      await access(existingVoicePath);
+      await copyFile(existingVoicePath, voicePath);
+    } catch {
+      if (isHttpUrl(voiceoverInput)) await downloadToFile(voiceoverInput, voicePath);
+      else throw new Error("Voiceover unavailable");
+    }
+  } else {
+    if (!isHttpUrl(voiceoverInput)) throw new Error("voiceoverInput must be http(s) URL");
+    await downloadToFile(voiceoverInput, voicePath);
+  }
+
+  // 3. Write concat list
+  const listPath = join(workDir, "segments.txt");
+  const listContent = segPaths
+    .map((p) => `file '${p.replace(/\\/g, "/").replace(/'/g, "'\\''")}'`)
+    .join("\n");
+  await writeFile(listPath, listContent);
+
+  // 4. Concat video segments with -c copy (stream copy, no re-encoding = near-instant)
+  const concatPath = join(workDir, "concat.mp4");
+  await runFfmpeg([
+    "-y",
+    "-f", "concat",
+    "-safe", "0",
+    "-i", listPath,
+    "-c:v", "copy",
+    "-an",
+    concatPath,
+  ]);
+
+  // 5. Mux voiceover (+ optional BGM) onto the concatenated video
+  const finalPath = join(workDir, "final.mp4");
+  const bgmAbs = opts?.bgmPath?.trim() || null;
+  const bgmVol = typeof opts?.bgmVolume === "number" && opts.bgmVolume > 0 ? opts.bgmVolume : BGM_MIX_VOLUME;
+
+  if (bgmAbs) {
+    await runFfmpeg([
+      "-y",
+      "-i", concatPath,
+      "-i", voicePath,
+      "-stream_loop", "-1", "-i", bgmAbs,
+      "-filter_complex", `[1:a][2:a]amix=inputs=2:duration=first:weights=1 ${bgmVol}[aout]`,
+      "-map", "0:v",
+      "-map", "[aout]",
+      "-c:v", "copy",
+      "-c:a", "aac",
+      "-movflags", "+faststart",
+      finalPath,
+    ]);
+  } else {
+    await runFfmpeg([
+      "-y",
+      "-i", concatPath,
+      "-i", voicePath,
+      "-map", "0:v",
+      "-map", "1:a",
+      "-c:v", "copy",
+      "-c:a", "aac",
+      "-movflags", "+faststart",
+      finalPath,
+    ]);
+  }
+
+  return finalPath;
+}

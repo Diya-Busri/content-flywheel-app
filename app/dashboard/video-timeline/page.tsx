@@ -1411,6 +1411,10 @@ export default function VideoTimelinePage() {
   const [compileLoading, setCompileLoading] = useState(false);
   const [compileDownloadUrl, setCompileDownloadUrl] = useState<string | null>(null);
   const [compileError, setCompileError] = useState<string | null>(null);
+  /** Maps scene_id → pre-rendered segment URL (Supabase MP4). Populated from script or on-demand. */
+  const [prerenderedSegments, setPrerenderedSegments] = useState<Record<string, string>>({});
+  /** Progress message during parallel pre-rendering phase */
+  const [prerenderProgress, setPrerenderProgress] = useState<string | null>(null);
 
   /** YouTube post modal state */
   const [ytModalOpen, setYtModalOpen] = useState(false);
@@ -1839,6 +1843,16 @@ export default function VideoTimelinePage() {
           setVoiceoverFileName(null);
           let totalDur = 0;
           let runStart = 0;
+          // Extract any pre-rendered segment URLs saved in the script JSON
+          const loadedSegments: Record<string, string> = {};
+          (scenesJson as Array<{ segment_url?: string | null }>).forEach((s, i) => {
+            if (typeof s.segment_url === "string" && s.segment_url.startsWith("http")) {
+              loadedSegments[`scene_${i + 1}`] = s.segment_url;
+            }
+          });
+          if (Object.keys(loadedSegments).length > 0) {
+            setPrerenderedSegments((prev) => ({ ...prev, ...loadedSegments }));
+          }
           const sceneList = scenesJson.map((s: { duration?: number; script_text?: string; image_url?: string | null; video_url?: string | null; animation_type?: string | null; section_label?: string | null; voiceover_url?: string | null }, i: number) => {
             const dur = typeof s.duration === "number" && s.duration > 0 ? s.duration : 5;
             totalDur += dur;
@@ -3343,6 +3357,176 @@ export default function VideoTimelinePage() {
 
   /** Server-side compile: FFmpeg on API (Ken Burns, trim, xfade, voiceover) → Supabase → download URL */
   const handleExportVideoServer = useCallback(async () => {
+    // ── Fast path: all scenes have pre-rendered segment URLs ──────────────────
+    // Skip re-encoding entirely: just concat segments + mux voiceover (~10-30s for any length)
+    const scenesWithMedia = scenes.filter((s) => {
+      const m = getSceneBackgroundMedia(s);
+      return m?.url;
+    });
+    const allSegmentsReady = scenesWithMedia.length > 0 &&
+      scenesWithMedia.every((s) => Boolean(prerenderedSegments[s.id]));
+    const perSceneVoiceUrls = scenes.map((s) => s.audioUrl?.trim() || "").filter(Boolean);
+    const hasSingleVoice = typeof voiceoverUrl === "string" && voiceoverUrl.trim().startsWith("http");
+    const hasVoice = perSceneVoiceUrls.length > 0 || hasSingleVoice;
+
+    if (allSegmentsReady && hasVoice) {
+      setCompileLoading(true);
+      setCompileError(null);
+      setCompileDownloadUrl(null);
+      setPrerenderProgress(null);
+      try {
+        const orderedSegmentUrls = scenes
+          .filter((s) => prerenderedSegments[s.id])
+          .map((s) => prerenderedSegments[s.id]);
+        const res = await fetch("/api/videos/compile-fast", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            segmentUrls: orderedSegmentUrls,
+            voiceoverUrls: perSceneVoiceUrls.length > 0 ? perSceneVoiceUrls : undefined,
+            singleVoiceoverUrl: perSceneVoiceUrls.length === 0 ? voiceoverUrl?.trim() : undefined,
+            scriptId: scriptId?.trim() || undefined,
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string; fastCompile?: boolean };
+        if (!res.ok) throw new Error(data.error ?? `Fast compile failed (${res.status})`);
+        if (data.url) {
+          setCompileDownloadUrl(data.url);
+          const a = document.createElement("a");
+          a.href = data.url;
+          a.download = `${(scriptName || "content-flywheel-video").trim()}.mp4`;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.click();
+          const currentProjectId = projectIdFromUrl ?? (await handleSaveToLibrary({ silent: true }))?.id ?? null;
+          if (currentProjectId) {
+            fetch(`/api/video-timeline/videos/${encodeURIComponent(currentProjectId)}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                status: "completed",
+                metadata: { exportedAt: new Date().toISOString(), videoUrl: data.url, exportUrl: data.url, outputUrl: data.url, compiledVideoUrl: data.url },
+              }),
+            }).catch(() => {});
+          }
+        } else {
+          setCompileError("No download URL returned.");
+        }
+      } catch (err) {
+        setCompileError(err instanceof Error ? err.message : "Fast compile failed");
+      } finally {
+        setCompileLoading(false);
+      }
+      return;
+    }
+
+    // ── Pre-render missing segments, then fast compile ────────────────────────
+    // Scenes have media but some segments are missing → pre-render them in parallel, then fast compile
+    const scenesNeedingPrerender = scenesWithMedia.filter((s) => !prerenderedSegments[s.id]);
+    if (scenesWithMedia.length > 0 && hasVoice && scenesNeedingPrerender.length > 0 && scenesNeedingPrerender.length <= scenesWithMedia.length) {
+      setCompileLoading(true);
+      setCompileError(null);
+      setCompileDownloadUrl(null);
+      const newSegments = { ...prerenderedSegments };
+      const totalToRender = scenesNeedingPrerender.length;
+      let rendered = 0;
+
+      try {
+        // Determine resolution from scene count
+        const estimatedDuration = scenes.reduce((sum, s) => sum + s.duration, 0);
+        const resolution = scenes.length > 60 || estimatedDuration > 600 ? "480p" : scenes.length > 20 ? "720p" : "720p";
+
+        // Pre-render in parallel batches of 4
+        const PRERENDER_CONCURRENCY = 4;
+        for (let qi = 0; qi < scenesNeedingPrerender.length; qi += PRERENDER_CONCURRENCY) {
+          const batch = scenesNeedingPrerender.slice(qi, qi + PRERENDER_CONCURRENCY);
+          setPrerenderProgress(`Pre-rendering scenes ${rendered + 1}–${Math.min(rendered + batch.length, totalToRender)} of ${totalToRender}…`);
+          await Promise.all(batch.map(async (scene) => {
+            const media = getSceneBackgroundMedia(scene);
+            if (!media?.url) return;
+            try {
+              const res = await fetch("/api/videos/prerender-scene", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  imageUrl: media.type === "image" ? media.url : undefined,
+                  videoUrl: media.type === "video" ? media.url : undefined,
+                  duration: scene.duration,
+                  resolution,
+                  sceneKey: scene.id,
+                }),
+              });
+              const data = (await res.json().catch(() => ({}))) as { segmentUrl?: string };
+              if (data.segmentUrl) {
+                newSegments[scene.id] = data.segmentUrl;
+              }
+            } catch { /* skip failed scene, will fall back */ }
+            rendered++;
+          }));
+          setPrerenderedSegments({ ...newSegments });
+        }
+
+        // Save segment URLs back to the script for future instant exports
+        if (scriptId?.trim() && Object.keys(newSegments).length > 0) {
+          fetch(`/api/video-timeline/save-segments`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scriptId: scriptId.trim(), segmentUrlsBySceneId: newSegments }),
+          }).catch(() => {});
+        }
+
+        // Now fast compile with all available segments
+        const orderedSegmentUrls = scenes
+          .filter((s) => newSegments[s.id])
+          .map((s) => newSegments[s.id]);
+
+        if (orderedSegmentUrls.length === 0) throw new Error("No segments could be rendered. Check your scene media.");
+
+        setPrerenderProgress(`Compiling ${orderedSegmentUrls.length} segments…`);
+        const res = await fetch("/api/videos/compile-fast", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            segmentUrls: orderedSegmentUrls,
+            voiceoverUrls: perSceneVoiceUrls.length > 0 ? perSceneVoiceUrls : undefined,
+            singleVoiceoverUrl: perSceneVoiceUrls.length === 0 ? voiceoverUrl?.trim() : undefined,
+            scriptId: scriptId?.trim() || undefined,
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+        if (!res.ok) throw new Error(data.error ?? `Compile failed (${res.status})`);
+        if (data.url) {
+          setCompileDownloadUrl(data.url);
+          const a = document.createElement("a");
+          a.href = data.url;
+          a.download = `${(scriptName || "content-flywheel-video").trim()}.mp4`;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.click();
+          const currentProjectId = projectIdFromUrl ?? (await handleSaveToLibrary({ silent: true }))?.id ?? null;
+          if (currentProjectId) {
+            fetch(`/api/video-timeline/videos/${encodeURIComponent(currentProjectId)}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                status: "completed",
+                metadata: { exportedAt: new Date().toISOString(), videoUrl: data.url, exportUrl: data.url, outputUrl: data.url, compiledVideoUrl: data.url },
+              }),
+            }).catch(() => {});
+          }
+        } else {
+          setCompileError("No download URL returned.");
+        }
+      } catch (err) {
+        setCompileError(err instanceof Error ? err.message : "Compile failed");
+      } finally {
+        setCompileLoading(false);
+        setPrerenderProgress(null);
+      }
+      return;
+    }
+
+    // ── Standard path: full FFmpeg compile ────────────────────────────────────
     // Build the request body: prefer scriptId (server loads scenes), fall back to inline guideScenes.
     let compileBody: Record<string, unknown>;
     if (scriptId?.trim()) {
@@ -3489,7 +3673,7 @@ export default function VideoTimelinePage() {
     } finally {
       setCompileLoading(false);
     }
-  }, [scriptId, sceneTransitionType, scriptName, projectIdFromUrl, handleSaveToLibrary, scenes, captions, voiceoverUrl]);
+  }, [scriptId, sceneTransitionType, scriptName, projectIdFromUrl, handleSaveToLibrary, scenes, captions, voiceoverUrl, prerenderedSegments, setPrerenderProgress]);
 
   // Optional: auto-export when navigated from Video Creation Guide after animations finish.
   // Uses voiceovers already present on the timeline scenes (per-clip audio) for template-studio flows.
@@ -4955,11 +5139,11 @@ export default function VideoTimelinePage() {
                   <div className="flex flex-col gap-1" role="status">
                     <p className="text-sm text-[#a0a0a0] flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                      Compiling… (images + voiceover → MP4)
+                      {prerenderProgress ?? "Compiling… (images + voiceover → MP4)"}
                     </p>
-                    {scenes.length > 60 && (
+                    {!prerenderProgress && scenes.length > 60 && (
                       <p className="text-xs text-[#a0a0a0] pl-6">
-                        This is a long video ({scenes.length} scenes) — processing in the background. This page will update automatically. You can also check My Library when it&apos;s done.
+                        Long video ({scenes.length} scenes) — processing in background. Page updates automatically.
                       </p>
                     )}
                   </div>

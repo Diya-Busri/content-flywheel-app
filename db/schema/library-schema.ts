@@ -79,6 +79,12 @@ export type SavedScriptScene = {
   voiceover_url?: string | null;
   /** Section label for timeline display (e.g. "Hook (0:00-0:30)"). */
   section_label?: string | null;
+  /**
+   * Pre-rendered segment MP4 URL (Supabase). When present, compile-fast uses
+   * this directly with -c copy (no re-encoding) for near-instant export.
+   * Populated by /api/videos/prerender-scene after voiceovers are ready.
+   */
+  segment_url?: string | null;
 };
 
 export const savedScriptsTable = pgTable("saved_scripts", {
