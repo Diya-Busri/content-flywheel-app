@@ -25,7 +25,7 @@ function compileDimensions(outputAspect: "16:9" | "9:16" | undefined, resolution
   return is720 ? { width: 1280, height: 720 } : { width: 1920, height: 1080 };
 }
 
-function resolveDrawtextFontFile(): string | null {
+export function resolveDrawtextFontFile(): string | null {
   const env = process.env.FFMPEG_DRAWTEXT_FONTFILE?.trim();
   if (env && existsSync(env)) return env;
   const cwd = process.cwd();

@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-import { compileVideoToFile, cleanupWorkDir, runFfmpeg, getFfmpegPath, type CompileScene } from "@/lib/videos/compile";
+import { compileVideoToFile, cleanupWorkDir, runFfmpeg, getFfmpegPath, resolveDrawtextFontFile, type CompileScene } from "@/lib/videos/compile";
 import { mkdir, writeFile, readFile } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
@@ -167,11 +167,13 @@ export async function POST(request: NextRequest) {
         if (captionText.trim()) {
           // Caption at TOP center with dark text on light background
           const escapedText = escapeFfmpegText(captionText.trim());
+          const fontFile = resolveDrawtextFontFile();
+          const fontFileArg = fontFile ? `fontfile='${fontFile}':` : "";
           await runFfmpeg([
             "-y",
             "-i", rawImagePath,
             "-vf",
-            `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:(iw-1080)/2:(ih-1920)/2,drawtext=text='${escapedText}':fontsize=48:fontcolor=black:x=(w-text_w)/2:y=h*0.05:box=1:boxcolor=white@0.75:boxborderw=12`,
+            `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:(iw-1080)/2:(ih-1920)/2,drawtext=${fontFileArg}text='${escapedText}':fontsize=48:fontcolor=black:x=(w-text_w)/2:y=h*0.05:box=1:boxcolor=white@0.75:boxborderw=12`,
             "-frames:v", "1",
             processedImagePath,
           ]);
