@@ -9,7 +9,7 @@ import ReviewsClient from "./ReviewsClient";
 export const metadata = { title: "Reviews | Content Flywheel" };
 
 export default async function ReviewsPage() {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
   const reviews = await db

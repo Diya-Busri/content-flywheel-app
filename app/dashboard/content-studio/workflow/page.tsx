@@ -14,7 +14,7 @@ const stepLinkClass =
   "text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 font-medium inline-flex items-center gap-1";
 
 export default function ContentWorkflowPage() {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
   return (

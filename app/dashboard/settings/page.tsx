@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default async function SettingsPage() {
-  const { userId } = auth();
+  const { userId } = await auth();
   const user = userId ? await currentUser() : null;
   const data = userId ? await getSettingsForPage() : { profile: null, settings: null, settingsTableMissing: false };
   const { profile, settings, settingsTableMissing } = data;

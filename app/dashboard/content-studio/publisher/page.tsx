@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default function PublisherPage() {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
   return (

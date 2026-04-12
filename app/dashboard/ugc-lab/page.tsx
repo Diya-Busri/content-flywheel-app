@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 export default async function UGCLabPage() {
-  const { userId } = auth();
+  const { userId } = await auth();
   const profile = userId ? await getProfileByUserId(userId) : null;
   const isPremium = profile?.membership === "pro";
 

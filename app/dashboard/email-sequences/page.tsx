@@ -8,7 +8,7 @@ import EmailSequencesClient from "./EmailSequencesClient";
 export const metadata = { title: "Email Sequences | Content Flywheel" };
 
 export default async function EmailSequencesPage() {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
   const sequences = await db

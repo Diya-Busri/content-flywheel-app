@@ -357,7 +357,7 @@ function ActionCard({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default async function DashboardPage() {
-  const { userId } = auth();
+  const { userId } = await auth();
   const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers, activeGoals, campaignsSent, profileRow, revenue] = userId
     ? await Promise.all([
         getVideoStats(userId),

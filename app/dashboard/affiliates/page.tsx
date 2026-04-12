@@ -8,7 +8,7 @@ import AffiliatesClient from "./AffiliatesClient";
 export const metadata = { title: "Affiliates | Content Flywheel" };
 
 export default async function AffiliatesPage() {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
   const links = await db

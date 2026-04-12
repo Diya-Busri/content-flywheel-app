@@ -19,7 +19,7 @@ function TemplateStudioFallback() {
 }
 
 export default function TemplateStudioPage() {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
   return (

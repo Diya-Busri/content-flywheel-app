@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function PrintOnDemandPage() {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) return null;
 
   const [settingsRow, products] = await Promise.all([

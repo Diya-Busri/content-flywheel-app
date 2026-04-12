@@ -22,7 +22,7 @@ function hasActiveSubscription(profile: any | null): boolean {
 }
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  const { userId } = auth();
+  const { userId } = await auth();
 
   if (!userId) {
     return redirect("/sign-in");
