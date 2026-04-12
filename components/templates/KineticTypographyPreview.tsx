@@ -63,7 +63,7 @@ function KineticSlide({
   const bgLayer = hasBg ? (
     <>
       <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${scene.bgImage})`, backgroundSize: "cover", backgroundPosition: "center", zIndex: 0 }} />
-      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.72)", zIndex: 1 }} />
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1 }} />
     </>
   ) : null;
 
