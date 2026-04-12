@@ -1331,30 +1331,50 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
             {products.map((product) => {
               const mockups = (product.mockupUrls as string[]) ?? [];
               return (
-                <button key={product.id} type="button" onClick={() => { setSelectedProduct(product); setView("product"); }}
-                  className="group rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-orange-300 dark:hover:border-orange-700 hover:shadow-md transition-all overflow-hidden text-left">
-                  <div className="aspect-square bg-gray-50 dark:bg-[#2A2A2A] relative overflow-hidden flex items-center justify-center">
-                    {mockups[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={mockups[0]} alt={product.title} className="w-full h-full object-cover" />
-                    ) : product.designFileUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={product.designFileUrl} alt={product.title} className="w-full h-full object-contain p-6" />
-                    ) : (
-                      <Shirt className="w-12 h-12 text-gray-300 dark:text-gray-600" />
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">{product.title}</p>
-                    {product.blueprintTitle && <p className="text-xs text-gray-400 mt-0.5 truncate">{product.blueprintTitle}</p>}
-                    <div className="flex items-center justify-between mt-2">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${product.printifyStatus === "synced" ? "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400" : "bg-gray-100 text-gray-500 dark:bg-[#2A2A2A] dark:text-gray-400"}`}>
-                        {product.printifyStatus === "synced" ? "Synced" : "Draft"}
-                      </span>
-                      <span className="text-xs text-gray-400">{mockups.length} mockup{mockups.length !== 1 ? "s" : ""}</span>
+                <div key={product.id} className="group rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-orange-300 dark:hover:border-orange-700 hover:shadow-md transition-all overflow-hidden relative">
+                  {/* Delete button */}
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (!confirm(`Delete "${product.title}"? This cannot be undone.`)) return;
+                      await fetch("/api/pod/delete-product", {
+                        method: "DELETE",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ productId: product.id }),
+                      });
+                      setProducts((prev) => prev.filter((p) => p.id !== product.id));
+                    }}
+                    className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/40 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                    title="Delete product"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button type="button" onClick={() => { setSelectedProduct(product); setView("product"); }} className="w-full text-left">
+                    <div className="aspect-square bg-gray-50 dark:bg-[#2A2A2A] relative overflow-hidden flex items-center justify-center">
+                      {mockups[0] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={mockups[0]} alt={product.title} className="w-full h-full object-cover" />
+                      ) : product.designFileUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={product.designFileUrl} alt={product.title} className="w-full h-full object-contain p-6" />
+                      ) : (
+                        <Shirt className="w-12 h-12 text-gray-300 dark:text-gray-600" />
+                      )}
                     </div>
-                  </div>
-                </button>
+                    <div className="p-4">
+                      <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">{product.title}</p>
+                      {product.blueprintTitle && <p className="text-xs text-gray-400 mt-0.5 truncate">{product.blueprintTitle}</p>}
+                      <div className="flex items-center justify-between mt-2">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${product.printifyStatus === "synced" ? "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400" : "bg-gray-100 text-gray-500 dark:bg-[#2A2A2A] dark:text-gray-400"}`}>
+                          {product.printifyStatus === "synced" ? "Synced" : "Draft"}
+                        </span>
+                        <span className="text-xs text-gray-400">{mockups.length} mockup{mockups.length !== 1 ? "s" : ""}</span>
+                      </div>
+                    </div>
+                  </button>
+                </div>
               );
             })}
           </div>
