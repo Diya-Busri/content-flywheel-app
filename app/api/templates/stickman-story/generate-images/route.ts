@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       if (i > 0) await sleep(400);
 
       const visualDescription = scenes[i]?.visualDescription ?? "";
-      const prompt = `whiteboard illustration, simple stickman characters, thick black outlines on white background, minimalist style, ${visualDescription}, flat colors, children's book aesthetic, no gradients, clean and simple`;
+      const prompt = `2D cartoon animation style, stickman characters with large round circle heads and simple black stick bodies, colorful illustrated background scene, flat color environment with buildings trees and sky, story animation art style similar to kurzgesagt or draw my life, ${visualDescription}, vibrant pastel colors, clean cartoon illustration, no text, no watermark`;
 
       const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
         method: "POST",
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           prompt,
-          image_size: "portrait_16_9",
+          image_size: "portrait_4_3",
           num_inference_steps: 4,
           num_images: 1,
           enable_safety_checker: true,
