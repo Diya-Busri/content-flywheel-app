@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { getTemplateStudioPrefill, clearTemplateStudioPrefill } from "@/lib/template-studio-prefill";
 import { setVideoPrefill, getTimelineUrl } from "@/lib/video-prefill";
+import { YouTubePublishSheet } from "@/components/youtube/YouTubePublishSheet";
 import { SlideDeck } from "./SlideDeck";
 import { SlidePreview } from "./SlidePreview";
 import { parseCharacterTypes } from "@/lib/ai-story-character-style";
@@ -469,6 +470,15 @@ export default function TemplateStudioClient() {
   const [storyVideoExportPhase, setStoryVideoExportPhase] = useState<"saving" | "compiling" | null>(null);
   const [storyVideoExportUrl, setStoryVideoExportUrl] = useState<string | null>(null);
   const [storyVideoExportScriptId, setStoryVideoExportScriptId] = useState<string | null>(null);
+
+  /** YouTube publish sheet state */
+  const [ytPublishSheet, setYtPublishSheet] = useState<{
+    videoTitle: string;
+    videoUrl: string;
+    thumbnailUrl?: string;
+    topic?: string;
+    niche?: string;
+  } | null>(null);
 
   // ── Anime Story Video state (mode 19) ────────────────────────────────────────
   const [animeStoryPremise, setAnimeStoryPremise] = useState("");
@@ -5215,9 +5225,32 @@ export default function TemplateStudioClient() {
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => void quickScheduleStickmanYouTube()}
+                  className="gap-1.5 text-red-600 dark:text-red-500 border-red-200 dark:border-red-800 hover:text-red-700"
+                  disabled={stickmanExporting}
+                  onClick={async () => {
+                    if (stickmanScenes.length === 0) {
+                      toast({ title: "Nothing to publish", description: "Generate scenes first.", variant: "destructive" });
+                      return;
+                    }
+                    toast({ title: "Exporting video…", description: "Rendering your stickman video for YouTube." });
+                    const exportRes = await fetch("/api/templates/stickman/export", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ topic: stickmanTopic.trim(), longMode: stickmanLongMode, voiceId: stickmanVoiceId, scenes: stickmanScenes }),
+                    });
+                    const exportData = (await exportRes.json().catch(() => ({}))) as { url?: string; error?: string };
+                    if (!exportRes.ok || !exportData.url) {
+                      toast({ title: "Export failed", description: exportData.error ?? "Could not export video. Try again.", variant: "destructive" });
+                      return;
+                    }
+                    setYtPublishSheet({
+                      videoTitle: `${stickmanTopic.trim() || "Stickman Whiteboard"} | Faceless Brand`,
+                      videoUrl: exportData.url,
+                      topic: stickmanTopic.trim() || "stickman whiteboard explainer",
+                    });
+                  }}
                 >
-                  Save to YouTube queue
+                  🎬 Publish to YouTube
                 </Button>
                 <Button
                   type="button"
@@ -6239,15 +6272,21 @@ export default function TemplateStudioClient() {
                         >
                           📸 Post to Instagram
                         </a>
-                        <a
-                          href="https://studio.youtube.com/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="Opens YouTube Studio to upload your video"
+                        <button
+                          type="button"
+                          title="Upload, generate SEO & schedule on YouTube"
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-red-600 hover:bg-red-700 text-white transition-colors"
+                          onClick={() => {
+                            const title = storyVideoTopic?.trim() || financeDocTopic?.trim() || "AI Story Video";
+                            setYtPublishSheet({
+                              videoTitle: title,
+                              videoUrl: storyVideoExportUrl ?? "",
+                              topic: title,
+                            });
+                          }}
                         >
-                          🎬 Post to YouTube
-                        </a>
+                          🎬 Publish to YouTube
+                        </button>
                         <button
                           type="button"
                           title="Copy video URL to clipboard"
@@ -6754,6 +6793,17 @@ export default function TemplateStudioClient() {
           </Card>
         </>
       )}
+
+      {/* YouTube Publish Sheet */}
+      <YouTubePublishSheet
+        open={ytPublishSheet !== null}
+        onOpenChange={(open) => { if (!open) setYtPublishSheet(null); }}
+        videoTitle={ytPublishSheet?.videoTitle ?? ""}
+        videoUrl={ytPublishSheet?.videoUrl ?? ""}
+        thumbnailUrl={ytPublishSheet?.thumbnailUrl}
+        topic={ytPublishSheet?.topic}
+        niche={ytPublishSheet?.niche}
+      />
     </div>
   );
 }

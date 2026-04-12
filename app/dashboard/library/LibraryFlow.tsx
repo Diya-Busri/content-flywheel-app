@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { YouTubePublishSheet } from "@/components/youtube/YouTubePublishSheet";
 import {
   Card,
   CardContent,
@@ -42,6 +43,7 @@ import {
   LayoutTemplate,
   Eye,
   Lock,
+  Youtube,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -381,6 +383,13 @@ export default function LibraryFlow() {
   const [packsLoading, setPacksLoading] = useState(false);
   const [youtubePosts, setYoutubePosts] = useState<ScheduledPostItem[]>([]);
   const [youtubeLoading, setYoutubeLoading] = useState(false);
+  /** YouTube publish sheet state */
+  const [ytPublishItem, setYtPublishItem] = useState<{
+    videoTitle: string;
+    videoUrl: string;
+    thumbnailUrl?: string;
+    niche?: string;
+  } | null>(null);
   const { toast } = useToast();
 
   const showThumbnail = (item: LibraryItem) =>
@@ -1355,6 +1364,23 @@ export default function LibraryFlow() {
                         <Button variant="outline" size="sm" onClick={() => handleDownloadItem(item)}>
                           <Download className="w-3.5 h-3.5" />
                         </Button>
+                        {item.type === "video" && getVideoDownloadUrl(item) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            title="Publish to YouTube"
+                            className="text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-400 border-red-200 dark:border-red-800"
+                            onClick={() =>
+                              setYtPublishItem({
+                                videoTitle: item.title,
+                                videoUrl: getVideoDownloadUrl(item)!,
+                                thumbnailUrl: item.thumbnail ?? undefined,
+                              })
+                            }
+                          >
+                            <Youtube className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </>
                     )}
                   </CardContent>
@@ -1364,6 +1390,16 @@ export default function LibraryFlow() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* YouTube Publish Sheet */}
+      <YouTubePublishSheet
+        open={ytPublishItem !== null}
+        onOpenChange={(open) => { if (!open) setYtPublishItem(null); }}
+        videoTitle={ytPublishItem?.videoTitle ?? ""}
+        videoUrl={ytPublishItem?.videoUrl ?? ""}
+        thumbnailUrl={ytPublishItem?.thumbnailUrl}
+        niche={ytPublishItem?.niche}
+      />
     </main>
   );
 }

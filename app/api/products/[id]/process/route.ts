@@ -258,7 +258,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       console.log("[DIAG] Final save to DB — status=draft", { productId, format, totalSections: sectionsWithContent.length });
     }
 
-    const userId = (existing as { userId?: string })?.userId;
     if (userId) {
       try {
         await db.insert(productHistoryTable).values({
