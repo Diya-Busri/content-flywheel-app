@@ -1769,9 +1769,10 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                                   headers: { "Content-Type": "application/json" },
                                   body: JSON.stringify({ prompt, style: aiStyle }),
                                 });
-                                const data2 = await res.json() as { imageUrl?: string; error?: string };
-                                if (!res.ok || !data2.imageUrl) throw new Error(data2.error ?? "Failed");
-                                setExtraDesigns(prev => ({ ...prev, [pos]: { file: null, preview: data2.imageUrl!, url: data2.imageUrl! } }));
+                                const data2 = await res.json() as { url?: string; imageUrl?: string; error?: string };
+                                const generatedUrl = data2.url ?? data2.imageUrl;
+                                if (!res.ok || !generatedUrl) throw new Error(data2.error ?? "Failed");
+                                setExtraDesigns(prev => ({ ...prev, [pos]: { file: null, preview: generatedUrl, url: generatedUrl } }));
                               } catch (err) {
                                 setExtraDesigns(prev => ({ ...prev, [pos]: { file: null, preview: null, url: null } }));
                                 toast({ title: "AI generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
