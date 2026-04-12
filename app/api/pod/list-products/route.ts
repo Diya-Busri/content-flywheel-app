@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { podProductsTable } from "@/db/schema/pod-products-schema";
-import { eq, desc, isNull } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET() {

@@ -210,9 +210,9 @@ export default function DropCampaignClient() {
     fetch("/api/pod/list-products").then(r => r.json()).then((data: PodProduct[]) => {
       if (Array.isArray(data)) setProducts(data);
     }).catch(() => {});
-    fetch("/api/brand-profile").then(r => r.json()).then((data: { brandName?: string; niche?: string }) => {
+    fetch("/api/brand-profile").then(r => r.json()).then((data: { brandName?: string; nicheIndustry?: string }) => {
       if (data.brandName) setBrandName(data.brandName);
-      if (data.niche) setNiche(data.niche);
+      if (data.nicheIndustry) setNiche(data.nicheIndustry);
     }).catch(() => {});
   }, []);
 
