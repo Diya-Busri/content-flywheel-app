@@ -134,14 +134,25 @@ function DayCard({ day }: { day: DropDay }) {
                 type="button"
                 onClick={() => {
                   try {
-                    const existing = JSON.parse(localStorage.getItem("cf:ts:draft") ?? "{}") as Record<string, unknown>;
-                    localStorage.setItem("cf:ts:draft", JSON.stringify({
-                      ...existing,
-                      mode: "13",
-                      kineticTopic: day.facelessScript.join(". "),
+                    // Use a unique one-time key so other open Template Studio tabs can't interfere
+                    const prefillKey = `cf:kinetic:prefill:${Date.now()}`;
+                    const scenes = day.facelessScript.map((text: string, i: number) => ({
+                      text,
+                      accentWords: i === 0 ? 3 : 1,
                     }));
-                  } catch { /* ignore */ }
-                  window.open("/dashboard/template-studio", "_blank");
+                    localStorage.setItem(prefillKey, JSON.stringify({
+                      mode: "13",
+                      kineticTopic: day.facelessHook,
+                      kineticData: {
+                        topic: day.facelessHook,
+                        colorScheme: "dark-orange",
+                        scenes,
+                      },
+                    }));
+                    window.open(`/dashboard/template-studio?prefill=${prefillKey}`, "_blank");
+                  } catch {
+                    window.open("/dashboard/template-studio", "_blank");
+                  }
                 }}
                 className="flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
               >
