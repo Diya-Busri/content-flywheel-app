@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const FAL_API_KEY = () => process.env.FAL_API_KEY?.trim() ?? "";
 

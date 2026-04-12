@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
 
     const scenes = Array.isArray(body.scenes) ? body.scenes : [];
     const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
+    const isLong = body.format === "long" || body.format === "epic";
 
     if (scenes.length === 0) return NextResponse.json({ error: "No scenes provided" }, { status: 400 });
     if (imageUrls.length === 0) return NextResponse.json({ error: "No image URLs provided" }, { status: 400 });
@@ -201,7 +202,7 @@ export async function POST(request: NextRequest) {
 
       // Step 4: Compile to final video
       const finalPath = await compileVideoToFile(workDir, compileScenes, "", concatAudioPath, undefined, {
-        outputAspect: "9:16",
+        outputAspect: isLong ? "16:9" : "9:16",
         videoPreset: "veryfast",
       });
 

@@ -473,7 +473,7 @@ export default function TemplateStudioClient() {
   const [animeStoryPremise, setAnimeStoryPremise] = useState("");
   const [animeStoryTone, setAnimeStoryTone] = useState("emotional");
   const [animeStoryCharacter, setAnimeStoryCharacter] = useState("");
-  const [animeStoryFormat, setAnimeStoryFormat] = useState<"short" | "long">("short");
+  const [animeStoryFormat, setAnimeStoryFormat] = useState<"short" | "long" | "epic">("short");
   const [animeStoryScenes, setAnimeStoryScenes] = useState<import("@/components/templates/AnimeStoryPreview").AnimeStoryScene[]>([]);
   const [animeStoryImages, setAnimeStoryImages] = useState<string[]>([]);
   const [animeStoryPhase, setAnimeStoryPhase] = useState<string | null>(null);
@@ -482,7 +482,7 @@ export default function TemplateStudioClient() {
 
   // ── Stickman Story Video state (mode 20) ─────────────────────────────────────
   const [stickmanStoryPremise, setStickmanStoryPremise] = useState("");
-  const [stickmanStoryFormat, setStickmanStoryFormat] = useState<"short" | "long">("short");
+  const [stickmanStoryFormat, setStickmanStoryFormat] = useState<"short" | "long" | "epic">("short");
   const [stickmanStoryNarrationTone, setStickmanStoryNarrationTone] = useState("serious");
   const [stickmanStoryScenes, setStickmanStoryScenes] = useState<import("@/components/templates/StickmanStoryPreview").StickmanStoryScene[]>([]);
   const [stickmanStoryImages, setStickmanStoryImages] = useState<string[]>([]);
@@ -4478,14 +4478,14 @@ export default function TemplateStudioClient() {
                 <div className="space-y-2">
                   <Label>Format</Label>
                   <div className="flex gap-2">
-                    {(["short", "long"] as const).map((f) => (
+                    {(["short", "long", "epic"] as const).map((f) => (
                       <button
                         key={f}
                         type="button"
                         onClick={() => setAnimeStoryFormat(f)}
                         className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition ${animeStoryFormat === f ? "bg-orange-500 text-white border-orange-500" : "border-gray-300 dark:border-gray-600 hover:border-orange-400"}`}
                       >
-                        {f === "short" ? "⚡ Short (30–60s, 8 scenes)" : "🎬 Long (2–5min, 20 scenes)"}
+                        {f === "short" ? "⚡ Short (30–60s, 8 scenes)" : f === "long" ? "🎬 Long (2–5min, 20 scenes)" : "🏆 Epic (10–20min, 60 scenes)"}
                       </button>
                     ))}
                   </div>
@@ -4524,14 +4524,14 @@ export default function TemplateStudioClient() {
                 <div className="space-y-2">
                   <Label>Format</Label>
                   <div className="flex gap-2">
-                    {(["short", "long"] as const).map((f) => (
+                    {(["short", "long", "epic"] as const).map((f) => (
                       <button
                         key={f}
                         type="button"
                         onClick={() => setStickmanStoryFormat(f)}
                         className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition ${stickmanStoryFormat === f ? "bg-orange-500 text-white border-orange-500" : "border-gray-300 dark:border-gray-600 hover:border-orange-400"}`}
                       >
-                        {f === "short" ? "⚡ Short (45–90s, 10 scenes)" : "🎬 Long (3–8min, 24 scenes)"}
+                        {f === "short" ? "⚡ Short (45–90s, 10 scenes)" : f === "long" ? "🎬 Long (3–8min, 24 scenes)" : "🏆 Epic (10–20min, 60 scenes)"}
                       </button>
                     ))}
                   </div>

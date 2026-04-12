@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json().catch(() => ({}))) as {
       premise?: string;
-      format?: "short" | "long";
+      format?: "short" | "long" | "epic";
       narrationTone?: string;
       sceneCount?: number;
     };
@@ -26,13 +26,13 @@ export async function POST(request: NextRequest) {
     const premise = typeof body.premise === "string" ? body.premise.trim() : "";
     if (!premise) return NextResponse.json({ error: "premise is required" }, { status: 400 });
 
-    const format = body.format === "long" ? "long" : "short";
+    const format = body.format === "epic" ? "epic" : body.format === "long" ? "long" : "short";
     const narrationTone = typeof body.narrationTone === "string" ? body.narrationTone.trim() : "informative and engaging";
 
-    const defaultCount = format === "long" ? 24 : 10;
+    const defaultCount = format === "epic" ? 60 : format === "long" ? 24 : 10;
     const sceneCount =
       typeof body.sceneCount === "number"
-        ? Math.min(Math.max(Math.round(body.sceneCount), 6), 40)
+        ? Math.min(Math.max(Math.round(body.sceneCount), 6), 80)
         : defaultCount;
 
     const completion = await openai.chat.completions.create({
@@ -40,29 +40,33 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: "system",
-          content: `You write whiteboard stickman story scripts for TikTok/Reels. You are a storyteller — every scene must connect to the one before and build toward a clear payoff. Follow a tight arc: setup → conflict → turning point → resolution. Read all the narration lines in order — they must sound like ONE continuous story, not disconnected observations.
+          content: `You write whiteboard stickman story scripts. You are a storyteller — every scene must connect to the one before and build toward a clear payoff.
+
+CRITICAL HOOK RULE: Scene 1 MUST be a scroll-stopping hook. Do NOT start with "She was born..." or "It all began..." or any slow setup. Start at the most dramatic or relatable moment of the story — the moment that makes someone stop scrolling and think "wait, what happened?" Examples of good hooks: "She had 48 hours left to save everything." / "Everyone said it was impossible. She was about to prove them wrong." / "This is the story of how she went from $0 to building something real — in her dorm room."
 
 Rules:
-- Scene 1: establish the character and their situation specifically
-- Middle scenes: show the real struggle — concrete, specific moments from the premise
-- Final scene: clear resolution — what changed, what they have now
+- Scene 1: HOOK — most compelling moment or statement, makes viewer stop scrolling immediately
+- Scene 2: Brief context — who is this person and why should we care
+- Middle scenes: specific struggle and turning points tied directly to the premise
+- Final scene: clear payoff — what they have now that they didn't before
 - Every narration line flows from the previous — no abrupt topic jumps
-- Captions are 3-6 words, punchy, specific to that moment (never generic like "THE JOURNEY BEGINS")
+- Captions are 3-6 words, punchy, specific (never "THE JOURNEY BEGINS" or "SHE KEPT GOING")
 - Visual descriptions must show stickman characters DOING something specific that matches the narration
-- Never write filler scenes — every scene must move the story forward`,
+- Never write filler — every scene must move the story forward`,
         },
         {
           role: "user",
-          content: `Write exactly ${sceneCount} scenes for this stickman story. This is ONE story told in ${sceneCount} connected moments — not ${sceneCount} random scenes.
+          content: `Write exactly ${sceneCount} scenes for this stickman story. ONE connected story — not ${sceneCount} random scenes.
 
 Premise: ${premise}
 Narration tone: ${narrationTone}
 
-Story arc:
-- Scenes 1-2: Who is this person? What is their situation right now?
-- Scenes 3-${Math.round(sceneCount * 0.6)}: The specific struggle and challenges from this premise
-- Scenes ${Math.round(sceneCount * 0.6) + 1}-${sceneCount - 1}: The shift — what changes
-- Scene ${sceneCount}: The payoff
+Story arc for ${sceneCount} scenes:
+- Scene 1: HOOK — the most gripping moment or statement. Do NOT start slow.
+- Scene 2: Who is this person and what is their situation?
+- Scenes 3-${Math.round(sceneCount * 0.55)}: The real specific struggle tied to this premise
+- Scenes ${Math.round(sceneCount * 0.55) + 1}-${sceneCount - 1}: The shift and transformation
+- Scene ${sceneCount}: The payoff — where they ended up
 
 Return ONLY valid JSON:
 {
