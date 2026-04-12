@@ -205,15 +205,22 @@ export default function DropCampaignClient() {
   const [campaign, setCampaign] = useState<DropCampaign | null>(null);
   const { toast } = useToast();
 
-  // Load POD products + brand profile on mount
+  // Load POD products + brand info on mount
   useEffect(() => {
     fetch("/api/pod/list-products").then(r => r.json()).then((data: PodProduct[]) => {
       if (Array.isArray(data)) setProducts(data);
     }).catch(() => {});
-    fetch("/api/brand-profile").then(r => r.json()).then((data: { brandName?: string; nicheIndustry?: string }) => {
-      if (data.brandName) setBrandName(data.brandName);
-      if (data.nicheIndustry) setNiche(data.nicheIndustry);
-    }).catch(() => {});
+
+    // Try brand profile first, fall back to content studio settings
+    Promise.all([
+      fetch("/api/brand-profile").then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch("/api/content-studio/user-settings").then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([brand, settings]) => {
+      if (brand?.brandName) setBrandName(brand.brandName);
+      // Niche: prefer brand profile, fall back to content studio selected niche
+      const nicheVal = brand?.nicheIndustry || settings?.selected_niche;
+      if (nicheVal) setNiche(nicheVal);
+    });
   }, []);
 
   // When a product is picked, auto-fill the product name
