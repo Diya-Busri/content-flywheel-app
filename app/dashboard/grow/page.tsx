@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   Store, Inbox, Star, Tag, Gift, Mail, Send,
-  BarChart2, Receipt, Wallet, Shirt, Palette, Link2,
+  BarChart2, Receipt, Wallet, Palette, Link2,
   ArrowRight,
 } from "lucide-react";
 
@@ -34,7 +34,6 @@ const SECTIONS: Record<Section, { heading: string; sub: string; cards: NavCard[]
       { icon: <Store className="w-5 h-5" />,  label: "My Store",      description: "View and manage your digital storefront",    href: "/dashboard/store",          highlight: true },
       { icon: <Inbox className="w-5 h-5" />,  label: "Orders",        description: "See every purchase and fulfilment status",   href: "/dashboard/orders"          },
       { icon: <Star className="w-5 h-5" />,   label: "Reviews",       description: "Read and respond to customer reviews",       href: "/dashboard/reviews"         },
-      { icon: <Shirt className="w-5 h-5" />,  label: "Print on Demand", description: "Design and sell merch with no upfront cost", href: "/dashboard/print-on-demand", highlight: true },
     ],
   },
   marketing: {

@@ -72,6 +72,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       label: "Grow",
       items: [
         { href: "/dashboard/grow", icon: <TrendingUp size={18} />, label: "Grow Hub", emoji: "🚀", activeWhenStartsWith: true },
+        { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", emoji: "👕", activeWhenStartsWith: true, featureKey: "print_on_demand" },
       ],
     },
   ].map((group) => ({ ...group, items: group.items.filter((item) => !item.featureKey || !disabled.has(item.featureKey)) }));
