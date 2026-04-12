@@ -4503,7 +4503,17 @@ export default function VideoTimelinePage() {
                   {inNextLayerMountZone && nextBlock && nextSceneData && (
                     <div className="absolute inset-0 w-full h-full" style={{ zIndex: 0, ...nextLayerStyle }}>
                       {nextMedia?.type === "image" ? (
-                        <img src={nextMedia.url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                        <>
+                          <div className="absolute inset-0 w-full h-full" style={{ background: nextColor }} />
+                          <img
+                            key={nextMedia.url}
+                            src={nextMedia.url}
+                            alt=""
+                            className="absolute inset-0 w-full h-full object-cover"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                          />
+                        </>
+
                       ) : nextMedia?.type === "video" ? (
                         <video
                           ref={nextSceneVideoRef}
@@ -4530,11 +4540,20 @@ export default function VideoTimelinePage() {
                   <div className="absolute inset-0 w-full h-full" style={currentLayerStyle}>
                   {/* Background */}
                   {backgroundMedia?.type === "image" ? (
-                    <img
-                      src={backgroundMedia.url}
-                      alt=""
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
+                    <>
+                      {/* Placeholder shown while image loads (or on error) */}
+                      <div
+                        className="absolute inset-0 w-full h-full"
+                        style={{ background: placeholderColor }}
+                      />
+                      <img
+                        key={backgroundMedia.url}
+                        src={backgroundMedia.url}
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                      />
+                    </>
                   ) : backgroundMedia?.type === "video" ? (
                     <video
                       key={activeScene.scene.id}
