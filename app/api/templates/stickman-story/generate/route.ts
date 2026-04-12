@@ -40,24 +40,38 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: "system",
-          content:
-            "You write whiteboard stickman story scripts. Each scene has a visual description (what stickman characters are doing, for image generation), a narration (voiceover, 1-3 sentences), and a caption (3-6 bold words summarising the scene).",
+          content: `You write whiteboard stickman story scripts for TikTok/Reels. You are a storyteller — every scene must connect to the one before and build toward a clear payoff. Follow a tight arc: setup → conflict → turning point → resolution. Read all the narration lines in order — they must sound like ONE continuous story, not disconnected observations.
+
+Rules:
+- Scene 1: establish the character and their situation specifically
+- Middle scenes: show the real struggle — concrete, specific moments from the premise
+- Final scene: clear resolution — what changed, what they have now
+- Every narration line flows from the previous — no abrupt topic jumps
+- Captions are 3-6 words, punchy, specific to that moment (never generic like "THE JOURNEY BEGINS")
+- Visual descriptions must show stickman characters DOING something specific that matches the narration
+- Never write filler scenes — every scene must move the story forward`,
         },
         {
           role: "user",
-          content: `Write exactly ${sceneCount} scenes for this whiteboard stickman story.
+          content: `Write exactly ${sceneCount} scenes for this stickman story. This is ONE story told in ${sceneCount} connected moments — not ${sceneCount} random scenes.
 
 Premise: ${premise}
 Narration tone: ${narrationTone}
 
-Return ONLY valid JSON in this exact format:
+Story arc:
+- Scenes 1-2: Who is this person? What is their situation right now?
+- Scenes 3-${Math.round(sceneCount * 0.6)}: The specific struggle and challenges from this premise
+- Scenes ${Math.round(sceneCount * 0.6) + 1}-${sceneCount - 1}: The shift — what changes
+- Scene ${sceneCount}: The payoff
+
+Return ONLY valid JSON:
 {
   "scenes": [
     {
       "sceneNumber": 1,
-      "visualDescription": "What stickman characters are doing in this scene, for image generation",
-      "narration": "1-3 sentence voiceover narration for this scene.",
-      "captionText": "3-6 BOLD WORDS"
+      "visualDescription": "Stickman characters doing something specific that matches the narration exactly",
+      "narration": "1-2 sentences that connect naturally to the scene before and after.",
+      "captionText": "3-6 SPECIFIC WORDS"
     }
   ]
 }`,
