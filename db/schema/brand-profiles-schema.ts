@@ -16,6 +16,8 @@ export const brandProfilesTable = pgTable("brand_profiles", {
   primaryColor: text("primary_color").notNull().default("#1a1a1a"),
   secondaryColor: text("secondary_color").notNull().default("#475569"),
   logoUrl: text("logo_url"),
+  accentColor: text("accent_color").notNull().default("#f97316"),
+  primaryFont: text("primary_font").notNull().default("Inter"),
   /** When true, Auto-Design uses "Let AI decide" by default; when false, uses "Use my brand colours". */
   preferAiColors: boolean("prefer_ai_colors").notNull().default(false),
   /** "match_product" = Pexels keyword from product niche/type; "random" = random aesthetic unrelated to niche. */

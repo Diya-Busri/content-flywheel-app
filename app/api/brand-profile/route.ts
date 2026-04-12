@@ -50,6 +50,8 @@ export async function GET() {
       websiteUrl: row.websiteUrl ?? undefined,
       primaryColor: row.primaryColor ?? "#1a1a1a",
       secondaryColor: row.secondaryColor ?? "#475569",
+      accentColor: row.accentColor ?? "#f97316",
+      primaryFont: row.primaryFont ?? "Inter",
       logoUrl: row.logoUrl ?? undefined,
       preferAiColors: row.preferAiColors ?? false,
       coverBackgroundPreference: row.coverBackgroundPreference ?? "match_product",
@@ -106,6 +108,8 @@ export async function POST(request: NextRequest) {
 
     const primaryColor = normalizeHex(body.primaryColor as string);
     const secondaryColor = normalizeHex(body.secondaryColor as string);
+    const accentColor = body.accentColor ? normalizeHex(body.accentColor as string) : "#f97316";
+    const primaryFont = (body.primaryFont as string)?.trim() || "Inter";
 
     const brandName = (body.brandName as string)?.trim() || null;
     const nicheIndustry = (body.nicheIndustry as string)?.trim() || null;
@@ -125,6 +129,8 @@ export async function POST(request: NextRequest) {
         websiteUrl: (body.websiteUrl as string)?.trim() || null,
         primaryColor,
         secondaryColor,
+        accentColor,
+        primaryFont,
         logoUrl,
         preferAiColors: Boolean(body.preferAiColors),
         coverBackgroundPreference: body.coverBackgroundPreference === "random" ? "random" : "match_product",
@@ -142,6 +148,8 @@ export async function POST(request: NextRequest) {
           websiteUrl: (body.websiteUrl as string)?.trim() || null,
           primaryColor,
           secondaryColor,
+          accentColor,
+          primaryFont,
           logoUrl: logoUrl ?? undefined,
           preferAiColors: body.preferAiColors !== undefined ? Boolean(body.preferAiColors) : undefined,
           coverBackgroundPreference: body.coverBackgroundPreference === "random" ? "random" : "match_product",
@@ -165,6 +173,8 @@ export async function POST(request: NextRequest) {
       websiteUrl: row?.websiteUrl ?? undefined,
       primaryColor: row?.primaryColor ?? primaryColor,
       secondaryColor: row?.secondaryColor ?? secondaryColor,
+      accentColor: row?.accentColor ?? accentColor,
+      primaryFont: row?.primaryFont ?? primaryFont,
       logoUrl: row?.logoUrl ?? logoUrl ?? undefined,
       preferAiColors: row?.preferAiColors ?? false,
       coverBackgroundPreference: row?.coverBackgroundPreference ?? "match_product",
@@ -193,6 +203,8 @@ export async function PATCH(request: NextRequest) {
     if (body.preferAiColors !== undefined) updates.preferAiColors = Boolean(body.preferAiColors);
     if (body.primaryColor !== undefined) updates.primaryColor = normalizeHex(body.primaryColor as string);
     if (body.secondaryColor !== undefined) updates.secondaryColor = normalizeHex(body.secondaryColor as string);
+    if (body.accentColor !== undefined) updates.accentColor = normalizeHex(body.accentColor as string);
+    if (body.primaryFont !== undefined) updates.primaryFont = (body.primaryFont as string)?.trim() || "Inter";
     if (body.tiktokUrl !== undefined) updates.tiktokUrl = (body.tiktokUrl as string)?.trim() || null;
     if (body.instagramUrl !== undefined) updates.instagramUrl = (body.instagramUrl as string)?.trim() || null;
     if (body.youtubeUrl !== undefined) updates.youtubeUrl = (body.youtubeUrl as string)?.trim() || null;
@@ -226,6 +238,8 @@ export async function PATCH(request: NextRequest) {
       websiteUrl: row.websiteUrl ?? undefined,
       primaryColor: row.primaryColor ?? "#1a1a1a",
       secondaryColor: row.secondaryColor ?? "#475569",
+      accentColor: row.accentColor ?? "#f97316",
+      primaryFont: row.primaryFont ?? "Inter",
       logoUrl: row.logoUrl ?? undefined,
       preferAiColors: row.preferAiColors ?? false,
       coverBackgroundPreference: row.coverBackgroundPreference ?? "match_product",

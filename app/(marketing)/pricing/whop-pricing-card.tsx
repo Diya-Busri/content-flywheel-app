@@ -16,6 +16,8 @@ interface WhopPricingCardProps {
   billingCycle: "monthly" | "yearly";
   savingsPercentage: number;
   savingsAmount: string;
+  /** When true, renders only the button (no card wrapper) for embedding in other layouts */
+  buttonOnly?: boolean;
 }
 
 /**
@@ -24,16 +26,17 @@ interface WhopPricingCardProps {
  * Designed with a clean, modern UI inspired by modern SaaS pricing cards
  * Includes animated price transitions and savings display
  */
-export default function WhopPricingCard({ 
-  title, 
-  price, 
-  description, 
-  buttonText, 
+export default function WhopPricingCard({
+  title,
+  price,
+  description,
+  buttonText,
   planId,
   redirectUrl,
   billingCycle,
   savingsPercentage,
-  savingsAmount
+  savingsAmount,
+  buttonOnly = false,
 }: WhopPricingCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +89,22 @@ export default function WhopPricingCard({
       setIsLoading(false);
     }
   };
+
+  // Button-only mode: just the checkout button
+  if (buttonOnly) {
+    return (
+      <div>
+        <Button
+          className="w-full h-12 text-base font-semibold bg-black hover:bg-gray-900 text-white"
+          onClick={handleCheckout}
+          disabled={isLoading || !planId}
+        >
+          {isLoading ? "Processing..." : buttonText}
+        </Button>
+        {error && <p className="mt-2 text-sm text-red-600 text-center">{error}</p>}
+      </div>
+    );
+  }
 
   // Benefits list
   const benefits = [

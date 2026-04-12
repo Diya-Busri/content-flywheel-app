@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import Link from "next/link";
 import Image from "next/image";
@@ -65,6 +65,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚", featureKey: "my_library" },
         { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅", featureKey: "content_calendar" },
         { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅", featureKey: "script_checker" },
+        { href: "/dashboard/caption-library", icon: <BookMarked size={18} />, label: "Caption Library", emoji: "🔖", activeWhenStartsWith: true },
       ],
     },
     {
@@ -86,6 +87,8 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯", featureKey: "goal_tracker" },
         { href: "/dashboard/referral", icon: <Gift size={18} />, label: "Invite Creators", emoji: "🎁", featureKey: "invite_creators" },
         { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", emoji: "👕", activeWhenStartsWith: true, featureKey: "print_on_demand" },
+        { href: "/dashboard/brand-kit", icon: <Palette size={18} />, label: "Brand Kit", emoji: "🎨", activeWhenStartsWith: true },
+        { href: "/dashboard/bio-page", icon: <Link2 size={18} />, label: "Link in Bio", emoji: "🔗", activeWhenStartsWith: true },
       ],
     },
   ].map((group) => ({ ...group, items: group.items.filter((item) => !item.featureKey || !disabled.has(item.featureKey)) }));

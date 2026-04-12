@@ -48,3 +48,6 @@ export * from "./affiliate-links-schema";
 export * from "./referrals-schema";
 export * from "./product-reviews-schema";
 export * from "./admin-finances-schema";
+export * from "./design-history-schema";
+export * from "./caption-library-schema";
+export * from "./bio-page-schema";
