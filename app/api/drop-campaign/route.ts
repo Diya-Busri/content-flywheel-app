@@ -13,9 +13,10 @@ export type DropDay = {
   day: number;
   phase: "teaser" | "reveal" | "hype" | "urgency" | "drop";
   phaseLabel: string;
-  // Reel: specific filming directions
-  reelHook: string;
-  reelDirections: string[]; // 4-5 specific shot/filming instructions
+  // Faceless text-on-screen video
+  facelessHook: string;
+  facelessScript: string[]; // 5-6 lines that appear one at a time on dark screen
+  facelessVideoIdea: string; // one-line description of what visuals/AI images to use
   // Caption
   instagramCaption: string;
   hashtags: string[];
@@ -56,9 +57,11 @@ export async function POST(req: Request) {
   const drop = dropDate || "this week";
   const priceCtx = price ? `priced at ${price}` : "";
 
-  const prompt = `You are a social media strategist for a ${nicheCtx} brand called "${brand}" dropping "${product}" ${priceCtx} on ${drop}.
+  const prompt = `You are a faceless content strategist for a ${nicheCtx} brand called "${brand}" dropping "${product}" ${priceCtx} on ${drop}.
 
-Generate a 7-day drop campaign that ACTUALLY CONVERTS — with real Reel filming directions and carousel slides, not just text posts. Return ONLY valid JSON:
+This brand is FACELESS — no filming, no face on camera. All content is AI-generated visuals, text-on-screen videos (dark background, lines appear one at a time), and designed carousel slides.
+
+Generate a 7-day drop campaign. Return ONLY valid JSON:
 
 {
   "productName": "${product}",
@@ -71,40 +74,41 @@ Generate a 7-day drop campaign that ACTUALLY CONVERTS — with real Reel filming
       "day": 1,
       "phase": "teaser",
       "phaseLabel": "Teaser",
-      "reelHook": "One punchy sentence to say at the very start of the Reel (spoken or text overlay)",
-      "reelDirections": [
-        "Shot 1: specific camera direction (e.g. extreme close-up of fabric texture, hand pulling hoodie out of box)",
-        "Shot 2: another specific shot",
-        "Shot 3: another specific shot",
-        "Shot 4: transition or ending shot",
-        "Edit tip: specific edit/audio suggestion (e.g. use slow-motion on the reveal, add deep bass sound effect)"
+      "facelessHook": "The first line that appears on screen — maximum 8 words, must stop the scroll",
+      "facelessScript": [
+        "Line 1 (hook)",
+        "Line 2",
+        "Line 3",
+        "Line 4",
+        "Line 5 (CTA or cliffhanger)"
       ],
-      "instagramCaption": "2-3 sentence caption with strong CTA",
+      "facelessVideoIdea": "One sentence describing what AI-generated image or visual to use as background (e.g. 'dark cinematic close-up of premium black fabric texture')",
+      "instagramCaption": "2-3 sentence caption with CTA",
       "hashtags": ["#VoidHours", "#Streetwear", "#NewDrop", "#LimitedEdition", "#Fashion", "#OOTD", "#HypeBeast", "#Drip"],
-      "storyIdea": "Specific story idea with interaction (poll, question sticker, countdown timer, etc.)",
+      "storyIdea": "Specific story idea using polls, countdown timer, or question sticker — no filming required",
       "carousel": null
     }
   ],
   "launchEmail": {
     "subject": "subject line",
-    "body": "3 paragraphs"
+    "body": "3 short paragraphs"
   }
 }
 
-Day phases and what content to include:
-- Day 1: phase="teaser" — NO product shown. Film mysterious details: hands, fabric close-up, packaging. Build intrigue. carousel=null
-- Day 2: phase="teaser" — More hints. Film shadow silhouette of hoodie, partial logo. carousel=null
-- Day 3: phase="reveal" — FIRST LOOK. Full product reveal Reel. Also include carousel with 4 slides: slide 1=bold reveal headline, slide 2=product name + key detail, slide 3=who it's for, slide 4=drop date CTA
-- Day 4: phase="reveal" — WORN. Film yourself (or a model) wearing it: walking, styling, fit check. carousel=null
-- Day 5: phase="hype" — WHY IT SELLS. carousel with 5 slides: slide 1=bold hook, slide 2=material/quality detail, slide 3=the design story, slide 4=limited availability, slide 5=price + where to get it
-- Day 6: phase="urgency" — TOMORROW. Last chance content. carousel with 3 slides: slide 1="Dropping Tomorrow", slide 2=discount code reveal, slide 3="Link in bio"
-- Day 7: phase="drop" — IT'S LIVE. Reel of putting it on for the first time. carousel with 4 slides: slide 1="It's here", slide 2=product shot, slide 3=discount code, slide 4=shop now CTA
+Day phases:
+- Day 1: phase="teaser" — mystery, don't reveal the product. carousel=null
+- Day 2: phase="teaser" — more anticipation, hint at something. carousel=null
+- Day 3: phase="reveal" — first look text video. carousel with 4 slides: slide 1=bold reveal headline, slide 2=product name + key detail, slide 3=who it's for, slide 4=drop date CTA
+- Day 4: phase="reveal" — show the product worn (use AI lifestyle mockup image as background). carousel=null
+- Day 5: phase="hype" — why people want this. carousel with 5 slides: hook, quality detail, design story, limited availability, price + CTA
+- Day 6: phase="urgency" — dropping tomorrow. carousel with 3 slides: "Dropping Tomorrow", discount code reveal, "Link in bio"
+- Day 7: phase="drop" — it's live. carousel with 4 slides: "It's here", product shot, discount code, "Shop now"
 
-reelDirections MUST be specific filming instructions (not vague). Tell them EXACTLY what to film: camera angle, movement, what's in frame, how long the clip should be, any transitions or audio.
+facelessScript: each line is 4-7 words max. Should build tension line by line. Think: cinematic, minimal, powerful.
+facelessVideoIdea: describe a specific AI image prompt suitable for the background (dark, moody, cinematic).
+carousel slides: heading is 2-5 bold words, body is 1 supporting sentence.
 
-Carousel slides: heading is short bold text (3-6 words), body is 1-2 supporting sentences.
-
-Tone: dark, minimal, confident. This is a premium streetwear brand. No cringe, no generic hype.`;
+Tone: dark, minimal, premium streetwear. No cringe. No generic marketing.`;
 
   try {
     const completion = await openai.chat.completions.create({

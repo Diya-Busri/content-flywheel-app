@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Loader2, Copy, Check, ChevronDown, ChevronUp, RefreshCw, Mail, Zap, BookMarked, Shirt, CheckCircle2, Video, LayoutTemplate, ImageIcon } from "lucide-react";
+import { Loader2, Copy, Check, ChevronDown, ChevronUp, RefreshCw, Mail, Zap, BookMarked, Shirt, CheckCircle2, LayoutTemplate, ImageIcon, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -117,7 +117,7 @@ function DayCard({ day }: { day: DropDay }) {
             <span className="text-sm font-semibold text-gray-900 dark:text-white">
               {phase.emoji} Day {day.day} — {day.phaseLabel}
             </span>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 italic truncate max-w-xs">&ldquo;{day.reelHook}&rdquo;</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 italic truncate max-w-xs">&ldquo;{day.facelessHook}&rdquo;</p>
           </div>
         </div>
         {open ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />}
@@ -126,22 +126,32 @@ function DayCard({ day }: { day: DropDay }) {
       {open && (
         <div className="px-4 pb-4 pt-3 border-t border-gray-100 dark:border-[#2A2A2A] space-y-4">
 
-          {/* Reel filming directions */}
+          {/* Faceless text-on-screen script */}
           <div>
-            <div className="flex items-center gap-1.5 mb-2">
-              <Video className="w-3.5 h-3.5 text-gray-400" />
-              <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Reel / TikTok — How to Film It</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">TikTok / Reel — Faceless Text Video</p>
+              <a
+                href={`/dashboard/content-studio/faceless-planner`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Open Faceless Planner
+              </a>
             </div>
-            <div className="rounded-xl bg-gray-950 dark:bg-black p-3 space-y-2">
-              <p className="text-orange-400 text-xs font-bold">&ldquo;{day.reelHook}&rdquo;</p>
-              {day.reelDirections.map((dir, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <span className="text-gray-600 text-[10px] font-bold mt-0.5 flex-shrink-0">{i + 1}.</span>
-                  <p className="text-gray-300 text-xs leading-relaxed">{dir}</p>
-                </div>
+            <div className="rounded-xl bg-gray-950 dark:bg-black p-4 space-y-2">
+              {day.facelessScript.map((line, i) => (
+                <p key={i} className={`text-center font-semibold leading-snug ${i === 0 ? "text-orange-400 text-sm" : "text-white text-sm"}`}>{line}</p>
               ))}
             </div>
-            <p className="text-[10px] text-gray-400 mt-1">↑ Exact shots to film — not just a script</p>
+            {day.facelessVideoIdea && (
+              <div className="mt-2 flex items-start gap-2 bg-gray-50 dark:bg-[#111] rounded-lg p-2.5">
+                <ImageIcon className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
+                <p className="text-[11px] text-gray-500 dark:text-gray-400"><span className="font-semibold text-gray-700 dark:text-gray-300">AI image idea:</span> {day.facelessVideoIdea}</p>
+              </div>
+            )}
+            <p className="text-[10px] text-gray-400 mt-1.5">↑ Each line appears on screen one at a time — no filming needed</p>
           </div>
 
           {/* Carousel (if available) */}
@@ -327,7 +337,7 @@ export default function DropCampaignClient() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Drop Campaign</h1>
         </div>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Pick a product → get exact Reel filming directions, carousel slides (open in Template Studio), captions, and a launch email. 7 days of content that actually sells.
+          Pick a product → get 7 days of faceless content: text-on-screen video scripts, carousel slides, captions, and a launch email. No filming, no face on camera.
         </p>
       </div>
 
