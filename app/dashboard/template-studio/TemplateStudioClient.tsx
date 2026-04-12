@@ -220,20 +220,21 @@ function buildTimelineContentFromAiStory(
       ...(voiceoverUrls[scene.sceneNumber] ? { audioUrl: voiceoverUrls[scene.sceneNumber] } : {}),
     };
   });
+  const effectiveDuration = sceneDuration ?? TIMELINE_SCENE_DURATION;
   const captions = aiStoryScenes
     .map((s, i) => {
       const text = s.dialogue?.trim();
       if (!text) return null;
-      const startTime = i * TIMELINE_SCENE_DURATION;
+      const startTime = i * effectiveDuration;
       return {
         id: `cap-template-${i}`,
         text,
         startTime,
-        endTime: startTime + TIMELINE_SCENE_DURATION,
+        endTime: startTime + effectiveDuration,
       };
     })
     .filter((c): c is NonNullable<typeof c> => c != null);
-  const totalDuration = scenes.length * TIMELINE_SCENE_DURATION;
+  const totalDuration = scenes.length * effectiveDuration;
   return { scenes, captions, totalDuration };
 }
 

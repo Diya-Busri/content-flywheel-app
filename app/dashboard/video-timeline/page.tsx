@@ -1293,6 +1293,13 @@ export default function VideoTimelinePage() {
   const voiceoverInputRef = useRef<HTMLInputElement>(null);
   /** Set to true when we want the audio element to play as soon as its new src is ready (canplay). */
   const pendingPlayRef = useRef(false);
+  /**
+   * Per-clip audio: locks which scene's audio is currently loaded in the <audio> element.
+   * Prevents the audio src from changing mid-clip when currentTime crosses a scene boundary
+   * (which would interrupt playback without ever firing onEnded, causing playback to stop silently).
+   * Only updated explicitly: on play, seek, or when onPlaybackEnded advances to the next clip.
+   */
+  const [perClipSceneId, setPerClipSceneId] = useState<string | null>(null);
 
   const [captionAnimation, setCaptionAnimation] = useState<"none" | "fadeIn" | "slideUp" | "pop">("fadeIn");
   const [captionPosition, setCaptionPosition] = useState<"bottom" | "middle" | "top">("bottom");
@@ -1389,14 +1396,30 @@ export default function VideoTimelinePage() {
     () => getActiveBlockAndScene(sceneBlocks, scenes, currentTime),
     [sceneBlocks, scenes, currentTime]
   );
+  /**
+   * Per-clip audio: the scene whose audio is currently locked into the <audio> element.
+   * This deliberately does NOT change when currentTime crosses scene boundaries — only when
+   * the user seeks or onPlaybackEnded explicitly advances to the next clip.
+   * Falls back to activeBlockAndScene when perClipSceneId hasn't been set yet (before first play).
+   */
+  const lockedBlockAndScene = useMemo(() => {
+    if (!hasPerClipAudio) return activeBlockAndScene;
+    if (perClipSceneId) {
+      const block = sceneBlocks.find((b) => b.id === perClipSceneId) ?? null;
+      const scene = block ? scenes.find((s) => s.id === block.id) ?? null : null;
+      if (block && scene) return { block, scene };
+    }
+    return activeBlockAndScene;
+  }, [hasPerClipAudio, perClipSceneId, sceneBlocks, scenes, activeBlockAndScene]);
+
   const playbackSrc =
-    hasPerClipAudio && activeBlockAndScene?.scene?.audioUrl
-      ? activeBlockAndScene.scene.audioUrl!
+    hasPerClipAudio && lockedBlockAndScene?.scene?.audioUrl
+      ? lockedBlockAndScene.scene.audioUrl!
       : !hasPerClipAudio && voiceoverUrl
       ? voiceoverUrl
       : null;
   const playbackStartOffset =
-    hasPerClipAudio && activeBlockAndScene?.scene?.audioUrl ? activeBlockAndScene.block.startTime : 0;
+    hasPerClipAudio && lockedBlockAndScene?.scene?.audioUrl ? lockedBlockAndScene.block.startTime : 0;
   const playbackStartOffsetRef = useRef(0);
 
   useEffect(() => {
@@ -2208,6 +2231,10 @@ export default function VideoTimelinePage() {
       }
       if (data.scriptId != null) setScriptId(data.scriptId ?? undefined);
       if (typeof data.title === "string" && data.title.trim()) setScriptName(data.title.trim());
+      // Reset playback state so the new project starts from scratch
+      setPerClipSceneId(null);
+      setCurrentTime(0);
+      setIsPlaying(false);
     } catch (err) {
       console.error("Load project failed:", err);
       alert(err instanceof Error ? err.message : "Failed to load project");
@@ -2291,13 +2318,21 @@ export default function VideoTimelinePage() {
   }, []);
 
   const play = useCallback(() => {
+    // Lock the per-clip scene on first play (or after a seek already set it).
+    // This prevents playbackSrc from changing mid-clip if currentTime crosses a scene boundary.
+    if (hasPerClipAudio && !perClipSceneId && activeBlockAndScene?.block.id) {
+      setPerClipSceneId(activeBlockAndScene.block.id);
+    }
     const voice = audioRef.current;
     const music = musicRef.current;
-    if (voice && music) music.currentTime = voice.currentTime;
+    // For per-clip audio, voice always starts at 0 (each clip is its own file), so don't use
+    // voice.currentTime to sync music — it would incorrectly reset music to 0 on every clip start.
+    // Music position is managed by seekTo/onPlaybackEnded instead.
+    if (voice && music && !hasPerClipAudio) music.currentTime = voice.currentTime;
     voice?.play();
     music?.play();
     sceneVideoRef.current?.play();
-  }, []);
+  }, [hasPerClipAudio, perClipSceneId, activeBlockAndScene]);
 
   /** Fired when a new audio src becomes ready to play. Triggers a pending play if one was queued —
    *  this avoids the race where play() is called before the new src has finished loading. */
@@ -2351,11 +2386,12 @@ export default function VideoTimelinePage() {
         .filter((x): x is { block: SceneBlock; scene: Scene } => !!x.scene?.audioUrl?.trim())
         .sort((a, b) => a.block.startTime - b.block.startTime);
 
-      // Identify which clip just ended using the audio element's src — this avoids a race
-      // condition where the last onTimeUpdate fires at exactly a scene boundary, pushing
-      // activeBlockAndScene into the next (potentially audio-less) scene before `ended` fires.
+      // Use the locked perClipSceneId as the primary way to identify the just-ended clip.
+      // This is more reliable than matching el.src (URL formats may differ) or activeBlockAndScene
+      // (which may have already advanced if currentTime crossed a scene boundary during the tail of the clip).
       const endedSrc = el?.src ?? "";
       const currentBlock =
+        (perClipSceneId ? blocksWithAudio.find((x) => x.block.id === perClipSceneId) : null) ??
         blocksWithAudio.find((x) => x.scene.audioUrl?.trim() === endedSrc) ??
         (activeBlockAndScene?.scene?.audioUrl
           ? { block: activeBlockAndScene.block, scene: activeBlockAndScene.scene }
@@ -2366,6 +2402,7 @@ export default function VideoTimelinePage() {
         const next = blocksWithAudio.find((x) => x.block.startTime > currentStart);
         if (next) {
           setCurrentTime(next.block.startTime);
+          setPerClipSceneId(next.block.id); // advance the locked clip to the next one
           setActiveCaption(getActiveCaption(next.block.startTime, captions));
           const music = musicRef.current;
           if (music) music.currentTime = next.block.startTime;
@@ -2426,7 +2463,7 @@ export default function VideoTimelinePage() {
       setActiveCaption(getActiveCaption(endTime, captions));
     }
     setIsPlaying(false);
-  }, [pause, voiceoverDuration, duration, captions, hasPerClipAudio, activeBlockAndScene, sceneBlocks, scenes]);
+  }, [pause, voiceoverDuration, duration, captions, hasPerClipAudio, perClipSceneId, activeBlockAndScene, sceneBlocks, scenes]);
 
   const seekTo = useCallback(
     (t: number) => {
@@ -2434,6 +2471,8 @@ export default function VideoTimelinePage() {
       const maxT = hasPerClipAudio ? duration : el?.duration ? el.duration : voiceoverDuration > 0 ? voiceoverDuration : duration;
       const clamped = Math.max(0, Math.min(t, maxT));
       const active = getActiveBlockAndScene(sceneBlocks, scenes, clamped);
+      // Update the locked clip scene so playbackSrc reflects the new position after seeking.
+      if (hasPerClipAudio) setPerClipSceneId(active?.block.id ?? null);
       if (el) {
         const offset = hasPerClipAudio && active?.scene?.audioUrl ? active.block.startTime : 0;
         el.currentTime = Math.max(0, clamped - offset);
@@ -3787,6 +3826,19 @@ export default function VideoTimelinePage() {
             <Redo2 className="h-3.5 w-3.5" />
           </button>
         </div>
+
+        {/* Reload from Library — only shown for saved projects, useful when images finish generating after the page opened */}
+        {projectIdFromUrl && (
+          <button
+            type="button"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[#c0c0c0] hover:text-white bg-[#1e1e1e] border border-[#2a2a2a] hover:bg-[#2a2a2a] transition-colors"
+            onClick={() => loadProject(projectIdFromUrl)}
+            title="Reload latest version from library (use this if scenes are grey after generating images)"
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5A.5.5 0 0 1 2 1h4a.5.5 0 0 1 0 1H3.707l2.147 2.146a.5.5 0 0 1-.708.708L3 2.707V4.5a.5.5 0 0 1-1 0V1.5zm13 13a.5.5 0 0 1-.5.5h-4a.5.5 0 0 1 0-1h2.293l-2.147-2.146a.5.5 0 0 1 .708-.708L13 13.293V11.5a.5.5 0 0 1 1 0v3zM1 8a7 7 0 1 0 14 0A7 7 0 0 0 1 8zm7-6a6 6 0 1 1 0 12A6 6 0 0 1 8 2z"/></svg>
+            Reload
+          </button>
+        )}
 
         {/* Save */}
         <button
@@ -5529,7 +5581,7 @@ export default function VideoTimelinePage() {
               <button
                 type="button"
                 className="p-1.5 rounded text-[#606060] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 transition-colors"
-                onClick={() => { if (audioRef.current) { audioRef.current.currentTime = 0; } }}
+                onClick={() => seekTo(0)}
                 title="Skip to start"
               >
                 <SkipBack className="h-3.5 w-3.5" />
@@ -5546,7 +5598,7 @@ export default function VideoTimelinePage() {
               <button
                 type="button"
                 className="p-1.5 rounded text-[#606060] hover:bg-[#2a2a2a] hover:text-white disabled:opacity-40 transition-colors"
-                onClick={() => { if (audioRef.current) { audioRef.current.currentTime = audioRef.current.duration || 0; } }}
+                onClick={() => seekTo(Math.max(duration, voiceoverDuration))}
                 title="Skip to end"
               >
                 <SkipForward className="h-3.5 w-3.5" />
