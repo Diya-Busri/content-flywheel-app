@@ -107,7 +107,7 @@ export const manageWhopMembershipStatusChange = async (
 
 // Check if the current user can access a premium feature
 export async function canAccessPremiumFeatures() {
-  const { userId } = auth();
+  const { userId } = await auth();
   
   if (!userId) {
     return false;

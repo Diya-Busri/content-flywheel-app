@@ -13,7 +13,7 @@ interface FeatureGateProps {
  * if the flag is turned off for the current user in the admin panel.
  */
 export async function FeatureGate({ featureKey, children, label }: FeatureGateProps) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) return <>{children}</>;
 
   const disabled = await getDisabledFeatures(userId);
