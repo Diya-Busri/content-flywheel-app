@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Palette, Save, Check, Loader2, Home, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Palette, Save, Check, Loader2, Home, ChevronRight, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -74,7 +74,9 @@ export default function BrandKitClient() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [brandName, setBrandName] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#1a1a1a");
@@ -99,6 +101,36 @@ export default function BrandKitClient() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const handleLogoUpload = useCallback(async (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Invalid file", description: "Please upload an image file", variant: "destructive" });
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch("/api/brand-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logoBase64: base64, primaryColor, secondaryColor, accentColor, primaryFont }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      setLogoUrl(data.logoUrl ?? "");
+      toast({ title: "Logo uploaded ✓" });
+    } catch (e) {
+      toast({ title: "Upload failed", description: e instanceof Error ? e.message : "Try again", variant: "destructive" });
+    } finally {
+      setUploadingLogo(false);
+    }
+  }, [primaryColor, secondaryColor, accentColor, primaryFont, toast]);
 
   const save = useCallback(async () => {
     setSaving(true);
@@ -200,25 +232,58 @@ export default function BrandKitClient() {
                 <h2 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-widest">
                   Logo
                 </h2>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleLogoUpload(f); }}
+                />
+
                 {logoUrl ? (
                   <div className="flex items-center gap-4">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={logoUrl} alt="Brand logo" className="w-16 h-16 object-contain rounded-xl border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#111] p-2" />
-                    <div>
-                      <p className="text-sm text-gray-700 dark:text-gray-300">Logo saved</p>
-                      <p className="text-xs text-gray-400 mt-0.5">Update your logo in Brand Builder → Settings</p>
+                    <img src={logoUrl} alt="Brand logo" className="w-20 h-20 object-contain rounded-xl border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#111] p-2" />
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">Logo uploaded ✓</p>
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingLogo}
+                        className="text-xs text-orange-500 hover:text-orange-600 mt-1 flex items-center gap-1"
+                      >
+                        {uploadingLogo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                        Replace logo
+                      </button>
                     </div>
+                    <button
+                      onClick={() => setLogoUrl("")}
+                      className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
                 ) : (
-                  <div className="rounded-xl border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] p-6 text-center">
-                    <p className="text-sm text-gray-500 dark:text-[#A0A0A0]">No logo uploaded yet</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Upload your logo in{" "}
-                      <Link href="/dashboard/brand-builder" className="text-orange-500 hover:underline">
-                        Brand Builder
-                      </Link>
-                    </p>
-                  </div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingLogo}
+                    className="w-full rounded-xl border-2 border-dashed border-gray-200 dark:border-[#2A2A2A] p-8 text-center hover:border-orange-400 hover:bg-orange-50/5 transition-all group"
+                  >
+                    {uploadingLogo ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="w-6 h-6 text-orange-500 animate-spin mx-auto" />
+                        <p className="text-sm text-gray-400">Uploading…</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload className="w-6 h-6 text-gray-300 dark:text-[#444] group-hover:text-orange-400 transition-colors mx-auto" />
+                        <p className="text-sm text-gray-500 dark:text-[#A0A0A0] group-hover:text-orange-500 transition-colors">
+                          Click to upload logo
+                        </p>
+                        <p className="text-xs text-gray-400">PNG, JPG, SVG — any size</p>
+                      </div>
+                    )}
+                  </button>
                 )}
               </div>
 
