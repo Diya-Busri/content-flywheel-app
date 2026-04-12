@@ -191,14 +191,15 @@ function normalizeTimelineMetadata(metadata: unknown): { metadata: Record<string
     } else {
       // Finance Documentary and Story Video are always 16:9
       const isFinanceOrStory = sourceType === "finance-documentary" || sourceType === "story-video";
-      // Legacy projects saved before sourceType was set correctly — detect by scene count (150 = Finance Doc standard)
-      const isLikelyFinanceDoc = !sourceType && scenes.length >= 100;
+      // Legacy projects saved before sourceType was set correctly:
+      // Finance docs saved as "ai-story" but have 100+ scenes (Finance Doc standard is 150)
+      const isLikelyFinanceDoc = scenes.length >= 100;
       if (isFinanceOrStory || isLikelyFinanceDoc) {
         if (current.aspectRatio !== "16:9") {
           next.aspectRatio = "16:9";
           changed = true;
         }
-        if (isLikelyFinanceDoc && !sourceType) {
+        if (isLikelyFinanceDoc && sourceType !== "finance-documentary") {
           next.sourceType = "finance-documentary";
           changed = true;
         }
