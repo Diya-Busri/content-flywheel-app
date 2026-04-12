@@ -99,7 +99,7 @@ export async function POST(
     await db
       .update(productsTable)
       .set({ marketingAssets: updatedAssets, updatedAt: new Date() })
-      .where(eq(productsTable.id, productId));
+      .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId)));
 
     return NextResponse.json({ success: true, priceLabel });
   } catch (err) {
@@ -161,7 +161,7 @@ export async function DELETE(
     await db
       .update(productsTable)
       .set({ marketingAssets: updatedAssets, updatedAt: new Date() })
-      .where(eq(productsTable.id, productId));
+      .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId)));
 
     return NextResponse.json({ success: true });
   } catch (err) {

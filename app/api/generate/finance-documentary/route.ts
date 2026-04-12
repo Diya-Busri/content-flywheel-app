@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import OpenAI from "openai";
 import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 min — large scene counts need parallel batch expansion
@@ -58,6 +59,9 @@ export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const apiRl = await checkApiRateLimit(userId);
+    if (apiRl) return apiRl;
 
     const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");
     if (!hasCredits) {

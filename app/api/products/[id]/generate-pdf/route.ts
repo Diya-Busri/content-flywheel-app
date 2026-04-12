@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { PDFDocument } from "pdf-lib";
 import { buildSinglePageHtml, type PdfProductPayload, type PdfSection } from "@/lib/pdf-product-html";
@@ -20,6 +21,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const apiRl = await checkApiRateLimit(userId);
+    if (apiRl) return apiRl;
+
     const body = await request.json().catch(() => ({}));
 
     const title = typeof body.title === "string" ? body.title : "My Product";

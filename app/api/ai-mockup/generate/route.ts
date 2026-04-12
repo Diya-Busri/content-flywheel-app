@@ -267,7 +267,7 @@ export async function POST(req: Request) {
     await db
       .update(podProductsTable)
       .set({ mockupUrls: [...currentMockups, blob.url], aiMockupPrompt: basePrompt })
-      .where(eq(podProductsTable.id, productId));
+      .where(and(eq(podProductsTable.id, productId), eq(podProductsTable.userId, userId)));
 
     return NextResponse.json({ mockupUrl: blob.url });
   } catch (err) {

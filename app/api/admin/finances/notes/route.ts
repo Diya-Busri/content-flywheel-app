@@ -4,7 +4,7 @@ import { db } from "@/db/db";
 import { adminFinanceNotesTable } from "@/db/schema/admin-finances-schema";
 import { desc } from "drizzle-orm";
 
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase() ?? "";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
 
 async function requireAdmin() {
   const user = await currentUser();

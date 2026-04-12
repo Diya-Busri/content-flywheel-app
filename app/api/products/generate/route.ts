@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { generateProduct, isValidProductType } from "@/lib/generators";
 import type { ProductType, ProductDetails } from "@/lib/generators/types";
 
 export async function POST(request: Request) {
   try {
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const apiRl = await checkApiRateLimit(userId);
+    if (apiRl) return apiRl;
+
     const body = await request.json();
     const { format, title, description, niche, sections } = body as {
       format?: string;

@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 export const runtime = "nodejs";
 
@@ -7,6 +9,12 @@ const DEFAULT_VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
 
 export async function POST(request: NextRequest) {
   try {
+    const { userId } = await auth();
+    if (!userId) return new Response("Unauthorized", { status: 401 });
+
+    const rl = await checkApiRateLimit(userId);
+    if (rl) return rl;
+
     const body = (await request.json()) as { text?: string; sceneIndex?: number; voiceId?: string };
     const text = typeof body.text === "string" ? body.text.trim() : "";
     const voiceId = typeof body.voiceId === "string" && body.voiceId.trim() ? body.voiceId.trim() : DEFAULT_VOICE_ID;

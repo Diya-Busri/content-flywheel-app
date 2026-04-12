@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getElevenLabsApiKey } from "@/lib/elevenlabs-api-key";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +12,9 @@ export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const apiRl = await checkApiRateLimit(userId);
+    if (apiRl) return apiRl;
 
     const body = await request.json().catch(() => ({})) as { text?: string; voiceId?: string };
     const text = typeof body.text === "string" ? body.text.trim() : "";

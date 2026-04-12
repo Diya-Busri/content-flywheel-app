@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { generateProduct, isValidProductType } from "@/lib/generators";
 import type { ProductType, ProductDetails, PageBackground, ExportDesignSettings, PlacedElementExport } from "@/lib/generators/types";
@@ -13,6 +14,12 @@ function sanitizeFilename(name: string): string {
  */
 export async function POST(request: Request) {
   try {
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const apiRl = await checkApiRateLimit(userId);
+    if (apiRl) return apiRl;
+
     const body = await request.json().catch(() => ({}));
     const format = (body.format ?? "ebook") as string;
     const title = typeof body.title === "string" ? body.title : "My Product";

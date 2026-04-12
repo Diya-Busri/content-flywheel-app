@@ -1,6 +1,6 @@
 /**
  * Fetch one Pexels video URL for B-roll (e.g. "someone applying" product).
- * Uses PEXELS_API_KEY or NEXT_PUBLIC_PEXELS_API_KEY.
+ * Uses PEXELS_API_KEY (server-only — never use NEXT_PUBLIC_ prefix for this key).
  * Prefers portrait, HD, duration 5–45s.
  */
 
@@ -33,7 +33,7 @@ export function derivePexelsQuery(productName: string, productDescription: strin
  * Search Pexels for one portrait video suitable for B-roll. Returns the first HD (or SD) file link, or null.
  */
 export async function fetchOnePexelsVideo(searchQuery: string): Promise<PexelsVideoResult> {
-  const apiKey = process.env.PEXELS_API_KEY || process.env.NEXT_PUBLIC_PEXELS_API_KEY;
+  const apiKey = process.env.PEXELS_API_KEY;
   if (!apiKey?.trim()) {
     console.log("[pexels-video] PEXELS_API_KEY not set, skipping B-roll");
     return null;

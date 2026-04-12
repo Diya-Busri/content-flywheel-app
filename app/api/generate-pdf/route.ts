@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 export const runtime = "nodejs";
@@ -10,6 +11,12 @@ export const maxDuration = 60;
  */
 export async function POST(request: Request) {
   try {
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const apiRl = await checkApiRateLimit(userId);
+    if (apiRl) return apiRl;
+
     const body = await request.json().catch(() => ({}));
     const html = typeof body.html === "string" ? body.html : "";
     const fileName = typeof body.fileName === "string" ? body.fileName : "document.pdf";

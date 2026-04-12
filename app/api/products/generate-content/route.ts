@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { generateProductContent } from "@/lib/generate-product-content";
 import { cleanProductTitle } from "@/lib/product-title";
 
 export async function POST(request: Request) {
   try {
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const apiRl = await checkApiRateLimit(userId);
+    if (apiRl) return apiRl;
+
     const body = await request.json().catch(() => ({}));
     const rawName = typeof body.productName === "string" ? body.productName.trim() : "";
     const productName = cleanProductTitle(rawName) || rawName;

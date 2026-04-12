@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     await db
       .update(podProductsTable)
       .set({ status: "published", printifyStatus: "published" })
-      .where(eq(podProductsTable.id, productId));
+      .where(and(eq(podProductsTable.id, productId), eq(podProductsTable.userId, userId)));
 
     return NextResponse.json({ success: true });
   } catch (err) {

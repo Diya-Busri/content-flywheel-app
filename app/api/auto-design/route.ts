@@ -6,6 +6,7 @@
  * - Pexels search keyword for background image
  */
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { getAutoDesignSuggestion } from "@/lib/auto-design-suggestion";
 
@@ -13,6 +14,12 @@ export type AutoDesignResult = Awaited<ReturnType<typeof getAutoDesignSuggestion
 
 export async function POST(request: NextRequest) {
   try {
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const apiRl = await checkApiRateLimit(userId);
+    if (apiRl) return apiRl;
+
     const body = await request.json().catch(() => ({}));
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const niche = typeof body.niche === "string" ? body.niche.trim() : "";

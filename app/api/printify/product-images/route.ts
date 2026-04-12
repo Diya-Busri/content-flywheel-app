@@ -74,7 +74,7 @@ export async function GET(req: Request) {
     await db
       .update(podProductsTable)
       .set({ mockupUrls })
-      .where(eq(podProductsTable.id, productId));
+      .where(and(eq(podProductsTable.id, productId), eq(podProductsTable.userId, userId)));
 
     return NextResponse.json({ mockupUrls });
   } catch (err) {

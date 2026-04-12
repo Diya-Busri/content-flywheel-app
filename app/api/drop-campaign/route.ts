@@ -1,6 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -42,6 +44,11 @@ export type DropCampaign = {
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const apiRl = await checkApiRateLimit(userId);
+  if (apiRl) return apiRl;
+  const rl = checkAiRateLimit(userId);
+  if (rl) return rl;
 
   const { productName, brandName, niche, dropDate, price } = await req.json() as {
     productName?: string;

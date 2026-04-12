@@ -128,7 +128,7 @@ export async function PATCH(req: Request) {
     if (variants && variants.length > 0) {
       await db.update(podProductsTable)
         .set({ variants: variants as typeof localProduct.variants })
-        .where(eq(podProductsTable.id, productId));
+        .where(and(eq(podProductsTable.id, productId), eq(podProductsTable.userId, userId)));
     }
 
     // Build Printify product payload
@@ -216,7 +216,7 @@ export async function PATCH(req: Request) {
         variants: (variants ?? localProduct.variants) as typeof localProduct.variants,
         ...(printifyMockupUrls.length > 0 ? { mockupUrls: printifyMockupUrls } : {}),
       })
-      .where(eq(podProductsTable.id, productId));
+      .where(and(eq(podProductsTable.id, productId), eq(podProductsTable.userId, userId)));
 
     return NextResponse.json({ success: true, printifyProductId, mockupUrls: printifyMockupUrls });
   } catch (err) {

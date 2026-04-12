@@ -183,7 +183,7 @@ export async function PATCH(
     await db
       .update(goalsTable)
       .set(updates)
-      .where(eq(goalsTable.id, id));
+      .where(and(eq(goalsTable.id, id), eq(goalsTable.userId, userId)));
 
     return NextResponse.json({ ok: true, ...updates });
   } catch (err) {
@@ -214,7 +214,7 @@ export async function DELETE(
     if (!goal) return NextResponse.json({ error: "Goal not found" }, { status: 404 });
 
     await db.delete(dailyTasksTable).where(eq(dailyTasksTable.goalId, id));
-    await db.delete(goalsTable).where(eq(goalsTable.id, id));
+    await db.delete(goalsTable).where(and(eq(goalsTable.id, id), eq(goalsTable.userId, userId)));
 
     return NextResponse.json({ ok: true });
   } catch (err) {

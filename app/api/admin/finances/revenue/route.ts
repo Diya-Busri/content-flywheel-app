@@ -4,7 +4,7 @@ import { db } from "@/db/db";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { eq, sum } from "drizzle-orm";
 
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase() ?? "";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
 
 export async function GET() {
   const user = await currentUser();

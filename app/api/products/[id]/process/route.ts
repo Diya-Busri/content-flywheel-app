@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { productHistoryTable } from "@/db/schema/product-history-schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   generateProductOutline,
   generateSingleSectionBody,
@@ -34,10 +35,16 @@ const BATCH_SIZE = 10; // Generate up to 10 sections in parallel (e.g. planner h
  * Client sees progress as each batch completes.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const apiRl = await checkApiRateLimit(userId);
+  if (apiRl) return apiRl;
+
   const { id: productId } = await params;
   if (!productId) return NextResponse.json({ error: "Product ID required" }, { status: 400 });
 
-  let existing: { id: string; status: string; format: string; title: string; niche: string; customizationOptions: unknown } | undefined;
+  let existing: { id: string; userId: string; status: string; format: string; title: string; niche: string; customizationOptions: unknown } | undefined;
   try {
     const body = await request.json().catch(() => ({}));
     const [existingRow] = await db
@@ -55,12 +62,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       .limit(1);
     existing = existingRow;
 
+    // Verify ownership — only the product owner may trigger generation
+    if (!existing) return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    if (existing.userId !== userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const isRetry = body.retry === true && existing?.status === "failed";
     if (isRetry) {
       await db
         .update(productsTable)
         .set({ status: "generating", generationError: null, updatedAt: new Date() })
-        .where(eq(productsTable.id, productId));
+        .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId)));
     }
 
     const niche = body.niche != null ? (typeof body.niche === "string" ? body.niche : (body.niche as { name?: string }).name ?? "") : "";

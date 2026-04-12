@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 export const runtime = "nodejs";
@@ -7,6 +8,12 @@ const MAX_PDF_BYTES = 10 * 1024 * 1024; // 10MB
 
 export async function POST(req: Request) {
   try {
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const apiRl = await checkApiRateLimit(userId);
+    if (apiRl) return apiRl;
+
     const formData = await req.formData().catch(() => null);
     const file = formData?.get("file");
     if (!file || !(file instanceof File) || file.size === 0) {

@@ -35,7 +35,7 @@ export async function POST(
     await db
       .update(videoJobsTable)
       .set({ status: "pending", progress: "0", error: null, updatedAt: new Date() })
-      .where(eq(videoJobsTable.id, id));
+      .where(and(eq(videoJobsTable.id, id), eq(videoJobsTable.userId, userId)));
 
     const base =
       process.env.NEXT_PUBLIC_APP_URL?.trim() ||

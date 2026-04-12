@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const updated = await db
     .update(productsTable)
     .set({ marketingAssets: { ...(product.marketingAssets as object ?? {}), testimonials } })
-    .where(eq(productsTable.id, params.id))
+    .where(and(eq(productsTable.id, params.id), eq(productsTable.userId, userId)))
     .returning({ id: productsTable.id });
 
   return NextResponse.json({ success: true, id: updated[0]?.id });

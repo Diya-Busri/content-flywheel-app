@@ -63,8 +63,7 @@ async function fetchOnePexelsPhoto(
   format: string | undefined,
   options: PexelsFetchOptions = {}
 ): Promise<string | null> {
-  const apiKey =
-    process.env.PEXELS_API_KEY || process.env.NEXT_PUBLIC_PEXELS_API_KEY;
+  const apiKey = process.env.PEXELS_API_KEY;
   if (!apiKey) return null;
   const { excludeUrls = [], pageSeed = Math.random(), queryOverride } = options;
   const query = queryOverride ?? getSafeCoverKeyword(niche, format);

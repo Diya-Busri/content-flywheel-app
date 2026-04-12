@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { db } from "@/db/db";
 import { podProductsTable } from "@/db/schema/pod-products-schema";
 import { eq } from "drizzle-orm";
@@ -12,6 +14,11 @@ export async function POST(req: Request) {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const apiRl = await checkApiRateLimit(userId);
+  if (apiRl) return apiRl;
+  const rl = checkAiRateLimit(userId);
+  if (rl) return rl;
 
   let productId: string | undefined;
   try {
