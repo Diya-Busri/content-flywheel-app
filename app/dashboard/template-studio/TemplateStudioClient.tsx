@@ -3131,6 +3131,11 @@ export default function TemplateStudioClient() {
 
   const handleCreationModeChange = useCallback(
     (next: CreationMode) => {
+      // Mode 18 = Drop Campaign — navigate there directly
+      if (next === "18") {
+        window.location.href = "/dashboard/drop-campaign";
+        return;
+      }
       if (next !== mode) {
         const storyM = mode === "7" || mode === "8" || mode === "9" || mode === "15" || mode === "17";
         const storyN = next === "7" || next === "8" || next === "9" || next === "15" || next === "17";

@@ -1,4 +1,4 @@
-export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15" | "16" | "17";
+export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15" | "16" | "17" | "18";
 
 /** Story-style Template Studio modes that share the scene pipeline */
 export type TemplateStudioStoryTemplateId =
@@ -47,6 +47,7 @@ export const CREATION_MODE_OPTION_GROUPS: {
       { value: "2", label: "Promote My App or Business" },
       { value: "3", label: "Promote My Clothing Brand" },
       { value: "6", label: "Sales/Product Launch Carousel" },
+      { value: "18", label: "🚀 Drop Campaign (7-Day Launch)" },
     ],
   },
   {
