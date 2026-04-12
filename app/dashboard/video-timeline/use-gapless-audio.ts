@@ -98,8 +98,7 @@ export function useGaplessAudio({
   /** Create (or return) the shared AudioContext + master gain. */
   const getCtx = useCallback((): AudioContext => {
     if (!ctxRef.current) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const Ctx = (typeof AudioContext !== "undefined" ? AudioContext : (window as any).webkitAudioContext) as typeof AudioContext;
+      const Ctx = (typeof AudioContext !== "undefined" ? AudioContext : (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
       ctxRef.current = new Ctx();
       gainRef.current = ctxRef.current.createGain();
       gainRef.current.connect(ctxRef.current.destination);
@@ -324,11 +323,13 @@ export function useGaplessAudio({
 
   // ─── cleanup on unmount ───────────────────────────────────────────────────
   useEffect(() => {
+    const gen = genRef;
+    const ctx = ctxRef;
     return () => {
-      ++genRef.current;
+      ++gen.current;
       cancelSources();
       stopRaf();
-      ctxRef.current?.close().catch(() => {});
+      ctx.current?.close().catch(() => {});
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
