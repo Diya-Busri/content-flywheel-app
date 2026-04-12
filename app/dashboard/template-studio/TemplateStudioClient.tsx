@@ -1269,6 +1269,7 @@ export default function TemplateStudioClient() {
               scenes: timelineScenes,
               captions: timelineCaptions,
               totalDuration,
+              aspectRatio: (mode === "15" || mode === "17") ? "16:9" : "9:16",
               sourceType:
                 mode === "8"
                   ? "satisfying-build"
@@ -1276,7 +1277,9 @@ export default function TemplateStudioClient() {
                     ? "ai-cooking-video"
                     : mode === "15"
                       ? "story-video"
-                      : "ai-story",
+                      : mode === "17"
+                        ? "finance-documentary"
+                        : "ai-story",
               templateStudioScenes: nextScenes,
               libraryItemType: "Video",
               ...(Object.keys(characterReferenceUrls).length > 0
