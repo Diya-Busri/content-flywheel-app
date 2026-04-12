@@ -31,7 +31,11 @@ export function resolveDrawtextFontFile(): string | null {
   const cwd = process.cwd();
   // Common paths across macOS + Linux server images + bundled node_modules fallback.
   const candidates = [
-    // Bundled via pdfjs-dist — always present in node_modules on Vercel
+    // Committed to public/fonts/ — always present in the deployed repo
+    join(cwd, "public/fonts/LiberationSans-Regular.ttf"),
+    // Next.js bundled font — always present since it ships with the next package
+    join(cwd, "node_modules/next/dist/compiled/@vercel/og/noto-sans-v27-latin-regular.ttf"),
+    // Bundled via pdfjs-dist
     join(cwd, "node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf"),
     // System Linux paths (Vercel, Ubuntu)
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
