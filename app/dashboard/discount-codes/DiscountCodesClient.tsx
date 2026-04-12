@@ -58,8 +58,8 @@ export default function DiscountCodesClient({ initialCodes }: { initialCodes: Pr
 
   return (
     <div style={{ padding: "32px 24px", maxWidth: "900px" }}>
-      <h1 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: 800, color: "#111827" }}>🎟️ Discount Codes</h1>
-      <p style={{ margin: "0 0 32px", fontSize: "14px", color: "#6b7280" }}>Create promo codes buyers can use at checkout.</p>
+      <h1 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: 800, color: "#111827" }}>🎟️ Store Discount Codes</h1>
+      <p style={{ margin: "0 0 32px", fontSize: "14px", color: "#6b7280" }}>Create discount codes your customers use at checkout — e.g. <strong>VOIDHOURS10</strong> for 10% off your products.</p>
 
       {/* Create form */}
       <div style={{ background: "#fff", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", marginBottom: "32px" }}>

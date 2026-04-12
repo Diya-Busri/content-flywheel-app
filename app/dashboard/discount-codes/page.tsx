@@ -5,7 +5,7 @@ import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
 import { eq, desc } from "drizzle-orm";
 import DiscountCodesClient from "./DiscountCodesClient";
 
-export const metadata = { title: "Discount Codes | Content Flywheel" };
+export const metadata = { title: "Store Discount Codes | Content Flywheel" };
 
 export default async function DiscountCodesPage() {
   const { userId } = auth();
