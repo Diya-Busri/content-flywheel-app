@@ -644,6 +644,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
 
   // ── Mockup state ─────────────────────────────────────────────────────────────
   const [generatingMockup, setGeneratingMockup] = useState(false);
+  const [generatingLifestyle, setGeneratingLifestyle] = useState(false);
   const [mockupStyle, setMockupStyle] = useState("lifestyle");
   const [mockupPlacement, setMockupPlacement] = useState("front");
 
@@ -1147,6 +1148,28 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
     } finally {
       setGeneratingMockup(false);
+    }
+  };
+
+  const handleGenerateLifestyle = async () => {
+    if (!selectedProduct) return;
+    setGeneratingLifestyle(true);
+    try {
+      const res = await fetch("/api/ai-mockup/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: selectedProduct.id, style: "lifestyle", placement: "front" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const updated = { ...selectedProduct, mockupUrls: [...((selectedProduct.mockupUrls as string[]) ?? []), data.mockupUrl] } as SelectPodProduct;
+      setSelectedProduct(updated);
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      toast({ title: "Lifestyle shot generated! 📸" });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setGeneratingLifestyle(false);
     }
   };
 
@@ -2190,31 +2213,52 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
             <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Mockups</p>
 
-              {/* ── Primary: Printify mockups (when synced) ── */}
+              {/* ── Hero: Lifestyle Shot (AI person wearing it) ── */}
+              <div className="rounded-xl border border-orange-200 dark:border-orange-900/40 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/10 p-3.5 mb-3">
+                <div className="flex items-start gap-2.5 mb-3">
+                  <div className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center flex-shrink-0">
+                    <span className="text-base">👤</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Lifestyle Shot</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">AI generates a photo of someone wearing your product on the street</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleGenerateLifestyle}
+                  disabled={generatingLifestyle || generatingMockup}
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2 font-semibold"
+                >
+                  {generatingLifestyle
+                    ? <><Loader2 className="w-4 h-4 animate-spin" />Generating lifestyle shot...</>
+                    : <><Sparkles className="w-4 h-4" />Generate Lifestyle Shot</>}
+                </Button>
+              </div>
+
+              {/* ── Printify official mockups (when synced) ── */}
               {selectedProduct.printifyProductId && (
                 <div className="mb-3">
                   <Button
                     onClick={handleFetchPrintifyMockups}
                     disabled={generatingMockup}
-                    className="w-full bg-[#18181B] hover:bg-[#27272A] dark:bg-white dark:hover:bg-gray-100 text-white dark:text-black gap-2 font-semibold"
+                    variant="outline"
+                    className="w-full gap-2 font-semibold border-gray-200 dark:border-[#2A2A2A]"
                   >
                     {generatingMockup
                       ? <><Loader2 className="w-4 h-4 animate-spin" />Loading...</>
                       : <><RefreshCw className="w-4 h-4" />Get Printify Mockups</>}
                   </Button>
-                  <p className="text-[10px] text-gray-400 text-center mt-1.5">Professional renders — person wearing it, flat lay, folded &amp; more</p>
+                  <p className="text-[10px] text-gray-400 text-center mt-1.5">Official renders from Printify — wearing, flat lay, folded &amp; more</p>
                 </div>
               )}
 
-              {/* ── Secondary: AI mockups ── */}
-              <details className={selectedProduct.printifyProductId ? "mt-1" : ""}>
-                {selectedProduct.printifyProductId && (
-                  <summary className="text-[10px] uppercase tracking-widest text-gray-400 cursor-pointer select-none mb-2 hover:text-gray-600 transition-colors">
-                    ✦ AI Mockup (alternative)
-                  </summary>
-                )}
-                <div>
-                  {/* Mockup style selector */}
+              {/* ── More AI mockup styles ── */}
+              <details className="mt-1">
+                <summary className="text-[10px] uppercase tracking-widest text-gray-400 cursor-pointer select-none mb-2 hover:text-gray-600 transition-colors flex items-center gap-1">
+                  ✦ More AI mockup styles
+                </summary>
+                <div className="mt-2">
+                  {/* Style selector */}
                   <div className="grid grid-cols-2 gap-1.5 mb-3">
                     {MOCKUP_STYLES.map((s) => (
                       <button key={s.id} type="button" onClick={() => setMockupStyle(s.id)}
@@ -2225,7 +2269,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                     ))}
                   </div>
 
-                  {/* Placement selector — show when product has extra placements */}
+                  {/* Placement selector */}
                   {(() => {
                     const productPlacements = (selectedProduct.placements as Array<{ position: string }> | null) ?? [];
                     const availablePlacements = [
@@ -2253,8 +2297,8 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                     );
                   })()}
 
-                  <Button onClick={handleGenerateMockup} disabled={generatingMockup} className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2">
-                    {generatingMockup ? <><Loader2 className="w-4 h-4 animate-spin" />Generating...</> : <><Sparkles className="w-4 h-4" />Generate AI Mockup</>}
+                  <Button onClick={handleGenerateMockup} disabled={generatingMockup || generatingLifestyle} className="w-full bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-black gap-2">
+                    {generatingMockup ? <><Loader2 className="w-4 h-4 animate-spin" />Generating...</> : <><Sparkles className="w-4 h-4" />Generate with selected style</>}
                   </Button>
                 </div>
               </details>
