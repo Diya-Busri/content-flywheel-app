@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Real-time trending topics in your niche. TikTok, YouTube, Instagram. Lifecycle, hashtags, sounds, formats, historical data.",
 };
 
-export default function TrendsPage() {
+export default async function TrendsPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "Connect TikTok, YouTube, Instagram, and Facebook for auto-publishing",
 };
 
-export default function ConnectedAccountsPage() {
+export default async function ConnectedAccountsPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

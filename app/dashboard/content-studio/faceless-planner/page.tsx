@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Generate a 7-day faceless content plan for TikTok and Instagram — text scripts, captions, hashtags and production tips.",
 };
 
-export default function FacelessPlannerPage() {
+export default async function FacelessPlannerPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

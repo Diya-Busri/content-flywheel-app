@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Generate unlimited video ideas for your niche with hooks, psychology, and engagement estimates",
 };
 
-export default function VideoIdeasPage() {
+export default async function VideoIdeasPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

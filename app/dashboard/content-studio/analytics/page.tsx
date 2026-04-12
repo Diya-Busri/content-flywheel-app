@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     "Overall performance, per-video analytics, best performing content, platform comparison, and AI insights",
 };
 
-export default function ContentStudioAnalyticsPage() {
+export default async function ContentStudioAnalyticsPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

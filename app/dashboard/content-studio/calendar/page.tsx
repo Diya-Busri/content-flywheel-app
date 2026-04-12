@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Monthly and weekly calendar, drag-and-drop scheduling, color by platform, optimal posting times, batch schedule",
 };
 
-export default function StudioCalendarPage() {
+export default async function StudioCalendarPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

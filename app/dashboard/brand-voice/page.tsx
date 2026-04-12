@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "Set your brand voice, tone, and writing style for AI-generated content",
 };
 
-export default function BrandVoicePage() {
+export default async function BrandVoicePage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

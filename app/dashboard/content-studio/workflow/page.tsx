@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 const stepLinkClass =
   "text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 font-medium inline-flex items-center gap-1";
 
-export default function ContentWorkflowPage() {
+export default async function ContentWorkflowPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

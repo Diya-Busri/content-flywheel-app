@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Critical for CTR. AI thumbnail generator from video title, 3 A/B-ready variations, text overlay editor, export for YouTube/TikTok/Instagram.",
 };
 
-export default function ThumbnailsPage() {
+export default async function ThumbnailsPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

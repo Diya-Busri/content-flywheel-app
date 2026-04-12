@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "Manage your brand colours, fonts, and logo in one place.",
 };
 
-export default function BrandKitPage() {
+export default async function BrandKitPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

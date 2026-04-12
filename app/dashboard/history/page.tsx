@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "Past generated products. Open or duplicate any product.",
 };
 
-export default function HistoryPage() {
+export default async function HistoryPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

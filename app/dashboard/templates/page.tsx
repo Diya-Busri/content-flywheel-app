@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "Your saved content templates. Use any template to pre-fill the relevant editor.",
 };
 
-export default function TemplatesPage() {
+export default async function TemplatesPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "Create your branded link-in-bio page with email waitlist.",
 };
 
-export default function BioPageDashboard() {
+export default async function BioPageDashboard() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
   return <BioPageEditor />;

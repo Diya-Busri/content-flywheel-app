@@ -18,7 +18,7 @@ function TemplateStudioFallback() {
   );
 }
 
-export default function TemplateStudioPage() {
+export default async function TemplateStudioPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

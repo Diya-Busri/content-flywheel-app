@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "Content calendar, captions, drop scripts, and launch checklist for your brand",
 };
 
-export default function BrandBuilderPage() {
+export default async function BrandBuilderPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

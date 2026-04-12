@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     "Test thumbnails, titles, hooks, posting times, and hashtags. Statistical significance and declare a winner with confidence %.",
 };
 
-export default function AbTestingPage() {
+export default async function AbTestingPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

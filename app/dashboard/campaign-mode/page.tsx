@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "Brand workspaces and campaigns",
 };
 
-export default function CampaignModePage() {
+export default async function CampaignModePage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

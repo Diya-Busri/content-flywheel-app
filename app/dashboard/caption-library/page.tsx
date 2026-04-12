@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "Save and reuse your best captions and hashtag sets.",
 };
 
-export default function CaptionLibraryPage() {
+export default async function CaptionLibraryPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

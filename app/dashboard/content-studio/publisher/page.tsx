@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Publish one video to all platforms with platform-specific options. TikTok, YouTube, Instagram, Facebook. Cross-post or bulk upload.",
 };
 
-export default function PublisherPage() {
+export default async function PublisherPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

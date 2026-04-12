@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Input interests/skills; AI suggests 5–10 profitable niches with scores and successful channels. Save your niche to affect all future content suggestions.",
 };
 
-export default function NicheResearchPage() {
+export default async function NicheResearchPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

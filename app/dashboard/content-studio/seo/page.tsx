@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Keyword research, search volume, competition, platform hashtags (TikTok, YouTube, Instagram), save hashtag groups",
 };
 
-export default function SeoPage() {
+export default async function SeoPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

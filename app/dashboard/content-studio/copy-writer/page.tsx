@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "AI-generated titles and SEO-optimized descriptions with CTR variations, timestamps, and CTA suggestions",
 };
 
-export default function CopyWriterPage() {
+export default async function CopyWriterPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
