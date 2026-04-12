@@ -38,12 +38,15 @@ type ActiveSource = {
 export function useGaplessAudio({
   clips,
   enabled = true,
+  playbackRate = 1,
   onTimeUpdate,
   onPlaybackEnded,
   onIsPlayingChange,
 }: {
   clips: GaplessClip[];
   enabled?: boolean;
+  /** Playback speed multiplier. Default 1. 0.5 = half speed, 2 = double speed. */
+  playbackRate?: number;
   /** Called ~60 fps with the current timeline position in seconds. */
   onTimeUpdate?: (t: number) => void;
   onPlaybackEnded?: () => void;
@@ -74,9 +77,11 @@ export function useGaplessAudio({
   const onTimeUpdateRef = useRef(onTimeUpdate);
   const onPlaybackEndedRef = useRef(onPlaybackEnded);
   const onIsPlayingChangeRef = useRef(onIsPlayingChange);
+  const playbackRateRef = useRef(playbackRate);
   useLayoutEffect(() => { onTimeUpdateRef.current = onTimeUpdate; });
   useLayoutEffect(() => { onPlaybackEndedRef.current = onPlaybackEnded; });
   useLayoutEffect(() => { onIsPlayingChangeRef.current = onIsPlayingChange; });
+  useLayoutEffect(() => { playbackRateRef.current = Math.max(0.1, playbackRate); });
 
   // ─── React state (UI) ────────────────────────────────────────────────────
   const [isPlaying, setIsPlayingState] = useState(false);
@@ -144,7 +149,7 @@ export function useGaplessAudio({
   /** Current global timeline position (seconds). Works whether playing or paused. */
   const getCurrentTime = useCallback((): number => {
     if (!isPlayingRef.current || !ctxRef.current) return pausedAtRef.current;
-    return playStartTimelineRef.current + (ctxRef.current.currentTime - playStartCtxRef.current);
+    return playStartTimelineRef.current + (ctxRef.current.currentTime - playStartCtxRef.current) * playbackRateRef.current;
   }, []);
 
   /** Start the 60 fps RAF loop that drives time + caption updates. */
@@ -218,16 +223,18 @@ export function useGaplessAudio({
         ? Math.max(ctx.currentTime + 0.01, ctx.currentTime)
         : Math.max(ctx.currentTime + 0.01, nextCtxTime);
 
+      const rate = playbackRateRef.current;
       const src = ctx.createBufferSource();
       src.buffer = buf;
+      src.playbackRate.value = rate;
       src.connect(gain);
       src.start(scheduleAt, bufferOffset);
       // No stop() — let it play to its natural end for gapless chaining
 
       activeSourcesRef.current.push({ node: src, clipId: clip.id, ctxStart: scheduleAt });
 
-      // The next clip must start exactly when this one ends
-      nextCtxTime = scheduleAt + remaining;
+      // With playbackRate=r, r seconds of buffer play in 1/r seconds of wall-clock time
+      nextCtxTime = scheduleAt + remaining / rate;
       firstClip = false;
     }
   }, [clips, loadBuffer]);

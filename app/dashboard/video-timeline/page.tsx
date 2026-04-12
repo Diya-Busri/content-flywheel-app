@@ -1316,6 +1316,8 @@ export default function VideoTimelinePage() {
 
   const [musicUrl, setMusicUrl] = useState<string | null>(null);
   const [musicVolume, setMusicVolume] = useState(70);
+  /** Playback speed: 0.5, 1, 1.5, or 2 */
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
 
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
@@ -1415,6 +1417,7 @@ export default function VideoTimelinePage() {
   const gapless = useGaplessAudio({
     clips: perClipClips,
     enabled: hasPerClipAudio,
+    playbackRate: playbackSpeed,
     onTimeUpdate: useCallback((t: number) => {
       if (isDraggingPlayhead) return;
       setCurrentTime(t);
@@ -1566,6 +1569,43 @@ export default function VideoTimelinePage() {
     const el = musicRef.current;
     if (el) el.volume = Math.max(0, Math.min(1, musicVolume / 100));
   }, [musicVolume, musicUrl]);
+
+  // Keep audio + music playback rate in sync (single-voiceover mode)
+  useEffect(() => {
+    const rate = Math.max(0.1, playbackSpeed);
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+    if (musicRef.current) musicRef.current.playbackRate = rate;
+  }, [playbackSpeed]);
+
+  // When speed changes during per-clip playback, re-seek from current position so gapless
+  // reschedules with the new playbackRate (already-buffered nodes used the old rate).
+  const prevSpeedRef = useRef(playbackSpeed);
+  useEffect(() => {
+    if (prevSpeedRef.current === playbackSpeed) return;
+    prevSpeedRef.current = playbackSpeed;
+    if (hasPerClipAudio && isPlaying) {
+      const t = gapless.getCurrentTime();
+      gapless.seek(t);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playbackSpeed]);
+
+  // Auto-scroll timeline to keep playhead in view during playback
+  useEffect(() => {
+    if (!isPlaying || isDraggingPlayhead) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const effectiveDur = Math.max(duration, voiceoverDuration);
+    if (effectiveDur <= 0) return;
+    const totalWidth = container.scrollWidth;
+    const playheadX = effectiveDur > 0 ? (currentTime / effectiveDur) * totalWidth : 0;
+    const { scrollLeft, clientWidth } = container;
+    const rightEdge = scrollLeft + clientWidth;
+    // If playhead is outside the visible area, scroll to put it at 30% from the left
+    if (playheadX < scrollLeft + 40 || playheadX > rightEdge - 40) {
+      container.scrollLeft = Math.max(0, playheadX - clientWidth * 0.3);
+    }
+  }, [currentTime, isPlaying, isDraggingPlayhead, duration, voiceoverDuration]);
 
   // Update active scene when playhead or scene blocks change
   useEffect(() => {
@@ -5604,6 +5644,27 @@ export default function VideoTimelinePage() {
             <span className="text-xs text-[#505050] tabular-nums font-mono ml-0.5">
               {formatTime(currentTime)}<span className="text-[#383838]"> / {formatTime(Math.max(duration, voiceoverDuration))}</span>
             </span>
+
+            <div className="w-px h-4 bg-[#2a2a2a] mx-1" />
+
+            {/* Playback speed */}
+            <div className="flex items-center gap-px bg-[#1a1a1a] rounded border border-[#2a2a2a] px-0.5">
+              {([0.5, 1, 1.5, 2] as const).map((speed) => (
+                <button
+                  key={speed}
+                  type="button"
+                  onClick={() => setPlaybackSpeed(speed)}
+                  className={`px-1.5 py-0.5 text-[10px] font-mono rounded transition-colors ${
+                    playbackSpeed === speed
+                      ? "bg-[#f97316]/80 text-white"
+                      : "text-[#606060] hover:text-white hover:bg-[#2a2a2a]"
+                  }`}
+                  title={`${speed}× speed`}
+                >
+                  {speed}×
+                </button>
+              ))}
+            </div>
 
             <div className="w-px h-4 bg-[#2a2a2a] mx-1" />
 
