@@ -333,5 +333,10 @@ export function useGaplessAudio({
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { isPlaying, isBuffering, play, pause, seek, getCurrentTime };
+  /** Return a decoded AudioBuffer from cache (available after first play). Useful for waveform rendering. */
+  const getBuffer = useCallback((url: string): AudioBuffer | null => {
+    return bufferCache.current.get(url) ?? null;
+  }, []);
+
+  return { isPlaying, isBuffering, play, pause, seek, getCurrentTime, getBuffer };
 }
