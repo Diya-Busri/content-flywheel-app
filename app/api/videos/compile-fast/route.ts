@@ -33,7 +33,8 @@ import {
 } from "@/lib/videos/compile";
 import { BGM_MIX_VOLUME, BGM_REQUEST_VALUES, type BgmSelectValue } from "@/lib/bgm-tracks";
 import { resolveLocalBgmPath } from "@/lib/bgm-tracks.server";
-import { mkdir, readFile } from "fs/promises";
+import { mkdir } from "fs/promises";
+import { createReadStream, statSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
 import { tmpdir } from "os";
@@ -135,20 +136,40 @@ export async function POST(request: NextRequest) {
         }
       );
 
-      const buffer = await readFile(finalPath);
       const storageKey = scriptId?.trim() ? scriptId.trim() : `fast-compile/${randomUUID()}`;
       const fileName = `compiled-fast-${Date.now()}.mp4`;
       const storagePath = `${userId}/${storageKey}/${fileName}`;
 
-      const { data, error } = await supabase.storage
-        .from(BUCKET)
-        .upload(storagePath, buffer, { contentType: "video/mp4", upsert: true });
+      // Stream directly to Supabase REST API — avoids loading the whole video
+      // into memory (compiled 27-min videos can be 200MB–1GB+).
+      const fileSizeBytes = statSync(finalPath).size;
+      const fileStream = createReadStream(finalPath);
 
-      if (error) {
-        return NextResponse.json({ error: `Upload failed: ${error.message}` }, { status: 500 });
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+      const uploadRes = await fetch(
+        `${supabaseUrl}/storage/v1/object/${BUCKET}/${storagePath}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${supabaseKey}`,
+            "Content-Type": "video/mp4",
+            "Content-Length": String(fileSizeBytes),
+            "x-upsert": "true",
+          },
+          // @ts-ignore — Node 18 fetch supports ReadStream with duplex: "half"
+          body: fileStream,
+          duplex: "half",
+        } as RequestInit
+      );
+
+      if (!uploadRes.ok) {
+        const msg = await uploadRes.text().catch(() => uploadRes.statusText);
+        return NextResponse.json({ error: `Upload failed: ${msg}` }, { status: 500 });
       }
 
-      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
+      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
       const publicUrl = urlData.publicUrl;
 
       // Save to library

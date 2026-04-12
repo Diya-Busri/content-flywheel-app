@@ -28,7 +28,8 @@ import {
   cleanupWorkDir,
   type CompileScene,
 } from "@/lib/videos/compile";
-import { mkdir, readFile } from "fs/promises";
+import { mkdir } from "fs/promises";
+import { createReadStream, statSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
 import { tmpdir } from "os";
@@ -113,19 +114,38 @@ export async function POST(request: NextRequest) {
 
       await renderSceneSegmentOnly(workDir, scene, segPath, width, height);
 
-      const buffer = await readFile(segPath);
       const key = sceneKey?.trim().replace(/[^a-z0-9_-]/gi, "_").slice(0, 64) || randomUUID().slice(0, 8);
       const storagePath = `${userId}/segments/${key}-${Date.now()}.mp4`;
 
-      const { data, error } = await supabase.storage
-        .from(BUCKET)
-        .upload(storagePath, buffer, { contentType: "video/mp4", upsert: true });
+      // Stream upload — avoids OOM for long scenes
+      const fileSizeBytes = statSync(segPath).size;
+      const fileStream = createReadStream(segPath);
 
-      if (error) {
-        return NextResponse.json({ error: `Upload failed: ${error.message}` }, { status: 500 });
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+      const uploadRes = await fetch(
+        `${supabaseUrl}/storage/v1/object/${BUCKET}/${storagePath}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${supabaseKey}`,
+            "Content-Type": "video/mp4",
+            "Content-Length": String(fileSizeBytes),
+            "x-upsert": "true",
+          },
+          // @ts-ignore — Node 18 fetch supports ReadStream with duplex: "half"
+          body: fileStream,
+          duplex: "half",
+        } as RequestInit
+      );
+
+      if (!uploadRes.ok) {
+        const msg = await uploadRes.text().catch(() => uploadRes.statusText);
+        return NextResponse.json({ error: `Upload failed: ${msg}` }, { status: 500 });
       }
 
-      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
+      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
       return NextResponse.json({ segmentUrl: urlData.publicUrl });
     } finally {
       await cleanupWorkDir(workDir);
