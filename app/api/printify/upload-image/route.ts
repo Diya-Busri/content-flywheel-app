@@ -8,7 +8,7 @@ import { alertPrintifyError } from "@/lib/printify-alert";
 
 /** Upload a design image to Printify's image library and return the Printify image ID */
 export async function POST(req: Request) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {

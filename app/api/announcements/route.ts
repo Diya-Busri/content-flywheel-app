@@ -5,7 +5,7 @@ import { announcementsTable } from "@/db/schema/announcements-schema";
 import { and, eq, or, isNull, gt } from "drizzle-orm";
 
 export async function GET() {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ announcements: [] });
 
   const now = new Date();

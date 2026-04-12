@@ -15,7 +15,7 @@ import { printifyFetch } from "@/lib/printify";
  * a product is created — far better than AI generation.
  */
 export async function GET(req: Request) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);

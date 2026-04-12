@@ -1,12 +1,14 @@
 /**
- * Debug endpoint: Test HeyGen API connectivity.
+ * Debug endpoint: Test HeyGen API connectivity. Admin-only.
  * GET /api/test-heygen
  * Returns avatar list if HEYGEN_API_KEY is valid.
  */
 import { NextResponse } from "next/server";
-import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { isAdmin } from "@/lib/is-admin";
 
 export async function GET() {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const hasKey = Boolean(process.env.HEYGEN_API_KEY?.trim());
   if (!hasKey) {
     return NextResponse.json(

@@ -8,7 +8,7 @@ import { createProfile, getProfileByUserId } from "@/db/queries/profiles-queries
  */
 export async function GET() {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: "Not signed in", userId: null });
     }

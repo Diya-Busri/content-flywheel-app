@@ -5,7 +5,7 @@ import { notificationsTable } from "@/db/schema/notifications-schema";
 import { eq, desc, and } from "drizzle-orm";
 
 export async function GET() {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const notifications = await db.select().from(notificationsTable)
@@ -17,7 +17,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();

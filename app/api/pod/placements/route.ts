@@ -48,7 +48,7 @@ export async function PATCH(req: Request) {
     await db
       .update(podProductsTable)
       .set({ placements: updatedPlacements, ...extraUpdate })
-      .where(eq(podProductsTable.id, productId));
+      .where(and(eq(podProductsTable.id, productId), eq(podProductsTable.userId, userId)));
 
     return NextResponse.json({ placements: updatedPlacements });
   } catch (err) {

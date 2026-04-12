@@ -8,7 +8,7 @@ import { alertPrintifyError } from "@/lib/printify-alert";
 
 /** GET — verify connection and return shops */
 export async function GET() {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
@@ -33,7 +33,7 @@ export async function GET() {
 
 /** POST — save API key and selected shop */
 export async function POST(req: Request) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {

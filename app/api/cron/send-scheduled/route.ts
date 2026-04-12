@@ -13,10 +13,12 @@ export const dynamic = "force-dynamic";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function GET(request: Request) {
-  // Verify this is from Vercel Cron (or an authorised internal call)
+  // Verify this is from Vercel Cron (or an authorised internal call).
+  // Always require the secret — if it's not set, block all calls so the
+  // cron endpoint is never accidentally left open.
   const authHeader = request.headers.get("authorization");
   if (
-    process.env.CRON_SECRET &&
+    !process.env.CRON_SECRET ||
     authHeader !== `Bearer ${process.env.CRON_SECRET}`
   ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

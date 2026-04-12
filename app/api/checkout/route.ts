@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   }
 
   const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
-  const { userId } = auth();
+  const { userId } = await auth();
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
 
