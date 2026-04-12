@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Sparkles, Loader2, Copy, Check, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { Sparkles, Loader2, Copy, Check, ChevronDown, ChevronUp, RefreshCw, BookMarked } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,58 @@ const PLATFORM_LABELS: Record<FacelessPost["platform"], string> = {
 };
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function SaveCaptionButton({ post }: { post: FacelessPost }) {
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const platform = post.platform === "both" ? "all" : post.platform;
+      const res = await fetch("/api/caption-library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `Day ${post.day} — ${TYPE_LABELS[post.type].label}`,
+          caption: post.caption,
+          hashtags: post.hashtags.join(" "),
+          platform,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setSaved(true);
+      toast({ title: "Saved to Caption Library ✓" });
+    } catch {
+      toast({ title: "Error", description: "Could not save caption", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={save}
+      disabled={saving || saved}
+      className={`flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md transition-all ${
+        saved
+          ? "text-green-600 bg-green-50 dark:bg-green-950/20"
+          : "text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+      }`}
+      title="Save to Caption Library"
+    >
+      {saving ? (
+        <Loader2 className="w-3 h-3 animate-spin" />
+      ) : saved ? (
+        <Check className="w-3 h-3" />
+      ) : (
+        <BookMarked className="w-3 h-3" />
+      )}
+      {saved ? "Saved" : "Save"}
+    </button>
+  );
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -95,7 +147,10 @@ function PostCard({ post }: { post: FacelessPost }) {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Caption + Hashtags</p>
-              <CopyButton text={captionWithHashtags} />
+              <div className="flex items-center gap-1">
+                <SaveCaptionButton post={post} />
+                <CopyButton text={captionWithHashtags} />
+              </div>
             </div>
             <div className="rounded-xl bg-gray-50 dark:bg-[#111] p-3">
               <p className="text-sm text-gray-800 dark:text-gray-200">{post.caption}</p>
