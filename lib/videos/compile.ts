@@ -19,7 +19,11 @@ import { BGM_MIX_VOLUME } from "@/lib/bgm-tracks";
 
 const FPS = 25;
 
-function compileDimensions(outputAspect: "16:9" | "9:16" | undefined, resolution?: "1080p" | "720p"): { width: number; height: number } {
+function compileDimensions(outputAspect: "16:9" | "9:16" | undefined, resolution?: "1080p" | "720p" | "480p"): { width: number; height: number } {
+  if (resolution === "480p") {
+    if (outputAspect === "9:16") return { width: 480, height: 854 };
+    return { width: 854, height: 480 };
+  }
   const is720 = resolution === "720p";
   if (outputAspect === "9:16") return is720 ? { width: 720, height: 1280 } : { width: 1080, height: 1920 };
   return is720 ? { width: 1280, height: 720 } : { width: 1920, height: 1080 };
@@ -315,10 +319,11 @@ export type CompileVideoOptions = {
   videoPreset?: "ultrafast" | "superfast" | "veryfast" | "faster" | "fast" | "medium";
   /**
    * Output resolution. "720p" = 1280×720 (landscape) / 720×1280 (portrait).
+   * "480p" = 854×480 — use for very long videos (>60 scenes or >10 min) to compile within timeout.
    * Defaults to "1080p" (1920×1080 or 1080×1920).
    * Use "720p" for long-form videos (>20 scenes) to keep file size under Supabase limits.
    */
-  resolution?: "1080p" | "720p";
+  resolution?: "1080p" | "720p" | "480p";
   /**
    * x264 CRF value (0–51). Lower = better quality + larger file. Default 23.
    * Use 28–30 for large documentary exports to keep file size manageable.
@@ -369,34 +374,59 @@ export async function compileVideoToFile(
     }
   }
 
-  // 2) Download each scene asset and render segment (video-only, no audio)
+  // 2a) Pre-download all remote assets in parallel (network I/O, not CPU bound)
+  //     This cuts download time from O(n*latency) to O(latency) for large documentaries.
+  const DOWNLOAD_CONCURRENCY = 8;
+  type AssetInfo = { index: number; localPath: string; isVideo: boolean };
+  const assetMap = new Map<number, AssetInfo>();
+
+  // Build download queue for remote assets only
+  const downloadQueue: Array<{ index: number; url: string; isVideo: boolean }> = [];
+  for (let i = 0; i < scenes.length; i++) {
+    const s = scenes[i];
+    if (s.localImagePath?.trim()) continue; // already local
+    const imageUrl = s.image_url?.trim() || null;
+    const videoUrl = s.video_url?.trim() || null;
+    if (videoUrl && isHttpUrl(videoUrl)) {
+      downloadQueue.push({ index: i, url: videoUrl, isVideo: true });
+    } else if (imageUrl && isHttpUrl(imageUrl)) {
+      downloadQueue.push({ index: i, url: imageUrl, isVideo: false });
+    }
+  }
+
+  // Process downloads with concurrency cap
+  for (let qi = 0; qi < downloadQueue.length; qi += DOWNLOAD_CONCURRENCY) {
+    const batch = downloadQueue.slice(qi, qi + DOWNLOAD_CONCURRENCY);
+    await Promise.all(
+      batch.map(async ({ index, url, isVideo }) => {
+        const localPath = await downloadAsset(url, workDir, index, !isVideo);
+        assetMap.set(index, { index, localPath, isVideo });
+      })
+    );
+  }
+
+  // 2b) Render each scene segment sequentially (FFmpeg is CPU-bound; parallel spawn causes thrashing)
   for (let i = 0; i < scenes.length; i++) {
     const s = scenes[i];
     const dur = typeof s.duration === "number" && s.duration > 0 ? s.duration : 5;
 
-    const imageUrl = s.image_url?.trim() || null;
-    const videoUrl = s.video_url?.trim() || null;
     const localImg = s.localImagePath?.trim() || null;
-    if (localImg && !videoUrl) {
+    const downloaded = assetMap.get(i);
+    const segPath = join(workDir, `seg_${i}.mp4`);
+
+    if (localImg && !downloaded?.isVideo) {
       await access(localImg);
-      const segPath = join(workDir, `seg_${i}.mp4`);
       await renderImageSegment(localImg, dur, segPath, width, height, s.dialogue, {
         staticShot: Boolean(s.disableKenBurns),
         kenBurnsZoomMax: s.kenBurnsZoomMax,
       });
-    } else if (imageUrl && !videoUrl) {
-      if (!isHttpUrl(imageUrl)) throw new Error(`Scene ${i + 1} image_url must be http(s)`);
-      const inputPath = await downloadAsset(imageUrl, workDir, i, true);
-      const segPath = join(workDir, `seg_${i}.mp4`);
-      await renderImageSegment(inputPath, dur, segPath, width, height, s.dialogue, {
+    } else if (downloaded?.isVideo) {
+      await renderVideoSegment(downloaded.localPath, dur, segPath, width, height, s.dialogue);
+    } else if (downloaded) {
+      await renderImageSegment(downloaded.localPath, dur, segPath, width, height, s.dialogue, {
         staticShot: Boolean(s.disableKenBurns),
         kenBurnsZoomMax: s.kenBurnsZoomMax,
       });
-    } else if (videoUrl) {
-      if (!isHttpUrl(videoUrl)) throw new Error(`Scene ${i + 1} video_url must be http(s)`);
-      const inputPath = await downloadAsset(videoUrl, workDir, i, false);
-      const segPath = join(workDir, `seg_${i}.mp4`);
-      await renderVideoSegment(inputPath, dur, segPath, width, height, s.dialogue);
     } else {
       throw new Error(`Scene ${i + 1} must have image_url, video_url, or localImagePath`);
     }

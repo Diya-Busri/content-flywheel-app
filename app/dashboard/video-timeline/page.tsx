@@ -3380,10 +3380,79 @@ export default function VideoTimelinePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(compileBody),
       });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+        jobId?: string;
+        status?: string;
+        message?: string;
+      };
       if (!res.ok) {
         throw new Error(data.error ?? `Compile failed (${res.status})`);
       }
+
+      // ── Async job: server queued the compile (video too long for sync) ──
+      if (data.jobId && data.status === "queued") {
+        setCompileError(null);
+        // Poll every 15s for up to 8 minutes
+        const jobId = data.jobId;
+        const MAX_POLLS = 32;
+        let polls = 0;
+        const poll = async (): Promise<void> => {
+          polls++;
+          try {
+            const statusRes = await fetch(`/api/videos/compile/status/${encodeURIComponent(jobId)}`);
+            const statusData = (await statusRes.json().catch(() => ({}))) as {
+              status?: string; url?: string; error?: string;
+            };
+            if (statusData.status === "completed" && statusData.url) {
+              setCompileDownloadUrl(statusData.url);
+              setCompileLoading(false);
+              const a = document.createElement("a");
+              a.href = statusData.url;
+              a.download = `${(scriptName || "content-flywheel-video").trim()}.mp4`;
+              a.target = "_blank";
+              a.rel = "noopener noreferrer";
+              a.click();
+              const currentProjectId = projectIdFromUrl ?? (await handleSaveToLibrary({ silent: true }))?.id ?? null;
+              if (currentProjectId) {
+                fetch(`/api/video-timeline/videos/${encodeURIComponent(currentProjectId)}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    status: "completed",
+                    metadata: { exportedAt: new Date().toISOString(), videoUrl: statusData.url, exportUrl: statusData.url, outputUrl: statusData.url, compiledVideoUrl: statusData.url },
+                  }),
+                }).catch(() => {});
+              }
+              return;
+            }
+            if (statusData.status === "failed") {
+              setCompileError(statusData.error ?? "Compile failed in background");
+              setCompileLoading(false);
+              return;
+            }
+            if (polls < MAX_POLLS) {
+              window.setTimeout(() => void poll(), 15_000);
+            } else {
+              setCompileError("Compile is taking longer than expected. Check My Library in a few minutes — it will appear there when ready.");
+              setCompileLoading(false);
+            }
+          } catch {
+            if (polls < MAX_POLLS) {
+              window.setTimeout(() => void poll(), 15_000);
+            } else {
+              setCompileError("Could not check compile status. Check My Library in a few minutes.");
+              setCompileLoading(false);
+            }
+          }
+        };
+        // Start polling after 15s
+        window.setTimeout(() => void poll(), 15_000);
+        return; // keep compileLoading=true while polling
+      }
+
+      // ── Sync response: url returned immediately ──
       if (data.url) {
         setCompileDownloadUrl(data.url);
         // Trigger immediate browser download so user does not need to hunt for links.
@@ -4883,10 +4952,17 @@ export default function VideoTimelinePage() {
                   </>
                 )}
                 {compileLoading && (
-                  <p className="text-sm text-[#a0a0a0] flex items-center gap-2" role="status">
-                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                    Compiling… (images + voiceover → 1080p MP4)
-                  </p>
+                  <div className="flex flex-col gap-1" role="status">
+                    <p className="text-sm text-[#a0a0a0] flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                      Compiling… (images + voiceover → MP4)
+                    </p>
+                    {scenes.length > 60 && (
+                      <p className="text-xs text-[#a0a0a0] pl-6">
+                        This is a long video ({scenes.length} scenes) — processing in the background. This page will update automatically. You can also check My Library when it&apos;s done.
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             )}

@@ -27,7 +27,7 @@ import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { logEvent } from "@/lib/log-event";
 import { db } from "@/db/db";
-import { savedScriptsTable, videosTable } from "@/db/schema/library-schema";
+import { savedScriptsTable, videosTable, renderJobsTable } from "@/db/schema/library-schema";
 import { goalsTable } from "@/db/schema/goals-schema";
 import { eq, and } from "drizzle-orm";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
@@ -208,6 +208,68 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // For very long videos (>60 scenes or >10 min estimated), use the async job pattern
+    // to avoid Vercel's 300s gateway timeout. Returns { jobId } immediately; client polls.
+    const estimatedDurationForRouting = scenes.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 5), 0);
+    const needsAsyncJob = scenes.length > 60 || estimatedDurationForRouting > 600;
+    if (needsAsyncJob) {
+      const internalSecret = process.env.COMPILE_INTERNAL_SECRET?.trim();
+      if (internalSecret) {
+        const [job] = await db
+          .insert(renderJobsTable)
+          .values({
+            userId,
+            status: "pending",
+            payload: {
+              scriptId: scriptId || null,
+              sceneRows: Array.isArray((body as { guideScenes?: unknown }).guideScenes)
+                ? (body as { guideScenes: unknown[] }).guideScenes
+                : null,
+              voiceoverUrl: hasSingleUrl ? singleVoiceoverUrl : null,
+              storageFolderKey,
+              backgroundMusic,
+              outputAspect: outputAspect ?? null,
+              transition: transition ?? null,
+            },
+          })
+          .returning();
+
+        if (job?.id) {
+          // Fire-and-forget: trigger the background runner (independent of browser connection)
+          const baseUrl = process.env.NEXTAUTH_URL?.trim() ||
+            process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+            "https://contentflywheel.co.uk";
+          fetch(`${baseUrl}/api/videos/compile/run`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-compile-secret": internalSecret,
+            },
+            body: JSON.stringify({
+              jobId: job.id,
+              userId,
+              storageFolderKey,
+              scriptId: scriptId || null,
+              sceneRows: Array.isArray((body as { guideScenes?: unknown }).guideScenes)
+                ? (body as { guideScenes: unknown[] }).guideScenes
+                : null,
+              voiceoverUrl: hasSingleUrl ? singleVoiceoverUrl : null,
+              backgroundMusic,
+              outputAspect: outputAspect ?? null,
+              transition: transition ?? null,
+            }),
+          }).catch((e) => console.error("[compile] background trigger failed:", e));
+
+          return NextResponse.json({
+            jobId: job.id,
+            status: "queued",
+            message: `Your ${Math.round(estimatedDurationForRouting / 60)} minute video is queued for background processing. Poll /api/videos/compile/status/${job.id} for completion.`,
+          });
+        }
+      }
+      // Fallback if internal secret not set: continue with synchronous compile (may timeout)
+    }
+
     const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json(
@@ -248,15 +310,23 @@ export async function POST(request: NextRequest) {
           { status: 503 }
         );
       }
-      // Large documentaries (>20 scenes) would produce 200-400 MB at 1080p,
-      // exceeding Supabase's storage limit. Downscale to 720p + CRF 28 to keep
-      // files under ~50 MB while maintaining good visual quality.
-      const isLargeVideo = scenes.length > 20;
+      // Quality tiers based on video length to stay within Vercel's 5-min compile window:
+      //   Small  (≤20 scenes / ≤5 min):   1080p, CRF 23, medium  — best quality
+      //   Medium (21–60 scenes / 5-10 min): 720p, CRF 28, medium  — good quality, smaller file
+      //   Large  (>60 scenes / >10 min):    480p, CRF 32, veryfast — fastest encode, avoids timeout
+      const estimatedDurationSec = scenes.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 5), 0);
+      const isHugeVideo = scenes.length > 60 || estimatedDurationSec > 600;
+      const isLargeVideo = !isHugeVideo && scenes.length > 20;
+      const compileQuality = isHugeVideo
+        ? { resolution: "480p" as const, crf: 32, videoPreset: "veryfast" as const }
+        : isLargeVideo
+          ? { resolution: "720p" as const, crf: 28 }
+          : {};
       const finalPath = await compileVideoToFile(workDir, scenes, voiceoverInput, existingVoicePath, transition, {
         bgmPath,
         bgmVolume: BGM_MIX_VOLUME,
         ...(outputAspect ? { outputAspect } : {}),
-        ...(isLargeVideo ? { resolution: "720p", crf: 28 } : {}),
+        ...compileQuality,
       });
       const buffer = await readFile(finalPath);
       const fileName = `compiled-${Date.now()}.mp4`;
