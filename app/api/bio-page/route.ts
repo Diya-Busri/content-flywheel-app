@@ -76,6 +76,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(row);
   } catch (e) {
+    // Unique constraint on slug column — two users raced for the same slug
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("unique") || msg.includes("duplicate") || msg.includes("bio_pages_slug")) {
+      return NextResponse.json({ error: "This slug is already taken. Try a different one." }, { status: 409 });
+    }
     console.error("[bio-page] POST error:", e);
     return NextResponse.json({ error: "Failed to save bio page" }, { status: 500 });
   }

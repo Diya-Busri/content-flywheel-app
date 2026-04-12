@@ -64,16 +64,17 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(created, { status: 201 });
 }
 
-// DELETE — delete a promo code
+// DELETE — deactivate a promo code (soft delete — preserves usage history)
 export async function DELETE(request: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await request.json();
+  const { id } = await request.json().catch(() => ({})) as { id?: string };
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   await db
-    .delete(creatorPromoCodesTable)
+    .update(creatorPromoCodesTable)
+    .set({ active: false })
     .where(and(eq(creatorPromoCodesTable.id, id), eq(creatorPromoCodesTable.creatorUserId, userId)));
 
   return NextResponse.json({ success: true });

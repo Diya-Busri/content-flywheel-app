@@ -30,7 +30,7 @@ export default function DiscountCodesClient({ initialCodes }: { initialCodes: Pr
       maxUses: form.maxUses ? parseInt(form.maxUses) : null,
       expiresAt: form.expiresAt || null,
     };
-    const res = await fetch("/api/creator-promo-codes", {
+    const res = await fetch("/api/creator/promo-codes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -46,7 +46,11 @@ export default function DiscountCodesClient({ initialCodes }: { initialCodes: Pr
   }
 
   async function deactivate(id: string) {
-    await fetch(`/api/creator-promo-codes/${id}`, { method: "DELETE" });
+    await fetch("/api/creator/promo-codes", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
     setCodes((c) => c.map((code) => code.id === id ? { ...code, active: false } : code));
   }
 

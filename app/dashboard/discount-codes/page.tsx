@@ -8,7 +8,7 @@ import DiscountCodesClient from "./DiscountCodesClient";
 export const metadata = { title: "Store Discount Codes | Content Flywheel" };
 
 export default async function DiscountCodesPage() {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
   const codes = await db

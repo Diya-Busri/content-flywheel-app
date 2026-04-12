@@ -3120,9 +3120,35 @@ export default function VideoTimelinePage() {
     ]
   );
 
-  /** Save timeline project to the existing videos table (via API; content stored in metadata). */
+  /** Save timeline project to the existing videos table (via API; content stored in metadata).
+   *  If projectId is already in the URL (project was previously saved), PATCHes the existing
+   *  row instead of creating a duplicate library entry. */
   const handleSaveToLibrary = useCallback(async (opts?: { silent?: boolean }) => {
     try {
+      const existingProjectId = searchParams.get("projectId");
+      const metadata: Record<string, unknown> = {
+        ...saveProjectPayload.content,
+        savedAt: new Date().toISOString(),
+        ...(prefillDescription != null && { description: prefillDescription }),
+        ...(prefillHashtags != null && { hashtags: prefillHashtags }),
+        ...(prefillScheduledAt != null && { scheduledAt: prefillScheduledAt }),
+      };
+
+      let res: Response;
+      if (existingProjectId) {
+        // Update the existing project — no new library entry created
+        res = await fetch(`/api/video-timeline/videos/${encodeURIComponent(existingProjectId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: saveProjectPayload.title, metadata }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data as { error?: string }).error ?? "Save failed");
+        if (!opts?.silent) alert("✅ Project updated!");
+        return { id: existingProjectId } as { id: string; title?: string; createdAt?: string };
+      }
+
+      // No existing project — create a new one
       const videoProject = {
         title: saveProjectPayload.title,
         content: saveProjectPayload.content,
@@ -3131,7 +3157,7 @@ export default function VideoTimelinePage() {
         ...(prefillHashtags != null && { hashtags: prefillHashtags }),
         ...(prefillScheduledAt != null && { scheduledAt: prefillScheduledAt }),
       };
-      const res = await fetch("/api/video-timeline/save", {
+      res = await fetch("/api/video-timeline/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(videoProject),
@@ -3154,7 +3180,7 @@ export default function VideoTimelinePage() {
       if (!opts?.silent) alert("Failed to save: " + (err instanceof Error ? err.message : String(err)));
       throw err;
     }
-  }, [saveProjectPayload, prefillThumbnailUrl, prefillDescription, prefillHashtags, prefillScheduledAt]);
+  }, [saveProjectPayload, prefillThumbnailUrl, prefillDescription, prefillHashtags, prefillScheduledAt, searchParams]);
 
   /** Save (if needed) and go to Content Calendar to schedule this video. */
   const handleSchedule = useCallback(async () => {
