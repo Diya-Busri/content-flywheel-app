@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Loader2, Copy, Check, ChevronDown, ChevronUp, RefreshCw, Mail, Zap, BookMarked, Shirt, CheckCircle2, LayoutTemplate, ExternalLink } from "lucide-react";
+import { Loader2, Copy, Check, ChevronDown, ChevronUp, RefreshCw, Mail, Zap, BookMarked, Shirt, CheckCircle2, LayoutTemplate, ExternalLink, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
