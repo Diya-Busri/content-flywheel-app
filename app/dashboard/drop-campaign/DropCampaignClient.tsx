@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Loader2, Copy, Check, ChevronDown, ChevronUp, RefreshCw, Mail, Zap, BookMarked, Shirt, CheckCircle2, LayoutTemplate, ImageIcon, ExternalLink } from "lucide-react";
+import { Loader2, Copy, Check, ChevronDown, ChevronUp, RefreshCw, Mail, Zap, BookMarked, Shirt, CheckCircle2, LayoutTemplate, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -126,32 +126,35 @@ function DayCard({ day }: { day: DropDay }) {
       {open && (
         <div className="px-4 pb-4 pt-3 border-t border-gray-100 dark:border-[#2A2A2A] space-y-4">
 
-          {/* Faceless text-on-screen script */}
+          {/* Kinetic Typography script */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">TikTok / Reel — Faceless Text Video</p>
-              <a
-                href={`/dashboard/content-studio/faceless-planner`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Kinetic Typography Video</p>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const existing = JSON.parse(localStorage.getItem("cf:ts:draft") ?? "{}") as Record<string, unknown>;
+                    localStorage.setItem("cf:ts:draft", JSON.stringify({
+                      ...existing,
+                      mode: "13",
+                      kineticTopic: day.facelessScript.join(". "),
+                    }));
+                  } catch { /* ignore */ }
+                  window.open("/dashboard/template-studio", "_blank");
+                }}
                 className="flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
               >
                 <ExternalLink className="w-3 h-3" />
-                Open Faceless Planner
-              </a>
+                Make this video →
+              </button>
             </div>
             <div className="rounded-xl bg-gray-950 dark:bg-black p-4 space-y-2">
               {day.facelessScript.map((line, i) => (
                 <p key={i} className={`text-center font-semibold leading-snug ${i === 0 ? "text-orange-400 text-sm" : "text-white text-sm"}`}>{line}</p>
               ))}
             </div>
-            {day.facelessVideoIdea && (
-              <div className="mt-2 flex items-start gap-2 bg-gray-50 dark:bg-[#111] rounded-lg p-2.5">
-                <ImageIcon className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
-                <p className="text-[11px] text-gray-500 dark:text-gray-400"><span className="font-semibold text-gray-700 dark:text-gray-300">AI image idea:</span> {day.facelessVideoIdea}</p>
-              </div>
-            )}
-            <p className="text-[10px] text-gray-400 mt-1.5">↑ Each line appears on screen one at a time — no filming needed</p>
+            <p className="text-[10px] text-gray-400 mt-1.5">↑ Like the dark text videos you make in Template Studio — click &ldquo;Make this video&rdquo; to open it pre-filled</p>
           </div>
 
           {/* Carousel (if available) */}
