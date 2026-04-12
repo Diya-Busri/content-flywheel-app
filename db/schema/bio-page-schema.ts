@@ -1,8 +1,8 @@
 import { pgTable, text, boolean, timestamp } from "drizzle-orm/pg-core";
-import { createId } from "@paralleldrive/cuid2";
+import { sql } from "drizzle-orm";
 
 export const bioPagesTable = pgTable("bio_pages", {
-  id: text("id").primaryKey().$defaultFn(() => createId()),
+  id: text("id").primaryKey().notNull().default(sql`gen_random_uuid()`),
   userId: text("user_id").notNull().unique(),
   slug: text("slug").notNull().unique(),
   title: text("title").notNull().default(""),
@@ -18,7 +18,7 @@ export const bioPagesTable = pgTable("bio_pages", {
 });
 
 export const waitlistEntriesTable = pgTable("waitlist_entries", {
-  id: text("id").primaryKey().$defaultFn(() => createId()),
+  id: text("id").primaryKey().notNull().default(sql`gen_random_uuid()`),
   userId: text("user_id").notNull(),
   email: text("email").notNull(),
   name: text("name"),
