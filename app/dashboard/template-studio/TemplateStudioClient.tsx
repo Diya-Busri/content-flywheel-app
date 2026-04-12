@@ -475,6 +475,9 @@ export default function TemplateStudioClient() {
   const [animeStoryCharacter, setAnimeStoryCharacter] = useState("");
   const [animeStoryFormat, setAnimeStoryFormat] = useState<"short" | "long" | "epic">("short");
   const [animeStoryChannelName, setAnimeStoryChannelName] = useState("");
+  const [animeStoryPasteMode, setAnimeStoryPasteMode] = useState(false);
+  const [animeStoryRawScript, setAnimeStoryRawScript] = useState("");
+  const [animeStoryEditMode, setAnimeStoryEditMode] = useState(false);
   const [animeStoryScenes, setAnimeStoryScenes] = useState<import("@/components/templates/AnimeStoryPreview").AnimeStoryScene[]>([]);
   const [animeStoryImages, setAnimeStoryImages] = useState<string[]>([]);
   const [animeStoryPhase, setAnimeStoryPhase] = useState<string | null>(null);
@@ -485,6 +488,9 @@ export default function TemplateStudioClient() {
   const [stickmanStoryPremise, setStickmanStoryPremise] = useState("");
   const [stickmanStoryFormat, setStickmanStoryFormat] = useState<"short" | "long" | "epic">("short");
   const [stickmanStoryChannelName, setStickmanStoryChannelName] = useState("");
+  const [stickmanStoryPasteMode, setStickmanStoryPasteMode] = useState(false);
+  const [stickmanStoryRawScript, setStickmanStoryRawScript] = useState("");
+  const [stickmanStoryEditMode, setStickmanStoryEditMode] = useState(false);
   const [stickmanStoryNarrationTone, setStickmanStoryNarrationTone] = useState("serious");
   const [stickmanStoryScenes, setStickmanStoryScenes] = useState<import("@/components/templates/StickmanStoryPreview").StickmanStoryScene[]>([]);
   const [stickmanStoryImages, setStickmanStoryImages] = useState<string[]>([]);
@@ -931,9 +937,9 @@ export default function TemplateStudioClient() {
                   : mode === "17"
                     ? financeDocTopic.trim().length > 0
                   : mode === "19"
-                    ? animeStoryPremise.trim().length > 0
+                    ? (animeStoryPasteMode ? animeStoryRawScript.trim().length > 0 : animeStoryPremise.trim().length > 0)
                   : mode === "20"
-                    ? stickmanStoryPremise.trim().length > 0
+                    ? (stickmanStoryPasteMode ? stickmanStoryRawScript.trim().length > 0 : stickmanStoryPremise.trim().length > 0)
                   : mode === "1" || mode === "4"
                 ? niche.trim().length > 0
                 : mode === "2" || mode === "6"
@@ -4443,25 +4449,53 @@ export default function TemplateStudioClient() {
             {/* ── Anime Story Video setup (mode 19) ──────────────────────── */}
             {isAnimeStoryMode && (
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Story premise / POV</Label>
-                  <textarea
-                    placeholder='e.g. "POV: You moved to a new city at 22 alone" or "A girl who never gave up on her dream"'
-                    value={animeStoryPremise}
-                    onChange={(e) => setAnimeStoryPremise(e.target.value)}
-                    rows={2}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-                  />
+                {/* Mode toggle */}
+                <div className="flex gap-2 p-1 bg-muted rounded-lg">
+                  <button type="button" onClick={() => setAnimeStoryPasteMode(false)}
+                    className={`flex-1 py-1.5 rounded-md text-sm font-medium transition ${!animeStoryPasteMode ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                    🤖 AI writes story
+                  </button>
+                  <button type="button" onClick={() => setAnimeStoryPasteMode(true)}
+                    className={`flex-1 py-1.5 rounded-md text-sm font-medium transition ${animeStoryPasteMode ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                    ✍️ Paste my script
+                  </button>
                 </div>
-                <div className="space-y-2">
-                  <Label>Character description</Label>
-                  <Input
-                    placeholder="e.g. young woman, dark hair, casual clothes"
-                    value={animeStoryCharacter}
-                    onChange={(e) => setAnimeStoryCharacter(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">Used to keep the character consistent across scenes</p>
-                </div>
+
+                {animeStoryPasteMode ? (
+                  <div className="space-y-2">
+                    <Label>Your script</Label>
+                    <textarea
+                      placeholder={"Paste your voiceover script here.\n\nSeparate each scene with a blank line, or one line per scene.\n\nAI will add visuals and subtitles automatically."}
+                      value={animeStoryRawScript}
+                      onChange={(e) => setAnimeStoryRawScript(e.target.value)}
+                      rows={10}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground">One scene per paragraph (blank line between) or one per line. AI adds visuals &amp; subtitles — your words stay exactly as written.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Story premise / POV</Label>
+                      <textarea
+                        placeholder='e.g. "POV: You moved to a new city at 22 alone" or "A girl who never gave up on her dream"'
+                        value={animeStoryPremise}
+                        onChange={(e) => setAnimeStoryPremise(e.target.value)}
+                        rows={2}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Character description</Label>
+                      <Input
+                        placeholder="e.g. young woman, dark hair, casual clothes"
+                        value={animeStoryCharacter}
+                        onChange={(e) => setAnimeStoryCharacter(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">Used to keep the character consistent across scenes</p>
+                    </div>
+                  </>
+                )}
                 <div className="space-y-2">
                   <Label>Tone</Label>
                   <div className="flex flex-wrap gap-2">
@@ -4509,16 +4543,42 @@ export default function TemplateStudioClient() {
             {/* ── Stickman Story Video setup (mode 20) ───────────────────── */}
             {isStickmanStoryMode && (
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Story premise</Label>
-                  <textarea
-                    placeholder='e.g. "A man who never said no became the most powerful person" or "What if you worked in silence for 5 years?"'
-                    value={stickmanStoryPremise}
-                    onChange={(e) => setStickmanStoryPremise(e.target.value)}
-                    rows={2}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-                  />
+                {/* Mode toggle */}
+                <div className="flex gap-2 p-1 bg-muted rounded-lg">
+                  <button type="button" onClick={() => setStickmanStoryPasteMode(false)}
+                    className={`flex-1 py-1.5 rounded-md text-sm font-medium transition ${!stickmanStoryPasteMode ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                    🤖 AI writes story
+                  </button>
+                  <button type="button" onClick={() => setStickmanStoryPasteMode(true)}
+                    className={`flex-1 py-1.5 rounded-md text-sm font-medium transition ${stickmanStoryPasteMode ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                    ✍️ Paste my script
+                  </button>
                 </div>
+
+                {stickmanStoryPasteMode ? (
+                  <div className="space-y-2">
+                    <Label>Your script</Label>
+                    <textarea
+                      placeholder={"Paste your narration script here.\n\nSeparate each scene with a blank line, or one line per scene.\n\nAI will add visuals and captions automatically."}
+                      value={stickmanStoryRawScript}
+                      onChange={(e) => setStickmanStoryRawScript(e.target.value)}
+                      rows={10}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground">One scene per paragraph (blank line between) or one per line. AI adds visuals &amp; captions — your words stay exactly as written.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Story premise</Label>
+                    <textarea
+                      placeholder='e.g. "A man who never said no became the most powerful person" or "What if you worked in silence for 5 years?"'
+                      value={stickmanStoryPremise}
+                      onChange={(e) => setStickmanStoryPremise(e.target.value)}
+                      rows={2}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Narration tone</Label>
                   <div className="flex flex-wrap gap-2">
@@ -4873,84 +4933,66 @@ export default function TemplateStudioClient() {
                       await runAnimationPrompts();
                     } else if (isAnimeStoryMode) {
                       // ── Anime Story Video: Script → Images → Export ──────────
-                      if (!animeStoryPremise.trim()) {
-                        toast({ title: "Missing premise", description: "Please enter a story premise.", variant: "destructive" }); return;
+                      if (animeStoryPasteMode ? !animeStoryRawScript.trim() : !animeStoryPremise.trim()) {
+                        toast({ title: animeStoryPasteMode ? "Missing script" : "Missing premise", description: animeStoryPasteMode ? "Please paste your script." : "Please enter a story premise.", variant: "destructive" }); return;
                       }
-                      setAnimeStoryVideoUrl(null); setAnimeStoryImages([]); setAnimeStoryScenes([]);
+                      setAnimeStoryVideoUrl(null); setAnimeStoryImages([]); setAnimeStoryScenes([]); setAnimeStoryEditMode(false);
                       try {
                         setAnimeStoryPhase("generating-script");
-                        const scriptRes = await fetch("/api/templates/anime-story/generate", {
-                          method: "POST", headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ premise: animeStoryPremise, tone: animeStoryTone, character: animeStoryCharacter || "young protagonist", format: animeStoryFormat }),
-                        });
-                        const scriptData = await scriptRes.json() as { scenes?: import("@/components/templates/AnimeStoryPreview").AnimeStoryScene[]; error?: string };
-                        if (!scriptRes.ok || scriptData.error) throw new Error(scriptData.error ?? "Script generation failed");
-                        const scenes = scriptData.scenes ?? [];
+                        let scenes: import("@/components/templates/AnimeStoryPreview").AnimeStoryScene[];
+                        if (animeStoryPasteMode) {
+                          const parseRes = await fetch("/api/templates/anime-story/parse-script", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ rawScript: animeStoryRawScript, character: animeStoryCharacter || "young protagonist", tone: animeStoryTone }),
+                          });
+                          const parseData = await parseRes.json() as { scenes?: import("@/components/templates/AnimeStoryPreview").AnimeStoryScene[]; error?: string };
+                          if (!parseRes.ok || parseData.error) throw new Error(parseData.error ?? "Script parsing failed");
+                          scenes = parseData.scenes ?? [];
+                        } else {
+                          const scriptRes = await fetch("/api/templates/anime-story/generate", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ premise: animeStoryPremise, tone: animeStoryTone, character: animeStoryCharacter || "young protagonist", format: animeStoryFormat }),
+                          });
+                          const scriptData = await scriptRes.json() as { scenes?: import("@/components/templates/AnimeStoryPreview").AnimeStoryScene[]; error?: string };
+                          if (!scriptRes.ok || scriptData.error) throw new Error(scriptData.error ?? "Script generation failed");
+                          scenes = scriptData.scenes ?? [];
+                        }
                         setAnimeStoryScenes(scenes);
-                        toast({ title: "Script ready!", description: `${scenes.length} scenes generated.` });
-
-                        setAnimeStoryPhase("generating-images");
-                        const imgRes = await fetch("/api/templates/anime-story/generate-images", {
-                          method: "POST", headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ scenes, character: animeStoryCharacter || "young protagonist" }),
-                        });
-                        const imgData = await imgRes.json() as { imageUrls?: string[]; error?: string };
-                        if (!imgRes.ok || imgData.error) throw new Error(imgData.error ?? "Image generation failed");
-                        setAnimeStoryImages(imgData.imageUrls ?? []);
-                        toast({ title: "Images ready!", description: "AI backgrounds generated." });
-
-                        setAnimeStoryPhase("assembling-video");
-                        const exportRes = await fetch("/api/templates/anime-story/export", {
-                          method: "POST", headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ scenes, imageUrls: imgData.imageUrls ?? [], format: animeStoryFormat, channelName: animeStoryChannelName, videoTitle: animeStoryPremise.slice(0, 55) }),
-                        });
-                        const exportData = await exportRes.json() as { url?: string; error?: string };
-                        if (!exportRes.ok || exportData.error) throw new Error(exportData.error ?? "Export failed");
-                        setAnimeStoryVideoUrl(exportData.url ?? null);
                         setAnimeStoryPhase(null);
-                        toast({ title: "Video ready! 🎌", description: "Your anime story video has been assembled." });
+                        toast({ title: "Script ready! ✏️", description: `${scenes.length} scenes generated — review and edit below, then click "Generate Images & Video".` });
                       } catch (e) {
                         setAnimeStoryPhase(null);
                         toast({ title: "Generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
                       }
                     } else if (isStickmanStoryMode) {
-                      // ── Stickman Story Video: Script → Images → Export ──────
-                      if (!stickmanStoryPremise.trim()) {
-                        toast({ title: "Missing premise", description: "Please enter a story premise.", variant: "destructive" }); return;
+                      // ── Stickman Story Video: Script only (step 1) ──────────
+                      if (stickmanStoryPasteMode ? !stickmanStoryRawScript.trim() : !stickmanStoryPremise.trim()) {
+                        toast({ title: stickmanStoryPasteMode ? "Missing script" : "Missing premise", description: stickmanStoryPasteMode ? "Please paste your script." : "Please enter a story premise.", variant: "destructive" }); return;
                       }
-                      setStickmanStoryVideoUrl(null); setStickmanStoryImages([]); setStickmanStoryScenes([]);
+                      setStickmanStoryVideoUrl(null); setStickmanStoryImages([]); setStickmanStoryScenes([]); setStickmanStoryEditMode(false);
                       try {
                         setStickmanStoryPhase("generating-script");
-                        const scriptRes = await fetch("/api/templates/stickman-story/generate", {
-                          method: "POST", headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ premise: stickmanStoryPremise, format: stickmanStoryFormat, narrationTone: stickmanStoryNarrationTone }),
-                        });
-                        const scriptData = await scriptRes.json() as { scenes?: import("@/components/templates/StickmanStoryPreview").StickmanStoryScene[]; error?: string };
-                        if (!scriptRes.ok || scriptData.error) throw new Error(scriptData.error ?? "Script generation failed");
-                        const scenes = scriptData.scenes ?? [];
+                        let scenes: import("@/components/templates/StickmanStoryPreview").StickmanStoryScene[];
+                        if (stickmanStoryPasteMode) {
+                          const parseRes = await fetch("/api/templates/stickman-story/parse-script", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ rawScript: stickmanStoryRawScript, narrationTone: stickmanStoryNarrationTone }),
+                          });
+                          const parseData = await parseRes.json() as { scenes?: import("@/components/templates/StickmanStoryPreview").StickmanStoryScene[]; error?: string };
+                          if (!parseRes.ok || parseData.error) throw new Error(parseData.error ?? "Script parsing failed");
+                          scenes = parseData.scenes ?? [];
+                        } else {
+                          const scriptRes = await fetch("/api/templates/stickman-story/generate", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ premise: stickmanStoryPremise, format: stickmanStoryFormat, narrationTone: stickmanStoryNarrationTone }),
+                          });
+                          const scriptData = await scriptRes.json() as { scenes?: import("@/components/templates/StickmanStoryPreview").StickmanStoryScene[]; error?: string };
+                          if (!scriptRes.ok || scriptData.error) throw new Error(scriptData.error ?? "Script generation failed");
+                          scenes = scriptData.scenes ?? [];
+                        }
                         setStickmanStoryScenes(scenes);
-                        toast({ title: "Script ready!", description: `${scenes.length} scenes generated.` });
-
-                        setStickmanStoryPhase("generating-images");
-                        const imgRes = await fetch("/api/templates/stickman-story/generate-images", {
-                          method: "POST", headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ scenes }),
-                        });
-                        const imgData = await imgRes.json() as { imageUrls?: string[]; error?: string };
-                        if (!imgRes.ok || imgData.error) throw new Error(imgData.error ?? "Image generation failed");
-                        setStickmanStoryImages(imgData.imageUrls ?? []);
-                        toast({ title: "Images ready!" });
-
-                        setStickmanStoryPhase("assembling-video");
-                        const exportRes = await fetch("/api/templates/stickman-story/export", {
-                          method: "POST", headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ scenes, imageUrls: imgData.imageUrls ?? [], format: stickmanStoryFormat, channelName: stickmanStoryChannelName, videoTitle: stickmanStoryPremise.slice(0, 55) }),
-                        });
-                        const exportData = await exportRes.json() as { url?: string; error?: string };
-                        if (!exportRes.ok || exportData.error) throw new Error(exportData.error ?? "Export failed");
-                        setStickmanStoryVideoUrl(exportData.url ?? null);
                         setStickmanStoryPhase(null);
-                        toast({ title: "Video ready! ✏️", description: "Your stickman story video has been assembled." });
+                        toast({ title: "Script ready! ✏️", description: `${scenes.length} scenes — review and edit below, then click "Generate Images & Video".` });
                       } catch (e) {
                         setStickmanStoryPhase(null);
                         toast({ title: "Generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
@@ -5393,13 +5435,84 @@ export default function TemplateStudioClient() {
                 </div>
               </div>
             ) : (
-              <AnimeStoryPreview
-                scenes={animeStoryScenes}
-                imageUrls={animeStoryImages}
-                currentScene={animeStoryCurrentScene}
-                onSceneChange={setAnimeStoryCurrentScene}
-                phase={animeStoryPhase}
-              />
+              <>
+                <AnimeStoryPreview
+                  scenes={animeStoryScenes}
+                  imageUrls={animeStoryImages}
+                  currentScene={animeStoryCurrentScene}
+                  onSceneChange={setAnimeStoryCurrentScene}
+                  phase={animeStoryPhase}
+                />
+                {/* Editable scene list + Generate button (shown when script ready, no video yet) */}
+                {animeStoryScenes.length > 0 && !animeStoryPhase && !animeStoryVideoUrl && (
+                  <div className="space-y-3 pt-2 border-t">
+                    <div className="flex items-center justify-between">
+                      <button type="button" onClick={() => setAnimeStoryEditMode((v) => !v)}
+                        className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
+                        ✏️ {animeStoryEditMode ? "Hide editor" : "Edit scenes"}
+                      </button>
+                      <span className="text-xs text-muted-foreground">{animeStoryScenes.length} scenes</span>
+                    </div>
+                    {animeStoryEditMode && (
+                      <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                        {animeStoryScenes.map((scene, i) => (
+                          <div key={i} className="rounded-lg border p-3 space-y-2 bg-muted/30">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-orange-500 shrink-0">#{i + 1}</span>
+                              <input
+                                value={scene.subtitleText ?? ""}
+                                onChange={(e) => setAnimeStoryScenes((prev) => prev.map((s, j) => j === i ? { ...s, subtitleText: e.target.value } : s))}
+                                placeholder="Subtitle (4-7 words)"
+                                className="flex-1 text-xs font-semibold rounded border border-input bg-background px-2 py-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              />
+                            </div>
+                            <textarea
+                              value={scene.voiceoverLine ?? ""}
+                              onChange={(e) => setAnimeStoryScenes((prev) => prev.map((s, j) => j === i ? { ...s, voiceoverLine: e.target.value } : s))}
+                              placeholder="Voiceover narration..."
+                              rows={2}
+                              className="w-full text-xs rounded border border-input bg-background px-2 py-1 resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setAnimeStoryImages([]);
+                        try {
+                          const scenes = animeStoryScenes;
+                          setAnimeStoryPhase("generating-images");
+                          const imgRes = await fetch("/api/templates/anime-story/generate-images", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ scenes, character: animeStoryCharacter || "young protagonist" }),
+                          });
+                          const imgData = await imgRes.json() as { imageUrls?: string[]; error?: string };
+                          if (!imgRes.ok || imgData.error) throw new Error(imgData.error ?? "Image generation failed");
+                          setAnimeStoryImages(imgData.imageUrls ?? []);
+                          setAnimeStoryPhase("assembling-video");
+                          const exportRes = await fetch("/api/templates/anime-story/export", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ scenes, imageUrls: imgData.imageUrls ?? [], format: animeStoryFormat, channelName: animeStoryChannelName, videoTitle: animeStoryPremise.slice(0, 55) }),
+                          });
+                          const exportData = await exportRes.json() as { url?: string; error?: string };
+                          if (!exportRes.ok || exportData.error) throw new Error(exportData.error ?? "Export failed");
+                          setAnimeStoryVideoUrl(exportData.url ?? null);
+                          setAnimeStoryPhase(null);
+                          toast({ title: "Video ready! 🎌" });
+                        } catch (e) {
+                          setAnimeStoryPhase(null);
+                          toast({ title: "Failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+                        }
+                      }}
+                      className="w-full py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold flex items-center justify-center gap-2 transition"
+                    >
+                      <Film className="w-4 h-4" /> Generate Images &amp; Video →
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -5440,13 +5553,84 @@ export default function TemplateStudioClient() {
                 </div>
               </div>
             ) : (
-              <StickmanStoryPreview
-                scenes={stickmanStoryScenes}
-                imageUrls={stickmanStoryImages}
-                currentScene={stickmanStoryCurrentScene}
-                onSceneChange={setStickmanStoryCurrentScene}
-                phase={stickmanStoryPhase}
-              />
+              <>
+                <StickmanStoryPreview
+                  scenes={stickmanStoryScenes}
+                  imageUrls={stickmanStoryImages}
+                  currentScene={stickmanStoryCurrentScene}
+                  onSceneChange={setStickmanStoryCurrentScene}
+                  phase={stickmanStoryPhase}
+                />
+                {/* Editable scene list + Generate button (shown when script ready, no video yet) */}
+                {stickmanStoryScenes.length > 0 && !stickmanStoryPhase && !stickmanStoryVideoUrl && (
+                  <div className="space-y-3 pt-2 border-t">
+                    <div className="flex items-center justify-between">
+                      <button type="button" onClick={() => setStickmanStoryEditMode((v) => !v)}
+                        className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
+                        ✏️ {stickmanStoryEditMode ? "Hide editor" : "Edit scenes"}
+                      </button>
+                      <span className="text-xs text-muted-foreground">{stickmanStoryScenes.length} scenes</span>
+                    </div>
+                    {stickmanStoryEditMode && (
+                      <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                        {stickmanStoryScenes.map((scene, i) => (
+                          <div key={i} className="rounded-lg border p-3 space-y-2 bg-muted/30">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-orange-500 shrink-0">#{i + 1}</span>
+                              <input
+                                value={scene.captionText ?? ""}
+                                onChange={(e) => setStickmanStoryScenes((prev) => prev.map((s, j) => j === i ? { ...s, captionText: e.target.value } : s))}
+                                placeholder="Caption (3-6 words)"
+                                className="flex-1 text-xs font-semibold rounded border border-input bg-background px-2 py-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              />
+                            </div>
+                            <textarea
+                              value={scene.narration ?? ""}
+                              onChange={(e) => setStickmanStoryScenes((prev) => prev.map((s, j) => j === i ? { ...s, narration: e.target.value } : s))}
+                              placeholder="Narration..."
+                              rows={2}
+                              className="w-full text-xs rounded border border-input bg-background px-2 py-1 resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setStickmanStoryImages([]);
+                        try {
+                          const scenes = stickmanStoryScenes;
+                          setStickmanStoryPhase("generating-images");
+                          const imgRes = await fetch("/api/templates/stickman-story/generate-images", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ scenes }),
+                          });
+                          const imgData = await imgRes.json() as { imageUrls?: string[]; error?: string };
+                          if (!imgRes.ok || imgData.error) throw new Error(imgData.error ?? "Image generation failed");
+                          setStickmanStoryImages(imgData.imageUrls ?? []);
+                          setStickmanStoryPhase("assembling-video");
+                          const exportRes = await fetch("/api/templates/stickman-story/export", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ scenes, imageUrls: imgData.imageUrls ?? [], format: stickmanStoryFormat, channelName: stickmanStoryChannelName, videoTitle: stickmanStoryPremise.slice(0, 55) }),
+                          });
+                          const exportData = await exportRes.json() as { url?: string; error?: string };
+                          if (!exportRes.ok || exportData.error) throw new Error(exportData.error ?? "Export failed");
+                          setStickmanStoryVideoUrl(exportData.url ?? null);
+                          setStickmanStoryPhase(null);
+                          toast({ title: "Video ready! ✏️" });
+                        } catch (e) {
+                          setStickmanStoryPhase(null);
+                          toast({ title: "Failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+                        }
+                      }}
+                      className="w-full py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold flex items-center justify-center gap-2 transition"
+                    >
+                      <Film className="w-4 h-4" /> Generate Images &amp; Video →
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
