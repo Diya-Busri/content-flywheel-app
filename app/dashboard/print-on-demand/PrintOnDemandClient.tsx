@@ -24,7 +24,7 @@ type Props = {
 
 type Blueprint = { id: number; title: string; brand: string; images: string[] };
 type Provider = { id: number; title: string; location: { country: string } };
-type Variant = { id: number; title: string; options: Record<string, string>; placeholders: Array<{ position: string }> };
+type Variant = { id: number; title: string; options: Record<string, string>; placeholders: Array<{ position: string }>; cost?: number };
 
 // Brand / typography chips shown when user has no prompt
 const BRAND_PROMPTS = [
@@ -184,6 +184,57 @@ function Steps({ current, steps }: { current: number; steps: string[] }) {
 }
 
 const CREATE_STEPS = ["Design", "Product type", "Provider", "Variants", "Review"];
+
+// ─── Profit Calculator ────────────────────────────────────────────────────────
+function ProfitCalculator({ avgSalePrice }: { avgSalePrice: number }) {
+  const [baseCost, setBaseCost] = useState("");
+  const base = parseFloat(baseCost);
+  const profit = !isNaN(base) && base > 0 ? avgSalePrice - base : null;
+  const margin = profit != null && avgSalePrice > 0 ? Math.round((profit / avgSalePrice) * 100) : null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <p className="text-[10px] text-gray-400 mb-1">Printify base cost</p>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm text-gray-400">£</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="e.g. 12.50"
+              value={baseCost}
+              onChange={e => setBaseCost(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#111] px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+            />
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1">Find this in Printify → your product → Edit</p>
+        </div>
+        <div className="flex-1">
+          <p className="text-[10px] text-gray-400 mb-1">Your sale price (avg)</p>
+          <p className="text-lg font-bold text-gray-900 dark:text-white">£{avgSalePrice.toFixed(2)}</p>
+        </div>
+      </div>
+      {profit != null ? (
+        <div className={`rounded-xl px-4 py-3 flex items-center justify-between ${profit > 0 ? "bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30" : "bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30"}`}>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest font-semibold text-gray-400">Profit per sale</p>
+            <p className={`text-2xl font-bold ${profit > 0 ? "text-green-700 dark:text-green-300" : "text-red-600"}`}>£{profit.toFixed(2)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-gray-400">Margin</p>
+            <p className={`text-xl font-bold ${profit > 0 ? "text-green-700 dark:text-green-300" : "text-red-600"}`}>{margin}%</p>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl bg-gray-50 dark:bg-[#111] border border-gray-100 dark:border-[#2A2A2A] px-4 py-3 text-center">
+          <p className="text-xs text-gray-400">Enter your Printify base cost to see profit</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Mockup grid with download + share ───────────────────────────────────────
 function MockupGrid({ mockups, productTitle }: { mockups: string[]; productTitle: string }) {
@@ -1886,9 +1937,39 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                     </div>
                   </div>
 
+                  {/* Profit summary banner */}
+                  {selectedVariants.size > 0 && (() => {
+                    const enabledVars = variants.filter(v => selectedVariants.has(v.id));
+                    const withCost = enabledVars.filter(v => v.cost != null);
+                    if (withCost.length === 0) return null;
+                    const avgBase = withCost.reduce((s, v) => s + v.cost!, 0) / withCost.length / 100;
+                    const avgSale = enabledVars.reduce((s, v) => s + parseFloat(variantPrices[v.id] ?? "25"), 0) / enabledVars.length;
+                    const profit = avgSale - avgBase;
+                    const margin = avgSale > 0 ? Math.round((profit / avgSale) * 100) : 0;
+                    return (
+                      <div className="rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30 px-4 py-3 flex items-center gap-4">
+                        <div className="flex-1">
+                          <p className="text-[10px] uppercase tracking-widest text-green-600 dark:text-green-400 font-semibold">Est. profit per sale</p>
+                          <p className="text-xl font-bold text-green-700 dark:text-green-300">£{profit.toFixed(2)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] text-gray-400">Base cost</p>
+                          <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">£{avgBase.toFixed(2)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] text-gray-400">Margin</p>
+                          <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">{margin}%</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className={`space-y-1.5 overflow-y-auto transition-all ${variantsExpanded ? "max-h-[500px]" : "max-h-[280px]"}`}>
                     {variants.map((v) => {
                       const checked = selectedVariants.has(v.id);
+                      const baseCost = v.cost != null ? v.cost / 100 : null;
+                      const salePrice = parseFloat(variantPrices[v.id] ?? "25");
+                      const profit = baseCost != null ? salePrice - baseCost : null;
                       return (
                         <div key={v.id} className={`flex items-center gap-3 rounded-lg px-3 py-2 border transition-all ${checked ? "border-orange-200 bg-orange-50/50 dark:bg-orange-950/10 dark:border-orange-900/30" : "border-gray-100 dark:border-[#2A2A2A]"}`}>
                           <input type="checkbox" checked={checked} onChange={() => setSelectedVariants((prev) => {
@@ -1896,7 +1977,17 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                             if (next.has(v.id)) next.delete(v.id); else next.add(v.id);
                             return next;
                           })} className="accent-orange-500" />
-                          <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">{v.title}</span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm text-gray-700 dark:text-gray-300 truncate block">{v.title}</span>
+                            {baseCost != null && checked && (
+                              <span className="text-[10px] text-gray-400">
+                                Base: £{baseCost.toFixed(2)}
+                                {profit != null && <span className={`ml-2 font-medium ${profit > 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
+                                  Profit: £{profit.toFixed(2)}
+                                </span>}
+                              </span>
+                            )}
+                          </div>
                           {checked && (
                             <div className="flex items-center gap-1 shrink-0">
                               <span className="text-xs text-gray-400">£</span>
@@ -2244,6 +2335,20 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 </div>
               )}
             </div>
+
+            {/* Profit Calculator */}
+            {(() => {
+              const storedVariants = (selectedProduct.variants as Array<{ id: number; price: number; title?: string; enabled?: boolean }> | null) ?? [];
+              const enabledVariants = storedVariants.filter(v => v.enabled !== false && v.price > 0);
+              if (enabledVariants.length === 0) return null;
+              const avgPrice = enabledVariants.reduce((s, v) => s + v.price, 0) / enabledVariants.length / 100;
+              return (
+                <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">💰 Profit Calculator</p>
+                  <ProfitCalculator avgSalePrice={avgPrice} />
+                </div>
+              );
+            })()}
 
             <div className="rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/10 border border-orange-100 dark:border-orange-900/30 p-4">
               <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-2">Marketing Tip</p>
