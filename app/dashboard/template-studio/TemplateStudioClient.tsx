@@ -448,6 +448,10 @@ export default function TemplateStudioClient() {
 
   // ── Kinetic Typography state (mode 13) ───────────────────────────────────────
   const [kineticTopic, setKineticTopic] = useState("");
+  const [kineticBrandName, setKineticBrandName] = useState("");
+  const [kineticTargetAudience, setKineticTargetAudience] = useState("");
+  const [kineticBrandStory, setKineticBrandStory] = useState("");
+  const [kineticCta, setKineticCta] = useState("");
   const [kineticFormLength, setKineticFormLength] = useState<"short" | "long">("short");
   const [kineticSceneCount, setKineticSceneCount] = useState(12);
   const [kineticColorScheme, setKineticColorScheme] = useState<import("@/components/templates/KineticTypographyPreview").KineticData["colorScheme"]>("dark-orange");
@@ -455,7 +459,8 @@ export default function TemplateStudioClient() {
   const [kineticData, setKineticData] = useState<import("@/components/templates/KineticTypographyPreview").KineticData | null>(null);
   const [kineticLoading, setKineticLoading] = useState(false);
   const [kineticExporting, setKineticExporting] = useState(false);
-  const [kineticPreviewVoiceover, setKineticPreviewVoiceover] = useState(false);
+  const [kineticBgLoading, setKineticBgLoading] = useState(false);
+  const [kineticPreviewVoiceover, setKineticPreviewVoiceover] = useState(true);
 
   const [storyVideoExporting, setStoryVideoExporting] = useState(false);
   const [storyVideoExportPhase, setStoryVideoExportPhase] = useState<"saving" | "compiling" | null>(null);
@@ -4313,6 +4318,53 @@ export default function TemplateStudioClient() {
                   <input type="checkbox" checked={kineticPreviewVoiceover} onChange={(e) => setKineticPreviewVoiceover(e.target.checked)} className="accent-orange-500 w-4 h-4" />
                   <span className="text-sm">🔊 Preview voiceover (ElevenLabs)</span>
                 </label>
+
+                {/* Brand context — makes the script actually hook & convert */}
+                <details className="group">
+                  <summary className="cursor-pointer text-sm font-semibold text-orange-400 hover:text-orange-300 flex items-center gap-1 select-none">
+                    <span className="group-open:rotate-90 inline-block transition-transform">▶</span>
+                    Brand context <span className="text-xs font-normal text-muted-foreground ml-1">(recommended — makes scripts convert)</span>
+                  </summary>
+                  <div className="mt-3 space-y-3 pl-1">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Brand name</Label>
+                      <Input
+                        placeholder="e.g. Void Hours"
+                        value={kineticBrandName}
+                        onChange={(e) => setKineticBrandName(e.target.value)}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Who is this for?</Label>
+                      <Input
+                        placeholder="e.g. quiet builders who don't chase clout"
+                        value={kineticTargetAudience}
+                        onChange={(e) => setKineticTargetAudience(e.target.value)}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Brand story / vibe (1–2 sentences)</Label>
+                      <textarea
+                        placeholder="e.g. We build in silence. No clout, no noise. Just the work."
+                        value={kineticBrandStory}
+                        onChange={(e) => setKineticBrandStory(e.target.value)}
+                        rows={2}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Call to action</Label>
+                      <Input
+                        placeholder="e.g. Follow @voidhours.studio for the drop"
+                        value={kineticCta}
+                        onChange={(e) => setKineticCta(e.target.value)}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                </details>
               </div>
             )}
 
@@ -4510,7 +4562,7 @@ export default function TemplateStudioClient() {
                         const res = await fetch("/api/templates/kinetic/generate", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ topic: kineticTopic, sceneCount: kineticSceneCount, colorScheme: kineticColorScheme }),
+                          body: JSON.stringify({ topic: kineticTopic, sceneCount: kineticSceneCount, colorScheme: kineticColorScheme, brandName: kineticBrandName, targetAudience: kineticTargetAudience, brandStory: kineticBrandStory, cta: kineticCta }),
                         });
                         const json = await res.json() as KineticData & { error?: string };
                         if (!res.ok || json.error) throw new Error(json.error ?? "Generation failed");
@@ -4958,6 +5010,57 @@ export default function TemplateStudioClient() {
           </CardHeader>
           <CardContent className="space-y-4">
             <KineticTypographyPreview data={kineticData} voiceover={kineticPreviewVoiceover} aspectRatio={kineticFormLength === "long" ? "16:9" : "9:16"} voiceId={kineticVoiceId} />
+
+            {/* AI Backgrounds */}
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={kineticBgLoading}
+                className="border-orange-500/50 text-orange-500 hover:bg-orange-500/10"
+                onClick={async () => {
+                  setKineticBgLoading(true);
+                  try {
+                    const hasBgs = kineticData.scenes.some(s => s.bgImage);
+                    if (hasBgs) {
+                      // Remove backgrounds
+                      setKineticData({ ...kineticData, scenes: kineticData.scenes.map(s => ({ ...s, bgImage: undefined })) });
+                      return;
+                    }
+                    const res = await fetch("/api/templates/kinetic/generate-images", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ topic: kineticTopic, brandName: kineticBrandName, colorScheme: kineticColorScheme, sceneCount: kineticData.scenes.length }),
+                    });
+                    const json = await res.json() as { images?: string[]; error?: string };
+                    if (!res.ok || json.error) throw new Error(json.error ?? "Failed");
+                    const imgs = json.images ?? [];
+                    if (!imgs.length) throw new Error("No images returned");
+                    // Distribute 4 images across all scenes (cycle through them)
+                    setKineticData({
+                      ...kineticData,
+                      scenes: kineticData.scenes.map((s, i) => ({ ...s, bgImage: imgs[i % imgs.length] })),
+                    });
+                    toast({ title: "Backgrounds added!", description: "4 cinematic AI images applied to your scenes." });
+                  } catch (e) {
+                    toast({ title: "Background generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+                  } finally {
+                    setKineticBgLoading(false);
+                  }
+                }}
+              >
+                {kineticBgLoading
+                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating…</>
+                  : kineticData.scenes.some(s => s.bgImage)
+                    ? "✕ Remove backgrounds"
+                    : "🎨 Add AI backgrounds"}
+              </Button>
+              {kineticBgLoading && (
+                <span className="text-xs text-muted-foreground">Generating 4 cinematic images…</span>
+              )}
+            </div>
+
             <div className="rounded-lg bg-muted/60 border p-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-2">Export options</p>
               <div className="flex flex-wrap gap-2">

@@ -7,11 +7,6 @@ export const dynamic = "force-dynamic";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-/**
- * POST /api/templates/kinetic/generate
- * Body: { topic: string, sceneCount?: number, colorScheme?: string }
- * Returns: { topic, colorScheme, scenes: [{ text, accentWords }] }
- */
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -24,6 +19,11 @@ export async function POST(request: NextRequest) {
       topic?: string;
       sceneCount?: number;
       colorScheme?: string;
+      brandName?: string;
+      targetAudience?: string;
+      brandStory?: string;
+      cta?: string;
+      productName?: string;
     };
 
     const topic = typeof body.topic === "string" ? body.topic.trim() : "";
@@ -34,28 +34,47 @@ export async function POST(request: NextRequest) {
 
     if (!topic) return NextResponse.json({ error: "topic is required" }, { status: 400 });
 
+    const brandCtx = body.brandName ? `Brand: "${body.brandName}"` : "";
+    const audienceCtx = body.targetAudience ? `Target audience: ${body.targetAudience}` : "";
+    const storyCtx = body.brandStory ? `Brand story: ${body.brandStory}` : "";
+    const ctaCtx = body.cta || "Follow for more";
+    const productCtx = body.productName ? `Product being promoted: ${body.productName}` : "";
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `You are a viral faceless video scriptwriter specialising in kinetic typography videos.
-Write punchy, impactful sentences designed to appear one at a time on a dark screen with bold white text.
+          content: `You are a viral faceless TikTok scriptwriter. You write kinetic typography scripts that appear line by line on a dark screen.
+
+STRUCTURE every script with this arc:
+1. HOOK (scenes 1-2): Stop the scroll. Speak directly to the audience's identity or pain. Make them feel seen.
+2. STORY (scenes 3-6): Build tension. Tell the brand story or why this matters. Who is this for. What they stand for.
+3. VALUE (scenes 7-9): Why they should care. What makes this different. What they're missing.
+4. CTA (final 2-3 scenes): Direct, clear call to action. Follow. Shop. Link in bio. Don't be vague.
+
 Rules:
-- Each scene is ONE sentence or short phrase, max 15 words
-- Hook the viewer in the first 2 scenes
-- Use a mix of facts, insights, questions, and calls to action
-- Make it feel like the viewer is learning something valuable fast
-- End with a strong CTA scene
-- accentWords is how many words at the START of the text should appear in the accent colour (1-3 typically)`,
+- Each scene is ONE sentence, max 10 words
+- Hook MUST be the first line — something that makes the target audience feel "that's me"
+- Include the brand name naturally (not forced)
+- The CTA must be specific: "Follow @[brand] for the drop" or "Link in bio — dropping [date]"
+- accentWords = how many words at the START appear in accent colour (usually 1-3)
+- Tone: dark, minimal, confident. Like the brand is talking to exactly one person.`,
         },
         {
           role: "user",
-          content: `Write exactly ${sceneCount} kinetic typography scenes for a short-form video about: "${topic}".
+          content: `Write exactly ${sceneCount} kinetic typography scenes for: "${topic}"
+
+${brandCtx}
+${audienceCtx}
+${storyCtx}
+${productCtx}
+CTA to use: ${ctaCtx}
+
 Return ONLY valid JSON:
 {
   "scenes": [
-    { "text": "Short punchy sentence here.", "accentWords": 2 }
+    { "text": "Short punchy line.", "accentWords": 2 }
   ]
 }`,
         },

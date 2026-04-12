@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from "react";
 export type KineticScene = {
   text: string;
   accentWords: number; // first N words shown in accent colour
+  bgImage?: string;    // optional cinematic background image URL
 };
 
 export type KineticData = {
@@ -48,6 +49,7 @@ function KineticSlide({
   const accentCount = Math.min(scene.accentWords, words.length);
   const progressPct = ((index + 1) / total) * 100;
   const font = "'Inter', 'Helvetica Neue', Arial, sans-serif";
+  const hasBg = !!scene.bgImage;
 
   const style = `
     @keyframes kt-slide {
@@ -57,25 +59,36 @@ function KineticSlide({
     .kt-in { animation: kt-slide 0.4s cubic-bezier(.22,1,.36,1) forwards; }
   `;
 
+  // Shared background layer: cinematic image + dark overlay when bgImage is present
+  const bgLayer = hasBg ? (
+    <>
+      <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${scene.bgImage})`, backgroundSize: "cover", backgroundPosition: "center", zIndex: 0 }} />
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.72)", zIndex: 1 }} />
+    </>
+  ) : null;
+
   if (!wide) {
     // Portrait: centered
     return (
-      <div style={{ width: "100%", height: "100%", background: scheme.bg, fontFamily: font,
+      <div style={{ width: "100%", height: "100%", background: hasBg ? "#000" : scheme.bg, fontFamily: font,
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
         position: "relative", overflow: "hidden", padding: "8% 7%", boxSizing: "border-box" }}>
         <style>{style}</style>
-        <div style={{ position: "absolute", top: "30%", left: "50%", transform: "translate(-50%,-50%)",
-          width: "80%", height: "60%", background: `radial-gradient(ellipse,${scheme.glow} 0%,transparent 70%)`, pointerEvents: "none" }} />
-        <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent, transition: "width 0.4s" }} />
-        <div style={{ position: "absolute", top: "5%", right: "6%", color: "rgba(255,255,255,0.25)", fontSize: "clamp(9px,1.4vw,12px)", fontWeight: 600, letterSpacing: "0.1em" }}>
+        {bgLayer}
+        {!hasBg && (
+          <div style={{ position: "absolute", top: "30%", left: "50%", transform: "translate(-50%,-50%)",
+            width: "80%", height: "60%", background: `radial-gradient(ellipse,${scheme.glow} 0%,transparent 70%)`, pointerEvents: "none", zIndex: 1 }} />
+        )}
+        <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent, transition: "width 0.4s", zIndex: 10 }} />
+        <div style={{ position: "absolute", top: "5%", right: "6%", color: "rgba(255,255,255,0.25)", fontSize: "clamp(9px,1.4vw,12px)", fontWeight: 600, letterSpacing: "0.1em", zIndex: 10 }}>
           {index + 1}/{total}
         </div>
-        <div className="kt-in" style={{ textAlign: "center", position: "relative", zIndex: 2, maxWidth: "90%" }}>
+        <div className="kt-in" style={{ textAlign: "center", position: "relative", zIndex: 10, maxWidth: "90%" }}>
           <p style={{ fontSize: "clamp(18px,4vw,52px)", fontWeight: 900, lineHeight: 1.2, margin: 0, letterSpacing: "-0.01em" }}>
             <WordsSpan words={words} accentCount={accentCount} scheme={scheme} />
           </p>
         </div>
-        <div style={{ position: "absolute", bottom: "10%", left: "50%", transform: "translateX(-50%)", width: "clamp(24px,4vw,44px)", height: 3, background: scheme.accent, borderRadius: 2, opacity: 0.55 }} />
+        <div style={{ position: "absolute", bottom: "10%", left: "50%", transform: "translateX(-50%)", width: "clamp(24px,4vw,44px)", height: 3, background: scheme.accent, borderRadius: 2, opacity: 0.55, zIndex: 10 }} />
       </div>
     );
   }
@@ -85,20 +98,21 @@ function KineticSlide({
   if (layout === 0) {
     // Layout A: ghost number left + text right
     return (
-      <div style={{ width: "100%", height: "100%", background: scheme.bg, fontFamily: font,
+      <div style={{ width: "100%", height: "100%", background: hasBg ? "#000" : scheme.bg, fontFamily: font,
         display: "flex", alignItems: "center", position: "relative", overflow: "hidden" }}>
         <style>{style}</style>
-        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 50% 50%,${scheme.glow} 0%,transparent 65%)`, pointerEvents: "none" }} />
-        <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent }} />
+        {bgLayer}
+        {!hasBg && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 50% 50%,${scheme.glow} 0%,transparent 65%)`, pointerEvents: "none", zIndex: 1 }} />}
+        <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent, zIndex: 10 }} />
         {/* left accent bar */}
-        <div style={{ position: "absolute", left: 0, top: 0, width: 6, height: "100%", background: scheme.accent, opacity: 0.7 }} />
+        <div style={{ position: "absolute", left: 0, top: 0, width: 6, height: "100%", background: scheme.accent, opacity: 0.7, zIndex: 10 }} />
         {/* ghost number */}
         <div style={{ position: "absolute", left: "3%", top: "50%", transform: "translateY(-50%)",
           fontSize: "clamp(80px,28vw,220px)", fontWeight: 900, lineHeight: 1,
-          color: scheme.accent, opacity: 0.07, letterSpacing: "-0.05em", userSelect: "none", pointerEvents: "none" }}>
+          color: scheme.accent, opacity: hasBg ? 0.12 : 0.07, letterSpacing: "-0.05em", userSelect: "none", pointerEvents: "none", zIndex: 10 }}>
           {index + 1}
         </div>
-        <div className="kt-in" style={{ position: "relative", zIndex: 2, marginLeft: "28%", paddingRight: "5%", maxWidth: "70%" }}>
+        <div className="kt-in" style={{ position: "relative", zIndex: 10, marginLeft: "28%", paddingRight: "5%", maxWidth: "70%" }}>
           <div style={{ fontSize: "clamp(7px,1vw,11px)", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: scheme.accent, marginBottom: "8%", opacity: 0.85 }}>
             Part {index + 1} of {total}
           </div>
@@ -106,7 +120,7 @@ function KineticSlide({
             <WordsSpan words={words} accentCount={accentCount} scheme={scheme} />
           </p>
         </div>
-        <div style={{ position: "absolute", bottom: "5%", right: "4%", fontSize: "clamp(7px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.18)", letterSpacing: 2 }}>
+        <div style={{ position: "absolute", bottom: "5%", right: "4%", fontSize: "clamp(7px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.18)", letterSpacing: 2, zIndex: 10 }}>
           {index + 1} / {total}
         </div>
       </div>
@@ -117,19 +131,20 @@ function KineticSlide({
     // Layout B: centered with flanking rules + corner brackets
     const corner = { position: "absolute" as const, width: "clamp(12px,3vw,28px)", height: "clamp(12px,3vw,28px)" };
     return (
-      <div style={{ width: "100%", height: "100%", background: scheme.bg, fontFamily: font,
+      <div style={{ width: "100%", height: "100%", background: hasBg ? "#000" : scheme.bg, fontFamily: font,
         display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
         <style>{style}</style>
-        <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 50% 50%,${scheme.glow} 0%,transparent 60%)`, pointerEvents: "none" }} />
-        <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent }} />
+        {bgLayer}
+        {!hasBg && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 50% 50%,${scheme.glow} 0%,transparent 60%)`, pointerEvents: "none", zIndex: 1 }} />}
+        <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent, zIndex: 10 }} />
         {/* corner brackets */}
         {[
           { top: "4%", left: "3%", borderTop: `3px solid ${scheme.accent}`, borderLeft: `3px solid ${scheme.accent}` },
           { top: "4%", right: "3%", borderTop: `3px solid ${scheme.accent}`, borderRight: `3px solid ${scheme.accent}` },
           { bottom: "4%", left: "3%", borderBottom: `3px solid ${scheme.accent}`, borderLeft: `3px solid ${scheme.accent}` },
           { bottom: "4%", right: "3%", borderBottom: `3px solid ${scheme.accent}`, borderRight: `3px solid ${scheme.accent}` },
-        ].map((s, i) => <div key={i} style={{ ...corner, ...s }} />)}
-        <div className="kt-in" style={{ position: "relative", zIndex: 2, maxWidth: "80%", textAlign: "center", padding: "0 4%" }}>
+        ].map((s, i) => <div key={i} style={{ ...corner, ...s, zIndex: 10 }} />)}
+        <div className="kt-in" style={{ position: "relative", zIndex: 10, maxWidth: "80%", textAlign: "center", padding: "0 4%" }}>
           {/* top rule */}
           <div style={{ display: "flex", alignItems: "center", gap: "2%", marginBottom: "6%" }}>
             <div style={{ flex: 1, height: 1.5, background: scheme.accent, opacity: 0.35 }} />
@@ -147,7 +162,7 @@ function KineticSlide({
             <div style={{ flex: 1, height: 1.5, background: scheme.accent, opacity: 0.25 }} />
           </div>
         </div>
-        <div style={{ position: "absolute", bottom: "5%", right: "4%", fontSize: "clamp(7px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.18)", letterSpacing: 2 }}>
+        <div style={{ position: "absolute", bottom: "5%", right: "4%", fontSize: "clamp(7px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.18)", letterSpacing: 2, zIndex: 10 }}>
           {Math.round(progressPct)}%
         </div>
       </div>
@@ -157,13 +172,16 @@ function KineticSlide({
   // Layout C: left-aligned text + dot grid + vertical bar right
   const dots = Array.from({ length: 42 });
   return (
-    <div style={{ width: "100%", height: "100%", background: scheme.bg, fontFamily: font,
+    <div style={{ width: "100%", height: "100%", background: hasBg ? "#000" : scheme.bg, fontFamily: font,
       display: "flex", alignItems: "center", position: "relative", overflow: "hidden" }}>
       <style>{style}</style>
-      <div style={{ position: "absolute", top: "50%", left: "30%", transform: "translate(-50%,-50%)",
-        width: "70%", height: "80%", background: `radial-gradient(ellipse,${scheme.glow} 0%,transparent 70%)`, pointerEvents: "none" }} />
-      <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent }} />
-      <div className="kt-in" style={{ position: "relative", zIndex: 2, padding: "0 0 0 7%", maxWidth: "70%" }}>
+      {bgLayer}
+      {!hasBg && (
+        <div style={{ position: "absolute", top: "50%", left: "30%", transform: "translate(-50%,-50%)",
+          width: "70%", height: "80%", background: `radial-gradient(ellipse,${scheme.glow} 0%,transparent 70%)`, pointerEvents: "none", zIndex: 1 }} />
+      )}
+      <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent, zIndex: 10 }} />
+      <div className="kt-in" style={{ position: "relative", zIndex: 10, padding: "0 0 0 7%", maxWidth: "70%" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "2%", marginBottom: "6%" }}>
           <div style={{ width: "clamp(6px,1vw,10px)", height: "clamp(6px,1vw,10px)", borderRadius: "50%", background: scheme.accent }} />
           <span style={{ fontSize: "clamp(6px,0.9vw,10px)", fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: scheme.accent, opacity: 0.85 }}>
@@ -175,15 +193,15 @@ function KineticSlide({
         </p>
       </div>
       {/* vertical bar */}
-      <div style={{ position: "absolute", right: "23%", top: "10%", height: "80%", width: 2, background: scheme.accent, opacity: 0.15, borderRadius: 2 }} />
+      <div style={{ position: "absolute", right: "23%", top: "10%", height: "80%", width: 2, background: scheme.accent, opacity: 0.15, borderRadius: 2, zIndex: 10 }} />
       {/* dot grid */}
       <div style={{ position: "absolute", right: "4%", top: "50%", transform: "translateY(-50%)",
-        display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: "clamp(4px,0.8vw,10px)", opacity: 0.1 }}>
+        display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: "clamp(4px,0.8vw,10px)", opacity: hasBg ? 0.06 : 0.1, zIndex: 10 }}>
         {dots.map((_, i) => (
           <div key={i} style={{ width: "clamp(3px,0.5vw,6px)", height: "clamp(3px,0.5vw,6px)", borderRadius: "50%", background: scheme.accent }} />
         ))}
       </div>
-      <div style={{ position: "absolute", bottom: "5%", left: "7%", fontSize: "clamp(7px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.18)", letterSpacing: 2 }}>
+      <div style={{ position: "absolute", bottom: "5%", left: "7%", fontSize: "clamp(7px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.18)", letterSpacing: 2, zIndex: 10 }}>
         {index + 1} / {total}
       </div>
     </div>
