@@ -2848,21 +2848,21 @@ export default function TemplateStudioClient() {
   // RESTORE: on mount, reload all saved state from localStorage
   useEffect(() => {
     try {
-      // One-time prefill from Drop Campaign (passed via ?prefill=<key> URL param)
-      // This avoids cross-tab localStorage interference
+      // Kinetic prefill from Drop Campaign — encoded directly in URL (?kp=<base64>)
+      // No localStorage involved, no cross-tab interference
       const urlParams = new URLSearchParams(window.location.search);
-      const prefillKey = urlParams.get("prefill");
-      if (prefillKey) {
-        const prefillRaw = localStorage.getItem(prefillKey);
-        if (prefillRaw) {
-          localStorage.removeItem(prefillKey); // consume immediately — can't be read by other tabs
-          const prefill = JSON.parse(prefillRaw) as Record<string, unknown>;
+      const kp = urlParams.get("kp");
+      if (kp) {
+        try {
+          const prefill = JSON.parse(decodeURIComponent(escape(atob(kp)))) as Record<string, unknown>;
           if (typeof prefill.mode === "string") setMode(prefill.mode as CreationMode);
           if (typeof prefill.kineticTopic === "string") setKineticTopic(prefill.kineticTopic);
           if (prefill.kineticData && typeof prefill.kineticData === "object") {
             setKineticData(prefill.kineticData as import("@/components/templates/KineticTypographyPreview").KineticData);
           }
-          return; // skip normal draft restore when coming from prefill
+          return; // skip normal draft restore
+        } catch {
+          // malformed — fall through to normal restore
         }
       }
 

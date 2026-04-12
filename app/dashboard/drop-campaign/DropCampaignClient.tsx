@@ -134,22 +134,18 @@ function DayCard({ day }: { day: DropDay }) {
                 type="button"
                 onClick={() => {
                   try {
-                    // Use a unique one-time key so other open Template Studio tabs can't interfere
-                    const prefillKey = `cf:kinetic:prefill:${Date.now()}`;
                     const scenes = day.facelessScript.map((text: string, i: number) => ({
                       text,
                       accentWords: i === 0 ? 3 : 1,
                     }));
-                    localStorage.setItem(prefillKey, JSON.stringify({
+                    const payload = JSON.stringify({
                       mode: "13",
                       kineticTopic: day.facelessHook,
-                      kineticData: {
-                        topic: day.facelessHook,
-                        colorScheme: "dark-orange",
-                        scenes,
-                      },
-                    }));
-                    window.open(`/dashboard/template-studio?prefill=${prefillKey}`, "_blank");
+                      kineticData: { topic: day.facelessHook, colorScheme: "dark-orange", scenes },
+                    });
+                    // Encode directly in URL — no localStorage, no cross-tab issues
+                    const encoded = btoa(unescape(encodeURIComponent(payload)));
+                    window.open(`/dashboard/template-studio?kp=${encoded}`, "_blank");
                   } catch {
                     window.open("/dashboard/template-studio", "_blank");
                   }
