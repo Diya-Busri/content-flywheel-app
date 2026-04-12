@@ -62,6 +62,8 @@ import { ViralTemplatePreview, VIRAL_SHORT_DURATION, VIRAL_LONG_DURATION } from 
 import type { ViralTemplateData, ViralSettings } from "@/components/templates/ViralTemplatePreview";
 import { KineticTypographyPreview, KINETIC_COLOR_OPTIONS, KINETIC_VOICE_OPTIONS } from "@/components/templates/KineticTypographyPreview";
 import type { KineticData } from "@/components/templates/KineticTypographyPreview";
+import { AnimeStoryPreview } from "@/components/templates/AnimeStoryPreview";
+import { StickmanStoryPreview } from "@/components/templates/StickmanStoryPreview";
 import { AiStorySceneVoiceover } from "@/components/ai-story/AiStorySceneVoiceover";
 import { AiStoryAnimateSceneBlock } from "@/components/ai-story/AiStoryAnimateSceneBlock";
 import {
@@ -466,6 +468,27 @@ export default function TemplateStudioClient() {
   const [storyVideoExportPhase, setStoryVideoExportPhase] = useState<"saving" | "compiling" | null>(null);
   const [storyVideoExportUrl, setStoryVideoExportUrl] = useState<string | null>(null);
   const [storyVideoExportScriptId, setStoryVideoExportScriptId] = useState<string | null>(null);
+
+  // ── Anime Story Video state (mode 19) ────────────────────────────────────────
+  const [animeStoryPremise, setAnimeStoryPremise] = useState("");
+  const [animeStoryTone, setAnimeStoryTone] = useState("emotional");
+  const [animeStoryCharacter, setAnimeStoryCharacter] = useState("");
+  const [animeStoryFormat, setAnimeStoryFormat] = useState<"short" | "long">("short");
+  const [animeStoryScenes, setAnimeStoryScenes] = useState<import("@/components/templates/AnimeStoryPreview").AnimeStoryScene[]>([]);
+  const [animeStoryImages, setAnimeStoryImages] = useState<string[]>([]);
+  const [animeStoryPhase, setAnimeStoryPhase] = useState<string | null>(null);
+  const [animeStoryVideoUrl, setAnimeStoryVideoUrl] = useState<string | null>(null);
+  const [animeStoryCurrentScene, setAnimeStoryCurrentScene] = useState(0);
+
+  // ── Stickman Story Video state (mode 20) ─────────────────────────────────────
+  const [stickmanStoryPremise, setStickmanStoryPremise] = useState("");
+  const [stickmanStoryFormat, setStickmanStoryFormat] = useState<"short" | "long">("short");
+  const [stickmanStoryNarrationTone, setStickmanStoryNarrationTone] = useState("serious");
+  const [stickmanStoryScenes, setStickmanStoryScenes] = useState<import("@/components/templates/StickmanStoryPreview").StickmanStoryScene[]>([]);
+  const [stickmanStoryImages, setStickmanStoryImages] = useState<string[]>([]);
+  const [stickmanStoryPhase, setStickmanStoryPhase] = useState<string | null>(null);
+  const [stickmanStoryVideoUrl, setStickmanStoryVideoUrl] = useState<string | null>(null);
+  const [stickmanStoryCurrentScene, setStickmanStoryCurrentScene] = useState(0);
   const [storyVideoExportError, setStoryVideoExportError] = useState<string | null>(null);
   // Auto full-video generation state
   const [autoGenerating, setAutoGenerating] = useState(false);
@@ -533,6 +556,8 @@ export default function TemplateStudioClient() {
   const isStickmanMode = mode === "11";
   const isViralMode = mode === "12";
   const isKineticMode = mode === "13";
+  const isAnimeStoryMode = mode === "19";
+  const isStickmanStoryMode = mode === "20";
   /** Modes that attach show/episode into timeline metadata when saving (not the setup-only screen). */
   const isTemplateStudioSeriesMode =
     mode === "7" ||
@@ -903,6 +928,10 @@ export default function TemplateStudioClient() {
                     ? animCharacterDescription.trim().length > 0
                   : mode === "17"
                     ? financeDocTopic.trim().length > 0
+                  : mode === "19"
+                    ? animeStoryPremise.trim().length > 0
+                  : mode === "20"
+                    ? stickmanStoryPremise.trim().length > 0
                   : mode === "1" || mode === "4"
                 ? niche.trim().length > 0
                 : mode === "2" || mode === "6"
@@ -4409,7 +4438,108 @@ export default function TemplateStudioClient() {
               />
             )}
 
-            {!isStoryTemplateMode && mode !== "10" && !isStickmanMode && !isSeriesLibrarySetupMode && (
+            {/* ── Anime Story Video setup (mode 19) ──────────────────────── */}
+            {isAnimeStoryMode && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Story premise / POV</Label>
+                  <textarea
+                    placeholder='e.g. "POV: You moved to a new city at 22 alone" or "A girl who never gave up on her dream"'
+                    value={animeStoryPremise}
+                    onChange={(e) => setAnimeStoryPremise(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Character description</Label>
+                  <Input
+                    placeholder="e.g. young woman, dark hair, casual clothes"
+                    value={animeStoryCharacter}
+                    onChange={(e) => setAnimeStoryCharacter(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Used to keep the character consistent across scenes</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Tone</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {["emotional", "motivational", "dramatic", "funny"].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setAnimeStoryTone(t)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${animeStoryTone === t ? "bg-orange-500 text-white border-orange-500" : "border-gray-300 dark:border-gray-600 hover:border-orange-400"}`}
+                      >
+                        {t.charAt(0).toUpperCase() + t.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Format</Label>
+                  <div className="flex gap-2">
+                    {(["short", "long"] as const).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setAnimeStoryFormat(f)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition ${animeStoryFormat === f ? "bg-orange-500 text-white border-orange-500" : "border-gray-300 dark:border-gray-600 hover:border-orange-400"}`}
+                      >
+                        {f === "short" ? "⚡ Short (30–60s, 8 scenes)" : "🎬 Long (2–5min, 20 scenes)"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Stickman Story Video setup (mode 20) ───────────────────── */}
+            {isStickmanStoryMode && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Story premise</Label>
+                  <textarea
+                    placeholder='e.g. "A man who never said no became the most powerful person" or "What if you worked in silence for 5 years?"'
+                    value={stickmanStoryPremise}
+                    onChange={(e) => setStickmanStoryPremise(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Narration tone</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {["serious", "dramatic", "neutral", "motivational"].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setStickmanStoryNarrationTone(t)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${stickmanStoryNarrationTone === t ? "bg-orange-500 text-white border-orange-500" : "border-gray-300 dark:border-gray-600 hover:border-orange-400"}`}
+                      >
+                        {t.charAt(0).toUpperCase() + t.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Format</Label>
+                  <div className="flex gap-2">
+                    {(["short", "long"] as const).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setStickmanStoryFormat(f)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition ${stickmanStoryFormat === f ? "bg-orange-500 text-white border-orange-500" : "border-gray-300 dark:border-gray-600 hover:border-orange-400"}`}
+                      >
+                        {f === "short" ? "⚡ Short (45–90s, 10 scenes)" : "🎬 Long (3–8min, 24 scenes)"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!isStoryTemplateMode && mode !== "10" && !isStickmanMode && !isSeriesLibrarySetupMode && !isAnimeStoryMode && !isStickmanStoryMode && (
               <>
             <div className="space-y-2">
               <Label htmlFor="template-studio-slide-count">Number of slides</Label>
@@ -4717,6 +4847,90 @@ export default function TemplateStudioClient() {
                       await runBrandStoryVideo();
                     } else if (mode === "16") {
                       await runAnimationPrompts();
+                    } else if (isAnimeStoryMode) {
+                      // ── Anime Story Video: Script → Images → Export ──────────
+                      if (!animeStoryPremise.trim()) {
+                        toast({ title: "Missing premise", description: "Please enter a story premise.", variant: "destructive" }); return;
+                      }
+                      setAnimeStoryVideoUrl(null); setAnimeStoryImages([]); setAnimeStoryScenes([]);
+                      try {
+                        setAnimeStoryPhase("generating-script");
+                        const scriptRes = await fetch("/api/templates/anime-story/generate", {
+                          method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ premise: animeStoryPremise, tone: animeStoryTone, character: animeStoryCharacter || "young protagonist", format: animeStoryFormat }),
+                        });
+                        const scriptData = await scriptRes.json() as { scenes?: import("@/components/templates/AnimeStoryPreview").AnimeStoryScene[]; error?: string };
+                        if (!scriptRes.ok || scriptData.error) throw new Error(scriptData.error ?? "Script generation failed");
+                        const scenes = scriptData.scenes ?? [];
+                        setAnimeStoryScenes(scenes);
+                        toast({ title: "Script ready!", description: `${scenes.length} scenes generated.` });
+
+                        setAnimeStoryPhase("generating-images");
+                        const imgRes = await fetch("/api/templates/anime-story/generate-images", {
+                          method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ scenes, character: animeStoryCharacter || "young protagonist" }),
+                        });
+                        const imgData = await imgRes.json() as { imageUrls?: string[]; error?: string };
+                        if (!imgRes.ok || imgData.error) throw new Error(imgData.error ?? "Image generation failed");
+                        setAnimeStoryImages(imgData.imageUrls ?? []);
+                        toast({ title: "Images ready!", description: "AI backgrounds generated." });
+
+                        setAnimeStoryPhase("assembling-video");
+                        const exportRes = await fetch("/api/templates/anime-story/export", {
+                          method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ scenes, imageUrls: imgData.imageUrls ?? [], format: animeStoryFormat }),
+                        });
+                        const exportData = await exportRes.json() as { url?: string; error?: string };
+                        if (!exportRes.ok || exportData.error) throw new Error(exportData.error ?? "Export failed");
+                        setAnimeStoryVideoUrl(exportData.url ?? null);
+                        setAnimeStoryPhase(null);
+                        toast({ title: "Video ready! 🎌", description: "Your anime story video has been assembled." });
+                      } catch (e) {
+                        setAnimeStoryPhase(null);
+                        toast({ title: "Generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+                      }
+                    } else if (isStickmanStoryMode) {
+                      // ── Stickman Story Video: Script → Images → Export ──────
+                      if (!stickmanStoryPremise.trim()) {
+                        toast({ title: "Missing premise", description: "Please enter a story premise.", variant: "destructive" }); return;
+                      }
+                      setStickmanStoryVideoUrl(null); setStickmanStoryImages([]); setStickmanStoryScenes([]);
+                      try {
+                        setStickmanStoryPhase("generating-script");
+                        const scriptRes = await fetch("/api/templates/stickman-story/generate", {
+                          method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ premise: stickmanStoryPremise, format: stickmanStoryFormat, narrationTone: stickmanStoryNarrationTone }),
+                        });
+                        const scriptData = await scriptRes.json() as { scenes?: import("@/components/templates/StickmanStoryPreview").StickmanStoryScene[]; error?: string };
+                        if (!scriptRes.ok || scriptData.error) throw new Error(scriptData.error ?? "Script generation failed");
+                        const scenes = scriptData.scenes ?? [];
+                        setStickmanStoryScenes(scenes);
+                        toast({ title: "Script ready!", description: `${scenes.length} scenes generated.` });
+
+                        setStickmanStoryPhase("generating-images");
+                        const imgRes = await fetch("/api/templates/stickman-story/generate-images", {
+                          method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ scenes }),
+                        });
+                        const imgData = await imgRes.json() as { imageUrls?: string[]; error?: string };
+                        if (!imgRes.ok || imgData.error) throw new Error(imgData.error ?? "Image generation failed");
+                        setStickmanStoryImages(imgData.imageUrls ?? []);
+                        toast({ title: "Images ready!" });
+
+                        setStickmanStoryPhase("assembling-video");
+                        const exportRes = await fetch("/api/templates/stickman-story/export", {
+                          method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ scenes, imageUrls: imgData.imageUrls ?? [], format: stickmanStoryFormat }),
+                        });
+                        const exportData = await exportRes.json() as { url?: string; error?: string };
+                        if (!exportRes.ok || exportData.error) throw new Error(exportData.error ?? "Export failed");
+                        setStickmanStoryVideoUrl(exportData.url ?? null);
+                        setStickmanStoryPhase(null);
+                        toast({ title: "Video ready! ✏️", description: "Your stickman story video has been assembled." });
+                      } catch (e) {
+                        setStickmanStoryPhase(null);
+                        toast({ title: "Generation failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+                      }
                     } else {
                       await saveSetup();
                       setStep(2);
@@ -4728,6 +4942,8 @@ export default function TemplateStudioClient() {
                     ((mode === "8" || mode === "9" || mode === "15" || mode === "17") && aiStoryLoading) ||
                     (mode === "10" && brandStoryVideoLoading) ||
                     (mode === "16" && animPromptsLoading) ||
+                    (isAnimeStoryMode && animeStoryPhase !== null) ||
+                    (isStickmanStoryMode && stickmanStoryPhase !== null) ||
                     (isStickmanMode && stickmanLoading) ||
                     (isViralMode && viralLoading) ||
                     (isKineticMode && kineticLoading)
@@ -4767,14 +4983,20 @@ export default function TemplateStudioClient() {
                                   : stickmanLongMode
                                     ? "Generate long YouTube storyboard"
                                     : "Generate whiteboard video"
-                                : "Next — Generate content"}
+                                : isAnimeStoryMode
+                                  ? animeStoryPhase !== null ? animeStoryPhase === "generating-script" ? "Generating script…" : animeStoryPhase === "generating-images" ? "Generating images…" : "Assembling video…" : animeStoryVideoUrl ? "Regenerate video" : "Generate anime video"
+                                  : isStickmanStoryMode
+                                    ? stickmanStoryPhase !== null ? stickmanStoryPhase === "generating-script" ? "Generating script…" : stickmanStoryPhase === "generating-images" ? "Generating images…" : "Assembling video…" : stickmanStoryVideoUrl ? "Regenerate video" : "Generate stickman video"
+                                    : "Next — Generate content"}
                   {(isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
                   ((mode === "8" || mode === "9" || mode === "15" || mode === "17") && aiStoryLoading) ||
                   (mode === "10" && brandStoryVideoLoading) ||
                   (mode === "16" && animPromptsLoading) ||
                   (isStickmanMode && stickmanLoading) ||
                   (isViralMode && viralLoading) ||
-                  (isKineticMode && kineticLoading) ? (
+                  (isKineticMode && kineticLoading) ||
+                  (isAnimeStoryMode && animeStoryPhase !== null) ||
+                  (isStickmanStoryMode && stickmanStoryPhase !== null) ? (
                     <Loader2 className="w-4 h-4 ml-2 animate-spin" />
                   ) : (
                     <ArrowRight className="w-4 h-4 ml-2" />
@@ -5107,6 +5329,101 @@ export default function TemplateStudioClient() {
                 </Button>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Anime Story Video Preview ──────────────────────────────────────── */}
+      {step === 1 && isAnimeStoryMode && (animeStoryScenes.length > 0 || animeStoryPhase !== null) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>🎌 Anime Story Video</CardTitle>
+            <CardDescription>
+              {animeStoryPhase === "generating-script" && "Writing your story script…"}
+              {animeStoryPhase === "generating-images" && `Generating AI anime images… (${animeStoryImages.length}/${animeStoryScenes.length} done)`}
+              {animeStoryPhase === "assembling-video" && "Assembling your video with voiceover and subtitles…"}
+              {!animeStoryPhase && animeStoryVideoUrl && "Your video is ready!"}
+              {!animeStoryPhase && !animeStoryVideoUrl && `${animeStoryScenes.length} scenes generated — scroll through the preview below`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Progress stepper */}
+            {animeStoryPhase && (
+              <div className="flex items-center gap-2 text-sm">
+                {["generating-script", "generating-images", "assembling-video"].map((p, i) => (
+                  <div key={p} className="flex items-center gap-2">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${animeStoryPhase === p ? "bg-orange-500 text-white animate-pulse" : ["generating-images", "assembling-video"].indexOf(animeStoryPhase) > i ? "bg-green-500 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500"}`}>{i + 1}</div>
+                    <span className={animeStoryPhase === p ? "text-orange-500 font-medium" : "text-muted-foreground"}>{p === "generating-script" ? "Script" : p === "generating-images" ? "Images" : "Video"}</span>
+                    {i < 2 && <span className="text-muted-foreground">→</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {animeStoryVideoUrl ? (
+              <div className="space-y-3">
+                <video src={animeStoryVideoUrl} controls className="w-full max-w-sm mx-auto rounded-xl" style={{ aspectRatio: "9/16" }} />
+                <div className="flex gap-2 justify-center">
+                  <a href={animeStoryVideoUrl} download="anime-story.mp4" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition">
+                    <Download className="w-4 h-4" /> Download MP4
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <AnimeStoryPreview
+                scenes={animeStoryScenes}
+                imageUrls={animeStoryImages}
+                currentScene={animeStoryCurrentScene}
+                onSceneChange={setAnimeStoryCurrentScene}
+                phase={animeStoryPhase}
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Stickman Story Video Preview ────────────────────────────────────── */}
+      {step === 1 && isStickmanStoryMode && (stickmanStoryScenes.length > 0 || stickmanStoryPhase !== null) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>✏️ Stickman Story Video</CardTitle>
+            <CardDescription>
+              {stickmanStoryPhase === "generating-script" && "Writing your story script…"}
+              {stickmanStoryPhase === "generating-images" && `Generating stickman illustrations… (${stickmanStoryImages.length}/${stickmanStoryScenes.length} done)`}
+              {stickmanStoryPhase === "assembling-video" && "Assembling your video with narration…"}
+              {!stickmanStoryPhase && stickmanStoryVideoUrl && "Your video is ready!"}
+              {!stickmanStoryPhase && !stickmanStoryVideoUrl && `${stickmanStoryScenes.length} scenes generated`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {stickmanStoryPhase && (
+              <div className="flex items-center gap-2 text-sm">
+                {["generating-script", "generating-images", "assembling-video"].map((p, i) => (
+                  <div key={p} className="flex items-center gap-2">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${stickmanStoryPhase === p ? "bg-orange-500 text-white animate-pulse" : ["generating-images", "assembling-video"].indexOf(stickmanStoryPhase) > i ? "bg-green-500 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500"}`}>{i + 1}</div>
+                    <span className={stickmanStoryPhase === p ? "text-orange-500 font-medium" : "text-muted-foreground"}>{p === "generating-script" ? "Script" : p === "generating-images" ? "Images" : "Video"}</span>
+                    {i < 2 && <span className="text-muted-foreground">→</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {stickmanStoryVideoUrl ? (
+              <div className="space-y-3">
+                <video src={stickmanStoryVideoUrl} controls className="w-full max-w-sm mx-auto rounded-xl" style={{ aspectRatio: "9/16" }} />
+                <div className="flex gap-2 justify-center">
+                  <a href={stickmanStoryVideoUrl} download="stickman-story.mp4" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition">
+                    <Download className="w-4 h-4" /> Download MP4
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <StickmanStoryPreview
+                scenes={stickmanStoryScenes}
+                imageUrls={stickmanStoryImages}
+                currentScene={stickmanStoryCurrentScene}
+                onSceneChange={setStickmanStoryCurrentScene}
+                phase={stickmanStoryPhase}
+              />
+            )}
           </CardContent>
         </Card>
       )}

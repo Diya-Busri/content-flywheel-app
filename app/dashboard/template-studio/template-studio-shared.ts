@@ -1,4 +1,4 @@
-export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15" | "16" | "17" | "18";
+export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15" | "16" | "17" | "18" | "19" | "20";
 
 /** Story-style Template Studio modes that share the scene pipeline */
 export type TemplateStudioStoryTemplateId =
@@ -68,6 +68,8 @@ export const CREATION_MODE_OPTION_GROUPS: {
       { value: "13", label: "⚡ Kinetic Typography Video" },
       { value: "15", label: "Story Video" },
       { value: "16", label: "🎬 AI Animation Video Prompts" },
+      { value: "19", label: "🎌 Anime Story Video" },
+      { value: "20", label: "✏️ Stickman Story Video" },
     ],
   },
 ];
