@@ -2,6 +2,7 @@
 
 import "./timeline-scroll.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useGaplessAudio, type GaplessClip } from "./use-gapless-audio";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getVideoPrefill, clearVideoPrefill, type VideoPrefill } from "@/lib/video-prefill";
 
@@ -1396,30 +1397,43 @@ export default function VideoTimelinePage() {
     () => getActiveBlockAndScene(sceneBlocks, scenes, currentTime),
     [sceneBlocks, scenes, currentTime]
   );
-  /**
-   * Per-clip audio: the scene whose audio is currently locked into the <audio> element.
-   * This deliberately does NOT change when currentTime crosses scene boundaries — only when
-   * the user seeks or onPlaybackEnded explicitly advances to the next clip.
-   * Falls back to activeBlockAndScene when perClipSceneId hasn't been set yet (before first play).
-   */
-  const lockedBlockAndScene = useMemo(() => {
-    if (!hasPerClipAudio) return activeBlockAndScene;
-    if (perClipSceneId) {
-      const block = sceneBlocks.find((b) => b.id === perClipSceneId) ?? null;
-      const scene = block ? scenes.find((s) => s.id === block.id) ?? null : null;
-      if (block && scene) return { block, scene };
-    }
-    return activeBlockAndScene;
-  }, [hasPerClipAudio, perClipSceneId, sceneBlocks, scenes, activeBlockAndScene]);
 
-  const playbackSrc =
-    hasPerClipAudio && lockedBlockAndScene?.scene?.audioUrl
-      ? lockedBlockAndScene.scene.audioUrl!
-      : !hasPerClipAudio && voiceoverUrl
-      ? voiceoverUrl
-      : null;
-  const playbackStartOffset =
-    hasPerClipAudio && lockedBlockAndScene?.scene?.audioUrl ? lockedBlockAndScene.block.startTime : 0;
+  /** Clips fed to the gapless Web Audio engine (per-clip audio mode only). */
+  const perClipClips = useMemo<GaplessClip[]>(() => {
+    if (!hasPerClipAudio) return [];
+    return sceneBlocks
+      .map((b) => {
+        const scene = scenes.find((s) => s.id === b.id);
+        if (!scene?.audioUrl?.trim()) return null;
+        return { id: b.id, audioUrl: scene.audioUrl!, startTime: b.startTime, duration: Math.max(0.01, b.endTime - b.startTime) } as GaplessClip;
+      })
+      .filter((c): c is GaplessClip => c !== null);
+  }, [hasPerClipAudio, sceneBlocks, scenes]);
+
+  /** Gapless Web Audio engine — used for per-clip audio (Finance Doc, Template Studio, etc.)
+   *  Gives zero-gap, sample-accurate playback and 60 fps time updates. */
+  const gapless = useGaplessAudio({
+    clips: perClipClips,
+    enabled: hasPerClipAudio,
+    onTimeUpdate: useCallback((t: number) => {
+      if (isDraggingPlayhead) return;
+      setCurrentTime(t);
+      setActiveCaption(getActiveCaption(t, captions));
+    }, [isDraggingPlayhead, captions]),
+    onPlaybackEnded: useCallback(() => {
+      setIsPlaying(false);
+      const endT = perClipClips.reduce((m, c) => Math.max(m, c.startTime + c.duration), 0);
+      if (endT > 0) {
+        setCurrentTime(endT);
+        setActiveCaption(getActiveCaption(endT, captions));
+      }
+    }, [perClipClips, captions]),
+    onIsPlayingChange: useCallback((v: boolean) => setIsPlaying(v), []),
+  });
+
+  // For the legacy <audio> element (single voiceover only — not per-clip)
+  const playbackSrc = !hasPerClipAudio && voiceoverUrl ? voiceoverUrl : null;
+  const playbackStartOffset = 0;
   const playbackStartOffsetRef = useRef(0);
 
   useEffect(() => {
@@ -2235,6 +2249,7 @@ export default function VideoTimelinePage() {
       setPerClipSceneId(null);
       setCurrentTime(0);
       setIsPlaying(false);
+      void gapless.pause(); // stop gapless engine if it was playing
     } catch (err) {
       console.error("Load project failed:", err);
       alert(err instanceof Error ? err.message : "Failed to load project");
@@ -2309,33 +2324,31 @@ export default function VideoTimelinePage() {
     if (el && Number.isFinite(el.duration)) setVoiceoverDuration(el.duration);
   }, [hasPerClipAudio]);
 
-  const onPlay = useCallback(() => setIsPlaying(true), []);
+  const onPlay = useCallback(() => { if (!hasPerClipAudio) setIsPlaying(true); }, [hasPerClipAudio]);
   const onPause = useCallback(() => {
+    if (hasPerClipAudio) return; // gapless engine manages isPlaying for per-clip
     // Don't mark as "paused" while the tail tick is running — the audio element is intentionally
     // paused at that point but the timeline/captions are still advancing via requestAnimationFrame.
     if (playbackTailRef.current) return;
     setIsPlaying(false);
-  }, []);
+  }, [hasPerClipAudio]);
 
   const play = useCallback(() => {
-    // Lock the per-clip scene on first play (or after a seek already set it).
-    // This prevents playbackSrc from changing mid-clip if currentTime crosses a scene boundary.
-    if (hasPerClipAudio && !perClipSceneId && activeBlockAndScene?.block.id) {
-      setPerClipSceneId(activeBlockAndScene.block.id);
+    if (hasPerClipAudio) {
+      // Route through gapless Web Audio engine for zero-gap clip chaining
+      void gapless.play(currentTime);
+      musicRef.current?.play();
+      return;
     }
     const voice = audioRef.current;
     const music = musicRef.current;
-    // For per-clip audio, voice always starts at 0 (each clip is its own file), so don't use
-    // voice.currentTime to sync music — it would incorrectly reset music to 0 on every clip start.
-    // Music position is managed by seekTo/onPlaybackEnded instead.
-    if (voice && music && !hasPerClipAudio) music.currentTime = voice.currentTime;
+    if (voice && music) music.currentTime = voice.currentTime;
     voice?.play();
     music?.play();
     sceneVideoRef.current?.play();
-  }, [hasPerClipAudio, perClipSceneId, activeBlockAndScene]);
+  }, [hasPerClipAudio, gapless, currentTime]);
 
-  /** Fired when a new audio src becomes ready to play. Triggers a pending play if one was queued —
-   *  this avoids the race where play() is called before the new src has finished loading. */
+  /** Fired when a new audio src becomes ready to play (single-voiceover mode only). */
   const onCanPlay = useCallback(() => {
     if (pendingPlayRef.current) {
       pendingPlayRef.current = false;
@@ -2344,12 +2357,19 @@ export default function VideoTimelinePage() {
   }, [play]);
 
   const pause = useCallback(() => {
-    pendingPlayRef.current = false; // cancel any queued play-on-canplay
+    if (hasPerClipAudio) {
+      // Gapless engine handles its own state; also pause music
+      void gapless.pause();
+      musicRef.current?.pause();
+      sceneVideoRef.current?.pause();
+      return;
+    }
+    pendingPlayRef.current = false;
     audioRef.current?.pause();
     musicRef.current?.pause();
     sceneVideoRef.current?.pause();
     setIsPlaying(false);
-  }, []);
+  }, [hasPerClipAudio, gapless]);
 
   /** Keyboard shortcuts: Space = play/pause, Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z = redo */
   useEffect(() => {
@@ -2375,47 +2395,14 @@ export default function VideoTimelinePage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isPlaying, play, pause, undo, redo, voiceoverUrl, hasPerClipAudio]);
 
+  // onPlaybackEnded is only used by the <audio> element (single voiceover, no per-clip).
+  // Per-clip audio is handled entirely by the gapless engine + its onPlaybackEnded callback.
   const onPlaybackEnded = useCallback(() => {
+    if (hasPerClipAudio) return; // gapless engine handles this
+
     const el = audioRef.current;
-    let voiceEnd = Number(el?.duration) ? el.duration : (voiceoverDuration > 0 ? voiceoverDuration : 0);
-    let timelineEnd = Math.max(duration, voiceEnd);
-
-    if (hasPerClipAudio) {
-      const blocksWithAudio = sceneBlocks
-        .map((b) => ({ block: b, scene: scenes.find((s) => s.id === b.id) }))
-        .filter((x): x is { block: SceneBlock; scene: Scene } => !!x.scene?.audioUrl?.trim())
-        .sort((a, b) => a.block.startTime - b.block.startTime);
-
-      // Use the locked perClipSceneId as the primary way to identify the just-ended clip.
-      // This is more reliable than matching el.src (URL formats may differ) or activeBlockAndScene
-      // (which may have already advanced if currentTime crossed a scene boundary during the tail of the clip).
-      const endedSrc = el?.src ?? "";
-      const currentBlock =
-        (perClipSceneId ? blocksWithAudio.find((x) => x.block.id === perClipSceneId) : null) ??
-        blocksWithAudio.find((x) => x.scene.audioUrl?.trim() === endedSrc) ??
-        (activeBlockAndScene?.scene?.audioUrl
-          ? { block: activeBlockAndScene.block, scene: activeBlockAndScene.scene }
-          : null);
-
-      if (currentBlock) {
-        const currentStart = currentBlock.block.startTime;
-        const next = blocksWithAudio.find((x) => x.block.startTime > currentStart);
-        if (next) {
-          setCurrentTime(next.block.startTime);
-          setPerClipSceneId(next.block.id); // advance the locked clip to the next one
-          setActiveCaption(getActiveCaption(next.block.startTime, captions));
-          const music = musicRef.current;
-          if (music) music.currentTime = next.block.startTime;
-          // Queue play via onCanPlay so we wait until the new src is loaded and ready —
-          // calling play() immediately can race with the browser loading the new src.
-          pendingPlayRef.current = true;
-          return;
-        }
-        // No next clip with audio: continue playhead through rest of timeline (tail from end of current block)
-        voiceEnd = currentBlock.block.endTime;
-        timelineEnd = Math.max(duration, voiceEnd);
-      }
-    }
+    const voiceEnd = Number(el?.duration) ? el.duration : (voiceoverDuration > 0 ? voiceoverDuration : 0);
+    const timelineEnd = Math.max(duration, voiceEnd);
 
     // Pause voice and music; scene video may keep playing if we run the tail
     audioRef.current?.pause();
@@ -2426,9 +2413,8 @@ export default function VideoTimelinePage() {
     if (hasMoreTimeline) {
       const TAIL_INTERVAL_MS = 100;
       const r = { rafId: 0, timelineEnd, lastTs: performance.now(), lastUpdateTs: performance.now(), tailTime: voiceEnd };
-      // Set ref BEFORE requestAnimationFrame so onPause (fired async by audio.pause()) sees it and skips.
       playbackTailRef.current = r;
-      setIsPlaying(true); // keep UI in "playing" state — audio is paused but timeline is still advancing
+      setIsPlaying(true);
       const tick = () => {
         const ref = playbackTailRef.current;
         if (!ref || ref.rafId === 0) return;
@@ -2463,27 +2449,31 @@ export default function VideoTimelinePage() {
       setActiveCaption(getActiveCaption(endTime, captions));
     }
     setIsPlaying(false);
-  }, [pause, voiceoverDuration, duration, captions, hasPerClipAudio, perClipSceneId, activeBlockAndScene, sceneBlocks, scenes]);
+  }, [pause, voiceoverDuration, duration, captions, hasPerClipAudio]);
 
   const seekTo = useCallback(
     (t: number) => {
       const el = audioRef.current;
       const maxT = hasPerClipAudio ? duration : el?.duration ? el.duration : voiceoverDuration > 0 ? voiceoverDuration : duration;
       const clamped = Math.max(0, Math.min(t, maxT));
-      const active = getActiveBlockAndScene(sceneBlocks, scenes, clamped);
-      // Update the locked clip scene so playbackSrc reflects the new position after seeking.
-      if (hasPerClipAudio) setPerClipSceneId(active?.block.id ?? null);
-      if (el) {
-        const offset = hasPerClipAudio && active?.scene?.audioUrl ? active.block.startTime : 0;
-        el.currentTime = Math.max(0, clamped - offset);
-      }
+
       setCurrentTime(clamped);
       const caption = getActiveCaption(clamped, captions);
       setActiveCaption(caption);
+
+      if (hasPerClipAudio) {
+        // Gapless engine handles audio position; sync music separately
+        gapless.seek(clamped);
+        const music = musicRef.current;
+        if (music) music.currentTime = clamped;
+        return;
+      }
+
+      if (el) el.currentTime = Math.max(0, clamped);
       const music = musicRef.current;
       if (music) music.currentTime = clamped;
     },
-    [duration, voiceoverDuration, captions, hasPerClipAudio, sceneBlocks, scenes]
+    [duration, voiceoverDuration, captions, hasPerClipAudio, gapless]
   );
 
   // Timeline width: base width from duration, then zoom (0.25–3)
@@ -4575,7 +4565,8 @@ export default function VideoTimelinePage() {
                 </div>
               </>
             )}
-            {(voiceoverUrl || hasPerClipAudio) && (
+            {/* Single voiceover <audio> element — only used when NOT in per-clip audio mode */}
+            {!hasPerClipAudio && voiceoverUrl && (
               <audio
                 ref={audioRef}
                 src={playbackSrc ?? undefined}
@@ -5593,7 +5584,12 @@ export default function VideoTimelinePage() {
                 disabled={(!voiceoverUrl && !hasPerClipAudio) || isExporting}
                 title={isPlaying ? "Pause (Space)" : "Play (Space)"}
               >
-                {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                {gapless.isBuffering
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : isPlaying
+                    ? <Pause className="h-3.5 w-3.5" />
+                    : <Play className="h-3.5 w-3.5" />
+                }
               </button>
               <button
                 type="button"
