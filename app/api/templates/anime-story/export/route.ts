@@ -63,11 +63,15 @@ export async function POST(request: NextRequest) {
       imageUrls?: string[];
       voiceId?: string;
       format?: "short" | "long" | "epic";
+      channelName?: string;
+      videoTitle?: string;
     };
 
     const scenes = Array.isArray(body.scenes) ? body.scenes : [];
     const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
     const isLong = body.format === "long" || body.format === "epic";
+    const channelName = typeof body.channelName === "string" ? body.channelName.trim() : "";
+    const videoTitle = typeof body.videoTitle === "string" ? body.videoTitle.trim().slice(0, 55) : "Story";
 
     if (scenes.length === 0) return NextResponse.json({ error: "No scenes provided" }, { status: 400 });
     if (imageUrls.length === 0) return NextResponse.json({ error: "No image URLs provided" }, { status: 400 });
@@ -121,6 +125,18 @@ export async function POST(request: NextRequest) {
         const duration = await probeAudioDurationSeconds(audioPath);
         // Add a small buffer so the image holds slightly longer than the audio
         sceneDurations.push(Math.max(2, duration + 0.3));
+      }
+
+      // Step 1.5: If long/epic, prepend intro silence and append outro silence
+      const INTRO_DURATION = 5;
+      const OUTRO_DURATION = 8;
+      if (isLong) {
+        const introSilencePath = join(workDir, "intro_silence.mp3");
+        await runFfmpeg(["-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", String(INTRO_DURATION), "-c:a", "libmp3lame", "-b:a", "192k", introSilencePath]);
+        const outroSilencePath = join(workDir, "outro_silence.mp3");
+        await runFfmpeg(["-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", String(OUTRO_DURATION), "-c:a", "libmp3lame", "-b:a", "192k", outroSilencePath]);
+        audioTempPaths.unshift(introSilencePath);
+        audioTempPaths.push(outroSilencePath);
       }
 
       // Step 2: Concatenate all scene audio into a single voiceover
@@ -199,6 +215,34 @@ export async function POST(request: NextRequest) {
           disableKenBurns: false,
           kenBurnsZoomMax: 1.04,
         });
+      }
+
+      // Step 3.5: If long/epic, prepend intro card and append outro card
+      if (isLong) {
+        const fontFile = resolveDrawtextFontFile();
+        const fa = fontFile ? `fontfile='${fontFile}':` : "";
+        const dims = "1920x1080";
+        const escapedTitle = escapeFfmpegText(videoTitle);
+        const escapedChannel = channelName ? escapeFfmpegText(channelName) : "";
+
+        // Intro card — title + channel name on dark background
+        const introCardPath = join(workDir, "intro_card.jpg");
+        let introVf = `scale=1920:1080,drawtext=${fa}text='${escapedTitle}':fontsize=80:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2${channelName ? `-80` : ""}`;
+        if (escapedChannel) {
+          introVf += `,drawtext=${fa}text='${escapedChannel}':fontsize=44:fontcolor=#aaaaaa:x=(w-text_w)/2:y=(h-text_h)/2+80`;
+        }
+        await runFfmpeg(["-y", "-f", "lavfi", "-i", `color=c=0x111111:s=${dims}:d=1`, "-vf", introVf, "-frames:v", "1", introCardPath]);
+
+        // Outro card — thanks + subscribe + channel
+        const outroCardPath = join(workDir, "outro_card.jpg");
+        let outroVf = `scale=1920:1080,drawtext=${fa}text='Thanks for watching':fontsize=72:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2-80,drawtext=${fa}text='Like & Subscribe for more':fontsize=48:fontcolor=#f97316:x=(w-text_w)/2:y=(h-text_h)/2+20`;
+        if (escapedChannel) {
+          outroVf += `,drawtext=${fa}text='${escapedChannel}':fontsize=36:fontcolor=#aaaaaa:x=(w-text_w)/2:y=(h-text_h)/2+100`;
+        }
+        await runFfmpeg(["-y", "-f", "lavfi", "-i", `color=c=0x111111:s=${dims}:d=1`, "-vf", outroVf, "-frames:v", "1", outroCardPath]);
+
+        compileScenes.unshift({ duration: INTRO_DURATION, image_url: null, video_url: null, localImagePath: introCardPath, disableKenBurns: true });
+        compileScenes.push({ duration: OUTRO_DURATION, image_url: null, video_url: null, localImagePath: outroCardPath, disableKenBurns: true });
       }
 
       // Step 4: Compile to final video

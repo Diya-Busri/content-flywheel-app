@@ -474,6 +474,7 @@ export default function TemplateStudioClient() {
   const [animeStoryTone, setAnimeStoryTone] = useState("emotional");
   const [animeStoryCharacter, setAnimeStoryCharacter] = useState("");
   const [animeStoryFormat, setAnimeStoryFormat] = useState<"short" | "long" | "epic">("short");
+  const [animeStoryChannelName, setAnimeStoryChannelName] = useState("");
   const [animeStoryScenes, setAnimeStoryScenes] = useState<import("@/components/templates/AnimeStoryPreview").AnimeStoryScene[]>([]);
   const [animeStoryImages, setAnimeStoryImages] = useState<string[]>([]);
   const [animeStoryPhase, setAnimeStoryPhase] = useState<string | null>(null);
@@ -483,6 +484,7 @@ export default function TemplateStudioClient() {
   // ── Stickman Story Video state (mode 20) ─────────────────────────────────────
   const [stickmanStoryPremise, setStickmanStoryPremise] = useState("");
   const [stickmanStoryFormat, setStickmanStoryFormat] = useState<"short" | "long" | "epic">("short");
+  const [stickmanStoryChannelName, setStickmanStoryChannelName] = useState("");
   const [stickmanStoryNarrationTone, setStickmanStoryNarrationTone] = useState("serious");
   const [stickmanStoryScenes, setStickmanStoryScenes] = useState<import("@/components/templates/StickmanStoryPreview").StickmanStoryScene[]>([]);
   const [stickmanStoryImages, setStickmanStoryImages] = useState<string[]>([]);
@@ -4490,6 +4492,17 @@ export default function TemplateStudioClient() {
                     ))}
                   </div>
                 </div>
+                {(animeStoryFormat === "long" || animeStoryFormat === "epic") && (
+                  <div className="space-y-2">
+                    <Label>YouTube channel name <span className="text-gray-400 font-normal">(optional)</span></Label>
+                    <Input
+                      placeholder="e.g. @voidhours"
+                      value={animeStoryChannelName}
+                      onChange={(e) => setAnimeStoryChannelName(e.target.value)}
+                    />
+                    <p className="text-xs text-gray-500">Shown on the intro and outro title cards</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -4536,6 +4549,17 @@ export default function TemplateStudioClient() {
                     ))}
                   </div>
                 </div>
+                {(stickmanStoryFormat === "long" || stickmanStoryFormat === "epic") && (
+                  <div className="space-y-2">
+                    <Label>YouTube channel name <span className="text-gray-400 font-normal">(optional)</span></Label>
+                    <Input
+                      placeholder="e.g. @voidhours"
+                      value={stickmanStoryChannelName}
+                      onChange={(e) => setStickmanStoryChannelName(e.target.value)}
+                    />
+                    <p className="text-xs text-gray-500">Shown on the intro and outro title cards</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -4878,7 +4902,7 @@ export default function TemplateStudioClient() {
                         setAnimeStoryPhase("assembling-video");
                         const exportRes = await fetch("/api/templates/anime-story/export", {
                           method: "POST", headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ scenes, imageUrls: imgData.imageUrls ?? [], format: animeStoryFormat }),
+                          body: JSON.stringify({ scenes, imageUrls: imgData.imageUrls ?? [], format: animeStoryFormat, channelName: animeStoryChannelName, videoTitle: animeStoryPremise.slice(0, 55) }),
                         });
                         const exportData = await exportRes.json() as { url?: string; error?: string };
                         if (!exportRes.ok || exportData.error) throw new Error(exportData.error ?? "Export failed");
@@ -4920,7 +4944,7 @@ export default function TemplateStudioClient() {
                         setStickmanStoryPhase("assembling-video");
                         const exportRes = await fetch("/api/templates/stickman-story/export", {
                           method: "POST", headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ scenes, imageUrls: imgData.imageUrls ?? [], format: stickmanStoryFormat }),
+                          body: JSON.stringify({ scenes, imageUrls: imgData.imageUrls ?? [], format: stickmanStoryFormat, channelName: stickmanStoryChannelName, videoTitle: stickmanStoryPremise.slice(0, 55) }),
                         });
                         const exportData = await exportRes.json() as { url?: string; error?: string };
                         if (!exportRes.ok || exportData.error) throw new Error(exportData.error ?? "Export failed");
