@@ -1,23 +1,52 @@
 /**
- * Shortens a title to a punchy 3-5 word thumbnail hook.
- * e.g. "What WEALTH Looks Like at 3AM: The Untold Truth Revealed"
- *   → "The WEALTH Truth"
+ * Shortens a title to a punchy 3-4 word thumbnail hook.
+ * Keeps natural phrasing by anchoring on ALL-CAPS words and numbers,
+ * then bridging them with connecting words.
+ *
+ * Examples:
+ *   "What WEALTH Looks Like at 3AM: The Untold Truth"  → "WEALTH AT 3AM"
+ *   "Why Rich People Wake Up at 5AM"                   → "UP AT 5AM"
+ *   "How I Made $1 Million in 30 Days"                 → "$1 IN 30 DAYS"
+ *   "The Secret Habits of Billionaires"                → "SECRET HABITS OF BILLIONAIRES"
  */
-function makeThumbnailHook(title: string): string {
-  // Strip everything after a colon or dash (subtitle)
+export function makeThumbnailHook(title: string): string {
+  // Strip subtitle after colon or dash
   const main = title.split(/[:\-–—]/)[0].trim();
-  const words = main.split(" ").filter(Boolean);
+  const words = main.split(/\s+/).filter(Boolean);
 
-  // If already 4 words or fewer, use as-is
   if (words.length <= 4) return main.toUpperCase();
 
-  // Strategy: filter out stop-words and take up to 4 "power" keywords
-  const stop = new Set(["the","a","an","to","of","in","on","at","for","and","or","but","is","are","was","were","be","been","has","have","had","do","does","did","will","would","could","should","may","might","like","with","from","that","this","it","its","by","as","up","out","if","so","not","no","we","you","your","my","our","their","them","they","he","she","what","how","why","when","where","who","which","than","then","also","about"]);
-  const power = words.filter(w => !stop.has(w.toLowerCase()));
+  // Find "anchor" words: intentionally ALL-CAPS or contain digits/$/%
+  const anchorIdx: number[] = [];
+  words.forEach((w, i) => {
+    const isAllCaps = w.length > 1 && w === w.toUpperCase() && /[A-Z]/.test(w);
+    const isSpecial = /[\d$%]/.test(w);
+    if (isAllCaps || isSpecial) anchorIdx.push(i);
+  });
 
-  // Take up to 4 power words
-  const chosen = power.slice(0, 4);
-  return chosen.join(" ").toUpperCase();
+  if (anchorIdx.length >= 2) {
+    const first = anchorIdx[0];
+    const last = anchorIdx[anchorIdx.length - 1];
+    // first anchor + bridge word (word immediately before last anchor) + last anchor
+    const chosen: string[] = [words[first]];
+    if (last - first >= 2) chosen.push(words[last - 1]); // e.g. "at"
+    chosen.push(words[last]);
+    // optionally append the word right after the last anchor (e.g. "Days")
+    if (chosen.length < 4 && last + 1 < words.length) chosen.push(words[last + 1]);
+    return chosen.join(" ").toUpperCase();
+  }
+
+  if (anchorIdx.length === 1) {
+    // Single anchor: take up to 2 words before it + the anchor + 1 after
+    const idx = anchorIdx[0];
+    const start = Math.max(0, idx - 2);
+    return words.slice(start, Math.min(words.length, start + 4)).join(" ").toUpperCase();
+  }
+
+  // No anchors — take first 4 words, skipping a leading article
+  const skipFirst = new Set(["the", "a", "an"]);
+  const start = skipFirst.has(words[0].toLowerCase()) ? 1 : 0;
+  return words.slice(start, start + 4).join(" ").toUpperCase();
 }
 
 /**

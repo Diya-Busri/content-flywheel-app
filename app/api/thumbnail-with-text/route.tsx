@@ -11,24 +11,9 @@ import { ImageResponse } from "next/og";
 import { auth } from "@clerk/nextjs/server";
 import { put } from "@vercel/blob";
 import { randomBytes } from "crypto";
+import { makeThumbnailHook } from "@/lib/thumbnail-text-overlay";
 
 export const dynamic = "force-dynamic";
-
-function makeThumbnailHook(title: string): string {
-  const main = title.split(/[:\-–—]/)[0].trim();
-  const words = main.split(" ").filter(Boolean);
-  if (words.length <= 4) return main.toUpperCase();
-  const stop = new Set([
-    "the","a","an","to","of","in","on","at","for","and","or","but","is","are",
-    "was","were","be","been","has","have","had","do","does","did","will","would",
-    "could","should","may","might","like","with","from","that","this","it","its",
-    "by","as","up","out","if","so","not","no","we","you","your","my","our",
-    "their","them","they","he","she","what","how","why","when","where","who",
-    "which","than","then","also","about",
-  ]);
-  const power = words.filter((w) => !stop.has(w.toLowerCase()));
-  return power.slice(0, 4).join(" ").toUpperCase();
-}
 
 export async function POST(request: NextRequest) {
   try {
