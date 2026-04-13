@@ -598,7 +598,7 @@ export default function ConnectedAccountsClient() {
             <DialogTitle className="text-gray-900 dark:text-white">Which channel are you adding?</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1 text-sm text-gray-700 dark:text-gray-300">
-            <p>Enter the channel handle, then you'll be taken to Google.</p>
+            <p>Enter the channel handle, then you&apos;ll be taken to Google.</p>
             <div className="space-y-1">
               <Label htmlFor="yt-pre-handle" className="text-sm text-gray-900 dark:text-white">Channel handle</Label>
               <div className="flex items-center gap-2 rounded-md border border-input px-3">
