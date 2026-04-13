@@ -558,6 +558,8 @@ export default function TemplateStudioClient() {
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const publishSlideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const aiStoryScenesSectionRef = useRef<HTMLDivElement | null>(null);
+  /** Track the previous mode so we only reset scenes on actual user-driven mode changes, not initial mount. */
+  const prevModeRef = useRef<string | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -625,29 +627,33 @@ export default function TemplateStudioClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFinanceDocMode]);
 
-  // Auto-set default niche, clear topic, and reset scenes when switching documentary modes
+  // Auto-set default niche, clear topic, and reset scenes when the user actively switches documentary modes
   useEffect(() => {
+    const prev = prevModeRef.current;
+    prevModeRef.current = mode;
+    // Skip on initial mount (prev is null) or when switching to a non-doc mode
+    if (prev === null || prev === mode) return;
     if (mode === "21") {
       setFinanceDocNiche("History");
       setFinanceDocTopic("");
       setAiStoryScenes([]);
       setSceneImageUrls({});
       setVoiceoverUrls({});
-      setStep(0);
+      setStep(1);
     } else if (mode === "22") {
       setFinanceDocNiche("Technology & AI");
       setFinanceDocTopic("");
       setAiStoryScenes([]);
       setSceneImageUrls({});
       setVoiceoverUrls({});
-      setStep(0);
+      setStep(1);
     } else if (mode === "17") {
       setFinanceDocNiche("Personal Finance");
       setFinanceDocTopic("");
       setAiStoryScenes([]);
       setSceneImageUrls({});
       setVoiceoverUrls({});
-      setStep(0);
+      setStep(1);
     }
   }, [mode]);
 
