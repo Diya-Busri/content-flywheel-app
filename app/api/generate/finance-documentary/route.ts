@@ -117,6 +117,29 @@ export async function POST(request: NextRequest) {
       "Bold Modern": "bold vibrant colors, dynamic composition, energetic modern design, striking contrasts, Gen Z aesthetic, digital-native feel",
     }[style] ?? "cinematic dark luxury aesthetic, premium quality, dramatic lighting";
 
+    // Niche-aware defaults so Tech/History docs don't bleed into finance territory
+    const defaultChannelName =
+      niche === "History" ? "a history documentary channel"
+      : niche === "Technology & AI" ? "a tech documentary channel"
+      : "a premium documentary channel";
+
+    // Image prompt guidelines tailored to each niche
+    const nicheImageGuidelines =
+      niche === "History"
+        ? `- Cinematic historical visuals: ${visualStyle}
+- Include: camera angle (aerial drone over ancient ruins, extreme close-up of artefact, wide establishing shot of period location), dramatic lighting, authentic period-accurate details
+- Use: ancient ruins, historical artefacts, dramatic battle reconstructions, aged maps and manuscripts, candlelit interiors, sweeping period landscapes, dramatic sky
+- NEVER use: modern technology, contemporary cities, digital screens`
+        : niche === "Technology & AI"
+        ? `- Cinematic technology visuals: ${visualStyle}
+- Include: camera angle (extreme close-up of circuit board, aerial drone of futuristic city, wide shot of server room), dramatic lighting with cool blues and electric highlights
+- Use: glowing circuit boards, holographic interfaces, sleek devices, abstract data streams, futuristic cityscapes, robotic hands, AI visualisations, neon-lit labs
+- NEVER use: old technology, analogue imagery, poverty, or finance/money metaphors`
+        : `- Cinematic premium visuals: ${visualStyle}
+- Include: camera angle (aerial drone, extreme close-up, wide establishing, etc.), explicit lighting description, and key visual elements
+- Use: city skylines at night, gold/money close-ups, luxury items as wealth metaphors, abstract data visualisations, dramatic dark environments
+- NEVER use: empty wallets, poverty imagery, distress, homelessness — show contrast through luxury vs simplicity instead`;
+
     const affiliateName = affiliatePlatform || "the platform in the description";
     const affiliateOfferText = affiliateOffer || "a bonus when you sign up using the link below";
 
@@ -152,7 +175,7 @@ export async function POST(request: NextRequest) {
     const outlineUserPrompt = `Create a ${sceneCount}-scene outline for a ${tone} ${niche} documentary.
 
 TOPIC: "${topic}"
-CHANNEL: "${channelName || "a premium documentary channel"}"
+CHANNEL: "${channelName || defaultChannelName}"
 CURRENT YEAR: ${currentYear} — all content must feel current and specific. No statistics before 2023.
 
 STRUCTURE (follow exactly):
@@ -230,12 +253,12 @@ Return ONLY valid JSON:
     const outlineText = outline.map((s) => `Scene ${s.sceneNumber}: ${s.title} — ${s.brief}`).join("\n");
     const batches = chunk(outline, BATCH_SIZE);
 
-    const expandSystemPrompt = `You are expanding scene outlines into full ${tone} documentary narration and cinematic image prompts. Be substantive and engaging.`;
+    const expandSystemPrompt = `You are expanding scene outlines into full ${tone} ${niche} documentary narration and cinematic image prompts. Stay strictly on the topic and niche provided — never drift into unrelated subject matter. Be substantive and engaging.`;
 
     async function expandBatch(batchScenes: OutlineScene[]): Promise<FinanceDocScene[]> {
       const scenesText = batchScenes.map((s) => `Scene ${s.sceneNumber}: ${s.title} — ${s.brief}`).join("\n");
 
-      const expandPrompt = `TOPIC: "${topic}" | CHANNEL: "${channelName || "Finance Channel"}" | YEAR: ${currentYear}
+      const expandPrompt = `TOPIC: "${topic}" | NICHE: "${niche}" | CHANNEL: "${channelName || defaultChannelName}" | YEAR: ${currentYear}
 VISUAL STYLE: ${visualStyle}
 FULL OUTLINE CONTEXT (for continuity):
 ${outlineText}
@@ -244,6 +267,7 @@ NOW EXPAND ONLY THESE ${batchScenes.length} SCENES into full narration + image p
 ${scenesText}
 
 DIALOGUE RULES:
+- Stay 100% on the topic and niche: "${niche}" — every sentence must be relevant to "${topic}"
 - 3-4 punchy sentences per scene (~10-12 seconds when read aloud at a steady pace)
 - Natural spoken delivery — short sentences, rhythm that builds. No academic tone.
 - Every sentence must either reveal something, build tension, or move the story forward. No padding.
@@ -251,10 +275,7 @@ DIALOGUE RULES:
 - BANNED phrases: "in conclusion", "let's dive in", "it's important to note", "as we can see", "today we're going to", "welcome back", "don't forget to subscribe" mid-script, "that being said", "without further ado"
 
 IMAGE PROMPT RULES:
-- Cinematic, premium visuals: ${visualStyle}
-- Include: camera angle (aerial drone, extreme close-up, wide establishing, etc.), explicit lighting description, and key visual elements
-- Use: city skylines at night, gold/money close-ups, luxury items as wealth metaphors, abstract data visualisations, dramatic dark environments
-- NEVER use: empty wallets, poverty imagery, distress, homelessness — show contrast through luxury vs simplicity instead
+${nicheImageGuidelines}
 - No text, letters, watermarks in the image
 
 Return ONLY valid JSON:
