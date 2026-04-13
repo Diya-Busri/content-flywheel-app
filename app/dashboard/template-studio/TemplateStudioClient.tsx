@@ -370,6 +370,8 @@ export default function TemplateStudioClient() {
   const [financeDocCtaGoal, setFinanceDocCtaGoal] = useState("subscribe");
   const [financeDocChannelName, setFinanceDocChannelName] = useState("");
   const [financeDocProductName, setFinanceDocProductName] = useState("");
+  /** YouTube channels fetched from /api/connected-accounts for the channel name dropdown. */
+  const [youtubeChannels, setYoutubeChannels] = useState<{ id: string; name: string }[]>([]);
   const [financeDocAffiliatePlatform, setFinanceDocAffiliatePlatform] = useState("trading212");
   const [financeDocAffiliateCustomName, setFinanceDocAffiliateCustomName] = useState("");
   const [financeDocAffiliateOffer, setFinanceDocAffiliateOffer] = useState("");
@@ -600,6 +602,28 @@ export default function TemplateStudioClient() {
     setEpisodeNumber(p.episodeNumber);
     setSeriesPrefsLoaded(true);
   }, []);
+
+  // Fetch connected YouTube channels for the channel name dropdown
+  useEffect(() => {
+    if (!isFinanceDocMode) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/connected-accounts");
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data.connected) ? data.connected : [];
+        const yt = (list as { platform?: string; platformUsername?: string | null; id?: string }[])
+          .filter((r) => r.platform === "youtube" && r.platformUsername)
+          .map((r) => ({ id: r.id ?? r.platformUsername ?? "", name: r.platformUsername! }));
+        setYoutubeChannels(yt);
+        // Auto-select the first channel if nothing is set yet
+        if (yt.length > 0 && !financeDocChannelName) {
+          setFinanceDocChannelName(yt[0]!.name);
+        }
+      } catch { /* ignore */ }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFinanceDocMode]);
 
   // Auto-set default niche, clear topic, and reset scenes when switching documentary modes
   useEffect(() => {
@@ -4176,15 +4200,37 @@ export default function TemplateStudioClient() {
                   </Select>
                 </div>
 
-                {/* Channel name */}
+                {/* Channel name — dropdown from connected YouTube accounts */}
                 <div className="space-y-2">
-                  <Label htmlFor="finance-channel">Channel name <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                  <Input
-                    id="finance-channel"
-                    placeholder="e.g. Smart Income Circle"
-                    value={financeDocChannelName}
-                    onChange={(e) => setFinanceDocChannelName(e.target.value)}
-                  />
+                  <Label>Channel name <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  {youtubeChannels.length > 0 ? (
+                    <Select
+                      value={financeDocChannelName}
+                      onValueChange={setFinanceDocChannelName}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Select a channel" /></SelectTrigger>
+                      <SelectContent>
+                        {youtubeChannels.map((ch) => (
+                          <SelectItem key={ch.id} value={ch.name}>
+                            📺 {ch.name}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="">None / custom</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      id="finance-channel"
+                      placeholder="e.g. Smart Income Circle"
+                      value={financeDocChannelName}
+                      onChange={(e) => setFinanceDocChannelName(e.target.value)}
+                    />
+                  )}
+                  {youtubeChannels.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      <a href="/dashboard/settings/connected-accounts" className="underline">Connect a YouTube channel</a> to pick from your accounts.
+                    </p>
+                  )}
                 </div>
 
                 {/* Voiceover voice */}
