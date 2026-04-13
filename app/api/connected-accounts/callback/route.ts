@@ -22,10 +22,14 @@ function getRedirectUrl(): string {
   return `${base.replace(/\/$/, "")}/dashboard/settings/connected-accounts`;
 }
 
-function getPlatformFromState(state: string | null): ConnectedPlatform | null {
-  if (!state) return null;
-  const raw = state.split(":")[0];
-  return PLATFORMS.includes(raw as ConnectedPlatform) ? (raw as ConnectedPlatform) : null;
+function getPlatformFromState(state: string | null): { platform: ConnectedPlatform | null; forceNew: boolean } {
+  if (!state) return { platform: null, forceNew: false };
+  const parts = state.split(":");
+  const raw = parts[0];
+  // State format: "platform:random" or "platform:new:random" (new = force insert)
+  const forceNew = parts[1] === "new";
+  const platform = PLATFORMS.includes(raw as ConnectedPlatform) ? (raw as ConnectedPlatform) : null;
+  return { platform, forceNew };
 }
 
 /**
@@ -64,13 +68,14 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const state = searchParams.get("state");
-    const platform = getPlatformFromState(state);
+    const { platform, forceNew } = getPlatformFromState(state);
     const code = searchParams.get("code");
     const errorParam = searchParams.get("error");
 
     console.log("[connected-accounts/callback] Incoming OAuth callback:", {
       pathname: new URL(request.url).pathname,
       platformFromState: platform,
+      forceNew,
       statePrefix: state?.split(":")[0] ?? null,
       stateLength: state?.length ?? 0,
       stateSample: state ? `${state.slice(0, 48)}${state.length > 48 ? "…" : ""}` : null,
@@ -547,12 +552,17 @@ export async function GET(request: NextRequest) {
       updatedAt: new Date(),
     };
 
-    const matchedExisting =
-      platform === "instagram"
+    // forceNew = user explicitly clicked "+ Add another account" → always INSERT
+    const matchedExisting = forceNew
+      ? null
+      : platform === "instagram"
         ? matchInstagramExistingRow(existing, platformUserId)
         : (platform === "youtube" || platform === "tiktok") && platformUserId
           ? existing.find((r) => (r.platformUserId ?? null) === platformUserId) ?? null
-          : existing[0] ?? null;
+          // YouTube with no channel ID resolved: don't overwrite an existing channel row
+          : platform === "youtube"
+            ? null
+            : existing[0] ?? null;
 
     console.log("[connected-accounts/callback] Persisting connected_accounts:", {
       platform,

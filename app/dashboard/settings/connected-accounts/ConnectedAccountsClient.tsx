@@ -134,13 +134,13 @@ export default function ConnectedAccountsClient() {
     }
   }, [fetchAccounts, toast]);
 
-  const handleConnect = async (platform: ConnectedPlatform) => {
+  const handleConnect = async (platform: ConnectedPlatform, addAnother = false) => {
     setConnecting(platform);
     try {
       const res = await fetch("/api/connected-accounts/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform }),
+        body: JSON.stringify({ platform, addAnother }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -327,7 +327,7 @@ export default function ConnectedAccountsClient() {
                             onClick={() =>
                               platform === "instagram"
                                 ? openInstagramPreConnect()
-                                : void handleConnect(platform)
+                                : void handleConnect(platform, true)
                             }
                             disabled={isConnecting}
                           >

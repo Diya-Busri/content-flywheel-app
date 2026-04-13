@@ -143,7 +143,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const state = `${platform}:${randomBytes(16).toString("hex")}`;
+    const addAnother = body?.addAnother === true;
+    // "platform:new:random" signals the callback to always INSERT (never update existing row)
+    const state = addAnother
+      ? `${platform}:new:${randomBytes(16).toString("hex")}`
+      : `${platform}:${randomBytes(16).toString("hex")}`;
     console.log("[connected-accounts/connect] Starting OAuth for platform:", platform);
     const authUrl = buildAuthUrl(platform, state, request);
     if (!authUrl) {
