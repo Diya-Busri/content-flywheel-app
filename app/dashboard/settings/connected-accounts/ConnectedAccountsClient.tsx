@@ -266,6 +266,19 @@ export default function ConnectedAccountsClient() {
       if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to save");
       const handle = ytPickerHandle.trim().startsWith("@") ? ytPickerHandle.trim() : `@${ytPickerHandle.trim()}`;
       toast({ title: "Channel saved!", description: `Connected as ${handle}` });
+      // Optimistically update local data so the fallback effect doesn't re-trigger
+      // (race: URL clears → searchParams update → effect fires with stale unlabeled row)
+      const savedId = activePickerAccountId;
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              connected: prev.connected.map((a) =>
+                a.id === savedId ? { ...a, platformUsername: handle } : a
+              ),
+            }
+          : prev
+      );
       setYtFallbackAccountId("");
       router.replace("/dashboard/settings/connected-accounts");
       fetchAccounts();
