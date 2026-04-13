@@ -2274,13 +2274,19 @@ export default function TemplateStudioClient() {
         whatBuilding,
         dishName: cookingDishName,
         storyVideoTopic,
+        financeDocTopic,
         seriesShowTitle,
       });
+      const sourceType = isFinanceDocMode
+        ? ("finance-documentary" as const)
+        : mode === "15"
+          ? ("story-video" as const)
+          : ("ai-story" as const);
       const metaBase = {
         scenes,
         captions,
         totalDuration,
-        sourceType: (mode === "15" ? "story-video" : "ai-story") as "ai-story" | "story-video",
+        sourceType,
         savedAt: new Date().toISOString(),
         ...(Object.keys(characterReferenceUrls).length > 0
           ? { aiStoryCharacterReferenceUrls: characterReferenceUrls }
@@ -2302,6 +2308,7 @@ export default function TemplateStudioClient() {
   }, [
     libraryDraftVideoId,
     isStoryTemplateMode,
+    isFinanceDocMode,
     aiStoryScenes,
     sceneImageUrls,
     sceneVideoUrls,
@@ -2309,12 +2316,25 @@ export default function TemplateStudioClient() {
     characterReferenceUrlsSerializeKey,
     cookingDishName,
     episodeNumber,
+    financeDocTopic,
     mode,
     seriesShowTitle,
     storyVideoTopic,
     theme,
     whatBuilding,
   ]);
+
+  // Auto-sync to Video Timeline whenever images or voiceovers are generated.
+  // Debounced 3s so rapid individual scene generates batch into a single PATCH.
+  useEffect(() => {
+    if (!libraryDraftVideoId || !isStoryTemplateMode || aiStoryScenes.length === 0) return;
+    const imagesCount = Object.keys(sceneImageUrls).length;
+    const voiceCount = Object.keys(voiceoverUrls).length;
+    if (imagesCount === 0 && voiceCount === 0) return; // nothing new to sync yet
+    const t = setTimeout(() => { void flushAiStoryDraftToLibrary(); }, 3000);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sceneImageUrls, voiceoverUrls]);
 
   const openVideoTimeline = useCallback(async () => {
     writeAiStoryTimelinePrefill();
