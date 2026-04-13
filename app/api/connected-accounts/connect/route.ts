@@ -100,7 +100,7 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: Next
         response_type: "code",
         scope: "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
         access_type: "offline",
-        prompt: "consent",
+        prompt: "select_account consent",
         state,
       });
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;

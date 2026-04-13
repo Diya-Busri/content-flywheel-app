@@ -37,8 +37,8 @@ import {
 type ConnectedAccount = {
   id: string;
   platform: string;
-  accountName?: string;
-  username?: string;
+  platformUsername?: string | null;
+  platformUserId?: string | null;
 };
 
 export type YouTubePublishSheetProps = {
@@ -499,11 +499,21 @@ export function YouTubePublishSheet({
                     <SelectValue placeholder="Select account…" />
                   </SelectTrigger>
                   <SelectContent>
-                    {accounts.map((acc) => (
-                      <SelectItem key={acc.id} value={acc.id}>
-                        {acc.accountName ?? acc.username ?? acc.id}
-                      </SelectItem>
-                    ))}
+                    {accounts.map((acc, idx) => {
+                      const label = acc.platformUsername
+                        ? acc.platformUsername.startsWith("@")
+                          ? acc.platformUsername
+                          : `@${acc.platformUsername}`
+                        : `YouTube Channel ${idx + 1}`;
+                      return (
+                        <SelectItem key={acc.id} value={acc.id}>
+                          <span className="flex items-center gap-2">
+                            <Youtube className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                            {label}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               )}

@@ -290,12 +290,20 @@ export default function ConnectedAccountsClient() {
 
                     {isConnected && (
                       <div className="mt-2 space-y-1">
-                        {accounts.map((account, idx) => (
-                          <p key={account.id} className="text-xs text-muted-foreground">
-                            Connected #{idx + 1}
-                            {account.platformUsername ? ` as @${account.platformUsername}` : ""}
-                          </p>
-                        ))}
+                        {accounts.map((account, idx) => {
+                          const handle = account.platformUsername
+                            ? account.platformUsername.startsWith("@")
+                              ? account.platformUsername
+                              : `@${account.platformUsername}`
+                            : null;
+                          return (
+                            <p key={account.id} className="text-xs text-muted-foreground">
+                              {handle
+                                ? <><span className="font-medium text-foreground">{handle}</span>{" "}connected</>
+                                : `Channel #${idx + 1} connected`}
+                            </p>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -361,18 +369,25 @@ export default function ConnectedAccountsClient() {
 
                 {isConnected && (
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {accounts.map((account, idx) => (
-                      <Button
-                        key={account.id}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setDisconnectTarget({ platform, accountId: account.id })}
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <Unplug className="mr-1 h-4 w-4" />
-                        Disconnect {PLATFORM_LABELS[platform]} #{idx + 1}
-                      </Button>
-                    ))}
+                    {accounts.map((account, idx) => {
+                      const handle = account.platformUsername
+                        ? account.platformUsername.startsWith("@")
+                          ? account.platformUsername
+                          : `@${account.platformUsername}`
+                        : `${PLATFORM_LABELS[platform]} #${idx + 1}`;
+                      return (
+                        <Button
+                          key={account.id}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setDisconnectTarget({ platform, accountId: account.id })}
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Unplug className="mr-1 h-4 w-4" />
+                          Disconnect {handle}
+                        </Button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
