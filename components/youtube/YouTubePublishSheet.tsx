@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { addTextOverlayToThumbnail } from "@/lib/thumbnail-text-overlay";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Loader2,
@@ -276,10 +277,28 @@ export function YouTubePublishSheet({
       const data = await res.json().catch(() => ({})) as { url?: string; imageUrl?: string };
       const imgUrl = data.url ?? data.imageUrl ?? "";
       if (!imgUrl) throw new Error("No image returned");
-      setGeneratedThumbnail(imgUrl);
-      setActiveThumbnail(imgUrl);
+
+      // Apply title text overlay via browser Canvas
+      let finalUrl = imgUrl;
+      try {
+        const withText = await addTextOverlayToThumbnail(imgUrl, title || videoTitle);
+        // Upload composited PNG to Vercel Blob
+        const uploadRes = await fetch("/api/upload-thumbnail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: withText }),
+        });
+        const uploadData = await uploadRes.json().catch(() => ({})) as { url?: string };
+        if (uploadData.url) finalUrl = uploadData.url;
+        else finalUrl = withText; // fall back to data URL if upload fails
+      } catch {
+        // CORS or canvas failure — use raw image without text
+      }
+
+      setGeneratedThumbnail(finalUrl);
+      setActiveThumbnail(finalUrl);
       // Auto-save thumbnail so it survives reopen
-      void saveVideoSEO({ thumbnailUrl: imgUrl });
+      void saveVideoSEO({ thumbnailUrl: finalUrl });
     } catch (e) {
       toast({
         title: "Thumbnail generation failed",
@@ -489,7 +508,7 @@ export function YouTubePublishSheet({
                   </div>
                 )}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -504,6 +523,37 @@ export function YouTubePublishSheet({
                   )}
                   {generatedThumbnail ? "Regenerate" : "Generate Thumbnail"}
                 </Button>
+                {activeThumbnail && !thumbnailGenerating && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs"
+                    disabled={thumbnailGenerating}
+                    onClick={async () => {
+                      setThumbnailGenerating(true);
+                      try {
+                        const withText = await addTextOverlayToThumbnail(activeThumbnail, title || videoTitle);
+                        const uploadRes = await fetch("/api/upload-thumbnail", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ imageBase64: withText }),
+                        });
+                        const uploadData = await uploadRes.json().catch(() => ({})) as { url?: string };
+                        const finalUrl = uploadData.url ?? withText;
+                        setGeneratedThumbnail(finalUrl);
+                        setActiveThumbnail(finalUrl);
+                        void saveVideoSEO({ thumbnailUrl: finalUrl });
+                      } catch {
+                        toast({ title: "Could not add text", description: "Try regenerating the thumbnail.", variant: "destructive" });
+                      } finally {
+                        setThumbnailGenerating(false);
+                      }
+                    }}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                    Add title text
+                  </Button>
+                )}
                 {generatedThumbnail && activeThumbnail !== thumbnailUrl && thumbnailUrl && (
                   <Button
                     variant="ghost"
