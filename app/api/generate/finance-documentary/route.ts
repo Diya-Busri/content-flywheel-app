@@ -121,50 +121,65 @@ export async function POST(request: NextRequest) {
     const affiliateOfferText = affiliateOffer || "a bonus when you sign up using the link below";
 
     const ctaInstruction = {
-      subscribe: "End with a compelling reason to subscribe for more wealth-building content",
-      affiliate: `Naturally weave in the referral: tell viewers you personally use ${affiliateName} and they can get ${affiliateOfferText} — link in the description. Make it feel authentic.`,
+      subscribe: `Tell viewers exactly what they'll get by subscribing — a specific upcoming topic or series. End with: "Hit subscribe and turn on notifications — you don't want to miss what's coming next."`,
+      affiliate: `Naturally weave in the referral: tell viewers you personally use ${affiliateName} and they can get ${affiliateOfferText} — link in the description. Make it feel like a genuine recommendation, not an ad.`,
       sell_product: productName
-        ? `End with a natural mention that ${productName} teaches this in detail — available in the link below`
+        ? `End with a natural mention that ${productName} goes deeper on everything covered — available in the link below. Make it feel like the logical next step, not a sales pitch.`
         : "End by directing viewers to the free resource in the description",
-      email_list: "End by offering a free resource (checklist/guide) to viewers who join the email list",
-      comment: "End with a thought-provoking question that makes viewers want to comment their answer",
-    }[ctaGoal] ?? "End with a strong call to action";
+      email_list: "End by offering a specific free resource (e.g. 'I made a free checklist of the 7 steps covered in this video') — available when they join the email list. Be specific about what they'll receive.",
+      comment: "End with one specific, polarising question tied directly to the topic. Something people will have strong opinions on. E.g. 'Do you think the average person can still build real wealth in 2026? Drop your answer below.'",
+    }[ctaGoal] ?? "End with a strong, specific call to action";
 
     const hookInstruction = {
-      shocking_stat: "Open with a shocking, little-known statistic that immediately grabs attention",
-      contrarian: "Open with a bold contrarian statement that challenges what viewers believe",
-      story: "Open with a brief compelling story or scenario that hooks emotionally",
-      question: "Open with a direct, provocative question that makes viewers want to keep watching",
-      reveal: "Open with a promise to reveal a hidden truth most people don't know",
-    }[hookStyle] ?? "Open with a powerful hook";
+      shocking_stat: "Scene 1 opens with ONE jaw-dropping specific statistic that reframes the topic immediately. No intro, no channel name — straight into the stat. E.g. '93% of people who try to build wealth this way fail within 3 years — and nobody tells you why.'",
+      contrarian: "Scene 1 opens with a bold statement that directly contradicts what most people believe about this topic. Make it feel like you're about to expose something. E.g. 'Everything you've been told about [topic] is designed to keep you broke.'",
+      story: "Scene 1 opens mid-scene in a specific story — a real person, a specific moment, a specific year. No setup. Drop viewers straight into the action. E.g. 'In 2019, a 26-year-old warehouse worker made one decision that completely changed his financial life. This is what he did.'",
+      question: "Scene 1 opens with a single pointed question that makes viewers immediately question something they thought they knew. Pause for effect in the writing. E.g. 'What if the reason you're not building wealth has nothing to do with how hard you work?'",
+      reveal: "Scene 1 opens by teasing a specific hidden truth — name what it is, say it's been hidden, and promise to reveal it. E.g. 'There's a wealth-building strategy that banks actively discourage — and today, we're exposing exactly how it works.'",
+    }[hookStyle] ?? "Scene 1 opens with a powerful hook — no branded intro, straight into the content";
 
     // ─────────────────────────────────────────────
     // PASS 1: Generate compact outline for ALL scenes
     // ─────────────────────────────────────────────
-    const outlineSystemPrompt = `You are an elite YouTube documentary scriptwriter for ${niche} content. Generate a complete scene-by-scene outline.`;
+    const outlineSystemPrompt = `You are an elite YouTube documentary scriptwriter specialising in ${niche} content. You write scripts that get millions of views — your titles, hooks, and structure are engineered for maximum click-through rate and audience retention.`;
 
     const midStart = Math.floor(sceneCount * 0.15) + 1;
     const midEnd = sceneCount - 4;
     const affiliateMidNote = ctaGoal === "affiliate"
-      ? `- Somewhere in scenes ${midStart}-${midEnd}: briefly mention using ${affiliateName} for investing — 1 scene only, keep it natural`
+      ? `- Somewhere in scenes ${midStart}-${midEnd}: briefly mention using ${affiliateName} — 1 scene only, keep it natural and authentic`
       : "";
 
     const outlineUserPrompt = `Create a ${sceneCount}-scene outline for a ${tone} ${niche} documentary.
 
 TOPIC: "${topic}"
-CHANNEL: "${channelName || "a premium finance channel"}"
-CURRENT YEAR: ${currentYear} — all content must feel current. No stats before 2023.
+CHANNEL: "${channelName || "a premium documentary channel"}"
+CURRENT YEAR: ${currentYear} — all content must feel current and specific. No statistics before 2023.
 
 STRUCTURE (follow exactly):
-- Scene 1: Branded intro — establish "${channelName || "the channel"}" brand & credibility. No topic content yet.
-- Scene 2: ${hookInstruction}
-- Scenes 3-${Math.floor(sceneCount * 0.15)}: Set up the problem / tension — why this matters, real stats, relatable examples
-- Scenes ${midStart}-${midEnd}: Deep dive — specific facts, named examples, insights. Build progressively. Vary pace.
+- Scene 1: ${hookInstruction}
+- Scenes 2-${Math.floor(sceneCount * 0.12)}: Build tension — why this topic matters RIGHT NOW, specific recent statistics, relatable real examples. Maintain the energy from scene 1.
+- Scenes ${Math.floor(sceneCount * 0.12) + 1}-${Math.floor(sceneCount * 0.15)}: Establish credibility — what most people get wrong, and why this video is different
+- Scenes ${midStart}-${midEnd}: Deep dive — specific facts, named real-world examples, layered insights. Vary the pace: fast revelations followed by slower explanations. Never let momentum drop.
 ${affiliateMidNote}
-- Scene ${sceneCount - 3}: Turning point / key revelation that reframes everything
-- Scene ${sceneCount - 2}: Actionable takeaway — the #1 thing to do this week
+- Scene ${sceneCount - 3}: The big turning point — a revelation that reframes everything the viewer just watched
+- Scene ${sceneCount - 2}: Actionable takeaway — the single most important thing to do this week, specific and practical
 - Scene ${sceneCount - 1}: ${ctaInstruction}
-- Scene ${sceneCount}: Branded outro — "New video every week. Subscribe. See you in the next one."
+- Scene ${sceneCount}: Short branded outro — 2 sentences max. Warm, personal sign-off.
+
+YOUTUBE TITLE — CRITICAL (this is what determines if the video gets clicked at all):
+Use ONE of these proven high-CTR formulas:
+• "The [Shocking Truth / Real Reason / Hidden Secret] About [Topic] Nobody Tells You"
+• "Why [Common Belief About Topic] Is [Wrong / A Lie / Keeping You Broke]"
+• "How [Specific Person or Group] [Achieved Outcome] Doing This One Thing"
+• "[Number] [Things / Signs / Reasons] [Topic] [Strong Outcome] (Most People Don't Know This)"
+• "What Happens When [Scenario] — The Truth About [Topic]"
+
+TITLE RULES:
+- Must create a CURIOSITY GAP — tease the answer without giving it away
+- Must feel PERSONAL to the viewer — use "You" or make them the subject
+- Be SPECIFIC — use numbers, years, real names where possible
+- NEVER use: "Unlocking", "Exploring", "Deep Dive Into", "Introduction to", "Understanding" — zero clicks
+- Under 70 characters. No ALL CAPS words.
 
 Return ONLY valid JSON:
 {
@@ -172,11 +187,11 @@ Return ONLY valid JSON:
     {"sceneNumber": 1, "title": "Short descriptive title", "brief": "One sentence — exactly what this scene covers and why it matters."}
   ],
   "socialMediaPack": {
-    "youtubeTitle": "Click-worthy title under 70 chars",
-    "youtubeDescription": "SEO-optimised 150-word description with timestamps placeholder and keywords",
+    "youtubeTitle": "High-CTR title using one of the proven formulas — specific, curiosity-gap, personal, under 70 chars",
+    "youtubeDescription": "SEO-optimised description. First 2 lines (shown in search) must tease the biggest revelation — make people click. Then 3-4 bullet points of what viewers will learn. Keywords woven naturally. End with: [Timestamps]",
     "youtubeTags": ["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10"],
-    "tiktokCaption": "Punchy TikTok/Reels caption with 3-5 hashtags",
-    "hook": "Exact first sentence of the video"
+    "tiktokCaption": "One punchy sentence that creates instant curiosity, then 3-5 hashtags. No filler.",
+    "hook": "The exact first sentence of Scene 1 — the sharpest, most attention-grabbing sentence in the script"
   }
 }`;
 
@@ -230,8 +245,10 @@ ${scenesText}
 
 DIALOGUE RULES:
 - 3-4 punchy sentences per scene (~10-12 seconds when read aloud at a steady pace)
-- Sounds natural when spoken. Specific facts, real examples from 2024-2026.
-- Never use "in conclusion", "let's dive in", or generic filler phrases.
+- Natural spoken delivery — short sentences, rhythm that builds. No academic tone.
+- Every sentence must either reveal something, build tension, or move the story forward. No padding.
+- Use specific facts: real names, real years, real numbers. "A study found..." is weak. "In 2024, Stanford found that 78% of..." is strong.
+- BANNED phrases: "in conclusion", "let's dive in", "it's important to note", "as we can see", "today we're going to", "welcome back", "don't forget to subscribe" mid-script, "that being said", "without further ado"
 
 IMAGE PROMPT RULES:
 - Cinematic, premium visuals: ${visualStyle}
