@@ -975,7 +975,9 @@ export default function TemplateStudioClient() {
 
   const socialMediaPackText = useMemo(() => {
     if (!socialMediaPack) return "";
-    const hashtagsLine = socialMediaPack.hashtags.join(" ");
+    // hashtags may be undefined if loaded from old localStorage data — guard against it
+    const hashtags = Array.isArray(socialMediaPack.hashtags) ? socialMediaPack.hashtags : [];
+    const hashtagsLine = hashtags.join(" ");
     return [
       "TikTok/Instagram Caption:",
       socialMediaPack.caption,
@@ -1274,15 +1276,24 @@ export default function TemplateStudioClient() {
           typeof data.character_seed === "string" ? data.character_seed.trim() : ""
         );
         const pack = data.socialMediaPack as {
+          // Regular AI story fields
           caption?: string;
           title?: string;
           hashtags?: string[];
           youtubeDescription?: string;
+          // Finance / History / Tech Documentary fields (different shape from API)
+          youtubeTitle?: string;
+          youtubeTags?: string[];
+          tiktokCaption?: string;
         } | undefined;
         setSocialMediaPack({
-          caption: typeof pack?.caption === "string" ? pack.caption : "",
-          title: typeof pack?.title === "string" ? pack.title : "",
-          hashtags: Array.isArray(pack?.hashtags) ? pack.hashtags.filter((h): h is string => typeof h === "string") : [],
+          // Finance doc uses different field names — map them to the shared type
+          caption: typeof pack?.caption === "string" ? pack.caption
+            : typeof pack?.tiktokCaption === "string" ? pack.tiktokCaption : "",
+          title: typeof pack?.title === "string" ? pack.title
+            : typeof pack?.youtubeTitle === "string" ? pack.youtubeTitle : "",
+          hashtags: Array.isArray(pack?.hashtags) ? pack.hashtags.filter((h): h is string => typeof h === "string")
+            : Array.isArray(pack?.youtubeTags) ? pack.youtubeTags.filter((h): h is string => typeof h === "string") : [],
           youtubeDescription: typeof pack?.youtubeDescription === "string" ? pack.youtubeDescription : "",
         });
         setVoiceoverUrls({});
@@ -3064,7 +3075,19 @@ export default function TemplateStudioClient() {
       if (d.sceneImageUrls && typeof d.sceneImageUrls === "object") setSceneImageUrls(d.sceneImageUrls as Record<number, string>);
       if (d.sceneVideoUrls && typeof d.sceneVideoUrls === "object") setSceneVideoUrls(d.sceneVideoUrls as Record<number, string>);
       if (d.voiceoverUrls && typeof d.voiceoverUrls === "object") setVoiceoverUrls(d.voiceoverUrls as Record<number, string>);
-      if (d.socialMediaPack) setSocialMediaPack(d.socialMediaPack as SocialMediaPack);
+      if (d.socialMediaPack && typeof d.socialMediaPack === "object") {
+        // Validate shape — old finance-doc packs used different field names (youtubeTitle/youtubeTags/tiktokCaption)
+        // Normalise everything into the shared SocialMediaPack type to avoid runtime crashes in useMemo.
+        const raw = d.socialMediaPack as Record<string, unknown>;
+        const caption = typeof raw.caption === "string" ? raw.caption
+          : typeof raw.tiktokCaption === "string" ? raw.tiktokCaption : "";
+        const title = typeof raw.title === "string" ? raw.title
+          : typeof raw.youtubeTitle === "string" ? raw.youtubeTitle : "";
+        const hashtags = Array.isArray(raw.hashtags) ? raw.hashtags.filter((h): h is string => typeof h === "string")
+          : Array.isArray(raw.youtubeTags) ? raw.youtubeTags.filter((h): h is string => typeof h === "string") : [];
+        const youtubeDescription = typeof raw.youtubeDescription === "string" ? raw.youtubeDescription : "";
+        setSocialMediaPack({ caption, title, hashtags, youtubeDescription });
+      }
       // Other commonly-used fields
       if (typeof d.storyVideoTopic === "string") setStoryVideoTopic(d.storyVideoTopic);
       if (typeof d.storyVideoTargetAudience === "string") setStoryVideoTargetAudience(d.storyVideoTargetAudience);
