@@ -3386,6 +3386,7 @@ export default function VideoTimelinePage() {
             voiceoverUrls: perSceneVoiceUrls.length > 0 ? perSceneVoiceUrls : undefined,
             singleVoiceoverUrl: perSceneVoiceUrls.length === 0 ? voiceoverUrl?.trim() : undefined,
             scriptId: scriptId?.trim() || undefined,
+            scriptTitle: scriptName?.trim() || undefined,
           }),
         });
         const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string; fastCompile?: boolean };
@@ -3491,6 +3492,7 @@ export default function VideoTimelinePage() {
             voiceoverUrls: perSceneVoiceUrls.length > 0 ? perSceneVoiceUrls : undefined,
             singleVoiceoverUrl: perSceneVoiceUrls.length === 0 ? voiceoverUrl?.trim() : undefined,
             scriptId: scriptId?.trim() || undefined,
+            scriptTitle: scriptName?.trim() || undefined,
           }),
         });
         const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };

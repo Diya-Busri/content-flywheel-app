@@ -68,6 +68,9 @@ export async function POST(request: NextRequest) {
       backgroundMusic?: string;
       outputAspect?: "16:9" | "9:16";
       scriptId?: string;
+      scriptTitle?: string;
+      topic?: string;
+      niche?: string;
     };
 
     const {
@@ -77,6 +80,9 @@ export async function POST(request: NextRequest) {
       backgroundMusic: bgmRaw = "none",
       outputAspect,
       scriptId,
+      scriptTitle,
+      topic,
+      niche,
     } = body;
 
     if (!Array.isArray(segmentUrls) || segmentUrls.length === 0) {
@@ -177,12 +183,22 @@ export async function POST(request: NextRequest) {
         const dateLabel = new Date().toLocaleDateString("en-GB", {
           day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
         });
+        // Use script title if provided so YouTube SEO has proper context
+        const videoTitle = scriptTitle?.trim()
+          ? scriptTitle.trim()
+          : `Compiled Video — ${dateLabel}`;
         await db.insert(videosTable).values({
           userId,
-          title: `Compiled Video — ${dateLabel}`,
+          title: videoTitle,
           platforms: ["video-guide"],
           status: "draft",
-          metadata: { download_url: publicUrl, compiled_video_url: publicUrl, fastCompile: true },
+          metadata: {
+            download_url: publicUrl,
+            compiled_video_url: publicUrl,
+            fastCompile: true,
+            topic: topic ?? null,
+            niche: niche ?? null,
+          },
         });
       } catch { /* non-fatal */ }
 
