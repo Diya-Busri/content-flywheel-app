@@ -552,20 +552,25 @@ export async function GET(request: NextRequest) {
       updatedAt: new Date(),
     };
 
-    // forceNew = user explicitly clicked "+ Add another account" → always INSERT
-    const matchedExisting = forceNew
-      ? null
-      : platform === "instagram"
-        ? matchInstagramExistingRow(existing, platformUserId)
-        : (platform === "youtube" || platform === "tiktok") && platformUserId
-          ? existing.find((r) => (r.platformUserId ?? null) === platformUserId) ?? null
-          // YouTube with no channel ID resolved: don't overwrite an existing channel row
-          : platform === "youtube"
-            ? null
+    // YouTube: ALWAYS insert a new row (never update existing).
+    // Google brand account OAuth returns the same primary channel ID regardless of which
+    // brand was selected, so matching by platformUserId would always overwrite the first
+    // channel. We store the token with null platformUserId (bypassing the unique constraint)
+    // and show a channel picker modal so the user can set the correct handle.
+    //
+    // Other platforms: match existing row (update token) or insert if new.
+    const matchedExisting =
+      platform === "youtube"
+        ? null
+        : platform === "instagram"
+          ? matchInstagramExistingRow(existing, platformUserId)
+          : (platform === "tiktok") && platformUserId
+            ? existing.find((r) => (r.platformUserId ?? null) === platformUserId) ?? null
             : existing[0] ?? null;
 
     console.log("[connected-accounts/callback] Persisting connected_accounts:", {
       platform,
+      forceNew,
       existingCount: existing.length,
       matchedExistingId: matchedExisting?.id ?? null,
       platformUserId: row.platformUserId ?? null,
@@ -602,12 +607,10 @@ export async function GET(request: NextRequest) {
           returning: updated,
         });
       } else {
-        // For forceNew (add another account): always use null platformUserId so we never
-        // hit the unique(userId, platform, platformUserId) constraint — Google brand account
-        // OAuth often returns the same primary channel ID regardless of which brand was picked.
-        // The channel picker modal after this redirect lets the user set the correct handle.
-        const insertPlatformUserId = forceNew ? null : (row.platformUserId ?? null);
-        const insertPlatformUsername = forceNew ? null : (row.platformUsername ?? null);
+        // YouTube always inserts with null platformUserId to avoid unique constraint issues.
+        // The channel picker modal lets the user set the correct handle afterwards.
+        const insertPlatformUserId = platform === "youtube" ? null : (row.platformUserId ?? null);
+        const insertPlatformUsername = platform === "youtube" ? null : (row.platformUsername ?? null);
 
         let inserted: { id: string }[] = [];
         try {
@@ -627,9 +630,9 @@ export async function GET(request: NextRequest) {
         } catch (insertErr) {
           const code = insertErr && typeof insertErr === "object" && "code" in insertErr
             ? (insertErr as { code?: string }).code : undefined;
-          // Unique constraint violation — retry with null platformUserId
           if (code === "23505") {
-            console.warn("[connected-accounts/callback] Unique constraint on insert — retrying with null platformUserId");
+            // Unique constraint — retry with null IDs
+            console.warn("[connected-accounts/callback] Unique constraint on insert — retrying with null IDs");
             inserted = await db
               .insert(connectedAccountsTable)
               .values({
