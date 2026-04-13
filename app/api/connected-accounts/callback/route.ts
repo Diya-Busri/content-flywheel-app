@@ -602,21 +602,53 @@ export async function GET(request: NextRequest) {
           returning: updated,
         });
       } else {
-        const inserted = await db
-          .insert(connectedAccountsTable)
-          .values({
-            userId: row.userId,
-            platform: row.platform,
-            accessToken: row.accessToken,
-            refreshToken: row.refreshToken ?? null,
-            expiresAt: row.expiresAt,
-            platformUserId: row.platformUserId ?? null,
-            platformUsername: row.platformUsername ?? null,
-            ...(platform === "instagram" ? { scopes: INSTAGRAM_FACEBOOK_CONNECT_SCOPES } : {}),
-          })
-          .returning({ id: connectedAccountsTable.id });
+        // For forceNew (add another account): always use null platformUserId so we never
+        // hit the unique(userId, platform, platformUserId) constraint — Google brand account
+        // OAuth often returns the same primary channel ID regardless of which brand was picked.
+        // The channel picker modal after this redirect lets the user set the correct handle.
+        const insertPlatformUserId = forceNew ? null : (row.platformUserId ?? null);
+        const insertPlatformUsername = forceNew ? null : (row.platformUsername ?? null);
+
+        let inserted: { id: string }[] = [];
+        try {
+          inserted = await db
+            .insert(connectedAccountsTable)
+            .values({
+              userId: row.userId,
+              platform: row.platform,
+              accessToken: row.accessToken,
+              refreshToken: row.refreshToken ?? null,
+              expiresAt: row.expiresAt,
+              platformUserId: insertPlatformUserId,
+              platformUsername: insertPlatformUsername,
+              ...(platform === "instagram" ? { scopes: INSTAGRAM_FACEBOOK_CONNECT_SCOPES } : {}),
+            })
+            .returning({ id: connectedAccountsTable.id });
+        } catch (insertErr) {
+          const code = insertErr && typeof insertErr === "object" && "code" in insertErr
+            ? (insertErr as { code?: string }).code : undefined;
+          // Unique constraint violation — retry with null platformUserId
+          if (code === "23505") {
+            console.warn("[connected-accounts/callback] Unique constraint on insert — retrying with null platformUserId");
+            inserted = await db
+              .insert(connectedAccountsTable)
+              .values({
+                userId: row.userId,
+                platform: row.platform,
+                accessToken: row.accessToken,
+                refreshToken: row.refreshToken ?? null,
+                expiresAt: row.expiresAt,
+                platformUserId: null,
+                platformUsername: null,
+                ...(platform === "instagram" ? { scopes: INSTAGRAM_FACEBOOK_CONNECT_SCOPES } : {}),
+              })
+              .returning({ id: connectedAccountsTable.id });
+          } else {
+            throw insertErr;
+          }
+        }
         savedRowId = inserted[0]?.id ?? null;
-        console.log("[connected-accounts/callback] Inserted connected_accounts:", { platform, returning: inserted });
+        console.log("[connected-accounts/callback] Inserted connected_accounts:", { platform, forceNew, returning: inserted });
       }
     } catch (e) {
       console.error("[connected-accounts/callback] DB insert/update connected_accounts failed:", {
