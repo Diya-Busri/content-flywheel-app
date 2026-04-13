@@ -1,5 +1,29 @@
 /**
+ * Shortens a title to a punchy 3-5 word thumbnail hook.
+ * e.g. "What WEALTH Looks Like at 3AM: The Untold Truth Revealed"
+ *   → "The WEALTH Truth"
+ */
+function makeThumbnailHook(title: string): string {
+  // Strip everything after a colon or dash (subtitle)
+  const main = title.split(/[:\-–—]/)[0].trim();
+  const words = main.split(" ").filter(Boolean);
+
+  // If already 4 words or fewer, use as-is
+  if (words.length <= 4) return main.toUpperCase();
+
+  // Pick the most impactful words: capitalised/short words tend to be keywords
+  // Strategy: take first word + any ALL-CAPS or long "power" words + last word, max 4
+  const stop = new Set(["the","a","an","to","of","in","on","at","for","and","or","but","is","are","was","were","be","been","has","have","had","do","does","did","will","would","could","should","may","might","like","with","from","that","this","it","its","by","as","up","out","if","so","not","no","we","you","your","my","our","their","them","they","he","she","what","how","why","when","where","who","which","than","then","also","about"]);
+  const power = words.filter(w => !stop.has(w.toLowerCase()));
+
+  // Take up to 4 power words
+  const chosen = power.slice(0, 4);
+  return chosen.join(" ").toUpperCase();
+}
+
+/**
  * Composites bold title text onto a thumbnail image using the browser Canvas API.
+ * Uses a short punchy hook (3-4 words) so text is always fully visible.
  * Returns a base64 data URL (PNG) ready to upload or display.
  */
 export async function addTextOverlayToThumbnail(
@@ -23,69 +47,46 @@ export async function addTextOverlayToThumbnail(
       // Draw background image
       ctx.drawImage(img, 0, 0, W, H);
 
-      // Dark gradient over bottom 40%
-      const grad = ctx.createLinearGradient(0, H * 0.55, 0, H);
+      // Dark gradient over bottom 45%
+      const grad = ctx.createLinearGradient(0, H * 0.5, 0, H);
       grad.addColorStop(0, "rgba(0,0,0,0)");
-      grad.addColorStop(1, "rgba(0,0,0,0.85)");
+      grad.addColorStop(1, "rgba(0,0,0,0.88)");
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, W, H);
 
-      // ── Text setup ──
-      const maxWidth = W * 0.88;
-      const fontSize = Math.round(W / 12); // ~150px at 1792w
-      ctx.font = `900 ${fontSize}px "Arial Black", Arial, sans-serif`;
+      // ── Shorten title to 3-4 punchy words ──
+      const hook = makeThumbnailHook(title);
+
+      // ── Text setup — big enough to fill width with only 4 words ──
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
 
-      // Word-wrap title into lines
-      const words = title.split(" ");
-      const lines: string[] = [];
-      let current = "";
-      for (const word of words) {
-        const test = current ? `${current} ${word}` : word;
-        if (ctx.measureText(test).width > maxWidth && current) {
-          lines.push(current);
-          current = word;
-        } else {
-          current = test;
-        }
+      // Auto-size font so text fills ~85% of width in one line
+      let fontSize = Math.round(W / 6);
+      ctx.font = `900 ${fontSize}px "Arial Black", Arial, sans-serif`;
+      while (ctx.measureText(hook).width > W * 0.88 && fontSize > 60) {
+        fontSize -= 4;
+        ctx.font = `900 ${fontSize}px "Arial Black", Arial, sans-serif`;
       }
-      if (current) lines.push(current);
 
-      const lineH = fontSize * 1.2;
-      const totalH = lines.length * lineH;
-      const bottomPad = H * 0.06;
-      const startY = H - bottomPad - (lines.length - 1) * lineH;
+      const bottomPad = H * 0.07;
+      const y = H - bottomPad;
 
-      lines.forEach((line, i) => {
-        const y = startY + i * lineH;
-        // Black stroke for contrast
-        ctx.strokeStyle = "rgba(0,0,0,0.9)";
-        ctx.lineWidth = fontSize * 0.08;
-        ctx.lineJoin = "round";
-        ctx.strokeText(line, W / 2, y);
-        // White fill
-        ctx.fillStyle = "#FFFFFF";
-        ctx.fillText(line, W / 2, y);
-      });
+      // Black stroke for contrast
+      ctx.strokeStyle = "rgba(0,0,0,0.95)";
+      ctx.lineWidth = fontSize * 0.1;
+      ctx.lineJoin = "round";
+      ctx.strokeText(hook, W / 2, y);
 
-      // Subtle channel-brand strip at very top
-      ctx.fillStyle = "rgba(255,80,0,0.85)"; // orange brand accent
-      ctx.fillRect(0, 0, W * 0.007, H); // thin left bar
+      // White fill
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText(hook, W / 2, y);
 
       resolve(canvas.toDataURL("image/png"));
     };
 
     img.onerror = () => {
-      // CORS fallback: try without crossOrigin
-      const img2 = new Image();
-      img2.onload = () => {
-        // Re-run without tainted check — note: toDataURL will fail if tainted
-        // so we just reject and let caller handle
-        reject(new Error("Image blocked by CORS — cannot add text overlay"));
-      };
-      img2.onerror = () => reject(new Error("Image failed to load"));
-      img2.src = imageUrl;
+      reject(new Error("Image blocked by CORS — cannot add text overlay"));
     };
 
     img.src = imageUrl;
