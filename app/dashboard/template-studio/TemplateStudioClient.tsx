@@ -390,6 +390,9 @@ export default function TemplateStudioClient() {
   const [aiStoryScenes, setAiStoryScenes] = useState<{ sceneNumber: number; dialogue: string; imagePrompt: string; motionPrompt?: string }[]>([]);
   const [socialMediaPack, setSocialMediaPack] = useState<SocialMediaPack | null>(null);
   const [socialMediaPackLoading, setSocialMediaPackLoading] = useState(false);
+  /** Brand thumbnail (black+gold) generated for Finance/History/Tech Documentary */
+  const [brandThumbnailUrl, setBrandThumbnailUrl] = useState<string | null>(null);
+  const [brandThumbnailLoading, setBrandThumbnailLoading] = useState(false);
   const [aiStoryCharacterStyle, setAiStoryCharacterStyle] = useState<string>("");
   /** GPT-4o ~40-word visual lock; prepended to each scene image_prompt on the server. */
   const [characterSeed, setCharacterSeed] = useState("");
@@ -639,6 +642,8 @@ export default function TemplateStudioClient() {
       setAiStoryScenes([]);
       setSceneImageUrls({});
       setVoiceoverUrls({});
+      setSocialMediaPack(null);
+      setBrandThumbnailUrl(null);
       setStep(1);
     } else if (mode === "22") {
       setFinanceDocNiche("Technology & AI");
@@ -646,6 +651,8 @@ export default function TemplateStudioClient() {
       setAiStoryScenes([]);
       setSceneImageUrls({});
       setVoiceoverUrls({});
+      setSocialMediaPack(null);
+      setBrandThumbnailUrl(null);
       setStep(1);
     } else if (mode === "17") {
       setFinanceDocNiche("Personal Finance");
@@ -653,6 +660,8 @@ export default function TemplateStudioClient() {
       setAiStoryScenes([]);
       setSceneImageUrls({});
       setVoiceoverUrls({});
+      setSocialMediaPack(null);
+      setBrandThumbnailUrl(null);
       setStep(1);
     }
   }, [mode]);
@@ -1566,6 +1575,30 @@ export default function TemplateStudioClient() {
     if (words.length <= LOCK_WORD_TARGET) return "";
     return words.slice(LOCK_WORD_TARGET).join(" ").trim();
   }, []);
+
+  const handleGenerateBrandThumbnail = useCallback(async () => {
+    const title = socialMediaPack?.title?.trim() || financeDocTopic.trim();
+    if (!title) return;
+    setBrandThumbnailLoading(true);
+    try {
+      const res = await fetch("/api/generate/brand-thumbnail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          subtitle: financeDocChannelName.trim() || undefined,
+          style: "gold",
+        }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok || !data.url) throw new Error(data.error ?? "Failed");
+      setBrandThumbnailUrl(data.url);
+    } catch (e) {
+      toast({ title: "Thumbnail failed", description: e instanceof Error ? e.message : "Try again", variant: "destructive" });
+    } finally {
+      setBrandThumbnailLoading(false);
+    }
+  }, [socialMediaPack, financeDocTopic, financeDocChannelName, toast]);
 
   const handleRegenerateSocialMediaPack = useCallback(async () => {
     if (!isStoryTemplateMode || aiStoryScenes.length === 0) return;
@@ -6496,6 +6529,53 @@ export default function TemplateStudioClient() {
                     value={socialMediaPackText}
                     className="min-h-[260px] font-mono text-xs"
                   />
+                </div>
+              )}
+
+              {/* Brand Thumbnail — Finance/History/Tech Documentary only */}
+              {isFinanceDocMode && socialMediaPack && (
+                <div className="rounded-lg border border-yellow-300 bg-yellow-50/60 dark:border-yellow-800 dark:bg-yellow-950/20 p-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">🎨 Brand Thumbnail</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Black &amp; gold thumbnail in your channel style — ready to upload to YouTube.
+                    </p>
+                  </div>
+                  {brandThumbnailUrl && (
+                    <div className="rounded-lg overflow-hidden border border-border">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={brandThumbnailUrl} alt="Brand thumbnail preview" className="w-full" />
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+                      size="sm"
+                      disabled={brandThumbnailLoading}
+                      onClick={() => void handleGenerateBrandThumbnail()}
+                    >
+                      {brandThumbnailLoading ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4 mr-2" />
+                      )}
+                      {brandThumbnailUrl ? "Regenerate Thumbnail" : "Generate Thumbnail"}
+                    </Button>
+                    {brandThumbnailUrl && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        asChild
+                      >
+                        <a href={brandThumbnailUrl} download="thumbnail.png" target="_blank" rel="noopener noreferrer">
+                          <Download className="w-4 h-4 mr-2" />
+                          Download PNG
+                        </a>
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
