@@ -256,11 +256,13 @@ function buildTemplateStudioLibraryTitle(params: {
 }): string {
   const ep = params.episodeNumber >= 1 ? params.episodeNumber : 1;
   let core: string;
-  if (params.mode === "17") {
+  if (params.mode === "17" || params.mode === "21" || params.mode === "22") {
+    const prefix = params.mode === "21" ? "History Doc" : params.mode === "22" ? "Tech Doc" : "Finance Doc";
+    const fullPrefix = params.mode === "21" ? "History Documentary" : params.mode === "22" ? "Tech Documentary" : "Finance Documentary";
     const t = (params.financeDocTopic ?? "").trim();
     core = t
-      ? `Finance Doc - ${t.slice(0, 65)}${t.length > 65 ? "…" : ""} - Ep ${ep}`
-      : `Finance Documentary - Episode ${ep}`;
+      ? `${prefix} - ${t.slice(0, 65)}${t.length > 65 ? "…" : ""} - Ep ${ep}`
+      : `${fullPrefix} - Episode ${ep}`;
   } else if (params.mode === "15") {
     const t = (params.storyVideoTopic ?? "").trim();
     core = t
@@ -559,6 +561,7 @@ export default function TemplateStudioClient() {
 
   const { toast } = useToast();
 
+  const isFinanceDocMode = mode === "17" || mode === "21" || mode === "22";
   const selectedTemplate: TemplateStudioStoryTemplateId | undefined =
     mode === "7"
       ? "ai_story"
@@ -568,10 +571,10 @@ export default function TemplateStudioClient() {
           ? "ai_cooking_video"
           : mode === "15"
             ? "story_video"
-            : mode === "17"
+            : isFinanceDocMode
               ? "finance_documentary"
               : undefined;
-  const isStoryTemplateMode = mode === "7" || mode === "8" || mode === "9" || mode === "15" || mode === "17";
+  const isStoryTemplateMode = mode === "7" || mode === "8" || mode === "9" || mode === "15" || isFinanceDocMode;
   const isAiStoryMode = mode === "7";
   const isStickmanMode = mode === "11";
   const isViralMode = mode === "12";
@@ -588,7 +591,7 @@ export default function TemplateStudioClient() {
     mode === "12" ||
     mode === "13" ||
     mode === "15" ||
-    mode === "17";
+    isFinanceDocMode;
   const isSeriesLibrarySetupMode = mode === "14";
 
   useEffect(() => {
@@ -597,6 +600,12 @@ export default function TemplateStudioClient() {
     setEpisodeNumber(p.episodeNumber);
     setSeriesPrefsLoaded(true);
   }, []);
+
+  // Auto-set default niche when switching to History or Tech Documentary modes
+  useEffect(() => {
+    if (mode === "21") setFinanceDocNiche("History");
+    else if (mode === "22") setFinanceDocNiche("Technology & AI");
+  }, [mode]);
 
   useEffect(() => {
     if (!seriesPrefsLoaded) return;
@@ -946,7 +955,7 @@ export default function TemplateStudioClient() {
                   ? kineticTopic.trim().length > 0
                   : mode === "16"
                     ? animCharacterDescription.trim().length > 0
-                  : mode === "17"
+                  : isFinanceDocMode
                     ? financeDocTopic.trim().length > 0
                   : mode === "19"
                     ? (animeStoryPasteMode ? animeStoryRawScript.trim().length > 0 : animeStoryPremise.trim().length > 0)
@@ -1104,7 +1113,7 @@ export default function TemplateStudioClient() {
               ? TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.satisfying_build
               : mode === "15"
                 ? TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.story_video
-                : mode === "17"
+                : isFinanceDocMode
                   ? TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.finance_documentary
                   : TEMPLATE_STUDIO_STORY_GENERATE_ROUTES.ai_cooking_video;
         const res = await fetch(generateUrl, {
@@ -1138,7 +1147,7 @@ export default function TemplateStudioClient() {
                     scene_count: storyVideoSceneCount,
                     episode_number: episodeForApi,
                   }
-                : mode === "17"
+                : isFinanceDocMode
                   ? {
                       topic: financeDocTopic.trim(),
                       niche: financeDocNiche,
@@ -1282,7 +1291,7 @@ export default function TemplateStudioClient() {
               scenes: timelineScenes,
               captions: timelineCaptions,
               totalDuration,
-              aspectRatio: (mode === "15" || mode === "17") ? "16:9" : "9:16",
+              aspectRatio: (mode === "15" || isFinanceDocMode) ? "16:9" : "9:16",
               sourceType:
                 mode === "8"
                   ? "satisfying-build"
@@ -1290,7 +1299,7 @@ export default function TemplateStudioClient() {
                     ? "ai-cooking-video"
                     : mode === "15"
                       ? "story-video"
-                      : mode === "17"
+                      : isFinanceDocMode
                         ? "finance-documentary"
                         : "ai-story",
               templateStudioScenes: nextScenes,
@@ -2161,7 +2170,7 @@ export default function TemplateStudioClient() {
       sceneImageUrls,
       sceneVideoUrls,
       effectiveVoiceoverUrls,
-      mode === "17" ? FINANCE_DOC_SCENE_DURATION : undefined
+      isFinanceDocMode ? FINANCE_DOC_SCENE_DURATION : undefined
     );
     try {
       const draftTitle = buildTemplateStudioLibraryTitle({
@@ -2240,13 +2249,15 @@ export default function TemplateStudioClient() {
       if (aiStoryScenes.length !== AI_STORY_SCENE_COUNT) return false;
     }
     return aiStoryScenes.every((s) => {
-      const v = sceneVideoUrls[s.sceneNumber];
+      // Finance Documentary uses Ken Burns (images), not Kling video clips
+      const hasAsset = isFinanceDocMode
+        ? isHttpUrl(sceneImageUrls[s.sceneNumber])
+        : isHttpUrl(sceneVideoUrls[s.sceneNumber]);
       const vo = effectiveVoiceoverUrls[s.sceneNumber];
-      const hasVideo = isHttpUrl(v);
-      if (!voiceoverEnabled) return hasVideo;
-      return hasVideo && isHttpUrl(vo);
+      if (!voiceoverEnabled) return hasAsset;
+      return hasAsset && isHttpUrl(vo);
     });
-  }, [isStoryTemplateMode, step, mode, aiStoryScenes, sceneVideoUrls, effectiveVoiceoverUrls, voiceoverEnabled]);
+  }, [isStoryTemplateMode, step, mode, isFinanceDocMode, aiStoryScenes, sceneImageUrls, sceneVideoUrls, effectiveVoiceoverUrls, voiceoverEnabled]);
 
   const handleSuggestTopics = useCallback(async () => {
     const niche = storyVideoChannelNiche.trim() || storyVideoTargetAudience.trim();
@@ -2273,6 +2284,18 @@ export default function TemplateStudioClient() {
       setStoryVideoTopicSuggestionsLoading(false);
     }
   }, [storyVideoChannelNiche, storyVideoTargetAudience, toast]);
+
+  /** Poll a background compile job until it completes or fails. Returns the MP4 url. */
+  const pollCompileJob = useCallback(async (jobId: string, phaseLabel: string): Promise<string> => {
+    for (let attempt = 0; attempt < 72; attempt++) { // 72 × 10s = 12 min max
+      await new Promise((r) => setTimeout(r, attempt === 0 ? 5000 : 10000));
+      const res = await fetch(`/api/videos/compile/status/${jobId}`);
+      const data = (await res.json().catch(() => ({}))) as { status?: string; url?: string; error?: string };
+      if (data.status === "completed" && data.url) return data.url;
+      if (data.status === "failed") throw new Error(data.error ?? `${phaseLabel} failed`);
+    }
+    throw new Error("Video processing timed out. Check My Library for your video.");
+  }, []);
 
   const handleGenerateFullVideo = useCallback(async () => {
     if (autoGenerating || aiStoryScenes.length === 0) return;
@@ -2340,11 +2363,12 @@ export default function TemplateStudioClient() {
         setAutoGenerateProgress({ done: i + 1, total });
       }
 
-      // Step 2: Animate scenes
+      // Step 2: Animate scenes (skipped for Finance/History/Tech Documentary — uses Ken Burns on images instead)
+      const latestVideoUrls: Record<number, string> = { ...sceneVideoUrls };
+      if (!isFinanceDocMode) {
       setAutoGeneratePhase("Animating scenes");
       setAutoGenerateProgress({ done: 0, total });
-      const latestVideoUrls: Record<number, string> = { ...sceneVideoUrls };
-      const aspectRatio = (mode === "15" || mode === "17") ? "16:9" : "9:16";
+      const aspectRatio = (mode === "15") ? "16:9" : "9:16";
 
       for (let i = 0; i < ordered.length; i++) {
         const scene = ordered[i]!;
@@ -2383,12 +2407,15 @@ export default function TemplateStudioClient() {
         }
         setAutoGenerateProgress({ done: i + 1, total });
       }
+      } // end if (!isFinanceDocMode) for Kling animation step
 
       // Step 3: Generate voiceovers
       setAutoGeneratePhase("Generating voiceovers");
       setAutoGenerateProgress({ done: 0, total });
       const latestVoiceoverUrls: Record<number, string> = { ...voiceoverUrls };
-      const defaultVoiceId = elevenLabsVoices[0]?.voice_id ?? "EXAVITQu4vr4xnSDxMaL";
+      const defaultVoiceId = isFinanceDocMode
+        ? financeDocVoiceId
+        : (elevenLabsVoices[0]?.voice_id ?? "EXAVITQu4vr4xnSDxMaL");
 
       for (let i = 0; i < ordered.length; i++) {
         const scene = ordered[i]!;
@@ -2402,7 +2429,7 @@ export default function TemplateStudioClient() {
         try {
           const voiceRes = await fetch("/api/ai-coach/voice-over", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ script: speakable, voiceId: defaultVoiceId, maxDurationSeconds: mode === "17" ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION }),
+            body: JSON.stringify({ script: speakable, voiceId: defaultVoiceId, maxDurationSeconds: isFinanceDocMode ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION }),
           });
           const voiceData = (await voiceRes.json().catch(() => ({}))) as { url?: string; publicUrl?: string; audioUrl?: string };
           const voiceUrl = voiceData.url ?? voiceData.publicUrl ?? voiceData.audioUrl ?? "";
@@ -2421,12 +2448,12 @@ export default function TemplateStudioClient() {
       setAutoGenerateProgress(null);
       const scenes_json = ordered.map((scene) => ({
         scene_number: scene.sceneNumber,
-        duration: mode === "17" ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION,
+        duration: isFinanceDocMode ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION,
         script_text: scene.dialogue?.trim() ?? "",
         image_url: latestImageUrls[scene.sceneNumber] ?? null,
         // Mode 17 documentary: use image (Ken Burns) not Kling clip — Kling clips are 5s fixed
         // which makes a 35-scene video only 3 mins. Ken Burns fills the full voiceover duration.
-        video_url: mode === "17" ? null : (latestVideoUrls[scene.sceneNumber] ?? null),
+        video_url: isFinanceDocMode ? null : (latestVideoUrls[scene.sceneNumber] ?? null),
         voiceover_url: latestVoiceoverUrls[scene.sceneNumber] ?? null,
         caption: scene.dialogue?.trim() ?? null,
         animation_type: "video",
@@ -2448,10 +2475,10 @@ export default function TemplateStudioClient() {
           scriptId: saveData.id,
           transition: "fade",
           backgroundMusic: storyBackgroundMusic,
-          ...((mode === "15" && storyVideoFormat === "long") || mode === "17" ? { outputAspect: "16:9" } : {}),
+          ...((mode === "15" && storyVideoFormat === "long") || isFinanceDocMode ? { outputAspect: "16:9" } : {}),
         }),
       });
-      const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; error?: string; code?: string };
+      const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; jobId?: string; error?: string; code?: string };
 
       if (!compileRes.ok) {
         if (compileData.code === "NO_VIDEO_CREDITS") {
@@ -2462,7 +2489,12 @@ export default function TemplateStudioClient() {
         throw new Error(compileData.error ?? "Compile failed");
       }
 
-      const finalUrl = compileData.url ?? "";
+      let finalUrl = compileData.url ?? "";
+      if (!finalUrl && compileData.jobId) {
+        // Long video queued for background processing — poll until done
+        setAutoGeneratePhase("Stitching video (background)…");
+        finalUrl = await pollCompileJob(compileData.jobId, "Compile");
+      }
       if (!finalUrl) throw new Error("No video URL returned");
 
       setStoryVideoExportUrl(finalUrl);
@@ -2478,10 +2510,10 @@ export default function TemplateStudioClient() {
       setAutoGenerateProgress(null);
     }
   }, [
-    autoGenerating, aiStoryScenes, mode, sceneImageUrls, sceneVideoUrls, voiceoverUrls,
-    characterSeed, storyVideoFormat, elevenLabsVoices, storyBackgroundMusic,
-    episodeNumber, theme, whatBuilding, cookingDishName, storyVideoTopic, seriesShowTitle,
-    toast,
+    autoGenerating, aiStoryScenes, mode, isFinanceDocMode, sceneImageUrls, sceneVideoUrls, voiceoverUrls,
+    characterSeed, storyVideoFormat, elevenLabsVoices, financeDocVoiceId, storyBackgroundMusic,
+    episodeNumber, theme, whatBuilding, cookingDishName, storyVideoTopic, financeDocTopic, seriesShowTitle,
+    pollCompileJob, toast,
   ]);
 
   const handleExportStoryVideo = useCallback(async () => {
@@ -2503,11 +2535,11 @@ export default function TemplateStudioClient() {
         const dialogue = scene.dialogue?.trim() ?? "";
         return {
           scene_number: scene.sceneNumber,
-          duration: mode === "17" ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION,
+          duration: isFinanceDocMode ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION,
           script_text: dialogue,
           image_url: image_url && isHttpUrl(image_url) ? image_url : null,
           // Mode 17: use image (Ken Burns) not Kling clip — Kling is 5s fixed, voiceover is 12-15s
-          video_url: mode === "17" ? null : (video_url && isHttpUrl(video_url) ? video_url : null),
+          video_url: isFinanceDocMode ? null : (video_url && isHttpUrl(video_url) ? video_url : null),
           caption: dialogue || null,
           animation_type: "video",
           voiceover_url: voiceover_url && isHttpUrl(voiceover_url) ? voiceover_url : null,
@@ -2525,6 +2557,7 @@ export default function TemplateStudioClient() {
             whatBuilding,
             dishName: cookingDishName,
             storyVideoTopic,
+            financeDocTopic,
             seriesShowTitle,
           }),
           scenes_json,
@@ -2546,16 +2579,21 @@ export default function TemplateStudioClient() {
           scriptId,
           transition: "fade",
           backgroundMusic: storyBackgroundMusic,
-          ...((mode === "15" && storyVideoFormat === "long") || mode === "17" ? { outputAspect: "16:9" } : {}),
+          ...((mode === "15" && storyVideoFormat === "long") || isFinanceDocMode ? { outputAspect: "16:9" } : {}),
         }),
       });
-      const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; error?: string };
+      const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; jobId?: string; error?: string };
       if (!compileRes.ok) {
         throw new Error(typeof compileData.error === "string" ? compileData.error : "Video compile failed");
       }
-      const url = typeof compileData.url === "string" ? compileData.url.trim() : "";
-      if (!url) throw new Error("No MP4 URL returned");
-      setStoryVideoExportUrl(url);
+      let exportUrl = typeof compileData.url === "string" ? compileData.url.trim() : "";
+      if (!exportUrl && compileData.jobId) {
+        // Long video queued for background processing — poll until done
+        setStoryVideoExportPhase("compiling");
+        exportUrl = await pollCompileJob(compileData.jobId, "Video export");
+      }
+      if (!exportUrl) throw new Error("No MP4 URL returned");
+      setStoryVideoExportUrl(exportUrl);
       toast({
         title: "Story video ready",
         description: "Your MP4 is ready to download.",
@@ -2573,9 +2611,12 @@ export default function TemplateStudioClient() {
     canExportStoryVideo,
     cookingDishName,
     episodeNumber,
+    financeDocTopic,
     flushAiStoryDraftToLibrary,
+    isFinanceDocMode,
     libraryDraftVideoId,
     mode,
+    pollCompileJob,
     sceneImageUrls,
     sceneVideoUrls,
     seriesShowTitle,
@@ -2682,7 +2723,7 @@ export default function TemplateStudioClient() {
       sceneImageUrls,
       sceneVideoUrls,
       voiceoverUrls,
-      mode === "17" ? FINANCE_DOC_SCENE_DURATION : undefined
+      isFinanceDocMode ? FINANCE_DOC_SCENE_DURATION : undefined
     );
     const draftTitle = buildTemplateStudioLibraryTitle({
       mode,
@@ -3036,7 +3077,7 @@ export default function TemplateStudioClient() {
       try {
         const imageBody: Record<string, unknown> = { prompt: scene.imagePrompt };
         if (mode === "15") imageBody.storyVideoFormat = storyVideoFormat;
-        if (mode === "17") imageBody.storyVideoFormat = "long"; // 16:9 landscape for YouTube documentary
+        if (isFinanceDocMode) imageBody.storyVideoFormat = "long"; // 16:9 landscape for YouTube documentary
         const res = await fetch("/api/generate-image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -3074,11 +3115,14 @@ export default function TemplateStudioClient() {
       // Resolve the voice ID for this scene (same logic as per-scene card)
       const characterNameMatch = scene.dialogue.match(/^([^:]+):/);
       const characterName = characterNameMatch ? characterNameMatch[1].trim() : null;
-      const voiceId = characterName && characterVoices[characterName]
-        ? characterVoices[characterName]
-        : characterName
-          ? getDefaultVoiceIdForCharacter(characterName)
-          : elevenLabsVoices[0]?.voice_id ?? "";
+      // For documentary modes always use the user-selected narrator voice (ignores any "Narrator:" prefix)
+      const voiceId = isFinanceDocMode
+        ? financeDocVoiceId
+        : characterName && characterVoices[characterName]
+          ? characterVoices[characterName]
+          : characterName
+            ? getDefaultVoiceIdForCharacter(characterName)
+            : elevenLabsVoices[0]?.voice_id ?? "";
       if (!voiceId) {
         setAllVoiceoversProgress({ done: i + 1, total: ordered.length });
         continue;
@@ -3092,7 +3136,7 @@ export default function TemplateStudioClient() {
         const res = await fetch("/api/ai-coach/voice-over", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ script: speakableText, voiceId, maxDurationSeconds: mode === "17" ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION }),
+          body: JSON.stringify({ script: speakableText, voiceId, maxDurationSeconds: isFinanceDocMode ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION }),
         });
         const data = await res.json().catch(() => ({})) as { url?: string; publicUrl?: string; audioUrl?: string };
         const voUrl =
@@ -3124,7 +3168,7 @@ export default function TemplateStudioClient() {
     if (scenesToAnimate.length === 0) return;
     setAllAnimationsGenerating(true);
     setAllAnimationsProgress({ done: 0, total: scenesToAnimate.length });
-    const aspectRatio = (mode === "15" || mode === "17") ? "16:9" : "9:16";
+    const aspectRatio = (mode === "15" || isFinanceDocMode) ? "16:9" : "9:16";
     // Step 1: Fire all animation requests in parallel to get requestIds
     const pending: { scene: typeof scenesToAnimate[0]; requestId: string }[] = [];
     await Promise.all(
@@ -3215,7 +3259,7 @@ export default function TemplateStudioClient() {
         return;
       }
       if (next !== mode) {
-        const storyM = mode === "7" || mode === "8" || mode === "9" || mode === "15" || mode === "17";
+        const storyM = mode === "7" || mode === "8" || mode === "9" || mode === "15" || isFinanceDocMode;
         const storyN = next === "7" || next === "8" || next === "9" || next === "15" || next === "17";
         const brandM = mode === "10";
         const brandN = next === "10";
@@ -4800,7 +4844,7 @@ export default function TemplateStudioClient() {
                         return;
                       }
                       await runCharacterStylePreview();
-                    } else if (mode === "8" || mode === "9" || mode === "15" || mode === "17") {
+                    } else if (mode === "8" || mode === "9" || mode === "15" || isFinanceDocMode) {
                       await runGenerateAiStory();
                     } else if (isViralMode) {
                       setViralLoading(true);
@@ -5045,7 +5089,7 @@ export default function TemplateStudioClient() {
                   disabled={
                     !canProceedStep1 ||
                     (isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
-                    ((mode === "8" || mode === "9" || mode === "15" || mode === "17") && aiStoryLoading) ||
+                    ((mode === "8" || mode === "9" || mode === "15" || isFinanceDocMode) && aiStoryLoading) ||
                     (mode === "10" && brandStoryVideoLoading) ||
                     (mode === "16" && animPromptsLoading) ||
                     (isAnimeStoryMode && animeStoryPhase !== null) ||
@@ -5071,7 +5115,7 @@ export default function TemplateStudioClient() {
                           ? aiStoryScenes.length > 0
                             ? "Regenerate story"
                             : "Generate episode"
-                          : mode === "17"
+                          : isFinanceDocMode
                             ? aiStoryScenes.length > 0
                               ? "Regenerate documentary"
                               : "Generate documentary"
@@ -5095,7 +5139,7 @@ export default function TemplateStudioClient() {
                                     ? stickmanStoryPhase !== null ? stickmanStoryPhase === "generating-script" ? "Generating script…" : stickmanStoryPhase === "generating-images" ? "Generating images…" : "Assembling video…" : stickmanStoryVideoUrl ? "Regenerate video" : "Generate stickman video"
                                     : "Next — Generate content"}
                   {(isAiStoryMode && (aiStoryLoading || characterPreviewLoading)) ||
-                  ((mode === "8" || mode === "9" || mode === "15" || mode === "17") && aiStoryLoading) ||
+                  ((mode === "8" || mode === "9" || mode === "15" || isFinanceDocMode) && aiStoryLoading) ||
                   (mode === "10" && brandStoryVideoLoading) ||
                   (mode === "16" && animPromptsLoading) ||
                   (isStickmanMode && stickmanLoading) ||
@@ -5774,7 +5818,7 @@ export default function TemplateStudioClient() {
                       ? "Generated scenes for your AI Cooking Video."
                       : mode === "15"
                         ? "Generated scenes for your Story Video."
-                        : mode === "17"
+                        : isFinanceDocMode
                           ? "Your Finance Documentary storyboard. Generate images to bring each scene to life."
                           : "Generated scenes for your AI Story."}
                 </CardDescription>
@@ -5875,11 +5919,13 @@ export default function TemplateStudioClient() {
               {aiStoryScenes.map((scene) => {
                 const characterNameMatch = scene.dialogue.match(/^([^:]+):/);
                 const characterName = characterNameMatch ? characterNameMatch[1].trim() : null;
-                const voiceId = characterName && characterVoices[characterName]
-                  ? characterVoices[characterName]
-                  : characterName
-                    ? getDefaultVoiceIdForCharacter(characterName)
-                    : elevenLabsVoices[0]?.voice_id ?? "";
+                const voiceId = isFinanceDocMode
+                  ? financeDocVoiceId
+                  : characterName && characterVoices[characterName]
+                    ? characterVoices[characterName]
+                    : characterName
+                      ? getDefaultVoiceIdForCharacter(characterName)
+                      : elevenLabsVoices[0]?.voice_id ?? "";
                 const voiceoverUrl = voiceoverUrls[scene.sceneNumber];
                 const storedImageUrl = sceneImageUrls[scene.sceneNumber];
                 const isStoredUrlValid =
@@ -5907,7 +5953,7 @@ export default function TemplateStudioClient() {
                         alt={`Scene ${scene.sceneNumber}`}
                         className={cn(
                           "w-full rounded-md object-cover",
-                          mode === "15" || mode === "17" ? "aspect-video" : "aspect-square"
+                          mode === "15" || isFinanceDocMode ? "aspect-video" : "aspect-square"
                         )}
                       />
                     ) : null}
@@ -5973,7 +6019,7 @@ export default function TemplateStudioClient() {
                             if (mode === "15") {
                               imageBody.storyVideoFormat = storyVideoFormat;
                             }
-                            if (mode === "17") {
+                            if (isFinanceDocMode) {
                               // Finance Documentary = YouTube long-form = landscape 16:9
                               imageBody.storyVideoFormat = "long";
                             }
@@ -6035,7 +6081,7 @@ export default function TemplateStudioClient() {
                         onVideoUrl={(url) =>
                           setSceneVideoUrls((prev) => ({ ...prev, [scene.sceneNumber]: url }))
                         }
-                        {...(mode === "15" || mode === "17"
+                        {...(mode === "15" || isFinanceDocMode
                           ? {
                               aspectRatio: "16:9" as const,
                               videoClassName:

@@ -1,4 +1,4 @@
-export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15" | "16" | "17" | "18" | "19" | "20";
+export type CreationMode = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15" | "16" | "17" | "18" | "19" | "20" | "21" | "22";
 
 /** Story-style Template Studio modes that share the scene pipeline */
 export type TemplateStudioStoryTemplateId =
@@ -53,7 +53,9 @@ export const CREATION_MODE_OPTION_GROUPS: {
   {
     label: "Faceless Channels",
     options: [
-      { value: "17", label: "💰 Finance / Business Documentary" },
+      { value: "17", label: "💰 Finance Documentary" },
+      { value: "21", label: "🏛️ History Documentary" },
+      { value: "22", label: "💻 Tech Documentary" },
     ],
   },
   {
@@ -199,6 +201,13 @@ export const FINANCE_DOC_NICHE_OPTIONS = [
   { value: "Wealth Mindset", label: "🧠 Wealth Mindset" },
   { value: "Financial Freedom", label: "🌍 Financial Freedom" },
   { value: "Passive Income", label: "💤 Passive Income" },
+  { value: "History", label: "🏛️ History" },
+  { value: "Ancient Civilisations", label: "🗿 Ancient Civilisations" },
+  { value: "War & Military History", label: "⚔️ War & Military History" },
+  { value: "Mysteries & Conspiracies", label: "🔍 Mysteries & Conspiracies" },
+  { value: "Technology & AI", label: "🤖 Technology & AI" },
+  { value: "Science & Space", label: "🚀 Science & Space" },
+  { value: "Tech Business", label: "💻 Tech Business" },
 ] as const;
 
 export const FINANCE_DOC_STYLE_OPTIONS = [
@@ -258,6 +267,55 @@ export const FINANCE_DOC_TOPIC_SUGGESTIONS: Record<string, string[]> = {
     "The truth about passive income that gurus won't tell you",
     "How to turn one skill into multiple income streams",
     "Building digital assets that pay you forever",
+  ],
+  "History": [
+    "The ancient civilisation that was 1000 years ahead of its time",
+    "The forgotten empire that ruled half the world",
+    "The real story behind the most famous event in history",
+    "The secret society that shaped the modern world",
+    "The historical figure who changed everything — and was erased from the books",
+  ],
+  "Ancient Civilisations": [
+    "The mystery of how the pyramids were actually built",
+    "The lost city that archaeologists still cannot explain",
+    "The ancient technology that scientists are only now understanding",
+    "How Rome really fell — and why it matters today",
+    "The civilisation that vanished overnight with no explanation",
+  ],
+  "War & Military History": [
+    "The battle that changed the course of human history",
+    "The secret operation that won World War II",
+    "The soldier who fought alone for 30 years not knowing the war was over",
+    "The deadliest day in military history nobody talks about",
+    "The weapon so powerful it was immediately destroyed after use",
+  ],
+  "Mysteries & Conspiracies": [
+    "The disappearance that has never been solved",
+    "The government secret that was hidden for 50 years",
+    "The unsolved mystery that baffles scientists to this day",
+    "The conspiracy theory that turned out to be completely true",
+    "The event so strange that even experts cannot explain it",
+  ],
+  "Technology & AI": [
+    "How AI is quietly taking over jobs nobody expected",
+    "The technology that will make smartphones obsolete by 2030",
+    "Why every major tech company is terrified of this one breakthrough",
+    "The dark side of social media algorithms nobody is talking about",
+    "How AI will change what it means to be human",
+  ],
+  "Science & Space": [
+    "The discovery that proves we are not alone in the universe",
+    "The science experiment so dangerous it was shut down immediately",
+    "What NASA found on Mars that they refused to release for 10 years",
+    "The black hole that broke every rule of physics",
+    "The scientist who was laughed at — then proved everyone wrong",
+  ],
+  "Tech Business": [
+    "How a college dropout built a £1 trillion company",
+    "The startup that killed an entire industry overnight",
+    "Why Silicon Valley is terrified of this new technology",
+    "The billion dollar idea that was stolen — and the real story behind it",
+    "How one algorithm change made 10,000 businesses go bankrupt",
   ],
 };
 
