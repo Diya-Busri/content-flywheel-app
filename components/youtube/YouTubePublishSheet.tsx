@@ -396,7 +396,7 @@ export function YouTubePublishSheet({
                 size="sm"
                 className="h-7 gap-1.5 text-xs"
                 disabled={seoLoading}
-                onClick={generateSEO}
+                onClick={() => generateSEO()}
               >
                 {seoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                 Regenerate SEO
