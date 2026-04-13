@@ -2,11 +2,9 @@
  * POST /api/thumbnail-with-text
  * Body: { imageUrl: string; title: string }
  *
- * Fetches the thumbnail image server-side, composites bold title text on top
- * using Next.js ImageResponse (satori + resvg-wasm — zero extra dependencies),
- * uploads the result to Vercel Blob, and returns { url }.
- *
- * Doing this server-side completely avoids browser Canvas CORS restrictions.
+ * Fetches the thumbnail image server-side, composites bold title text using
+ * Next.js ImageResponse (satori + resvg-wasm), uploads to Vercel Blob,
+ * returns { url }.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { ImageResponse } from "next/og";
@@ -16,7 +14,6 @@ import { randomBytes } from "crypto";
 
 export const dynamic = "force-dynamic";
 
-// ── same logic as lib/thumbnail-text-overlay.ts ──────────────────────────────
 function makeThumbnailHook(title: string): string {
   const main = title.split(/[:\-–—]/)[0].trim();
   const words = main.split(" ").filter(Boolean);
@@ -50,9 +47,9 @@ export async function POST(request: NextRequest) {
 
     const hook = makeThumbnailHook(body.title ?? "");
 
-    // ── Fetch the source image and convert to base64 data URL ─────────────────
+    // ── Fetch source image → base64 data URL ─────────────────────────────────
     const imgRes = await fetch(body.imageUrl, {
-      headers: { "User-Agent": "ContentFlywheel/1.0 (thumbnail-composer)" },
+      headers: { "User-Agent": "ContentFlywheel/1.0" },
     });
     if (!imgRes.ok) {
       return NextResponse.json(
@@ -65,13 +62,14 @@ export async function POST(request: NextRequest) {
     const base64 = Buffer.from(imgBuffer).toString("base64");
     const dataUrl = `data:${contentType};base64,${base64}`;
 
-    // ── Decide font size based on hook length ─────────────────────────────────
-    const fontSize = hook.length <= 8 ? 130 : hook.length <= 14 ? 100 : 76;
+    // font size based on hook word length
+    const fontSize = hook.length <= 8 ? 140 : hook.length <= 14 ? 110 : 80;
 
-    // ── Composite using ImageResponse (satori → resvg PNG) ────────────────────
     const W = 1280;
     const H = 720;
 
+    // ── Use backgroundImage on the root div — simplest satori layout ─────────
+    // satori supports backgroundImage with data URLs natively.
     const imageResponse = new ImageResponse(
       (
         <div
@@ -79,79 +77,36 @@ export async function POST(request: NextRequest) {
             width: W,
             height: H,
             display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "center",
-            position: "relative",
-            overflow: "hidden",
+            flexDirection: "column",
+            justifyContent: "flex-end",
+            // Background image fills entire canvas
+            backgroundImage: `url(${dataUrl})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
           }}
         >
-          {/* Background image */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={dataUrl}
-            width={W}
-            height={H}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: W,
-              height: H,
-              objectFit: "cover",
-            }}
-          />
-
-          {/* Dark scrim over bottom half */}
+          {/* Dark gradient + text at the bottom */}
           <div
             style={{
-              position: "absolute",
-              bottom: 0,
-              left: 0,
-              width: W,
-              height: H * 0.55,
-              background: "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.92) 100%)",
-            }}
-          />
-
-          {/* Title text */}
-          <div
-            style={{
-              position: "relative",
               display: "flex",
               justifyContent: "center",
-              paddingBottom: 52,
+              alignItems: "flex-end",
+              paddingBottom: 54,
               paddingLeft: 40,
               paddingRight: 40,
-              width: "100%",
+              paddingTop: 160,
+              background:
+                "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.92) 100%)",
             }}
           >
-            {/* Shadow layer (offset duplicate for contrast) */}
-            <span
-              style={{
-                position: "absolute",
-                fontSize,
-                fontWeight: 900,
-                color: "rgba(0,0,0,0.85)",
-                letterSpacing: "-1px",
-                top: 4,
-                left: 44,
-                right: 44,
-                bottom: 48,
-                textAlign: "center",
-                display: "flex",
-                justifyContent: "center",
-              }}
-            >
-              {hook}
-            </span>
-            {/* White fill */}
             <span
               style={{
                 fontSize,
                 fontWeight: 900,
                 color: "#FFFFFF",
-                letterSpacing: "-1px",
                 textAlign: "center",
+                letterSpacing: "-2px",
+                lineHeight: 1.1,
               }}
             >
               {hook}
@@ -162,7 +117,7 @@ export async function POST(request: NextRequest) {
       { width: W, height: H }
     );
 
-    // ── Upload PNG to Vercel Blob ──────────────────────────────────────────────
+    // ── Upload to Vercel Blob ─────────────────────────────────────────────────
     const pngBuffer = Buffer.from(await imageResponse.arrayBuffer());
     const filename = `thumbnails/${userId}/${randomBytes(8).toString("hex")}.png`;
     const blob = await put(filename, pngBuffer, {

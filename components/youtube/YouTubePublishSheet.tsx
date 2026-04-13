@@ -494,7 +494,7 @@ export function YouTubePublishSheet({
               <Label className="text-sm font-medium">Thumbnail</Label>
               <div className="relative aspect-video rounded-lg overflow-hidden bg-muted border">
                 {activeThumbnail ? (
-                  <img src={activeThumbnail} alt="Thumbnail" className="w-full h-full object-cover" />
+                  <img key={activeThumbnail} src={activeThumbnail} alt="Thumbnail" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                     <ImageIcon className="w-10 h-10" />
