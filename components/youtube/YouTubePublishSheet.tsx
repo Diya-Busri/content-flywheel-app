@@ -82,6 +82,7 @@ export function YouTubePublishSheet({
   // Thumbnail generation state
   const [generatedThumbnail, setGeneratedThumbnail] = useState<string | null>(null);
   const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
+  const [textOverlayLoading, setTextOverlayLoading] = useState(false);
   const [activeThumbnail, setActiveThumbnail] = useState<string | null>(thumbnailUrl ?? null);
 
   // Account & schedule state
@@ -523,16 +524,17 @@ export function YouTubePublishSheet({
                   )}
                   {generatedThumbnail ? "Regenerate" : "Generate Thumbnail"}
                 </Button>
-                {activeThumbnail && !thumbnailGenerating && (
+                {activeThumbnail && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="gap-1.5 text-xs"
-                    disabled={thumbnailGenerating}
+                    disabled={textOverlayLoading || thumbnailGenerating}
                     onClick={async () => {
-                      setThumbnailGenerating(true);
+                      setTextOverlayLoading(true);
                       try {
                         const withText = await addTextOverlayToThumbnail(activeThumbnail, title || videoTitle);
+                        // Upload composited PNG to Vercel Blob so we have a stable URL
                         const uploadRes = await fetch("/api/upload-thumbnail", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
@@ -543,15 +545,25 @@ export function YouTubePublishSheet({
                         setGeneratedThumbnail(finalUrl);
                         setActiveThumbnail(finalUrl);
                         void saveVideoSEO({ thumbnailUrl: finalUrl });
-                      } catch {
-                        toast({ title: "Could not add text", description: "Try regenerating the thumbnail.", variant: "destructive" });
+                        toast({ title: "✅ Title text added!", description: "Thumbnail updated with bold title overlay." });
+                      } catch (err) {
+                        console.error("[add-title-text]", err);
+                        toast({
+                          title: "Could not add text",
+                          description: err instanceof Error ? err.message : "Try regenerating the thumbnail first.",
+                          variant: "destructive",
+                        });
                       } finally {
-                        setThumbnailGenerating(false);
+                        setTextOverlayLoading(false);
                       }
                     }}
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-orange-500" />
-                    Add title text
+                    {textOverlayLoading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                    )}
+                    {textOverlayLoading ? "Adding text…" : "Add title text"}
                   </Button>
                 )}
                 {generatedThumbnail && activeThumbnail !== thumbnailUrl && thumbnailUrl && (
