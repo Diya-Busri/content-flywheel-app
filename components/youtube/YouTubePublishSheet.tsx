@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { addTextOverlayToThumbnail } from "@/lib/thumbnail-text-overlay";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Loader2,
@@ -282,18 +281,16 @@ export function YouTubePublishSheet({
       // Apply title text overlay via browser Canvas
       let finalUrl = imgUrl;
       try {
-        const withText = await addTextOverlayToThumbnail(imgUrl, title || videoTitle);
-        // Upload composited PNG to Vercel Blob
-        const uploadRes = await fetch("/api/upload-thumbnail", {
+        // Add text overlay via server-side compositing (no canvas/CORS)
+        const overlayRes = await fetch("/api/thumbnail-with-text", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: withText }),
+          body: JSON.stringify({ imageUrl: imgUrl, title: title || videoTitle }),
         });
-        const uploadData = await uploadRes.json().catch(() => ({})) as { url?: string };
-        if (uploadData.url) finalUrl = uploadData.url;
-        else finalUrl = withText; // fall back to data URL if upload fails
+        const overlayData = await overlayRes.json().catch(() => ({})) as { url?: string };
+        if (overlayData.url) finalUrl = overlayData.url;
       } catch {
-        // CORS or canvas failure — use raw image without text
+        // Fall back to raw image if overlay fails
       }
 
       setGeneratedThumbnail(finalUrl);
@@ -533,18 +530,22 @@ export function YouTubePublishSheet({
                     onClick={async () => {
                       setTextOverlayLoading(true);
                       try {
-                        const withText = await addTextOverlayToThumbnail(activeThumbnail, title || videoTitle);
-                        // Upload composited PNG to Vercel Blob so we have a stable URL
-                        const uploadRes = await fetch("/api/upload-thumbnail", {
+                        // Server-side compositing — no canvas/CORS issues
+                        const res = await fetch("/api/thumbnail-with-text", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ imageBase64: withText }),
+                          body: JSON.stringify({
+                            imageUrl: activeThumbnail,
+                            title: title || videoTitle,
+                          }),
                         });
-                        const uploadData = await uploadRes.json().catch(() => ({})) as { url?: string };
-                        const finalUrl = uploadData.url ?? withText;
-                        setGeneratedThumbnail(finalUrl);
-                        setActiveThumbnail(finalUrl);
-                        void saveVideoSEO({ thumbnailUrl: finalUrl });
+                        const data = await res.json().catch(() => ({})) as { url?: string; error?: string };
+                        if (!res.ok || !data.url) {
+                          throw new Error(data.error ?? "Server failed to add text");
+                        }
+                        setGeneratedThumbnail(data.url);
+                        setActiveThumbnail(data.url);
+                        void saveVideoSEO({ thumbnailUrl: data.url });
                         toast({ title: "✅ Title text added!", description: "Thumbnail updated with bold title overlay." });
                       } catch (err) {
                         console.error("[add-title-text]", err);
