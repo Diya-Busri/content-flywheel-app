@@ -208,10 +208,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For very long videos (>60 scenes or >10 min estimated), use the async job pattern
+    // For videos > 3 min of output or > 60 scenes, use the async job pattern
     // to avoid Vercel's 300s gateway timeout. Returns { jobId } immediately; client polls.
+    // NOTE: Documentary scenes are 11s each so 30 scenes = 330s (> 180) → always async.
     const estimatedDurationForRouting = scenes.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 5), 0);
-    const needsAsyncJob = scenes.length > 60 || estimatedDurationForRouting > 600;
+    const needsAsyncJob = scenes.length > 60 || estimatedDurationForRouting > 180;
     if (needsAsyncJob) {
       const internalSecret = process.env.COMPILE_INTERNAL_SECRET?.trim();
       if (internalSecret) {

@@ -2285,6 +2285,18 @@ export default function TemplateStudioClient() {
     }
   }, [storyVideoChannelNiche, storyVideoTargetAudience, toast]);
 
+  /** Poll a background compile job until it completes or fails. Returns the MP4 url. */
+  const pollCompileJob = useCallback(async (jobId: string, phaseLabel: string): Promise<string> => {
+    for (let attempt = 0; attempt < 72; attempt++) { // 72 × 10s = 12 min max
+      await new Promise((r) => setTimeout(r, attempt === 0 ? 5000 : 10000));
+      const res = await fetch(`/api/videos/compile/status/${jobId}`);
+      const data = (await res.json().catch(() => ({}))) as { status?: string; url?: string; error?: string };
+      if (data.status === "completed" && data.url) return data.url;
+      if (data.status === "failed") throw new Error(data.error ?? `${phaseLabel} failed`);
+    }
+    throw new Error("Video processing timed out. Check My Library for your video.");
+  }, []);
+
   const handleGenerateFullVideo = useCallback(async () => {
     if (autoGenerating || aiStoryScenes.length === 0) return;
     setAutoGenerating(true);
@@ -2466,7 +2478,7 @@ export default function TemplateStudioClient() {
           ...((mode === "15" && storyVideoFormat === "long") || isFinanceDocMode ? { outputAspect: "16:9" } : {}),
         }),
       });
-      const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; error?: string; code?: string };
+      const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; jobId?: string; error?: string; code?: string };
 
       if (!compileRes.ok) {
         if (compileData.code === "NO_VIDEO_CREDITS") {
@@ -2477,7 +2489,12 @@ export default function TemplateStudioClient() {
         throw new Error(compileData.error ?? "Compile failed");
       }
 
-      const finalUrl = compileData.url ?? "";
+      let finalUrl = compileData.url ?? "";
+      if (!finalUrl && compileData.jobId) {
+        // Long video queued for background processing — poll until done
+        setAutoGeneratePhase("Stitching video (background)…");
+        finalUrl = await pollCompileJob(compileData.jobId, "Compile");
+      }
       if (!finalUrl) throw new Error("No video URL returned");
 
       setStoryVideoExportUrl(finalUrl);
@@ -2493,10 +2510,10 @@ export default function TemplateStudioClient() {
       setAutoGenerateProgress(null);
     }
   }, [
-    autoGenerating, aiStoryScenes, mode, sceneImageUrls, sceneVideoUrls, voiceoverUrls,
-    characterSeed, storyVideoFormat, elevenLabsVoices, storyBackgroundMusic,
-    episodeNumber, theme, whatBuilding, cookingDishName, storyVideoTopic, seriesShowTitle,
-    toast,
+    autoGenerating, aiStoryScenes, mode, isFinanceDocMode, sceneImageUrls, sceneVideoUrls, voiceoverUrls,
+    characterSeed, storyVideoFormat, elevenLabsVoices, financeDocVoiceId, storyBackgroundMusic,
+    episodeNumber, theme, whatBuilding, cookingDishName, storyVideoTopic, financeDocTopic, seriesShowTitle,
+    pollCompileJob, toast,
   ]);
 
   const handleExportStoryVideo = useCallback(async () => {
@@ -2565,13 +2582,18 @@ export default function TemplateStudioClient() {
           ...((mode === "15" && storyVideoFormat === "long") || isFinanceDocMode ? { outputAspect: "16:9" } : {}),
         }),
       });
-      const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; error?: string };
+      const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; jobId?: string; error?: string };
       if (!compileRes.ok) {
         throw new Error(typeof compileData.error === "string" ? compileData.error : "Video compile failed");
       }
-      const url = typeof compileData.url === "string" ? compileData.url.trim() : "";
-      if (!url) throw new Error("No MP4 URL returned");
-      setStoryVideoExportUrl(url);
+      let exportUrl = typeof compileData.url === "string" ? compileData.url.trim() : "";
+      if (!exportUrl && compileData.jobId) {
+        // Long video queued for background processing — poll until done
+        setStoryVideoExportPhase("compiling");
+        exportUrl = await pollCompileJob(compileData.jobId, "Video export");
+      }
+      if (!exportUrl) throw new Error("No MP4 URL returned");
+      setStoryVideoExportUrl(exportUrl);
       toast({
         title: "Story video ready",
         description: "Your MP4 is ready to download.",
@@ -2589,9 +2611,12 @@ export default function TemplateStudioClient() {
     canExportStoryVideo,
     cookingDishName,
     episodeNumber,
+    financeDocTopic,
     flushAiStoryDraftToLibrary,
+    isFinanceDocMode,
     libraryDraftVideoId,
     mode,
+    pollCompileJob,
     sceneImageUrls,
     sceneVideoUrls,
     seriesShowTitle,
