@@ -121,27 +121,30 @@ export function YouTubePublishSheet({
       setGeneratedThumbnail(null);
       setActiveThumbnail(thumbnailUrl ?? null);
       setResult(null);
-      generateSEO();
+      // Pass videoTitle explicitly so first-load SEO uses the prop title
+      generateSEO(videoTitle);
       loadAccounts();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, videoTitle]);
 
-  const generateSEO = useCallback(async () => {
+  const generateSEO = useCallback(async (overrideTitle?: string) => {
     setSeoLoading(true);
+    // Use the current edited title if available, falling back to the prop
+    const effectiveTitle = overrideTitle ?? title?.trim() || videoTitle;
     try {
       const res = await fetch("/api/youtube/generate-seo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: videoTitle,
-          topic: topic ?? videoTitle,
+          title: effectiveTitle,
+          topic: topic ?? effectiveTitle,
           niche: niche ?? "",
         }),
       });
       if (!res.ok) throw new Error("SEO generation failed");
       const data = (await res.json()) as SEOData;
-      setTitle(data.title || videoTitle);
+      setTitle(data.title || effectiveTitle);
       setDescription(data.description || "");
       setKeywords(data.keywords || []);
       setKeywordsInput((data.keywords || []).join(", "));
@@ -155,7 +158,7 @@ export function YouTubePublishSheet({
     } finally {
       setSeoLoading(false);
     }
-  }, [videoTitle, topic, niche, toast]);
+  }, [title, videoTitle, topic, niche, toast]);
 
   const loadAccounts = useCallback(async () => {
     setAccountsLoading(true);
