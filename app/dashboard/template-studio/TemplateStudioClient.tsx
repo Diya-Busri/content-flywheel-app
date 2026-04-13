@@ -601,10 +601,11 @@ export default function TemplateStudioClient() {
     setSeriesPrefsLoaded(true);
   }, []);
 
-  // Auto-set default niche when switching to History or Tech Documentary modes
+  // Auto-set default niche and clear topic when switching documentary modes
   useEffect(() => {
-    if (mode === "21") setFinanceDocNiche("History");
-    else if (mode === "22") setFinanceDocNiche("Technology & AI");
+    if (mode === "21") { setFinanceDocNiche("History"); setFinanceDocTopic(""); }
+    else if (mode === "22") { setFinanceDocNiche("Technology & AI"); setFinanceDocTopic(""); }
+    else if (mode === "17") { setFinanceDocNiche("Personal Finance"); setFinanceDocTopic(""); }
   }, [mode]);
 
   useEffect(() => {
@@ -4063,7 +4064,13 @@ export default function TemplateStudioClient() {
                   <Label htmlFor="finance-topic">Video topic *</Label>
                   <Input
                     id="finance-topic"
-                    placeholder="e.g. How to build a £100k portfolio from scratch"
+                    placeholder={
+                      mode === "21"
+                        ? "e.g. The forgotten empire that ruled half the world"
+                        : mode === "22"
+                          ? "e.g. How AI is quietly taking over jobs nobody expected"
+                          : "e.g. How to build a £100k portfolio from scratch"
+                    }
                     value={financeDocTopic}
                     onChange={(e) => setFinanceDocTopic(e.target.value)}
                   />
