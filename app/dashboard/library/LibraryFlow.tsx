@@ -385,6 +385,7 @@ export default function LibraryFlow() {
   const [youtubeLoading, setYoutubeLoading] = useState(false);
   /** YouTube publish sheet state */
   const [ytPublishItem, setYtPublishItem] = useState<{
+    videoId?: string;
     videoTitle: string;
     videoUrl: string;
     thumbnailUrl?: string;
@@ -1372,6 +1373,7 @@ export default function LibraryFlow() {
                             className="text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-400 border-red-200 dark:border-red-800"
                             onClick={() =>
                               setYtPublishItem({
+                                videoId: item.id,
                                 videoTitle: item.title,
                                 videoUrl: getVideoDownloadUrl(item)!,
                                 thumbnailUrl: item.thumbnail ?? undefined,
@@ -1395,6 +1397,7 @@ export default function LibraryFlow() {
       <YouTubePublishSheet
         open={ytPublishItem !== null}
         onOpenChange={(open) => { if (!open) setYtPublishItem(null); }}
+        videoId={ytPublishItem?.videoId}
         videoTitle={ytPublishItem?.videoTitle ?? ""}
         videoUrl={ytPublishItem?.videoUrl ?? ""}
         thumbnailUrl={ytPublishItem?.thumbnailUrl}

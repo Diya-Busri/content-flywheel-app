@@ -47,6 +47,8 @@ export type YouTubePublishSheetProps = {
   videoUrl: string;
   /** Existing thumbnail URL (optional — will be shown as preview) */
   thumbnailUrl?: string;
+  /** Library video ID — used to persist SEO data so it doesn't disappear on reopen */
+  videoId?: string;
 };
 
 type SEOData = {
@@ -64,6 +66,7 @@ export function YouTubePublishSheet({
   niche,
   videoUrl,
   thumbnailUrl,
+  videoId,
 }: YouTubePublishSheetProps) {
   const { toast } = useToast();
 
@@ -105,9 +108,88 @@ export function YouTubePublishSheet({
     channelLabel: string;
   }[]>([]);
 
+  /** Persist SEO + thumbnail back to the library video so it survives page reloads */
+  const saveVideoSEO = useCallback(async (patch: {
+    title?: string;
+    thumbnailUrl?: string;
+    youtubeDescription?: string;
+    youtubeKeywords?: string[];
+    youtubeThumbnailPrompt?: string;
+  }) => {
+    if (!videoId) return;
+    try {
+      await fetch(`/api/library/videos/${videoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(patch.title ? { title: patch.title } : {}),
+          ...(patch.thumbnailUrl ? { thumbnailUrl: patch.thumbnailUrl } : {}),
+          metadata: {
+            youtubeTitle: patch.title,
+            youtubeDescription: patch.youtubeDescription,
+            youtubeKeywords: patch.youtubeKeywords,
+            youtubeThumbnailPrompt: patch.youtubeThumbnailPrompt,
+            youtubeThumbnailUrl: patch.thumbnailUrl,
+          },
+        }),
+      });
+    } catch {
+      /* non-fatal */
+    }
+  }, [videoId]);
+
   // Reset when opened with new video
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+
+    setResults([]);
+    setPublishProgress([]);
+    loadAccounts();
+
+    // If we have a videoId, try to load saved SEO from the library first
+    if (videoId) {
+      (async () => {
+        try {
+          const res = await fetch(`/api/library/videos/${videoId}`);
+          const data = await res.json().catch(() => ({})) as {
+            title?: string;
+            thumbnailUrl?: string;
+            metadata?: {
+              youtubeTitle?: string;
+              youtubeDescription?: string;
+              youtubeKeywords?: string[];
+              youtubeThumbnailPrompt?: string;
+              youtubeThumbnailUrl?: string;
+            };
+          };
+          const meta = data.metadata ?? {};
+          if (meta.youtubeTitle || meta.youtubeDescription) {
+            // Saved SEO exists — restore it, skip regeneration
+            setTitle(meta.youtubeTitle || videoTitle);
+            setDescription(meta.youtubeDescription || "");
+            const kws = meta.youtubeKeywords ?? [];
+            setKeywords(kws);
+            setKeywordsInput(kws.join(", "));
+            setThumbnailPrompt(meta.youtubeThumbnailPrompt || "");
+            const savedThumb = meta.youtubeThumbnailUrl || data.thumbnailUrl || thumbnailUrl || null;
+            setGeneratedThumbnail(savedThumb);
+            setActiveThumbnail(savedThumb);
+            return;
+          }
+        } catch {
+          /* fall through to generate */
+        }
+        // No saved SEO — generate fresh
+        setTitle(videoTitle);
+        setDescription("");
+        setKeywords([]);
+        setKeywordsInput("");
+        setThumbnailPrompt("");
+        setGeneratedThumbnail(null);
+        setActiveThumbnail(thumbnailUrl ?? null);
+        generateSEO(videoTitle);
+      })();
+    } else {
       setTitle(videoTitle);
       setDescription("");
       setKeywords([]);
@@ -115,14 +197,10 @@ export function YouTubePublishSheet({
       setThumbnailPrompt("");
       setGeneratedThumbnail(null);
       setActiveThumbnail(thumbnailUrl ?? null);
-      setResults([]);
-      setPublishProgress([]);
-      // Pass videoTitle explicitly so first-load SEO uses the prop title
       generateSEO(videoTitle);
-      loadAccounts();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, videoTitle]);
+  }, [open, videoTitle, videoId]);
 
   const generateSEO = useCallback(async (overrideTitle?: string) => {
     setSeoLoading(true);
@@ -145,6 +223,13 @@ export function YouTubePublishSheet({
       setKeywords(data.keywords || []);
       setKeywordsInput((data.keywords || []).join(", "));
       setThumbnailPrompt(data.thumbnailPrompt || "");
+      // Auto-save so it survives reopen
+      void saveVideoSEO({
+        title: data.title || effectiveTitle,
+        youtubeDescription: data.description || "",
+        youtubeKeywords: data.keywords || [],
+        youtubeThumbnailPrompt: data.thumbnailPrompt || "",
+      });
     } catch (e) {
       toast({
         title: "Could not generate SEO",
@@ -154,7 +239,7 @@ export function YouTubePublishSheet({
     } finally {
       setSeoLoading(false);
     }
-  }, [title, videoTitle, topic, niche, toast]);
+  }, [title, videoTitle, topic, niche, toast, saveVideoSEO]);
 
   const loadAccounts = useCallback(async () => {
     setAccountsLoading(true);
@@ -193,6 +278,8 @@ export function YouTubePublishSheet({
       if (!imgUrl) throw new Error("No image returned");
       setGeneratedThumbnail(imgUrl);
       setActiveThumbnail(imgUrl);
+      // Auto-save thumbnail so it survives reopen
+      void saveVideoSEO({ thumbnailUrl: imgUrl });
     } catch (e) {
       toast({
         title: "Thumbnail generation failed",
@@ -202,7 +289,7 @@ export function YouTubePublishSheet({
     } finally {
       setThumbnailGenerating(false);
     }
-  }, [thumbnailPrompt, toast]);
+  }, [thumbnailPrompt, toast, saveVideoSEO]);
 
   const getChannelLabel = useCallback((acc: ConnectedAccount, idx: number) => {
     const u = acc.platformUsername;

@@ -80,6 +80,57 @@ export async function DELETE(
   }
 }
 
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { id } = await params;
+    if (!id) return NextResponse.json({ error: "Video ID required" }, { status: 400 });
+
+    const body = await request.json().catch(() => ({})) as {
+      title?: string;
+      thumbnailUrl?: string;
+      metadata?: Record<string, unknown>;
+    };
+
+    // Merge metadata so callers can patch individual keys without wiping others
+    const existing = await db
+      .select({ metadata: videosTable.metadata, thumbnailUrl: videosTable.thumbnailUrl })
+      .from(videosTable)
+      .where(and(eq(videosTable.id, id), eq(videosTable.userId, userId)))
+      .limit(1);
+
+    if (!existing[0]) return NextResponse.json({ error: "Video not found" }, { status: 404 });
+
+    const mergedMeta = {
+      ...(existing[0].metadata ?? {}),
+      ...(body.metadata ?? {}),
+    };
+
+    const [updated] = await db
+      .update(videosTable)
+      .set({
+        ...(body.title !== undefined ? { title: body.title } : {}),
+        ...(body.thumbnailUrl !== undefined ? { thumbnailUrl: body.thumbnailUrl } : {}),
+        metadata: mergedMeta,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(videosTable.id, id), eq(videosTable.userId, userId)))
+      .returning();
+
+    return NextResponse.json({ ok: true, id: updated.id });
+  } catch (err) {
+    console.error("Library video PATCH failed:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to update video" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
