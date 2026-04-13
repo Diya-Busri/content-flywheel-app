@@ -12,13 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -90,7 +83,7 @@ export function YouTubePublishSheet({
   // Account & schedule state
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
-  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
+  const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set());
   const [scheduleType, setScheduleType] = useState<"now" | "schedule">("schedule");
   const [scheduleDate, setScheduleDate] = useState<string>(() => {
     // Default: tomorrow at 9am
@@ -102,13 +95,15 @@ export function YouTubePublishSheet({
 
   // Publish state
   const [publishing, setPublishing] = useState(false);
-  const [result, setResult] = useState<{
+  const [publishProgress, setPublishProgress] = useState<{ accountId: string; label: string; status: "pending" | "uploading" | "done" | "error"; error?: string; watchUrl?: string; studioUrl?: string }[]>([]);
+  const [results, setResults] = useState<{
     youtubeVideoId: string;
     watchUrl: string;
     studioUrl: string;
     scheduledAt: string;
     immediate: boolean;
-  } | null>(null);
+    channelLabel: string;
+  }[]>([]);
 
   // Reset when opened with new video
   useEffect(() => {
@@ -120,7 +115,8 @@ export function YouTubePublishSheet({
       setThumbnailPrompt("");
       setGeneratedThumbnail(null);
       setActiveThumbnail(thumbnailUrl ?? null);
-      setResult(null);
+      setResults([]);
+      setPublishProgress([]);
       // Pass videoTitle explicitly so first-load SEO uses the prop title
       generateSEO(videoTitle);
       loadAccounts();
@@ -167,15 +163,16 @@ export function YouTubePublishSheet({
       const data = await res.json().catch(() => ({ connected: [] })) as { connected?: ConnectedAccount[] };
       const ytAccounts = (data.connected ?? []).filter((a) => a.platform === "youtube");
       setAccounts(ytAccounts);
-      if (ytAccounts.length > 0 && !selectedAccountId) {
-        setSelectedAccountId(ytAccounts[0].id);
+      // Auto-select all connected accounts
+      if (ytAccounts.length > 0) {
+        setSelectedAccountIds(new Set(ytAccounts.map((a) => a.id)));
       }
     } catch {
       /* ignore */
     } finally {
       setAccountsLoading(false);
     }
-  }, [selectedAccountId]);
+  }, []);
 
   const generateThumbnail = useCallback(async () => {
     if (!thumbnailPrompt.trim()) {
@@ -207,13 +204,19 @@ export function YouTubePublishSheet({
     }
   }, [thumbnailPrompt, toast]);
 
+  const getChannelLabel = useCallback((acc: ConnectedAccount, idx: number) => {
+    const u = acc.platformUsername;
+    if (!u) return `YouTube Channel ${idx + 1}`;
+    return u.startsWith("@") ? u : `@${u}`;
+  }, []);
+
   const handlePublish = useCallback(async () => {
     if (!videoUrl.trim()) {
       toast({ title: "No video URL", description: "This video does not have a shareable URL yet.", variant: "destructive" });
       return;
     }
-    if (!selectedAccountId) {
-      toast({ title: "Select a YouTube account", description: "Connect YouTube in Settings → Connected accounts first.", variant: "destructive" });
+    if (selectedAccountIds.size === 0) {
+      toast({ title: "Select at least one channel", description: "Tick the channels you want to post to.", variant: "destructive" });
       return;
     }
     if (!title.trim()) {
@@ -230,7 +233,6 @@ export function YouTubePublishSheet({
       return;
     }
 
-    // Parse keywords from input (user may have edited the comma list)
     const finalKeywords = keywordsInput
       .split(",")
       .map((k) => k.trim())
@@ -238,54 +240,84 @@ export function YouTubePublishSheet({
       .slice(0, 30)
       .join(",");
 
+    const selectedAccounts = accounts.filter((a) => selectedAccountIds.has(a.id));
+
+    // Initialise per-channel progress
+    const progress = selectedAccounts.map((acc, idx) => ({
+      accountId: acc.id,
+      label: getChannelLabel(acc, idx),
+      status: "pending" as const,
+    }));
+    setPublishProgress(progress);
     setPublishing(true);
-    try {
-      const res = await fetch("/api/youtube/post-from-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          youtubeAccountId: selectedAccountId,
-          videoUrl,
-          title: title.trim().slice(0, 100),
-          description: description.slice(0, 5000),
-          keywords: finalKeywords,
-          scheduledAt,
-        }),
-      });
-      const data = await res.json().catch(() => ({})) as {
-        youtubeVideoId?: string;
-        watchUrl?: string;
-        studioUrl?: string;
-        scheduledAt?: string;
-        immediate?: boolean;
-        error?: string;
-      };
-      if (!res.ok || !data.youtubeVideoId) {
-        throw new Error(data.error ?? "Upload failed");
+
+    const completedResults: typeof results = [];
+
+    for (let i = 0; i < selectedAccounts.length; i++) {
+      const acc = selectedAccounts[i];
+      const label = getChannelLabel(acc, i);
+
+      // Mark as uploading
+      setPublishProgress((prev) =>
+        prev.map((p) => p.accountId === acc.id ? { ...p, status: "uploading" } : p)
+      );
+
+      try {
+        const res = await fetch("/api/youtube/post-from-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            youtubeAccountId: acc.id,
+            videoUrl,
+            title: title.trim().slice(0, 100),
+            description: description.slice(0, 5000),
+            keywords: finalKeywords,
+            scheduledAt,
+          }),
+        });
+        const data = await res.json().catch(() => ({})) as {
+          youtubeVideoId?: string;
+          watchUrl?: string;
+          studioUrl?: string;
+          scheduledAt?: string;
+          immediate?: boolean;
+          error?: string;
+        };
+        if (!res.ok || !data.youtubeVideoId) throw new Error(data.error ?? "Upload failed");
+
+        setPublishProgress((prev) =>
+          prev.map((p) => p.accountId === acc.id ? { ...p, status: "done", watchUrl: data.watchUrl, studioUrl: data.studioUrl } : p)
+        );
+        completedResults.push({
+          youtubeVideoId: data.youtubeVideoId!,
+          watchUrl: data.watchUrl!,
+          studioUrl: data.studioUrl!,
+          scheduledAt: data.scheduledAt!,
+          immediate: data.immediate ?? false,
+          channelLabel: label,
+        });
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : "Failed";
+        setPublishProgress((prev) =>
+          prev.map((p) => p.accountId === acc.id ? { ...p, status: "error", error: errMsg } : p)
+        );
       }
-      setResult({
-        youtubeVideoId: data.youtubeVideoId!,
-        watchUrl: data.watchUrl!,
-        studioUrl: data.studioUrl!,
-        scheduledAt: data.scheduledAt!,
-        immediate: data.immediate ?? false,
-      });
-      toast({
-        title: data.immediate ? "Published to YouTube!" : "Scheduled on YouTube!",
-        description: data.immediate
-          ? "Your video is now live."
-          : `Scheduled for ${new Date(data.scheduledAt!).toLocaleString()}`,
-      });
-    } catch (e) {
-      toast({
-        title: "Publish failed",
-        description: e instanceof Error ? e.message : "Something went wrong",
-        variant: "destructive",
-      });
-    } finally {
-      setPublishing(false);
     }
-  }, [videoUrl, selectedAccountId, title, description, scheduleType, scheduleDate, keywordsInput, toast]);
+
+    setResults(completedResults);
+    setPublishing(false);
+
+    const successCount = completedResults.length;
+    const totalCount = selectedAccounts.length;
+    toast({
+      title: successCount === totalCount
+        ? (scheduleType === "now" ? `Published to ${successCount} channel${successCount > 1 ? "s" : ""}!` : `Scheduled on ${successCount} channel${successCount > 1 ? "s" : ""}!`)
+        : `${successCount}/${totalCount} channels succeeded`,
+      description: scheduleType === "schedule" && successCount > 0
+        ? `Scheduled for ${new Date(scheduledAt).toLocaleString()}`
+        : undefined,
+    });
+  }, [videoUrl, selectedAccountIds, accounts, title, description, scheduleType, scheduleDate, keywordsInput, getChannelLabel, toast]);
 
   const removeKeyword = (kw: string) => {
     const updated = keywords.filter((k) => k !== kw);
@@ -308,39 +340,48 @@ export function YouTubePublishSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {result ? (
+        {results.length > 0 && !publishing ? (
           /* ── Success state ── */
-          <div className="flex flex-col items-center justify-center gap-6 py-10 text-center">
-            <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
+          <div className="flex flex-col gap-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-foreground">
+                  {scheduleType === "now" ? "Published!" : "Scheduled!"}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {results.length} channel{results.length > 1 ? "s" : ""} {scheduleType === "now" ? "published" : `scheduled for ${new Date(results[0].scheduledAt).toLocaleString()}`}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-foreground mb-1">
-                {result.immediate ? "Published!" : "Scheduled!"}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {result.immediate
-                  ? "Your video is now live on YouTube."
-                  : `Scheduled for ${new Date(result.scheduledAt).toLocaleString()}`}
-              </p>
+            <div className="space-y-2">
+              {publishProgress.map((p) => (
+                <div key={p.accountId} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2 font-medium">
+                    <Youtube className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                    {p.label}
+                  </span>
+                  {p.status === "done" && (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      {p.studioUrl && (
+                        <a href={p.studioUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline underline-offset-2">
+                          Studio
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  {p.status === "error" && (
+                    <span className="text-xs text-destructive">{p.error}</span>
+                  )}
+                </div>
+              ))}
             </div>
-            <div className="flex flex-col gap-2 w-full max-w-xs">
-              <Button asChild variant="default" className="w-full gap-2">
-                <a href={result.studioUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="w-4 h-4" />
-                  Open in YouTube Studio
-                </a>
-              </Button>
-              <Button asChild variant="outline" className="w-full gap-2">
-                <a href={result.watchUrl} target="_blank" rel="noopener noreferrer">
-                  <Youtube className="w-4 h-4 text-red-600" />
-                  Watch on YouTube
-                </a>
-              </Button>
-              <Button variant="ghost" className="w-full" onClick={() => onOpenChange(false)}>
-                Close
-              </Button>
-            </div>
+            <Button variant="ghost" className="w-full" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
           </div>
         ) : (
           <div className="space-y-5">
@@ -479,12 +520,29 @@ export function YouTubePublishSheet({
               </>
             )}
 
-            {/* ── YouTube account ── */}
+            {/* ── YouTube channels (multi-select checkboxes) ── */}
             <div className="space-y-1.5">
-              <Label className="text-sm">YouTube Account</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Post to channels</Label>
+                {accounts.length > 1 && (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                    onClick={() =>
+                      setSelectedAccountIds(
+                        selectedAccountIds.size === accounts.length
+                          ? new Set()
+                          : new Set(accounts.map((a) => a.id))
+                      )
+                    }
+                  >
+                    {selectedAccountIds.size === accounts.length ? "Deselect all" : "Select all"}
+                  </button>
+                )}
+              </div>
               {accountsLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Loading accounts…
+                  <Loader2 className="w-4 h-4 animate-spin" /> Loading channels…
                 </div>
               ) : accounts.length === 0 ? (
                 <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
@@ -494,28 +552,32 @@ export function YouTubePublishSheet({
                   </a>
                 </div>
               ) : (
-                <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select account…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map((acc, idx) => {
-                      const label = acc.platformUsername
-                        ? acc.platformUsername.startsWith("@")
-                          ? acc.platformUsername
-                          : `@${acc.platformUsername}`
-                        : `YouTube Channel ${idx + 1}`;
-                      return (
-                        <SelectItem key={acc.id} value={acc.id}>
-                          <span className="flex items-center gap-2">
-                            <Youtube className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                            {label}
-                          </span>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-1.5">
+                  {accounts.map((acc, idx) => {
+                    const label = getChannelLabel(acc, idx);
+                    const checked = selectedAccountIds.has(acc.id);
+                    return (
+                      <label
+                        key={acc.id}
+                        className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors ${checked ? "border-red-500/40 bg-red-500/5" : "border-border hover:bg-muted/50"}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = new Set(selectedAccountIds);
+                            if (e.target.checked) next.add(acc.id);
+                            else next.delete(acc.id);
+                            setSelectedAccountIds(next);
+                          }}
+                          className="accent-red-600 w-4 h-4"
+                        />
+                        <Youtube className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                        <span className="text-sm font-medium">{label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
@@ -553,10 +615,27 @@ export function YouTubePublishSheet({
               )}
             </div>
 
+            {/* ── Publishing progress (shown while uploading) ── */}
+            {publishing && publishProgress.length > 0 && (
+              <div className="space-y-1.5 rounded-lg border p-3">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Uploading to channels…</p>
+                {publishProgress.map((p) => (
+                  <div key={p.accountId} className="flex items-center gap-2 text-sm">
+                    {p.status === "pending" && <div className="w-4 h-4 rounded-full border-2 border-muted shrink-0" />}
+                    {p.status === "uploading" && <Loader2 className="w-4 h-4 animate-spin text-orange-500 shrink-0" />}
+                    {p.status === "done" && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />}
+                    {p.status === "error" && <X className="w-4 h-4 text-destructive shrink-0" />}
+                    <span className={p.status === "error" ? "text-destructive" : ""}>{p.label}</span>
+                    {p.status === "error" && <span className="text-xs text-muted-foreground ml-auto">{p.error}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* ── Publish button ── */}
             <Button
               className="w-full gap-2 bg-red-600 hover:bg-red-700 text-white"
-              disabled={publishing || seoLoading || !selectedAccountId || !videoUrl}
+              disabled={publishing || seoLoading || selectedAccountIds.size === 0 || !videoUrl}
               onClick={handlePublish}
             >
               {publishing ? (
@@ -565,10 +644,10 @@ export function YouTubePublishSheet({
                 <Youtube className="w-4 h-4" />
               )}
               {publishing
-                ? "Uploading to YouTube…"
+                ? `Uploading… (${publishProgress.filter(p => p.status === "done").length}/${publishProgress.length})`
                 : scheduleType === "now"
-                  ? "Publish to YouTube Now"
-                  : "Schedule on YouTube"}
+                  ? `Publish to ${selectedAccountIds.size} Channel${selectedAccountIds.size !== 1 ? "s" : ""} Now`
+                  : `Schedule on ${selectedAccountIds.size} Channel${selectedAccountIds.size !== 1 ? "s" : ""}`}
             </Button>
 
             {!videoUrl && (
