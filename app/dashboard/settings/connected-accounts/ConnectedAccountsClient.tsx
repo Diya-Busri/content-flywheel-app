@@ -278,7 +278,7 @@ export default function ConnectedAccountsClient() {
             const isConnected = accounts.length > 0;
             const isConnecting = connecting === platform;
             const canAddAnother =
-              (platform === "youtube" || platform === "instagram") && isConnected;
+              platform === "instagram" && isConnected;
             const oauthBlocked = OAUTH_UNAVAILABLE.includes(platform) && !isConnected;
 
             return (
@@ -304,6 +304,15 @@ export default function ConnectedAccountsClient() {
                             </p>
                           );
                         })}
+                        {platform === "youtube" && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5">
+                            💡 To publish to a different channel — disconnect this account, switch your active YouTube channel in{" "}
+                            <a href="https://studio.youtube.com" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                              YouTube Studio
+                            </a>
+                            , then reconnect here.
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
