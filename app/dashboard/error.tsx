@@ -21,6 +21,14 @@ export default function DashboardError({
       <p className="text-center text-sm text-muted-foreground">
         This dashboard page could not load. This is often due to a temporary server or database issue.
       </p>
+      {process.env.NODE_ENV !== "production" && error?.message && (
+        <p className="text-center text-xs font-mono text-red-500 max-w-lg break-all">{error.message}</p>
+      )}
+      {error?.message && (
+        <p className="text-center text-xs font-mono text-red-400 max-w-lg break-all bg-red-50 dark:bg-red-950/20 p-2 rounded border border-red-200">
+          {error.message}
+        </p>
+      )}
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Button onClick={reset} variant="outline">
           Try again
