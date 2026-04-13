@@ -573,6 +573,8 @@ export async function GET(request: NextRequest) {
       willInsert: !matchedExisting,
     });
 
+    let savedRowId: string | null = null;
+
     try {
       if (matchedExisting) {
         const updated = await db
@@ -594,6 +596,7 @@ export async function GET(request: NextRequest) {
             )
           )
           .returning({ id: connectedAccountsTable.id });
+        savedRowId = updated[0]?.id ?? null;
         console.log("[connected-accounts/callback] Updated connected_accounts:", {
           id: matchedExisting.id,
           returning: updated,
@@ -612,6 +615,7 @@ export async function GET(request: NextRequest) {
             ...(platform === "instagram" ? { scopes: INSTAGRAM_FACEBOOK_CONNECT_SCOPES } : {}),
           })
           .returning({ id: connectedAccountsTable.id });
+        savedRowId = inserted[0]?.id ?? null;
         console.log("[connected-accounts/callback] Inserted connected_accounts:", { platform, returning: inserted });
       }
     } catch (e) {
@@ -625,6 +629,16 @@ export async function GET(request: NextRequest) {
         err: e,
       });
       throw e;
+    }
+
+    // For YouTube new connections: redirect to channel picker so user can confirm
+    // which brand channel this token is for (Google brand account OAuth often returns
+    // the primary channel from channels?mine=true regardless of which brand was selected)
+    if (platform === "youtube" && savedRowId && !matchedExisting) {
+      const detected = encodeURIComponent(platformUsername ?? "");
+      return NextResponse.redirect(
+        `${redirectUrl}?yt_new=${encodeURIComponent(savedRowId)}&yt_detected=${detected}`
+      );
     }
 
     return successRedirect();

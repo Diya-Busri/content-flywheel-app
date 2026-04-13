@@ -81,6 +81,14 @@ export default function ConnectedAccountsClient() {
   const [manualTokenUsername, setManualTokenUsername] = useState("");
   const [manualTokenUserId, setManualTokenUserId] = useState("");
   const [manualTokenSaving, setManualTokenSaving] = useState(false);
+
+  // Post-OAuth YouTube channel picker
+  const [ytPickerOpen, setYtPickerOpen] = useState(false);
+  const [ytPickerAccountId, setYtPickerAccountId] = useState("");
+  const [ytPickerDetected, setYtPickerDetected] = useState("");
+  const [ytPickerHandle, setYtPickerHandle] = useState("");
+  const [ytPickerSaving, setYtPickerSaving] = useState(false);
+
   const { toast } = useToast();
 
   const canStartInstagramOAuth = igBusinessConfirmed && igFacebookLinkedConfirmed;
@@ -124,12 +132,22 @@ export default function ConnectedAccountsClient() {
     const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
     const error = params.get("error");
     const connected = params.get("connected");
+    const ytNew = params.get("yt_new");
+    const ytDetected = params.get("yt_detected");
+
+    window.history.replaceState({}, "", window.location.pathname);
+
     if (error) {
       toast({ title: "Connection failed", description: error, variant: "destructive" });
-      window.history.replaceState({}, "", window.location.pathname);
+    } else if (ytNew) {
+      // New YouTube connection — show channel picker
+      fetchAccounts();
+      setYtPickerAccountId(ytNew);
+      setYtPickerDetected(ytDetected ?? "");
+      setYtPickerHandle(ytDetected ?? "");
+      setYtPickerOpen(true);
     } else if (connected) {
       toast({ title: "Connected", description: "Account linked successfully." });
-      window.history.replaceState({}, "", window.location.pathname);
       fetchAccounts();
     }
   }, [fetchAccounts, toast]);
@@ -200,6 +218,27 @@ export default function ConnectedAccountsClient() {
       });
     } finally {
       setManualTokenSaving(false);
+    }
+  };
+
+  const handleYtPickerSave = async () => {
+    if (!ytPickerHandle.trim()) return;
+    setYtPickerSaving(true);
+    try {
+      const res = await fetch(`/api/connected-accounts/youtube`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: ytPickerAccountId, channelHandle: ytPickerHandle.trim() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to save");
+      toast({ title: "Channel saved", description: `Connected as ${ytPickerHandle.trim().startsWith("@") ? ytPickerHandle.trim() : `@${ytPickerHandle.trim()}`}` });
+      setYtPickerOpen(false);
+      fetchAccounts();
+    } catch (e) {
+      toast({ title: "Error", description: e instanceof Error ? e.message : "Could not save", variant: "destructive" });
+    } finally {
+      setYtPickerSaving(false);
     }
   };
 
@@ -278,7 +317,7 @@ export default function ConnectedAccountsClient() {
             const isConnected = accounts.length > 0;
             const isConnecting = connecting === platform;
             const canAddAnother =
-              platform === "instagram" && isConnected;
+              (platform === "youtube" || platform === "instagram") && isConnected;
             const oauthBlocked = OAUTH_UNAVAILABLE.includes(platform) && !isConnected;
 
             return (
@@ -304,15 +343,6 @@ export default function ConnectedAccountsClient() {
                             </p>
                           );
                         })}
-                        {platform === "youtube" && (
-                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5">
-                            💡 To publish to a different channel — disconnect this account, switch your active YouTube channel in{" "}
-                            <a href="https://studio.youtube.com" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
-                              YouTube Studio
-                            </a>
-                            , then reconnect here.
-                          </p>
-                        )}
                       </div>
                     )}
                   </div>
@@ -538,6 +568,50 @@ export default function ConnectedAccountsClient() {
             >
               {manualTokenSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save token
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── YouTube channel picker (post-OAuth) ── */}
+      <Dialog open={ytPickerOpen} onOpenChange={(open) => { if (!open) { setYtPickerOpen(false); fetchAccounts(); } }}>
+        <DialogContent className="border-[#E5E7EB] bg-white dark:border-[#2A2A2A] dark:bg-[#1A1A1A] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900 dark:text-white">Which YouTube channel is this?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1 text-sm text-gray-700 dark:text-gray-300">
+            <p>
+              We detected <span className="font-semibold">{ytPickerDetected || "an unknown channel"}</span> from your Google account.
+              If this is the wrong channel, enter the correct handle below.
+            </p>
+            <div className="space-y-1">
+              <Label htmlFor="yt-handle" className="text-sm text-gray-900 dark:text-white">Channel handle</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">@</span>
+                <Input
+                  id="yt-handle"
+                  placeholder="smartincomecircle"
+                  value={ytPickerHandle.replace(/^@+/, "")}
+                  onChange={(e) => setYtPickerHandle(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Enter the @handle shown on your YouTube channel page.</p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" className="border-gray-300 text-gray-700 dark:border-[#2A2A2A] dark:text-gray-300"
+              onClick={() => { setYtPickerOpen(false); fetchAccounts(); }}>
+              Skip
+            </Button>
+            <Button
+              type="button"
+              disabled={!ytPickerHandle.trim() || ytPickerSaving}
+              className="bg-orange-500 hover:bg-orange-600"
+              onClick={() => void handleYtPickerSave()}
+            >
+              {ytPickerSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save channel
             </Button>
           </DialogFooter>
         </DialogContent>
