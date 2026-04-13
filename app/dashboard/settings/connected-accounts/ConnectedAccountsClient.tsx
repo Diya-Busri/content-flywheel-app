@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Card,
@@ -82,12 +83,18 @@ export default function ConnectedAccountsClient() {
   const [manualTokenUserId, setManualTokenUserId] = useState("");
   const [manualTokenSaving, setManualTokenSaving] = useState(false);
 
-  // Post-OAuth YouTube channel picker
-  const [ytPickerOpen, setYtPickerOpen] = useState(false);
-  const [ytPickerAccountId, setYtPickerAccountId] = useState("");
-  const [ytPickerDetected, setYtPickerDetected] = useState("");
+  // Post-OAuth YouTube channel picker — driven by URL params
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const ytNewAccountId = searchParams.get("yt_new") ?? "";
+  const ytDetected = searchParams.get("yt_detected") ?? "";
   const [ytPickerHandle, setYtPickerHandle] = useState("");
   const [ytPickerSaving, setYtPickerSaving] = useState(false);
+
+  // Pre-fill handle when picker opens
+  useEffect(() => {
+    if (ytNewAccountId) setYtPickerHandle(ytDetected.replace(/^@+/, ""));
+  }, [ytNewAccountId, ytDetected]);
 
   const { toast } = useToast();
 
@@ -133,21 +140,16 @@ export default function ConnectedAccountsClient() {
     const error = params.get("error");
     const connected = params.get("connected");
     const ytNew = params.get("yt_new");
-    const ytDetected = params.get("yt_detected");
-
-    window.history.replaceState({}, "", window.location.pathname);
 
     if (error) {
-      toast({ title: "Connection failed", description: error, variant: "destructive" });
+      toast({ title: "Connection failed", description: decodeURIComponent(error), variant: "destructive" });
+      window.history.replaceState({}, "", window.location.pathname);
     } else if (ytNew) {
-      // New YouTube connection — show channel picker
+      // New YouTube connection — channel picker is shown via URL params (ytNewAccountId)
       fetchAccounts();
-      setYtPickerAccountId(ytNew);
-      setYtPickerDetected(ytDetected ?? "");
-      setYtPickerHandle(ytDetected ?? "");
-      setYtPickerOpen(true);
     } else if (connected) {
       toast({ title: "Connected", description: "Account linked successfully." });
+      window.history.replaceState({}, "", window.location.pathname);
       fetchAccounts();
     }
   }, [fetchAccounts, toast]);
@@ -222,18 +224,19 @@ export default function ConnectedAccountsClient() {
   };
 
   const handleYtPickerSave = async () => {
-    if (!ytPickerHandle.trim()) return;
+    if (!ytPickerHandle.trim() || !ytNewAccountId) return;
     setYtPickerSaving(true);
     try {
       const res = await fetch(`/api/connected-accounts/youtube`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId: ytPickerAccountId, channelHandle: ytPickerHandle.trim() }),
+        body: JSON.stringify({ accountId: ytNewAccountId, channelHandle: ytPickerHandle.trim() }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to save");
-      toast({ title: "Channel saved", description: `Connected as ${ytPickerHandle.trim().startsWith("@") ? ytPickerHandle.trim() : `@${ytPickerHandle.trim()}`}` });
-      setYtPickerOpen(false);
+      const handle = ytPickerHandle.trim().startsWith("@") ? ytPickerHandle.trim() : `@${ytPickerHandle.trim()}`;
+      toast({ title: "Channel saved!", description: `Connected as ${handle}` });
+      router.replace("/dashboard/settings/connected-accounts");
       fetchAccounts();
     } catch (e) {
       toast({ title: "Error", description: e instanceof Error ? e.message : "Could not save", variant: "destructive" });
@@ -574,34 +577,36 @@ export default function ConnectedAccountsClient() {
       </Dialog>
 
       {/* ── YouTube channel picker (post-OAuth) ── */}
-      <Dialog open={ytPickerOpen} onOpenChange={(open) => { if (!open) { setYtPickerOpen(false); fetchAccounts(); } }}>
+      <Dialog
+        open={Boolean(ytNewAccountId)}
+        onOpenChange={(open) => { if (!open) router.replace("/dashboard/settings/connected-accounts"); }}
+      >
         <DialogContent className="border-[#E5E7EB] bg-white dark:border-[#2A2A2A] dark:bg-[#1A1A1A] sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-gray-900 dark:text-white">Which YouTube channel is this?</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1 text-sm text-gray-700 dark:text-gray-300">
             <p>
-              We detected <span className="font-semibold">{ytPickerDetected || "an unknown channel"}</span> from your Google account.
-              If this is the wrong channel, enter the correct handle below.
+              Enter the handle for the channel you just connected. This is the <span className="font-semibold">@handle</span> shown on your YouTube channel page.
             </p>
             <div className="space-y-1">
               <Label htmlFor="yt-handle" className="text-sm text-gray-900 dark:text-white">Channel handle</Label>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">@</span>
-                <Input
+              <div className="flex items-center gap-2 rounded-md border border-input px-3">
+                <span className="text-muted-foreground select-none">@</span>
+                <input
                   id="yt-handle"
-                  placeholder="smartincomecircle"
+                  placeholder="historyai"
                   value={ytPickerHandle.replace(/^@+/, "")}
                   onChange={(e) => setYtPickerHandle(e.target.value)}
-                  className="flex-1"
+                  className="flex-1 bg-transparent py-2 text-sm outline-none"
+                  autoFocus
                 />
               </div>
-              <p className="text-xs text-muted-foreground">Enter the @handle shown on your YouTube channel page.</p>
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" className="border-gray-300 text-gray-700 dark:border-[#2A2A2A] dark:text-gray-300"
-              onClick={() => { setYtPickerOpen(false); fetchAccounts(); }}>
+              onClick={() => router.replace("/dashboard/settings/connected-accounts")}>
               Skip
             </Button>
             <Button
