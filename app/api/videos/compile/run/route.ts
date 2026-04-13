@@ -54,8 +54,12 @@ function isHttpUrl(s: string) {
 }
 
 export async function POST(request: NextRequest) {
-  // Verify internal secret
-  const secret = process.env.COMPILE_INTERNAL_SECRET?.trim();
+  // Verify internal secret — same derivation as /api/videos/compile/route.ts
+  const secret =
+    process.env.COMPILE_INTERNAL_SECRET?.trim() ||
+    (process.env.DATABASE_URL
+      ? Buffer.from(process.env.DATABASE_URL).toString("base64").slice(0, 40)
+      : null);
   const provided = request.headers.get("x-compile-secret")?.trim();
   if (!secret || !provided || secret !== provided) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

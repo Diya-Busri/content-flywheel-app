@@ -214,7 +214,14 @@ export async function POST(request: NextRequest) {
     const estimatedDurationForRouting = scenes.reduce((sum, s) => sum + (typeof s.duration === "number" ? s.duration : 5), 0);
     const needsAsyncJob = scenes.length > 60 || estimatedDurationForRouting > 180;
     if (needsAsyncJob) {
-      const internalSecret = process.env.COMPILE_INTERNAL_SECRET?.trim();
+      // Derive internal secret: use COMPILE_INTERNAL_SECRET if explicitly set, otherwise
+      // fall back to a stable value derived from DATABASE_URL (which is always set in production).
+      // Both this route and /api/videos/compile/run use the same derivation so they agree.
+      const internalSecret =
+        process.env.COMPILE_INTERNAL_SECRET?.trim() ||
+        (process.env.DATABASE_URL
+          ? Buffer.from(process.env.DATABASE_URL).toString("base64").slice(0, 40)
+          : null);
       if (internalSecret) {
         const [job] = await db
           .insert(renderJobsTable)
