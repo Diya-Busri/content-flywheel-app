@@ -601,11 +601,30 @@ export default function TemplateStudioClient() {
     setSeriesPrefsLoaded(true);
   }, []);
 
-  // Auto-set default niche and clear topic when switching documentary modes
+  // Auto-set default niche, clear topic, and reset scenes when switching documentary modes
   useEffect(() => {
-    if (mode === "21") { setFinanceDocNiche("History"); setFinanceDocTopic(""); }
-    else if (mode === "22") { setFinanceDocNiche("Technology & AI"); setFinanceDocTopic(""); }
-    else if (mode === "17") { setFinanceDocNiche("Personal Finance"); setFinanceDocTopic(""); }
+    if (mode === "21") {
+      setFinanceDocNiche("History");
+      setFinanceDocTopic("");
+      setAiStoryScenes([]);
+      setSceneImageUrls({});
+      setVoiceoverUrls({});
+      setStep(0);
+    } else if (mode === "22") {
+      setFinanceDocNiche("Technology & AI");
+      setFinanceDocTopic("");
+      setAiStoryScenes([]);
+      setSceneImageUrls({});
+      setVoiceoverUrls({});
+      setStep(0);
+    } else if (mode === "17") {
+      setFinanceDocNiche("Personal Finance");
+      setFinanceDocTopic("");
+      setAiStoryScenes([]);
+      setSceneImageUrls({});
+      setVoiceoverUrls({});
+      setStep(0);
+    }
   }, [mode]);
 
   useEffect(() => {
@@ -5826,7 +5845,7 @@ export default function TemplateStudioClient() {
                       : mode === "15"
                         ? "Generated scenes for your Story Video."
                         : isFinanceDocMode
-                          ? "Your Finance Documentary storyboard. Generate images to bring each scene to life."
+                          ? `Your ${mode === "21" ? "History" : mode === "22" ? "Tech" : "Finance"} Documentary storyboard. Generate images to bring each scene to life.`
                           : "Generated scenes for your AI Story."}
                 </CardDescription>
               </div>
