@@ -131,7 +131,7 @@ export function YouTubePublishSheet({
   const generateSEO = useCallback(async (overrideTitle?: string) => {
     setSeoLoading(true);
     // Use the current edited title if available, falling back to the prop
-    const effectiveTitle = overrideTitle ?? title?.trim() || videoTitle;
+    const effectiveTitle = overrideTitle ?? (title?.trim() || videoTitle);
     try {
       const res = await fetch("/api/youtube/generate-seo", {
         method: "POST",
