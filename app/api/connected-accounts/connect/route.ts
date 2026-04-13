@@ -64,7 +64,7 @@ function buildInstagramViaFacebookAuthUrl(callbackUrl: string, state: string): s
   return authUrl;
 }
 
-function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: NextRequest): string | null {
+function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: NextRequest, addAnother = false): string | null {
   const callbackUrl = getConnectedAccountsOAuthRedirectUri();
 
   switch (platform) {
@@ -94,14 +94,18 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: Next
       if (!clientId) return null;
       const xfHost = _request.headers.get("x-forwarded-host");
       const hostHeader = _request.headers.get("host");
+      // Always use `login select_account consent` so Google forces re-authentication
+      // and shows the full brand-channel picker every time. Without `login`, Google
+      // skips the picker on subsequent OAuth attempts and reuses the existing session
+      // (always returning Smart Income Circle / primary channel).
+      const ytPrompt = "login select_account consent";
       const params = new URLSearchParams({
         client_id: clientId,
         redirect_uri: callbackUrl,
         response_type: "code",
         scope: "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
         access_type: "offline",
-        prompt: "select_account consent",
-        max_age: "0",
+        prompt: ytPrompt,
         state,
       });
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
@@ -110,6 +114,8 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: Next
         redirect_uri_in_params: params.get("redirect_uri"),
         x_forwarded_host: xfHost,
         host: hostHeader,
+        ytPrompt,
+        addAnother,
         note: "callbackUrl is getConnectedAccountsOAuthRedirectUri() — NEXT_PUBLIC_APP_URL or production origin",
         NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "(unset)",
       });
@@ -149,8 +155,8 @@ export async function POST(request: NextRequest) {
     const state = addAnother
       ? `${platform}:new:${randomBytes(16).toString("hex")}`
       : `${platform}:${randomBytes(16).toString("hex")}`;
-    console.log("[connected-accounts/connect] Starting OAuth for platform:", platform);
-    const authUrl = buildAuthUrl(platform, state, request);
+    console.log("[connected-accounts/connect] Starting OAuth for platform:", platform, { addAnother });
+    const authUrl = buildAuthUrl(platform, state, request, addAnother);
     if (!authUrl) {
       return NextResponse.json(
         {

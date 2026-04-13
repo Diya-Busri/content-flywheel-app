@@ -410,7 +410,9 @@ export default function ConnectedAccountsClient() {
                         onClick={() =>
                           platform === "instagram"
                             ? openInstagramPreConnect()
-                            : void handleConnect(platform)
+                            : platform === "youtube"
+                              ? (setYtPreConnectHandle(""), setYtPreConnectOpen(true))
+                              : void handleConnect(platform)
                         }
                         disabled={isConnecting}
                         className="bg-orange-500 hover:bg-orange-600"
@@ -596,7 +598,7 @@ export default function ConnectedAccountsClient() {
             <DialogTitle className="text-gray-900 dark:text-white">Which channel are you adding?</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1 text-sm text-gray-700 dark:text-gray-300">
-            <p>Enter the channel handle first, then you'll be sent to Google to authorise it.</p>
+            <p>Enter the channel handle, then you'll be taken to Google.</p>
             <div className="space-y-1">
               <Label htmlFor="yt-pre-handle" className="text-sm text-gray-900 dark:text-white">Channel handle</Label>
               <div className="flex items-center gap-2 rounded-md border border-input px-3">
@@ -610,9 +612,14 @@ export default function ConnectedAccountsClient() {
                   autoFocus
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                💡 On the Google screen, make sure you select <strong>this specific brand channel</strong> from the account picker.
-              </p>
+            </div>
+            <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5 text-xs text-orange-800 dark:border-orange-900/40 dark:bg-orange-950/30 dark:text-orange-300 space-y-1">
+              <p className="font-semibold">On the Google screen:</p>
+              <ol className="list-decimal list-inside space-y-0.5">
+                <li>Google will ask you to sign in — this is normal, even if you&apos;re already logged in</li>
+                <li>After signing in, you&apos;ll see a list of accounts — <strong>select the brand channel</strong> that matches the handle above</li>
+                <li>Grant the permissions and you&apos;ll be redirected back here</li>
+              </ol>
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -632,7 +639,7 @@ export default function ConnectedAccountsClient() {
               }}
             >
               {ytPreConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Connect on Google →
+              Go to Google →
             </Button>
           </DialogFooter>
         </DialogContent>
