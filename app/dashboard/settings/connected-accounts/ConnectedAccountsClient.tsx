@@ -96,6 +96,23 @@ export default function ConnectedAccountsClient() {
   const [ytPreConnectHandle, setYtPreConnectHandle] = useState("");
   const [ytPreConnecting, setYtPreConnecting] = useState(false);
 
+  // Fallback account ID for picker: either from URL param or first unlabeled YouTube row
+  const [ytFallbackAccountId, setYtFallbackAccountId] = useState("");
+  const activePickerAccountId = ytNewAccountId || ytFallbackAccountId;
+
+  // After accounts load, check if any YouTube row has no label — auto-prompt to label it
+  useEffect(() => {
+    if (!data) return;
+    const ytAccounts = data.connected.filter((a) => a.platform === "youtube");
+    const unlabeled = ytAccounts.find((a) => !a.platformUsername?.trim());
+    if (unlabeled && !ytNewAccountId) {
+      setYtFallbackAccountId(unlabeled.id);
+      const saved = typeof window !== "undefined" ? (localStorage.getItem("yt_intended_handle") ?? "") : "";
+      setYtPickerHandle(saved.replace(/^@+/, ""));
+      if (saved) localStorage.removeItem("yt_intended_handle");
+    }
+  }, [data, ytNewAccountId]);
+
   // Pre-fill post-OAuth picker — prefers the pre-OAuth handle stored in localStorage
   useEffect(() => {
     if (ytNewAccountId) {
@@ -237,18 +254,19 @@ export default function ConnectedAccountsClient() {
   };
 
   const handleYtPickerSave = async () => {
-    if (!ytPickerHandle.trim() || !ytNewAccountId) return;
+    if (!ytPickerHandle.trim() || !activePickerAccountId) return;
     setYtPickerSaving(true);
     try {
       const res = await fetch(`/api/connected-accounts/youtube`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId: ytNewAccountId, channelHandle: ytPickerHandle.trim() }),
+        body: JSON.stringify({ accountId: activePickerAccountId, channelHandle: ytPickerHandle.trim() }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to save");
       const handle = ytPickerHandle.trim().startsWith("@") ? ytPickerHandle.trim() : `@${ytPickerHandle.trim()}`;
       toast({ title: "Channel saved!", description: `Connected as ${handle}` });
+      setYtFallbackAccountId("");
       router.replace("/dashboard/settings/connected-accounts");
       fetchAccounts();
     } catch (e) {
@@ -647,8 +665,13 @@ export default function ConnectedAccountsClient() {
 
       {/* ── YouTube channel picker (post-OAuth) ── */}
       <Dialog
-        open={Boolean(ytNewAccountId)}
-        onOpenChange={(open) => { if (!open) router.replace("/dashboard/settings/connected-accounts"); }}
+        open={Boolean(activePickerAccountId)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setYtFallbackAccountId("");
+            router.replace("/dashboard/settings/connected-accounts");
+          }
+        }}
       >
         <DialogContent className="border-[#E5E7EB] bg-white dark:border-[#2A2A2A] dark:bg-[#1A1A1A] sm:max-w-md">
           <DialogHeader>
@@ -675,7 +698,7 @@ export default function ConnectedAccountsClient() {
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" className="border-gray-300 text-gray-700 dark:border-[#2A2A2A] dark:text-gray-300"
-              onClick={() => router.replace("/dashboard/settings/connected-accounts")}>
+              onClick={() => { setYtFallbackAccountId(""); router.replace("/dashboard/settings/connected-accounts"); }}>
               Skip
             </Button>
             <Button
