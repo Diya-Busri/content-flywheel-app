@@ -216,6 +216,7 @@ export const FINANCE_DOC_TONE_OPTIONS = [
 ] as const;
 
 export const FINANCE_DOC_LENGTH_OPTIONS = [
+  { value: "mini",     label: "Short · 30 scenes · ~8 min" },
   { value: "short",    label: "Quick · 75 scenes · ~21 min" },
   { value: "medium",   label: "Standard · 150 scenes · ~42 min" },
   { value: "long",     label: "Extended · 250 scenes · ~70 min" },

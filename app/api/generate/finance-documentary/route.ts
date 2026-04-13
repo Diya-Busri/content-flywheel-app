@@ -76,7 +76,8 @@ export async function POST(request: NextRequest) {
       niche?: string;
       style?: string;
       tone?: string;
-      length?: "short" | "medium" | "long" | "epic";
+      length?: "mini" | "short" | "medium" | "long" | "epic";
+      voiceId?: string;
       hookStyle?: string;
       ctaGoal?: string;
       channelName?: string;
@@ -101,7 +102,8 @@ export async function POST(request: NextRequest) {
 
     // Scene count per length option
     const sceneCount =
-      length === "short" ? 75
+      length === "mini"  ? 30
+      : length === "short" ? 75
       : length === "long"  ? 250
       : length === "epic"  ? 400
       : 150; // medium default

@@ -362,7 +362,8 @@ export default function TemplateStudioClient() {
   const [financeDocNiche, setFinanceDocNiche] = useState("Personal Finance");
   const [financeDocStyle, setFinanceDocStyle] = useState("Dark Luxury");
   const [financeDocTone, setFinanceDocTone] = useState("Documentary");
-  const [financeDocLength, setFinanceDocLength] = useState<"short" | "medium" | "long">("medium");
+  const [financeDocLength, setFinanceDocLength] = useState<"mini" | "short" | "medium" | "long" | "epic">("short");
+  const [financeDocVoiceId, setFinanceDocVoiceId] = useState<string>(() => getDefaultVoiceId());
   const [financeDocHookStyle, setFinanceDocHookStyle] = useState("shocking_stat");
   const [financeDocCtaGoal, setFinanceDocCtaGoal] = useState("subscribe");
   const [financeDocChannelName, setFinanceDocChannelName] = useState("");
@@ -1147,6 +1148,7 @@ export default function TemplateStudioClient() {
                       hookStyle: financeDocHookStyle,
                       ctaGoal: financeDocCtaGoal,
                       channelName: financeDocChannelName.trim(),
+                      voiceId: financeDocVoiceId,
                       productName: financeDocProductName.trim(),
                       affiliatePlatform: financeDocCtaGoal === "affiliate"
                         ? (financeDocAffiliatePlatform === "other" ? financeDocAffiliateCustomName.trim() : financeDocAffiliatePlatform)
@@ -2927,7 +2929,8 @@ export default function TemplateStudioClient() {
       if (typeof d.financeDocNiche === "string") setFinanceDocNiche(d.financeDocNiche);
       if (typeof d.financeDocStyle === "string") setFinanceDocStyle(d.financeDocStyle);
       if (typeof d.financeDocTone === "string") setFinanceDocTone(d.financeDocTone);
-      if (typeof d.financeDocLength === "string") setFinanceDocLength(d.financeDocLength as "short" | "medium" | "long");
+      if (typeof d.financeDocLength === "string") setFinanceDocLength(d.financeDocLength as "mini" | "short" | "medium" | "long" | "epic");
+      if (typeof d.financeDocVoiceId === "string") setFinanceDocVoiceId(d.financeDocVoiceId);
       if (typeof d.financeDocHookStyle === "string") setFinanceDocHookStyle(d.financeDocHookStyle);
       if (typeof d.financeDocCtaGoal === "string") setFinanceDocCtaGoal(d.financeDocCtaGoal);
       if (typeof d.financeDocChannelName === "string") setFinanceDocChannelName(d.financeDocChannelName);
@@ -2969,6 +2972,7 @@ export default function TemplateStudioClient() {
           financeDocHookStyle,
           financeDocCtaGoal,
           financeDocChannelName,
+          financeDocVoiceId,
           financeDocProductName,
           aiStoryScenes,
           sceneImageUrls: filteredImageUrls,
@@ -4066,7 +4070,7 @@ export default function TemplateStudioClient() {
                 {/* Length */}
                 <div className="space-y-2">
                   <Label>Video length</Label>
-                  <Select value={financeDocLength} onValueChange={(v) => setFinanceDocLength(v as "short" | "medium" | "long")}>
+                  <Select value={financeDocLength} onValueChange={(v) => setFinanceDocLength(v as "mini" | "short" | "medium" | "long" | "epic")}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {FINANCE_DOC_LENGTH_OPTIONS.map((o) => (
@@ -4111,6 +4115,28 @@ export default function TemplateStudioClient() {
                     value={financeDocChannelName}
                     onChange={(e) => setFinanceDocChannelName(e.target.value)}
                   />
+                </div>
+
+                {/* Voiceover voice */}
+                <div className="space-y-2">
+                  <Label>Voiceover voice</Label>
+                  <Select
+                    value={financeDocVoiceId}
+                    onValueChange={(v) => {
+                      setFinanceDocVoiceId(v);
+                      setDefaultVoiceId(v);
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select voice" /></SelectTrigger>
+                    <SelectContent>
+                      {ELEVENLABS_VOICES.map((v) => (
+                        <SelectItem key={v.voiceId} value={v.voiceId}>
+                          {v.name} — {v.description}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">AI narrator voice for your video.</p>
                 </div>
 
                 {/* Product name (only if CTA = sell product) */}
