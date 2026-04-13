@@ -4267,8 +4267,8 @@ export default function TemplateStudioClient() {
                   <Label>Channel name <span className="text-muted-foreground font-normal">(optional)</span></Label>
                   {youtubeChannels.length > 0 ? (
                     <Select
-                      value={financeDocChannelName}
-                      onValueChange={setFinanceDocChannelName}
+                      value={financeDocChannelName || "__none__"}
+                      onValueChange={(v) => setFinanceDocChannelName(v === "__none__" ? "" : v)}
                     >
                       <SelectTrigger><SelectValue placeholder="Select a channel" /></SelectTrigger>
                       <SelectContent>
@@ -4277,7 +4277,7 @@ export default function TemplateStudioClient() {
                             📺 {ch.name}
                           </SelectItem>
                         ))}
-                        <SelectItem value="">None / custom</SelectItem>
+                        <SelectItem value="__none__">None / type manually</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : (
