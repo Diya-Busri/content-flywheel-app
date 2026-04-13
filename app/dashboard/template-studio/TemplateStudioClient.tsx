@@ -3047,7 +3047,7 @@ export default function TemplateStudioClient() {
       if (!raw) return;
       const d = JSON.parse(raw) as Record<string, unknown>;
       if (typeof d.mode === "string") setMode(d.mode as CreationMode);
-      if (typeof d.step === "number") setStep(d.step as 1 | 2 | 3);
+      if (d.step === 1 || d.step === 2 || d.step === 3) setStep(d.step);
       // Finance Documentary fields
       if (typeof d.financeDocTopic === "string") setFinanceDocTopic(d.financeDocTopic);
       if (typeof d.financeDocNiche === "string") setFinanceDocNiche(d.financeDocNiche);
