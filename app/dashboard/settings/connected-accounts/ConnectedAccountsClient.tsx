@@ -91,9 +91,18 @@ export default function ConnectedAccountsClient() {
   const [ytPickerHandle, setYtPickerHandle] = useState("");
   const [ytPickerSaving, setYtPickerSaving] = useState(false);
 
-  // Pre-fill handle when picker opens
+  // Pre-OAuth: ask channel name BEFORE going to Google
+  const [ytPreConnectOpen, setYtPreConnectOpen] = useState(false);
+  const [ytPreConnectHandle, setYtPreConnectHandle] = useState("");
+  const [ytPreConnecting, setYtPreConnecting] = useState(false);
+
+  // Pre-fill post-OAuth picker — prefers the pre-OAuth handle stored in localStorage
   useEffect(() => {
-    if (ytNewAccountId) setYtPickerHandle(ytDetected.replace(/^@+/, ""));
+    if (ytNewAccountId) {
+      const saved = typeof window !== "undefined" ? (localStorage.getItem("yt_intended_handle") ?? "") : "";
+      setYtPickerHandle((saved || ytDetected).replace(/^@+/, ""));
+      if (saved) localStorage.removeItem("yt_intended_handle");
+    }
   }, [ytNewAccountId, ytDetected]);
 
   const { toast } = useToast();
@@ -154,9 +163,13 @@ export default function ConnectedAccountsClient() {
     }
   }, [fetchAccounts, toast]);
 
-  const handleConnect = async (platform: ConnectedPlatform, addAnother = false) => {
+  const handleConnect = async (platform: ConnectedPlatform, addAnother = false, intendedHandle?: string) => {
     setConnecting(platform);
     try {
+      // Store the intended channel handle so the post-OAuth modal is pre-filled correctly
+      if (intendedHandle && typeof window !== "undefined") {
+        localStorage.setItem("yt_intended_handle", intendedHandle.replace(/^@+/, ""));
+      }
       const res = await fetch("/api/connected-accounts/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -369,7 +382,7 @@ export default function ConnectedAccountsClient() {
                             onClick={() =>
                               platform === "instagram"
                                 ? openInstagramPreConnect()
-                                : void handleConnect(platform, true)
+                                : (setYtPreConnectHandle(""), setYtPreConnectOpen(true))
                             }
                             disabled={isConnecting}
                           >
@@ -571,6 +584,55 @@ export default function ConnectedAccountsClient() {
             >
               {manualTokenSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save token
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── YouTube pre-connect: ask channel name BEFORE OAuth ── */}
+      <Dialog open={ytPreConnectOpen} onOpenChange={(open) => { if (!open) setYtPreConnectOpen(false); }}>
+        <DialogContent className="border-[#E5E7EB] bg-white dark:border-[#2A2A2A] dark:bg-[#1A1A1A] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900 dark:text-white">Which channel are you adding?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1 text-sm text-gray-700 dark:text-gray-300">
+            <p>Enter the channel handle first, then you'll be sent to Google to authorise it.</p>
+            <div className="space-y-1">
+              <Label htmlFor="yt-pre-handle" className="text-sm text-gray-900 dark:text-white">Channel handle</Label>
+              <div className="flex items-center gap-2 rounded-md border border-input px-3">
+                <span className="text-muted-foreground select-none">@</span>
+                <input
+                  id="yt-pre-handle"
+                  placeholder="smartincomecircle"
+                  value={ytPreConnectHandle.replace(/^@+/, "")}
+                  onChange={(e) => setYtPreConnectHandle(e.target.value)}
+                  className="flex-1 bg-transparent py-2 text-sm outline-none"
+                  autoFocus
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                💡 On the Google screen, make sure you select <strong>this specific brand channel</strong> from the account picker.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" className="border-gray-300 text-gray-700 dark:border-[#2A2A2A] dark:text-gray-300"
+              onClick={() => setYtPreConnectOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!ytPreConnectHandle.trim() || ytPreConnecting}
+              className="bg-orange-500 hover:bg-orange-600"
+              onClick={async () => {
+                setYtPreConnecting(true);
+                setYtPreConnectOpen(false);
+                await handleConnect("youtube", true, ytPreConnectHandle.trim());
+                setYtPreConnecting(false);
+              }}
+            >
+              {ytPreConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Connect on Google →
             </Button>
           </DialogFooter>
         </DialogContent>
