@@ -2293,12 +2293,25 @@ export default function TemplateStudioClient() {
           : {}),
       };
       const metadata = mergeSeriesIntoTimelinePayload(metaBase, seriesShowTitle, episodeNumber);
+
+      // If we have a socialMediaPack, embed its YouTube fields inside the metadata
+      // so the YouTube SEO panel in My Library shows the actual documentary
+      // title/description/tags instead of regenerating generic content.
+      const metadataWithYt = socialMediaPack ? {
+        ...metadata,
+        ...(socialMediaPack.title ? { youtubeTitle: socialMediaPack.title } : {}),
+        ...(socialMediaPack.youtubeDescription ? { youtubeDescription: socialMediaPack.youtubeDescription } : {}),
+        ...(Array.isArray(socialMediaPack.hashtags) && socialMediaPack.hashtags.length > 0
+          ? { youtubeKeywords: socialMediaPack.hashtags.join(", ") }
+          : {}),
+      } : metadata;
+
       const res = await fetch(`/api/video-timeline/videos/${encodeURIComponent(libraryDraftVideoId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: draftTitle,
-          metadata,
+          metadata: metadataWithYt,
         }),
       });
       return res.ok;
@@ -2319,6 +2332,7 @@ export default function TemplateStudioClient() {
     financeDocTopic,
     mode,
     seriesShowTitle,
+    socialMediaPack,
     storyVideoTopic,
     theme,
     whatBuilding,
