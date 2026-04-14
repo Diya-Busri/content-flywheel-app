@@ -230,19 +230,27 @@ export default function FinancesClient({
             const months = Object.entries(monthly).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12);
             if (months.length === 0) return <p style={{ color: "#9ca3af", fontSize: "14px" }}>No expenses yet.</p>;
             const max = Math.max(...months.map((m) => m[1]));
+            const avg = months.reduce((s, m) => s + m[1], 0) / months.length;
             return (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {months.map(([month, pence]) => (
-                  <div key={month} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <span style={{ width: "70px", fontSize: "12px", color: "#6b7280", flexShrink: 0 }}>
-                      {new Date(month + "-01").toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
-                    </span>
-                    <div style={{ flex: 1, height: "20px", background: "#f3f4f6", borderRadius: "6px", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${(pence / max) * 100}%`, background: "linear-gradient(90deg, #f97316, #ea580c)", borderRadius: "6px" }} />
+              <div>
+                {/* Average callout */}
+                <p style={{ fontSize: "13px", color: "#6b7280", marginBottom: "16px" }}>
+                  Average per month: <strong style={{ color: "#f97316" }}>{fmt(Math.round(avg))}</strong>
+                  {" · "}Total tracked: <strong style={{ color: "#111827" }}>{months.length} months</strong>
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {months.map(([month, pence]) => (
+                    <div key={month} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <span style={{ width: "76px", fontSize: "12px", color: "#6b7280", flexShrink: 0 }}>
+                        {new Date(month + "-01").toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
+                      </span>
+                      <div style={{ flex: 1, height: "22px", background: "#f3f4f6", borderRadius: "6px", overflow: "hidden", minWidth: 0 }}>
+                        <div style={{ height: "100%", width: `${(pence / max) * 100}%`, background: "linear-gradient(90deg, #f97316, #ea580c)", borderRadius: "6px", minWidth: "4px" }} />
+                      </div>
+                      <span style={{ minWidth: "90px", fontSize: "13px", fontWeight: 700, color: "#111827", textAlign: "right", flexShrink: 0 }}>{fmt(pence)}</span>
                     </div>
-                    <span style={{ width: "72px", fontSize: "13px", fontWeight: 700, color: "#111827", textAlign: "right" }}>{fmt(pence)}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             );
           })()}
