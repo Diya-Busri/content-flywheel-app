@@ -60,6 +60,7 @@ interface PromoResult {
   discountPercent?: number;
   discountAmount?: number;
   description?: string;
+  plan?: "monthly" | "yearly" | "both";
   error?: string;
 }
 
@@ -211,9 +212,14 @@ export default function PricingPage() {
           {/* Pricing cards */}
           <div className="grid gap-6 lg:grid-cols-2 max-w-4xl mx-auto mb-20">
             {PLANS.map((p, i) => {
-              const discountedPrice = promoResult?.valid
-                ? formatDiscountedPrice(promoResult, p.baseAmount, p.plan === "yearly")
+              const promoAppliesToThisPlan =
+                promoResult?.valid &&
+                (promoResult.plan === "both" || promoResult.plan === p.plan);
+              const discountedPrice = promoAppliesToThisPlan
+                ? formatDiscountedPrice(promoResult!, p.baseAmount, p.plan === "yearly")
                 : null;
+              const promoExcludesThisPlan =
+                promoResult?.valid && !promoAppliesToThisPlan;
 
               return (
                 <motion.div
@@ -261,7 +267,14 @@ export default function PricingPage() {
                     </AnimatePresence>
                     <span className="text-white/40 text-base">{p.period}</span>
                   </div>
-                  <p className="text-white/30 text-sm mb-8">{p.subtext}</p>
+                  <p className="text-white/30 text-sm mb-2">{p.subtext}</p>
+                  {promoExcludesThisPlan && (
+                    <p className="text-amber-400/80 text-xs mb-6">
+                      ⚠️ <span className="font-medium">{promoApplied}</span> is only valid for the{" "}
+                      <span className="font-semibold capitalize">{promoResult?.plan}</span> plan
+                    </p>
+                  )}
+                  {!promoExcludesThisPlan && <div className="mb-6" />}
 
                   <motion.button
                     type="button"

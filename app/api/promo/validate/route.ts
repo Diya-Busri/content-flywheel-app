@@ -23,5 +23,5 @@ export async function POST(req: NextRequest) {
     .where(and(eq(promoCodeUsesTable.codeId, promo.id), eq(promoCodeUsesTable.userId, userId)));
   if (used) return NextResponse.json({ valid: false, error: "You have already used this code" });
 
-  return NextResponse.json({ valid: true, discountPercent: promo.discountPercent, discountAmount: promo.discountAmount, description: promo.description });
+  return NextResponse.json({ valid: true, discountPercent: promo.discountPercent, discountAmount: promo.discountAmount, description: promo.description, plan: promo.plan });
 }
