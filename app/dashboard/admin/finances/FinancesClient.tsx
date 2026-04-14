@@ -211,7 +211,7 @@ export default function FinancesClient({
       {/* OVERVIEW TAB */}
       {tab === "overview" && (
         <div>
-          <h2 style={{ margin: "0 0 16px", fontSize: "16px", fontWeight: 700, color: c.text }}>Spending by Category</h2>
+          <h2 className="text-gray-900 dark:text-white" style={{ margin: "0 0 16px", fontSize: "16px", fontWeight: 700 }}>Spending by Category</h2>
           {expensesByCategory.length === 0 ? (
             <p style={{ color: c.textMuted, fontSize: "14px" }}>No expenses logged yet.</p>
           ) : (
@@ -226,7 +226,7 @@ export default function FinancesClient({
                       <span style={{ fontSize: "13px", fontWeight: 600, color: c.textSub }}>{catLabel}</span>
                       <span style={{ fontSize: "13px", fontWeight: 700, color }}>{fmt(pence)} <span style={{ color: c.textMuted, fontWeight: 400 }}>({pct.toFixed(1)}%)</span></span>
                     </div>
-                    <div style={{ height: "8px", background: c.barTrack, borderRadius: "999px", overflow: "hidden" }}>
+                    <div className="bg-gray-100 dark:bg-gray-700" style={{ height: "8px", borderRadius: "999px", overflow: "hidden" }}>
                       <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: "999px", transition: "width 0.5s ease" }} />
                     </div>
                   </div>
@@ -236,7 +236,7 @@ export default function FinancesClient({
           )}
 
           {/* Monthly breakdown */}
-          <h2 style={{ margin: "32px 0 16px", fontSize: "16px", fontWeight: 700, color: c.text }}>Monthly Spending</h2>
+          <h2 className="text-gray-900 dark:text-white" style={{ margin: "32px 0 16px", fontSize: "16px", fontWeight: 700 }}>Monthly Spending</h2>
           {(() => {
             const monthly: Record<string, number> = {};
             for (const e of expenses) {
@@ -250,20 +250,20 @@ export default function FinancesClient({
             return (
               <div>
                 {/* Average callout */}
-                <p style={{ fontSize: "13px", color: c.textMuted, marginBottom: "16px" }}>
+                <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
                   Average per month: <strong style={{ color: "#f97316" }}>{fmt(Math.round(avg))}</strong>
-                  {" · "}Total tracked: <strong style={{ color: c.text }}>{months.length} months</strong>
+                  {" · "}Total tracked: <strong className="text-gray-900 dark:text-white">{months.length} months</strong>
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {months.map(([month, pence]) => (
-                    <div key={month} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                      <span style={{ width: "76px", fontSize: "12px", color: c.textMuted, flexShrink: 0 }}>
+                    <div key={month} className="flex items-center gap-3">
+                      <span className="text-gray-500 dark:text-gray-400 text-xs shrink-0" style={{ width: "76px" }}>
                         {new Date(month + "-01").toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
                       </span>
-                      <div style={{ flex: 1, height: "22px", background: c.barTrack, borderRadius: "6px", overflow: "hidden", minWidth: 0 }}>
+                      <div className="flex-1 rounded-md overflow-hidden bg-gray-100 dark:bg-gray-700 min-w-0" style={{ height: "22px" }}>
                         <div style={{ height: "100%", width: `${(pence / max) * 100}%`, background: "linear-gradient(90deg, #f97316, #ea580c)", borderRadius: "6px", minWidth: "4px" }} />
                       </div>
-                      <span style={{ minWidth: "90px", fontSize: "13px", fontWeight: 700, color: c.text, textAlign: "right", flexShrink: 0 }}>{fmt(pence)}</span>
+                      <span className="text-gray-900 dark:text-white font-bold text-sm text-right shrink-0" style={{ minWidth: "90px" }}>{fmt(pence)}</span>
                     </div>
                   ))}
                 </div>
