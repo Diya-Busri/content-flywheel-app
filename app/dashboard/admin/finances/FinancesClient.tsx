@@ -1,5 +1,6 @@
 "use client";
 import { useState, useMemo } from "react";
+import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 
 type Expense = {
   id: string;
@@ -70,6 +71,21 @@ export default function FinancesClient({
   initialNotes: Note[];
   revenueFromOrders: number; // pence
 }) {
+  const { theme } = useDashboardTheme();
+  const dark = theme === "dark";
+
+  // Theme-aware colour tokens
+  const c = {
+    text:       dark ? "#f9fafb"  : "#111827",
+    textMuted:  dark ? "#9ca3af"  : "#6b7280",
+    textSub:    dark ? "#d1d5db"  : "#374151",
+    card:       dark ? "#1f2937"  : "#ffffff",
+    border:     dark ? "#374151"  : "#e5e7eb",
+    barTrack:   dark ? "#374151"  : "#f3f4f6",
+    inputBg:    dark ? "#111827"  : "#ffffff",
+    inputBorder:dark ? "#4b5563"  : "#d1d5db",
+  };
+
   const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
   const [notes, setNotes] = useState<Note[]>(initialNotes);
   const [tab, setTab] = useState<"overview" | "expenses" | "notes">("overview");
@@ -147,8 +163,8 @@ export default function FinancesClient({
     <div style={{ padding: "32px 24px", maxWidth: "1000px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       {/* Header */}
       <div style={{ marginBottom: "8px" }}>
-        <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800, color: "#111827" }}>💰 Finance Tracker</h1>
-        <p style={{ margin: "4px 0 0", fontSize: "14px", color: "#6b7280" }}>Private admin view — expenses, revenue, tax & notes</p>
+        <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800, color: c.text }}>💰 Finance Tracker</h1>
+        <p style={{ margin: "4px 0 0", fontSize: "14px", color: c.textMuted }}>Private admin view — expenses, revenue, tax & notes</p>
       </div>
 
       {/* Summary Cards */}
@@ -162,9 +178,9 @@ export default function FinancesClient({
           { label: "Pay Yourself Back", value: payYourselfBackPence > 0 ? fmt(payYourselfBackPence) : "£0.00 ✅", color: payYourselfBackPence > 0 ? "#f97316" : "#16a34a", bg: payYourselfBackPence > 0 ? "#fff7ed" : "#f0fdf4", sub: payYourselfBackPence > 0 ? "Still owed to you" : "Fully paid back!" },
         ].map(({ label, value, color, bg, sub }) => (
           <div key={label} style={{ background: bg, borderRadius: "16px", padding: "20px", border: `1px solid ${color}22` }}>
-            <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</p>
+            <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: 700, color: c.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</p>
             <p style={{ margin: "0 0 4px", fontSize: "22px", fontWeight: 800, color, lineHeight: 1 }}>{value}</p>
-            <p style={{ margin: 0, fontSize: "11px", color: "#9ca3af" }}>{sub}</p>
+            <p style={{ margin: 0, fontSize: "11px", color: c.textMuted }}>{sub}</p>
           </div>
         ))}
       </div>
@@ -175,15 +191,15 @@ export default function FinancesClient({
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "24px", borderBottom: "1px solid #f3f4f6", paddingBottom: "0" }}>
+      <div style={{ display: "flex", gap: "8px", marginBottom: "24px", borderBottom: `1px solid ${c.border}`, paddingBottom: "0" }}>
         {(["overview", "expenses", "notes"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             style={{
               padding: "10px 20px", borderRadius: "10px 10px 0 0", border: "none", cursor: "pointer", fontSize: "14px", fontWeight: 600,
-              background: tab === t ? "#fff" : "transparent",
-              color: tab === t ? "#111827" : "#6b7280",
+              background: tab === t ? c.card : "transparent",
+              color: tab === t ? c.text : c.textMuted,
               borderBottom: tab === t ? "2px solid #f97316" : "2px solid transparent",
             }}
           >
@@ -195,9 +211,9 @@ export default function FinancesClient({
       {/* OVERVIEW TAB */}
       {tab === "overview" && (
         <div>
-          <h2 style={{ margin: "0 0 16px", fontSize: "16px", fontWeight: 700, color: "#111827" }}>Spending by Category</h2>
+          <h2 style={{ margin: "0 0 16px", fontSize: "16px", fontWeight: 700, color: c.text }}>Spending by Category</h2>
           {expensesByCategory.length === 0 ? (
-            <p style={{ color: "#9ca3af", fontSize: "14px" }}>No expenses logged yet.</p>
+            <p style={{ color: c.textMuted, fontSize: "14px" }}>No expenses logged yet.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               {expensesByCategory.map(([cat, pence]) => {
@@ -207,10 +223,10 @@ export default function FinancesClient({
                 return (
                   <div key={cat}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{catLabel}</span>
-                      <span style={{ fontSize: "13px", fontWeight: 700, color }}>{fmt(pence)} <span style={{ color: "#9ca3af", fontWeight: 400 }}>({pct.toFixed(1)}%)</span></span>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: c.textSub }}>{catLabel}</span>
+                      <span style={{ fontSize: "13px", fontWeight: 700, color }}>{fmt(pence)} <span style={{ color: c.textMuted, fontWeight: 400 }}>({pct.toFixed(1)}%)</span></span>
                     </div>
-                    <div style={{ height: "8px", background: "#f3f4f6", borderRadius: "999px", overflow: "hidden" }}>
+                    <div style={{ height: "8px", background: c.barTrack, borderRadius: "999px", overflow: "hidden" }}>
                       <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: "999px", transition: "width 0.5s ease" }} />
                     </div>
                   </div>
@@ -220,7 +236,7 @@ export default function FinancesClient({
           )}
 
           {/* Monthly breakdown */}
-          <h2 style={{ margin: "32px 0 16px", fontSize: "16px", fontWeight: 700, color: "#111827" }}>Monthly Spending</h2>
+          <h2 style={{ margin: "32px 0 16px", fontSize: "16px", fontWeight: 700, color: c.text }}>Monthly Spending</h2>
           {(() => {
             const monthly: Record<string, number> = {};
             for (const e of expenses) {
@@ -228,26 +244,26 @@ export default function FinancesClient({
               monthly[month] = (monthly[month] ?? 0) + e.amountPence;
             }
             const months = Object.entries(monthly).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12);
-            if (months.length === 0) return <p style={{ color: "#9ca3af", fontSize: "14px" }}>No expenses yet.</p>;
+            if (months.length === 0) return <p style={{ color: c.textMuted, fontSize: "14px" }}>No expenses yet.</p>;
             const max = Math.max(...months.map((m) => m[1]));
             const avg = months.reduce((s, m) => s + m[1], 0) / months.length;
             return (
               <div>
                 {/* Average callout */}
-                <p style={{ fontSize: "13px", color: "#6b7280", marginBottom: "16px" }}>
+                <p style={{ fontSize: "13px", color: c.textMuted, marginBottom: "16px" }}>
                   Average per month: <strong style={{ color: "#f97316" }}>{fmt(Math.round(avg))}</strong>
-                  {" · "}Total tracked: <strong style={{ color: "#111827" }}>{months.length} months</strong>
+                  {" · "}Total tracked: <strong style={{ color: c.text }}>{months.length} months</strong>
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {months.map(([month, pence]) => (
                     <div key={month} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                      <span style={{ width: "76px", fontSize: "12px", color: "#6b7280", flexShrink: 0 }}>
+                      <span style={{ width: "76px", fontSize: "12px", color: c.textMuted, flexShrink: 0 }}>
                         {new Date(month + "-01").toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
                       </span>
-                      <div style={{ flex: 1, height: "22px", background: "#f3f4f6", borderRadius: "6px", overflow: "hidden", minWidth: 0 }}>
+                      <div style={{ flex: 1, height: "22px", background: c.barTrack, borderRadius: "6px", overflow: "hidden", minWidth: 0 }}>
                         <div style={{ height: "100%", width: `${(pence / max) * 100}%`, background: "linear-gradient(90deg, #f97316, #ea580c)", borderRadius: "6px", minWidth: "4px" }} />
                       </div>
-                      <span style={{ minWidth: "90px", fontSize: "13px", fontWeight: 700, color: "#111827", textAlign: "right", flexShrink: 0 }}>{fmt(pence)}</span>
+                      <span style={{ minWidth: "90px", fontSize: "13px", fontWeight: 700, color: c.text, textAlign: "right", flexShrink: 0 }}>{fmt(pence)}</span>
                     </div>
                   ))}
                 </div>
@@ -261,39 +277,39 @@ export default function FinancesClient({
       {tab === "expenses" && (
         <div>
           {/* Add form */}
-          <div style={{ background: "#fff", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", marginBottom: "24px" }}>
-            <h2 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: 700, color: "#111827" }}>Log an expense</h2>
+          <div style={{ background: c.card, borderRadius: "16px", padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", marginBottom: "24px" }}>
+            <h2 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: 700, color: c.text }}>Log an expense</h2>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 120px", gap: "12px", marginBottom: "12px" }}>
               <div>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Description</label>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: c.textSub, marginBottom: "4px" }}>Description</label>
                 <input
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                   placeholder="Vercel Pro subscription"
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${c.inputBorder}`, fontSize: "13px", boxSizing: "border-box", background: c.inputBg, color: c.text }}
                 />
               </div>
               <div>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Category</label>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: c.textSub, marginBottom: "4px" }}>Category</label>
                 <select
                   value={form.category}
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box", background: "#fff" }}
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${c.inputBorder}`, fontSize: "13px", boxSizing: "border-box", background: c.inputBg, color: c.text }}
                 >
-                  {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  {CATEGORIES.map((cat) => <option key={cat.value} value={cat.value}>{cat.label}</option>)}
                 </select>
               </div>
               <div>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Date</label>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: c.textSub, marginBottom: "4px" }}>Date</label>
                 <input
                   type="date"
                   value={form.date}
                   onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${c.inputBorder}`, fontSize: "13px", boxSizing: "border-box", background: c.inputBg, color: c.text }}
                 />
               </div>
               <div>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Amount (£)</label>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: c.textSub, marginBottom: "4px" }}>Amount (£)</label>
                 <input
                   type="number"
                   value={form.amount}
@@ -301,7 +317,7 @@ export default function FinancesClient({
                   placeholder="20.00"
                   min="0"
                   step="0.01"
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${c.inputBorder}`, fontSize: "13px", boxSizing: "border-box", background: c.inputBg, color: c.text }}
                 />
               </div>
             </div>
@@ -317,14 +333,14 @@ export default function FinancesClient({
 
           {/* Expenses table */}
           {expenses.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "48px", color: "#9ca3af", fontSize: "14px" }}>No expenses yet.</div>
+            <div style={{ textAlign: "center", padding: "48px", color: c.textMuted, fontSize: "14px" }}>No expenses yet.</div>
           ) : (
-            <div style={{ background: "#fff", borderRadius: "16px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+            <div style={{ background: c.card, borderRadius: "16px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
+                  <tr style={{ borderBottom: `1px solid ${c.border}` }}>
                     {["Date", "Description", "Category", "Amount", ""].map((h) => (
-                      <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                      <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: c.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -333,9 +349,9 @@ export default function FinancesClient({
                     const catLabel = CATEGORIES.find((c) => c.value === e.category)?.label ?? e.category;
                     const color = CAT_COLORS[e.category] ?? "#6b7280";
                     return (
-                      <tr key={e.id} style={{ borderBottom: "1px solid #f9fafb" }}>
-                        <td style={{ padding: "13px 16px", fontSize: "13px", color: "#6b7280", whiteSpace: "nowrap" }}>{fmtDate(e.date)}</td>
-                        <td style={{ padding: "13px 16px", fontSize: "14px", fontWeight: 500, color: "#111827" }}>{e.description}</td>
+                      <tr key={e.id} style={{ borderBottom: `1px solid ${c.border}` }}>
+                        <td style={{ padding: "13px 16px", fontSize: "13px", color: c.textMuted, whiteSpace: "nowrap" }}>{fmtDate(e.date)}</td>
+                        <td style={{ padding: "13px 16px", fontSize: "14px", fontWeight: 500, color: c.text }}>{e.description}</td>
                         <td style={{ padding: "13px 16px" }}>
                           <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700, background: color + "15", color, border: `1px solid ${color}33` }}>
                             {catLabel}
@@ -355,8 +371,8 @@ export default function FinancesClient({
                   })}
                 </tbody>
                 <tfoot>
-                  <tr style={{ borderTop: "2px solid #f3f4f6", background: "#fafafa" }}>
-                    <td colSpan={3} style={{ padding: "13px 16px", fontSize: "13px", fontWeight: 700, color: "#374151" }}>Total</td>
+                  <tr style={{ borderTop: `2px solid ${c.border}`, background: c.card }}>
+                    <td colSpan={3} style={{ padding: "13px 16px", fontSize: "13px", fontWeight: 700, color: c.textSub }}>Total</td>
                     <td style={{ padding: "13px 16px", fontSize: "16px", fontWeight: 800, color: "#ef4444" }}>{fmt(totalExpensesPence)}</td>
                     <td />
                   </tr>
@@ -370,14 +386,14 @@ export default function FinancesClient({
       {/* NOTES TAB */}
       {tab === "notes" && (
         <div>
-          <div style={{ background: "#fff", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", marginBottom: "24px" }}>
-            <h2 style={{ margin: "0 0 12px", fontSize: "15px", fontWeight: 700, color: "#111827" }}>Add a note</h2>
+          <div style={{ background: c.card, borderRadius: "16px", padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", marginBottom: "24px" }}>
+            <h2 style={{ margin: "0 0 12px", fontSize: "15px", fontWeight: 700, color: c.text }}>Add a note</h2>
             <textarea
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               placeholder="e.g. Need to repay £340 card spend from Nov. Waiting on Stripe payout. Remember to set aside 20% of next month's revenue for tax..."
               rows={4}
-              style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "1px solid #e5e7eb", fontSize: "14px", resize: "vertical", boxSizing: "border-box", lineHeight: 1.6 }}
+              style={{ width: "100%", padding: "12px", borderRadius: "10px", border: `1px solid ${c.inputBorder}`, fontSize: "14px", resize: "vertical", boxSizing: "border-box", lineHeight: 1.6, background: c.inputBg, color: c.text }}
             />
             <button
               onClick={addNote}
@@ -389,13 +405,13 @@ export default function FinancesClient({
           </div>
 
           {notes.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "48px", color: "#9ca3af", fontSize: "14px" }}>No notes yet. Add your first financial note above.</div>
+            <div style={{ textAlign: "center", padding: "48px", color: c.textMuted, fontSize: "14px" }}>No notes yet. Add your first financial note above.</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               {notes.map((n) => (
-                <div key={n.id} style={{ background: "#fff", borderRadius: "14px", padding: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", border: "1px solid #f3f4f6" }}>
+                <div key={n.id} style={{ background: c.card, borderRadius: "14px", padding: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", border: `1px solid ${c.border}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
-                    <p style={{ margin: 0, fontSize: "14px", color: "#374151", lineHeight: 1.7, whiteSpace: "pre-wrap", flex: 1 }}>{n.content}</p>
+                    <p style={{ margin: 0, fontSize: "14px", color: c.textSub, lineHeight: 1.7, whiteSpace: "pre-wrap", flex: 1 }}>{n.content}</p>
                     <button
                       onClick={() => deleteNote(n.id)}
                       style={{ flexShrink: 0, padding: "4px 10px", borderRadius: "6px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#dc2626", fontSize: "12px", cursor: "pointer" }}
@@ -403,7 +419,7 @@ export default function FinancesClient({
                       Delete
                     </button>
                   </div>
-                  <p style={{ margin: "10px 0 0", fontSize: "11px", color: "#9ca3af" }}>{fmtDate(n.createdAt)}</p>
+                  <p style={{ margin: "10px 0 0", fontSize: "11px", color: c.textMuted }}>{fmtDate(n.createdAt)}</p>
                 </div>
               ))}
             </div>
