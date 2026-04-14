@@ -1,6 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
-import { useDashboardTheme } from "@/components/dashboard-theme-provider";
+import { useState, useMemo, useEffect } from "react";
 
 type Expense = {
   id: string;
@@ -71,8 +70,14 @@ export default function FinancesClient({
   initialNotes: Note[];
   revenueFromOrders: number; // pence
 }) {
-  const { theme } = useDashboardTheme();
-  const dark = theme === "dark";
+  const [dark, setDark] = useState(true); // default dark to avoid flash
+  useEffect(() => {
+    const check = () => setDark(document.documentElement.classList.contains("dark"));
+    check();
+    const obs = new MutationObserver(check);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
 
   // Theme-aware colour tokens
   const c = {
