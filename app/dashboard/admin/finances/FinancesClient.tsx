@@ -255,20 +255,20 @@ export default function FinancesClient({
             return (
               <div>
                 {/* Average callout */}
-                <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
+                <p style={{ fontSize: "13px", color: dark ? "#9ca3af" : "#6b7280", marginBottom: "16px" }}>
                   Average per month: <strong style={{ color: "#f97316" }}>{fmt(Math.round(avg))}</strong>
-                  {" · "}Total tracked: <strong className="text-gray-900 dark:text-white">{months.length} months</strong>
+                  {" · "}Total tracked: <strong style={{ color: dark ? "#ffffff" : "#111827" }}>{months.length} months</strong>
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {months.map(([month, pence]) => (
-                    <div key={month} className="flex items-center gap-3">
-                      <span className="text-gray-500 dark:text-gray-400 text-xs shrink-0" style={{ width: "76px" }}>
+                    <div key={month} style={{ display: "grid", gridTemplateColumns: "80px 1fr 100px", alignItems: "center", gap: "12px" }}>
+                      <span style={{ fontSize: "12px", color: dark ? "#9ca3af" : "#6b7280" }}>
                         {new Date(month + "-01").toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
                       </span>
-                      <div className="flex-1 rounded-md overflow-hidden bg-gray-100 dark:bg-gray-700 min-w-0" style={{ height: "22px" }}>
+                      <div style={{ height: "22px", background: dark ? "#374151" : "#f3f4f6", borderRadius: "6px", overflow: "hidden" }}>
                         <div style={{ height: "100%", width: `${(pence / max) * 100}%`, background: "linear-gradient(90deg, #f97316, #ea580c)", borderRadius: "6px", minWidth: "4px" }} />
                       </div>
-                      <span className="text-gray-900 dark:text-white font-bold text-sm text-right shrink-0" style={{ minWidth: "90px" }}>{fmt(pence)}</span>
+                      <span style={{ fontSize: "14px", fontWeight: 800, color: dark ? "#ffffff" : "#111827", textAlign: "right" }}>{fmt(pence)}</span>
                     </div>
                   ))}
                 </div>
