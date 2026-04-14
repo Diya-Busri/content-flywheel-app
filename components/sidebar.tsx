@@ -69,11 +69,20 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       ],
     },
     {
+      label: "Sell",
+      items: [
+        { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦", activeWhenStartsWith: true, featureKey: "digital_products" },
+        { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️", activeWhenStartsWith: true, featureKey: "tiktok_shop" },
+        { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", emoji: "👕", activeWhenStartsWith: true, featureKey: "print_on_demand" },
+      ],
+    },
+    {
       label: "Grow",
       items: [
+        { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧", activeWhenStartsWith: true, featureKey: "email_marketing" },
+        { href: "/dashboard/goals", icon: <Target size={18} />, label: "Track Goals", emoji: "🎯", activeWhenStartsWith: true, featureKey: "goal_tracker" },
         { href: "/dashboard/drop-campaign", icon: <Zap size={18} />, label: "Drop Campaign", emoji: "🚀", activeWhenStartsWith: true },
         { href: "/dashboard/grow", icon: <TrendingUp size={18} />, label: "Grow Hub", emoji: "📈", activeWhenStartsWith: true },
-        { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", emoji: "👕", activeWhenStartsWith: true, featureKey: "print_on_demand" },
       ],
     },
   ].map((group) => ({ ...group, items: group.items.filter((item) => !item.featureKey || !disabled.has(item.featureKey)) }));

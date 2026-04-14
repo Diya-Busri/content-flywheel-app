@@ -38,7 +38,7 @@ export const USE_CASES: UseCase[] = [
     label: "Email Marketing",
     description: "Build and email your subscriber list",
     emoji: "📧",
-    featureKeys: [], // email nav items have no featureKey — always shown
+    featureKeys: ["email_marketing"],
   },
   {
     id: "tiktok_shop",
