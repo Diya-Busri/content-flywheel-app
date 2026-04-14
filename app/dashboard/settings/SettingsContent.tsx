@@ -116,12 +116,14 @@ export default function SettingsContent({
   const handleSaveFeatures = async () => {
     setFeaturesSaving(true);
     try {
-      await fetch("/api/user-features", {
+      const res = await fetch("/api/user-features", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabledFeatures: enabledFeatures ?? [] }),
       });
-      toast({ title: "Saved", description: "Your sidebar will update on next page load." });
+      if (!res.ok) throw new Error("Save failed");
+      toast({ title: "Saved", description: "Sidebar updated." });
+      router.refresh();
     } catch {
       toast({ title: "Error", description: "Could not save features.", variant: "destructive" });
     } finally {
@@ -687,7 +689,25 @@ export default function SettingsContent({
             {enabledFeatures && enabledFeatures.length > 0 && (
               <Button
                 variant="ghost"
-                onClick={() => setEnabledFeatures([])}
+                disabled={featuresSaving}
+                onClick={async () => {
+                  setEnabledFeatures([]);
+                  setFeaturesSaving(true);
+                  try {
+                    const res = await fetch("/api/user-features", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ enabledFeatures: [] }),
+                    });
+                    if (!res.ok) throw new Error();
+                    toast({ title: "Showing everything", description: "All sidebar items are now visible." });
+                    router.refresh();
+                  } catch {
+                    toast({ title: "Error", description: "Could not save.", variant: "destructive" });
+                  } finally {
+                    setFeaturesSaving(false);
+                  }
+                }}
                 className="text-gray-500"
               >
                 Show everything

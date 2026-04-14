@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { profilesTable } from "@/db/schema/profiles-schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -31,11 +31,16 @@ export async function PATCH(req: Request) {
 
   try {
     const { enabledFeatures } = await req.json();
+    const encoded = JSON.stringify(Array.isArray(enabledFeatures) ? enabledFeatures : []);
 
+    // Upsert — update if row exists, insert minimal row otherwise
     await db
-      .update(profilesTable)
-      .set({ enabledFeatures: JSON.stringify(enabledFeatures) })
-      .where(eq(profilesTable.userId, userId));
+      .insert(profilesTable)
+      .values({ userId, enabledFeatures: encoded })
+      .onConflictDoUpdate({
+        target: profilesTable.userId,
+        set: { enabledFeatures: sql`excluded.enabled_features` },
+      });
 
     return NextResponse.json({ success: true });
   } catch (err) {
