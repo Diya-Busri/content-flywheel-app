@@ -11,7 +11,7 @@ import { redirect } from "next/navigation";
 import { DashboardLayoutClient } from "@/components/dashboard-layout-client";
 import { DashboardSetupError } from "@/components/dashboard-setup-error";
 import { getDisabledFeatures } from "@/lib/feature-flags";
-import { getHiddenFeaturesByUseCases } from "@/lib/use-cases";
+import { getHiddenFeaturesByUseCases, USE_CASES } from "@/lib/use-cases";
 
 /** Paywall: user must have an active subscription to access the dashboard. */
 function hasActiveSubscription(profile: any | null): boolean {
@@ -94,7 +94,16 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     ? JSON.parse(profile.enabledFeatures)
     : null;
   const userHidden = getHiddenFeaturesByUseCases(selectedUseCases);
-  const allDisabled = [...new Set([...disabledFeatures, ...userHidden])];
+
+  // User's explicit feature selections override global admin flags —
+  // if a user has enabled a use case in Settings, those feature keys
+  // should always show even if an admin flag globally disables them.
+  const userExplicitKeys = selectedUseCases && selectedUseCases.length > 0
+    ? new Set(USE_CASES.filter(uc => selectedUseCases.includes(uc.id)).flatMap(uc => uc.featureKeys))
+    : new Set<string>();
+  const effectiveAdminDisabled = new Set([...disabledFeatures].filter(k => !userExplicitKeys.has(k)));
+
+  const allDisabled = [...new Set([...effectiveAdminDisabled, ...userHidden])];
 
   return (
     <DashboardLayoutClient profile={profile} userEmail={userEmail} disabledFeatures={allDisabled}>
