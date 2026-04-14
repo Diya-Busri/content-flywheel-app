@@ -92,6 +92,8 @@ export async function POST(request: NextRequest) {
     );
   }
   priceId = priceId.trim();
+  const resolvedPlan: "monthly" | "yearly" =
+    body.plan === "yearly" ? "yearly" : "monthly";
 
   const baseUrl = getStripeRedirectBase();
   const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
@@ -118,6 +120,12 @@ export async function POST(request: NextRequest) {
     }
     if (promo.maxUses !== null && promo.usedCount >= promo.maxUses) {
       return NextResponse.json({ error: "This promo code has reached its usage limit." }, { status: 400 });
+    }
+    if (promo.plan !== "both" && promo.plan !== resolvedPlan) {
+      return NextResponse.json(
+        { error: `This code is only valid for the ${promo.plan} plan.` },
+        { status: 400 }
+      );
     }
 
     try {

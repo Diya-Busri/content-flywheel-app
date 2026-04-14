@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Trash2, RefreshCw, Copy, Check, Tag, Shuffle, X } from "lucide-react";
 
 type DiscountType = "percent" | "fixed";
+type Plan = "monthly" | "yearly" | "both";
 
 type PromoCode = {
   id: string;
@@ -19,6 +20,7 @@ type PromoCode = {
   maxUses: number | null;
   usedCount: number;
   active: boolean;
+  plan: Plan;
   expiresAt: string | null;
   createdAt: string;
 };
@@ -28,6 +30,12 @@ type Toast = { msg: string; ok: boolean };
 function generateRandomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+function planLabel(plan: Plan): string {
+  if (plan === "monthly") return "Monthly only";
+  if (plan === "yearly") return "Yearly only";
+  return "Both plans";
 }
 
 export default function AdminPromoCodesPage() {
@@ -47,6 +55,7 @@ export default function AdminPromoCodesPage() {
   const [discountValue, setDiscountValue] = useState("");
   const [maxUses, setMaxUses] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
+  const [plan, setPlan] = useState<Plan>("both");
 
   function showToast(msg: string, ok: boolean) {
     setToast({ msg, ok });
@@ -126,17 +135,18 @@ export default function AdminPromoCodesPage() {
           discountValue: parseFloat(discountValue),
           maxUses: maxUses ? parseInt(maxUses) : null,
           expiresAt: expiresAt || null,
+          plan,
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { code?: PromoCode };
+      const data = (await res.json().catch(() => ({}))) as { code?: PromoCode; error?: string };
       if (data.code) {
         setCodes((prev) => [data.code!, ...prev]);
         setCode(""); setDescription(""); setDiscountType("percent");
-        setDiscountValue(""); setMaxUses(""); setExpiresAt("");
+        setDiscountValue(""); setMaxUses(""); setExpiresAt(""); setPlan("both");
         setShowForm(false);
         showToast("Promo code created", true);
       } else {
-        showToast("Failed to create promo code", false);
+        showToast(data.error ?? "Failed to create promo code", false);
       }
     } catch {
       showToast("Failed to create promo code", false);
@@ -193,7 +203,7 @@ export default function AdminPromoCodesPage() {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
-              {/* Code field with generate button */}
+              {/* Code field */}
               <div className="space-y-1">
                 <Label className="text-xs">Code *</Label>
                 <div className="flex gap-2">
@@ -230,7 +240,6 @@ export default function AdminPromoCodesPage() {
             <div className="space-y-2">
               <Label className="text-xs">Discount Type & Value *</Label>
               <div className="flex gap-2 items-center">
-                {/* Toggle */}
                 <div className="flex rounded-md border border-input overflow-hidden">
                   <button
                     type="button"
@@ -252,7 +261,7 @@ export default function AdminPromoCodesPage() {
                         : "bg-background text-muted-foreground hover:bg-muted dark:bg-card"
                     }`}
                   >
-                    $
+                    £
                   </button>
                 </div>
                 <Input
@@ -265,9 +274,35 @@ export default function AdminPromoCodesPage() {
                   className="w-32"
                 />
                 <span className="text-sm text-muted-foreground">
-                  {discountType === "percent" ? "percent off" : "dollars off"}
+                  {discountType === "percent" ? "percent off" : "pounds off"}
                 </span>
               </div>
+            </div>
+
+            {/* Plan restriction */}
+            <div className="space-y-2">
+              <Label className="text-xs">Applies to Plan *</Label>
+              <div className="flex gap-2">
+                {(["both", "monthly", "yearly"] as Plan[]).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPlan(p)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md border transition-colors ${
+                      plan === p
+                        ? "bg-orange-500 text-white border-orange-500"
+                        : "border-input bg-background text-muted-foreground hover:bg-muted dark:bg-card"
+                    }`}
+                  >
+                    {p === "both" ? "Both plans" : p.charAt(0).toUpperCase() + p.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {plan === "monthly" && "Code can only be used on the Monthly plan."}
+                {plan === "yearly" && "Code can only be used on the Yearly plan."}
+                {plan === "both" && "Code works on both Monthly and Yearly plans."}
+              </p>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
@@ -329,6 +364,7 @@ export default function AdminPromoCodesPage() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Code</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Discount</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Plan</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Uses</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Expires</th>
@@ -336,94 +372,128 @@ export default function AdminPromoCodesPage() {
                 </tr>
               </thead>
               <tbody>
-                {codes.map((pc) => (
-                  <tr
-                    key={pc.id}
-                    className="border-b border-[#E5E7EB] dark:border-white/10 last:border-0 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
-                  >
-                    {/* Code */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-semibold text-gray-900 dark:text-white">{pc.code}</span>
-                        <button
-                          onClick={() => void copyCode(pc.code)}
-                          className="text-muted-foreground hover:text-orange-500 transition-colors"
-                          title="Copy code"
-                        >
-                          {copied === pc.code ? (
-                            <Check className="w-3.5 h-3.5 text-green-500" />
+                {codes.map((pc) => {
+                  const isExpired = !!pc.expiresAt && new Date(pc.expiresAt) < new Date();
+                  const isExhausted = pc.maxUses !== null && pc.usedCount >= pc.maxUses;
+                  return (
+                    <tr
+                      key={pc.id}
+                      className="border-b border-[#E5E7EB] dark:border-white/10 last:border-0 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                    >
+                      {/* Code */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-semibold text-gray-900 dark:text-white">{pc.code}</span>
+                          <button
+                            onClick={() => void copyCode(pc.code)}
+                            className="text-muted-foreground hover:text-orange-500 transition-colors"
+                            title="Copy code"
+                          >
+                            {copied === pc.code ? (
+                              <Check className="w-3.5 h-3.5 text-green-500" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+
+                      {/* Description */}
+                      <td className="px-4 py-3 text-muted-foreground max-w-[160px]">
+                        <span className="line-clamp-1">{pc.description ?? "—"}</span>
+                      </td>
+
+                      {/* Discount */}
+                      <td className="px-4 py-3">
+                        <span className="font-semibold text-orange-600 dark:text-orange-400">
+                          {pc.discountPercent > 0
+                            ? `${pc.discountPercent}%`
+                            : `£${(pc.discountAmount / 100).toFixed(2)}`}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-1">off</span>
+                      </td>
+
+                      {/* Plan */}
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          pc.plan === "monthly"
+                            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+                            : pc.plan === "yearly"
+                            ? "bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400"
+                            : "bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300"
+                        }`}>
+                          {planLabel(pc.plan)}
+                        </span>
+                      </td>
+
+                      {/* Uses */}
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span>
+                            <span className="font-medium text-gray-900 dark:text-white">{pc.usedCount}</span>
+                            <span className="text-muted-foreground"> / {pc.maxUses ?? "∞"}</span>
+                          </span>
+                          {pc.usedCount === 0 ? (
+                            <span className="text-xs text-muted-foreground">Not used yet</span>
+                          ) : isExhausted ? (
+                            <span className="text-xs text-red-500 font-medium">Limit reached</span>
                           ) : (
-                            <Copy className="w-3.5 h-3.5" />
+                            <span className="text-xs text-amber-600 font-medium">{pc.usedCount} use{pc.usedCount !== 1 ? "s" : ""}</span>
                           )}
-                        </button>
-                      </div>
-                    </td>
+                        </div>
+                      </td>
 
-                    {/* Description */}
-                    <td className="px-4 py-3 text-muted-foreground max-w-[180px]">
-                      <span className="line-clamp-1">{pc.description ?? "—"}</span>
-                    </td>
-
-                    {/* Discount */}
-                    <td className="px-4 py-3">
-                      <span className="font-semibold text-orange-600 dark:text-orange-400">
-                        {pc.discountPercent > 0
-                          ? `${pc.discountPercent}%`
-                          : `$${(pc.discountAmount / 100).toFixed(2)}`}
-                      </span>
-                      <span className="text-xs text-muted-foreground ml-1">off</span>
-                    </td>
-
-                    {/* Uses */}
-                    <td className="px-4 py-3 text-muted-foreground">
-                      <span className="font-medium text-gray-900 dark:text-white">{pc.usedCount}</span>
-                      <span className="text-muted-foreground"> / {pc.maxUses ?? "∞"}</span>
-                    </td>
-
-                    {/* Status + toggle */}
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => void toggleActive(pc)}
-                        disabled={toggling === pc.id}
-                        className="focus:outline-none"
-                      >
-                        {toggling === pc.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                        ) : pc.active ? (
-                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 cursor-pointer text-[11px]">
-                            Active
-                          </Badge>
+                      {/* Status + toggle */}
+                      <td className="px-4 py-3">
+                        {isExpired ? (
+                          <Badge className="bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 text-[11px]">Expired</Badge>
+                        ) : isExhausted ? (
+                          <Badge className="bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 text-[11px]">Exhausted</Badge>
                         ) : (
-                          <Badge variant="secondary" className="cursor-pointer text-[11px]">
-                            Inactive
-                          </Badge>
+                          <button
+                            onClick={() => void toggleActive(pc)}
+                            disabled={toggling === pc.id}
+                            className="focus:outline-none"
+                          >
+                            {toggling === pc.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                            ) : pc.active ? (
+                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 cursor-pointer text-[11px]">
+                                Active
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="cursor-pointer text-[11px]">
+                                Inactive
+                              </Badge>
+                            )}
+                          </button>
                         )}
-                      </button>
-                    </td>
+                      </td>
 
-                    {/* Expires */}
-                    <td className="px-4 py-3 text-muted-foreground text-xs">
-                      {pc.expiresAt ? new Date(pc.expiresAt).toLocaleDateString() : "Never"}
-                    </td>
+                      {/* Expires */}
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {pc.expiresAt ? new Date(pc.expiresAt).toLocaleDateString("en-GB") : "Never"}
+                      </td>
 
-                    {/* Actions */}
-                    <td className="px-4 py-3">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive h-7 w-7 p-0"
-                        disabled={deleting === pc.id}
-                        onClick={() => void deleteCode(pc.id)}
-                      >
-                        {deleting === pc.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
-                        )}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                      {/* Actions */}
+                      <td className="px-4 py-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive h-7 w-7 p-0"
+                          disabled={deleting === pc.id}
+                          onClick={() => void deleteCode(pc.id)}
+                        >
+                          {deleting === pc.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

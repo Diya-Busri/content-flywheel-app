@@ -9,6 +9,7 @@ export const promoCodesTable = pgTable("promo_codes", {
   maxUses: integer("max_uses"), // null = unlimited
   usedCount: integer("used_count").notNull().default(0),
   active: boolean("active").notNull().default(true),
+  plan: text("plan").notNull().default("both"), // "monthly" | "yearly" | "both"
   expiresAt: timestamp("expires_at"),
   stripeCouponId: text("stripe_coupon_id"),
   stripePromotionCodeId: text("stripe_promotion_code_id"),

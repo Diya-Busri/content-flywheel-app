@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { code, description, discountType, discountValue, maxUses, expiresAt } = body;
+  const { code, description, discountType, discountValue, maxUses, expiresAt, plan } = body;
   if (!code) return NextResponse.json({ error: "code required" }, { status: 400 });
   if (!discountValue || discountValue <= 0) return NextResponse.json({ error: "discount value required" }, { status: 400 });
 
@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
     maxUses: maxUses || null,
     expiresAt: expiresAt ? new Date(expiresAt) : null,
     active: true,
+    plan: (plan === "monthly" || plan === "yearly") ? plan : "both",
     stripeCouponId,
     stripePromotionCodeId,
   }).returning();

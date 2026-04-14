@@ -37,6 +37,7 @@ import { coachSettingsTable, coachChatsTable } from "./schema/coach-settings-sch
 import { chatSummariesTable } from "./schema/chat-summaries-schema";
 import { emailContactsTable, emailCampaignsTable } from "./schema/email-marketing-schema";
 import { productSalesTable } from "./schema/product-sales-schema";
+import { promoCodesTable } from "./schema/promo-codes-schema";
 
 // Define the schema properly
 const schema = {
@@ -83,6 +84,7 @@ const schema = {
   emailContacts: emailContactsTable,
   emailCampaigns: emailCampaignsTable,
   productSales: productSalesTable,
+  promoCodes: promoCodesTable,
 };
 
 // Connection options tuned for Supabase pgBouncer (port 6543 pooler).
