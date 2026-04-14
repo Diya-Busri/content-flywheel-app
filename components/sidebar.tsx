@@ -208,7 +208,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
             {renderNavItem({ href: "/dashboard", icon: <Home size={18} />, label: "Home", emoji: "🏠" })}
           </div>
           <div className="space-y-4">
-            {navGroups.map((group) => (
+            {navGroups.filter((group) => group.items.length > 0).map((group) => (
               <div key={group.label}>
                 <p className="hidden md:block text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-600 px-3 mb-1.5">
                   {group.label}
