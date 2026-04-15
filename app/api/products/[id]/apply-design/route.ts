@@ -204,16 +204,24 @@ export async function POST(
     const pageSeed = typeof body.pageSeed === "number" ? body.pageSeed : Date.now();
     const pexelsQuery =
       coverBackgroundPreference === "random" ? getRandomCoverKeyword() : undefined;
-    const rawBgImageUrl = await fetchOnePexelsPhoto(niche, productFormat, {
+    const pexelsUrl = await fetchOnePexelsPhoto(niche, productFormat, {
       excludeUrls: usedCoverImageUrls,
       pageSeed,
       queryOverride: pexelsQuery,
     });
+
+    // Picsum fallback: if Pexels returns nothing (API key issue, rate limit, etc.)
+    // use picsum.photos which requires no API key and always returns a beautiful photo.
+    // Seed ensures different products get different images; regenerate gets a different one.
+    const picsumSeed = regenerate
+      ? Math.floor(pageSeed % 1000)
+      : Math.abs((title + niche).split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0)) % 1000;
+    const picsumFallbackUrl = `https://picsum.photos/seed/${picsumSeed}/800/1100`;
+
+    const rawBgImageUrl = pexelsUrl ?? picsumFallbackUrl;
+
     // Store proxy URL so editor and PDF export avoid CORS with html2canvas
-    const bgImageUrl =
-      rawBgImageUrl != null
-        ? `/api/proxy-image?url=${encodeURIComponent(rawBgImageUrl)}`
-        : undefined;
+    const bgImageUrl = `/api/proxy-image?url=${encodeURIComponent(rawBgImageUrl)}`;
     const primary = design.primary.startsWith("#") ? design.primary : `#${design.primary}`;
     const secondary = design.secondary.startsWith("#") ? design.secondary : `#${design.secondary}`;
     const accent = design.accent.startsWith("#") ? design.accent : `#${design.accent}`;
@@ -224,37 +232,20 @@ export async function POST(
     const overlayOpacity = Math.min(0.6, overlayOpacityRaw);
     const contentPageBg = design.contentPageBackgroundColor?.startsWith("#") ? design.contentPageBackgroundColor : `#${design.contentPageBackgroundColor ?? "ffffff"}`;
 
-    // When no Pexels image was found, guarantee a bold solid background.
-    // Use primary if it's dark enough; otherwise fall back to deep indigo so text is always readable.
-    const FALLBACK_DARK = "#1a237e"; // deep indigo — always readable with white text
-    const noImageBg = isColorDark(primary) ? primary : FALLBACK_DARK;
-    const effectiveOverlayColor = bgImageUrl ? overlayColor : noImageBg;
-    const effectiveOverlayOpacity = bgImageUrl ? overlayOpacity : 1;
-
-    // Cover/back text must contrast with whatever background ends up showing
-    const bgIsDark = bgImageUrl
-      ? (isColorDark(overlayColor) && overlayOpacity > 0.4)
-      : true; // no-image path always uses a dark bg (noImageBg is guaranteed dark)
+    // We always have a background image (Pexels or Picsum fallback), so overlay always renders.
+    const overlayForCoverBack = { color: overlayColor, opacity: overlayOpacity };
+    const bgIsDark = isColorDark(overlayColor) && overlayOpacity > 0.4;
     const coverTitleColor = bgIsDark ? "#ffffff" : primary;
     const coverBodyColor = bgIsDark ? "#e2e8f0" : secondary;
     const coverAccentColor = bgIsDark ? "#fcd34d" : accent;
 
     const totalPages = Math.max(2, sections.length + 2);
-    const overlayForCoverBack = { color: effectiveOverlayColor, opacity: effectiveOverlayOpacity };
-    // When there IS a background image: use overlay div (rendered only when bgImage exists).
-    // When there is NO background image: use backgroundColor field — the canvas renders
-    //   `currentPageBackgroundColor ?? "#ffffff"` when canvasBgUrl is null, so we MUST set
-    //   backgroundColor here; overlaySettings alone has no visual effect without a bgImage.
-    const coverBackBg = bgImageUrl
-      ? {
-          backgroundImage: bgImageUrl,
-          backgroundSettings: DEFAULT_IMAGE_SETTINGS,
-          overlaySettings: overlayForCoverBack,
-        }
-      : {
-          backgroundColor: noImageBg,
-        };
-    // Content pages: no image, use backgroundColor directly (same reason as above)
+    const coverBackBg = {
+      backgroundImage: bgImageUrl,
+      backgroundSettings: DEFAULT_IMAGE_SETTINGS,
+      overlaySettings: overlayForCoverBack,
+    };
+    // Content pages: no image, use backgroundColor (canvas uses this when no backgroundImage)
     const contentPageBgOnly = {
       backgroundColor: contentPageBg,
     };

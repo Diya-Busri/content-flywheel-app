@@ -13,6 +13,9 @@ const DIRECT_ORIGINS = [
   "pexels.com",
   "images.unsplash.com",
   "unsplash.com",
+  "picsum.photos",
+  "fastly.picsum.photos",
+  "i.picsum.photos",
 ];
 
 function isDirectAllowedOrigin(url: string): boolean {

@@ -12,6 +12,9 @@ const ALLOWED_ORIGINS = [
   "pexels.com",
   "images.unsplash.com",
   "unsplash.com",
+  "picsum.photos",
+  "fastly.picsum.photos",
+  "i.picsum.photos",
 ];
 
 function isAllowedOrigin(parsed: URL): boolean {
