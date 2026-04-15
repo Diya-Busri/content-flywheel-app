@@ -273,13 +273,13 @@ export default function FinancesClient({
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {months.map(([month, pence]) => (
                     <div key={month} style={{ display: "grid", gridTemplateColumns: "80px 1fr 100px", alignItems: "center", gap: "12px" }}>
-                      <span className="text-gray-500 dark:text-gray-400" style={{ fontSize: "12px" }}>
+                      <span className="finance-month-label" style={{ fontSize: "12px" }}>
                         {new Date(month + "-01").toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
                       </span>
-                      <div className="bg-gray-100 dark:bg-gray-700" style={{ height: "22px", borderRadius: "6px", overflow: "hidden" }}>
+                      <div className="finance-bar-track" style={{ height: "22px", borderRadius: "6px", overflow: "hidden" }}>
                         <div style={{ height: "100%", width: `${(pence / max) * 100}%`, background: "linear-gradient(90deg, #f97316, #ea580c)", borderRadius: "6px", minWidth: "4px" }} />
                       </div>
-                      <span className="text-gray-900 dark:!text-white" style={{ fontSize: "14px", fontWeight: 800, textAlign: "right" }}>{fmt(pence)}</span>
+                      <span className="finance-amount" style={{ fontSize: "14px", fontWeight: 800, textAlign: "right" }}>{fmt(pence)}</span>
                     </div>
                   ))}
                 </div>

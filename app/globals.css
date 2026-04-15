@@ -279,6 +279,14 @@
   right: auto !important;
 }
 
+/* Finance Tracker: monthly spending amount — white in dark mode */
+.finance-month-label { color: #6b7280; }
+.dark .finance-month-label { color: #9ca3af !important; }
+.finance-bar-track { background: #f3f4f6; }
+.dark .finance-bar-track { background: #374151 !important; }
+.finance-amount { color: #111827; }
+.dark .finance-amount { color: #ffffff !important; }
+
 /* AI Voice dropdown: always readable (white background, dark text) on Customize Videos */
 [data-voice-dropdown-content] {
   background-color: #ffffff !important;
