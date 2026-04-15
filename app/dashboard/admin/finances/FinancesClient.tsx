@@ -70,13 +70,24 @@ export default function FinancesClient({
   initialNotes: Note[];
   revenueFromOrders: number; // pence
 }) {
-  const [dark, setDark] = useState(true); // default dark to avoid flash
+  // Read theme directly from localStorage (same key next-themes uses) — synchronous, zero-delay
+  const [dark, setDark] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const stored = localStorage.getItem("content-flywheel-theme");
+    if (stored === "light") return false;
+    if (stored === "dark") return true;
+    return document.documentElement.classList.contains("dark");
+  });
+  // Keep in sync when user toggles theme
   useEffect(() => {
-    const check = () => setDark(document.documentElement.classList.contains("dark"));
-    check();
+    const check = () => {
+      const stored = localStorage.getItem("content-flywheel-theme");
+      setDark(stored === "dark" || (stored !== "light" && document.documentElement.classList.contains("dark")));
+    };
+    window.addEventListener("storage", check);
     const obs = new MutationObserver(check);
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
+    return () => { window.removeEventListener("storage", check); obs.disconnect(); };
   }, []);
 
   // Theme-aware colour tokens
