@@ -209,13 +209,18 @@ export async function POST(
     const overlayOpacity = Math.min(0.6, overlayOpacityRaw);
     const contentPageBg = design.contentPageBackgroundColor?.startsWith("#") ? design.contentPageBackgroundColor : `#${design.contentPageBackgroundColor ?? "ffffff"}`;
 
-    const overlayIsDark = isColorDark(overlayColor);
+    // When no Pexels image was found, use the primary colour as a solid background so the
+    // cover always looks designed — never plain white.
+    const effectiveOverlayColor = bgImageUrl ? overlayColor : primary;
+    const effectiveOverlayOpacity = bgImageUrl ? overlayOpacity : 1;
+
+    const overlayIsDark = isColorDark(effectiveOverlayColor) || effectiveOverlayOpacity > 0.7;
     const coverTitleColor = overlayIsDark ? "#ffffff" : primary;
     const coverBodyColor = overlayIsDark ? "#f1f5f9" : secondary;
     const coverAccentColor = overlayIsDark ? "#fcd34d" : accent;
 
     const totalPages = Math.max(2, sections.length + 2);
-    const overlayForCoverBack = { color: overlayColor, opacity: overlayOpacity };
+    const overlayForCoverBack = { color: effectiveOverlayColor, opacity: effectiveOverlayOpacity };
     const coverBackBg = {
       backgroundImage: bgImageUrl ?? undefined,
       backgroundSettings: DEFAULT_IMAGE_SETTINGS,
