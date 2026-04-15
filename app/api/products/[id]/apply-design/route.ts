@@ -209,15 +209,20 @@ export async function POST(
     const overlayOpacity = Math.min(0.6, overlayOpacityRaw);
     const contentPageBg = design.contentPageBackgroundColor?.startsWith("#") ? design.contentPageBackgroundColor : `#${design.contentPageBackgroundColor ?? "ffffff"}`;
 
-    // When no Pexels image was found, use the primary colour as a solid background so the
-    // cover always looks designed — never plain white.
-    const effectiveOverlayColor = bgImageUrl ? overlayColor : primary;
+    // When no Pexels image was found, guarantee a bold solid background.
+    // Use primary if it's dark enough; otherwise fall back to deep indigo so text is always readable.
+    const FALLBACK_DARK = "#1a237e"; // deep indigo — always readable with white text
+    const noImageBg = isColorDark(primary) ? primary : FALLBACK_DARK;
+    const effectiveOverlayColor = bgImageUrl ? overlayColor : noImageBg;
     const effectiveOverlayOpacity = bgImageUrl ? overlayOpacity : 1;
 
-    const overlayIsDark = isColorDark(effectiveOverlayColor) || effectiveOverlayOpacity > 0.7;
-    const coverTitleColor = overlayIsDark ? "#ffffff" : primary;
-    const coverBodyColor = overlayIsDark ? "#f1f5f9" : secondary;
-    const coverAccentColor = overlayIsDark ? "#fcd34d" : accent;
+    // Cover/back text must contrast with whatever background ends up showing
+    const bgIsDark = bgImageUrl
+      ? (isColorDark(overlayColor) && overlayOpacity > 0.4)
+      : true; // no-image path always uses a dark bg (noImageBg is guaranteed dark)
+    const coverTitleColor = bgIsDark ? "#ffffff" : primary;
+    const coverBodyColor = bgIsDark ? "#e2e8f0" : secondary;
+    const coverAccentColor = bgIsDark ? "#fcd34d" : accent;
 
     const totalPages = Math.max(2, sections.length + 2);
     const overlayForCoverBack = { color: effectiveOverlayColor, opacity: effectiveOverlayOpacity };
