@@ -20,13 +20,25 @@ export const BANNED_PEXELS_KEYWORDS = [
   "entrance",
 ] as const;
 
-/** Safe cover keywords for ALL products — only these are used for cover background searches. */
+/**
+ * Safe cover keywords — single words or short phrases with thousands of Pexels results.
+ * Strictly abstract/nature/texture — no people, animals, buildings, interiors.
+ */
 const SAFE_COVER_KEYWORDS_ALL = [
-  "bokeh light blur",
-  "soft abstract background",
-  "pastel gradient",
-  "minimal nature blur",
+  "abstract",
+  "gradient",
+  "bokeh",
+  "texture",
+  "forest",
+  "ocean",
+  "mountains",
+  "clouds",
+  "flowers",
+  "sunset",
 ] as const;
+
+/** Guaranteed fallback keywords tried in order when the primary query returns nothing. */
+export const PEXELS_FALLBACK_KEYWORDS = ["abstract", "gradient", "bokeh", "texture"] as const;
 
 const DEFAULT_SAFE_KEYWORD = SAFE_COVER_KEYWORDS_ALL[0];
 

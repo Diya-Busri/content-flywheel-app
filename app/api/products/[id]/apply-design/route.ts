@@ -14,7 +14,7 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { brandProfilesTable } from "@/db/schema/brand-profiles-schema";
 import { eq, and, isNull } from "drizzle-orm";
-import { getAutoDesignSuggestion, getSafeCoverKeyword, getRandomCoverKeyword } from "@/lib/auto-design-suggestion";
+import { getAutoDesignSuggestion, getSafeCoverKeyword, getRandomCoverKeyword, PEXELS_FALLBACK_KEYWORDS } from "@/lib/auto-design-suggestion";
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 1100;
@@ -64,31 +64,46 @@ async function fetchOnePexelsPhoto(
   options: PexelsFetchOptions = {}
 ): Promise<string | null> {
   const apiKey = process.env.PEXELS_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.warn("[apply-design] PEXELS_API_KEY not set — skipping image fetch");
+    return null;
+  }
   const { excludeUrls = [], pageSeed = Math.random(), queryOverride } = options;
-  const query = queryOverride ?? getSafeCoverKeyword(niche, format);
+  const primaryQuery = queryOverride ?? getSafeCoverKeyword(niche, format);
   const excludeSet = new Set(excludeUrls.map((u) => u.trim()).filter(Boolean));
   const pick = (p: { src?: { original?: string; large2x?: string; large?: string; medium?: string } }) =>
     p?.src?.original ?? p?.src?.large2x ?? p?.src?.large ?? p?.src?.medium ?? null;
 
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const page = 1 + (Math.floor((pageSeed + attempt * 0.33) * 1000) % 30);
-    const url = new URL("https://api.pexels.com/v1/search");
-    url.searchParams.set("query", query);
-    url.searchParams.set("per_page", "15");
-    url.searchParams.set("page", String(page));
-    url.searchParams.set("orientation", "square");
-    const res = await fetch(url.toString(), { headers: { Authorization: apiKey } });
-    if (!res.ok) continue;
-    const data = (await res.json()) as {
-      photos?: Array<{ src?: { original?: string; large2x?: string; large?: string; medium?: string } }>;
-    };
-    const photos = data.photos ?? [];
-    const candidates = photos.map(pick).filter((u): u is string => !!u && !excludeSet.has(u));
-    if (candidates.length > 0) {
-      return candidates[Math.floor(Math.random() * candidates.length)];
+  // Try primary query first (2 page attempts), then fallback keywords
+  const queriesToTry = [primaryQuery, ...PEXELS_FALLBACK_KEYWORDS.filter((q) => q !== primaryQuery)];
+
+  for (const query of queriesToTry) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      // Keep pages low (1-5) — Pexels returns empty results on high page numbers for niche queries
+      const page = 1 + (Math.floor((pageSeed + attempt * 0.5) * 100) % 5);
+      const url = new URL("https://api.pexels.com/v1/search");
+      url.searchParams.set("query", query);
+      url.searchParams.set("per_page", "15");
+      url.searchParams.set("page", String(page));
+      // portrait orientation suits book/product covers better than square
+      url.searchParams.set("orientation", "portrait");
+      const res = await fetch(url.toString(), { headers: { Authorization: apiKey } });
+      if (!res.ok) {
+        console.warn("[apply-design] Pexels API error:", res.status, "query:", query);
+        continue;
+      }
+      const data = (await res.json()) as {
+        photos?: Array<{ src?: { original?: string; large2x?: string; large?: string; medium?: string } }>;
+      };
+      const photos = data.photos ?? [];
+      const candidates = photos.map(pick).filter((u): u is string => !!u && !excludeSet.has(u));
+      if (candidates.length > 0) {
+        console.log("[apply-design] Pexels found image with query:", query, "page:", page);
+        return candidates[Math.floor(Math.random() * candidates.length)];
+      }
     }
   }
+  console.warn("[apply-design] Pexels returned no results for all queries — using solid background");
   return null;
 }
 
