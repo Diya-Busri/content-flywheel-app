@@ -4300,12 +4300,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           coverBackgroundPreference: coverBackgroundPreference === "random" ? "random" : "match_product",
                         }),
                       });
-                      if (!res.ok) throw new Error("Apply design failed");
+                      if (!res.ok) {
+                        const errBody = await res.json().catch(() => ({})) as { error?: string };
+                        throw new Error(errBody.error ?? `Server error ${res.status}`);
+                      }
                       await fetchProduct();
                       setAutoDesignSuccessView(true);
                       toast({ title: "Auto-design applied" });
-                    } catch {
-                      toast({ title: "Auto-design failed", variant: "destructive" });
+                    } catch (err) {
+                      const msg = err instanceof Error ? err.message : "Try again";
+                      toast({ title: "Auto-design failed", description: msg, variant: "destructive" });
                     } finally {
                       setAutoDesignLoading(false);
                       setTimeout(() => {

@@ -167,12 +167,23 @@ Return ONLY a valid JSON object (no markdown, no code fence) with exactly these 
   const data = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
-  const content = data.choices?.[0]?.message?.content?.trim();
-  if (!content) {
+  const rawContent = data.choices?.[0]?.message?.content?.trim();
+  if (!rawContent) {
     throw new Error("No design suggestion returned");
   }
+  // Strip markdown code fences (```json ... ``` or ``` ... ```) that OpenAI sometimes adds
+  const content = rawContent
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
 
-  const parsed = JSON.parse(content) as Record<string, unknown>;
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    console.error("[auto-design-suggestion] JSON parse failed. Raw content:", rawContent);
+    throw new Error("Design suggestion was not valid JSON");
+  }
   const overlayOpacityRaw = parsed.overlayOpacity;
   const overlayOpacityUnclamped =
     typeof overlayOpacityRaw === "number" && overlayOpacityRaw >= 0 && overlayOpacityRaw <= 1
