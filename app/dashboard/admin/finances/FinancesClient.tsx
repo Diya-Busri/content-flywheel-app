@@ -266,20 +266,20 @@ export default function FinancesClient({
             return (
               <div>
                 {/* Average callout */}
-                <p style={{ fontSize: "13px", color: dark ? "#9ca3af" : "#6b7280", marginBottom: "16px" }}>
+                <p style={{ fontSize: "13px", color: "hsl(var(--muted-foreground))", marginBottom: "16px" }}>
                   Average per month: <strong style={{ color: "#f97316" }}>{fmt(Math.round(avg))}</strong>
-                  {" · "}Total tracked: <strong style={{ color: dark ? "#ffffff" : "#111827" }}>{months.length} months</strong>
+                  {" · "}Total tracked: <strong style={{ color: "hsl(var(--foreground))" }}>{months.length} months</strong>
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {months.map(([month, pence]) => (
                     <div key={month} style={{ display: "grid", gridTemplateColumns: "80px 1fr 100px", alignItems: "center", gap: "12px" }}>
-                      <span className="finance-month-label" style={{ fontSize: "12px" }}>
+                      <span style={{ fontSize: "12px", color: "hsl(var(--muted-foreground))" }}>
                         {new Date(month + "-01").toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
                       </span>
-                      <div className="finance-bar-track" style={{ height: "22px", borderRadius: "6px", overflow: "hidden" }}>
+                      <div style={{ height: "22px", background: "hsl(var(--muted))", borderRadius: "6px", overflow: "hidden" }}>
                         <div style={{ height: "100%", width: `${(pence / max) * 100}%`, background: "linear-gradient(90deg, #f97316, #ea580c)", borderRadius: "6px", minWidth: "4px" }} />
                       </div>
-                      <span className="finance-amount" style={{ fontSize: "14px", fontWeight: 800, textAlign: "right" }}>{fmt(pence)}</span>
+                      <span style={{ fontSize: "14px", fontWeight: 800, textAlign: "right", color: "hsl(var(--foreground))" }}>{fmt(pence)}</span>
                     </div>
                   ))}
                 </div>
