@@ -226,13 +226,22 @@ export async function POST(
 
     const totalPages = Math.max(2, sections.length + 2);
     const overlayForCoverBack = { color: effectiveOverlayColor, opacity: effectiveOverlayOpacity };
-    const coverBackBg = {
-      backgroundImage: bgImageUrl ?? undefined,
-      backgroundSettings: DEFAULT_IMAGE_SETTINGS,
-      overlaySettings: overlayForCoverBack,
-    };
+    // When there IS a background image: use overlay div (rendered only when bgImage exists).
+    // When there is NO background image: use backgroundColor field — the canvas renders
+    //   `currentPageBackgroundColor ?? "#ffffff"` when canvasBgUrl is null, so we MUST set
+    //   backgroundColor here; overlaySettings alone has no visual effect without a bgImage.
+    const coverBackBg = bgImageUrl
+      ? {
+          backgroundImage: bgImageUrl,
+          backgroundSettings: DEFAULT_IMAGE_SETTINGS,
+          overlaySettings: overlayForCoverBack,
+        }
+      : {
+          backgroundColor: noImageBg,
+        };
+    // Content pages: no image, use backgroundColor directly (same reason as above)
     const contentPageBgOnly = {
-      overlaySettings: { color: contentPageBg, opacity: 1 },
+      backgroundColor: contentPageBg,
     };
     const pages: unknown[] = Array.from({ length: totalPages }, (_, i) => {
       if (i === 0 || i === totalPages - 1) return { ...coverBackBg };
