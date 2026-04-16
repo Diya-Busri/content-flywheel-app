@@ -271,6 +271,27 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
               </span>
             </motion.button>
           </div>
+          {/* Video Credits */}
+          {typeof profile?.videoCredits === "number" && (
+            <div className="px-3 mb-2">
+              <Link href="/dashboard/video-credits">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex items-center justify-center md:justify-between gap-1.5 py-1.5 px-3 rounded-lg bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 hover:bg-orange-100 dark:hover:bg-orange-500/20 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Film size={13} className="text-orange-500 shrink-0" />
+                    <span className="text-xs font-semibold text-orange-600 dark:text-orange-400 hidden md:block truncate">Video Credits</span>
+                  </div>
+                  <span className="text-xs font-bold text-orange-600 dark:text-orange-400 shrink-0 bg-orange-100 dark:bg-orange-500/20 px-1.5 py-0.5 rounded-full">
+                    {profile.videoCredits}
+                  </span>
+                </motion.div>
+              </Link>
+            </div>
+          )}
+
           {/* Billing */}
           <div className="px-3 mb-4">
             <div className="h-px bg-gradient-to-r from-transparent via-black/10 dark:via-white/10 to-transparent mb-4" />
