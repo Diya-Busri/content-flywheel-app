@@ -250,13 +250,17 @@ async function renderImageSegment(
   let vf = baseVf;
   if (dialogueLine?.trim()) {
     const fontFile = resolveDrawtextFontFile();
-    const flatCaps = buildViralCaptionDrawtextFlatVf(
-      dialogueLine.trim(),
-      width,
-      VIRAL_CAPTION_FONT_SIZES.medium,
-      fontFile ?? undefined
-    );
-    if (flatCaps) vf = `${baseVf},${flatCaps}`;
+    // Only add drawtext if we have an explicit font file — without one, FFmpeg uses fontconfig
+    // which is often missing on server environments and causes compile failure.
+    if (fontFile) {
+      const flatCaps = buildViralCaptionDrawtextFlatVf(
+        dialogueLine.trim(),
+        width,
+        VIRAL_CAPTION_FONT_SIZES.medium,
+        fontFile
+      );
+      if (flatCaps) vf = `${baseVf},${flatCaps}`;
+    }
   }
   const args = [
     "-y",
@@ -286,13 +290,16 @@ async function renderVideoSegment(
   let vf = scale;
   if (dialogueLine?.trim()) {
     const fontFile = resolveDrawtextFontFile();
-    const cap = buildViralCaptionDrawtextFlatVf(
-      dialogueLine.trim(),
-      width,
-      VIRAL_CAPTION_FONT_SIZES.medium,
-      fontFile ?? undefined
-    );
-    vf = `${scale},${cap}`;
+    // Only add drawtext if we have an explicit font file to avoid fontconfig failures on servers.
+    if (fontFile) {
+      const cap = buildViralCaptionDrawtextFlatVf(
+        dialogueLine.trim(),
+        width,
+        VIRAL_CAPTION_FONT_SIZES.medium,
+        fontFile
+      );
+      if (cap) vf = `${scale},${cap}`;
+    }
   }
   const args = [
     "-y",
