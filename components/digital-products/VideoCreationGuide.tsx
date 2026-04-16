@@ -464,6 +464,10 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const [animatingByScene, setAnimatingByScene] = useState<Record<number, boolean>>({});
   /** Product thumbnail for compile intro scene (bookMockup > coverThumbnail > thumbnail). */
   const [productThumbnailUrl, setProductThumbnailUrl] = useState<string | null>(null);
+  /** Auto-generated social captions shown after MP4 export. */
+  const [videoSocialCaptions, setVideoSocialCaptions] = useState<{ tiktok: string; instagram: string; twitter: string } | null>(null);
+  const [videoSocialCaptionsLoading, setVideoSocialCaptionsLoading] = useState(false);
+  const [copiedSocialCaption, setCopiedSocialCaption] = useState<"tiktok" | "instagram" | "twitter" | null>(null);
   useEffect(() => {
     if (!productId) return;
     fetch(`/api/products/${encodeURIComponent(productId)}`)
@@ -1429,6 +1433,20 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       const url = data.url?.trim();
       if (!url) throw new Error("No video URL returned");
       setLastCompiledVideoUrl(url);
+      setVideoSocialCaptions(null); // reset previous captions
+      // Auto-generate social captions for the exported video
+      if (productId) {
+        setVideoSocialCaptionsLoading(true);
+        fetch(`/api/products/${encodeURIComponent(productId)}/social-captions`, { method: "POST" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d: { tiktok?: string; instagram?: string; twitter?: string } | null) => {
+            if (d?.tiktok || d?.instagram || d?.twitter) {
+              setVideoSocialCaptions({ tiktok: d.tiktok ?? "", instagram: d.instagram ?? "", twitter: d.twitter ?? "" });
+            }
+          })
+          .catch(() => {})
+          .finally(() => setVideoSocialCaptionsLoading(false));
+      }
       // Trigger download directly via a link click (avoids popup blocker)
       const a = document.createElement("a");
       a.href = url;
@@ -1466,6 +1484,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     perSceneUrls,
     fullVoiceoverUrl,
     productThumbnailUrl,
+    productId,
     buildGuideSceneCaptionText,
     toast,
   ]);
@@ -3274,6 +3293,44 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                             </button>
                           </div>
                           <p className="text-xs text-muted-foreground">Download first, then upload to your platform.</p>
+                          {/* Social captions generated after export */}
+                          {videoSocialCaptionsLoading && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Generating captions &amp; hashtags…
+                            </div>
+                          )}
+                          {videoSocialCaptions && !videoSocialCaptionsLoading && (
+                            <div className="mt-3 flex flex-col gap-3">
+                              <p className="text-xs font-semibold text-foreground">Ready-to-post captions &amp; hashtags:</p>
+                              {(["tiktok", "instagram", "twitter"] as const).map((platform) => {
+                                const labels = { tiktok: "TikTok", instagram: "Instagram", twitter: "X / Twitter" };
+                                const text = videoSocialCaptions[platform];
+                                if (!text) return null;
+                                return (
+                                  <div key={platform} className="rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-background p-3 flex flex-col gap-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-xs font-medium text-muted-foreground">{labels[platform]}</span>
+                                      <button
+                                        type="button"
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-foreground transition-colors shrink-0"
+                                        onClick={() => {
+                                          void navigator.clipboard.writeText(text).then(() => {
+                                            setCopiedSocialCaption(platform);
+                                            setTimeout(() => setCopiedSocialCaption(null), 2000);
+                                          });
+                                        }}
+                                      >
+                                        <Copy className="w-3 h-3" />
+                                        {copiedSocialCaption === platform ? "Copied!" : "Copy"}
+                                      </button>
+                                    </div>
+                                    <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">{text}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
