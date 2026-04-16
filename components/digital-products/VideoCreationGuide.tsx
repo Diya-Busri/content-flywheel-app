@@ -1339,71 +1339,58 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       toast({ title: "No scenes", description: "Add a scene breakdown first.", variant: "destructive" });
       return;
     }
-    if (!canCompileServerSideVoice) {
-      if (typeof window !== "undefined") {
-        window.alert(
-          "Make full MP4 needs voiceover first.\n\nGenerate Scene Voiceovers (or a full-script voiceover) so the audio is uploaded and has a public https URL, then click Make full MP4 again."
-        );
-      }
-      toast({
-        title: "Public voiceover URLs required",
-        description:
-          "Save this guide to My Library and generate voiceovers so audio uploads to storage, or use a full-script voiceover with a library script. Blob previews only work in the browser timeline.",
-        variant: "destructive",
-      });
-      return;
-    }
     setGuideFullVideoLoading(true);
     try {
-      const { mergedUrls, mergedVideoUrls } = await runBulkGuideMediaGeneration();
-      const httpMediaOk = scenes.every((_, i) => {
-        const vid = mergedVideoUrls[i]?.trim();
-        const img = mergedUrls[i]?.trim();
-        const u = vid || img || "";
-        return u.startsWith("http://") || u.startsWith("https://");
-      });
-      if (!httpMediaOk) {
-        toast({
-          title: "Missing scene media",
-          description: "Every scene needs a generated image or video with a public URL.",
-          variant: "destructive",
-        });
-        return;
-      }
       const isHttp = (s: string | null | undefined) => {
         const t = (s ?? "").trim();
         return t.startsWith("http://") || t.startsWith("https://");
       };
-      const perSceneAllHttp = scenes.every((_, i) => isHttp(guideCoachVoiceoverUrls[i]) || isHttp(perSceneUrls[i]));
+      // Use existing scene media (images + animations already generated)
+      const guideScenes = scenes
+        .map((_, i) => {
+          const video_url = isHttp(guideSceneVideoUrls[i]) ? guideSceneVideoUrls[i].trim() : null;
+          const image_url = isHttp(guideSceneImageUrls[i]) ? guideSceneImageUrls[i].trim() : null;
+          if (!video_url && !image_url) return null; // skip scenes with no media
+          const vo = guideCoachVoiceoverUrls[i]?.trim() || perSceneUrls[i]?.trim() || "";
+          const caption = buildGuideSceneCaptionText(i).trim();
+          const row: {
+            duration: number;
+            image_url: string | null;
+            video_url: string | null;
+            script_text?: string;
+            caption?: string;
+            voiceover_url?: string;
+          } = {
+            duration: VIDEO_GUIDE_TIMELINE_SCENE_SEC,
+            image_url,
+            video_url,
+          };
+          if (caption) {
+            row.script_text = caption;
+            row.caption = caption;
+          }
+          if (isHttp(vo)) row.voiceover_url = vo;
+          return row;
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+
+      if (guideScenes.length === 0) {
+        toast({
+          title: "No scene media yet",
+          description: "Generate images for your scenes first using the Generate Image buttons above.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const perSceneAllHttp = guideScenes.every((r) => isHttp(r.voiceover_url ?? null));
+      // If not all per-scene voiceovers are available, remove them and use global voiceover instead
+      if (!perSceneAllHttp) {
+        guideScenes.forEach((r) => { delete r.voiceover_url; });
+      }
       const globalVoRaw = fullVoiceoverUrl?.trim() ?? "";
       const globalVo =
         globalVoRaw.startsWith("http://") || globalVoRaw.startsWith("https://") ? globalVoRaw : undefined;
-
-      const guideScenes = scenes.map((_, i) => {
-        const video_url = mergedVideoUrls[i]?.trim() || null;
-        const rawStill = mergedUrls[i]?.trim() || null;
-        const image_url = rawStill && isHttp(rawStill) ? rawStill : null;
-        const vo = guideCoachVoiceoverUrls[i]?.trim() || perSceneUrls[i]?.trim() || "";
-        const caption = buildGuideSceneCaptionText(i).trim();
-        const row: {
-          duration: number;
-          image_url: string | null;
-          video_url: string | null;
-          script_text?: string;
-          caption?: string;
-          voiceover_url?: string;
-        } = {
-          duration: VIDEO_GUIDE_TIMELINE_SCENE_SEC,
-          image_url,
-          video_url,
-        };
-        if (caption) {
-          row.script_text = caption;
-          row.caption = caption;
-        }
-        if (perSceneAllHttp && vo) row.voiceover_url = vo;
-        return row;
-      });
 
       const res = await fetch("/api/videos/compile", {
         method: "POST",
@@ -1450,8 +1437,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     }
   }, [
     scenes,
-    canCompileServerSideVoice,
-    runBulkGuideMediaGeneration,
+    guideSceneImageUrls,
+    guideSceneVideoUrls,
     guideCoachVoiceoverUrls,
     perSceneUrls,
     fullVoiceoverUrl,

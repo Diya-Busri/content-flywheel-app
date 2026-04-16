@@ -172,15 +172,7 @@ export async function POST(request: NextRequest) {
       singleVoiceoverUrl &&
       (singleVoiceoverUrl.startsWith("http://") || singleVoiceoverUrl.startsWith("https://"));
 
-    if (!usePerSceneVoiceover && !hasSingleUrl) {
-      return NextResponse.json(
-        {
-          error:
-            "Voiceover is missing. Generate per-scene voiceovers in the Video Guide, pass voiceoverUrl for one file for all scenes, or use a saved script with voiceover.",
-        },
-        { status: 400 }
-      );
-    }
+    // Voiceover is optional — if absent the video compiles with music (or silent if no BGM selected).
 
     const scenes: CompileScene[] = sceneRows.map((s) => {
       const duration = typeof s.duration === "number" && s.duration > 0 ? s.duration : 5;
@@ -290,7 +282,7 @@ export async function POST(request: NextRequest) {
     await mkdir(workDir, { recursive: true });
 
     try {
-      let voiceoverInput: string;
+      let voiceoverInput: string | null = null;
       let existingVoicePath: string | undefined;
       if (usePerSceneVoiceover) {
         const concatenated = await concatVoiceoverUrls(workDir, perSceneVoiceoverUrls);
@@ -307,10 +299,10 @@ export async function POST(request: NextRequest) {
             };
           }
         }
-        voiceoverInput = "";
-      } else {
-        voiceoverInput = singleVoiceoverUrl!;
+      } else if (hasSingleUrl) {
+        voiceoverInput = singleVoiceoverUrl;
       }
+      // else: no voiceover — video-only or BGM-only compile
       const bgmPath = resolveLocalBgmPath(backgroundMusic);
       if (backgroundMusic !== "none" && !bgmPath) {
         return NextResponse.json(

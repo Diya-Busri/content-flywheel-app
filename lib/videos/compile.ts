@@ -341,7 +341,7 @@ export type CompileVideoOptions = {
 export async function compileVideoToFile(
   workDir: string,
   scenes: CompileScene[],
-  voiceoverUrl: string,
+  voiceoverUrl: string | null | undefined,
   existingVoicePath?: string,
   transition?: string,
   compileOpts?: CompileVideoOptions
@@ -349,21 +349,27 @@ export async function compileVideoToFile(
   void transition;
   const { width, height } = compileDimensions(compileOpts?.outputAspect, compileOpts?.resolution);
   const voicePath = join(workDir, "voiceover.mp3");
+  let hasVoice = false;
   if (existingVoicePath) {
     try {
       await access(existingVoicePath);
       await copyFile(existingVoicePath, voicePath);
+      hasVoice = true;
     } catch {
-      if (!isHttpUrl(voiceoverUrl)) throw new Error("voiceover_url must be http(s) when existing voice path is missing");
-      await downloadToFile(voiceoverUrl, voicePath);
+      if (isHttpUrl(voiceoverUrl ?? "")) {
+        await downloadToFile(voiceoverUrl!, voicePath);
+        hasVoice = true;
+      }
+      // else: no voiceover — compile video-only
     }
-  } else {
-    if (!isHttpUrl(voiceoverUrl)) throw new Error("voiceover_url must be http(s)");
-    await downloadToFile(voiceoverUrl, voicePath);
+  } else if (isHttpUrl(voiceoverUrl ?? "")) {
+    await downloadToFile(voiceoverUrl!, voicePath);
+    hasVoice = true;
   }
+  // voiceoverUrl not provided or not http(s) → video-only compile (no audio or BGM-only)
   if (scenes.length === 0) throw new Error("At least one scene required");
 
-  if (scenes.length === 1) {
+  if (hasVoice && scenes.length === 1) {
     const audioDur = await probeAudioDurationSeconds(voicePath);
     if (audioDur != null && audioDur > 0.25) {
       const hold = 0.2;
@@ -448,36 +454,46 @@ export async function compileVideoToFile(
 
   let filterComplex = videoGraph;
   let extraInputs: string[] = [];
-  let mapAudioStream: string;
-
-  if (bgmAbs) {
-    const voiceIdx = inputCount;
-    const bgmIdx = inputCount + 1;
-    filterComplex += `;[${bgmIdx}:a]volume=${bgmVol}[bgm];[${voiceIdx}:a][bgm]amix=inputs=2:duration=first[aout]`;
-    extraInputs = ["-stream_loop", "-1", "-i", bgmAbs];
-    mapAudioStream = "[aout]";
-  } else {
-    mapAudioStream = `${inputCount}:a`;
-  }
+  let voiceInputs: string[] = [];
+  let audioArgs: string[] = [];
 
   const preset = compileOpts?.videoPreset ?? "medium";
   const crfValue = typeof compileOpts?.crf === "number" && compileOpts.crf >= 0 && compileOpts.crf <= 51
     ? compileOpts.crf
     : 23;
 
+  if (hasVoice && bgmAbs) {
+    // Voice + BGM: mix them
+    voiceInputs = ["-i", voicePath];
+    const voiceIdx = inputCount;
+    const bgmIdx = inputCount + 1;
+    filterComplex += `;[${bgmIdx}:a]volume=${bgmVol}[bgm];[${voiceIdx}:a][bgm]amix=inputs=2:duration=first[aout]`;
+    extraInputs = ["-stream_loop", "-1", "-i", bgmAbs];
+    audioArgs = ["-map", "[aout]", "-c:a", "aac"];
+  } else if (hasVoice) {
+    // Voice only
+    voiceInputs = ["-i", voicePath];
+    audioArgs = ["-map", `${inputCount}:a`, "-c:a", "aac"];
+  } else if (bgmAbs) {
+    // BGM only (no voiceover)
+    const bgmIdx = inputCount;
+    filterComplex += `;[${bgmIdx}:a]volume=${bgmVol}[bgm_out]`;
+    extraInputs = ["-stream_loop", "-1", "-i", bgmAbs];
+    audioArgs = ["-map", "[bgm_out]", "-c:a", "aac", "-shortest"];
+  }
+  // else: video-only (no audio args)
+
   const args = [
     "-y",
     ...segInputs,
-    "-i", voicePath,
+    ...voiceInputs,
     ...extraInputs,
     "-filter_complex", filterComplex,
     "-map", "[vout]",
-    "-map", mapAudioStream,
-    // Do not use -shortest: if total VO duration > sum(scene video durations), -shortest trims the audio tail (often the last scene).
+    ...audioArgs,
     "-c:v", "libx264",
     "-preset", preset,
     "-crf", String(crfValue),
-    "-c:a", "aac",
     "-movflags", "+faststart",
     finalPath,
   ];
