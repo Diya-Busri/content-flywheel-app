@@ -165,8 +165,9 @@ export async function POST(request: NextRequest) {
       bodyVoiceRaw.startsWith("http://") || bodyVoiceRaw.startsWith("https://") ? bodyVoiceRaw : null;
 
     const perSceneVoiceoverUrls = sceneRows.map(sceneVoiceoverHttpUrl);
+    // Use per-scene voiceovers if ANY scene has one (trailing scenes like product thumbnail may have none)
     const usePerSceneVoiceover =
-      sceneRows.length > 0 && perSceneVoiceoverUrls.every((u): u is string => u != null);
+      sceneRows.length > 0 && perSceneVoiceoverUrls.some((u): u is string => u != null);
     const singleVoiceoverUrl = !usePerSceneVoiceover ? bodySingleVoice ?? savedScriptVoiceover : null;
     const hasSingleUrl =
       singleVoiceoverUrl &&
@@ -285,18 +286,23 @@ export async function POST(request: NextRequest) {
       let voiceoverInput: string | null = null;
       let existingVoicePath: string | undefined;
       if (usePerSceneVoiceover) {
-        const concatenated = await concatVoiceoverUrls(workDir, perSceneVoiceoverUrls);
+        // Filter out null-voiceover scenes (e.g. trailing product thumbnail) — they play silently
+        const nonNullVoUrls = perSceneVoiceoverUrls.filter((u): u is string => u !== null);
+        const concatenated = await concatVoiceoverUrls(workDir, nonNullVoUrls);
         existingVoicePath = concatenated.path;
-        // Keep scene pacing synced to real TTS lengths to avoid silent visual tail.
-        // Add a tiny hold so cuts don't feel too abrupt.
+        // Sync scene durations to real TTS lengths — only for scenes that have a voiceover
         const HOLD_SEC = 0.15;
+        let voiceIdx = 0;
         for (let i = 0; i < scenes.length; i++) {
-          const measured = concatenated.sceneDurationsSec[i] ?? 0;
-          if (measured > 0.2) {
-            scenes[i] = {
-              ...scenes[i],
-              duration: Math.max(1, Number((measured + HOLD_SEC).toFixed(2))),
-            };
+          if (perSceneVoiceoverUrls[i] !== null) {
+            const measured = concatenated.sceneDurationsSec[voiceIdx] ?? 0;
+            if (measured > 0.2) {
+              scenes[i] = {
+                ...scenes[i],
+                duration: Math.max(1, Number((measured + HOLD_SEC).toFixed(2))),
+              };
+            }
+            voiceIdx++;
           }
         }
       } else if (hasSingleUrl) {
