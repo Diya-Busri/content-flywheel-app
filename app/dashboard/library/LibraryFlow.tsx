@@ -1136,6 +1136,10 @@ export default function LibraryFlow() {
                                     </Link>
                                   </DropdownMenuItem>
                                 )}
+                                <DropdownMenuItem onClick={() => handleDownloadItem(item)}>
+                                  <Download className="w-4 h-4 mr-2" />
+                                  Download
+                                </DropdownMenuItem>
                                 {item.type === "product" && (
                                   <DropdownMenuItem onClick={() => handleDuplicate(item)}>
                                     <Copy className="w-4 h-4 mr-2" />
@@ -1172,16 +1176,6 @@ export default function LibraryFlow() {
                           {item.type === "product" && (
                             <QuickSellSheet productId={item.id} productTitle={item.title} />
                           )}
-                          {item.type === "product" && (
-                            <Button variant="outline" size="sm" asChild title="Create Videos">
-                              <Link href={`/dashboard/digital-products/scripts?productId=${encodeURIComponent(item.id)}`}>
-                                <Video className="w-3.5 h-3.5" />
-                              </Link>
-                            </Button>
-                          )}
-                          <Button variant="outline" size="sm" onClick={() => handleDownloadItem(item)}>
-                            <Download className="w-3.5 h-3.5" />
-                          </Button>
                         </CardContent>
                       </Card>
                     ))}
@@ -1280,6 +1274,10 @@ export default function LibraryFlow() {
                                   </Link>
                                 </DropdownMenuItem>
                               )}
+                              <DropdownMenuItem onClick={() => handleDownloadItem(item)}>
+                                <Download className="w-4 h-4 mr-2" />
+                                Download
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => navigator.clipboard.writeText(item.title)}>
                                 <Copy className="w-4 h-4 mr-2" />
                                 Duplicate
@@ -1355,16 +1353,6 @@ export default function LibraryFlow() {
                         {item.type === "product" && (
                           <QuickSellSheet productId={item.id} productTitle={item.title} />
                         )}
-                        {item.type === "product" && (
-                          <Button variant="outline" size="sm" asChild title="Create Videos">
-                            <Link href={`/dashboard/digital-products/scripts?productId=${encodeURIComponent(item.id)}`}>
-                              <Video className="w-3.5 h-3.5" />
-                            </Link>
-                          </Button>
-                        )}
-                        <Button variant="outline" size="sm" onClick={() => handleDownloadItem(item)}>
-                          <Download className="w-3.5 h-3.5" />
-                        </Button>
                         {item.type === "video" && getVideoDownloadUrl(item) && (
                           <Button
                             variant="outline"
