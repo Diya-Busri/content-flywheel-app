@@ -1401,15 +1401,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         return;
       }
 
-      // Prepend a product showcase scene if we have the product thumbnail
-      if (productThumbnailUrl && isHttp(productThumbnailUrl)) {
-        guideScenes.unshift({
-          duration: 4,
-          image_url: productThumbnailUrl,
-          video_url: null,
-        });
-      }
-
+      // Resolve voiceover on content scenes BEFORE appending the thumbnail (thumbnail has no audio)
       const perSceneAllHttp = guideScenes.every((r) => isHttp(r.voiceover_url ?? null));
       // If not all per-scene voiceovers are available, remove them and use global voiceover instead
       if (!perSceneAllHttp) {
@@ -1418,6 +1410,15 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       const globalVoRaw = fullVoiceoverUrl?.trim() ?? "";
       const globalVo =
         globalVoRaw.startsWith("http://") || globalVoRaw.startsWith("https://") ? globalVoRaw : undefined;
+
+      // Append product showcase scene at the END as a sign-off / CTA
+      if (productThumbnailUrl && isHttp(productThumbnailUrl)) {
+        guideScenes.push({
+          duration: 4,
+          image_url: productThumbnailUrl,
+          video_url: null,
+        });
+      }
 
       const res = await fetch("/api/videos/compile", {
         method: "POST",
