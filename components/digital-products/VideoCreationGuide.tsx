@@ -65,6 +65,7 @@ import {
 } from "@/lib/video-prefill";
 import { AiStorySceneVoiceover } from "@/components/ai-story/AiStorySceneVoiceover";
 import { AiStoryAnimateSceneBlock } from "@/components/ai-story/AiStoryAnimateSceneBlock";
+import { NoVideoCreditsError } from "@/lib/ai-story-animate-client";
 
 /** Social Media Kit shape (matches API response). */
 export type SocialMediaKit = {
@@ -1140,8 +1141,21 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             const vurl = await animateAiStorySceneFromImage(img, getSceneFullPrompt(scene));
             mergedVideoUrls[i] = vurl;
           } catch (animErr) {
+            if (animErr instanceof NoVideoCreditsError) {
+              toast({
+                title: "Video credits required",
+                description: "You need video credits to animate scenes. Purchase credits to continue.",
+                variant: "destructive",
+                action: (
+                  <ToastAction altText="Buy credits" onClick={() => window.open("/dashboard/video-credits", "_blank")}>
+                    Buy credits
+                  </ToastAction>
+                ),
+              });
+              break; // Stop animating — no point continuing without credits
+            }
             toast({
-              title: `Scene ${i + 1} animation skipped`,
+              title: `Scene ${i + 1} animation failed`,
               description: animErr instanceof Error ? animErr.message : "Export will use the still image.",
               variant: "destructive",
             });

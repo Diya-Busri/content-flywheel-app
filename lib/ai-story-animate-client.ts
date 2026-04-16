@@ -6,6 +6,7 @@ type AnimateStartResponse = {
   request_id?: string | null;
   videoUrl?: string;
   error?: string;
+  code?: string;
 };
 
 type AnimateStatusResponse = {
@@ -13,6 +14,15 @@ type AnimateStatusResponse = {
   videoUrl?: string;
   error?: string;
 };
+
+/** Error thrown when user has no video credits. Callers can check err.code === "NO_VIDEO_CREDITS". */
+export class NoVideoCreditsError extends Error {
+  code = "NO_VIDEO_CREDITS";
+  constructor(message = "You need 1 video credit to animate a scene.") {
+    super(message);
+    this.name = "NoVideoCreditsError";
+  }
+}
 
 /** Calls the content-studio animate API and polls until a video URL is ready (matches scene-card polling behavior). */
 export async function animateAiStorySceneFromImage(imageUrl: string, motionPrompt: string): Promise<string> {
@@ -25,7 +35,12 @@ export async function animateAiStorySceneFromImage(imageUrl: string, motionPromp
     }),
   });
   const data = (await res.json()) as AnimateStartResponse;
-  if (!res.ok) throw new Error(data?.error ?? "Animation failed");
+  if (!res.ok) {
+    if (res.status === 402 || data?.code === "NO_VIDEO_CREDITS") {
+      throw new NoVideoCreditsError(data?.error ?? "You need 1 video credit to animate a scene.");
+    }
+    throw new Error(data?.error ?? "Animation failed");
+  }
   if (typeof data.videoUrl === "string" && data.videoUrl.trim()) return data.videoUrl.trim();
 
   const requestId = data.requestId ?? data.request_id ?? null;
