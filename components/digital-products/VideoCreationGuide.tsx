@@ -462,6 +462,20 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const [tiktokCheckItems, setTiktokCheckItems] = useState<boolean[]>([false, false, false, false, false, false, false]);
   /** Track which scene "Animate Scene" jobs are currently running so we can show export CTA. */
   const [animatingByScene, setAnimatingByScene] = useState<Record<number, boolean>>({});
+  /** Product thumbnail for compile intro scene (bookMockup > coverThumbnail > thumbnail). */
+  const [productThumbnailUrl, setProductThumbnailUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!productId) return;
+    fetch(`/api/products/${encodeURIComponent(productId)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((p: { marketingAssets?: { bookMockupUrl?: string | null; coverThumbnailUrl?: string | null; thumbnailUrl?: string | null } | null } | null) => {
+        const ma = p?.marketingAssets;
+        const url = ma?.bookMockupUrl?.trim() || ma?.coverThumbnailUrl?.trim() || ma?.thumbnailUrl?.trim() || null;
+        if (url) setProductThumbnailUrl(url);
+      })
+      .catch(() => {});
+  }, [productId]);
+
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   useEffect(() => {
     fetch("/api/video-credits/balance")
@@ -1383,6 +1397,15 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         return;
       }
 
+      // Prepend a product showcase scene if we have the product thumbnail
+      if (productThumbnailUrl && isHttp(productThumbnailUrl)) {
+        guideScenes.unshift({
+          duration: 4,
+          image_url: productThumbnailUrl,
+          video_url: null,
+        });
+      }
+
       const perSceneAllHttp = guideScenes.every((r) => isHttp(r.voiceover_url ?? null));
       // If not all per-scene voiceovers are available, remove them and use global voiceover instead
       if (!perSceneAllHttp) {
@@ -1442,6 +1465,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     guideCoachVoiceoverUrls,
     perSceneUrls,
     fullVoiceoverUrl,
+    productThumbnailUrl,
     buildGuideSceneCaptionText,
     toast,
   ]);

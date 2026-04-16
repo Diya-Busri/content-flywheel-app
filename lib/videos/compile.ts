@@ -276,11 +276,13 @@ async function renderImageSegment(
     kenZoomMax <= 2;
   const delta = useSubtleZoom ? kenZoomMax! - 1 : 0;
   /** Comma inside max() must be escaped for the filtergraph. */
+  // Zoom speed: 0.0025/frame → ~37% zoom over 150 frames (6s), clearly visible motion.
+  // Pan: drift 4% of width left→right so the image never looks truly frozen.
   const kenBurnsToYuv = useSubtleZoom
     ? `${coverCrop},setsar=1:1,` +
       `scale=8000:-1,zoompan=z='1+${delta}*on/max(1\\,${dFrames}-1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${dFrames}:s=${width}x${height}:fps=${FPS},format=yuv420p`
     : `${coverCrop},setsar=1:1,` +
-      `scale=8000:-1,zoompan=z='min(zoom+0.001,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${dFrames}:s=${width}x${height}:fps=${FPS},format=yuv420p`;
+      `scale=8000:-1,zoompan=z='min(zoom+0.0025,1.6)':x='iw/2-(iw/zoom/2)+iw*0.04*on/max(1\\,${dFrames}-1)':y='ih/2-(ih/zoom/2)':d=${dFrames}:s=${width}x${height}:fps=${FPS},format=yuv420p`;
   let baseVf = opts?.staticShot ? staticToYuv : kenBurnsToYuv;
   let vf = baseVf;
   if (dialogueLine?.trim()) {
