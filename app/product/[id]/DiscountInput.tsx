@@ -9,10 +9,10 @@ interface AppliedDiscount {
 
 export default function DiscountInput({
   productId,
-  onApply,
+  onApply = () => {},
 }: {
   productId: string;
-  onApply: (discount: AppliedDiscount | null) => void;
+  onApply?: (discount: AppliedDiscount | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
