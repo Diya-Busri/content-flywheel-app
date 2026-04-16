@@ -462,6 +462,13 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const [tiktokCheckItems, setTiktokCheckItems] = useState<boolean[]>([false, false, false, false, false, false, false]);
   /** Track which scene "Animate Scene" jobs are currently running so we can show export CTA. */
   const [animatingByScene, setAnimatingByScene] = useState<Record<number, boolean>>({});
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  useEffect(() => {
+    fetch("/api/video-credits/balance")
+      .then((r) => r.json())
+      .then((d: { balance?: number }) => setCreditBalance(d.balance ?? 0))
+      .catch(() => setCreditBalance(0));
+  }, []);
   /** When true, we auto-export once all animated scene videos + voiceovers are ready. */
   const [autoExportWhenAnimationsReady, setAutoExportWhenAnimationsReady] = useState(false);
   const autoExportStartedRef = useRef(false);
@@ -3039,8 +3046,24 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                       <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Visual / AI image prompt</p>
                       <p className="text-foreground whitespace-pre-wrap mb-3">{stripMarkdown(fullPrompt ?? "")}</p>
 
-                      {/* Image generation + animation */}
-                      {genImageUrl ? (
+                      {/* Image generation + animation — gated on video credits */}
+                      {creditBalance === 0 ? (
+                        <div className="rounded-lg border border-orange-200 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10 p-4 space-y-3">
+                          <p className="text-sm font-semibold text-orange-700 dark:text-orange-400">🎬 Video credits required</p>
+                          <p className="text-xs text-orange-600 dark:text-orange-300">
+                            You need video credits to generate scene images and animate them into videos. Purchase credits, then come back and generate your scenes.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+                              onClick={() => window.location.href = "/dashboard/video-credits"}
+                            >
+                              Buy Video Credits
+                            </Button>
+                          </div>
+                        </div>
+                      ) : genImageUrl ? (
                         <div className="space-y-2">
                           <img
                             src={genImageUrl}
@@ -3069,7 +3092,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                             aspectRatio={aspectCls === "aspect-video max-w-2xl" ? "16:9" : "9:16"}
                           />
                         </div>
-                      ) : (
+                      ) : creditBalance === null ? null : (
                         <Button
                           variant="outline"
                           size="sm"
