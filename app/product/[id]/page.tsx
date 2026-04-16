@@ -40,25 +40,29 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
-  const { id } = await params;
-  const [product] = await db
-    .select({ title: productsTable.title, marketingAssets: productsTable.marketingAssets })
-    .from(productsTable)
-    .where(and(eq(productsTable.id, id), isNull(productsTable.deletedAt)))
-    .limit(1);
+  try {
+    const { id } = await params;
+    const [product] = await db
+      .select({ title: productsTable.title, marketingAssets: productsTable.marketingAssets })
+      .from(productsTable)
+      .where(and(eq(productsTable.id, id), isNull(productsTable.deletedAt)))
+      .limit(1);
 
-  if (!product) return { title: "Product not found" };
-  const ma = (product.marketingAssets ?? {}) as MarketingAssets;
-  const title = ma.productTitle || product.title;
-  return {
-    title: `${title} — Digital Product`,
-    description: ma.productDescription ?? undefined,
-    openGraph: {
+    if (!product) return { title: "Product not found" };
+    const ma = (product.marketingAssets ?? {}) as MarketingAssets;
+    const title = ma.productTitle || product.title;
+    return {
       title: `${title} — Digital Product`,
       description: ma.productDescription ?? undefined,
-      images: ma.bookMockupUrl ? [ma.bookMockupUrl] : ma.coverThumbnailUrl ? [ma.coverThumbnailUrl] : [],
-    },
-  };
+      openGraph: {
+        title: `${title} — Digital Product`,
+        description: ma.productDescription ?? undefined,
+        images: ma.bookMockupUrl ? [ma.bookMockupUrl] : ma.coverThumbnailUrl ? [ma.coverThumbnailUrl] : [],
+      },
+    };
+  } catch {
+    return { title: "Digital Product" };
+  }
 }
 
 export default async function ProductSalesPage({
@@ -72,19 +76,26 @@ export default async function ProductSalesPage({
   const sp = await searchParams;
   const purchased = sp?.purchased === "true";
 
-  const [product] = await db
-    .select({
-      id: productsTable.id,
-      title: productsTable.title,
-      niche: productsTable.niche,
-      format: productsTable.format,
-      userId: productsTable.userId,
-      marketingAssets: productsTable.marketingAssets,
-      content: productsTable.content,
-    })
-    .from(productsTable)
-    .where(and(eq(productsTable.id, id), isNull(productsTable.deletedAt)))
-    .limit(1);
+  let product: { id: string; title: string; niche: string | null; format: string | null; userId: string; marketingAssets: unknown; content: unknown } | undefined;
+  try {
+    const rows = await db
+      .select({
+        id: productsTable.id,
+        title: productsTable.title,
+        niche: productsTable.niche,
+        format: productsTable.format,
+        userId: productsTable.userId,
+        marketingAssets: productsTable.marketingAssets,
+        content: productsTable.content,
+      })
+      .from(productsTable)
+      .where(and(eq(productsTable.id, id), isNull(productsTable.deletedAt)))
+      .limit(1);
+    product = rows[0];
+  } catch (err) {
+    console.error("[product page] DB error fetching product:", err);
+    throw err; // let error.tsx handle it
+  }
 
   if (!product) notFound();
 
