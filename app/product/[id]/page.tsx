@@ -88,15 +88,19 @@ export default async function ProductSalesPage({
 
   if (!product) notFound();
 
-  const [bv, reviews, upsellProducts] = await Promise.all([
-    db
+  let bv: { brandName: string | null; targetAudience: string | null } | undefined;
+  try {
+    const rows = await db
       .select({ brandName: brandVoiceTable.brandName, targetAudience: brandVoiceTable.targetAudience })
       .from(brandVoiceTable)
       .where(eq(brandVoiceTable.userId, product.userId))
-      .limit(1)
-      .then((r) => r[0])
-      .catch(() => undefined),
-    db
+      .limit(1);
+    bv = rows[0];
+  } catch { bv = undefined; }
+
+  let reviews: { id: string; buyerName: string | null; rating: number; reviewText: string | null; createdAt: Date }[] = [];
+  try {
+    reviews = await db
       .select({
         id: productReviewsTable.id,
         buyerName: productReviewsTable.buyerName,
@@ -107,17 +111,19 @@ export default async function ProductSalesPage({
       .from(productReviewsTable)
       .where(and(eq(productReviewsTable.productId, id), eq(productReviewsTable.approved, true)))
       .orderBy(productReviewsTable.createdAt)
-      .limit(20)
-      .catch(() => [] as typeof productReviewsTable.$inferSelect[]),
-    // Other products by same creator (exclude this one)
-    db
+      .limit(20);
+  } catch { reviews = []; }
+
+  let upsellProducts: { id: string; title: string; marketingAssets: unknown }[] = [];
+  try {
+    const rows = await db
       .select({ id: productsTable.id, title: productsTable.title, marketingAssets: productsTable.marketingAssets })
       .from(productsTable)
       .where(and(eq(productsTable.userId, product.userId), isNull(productsTable.deletedAt)))
-      .limit(6)
-      .then((r) => r.filter((p) => p.id !== id && ((p.marketingAssets as MarketingAssets)?.isNativePublished || (p.marketingAssets as MarketingAssets)?.checkoutUrl)).slice(0, 3))
-      .catch(() => [] as typeof productsTable.$inferSelect[]),
-  ]);
+      .limit(6);
+    upsellProducts = rows.filter((p) => p.id !== id && ((p.marketingAssets as MarketingAssets)?.isNativePublished || (p.marketingAssets as MarketingAssets)?.checkoutUrl)).slice(0, 3);
+  } catch { upsellProducts = []; }
+
   const upsellBundles: { id: string; title: string; bundlePrice: number; productIds: string[] }[] = [];
 
   const ma = (product.marketingAssets ?? {}) as MarketingAssets;
