@@ -2,7 +2,6 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { productReviewsTable } from "@/db/schema/product-reviews-schema";
-import { productBundlesTable } from "@/db/schema/product-bundles-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -89,7 +88,7 @@ export default async function ProductSalesPage({
 
   if (!product) notFound();
 
-  const [bv, reviews, upsellProducts, upsellBundles] = await Promise.all([
+  const [bv, reviews, upsellProducts] = await Promise.all([
     db
       .select({ brandName: brandVoiceTable.brandName, targetAudience: brandVoiceTable.targetAudience })
       .from(brandVoiceTable)
@@ -118,13 +117,8 @@ export default async function ProductSalesPage({
       .limit(6)
       .then((r) => r.filter((p) => p.id !== id && ((p.marketingAssets as MarketingAssets)?.isNativePublished || (p.marketingAssets as MarketingAssets)?.checkoutUrl)).slice(0, 3))
       .catch(() => [] as typeof productsTable.$inferSelect[]),
-    db
-      .select({ id: productBundlesTable.id, title: productBundlesTable.title, bundlePrice: productBundlesTable.bundlePrice, productIds: productBundlesTable.productIds })
-      .from(productBundlesTable)
-      .where(and(eq(productBundlesTable.creatorUserId, product.userId), eq(productBundlesTable.active, true)))
-      .limit(2)
-      .catch(() => [] as typeof productBundlesTable.$inferSelect[]),
   ]);
+  const upsellBundles: { id: string; title: string; bundlePrice: number; productIds: string[] }[] = [];
 
   const ma = (product.marketingAssets ?? {}) as MarketingAssets;
   const content = (product.content ?? {}) as ProductContent;
