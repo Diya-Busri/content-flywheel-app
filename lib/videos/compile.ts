@@ -10,10 +10,11 @@
  * FFmpeg path: tries @ffmpeg-installer/ffmpeg, then ffmpeg-static, then system "ffmpeg".
  */
 
-import { writeFile, rm, copyFile, access } from "fs/promises";
+import { writeFile, rm, copyFile, access, mkdir as fsMkdir } from "fs/promises";
 import { join } from "path";
 import { existsSync } from "fs";
 import { spawn } from "child_process";
+import { tmpdir } from "os";
 import { buildViralCaptionDrawtextFlatVf, VIRAL_CAPTION_FONT_SIZES } from "@/lib/video-caption-ffmpeg";
 import { BGM_MIX_VOLUME } from "@/lib/bgm-tracks";
 
@@ -133,12 +134,46 @@ export function getFfmpegPath(): string {
   return "ffmpeg";
 }
 
-export function runFfmpeg(args: string[], cwd?: string): Promise<void> {
+/**
+ * Write a minimal fontconfig config to /tmp so FFmpeg's drawtext filter can initialise
+ * on servers that have no system fontconfig (Vercel, Docker without fonts installed).
+ * Returns env vars to pass to the FFmpeg child process.
+ */
+let _fontconfigEnv: Record<string, string> | null = null;
+async function getFontconfigEnv(): Promise<Record<string, string>> {
+  if (_fontconfigEnv) return _fontconfigEnv;
+  try {
+    const cwd = process.cwd();
+    const fontsDir = join(cwd, "public/fonts");
+    const cacheDir = join(tmpdir(), "fontconfig-cache");
+    const confPath = join(tmpdir(), "fontconfig.conf");
+    await fsMkdir(cacheDir, { recursive: true });
+    const conf = `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>${fontsDir}</dir>
+  <cachedir>${cacheDir}</cachedir>
+  <match target="font"><edit name="autohint" mode="assign"><bool>true</bool></edit></match>
+</fontconfig>`;
+    await writeFile(confPath, conf, "utf8");
+    _fontconfigEnv = {
+      FONTCONFIG_FILE: confPath,
+      FONTCONFIG_PATH: fontsDir,
+    };
+    return _fontconfigEnv;
+  } catch {
+    return {};
+  }
+}
+
+export async function runFfmpeg(args: string[], cwd?: string): Promise<void> {
   const ffmpeg = getFfmpegPath();
+  const fcEnv = await getFontconfigEnv();
   return new Promise((resolve, reject) => {
     const proc = spawn(ffmpeg, args, {
       stdio: ["ignore", "pipe", "pipe"],
       cwd,
+      env: { ...process.env, ...fcEnv },
     });
     let stderr = "";
     proc.stderr?.on("data", (chunk) => { stderr += chunk.toString(); });
