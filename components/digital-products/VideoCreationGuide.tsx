@@ -3037,7 +3037,53 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     })()}
                     <div>
                       <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Visual / AI image prompt</p>
-                      <p className="text-foreground whitespace-pre-wrap">{stripMarkdown(fullPrompt ?? "")}</p>
+                      <p className="text-foreground whitespace-pre-wrap mb-3">{stripMarkdown(fullPrompt ?? "")}</p>
+
+                      {/* Image generation + animation */}
+                      {genImageUrl ? (
+                        <div className="space-y-2">
+                          <img
+                            src={genImageUrl}
+                            alt={`Scene ${i + 1}`}
+                            className={`w-full rounded-md ${aspectCls === "aspect-video max-w-2xl" ? "aspect-video" : "aspect-[9/16] max-w-[200px]"} object-cover`}
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={sceneImageBusy}
+                              onClick={() => generateGuideSceneImage(i)}
+                              className="gap-1.5"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              Regenerate
+                            </Button>
+                          </div>
+                          <AiStoryAnimateSceneBlock
+                            imageUrl={genImageUrl}
+                            motionPrompt={fullPrompt}
+                            videoUrl={guideSceneVideoUrls[i] ?? null}
+                            onVideoUrl={(url) => setGuideSceneVideoUrls((prev) => ({ ...prev, [i]: url }))}
+                            onAnimationStateChange={(isAnimating) => setAnimatingByScene((prev) => ({ ...prev, [i]: isAnimating }))}
+                            videoClassName={aspectCls === "aspect-video max-w-2xl" ? "w-full rounded-md mt-2 aspect-video object-cover" : "w-full rounded-md mt-2 aspect-[9/16] max-w-[200px] object-cover"}
+                            aspectRatio={aspectCls === "aspect-video max-w-2xl" ? "16:9" : "9:16"}
+                          />
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={sceneImageBusy}
+                          onClick={() => generateGuideSceneImage(i)}
+                          className="gap-1.5"
+                        >
+                          {sceneImageBusy ? (
+                            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating image…</>
+                          ) : (
+                            <><ImagePlus className="w-3.5 h-3.5" /> Generate Image</>
+                          )}
+                        </Button>
+                      )}
                     </div>
                     {(vd?.cameraAngle || vd?.lightingMood || vd?.colorPalette || vd?.mediaType) && (
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
