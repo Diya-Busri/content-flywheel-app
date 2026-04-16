@@ -50,7 +50,7 @@ export async function POST(
 
     const brandVoice = await getBrandVoice(userId).catch(() => "");
 
-    const userPrompt = `Create 3 social media captions for a digital product launch.
+    const userPrompt = `Create social media captions AND titles for a digital product video.
 
 PRODUCT: "${title}"
 NICHE: ${niche}
@@ -60,14 +60,20 @@ HASHTAGS: ${hashtags || "#digitalproduct #passiveincome"}
 
 Return ONLY valid JSON (no markdown, no code fences) in this exact shape:
 {
+  "tiktok_title": "...",
   "tiktok": "...",
+  "instagram_title": "...",
   "instagram": "...",
+  "youtube_title": "...",
   "twitter": "..."
 }
 
 Rules:
-- TikTok: Hook in first line, conversational, trending language, 3-5 relevant hashtags at the end, max 150 words
-- Instagram: Story-driven, benefit-focused, 5-8 hashtags at the end, max 200 words
+- tiktok_title: Short punchy video title, max 8 words, no hashtags
+- TikTok caption: Hook in first line, conversational, trending language, 3-5 relevant hashtags at the end, max 150 words
+- instagram_title: Benefit-driven title, max 10 words, no hashtags
+- Instagram caption: Story-driven, benefit-focused, 5-8 hashtags at the end, max 200 words
+- youtube_title: SEO-optimised title with keyword near the front, max 60 characters, no hashtags
 - Twitter/X: Punchy, 1 bold claim, max 240 characters total including any hashtags`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -100,7 +106,7 @@ Rules:
     const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
     const raw = (data.choices?.[0]?.message?.content ?? "").trim();
 
-    let parsed: { tiktok?: string; instagram?: string; twitter?: string } = {};
+    let parsed: { tiktok?: string; instagram?: string; twitter?: string; tiktok_title?: string; instagram_title?: string; youtube_title?: string } = {};
     try {
       parsed = JSON.parse(raw);
     } catch {
@@ -108,8 +114,11 @@ Rules:
     }
 
     return NextResponse.json({
+      tiktok_title: parsed.tiktok_title ?? "",
       tiktok: parsed.tiktok ?? "",
+      instagram_title: parsed.instagram_title ?? "",
       instagram: parsed.instagram ?? "",
+      youtube_title: parsed.youtube_title ?? "",
       twitter: parsed.twitter ?? "",
     });
   } catch (err) {

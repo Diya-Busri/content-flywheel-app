@@ -465,9 +465,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   /** Product thumbnail for compile intro scene (bookMockup > coverThumbnail > thumbnail). */
   const [productThumbnailUrl, setProductThumbnailUrl] = useState<string | null>(null);
   /** Auto-generated social captions shown after MP4 export. */
-  const [videoSocialCaptions, setVideoSocialCaptions] = useState<{ tiktok: string; instagram: string; twitter: string } | null>(null);
+  const [videoSocialCaptions, setVideoSocialCaptions] = useState<{ tiktok_title: string; tiktok: string; instagram_title: string; instagram: string; youtube_title: string; twitter: string } | null>(null);
   const [videoSocialCaptionsLoading, setVideoSocialCaptionsLoading] = useState(false);
-  const [copiedSocialCaption, setCopiedSocialCaption] = useState<"tiktok" | "instagram" | "twitter" | null>(null);
+  const [copiedSocialCaption, setCopiedSocialCaption] = useState<string | null>(null);
   useEffect(() => {
     if (!productId) return;
     fetch(`/api/products/${encodeURIComponent(productId)}`)
@@ -1440,9 +1440,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         setVideoSocialCaptionsLoading(true);
         fetch(`/api/products/${encodeURIComponent(productId)}/social-captions`, { method: "POST" })
           .then((r) => (r.ok ? r.json() : null))
-          .then((d: { tiktok?: string; instagram?: string; twitter?: string } | null) => {
+          .then((d: { tiktok_title?: string; tiktok?: string; instagram_title?: string; instagram?: string; youtube_title?: string; twitter?: string } | null) => {
             if (d?.tiktok || d?.instagram || d?.twitter) {
-              setVideoSocialCaptions({ tiktok: d.tiktok ?? "", instagram: d.instagram ?? "", twitter: d.twitter ?? "" });
+              setVideoSocialCaptions({ tiktok_title: d.tiktok_title ?? "", tiktok: d.tiktok ?? "", instagram_title: d.instagram_title ?? "", instagram: d.instagram ?? "", youtube_title: d.youtube_title ?? "", twitter: d.twitter ?? "" });
             }
           })
           .catch(() => {})
@@ -3304,10 +3304,35 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                           {videoSocialCaptions && !videoSocialCaptionsLoading && (
                             <div className="mt-3 flex flex-col gap-3">
                               <p className="text-xs font-semibold text-foreground">Ready-to-post captions &amp; hashtags:</p>
+                              {/* YouTube title row */}
+                              {videoSocialCaptions.youtube_title && (
+                                <div className="rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-background p-3 flex flex-col gap-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-medium text-muted-foreground">YouTube Title</span>
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-foreground transition-colors shrink-0"
+                                      onClick={() => {
+                                        void navigator.clipboard.writeText(videoSocialCaptions.youtube_title).then(() => {
+                                          setCopiedSocialCaption("youtube_title");
+                                          setTimeout(() => setCopiedSocialCaption(null), 2000);
+                                        });
+                                      }}
+                                    >
+                                      <Copy className="w-3 h-3" />
+                                      {copiedSocialCaption === "youtube_title" ? "Copied!" : "Copy"}
+                                    </button>
+                                  </div>
+                                  <p className="text-xs text-foreground font-medium">{videoSocialCaptions.youtube_title}</p>
+                                </div>
+                              )}
                               {(["tiktok", "instagram", "twitter"] as const).map((platform) => {
                                 const labels = { tiktok: "TikTok", instagram: "Instagram", twitter: "X / Twitter" };
+                                const titleKey = platform === "tiktok" ? "tiktok_title" : platform === "instagram" ? "instagram_title" : null;
+                                const title = titleKey ? videoSocialCaptions[titleKey as "tiktok_title"] : null;
                                 const text = videoSocialCaptions[platform];
                                 if (!text) return null;
+                                const fullText = title ? `${title}\n\n${text}` : text;
                                 return (
                                   <div key={platform} className="rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-background p-3 flex flex-col gap-2">
                                     <div className="flex items-center justify-between gap-2">
@@ -3316,7 +3341,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                         type="button"
                                         className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-foreground transition-colors shrink-0"
                                         onClick={() => {
-                                          void navigator.clipboard.writeText(text).then(() => {
+                                          void navigator.clipboard.writeText(fullText).then(() => {
                                             setCopiedSocialCaption(platform);
                                             setTimeout(() => setCopiedSocialCaption(null), 2000);
                                           });
@@ -3326,6 +3351,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                         {copiedSocialCaption === platform ? "Copied!" : "Copy"}
                                       </button>
                                     </div>
+                                    {title && <p className="text-xs font-semibold text-foreground">{title}</p>}
                                     <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">{text}</p>
                                   </div>
                                 );
