@@ -3042,72 +3042,76 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                         </div>
                       );
                     })()}
-                    <div>
-                      <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Visual / AI image prompt</p>
-                      <p className="text-foreground whitespace-pre-wrap mb-3">{stripMarkdown(fullPrompt ?? "")}</p>
+                    {(() => {
+                      const sceneAr = guide.videoFormat?.aspectRatio ?? (scene as { format?: { aspect_ratio?: string } }).format?.aspect_ratio ?? "9:16";
+                      const sceneIs169 = sceneAr === "16:9";
+                      const sceneImgUrl = guideSceneImageUrls[i];
+                      const sceneBusy = guideSceneImageLoadingIndex === i || guideBulkImagesLoading;
+                      return (
+                        <div>
+                          <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Visual / AI image prompt</p>
+                          <p className="text-foreground whitespace-pre-wrap mb-3">{stripMarkdown(fullPrompt ?? "")}</p>
 
-                      {/* Image generation + animation — gated on video credits */}
-                      {creditBalance === 0 ? (
-                        <div className="rounded-lg border border-orange-200 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10 p-4 space-y-3">
-                          <p className="text-sm font-semibold text-orange-700 dark:text-orange-400">🎬 Video credits required</p>
-                          <p className="text-xs text-orange-600 dark:text-orange-300">
-                            You need video credits to generate scene images and animate them into videos. Purchase credits, then come back and generate your scenes.
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              size="sm"
-                              className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
-                              onClick={() => window.location.href = "/dashboard/video-credits"}
-                            >
-                              Buy Video Credits
-                            </Button>
-                          </div>
-                        </div>
-                      ) : genImageUrl ? (
-                        <div className="space-y-2">
-                          <img
-                            src={genImageUrl}
-                            alt={`Scene ${i + 1}`}
-                            className={`w-full rounded-md ${aspectCls === "aspect-video max-w-2xl" ? "aspect-video" : "aspect-[9/16] max-w-[200px]"} object-cover`}
-                          />
-                          <div className="flex gap-2">
+                          {/* Image generation + animation — gated on video credits */}
+                          {creditBalance === 0 ? (
+                            <div className="rounded-lg border border-orange-200 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10 p-4 space-y-3">
+                              <p className="text-sm font-semibold text-orange-700 dark:text-orange-400">🎬 Video credits required</p>
+                              <p className="text-xs text-orange-600 dark:text-orange-300">
+                                You need video credits to generate scene images and animate them into videos. Purchase credits, then come back and generate your scenes.
+                              </p>
+                              <Button
+                                size="sm"
+                                className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+                                onClick={() => { window.location.href = "/dashboard/video-credits"; }}
+                              >
+                                Buy Video Credits
+                              </Button>
+                            </div>
+                          ) : sceneImgUrl ? (
+                            <div className="space-y-2">
+                              <img
+                                src={sceneImgUrl}
+                                alt={`Scene ${i + 1}`}
+                                className={`w-full rounded-md ${sceneIs169 ? "aspect-video" : "aspect-[9/16] max-w-[200px]"} object-cover`}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={sceneBusy}
+                                onClick={() => generateGuideSceneImage(i)}
+                                className="gap-1.5"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                Regenerate
+                              </Button>
+                              <AiStoryAnimateSceneBlock
+                                imageUrl={sceneImgUrl}
+                                motionPrompt={fullPrompt}
+                                videoUrl={guideSceneVideoUrls[i] ?? null}
+                                onVideoUrl={(url) => setGuideSceneVideoUrls((prev) => ({ ...prev, [i]: url }))}
+                                onAnimationStateChange={(isAnimating) => setAnimatingByScene((prev) => ({ ...prev, [i]: isAnimating }))}
+                                videoClassName={sceneIs169 ? "w-full rounded-md mt-2 aspect-video object-cover" : "w-full rounded-md mt-2 aspect-[9/16] max-w-[200px] object-cover"}
+                                aspectRatio={sceneIs169 ? "16:9" : "9:16"}
+                              />
+                            </div>
+                          ) : creditBalance === null ? null : (
                             <Button
                               variant="outline"
                               size="sm"
-                              disabled={sceneImageBusy}
+                              disabled={sceneBusy}
                               onClick={() => generateGuideSceneImage(i)}
                               className="gap-1.5"
                             >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                              Regenerate
+                              {sceneBusy ? (
+                                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating image…</>
+                              ) : (
+                                <><ImagePlus className="w-3.5 h-3.5" /> Generate Image</>
+                              )}
                             </Button>
-                          </div>
-                          <AiStoryAnimateSceneBlock
-                            imageUrl={genImageUrl}
-                            motionPrompt={fullPrompt}
-                            videoUrl={guideSceneVideoUrls[i] ?? null}
-                            onVideoUrl={(url) => setGuideSceneVideoUrls((prev) => ({ ...prev, [i]: url }))}
-                            onAnimationStateChange={(isAnimating) => setAnimatingByScene((prev) => ({ ...prev, [i]: isAnimating }))}
-                            videoClassName={aspectCls === "aspect-video max-w-2xl" ? "w-full rounded-md mt-2 aspect-video object-cover" : "w-full rounded-md mt-2 aspect-[9/16] max-w-[200px] object-cover"}
-                            aspectRatio={aspectCls === "aspect-video max-w-2xl" ? "16:9" : "9:16"}
-                          />
-                        </div>
-                      ) : creditBalance === null ? null : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={sceneImageBusy}
-                          onClick={() => generateGuideSceneImage(i)}
-                          className="gap-1.5"
-                        >
-                          {sceneImageBusy ? (
-                            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating image…</>
-                          ) : (
-                            <><ImagePlus className="w-3.5 h-3.5" /> Generate Image</>
                           )}
-                        </Button>
-                      )}
-                    </div>
+                        </div>
+                      );
+                    })()}
                     {(vd?.cameraAngle || vd?.lightingMood || vd?.colorPalette || vd?.mediaType) && (
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
                         {vd.cameraAngle && <span><span className="text-orange-500">Camera:</span> {vd.cameraAngle}</span>}
