@@ -464,14 +464,14 @@ export async function compileVideoToFile(
 
     if (localImg && !downloaded?.isVideo) {
       await access(localImg);
-      await renderImageSegment(localImg, dur, segPath, width, height, s.dialogue, {
+      await renderImageSegment(localImg, dur, segPath, width, height, null, {
         staticShot: Boolean(s.disableKenBurns),
         kenBurnsZoomMax: s.kenBurnsZoomMax,
       });
     } else if (downloaded?.isVideo) {
-      await renderVideoSegment(downloaded.localPath, dur, segPath, width, height, s.dialogue);
+      await renderVideoSegment(downloaded.localPath, dur, segPath, width, height, null);
     } else if (downloaded) {
-      await renderImageSegment(downloaded.localPath, dur, segPath, width, height, s.dialogue, {
+      await renderImageSegment(downloaded.localPath, dur, segPath, width, height, null, {
         staticShot: Boolean(s.disableKenBurns),
         kenBurnsZoomMax: s.kenBurnsZoomMax,
       });
@@ -575,16 +575,16 @@ export async function renderSceneSegmentOnly(
 
   if (localImg && !videoUrl) {
     await access(localImg);
-    await renderImageSegment(localImg, dur, segPath, width, height, scene.dialogue, {
+    await renderImageSegment(localImg, dur, segPath, width, height, null, {
       staticShot: Boolean(scene.disableKenBurns),
       kenBurnsZoomMax: scene.kenBurnsZoomMax,
     });
   } else if (videoUrl && isHttpUrl(videoUrl)) {
     const inputPath = await downloadAsset(videoUrl, workDir, 0, false);
-    await renderVideoSegment(inputPath, dur, segPath, width, height, scene.dialogue);
+    await renderVideoSegment(inputPath, dur, segPath, width, height, null);
   } else if (imageUrl && isHttpUrl(imageUrl)) {
     const inputPath = await downloadAsset(imageUrl, workDir, 0, true);
-    await renderImageSegment(inputPath, dur, segPath, width, height, scene.dialogue, {
+    await renderImageSegment(inputPath, dur, segPath, width, height, null, {
       staticShot: Boolean(scene.disableKenBurns),
       kenBurnsZoomMax: scene.kenBurnsZoomMax,
     });
