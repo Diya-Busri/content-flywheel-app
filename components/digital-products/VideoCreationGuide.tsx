@@ -3152,84 +3152,124 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               );
             })}
 
-            <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card mt-6">
-              <CardContent className="pt-6 pb-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div>
-                    <p className="font-medium text-foreground">Video Timeline</p>
-                    <p className="text-sm text-gray-600 dark:text-muted-foreground mt-1">
-                      For each scene: generate the still, run automatic motion (same engine as Animate Scene), then open the timeline with clips, voiceovers, and overlays. Motion can take several minutes per scene.
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-muted-foreground mt-2">
-                      <strong className="font-medium text-foreground">Make full MP4</strong> stitches everything on the server into one downloadable file. You need voiceovers uploaded as public URLs (save the guide to My Library and generate audio there, or use per-scene voice with a library script).
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 justify-end">
-                    {lastCompiledVideoUrl && (
-                      <>
-                        <a
-                          href={lastCompiledVideoUrl}
-                          download={`video-${Date.now()}.mp4`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 shrink-0 px-4 py-2 rounded-md text-sm font-medium bg-green-500 hover:bg-green-600 text-white transition-colors"
-                        >
-                          <Download className="w-4 h-4" />
-                          Download last video
-                        </a>
-                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                          <a
-                            href="https://www.tiktok.com/upload"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Opens TikTok upload — your video will be downloaded ready to upload"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-black hover:bg-gray-900 text-white transition-colors"
-                          >
-                            📱 Post to TikTok
-                          </a>
-                          <a
-                            href="https://www.instagram.com/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Open Instagram to upload your video via the app"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 hover:opacity-90 text-white transition-opacity"
-                          >
-                            📸 Post to Instagram
-                          </a>
-                          <a
-                            href="https://studio.youtube.com/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Opens YouTube Studio to upload your video"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-red-600 hover:bg-red-700 text-white transition-colors"
-                          >
-                            🎬 Post to YouTube
-                          </a>
-                          <button
-                            type="button"
-                            title="Copy video URL to clipboard"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-foreground transition-colors"
-                            onClick={() => {
-                              void navigator.clipboard.writeText(lastCompiledVideoUrl).then(() => {
-                                setCopiedVideoLink(true);
-                                setTimeout(() => setCopiedVideoLink(false), 2000);
-                              });
-                            }}
-                          >
-                            <Copy className="w-3 h-3" />
-                            {copiedVideoLink ? "Copied!" : "📋 Copy video link"}
-                          </button>
+            {(() => {
+              const someSceneHasMedia = scenes.some((_, i) => !!(guideSceneImageUrls[i]?.trim() || guideSceneVideoUrls[i]?.trim()));
+              const allScenesHaveMedia = scenes.length > 0 && scenes.every((_, i) => !!(guideSceneImageUrls[i]?.trim() || guideSceneVideoUrls[i]?.trim()));
+              return (
+                <Card className={`mt-6 border-2 transition-colors ${allScenesHaveMedia ? "border-orange-400 dark:border-orange-500 bg-orange-50 dark:bg-orange-950/20" : "border-gray-200 dark:border-border bg-gray-50 dark:bg-card"}`}>
+                  <CardContent className="pt-6 pb-6">
+                    <div className="flex flex-col gap-4">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                        <div>
+                          <p className="font-semibold text-foreground flex items-center gap-2">
+                            <Film className="w-4 h-4 text-orange-500" />
+                            Sync &amp; Export Full Video
+                          </p>
+                          <p className="text-sm text-gray-600 dark:text-muted-foreground mt-1">
+                            Once your scenes have images and animations, compile them all into one MP4 to download and post.
+                          </p>
+                          {!canCompileServerSideVoice && someSceneHasMedia && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5">
+                              Tip: Add scene voiceovers first to include audio in the compiled video.
+                            </p>
+                          )}
                         </div>
-                        <p className="w-full text-xs text-muted-foreground mt-0.5">
-                          Tip: Download first, then upload to your chosen platform.
-                        </p>
-                      </>
-                    )}
-                    <p className="text-xs text-gray-500 dark:text-muted-foreground">Use the AI prompts above to generate images in Midjourney, ChatGPT, or Grok, then edit your video in CapCut or Premiere.</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2 border-gray-300 dark:border-border"
+                            onClick={handleGenerateAllGuideImagesAndOpenTimeline}
+                            disabled={scenes.length === 0 || guideBulkImagesLoading}
+                          >
+                            <Film className="w-4 h-4" />
+                            Open in Timeline
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className={`gap-2 transition-colors ${allScenesHaveMedia ? "bg-orange-500 hover:bg-orange-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"}`}
+                            onClick={handleMakeFullVideoMp4}
+                            disabled={!someSceneHasMedia || guideFullVideoLoading}
+                            title={!someSceneHasMedia ? "Generate images for your scenes first" : "Compile all scenes into one MP4"}
+                          >
+                            {guideFullVideoLoading ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Compiling…
+                              </>
+                            ) : (
+                              <>
+                                <Download className="w-4 h-4" />
+                                Compile &amp; Export MP4
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                      {lastCompiledVideoUrl && (
+                        <div className="border-t border-gray-200 dark:border-border pt-4 flex flex-col gap-2">
+                          <p className="text-xs font-medium text-foreground">Your compiled video is ready:</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <a
+                              href={lastCompiledVideoUrl}
+                              download={`video-${Date.now()}.mp4`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 shrink-0 px-4 py-2 rounded-md text-sm font-medium bg-green-500 hover:bg-green-600 text-white transition-colors"
+                            >
+                              <Download className="w-4 h-4" />
+                              Download MP4
+                            </a>
+                            <a
+                              href="https://www.tiktok.com/upload"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Opens TikTok upload"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-black hover:bg-gray-900 text-white transition-colors"
+                            >
+                              📱 Post to TikTok
+                            </a>
+                            <a
+                              href="https://www.instagram.com/"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 hover:opacity-90 text-white transition-opacity"
+                            >
+                              📸 Post to Instagram
+                            </a>
+                            <a
+                              href="https://studio.youtube.com/"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-red-600 hover:bg-red-700 text-white transition-colors"
+                            >
+                              🎬 Post to YouTube
+                            </a>
+                            <button
+                              type="button"
+                              title="Copy video URL to clipboard"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-foreground transition-colors"
+                              onClick={() => {
+                                void navigator.clipboard.writeText(lastCompiledVideoUrl).then(() => {
+                                  setCopiedVideoLink(true);
+                                  setTimeout(() => setCopiedVideoLink(false), 2000);
+                                });
+                              }}
+                            >
+                              <Copy className="w-3 h-3" />
+                              {copiedVideoLink ? "Copied!" : "Copy link"}
+                            </button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">Download first, then upload to your platform.</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
           </TabsContent>
 
           <TabsContent value="editing" className="mt-6 space-y-4">
