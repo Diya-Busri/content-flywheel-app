@@ -1128,29 +1128,20 @@ export default function DiscoverFlow() {
       const updateBundleItem = (productId: string, status: "done" | "failed") => {
         setBundleItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, status } : i)));
       };
-      // Generate 2 at a time to avoid overwhelming the server
-      const CONCURRENCY = 2;
-      const results: ("done" | "failed")[] = [];
-      for (let i = 0; i < items.length; i += CONCURRENCY) {
-        const batch = items.slice(i, i + CONCURRENCY) as { productId: string; format: string; label: string; status: "generating" | "done" | "failed"; subFocus?: string }[];
-        const batchResults = await Promise.all(
-          batch.map(async (item) => {
-            const result = await pollBundleProductWithAutoRetry(item.productId, {
-              niche: nicheName,
-              productName: item.label,
-              format: item.format,
-              subFocus: item.subFocus,
-            });
-            updateBundleItem(item.productId, result);
-            return result;
-          })
-        );
-        results.push(...batchResults);
-        // Small pause between batches
-        if (i + CONCURRENCY < items.length) {
-          await new Promise((r) => setTimeout(r, 1500));
-        }
-      }
+      // Poll all 8 in parallel — server already generates them all simultaneously,
+      // so we must watch all at once or we waste time waiting for batches sequentially.
+      const results = await Promise.all(
+        items.map(async (item: { productId: string; format: string; label: string; status: "generating" | "done" | "failed"; subFocus?: string }) => {
+          const result = await pollBundleProductWithAutoRetry(item.productId, {
+            niche: nicheName,
+            productName: item.label,
+            format: item.format,
+            subFocus: item.subFocus,
+          });
+          updateBundleItem(item.productId, result);
+          return result;
+        })
+      );
       setBundleComplete(true);
       const failed = results.filter((r) => r === "failed").length;
       if (failed > 0) {
@@ -1254,26 +1245,15 @@ export default function DiscoverFlow() {
     appliedDesignRunRef.current = true;
     const useBrand = choice === "brand";
     setApplyingDesign(true);
-    // Apply design 2 at a time to avoid rate limiting
-    const applyInBatches = async () => {
-      const CONCURRENCY = 2;
-      for (let i = 0; i < doneIds.length; i += CONCURRENCY) {
-        const batch = doneIds.slice(i, i + CONCURRENCY);
-        await Promise.all(
-          batch.map((id) =>
-            fetch(`/api/products/${id}/apply-design`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ useBrandColors: useBrand }),
-            })
-          )
-        );
-        if (i + CONCURRENCY < doneIds.length) {
-          await new Promise((r) => setTimeout(r, 1000));
-        }
-      }
-    };
-    applyInBatches()
+    Promise.all(
+      doneIds.map((id) =>
+        fetch(`/api/products/${id}/apply-design`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ useBrandColors: useBrand }),
+        })
+      )
+    )
       .then(() => {
         setDesignApplied(true);
         toast({ title: "Design applied", description: "All products are styled and ready in My Library." });
