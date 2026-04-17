@@ -385,39 +385,28 @@ export default function TikTokShopFlow() {
       const hookDur = Math.max(3, Math.round(totalDur * 0.25));
       const ctaDur = Math.max(3, Math.round(totalDur * 0.20));
       const bodyDur = Math.max(3, totalDur - hookDur - ctaDur);
-      const scenes_json = [
-        { scene_number: 1, duration: hookDur, script_text: hookText, image_url: imageUrl, video_url: null, caption: hookText, animation_type: "image", voiceover_url: null, section_label: "Hook" },
-        { scene_number: 2, duration: bodyDur, script_text: bodyText, image_url: imageUrl, video_url: null, caption: bodyText, animation_type: "image", voiceover_url: null, section_label: "Body" },
-        { scene_number: 3, duration: ctaDur, script_text: ctaText, image_url: imageUrl, video_url: null, caption: ctaText, animation_type: "image", voiceover_url: null, section_label: "CTA" },
+      // Pass scenes inline to compile (skips DB save, voiceover via global voiceoverUrl)
+      const guideScenes = [
+        { duration: hookDur, image_url: imageUrl, video_url: null, script_text: hookText },
+        { duration: bodyDur, image_url: imageUrl, video_url: null, script_text: bodyText },
+        { duration: ctaDur, image_url: imageUrl, video_url: null, script_text: ctaText },
       ];
-      const variation =
-        (script as ScriptResult & { title?: string }).title ?? `Script ${selectedScriptIndex + 1}`;
-      const saveRes = await fetch("/api/saved-scripts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: `TikTok Affiliate — ${ctx.productName} — ${variation}`,
-          scenes_json,
-          voiceover_url: voiceoverUrl,
-        }),
-      });
-      const saveData = (await saveRes.json().catch(() => ({}))) as { id?: string; error?: string };
-      if (!saveRes.ok) throw new Error(saveData.error ?? "Failed to save script for export");
-      const scriptId = typeof saveData.id === "string" ? saveData.id : "";
-      if (!scriptId) throw new Error("No script id returned");
 
       const compileRes = await fetch("/api/videos/compile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scriptId,
+          guideScenes,
+          voiceoverUrl,
           transition: "fade",
           backgroundMusic: "none",
           outputAspect: "9:16",
         }),
       });
-      const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (!compileRes.ok) throw new Error(compileData.error ?? "Video compile failed");
+      const compileText = await compileRes.text();
+      let compileData: { url?: string; error?: string } = {};
+      try { compileData = JSON.parse(compileText); } catch { /* non-JSON response */ }
+      if (!compileRes.ok) throw new Error(compileData.error ?? `Compile error (${compileRes.status}): ${compileText.slice(0, 200)}`);
       const mp4 = typeof compileData.url === "string" ? compileData.url.trim() : "";
       if (!mp4.startsWith("http")) throw new Error("No MP4 URL returned");
       setAffiliateVideoUrl(mp4);
