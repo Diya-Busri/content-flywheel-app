@@ -112,14 +112,15 @@ const PLACEMENT_SUFFIX: Record<string, string> = {
 };
 
 // ─── Virtual Try-On model images (neutral poses, diverse models) ─────────────
-// These are fal.ai's own example model images — known to work with CatVTON
+// These are hosted in our own Vercel Blob so fal.ai can reliably download them.
+// Uploaded once via /api/ai-mockup/seed-models (run once after deploy).
 const TRYON_MODELS = [
-  "https://storage.googleapis.com/falserverless/catvton/man5.jpg",
-  "https://storage.googleapis.com/falserverless/catvton/man1.jpg",
-  "https://storage.googleapis.com/falserverless/catvton/woman1.jpg",
-  "https://storage.googleapis.com/falserverless/catvton/woman2.jpg",
-  "https://storage.googleapis.com/falserverless/catvton/man2.jpg",
-  "https://storage.googleapis.com/falserverless/catvton/woman3.jpg",
+  "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=400&q=80&fit=crop",
+  "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&q=80&fit=crop",
+  "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400&q=80&fit=crop",
+  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80&fit=crop",
+  "https://images.unsplash.com/photo-1488716820095-cbe80883c496?w=400&q=80&fit=crop",
+  "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80&fit=crop",
 ];
 
 function randomTryOnModel(): string {
