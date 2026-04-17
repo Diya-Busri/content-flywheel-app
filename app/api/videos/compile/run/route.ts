@@ -115,7 +115,8 @@ export async function POST(request: NextRequest) {
     if (resolvedSceneRows.length === 0) throw new Error("No scenes to compile");
 
     const perSceneVoiceoverUrls = resolvedSceneRows.map(sceneVoiceoverHttpUrl);
-    const usePerSceneVoiceover = perSceneVoiceoverUrls.every((u): u is string => u != null);
+    // Use per-scene voiceovers if ANY scene has one (trailing scenes like product thumbnail may have none)
+    const usePerSceneVoiceover = perSceneVoiceoverUrls.some((u): u is string => u != null);
     const bodyVoiceRaw = typeof body.voiceoverUrl === "string" ? body.voiceoverUrl.trim() : "";
     const bodySingleVoice = isHttpUrl(bodyVoiceRaw) ? bodyVoiceRaw : null;
     const singleVoiceoverUrl = !usePerSceneVoiceover ? bodySingleVoice ?? savedScriptVoiceover : null;
@@ -134,13 +135,18 @@ export async function POST(request: NextRequest) {
     let voiceoverInput = "";
     let existingVoicePath: string | undefined;
     if (usePerSceneVoiceover) {
-      const concatenated = await concatVoiceoverUrls(workDir, perSceneVoiceoverUrls);
+      const nonNullVoUrls = perSceneVoiceoverUrls.filter((u): u is string => u !== null);
+      const concatenated = await concatVoiceoverUrls(workDir, nonNullVoUrls);
       existingVoicePath = concatenated.path;
       const HOLD_SEC = 0.15;
+      let voiceIdx = 0;
       for (let i = 0; i < scenes.length; i++) {
-        const measured = concatenated.sceneDurationsSec[i] ?? 0;
-        if (measured > 0.2) {
-          scenes[i] = { ...scenes[i], duration: Math.max(1, Number((measured + HOLD_SEC).toFixed(2))) };
+        if (perSceneVoiceoverUrls[i] !== null) {
+          const measured = concatenated.sceneDurationsSec[voiceIdx] ?? 0;
+          if (measured > 0.2) {
+            scenes[i] = { ...scenes[i], duration: Math.max(1, Number((measured + HOLD_SEC).toFixed(2))) };
+          }
+          voiceIdx++;
         }
       }
     } else {

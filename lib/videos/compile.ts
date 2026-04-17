@@ -397,7 +397,10 @@ export async function compileVideoToFile(
   if (existingVoicePath) {
     try {
       await access(existingVoicePath);
-      await copyFile(existingVoicePath, voicePath);
+      // Only copy if src !== dst — copyFile(x, x) truncates the file on Linux
+      if (existingVoicePath !== voicePath) {
+        await copyFile(existingVoicePath, voicePath);
+      }
       hasVoice = true;
     } catch {
       if (isHttpUrl(voiceoverUrl ?? "")) {
