@@ -60,23 +60,21 @@ export async function GET(req: Request) {
       return NextResponse.json({ mockupUrls: [], message: "No mockups generated yet — try again in a moment" });
     }
 
-    // Products with many color variants have one image per (variant × view type) — potentially
-    // hundreds of URLs. Use is_selected_for_publishing to get the curated set Printify shows
-    // in their UI (Front, Back, Person 1, Person 2, etc.). Fall back to is_default if needed.
-    const publishingImages = images.filter((i) => i.is_selected_for_publishing && i.src);
-    const defaultImages = images.filter((i) => i.is_default && i.src);
-    const candidateImages = publishingImages.length > 0 ? publishingImages
-      : defaultImages.length > 0 ? defaultImages
-      : images;
-
-    const seen = new Set<string>();
-    const mockupUrls: string[] = [];
-    for (const img of candidateImages) {
-      if (img.src && !seen.has(img.src)) {
-        seen.add(img.src);
-        mockupUrls.push(img.src);
+    // Products with many color variants have one image per (variant × view type).
+    // Pick one image per unique position — preferring is_default or is_selected_for_publishing —
+    // so we get exactly one of each view (Front, Back, Folded, Person 1, Person 2, etc.)
+    // matching what Printify shows in their own UI.
+    const byPosition = new Map<string, typeof images[number]>();
+    for (const img of images) {
+      if (!img.src) continue;
+      // Use position as key; fall back to URL so images without position are still included
+      const key = img.position ? String(img.position) : img.src;
+      const existing = byPosition.get(key);
+      if (!existing || img.is_default || img.is_selected_for_publishing) {
+        byPosition.set(key, img);
       }
     }
+    const mockupUrls: string[] = [...byPosition.values()].map((i) => i.src);
 
     // Save back to our DB so they persist
     await db
