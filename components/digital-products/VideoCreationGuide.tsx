@@ -1401,15 +1401,25 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         return;
       }
 
-      // Resolve voiceover on content scenes BEFORE appending the thumbnail (thumbnail has no audio)
+      // Resolve voiceover strategy BEFORE appending the thumbnail (thumbnail has no audio)
+      const perSceneAnyHttp = guideScenes.some((r) => isHttp(r.voiceover_url ?? null));
       const perSceneAllHttp = guideScenes.every((r) => isHttp(r.voiceover_url ?? null));
-      // If not all per-scene voiceovers are available, remove them and use global voiceover instead
-      if (!perSceneAllHttp) {
-        guideScenes.forEach((r) => { delete r.voiceover_url; });
-      }
       const globalVoRaw = fullVoiceoverUrl?.trim() ?? "";
       const globalVo =
         globalVoRaw.startsWith("http://") || globalVoRaw.startsWith("https://") ? globalVoRaw : undefined;
+
+      let sendVoiceoverUrl: string | undefined;
+      if (perSceneAllHttp) {
+        // All scenes have per-scene voiceovers — compile uses them directly, no global needed
+        sendVoiceoverUrl = undefined;
+      } else if (perSceneAnyHttp) {
+        // Some scenes have per-scene voiceovers — keep them, server handles missing ones
+        sendVoiceoverUrl = undefined;
+      } else {
+        // No per-scene voiceovers at all — strip any stale keys and use global voiceover
+        guideScenes.forEach((r) => { delete r.voiceover_url; });
+        sendVoiceoverUrl = globalVo;
+      }
 
       // Append product showcase scene at the END as a sign-off / CTA
       if (productThumbnailUrl && isHttp(productThumbnailUrl)) {
@@ -1426,7 +1436,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         body: JSON.stringify({
           guideScenes,
           backgroundMusic: "none",
-          ...(globalVo && !perSceneAllHttp ? { voiceoverUrl: globalVo } : {}),
+          ...(sendVoiceoverUrl ? { voiceoverUrl: sendVoiceoverUrl } : {}),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
