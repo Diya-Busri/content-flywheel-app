@@ -53,6 +53,7 @@ export async function GET(req: Request) {
       settings.printifyApiKey
     ) as {
       images?: Array<{ src: string; position?: string; is_default?: boolean; is_selected_for_publishing?: boolean; variant_ids?: number[] }>;
+      variants?: Array<{ id: number; is_enabled: boolean }>;
     };
 
     const images = printifyProduct.images ?? [];
@@ -60,16 +61,40 @@ export async function GET(req: Request) {
       return NextResponse.json({ mockupUrls: [], message: "No mockups generated yet — try again in a moment" });
     }
 
-    // Printify only has 3 position values: "front", "back", "other".
-    // All person/lifestyle/folded shots are "other" spread across different variants.
-    // Simple URL dedup across all images gives every unique view (Front, Back, Person 1-N, Folded, etc.)
+    // Strategy: Printify stores one image per (variant × view type). With many colour variants
+    // this creates hundreds of images — mostly duplicates of the same view in different colours.
+    //
+    // Best approach: use is_selected_for_publishing images (Printify's curated showcase set),
+    // then fall back to is_default images, then fall back to the first-enabled-variant images.
+    // This gives the clean set Printify itself picks (typically 6-12 key views).
+    const selectedImages = images.filter((i) => i.src && i.is_selected_for_publishing);
+    const defaultImages = images.filter((i) => i.src && i.is_default);
+
+    let candidateImages: typeof images;
+
+    if (selectedImages.length >= 3) {
+      candidateImages = selectedImages;
+    } else if (defaultImages.length >= 3) {
+      candidateImages = defaultImages;
+    } else {
+      // Fall back: images for the first enabled variant
+      const firstEnabledVariant = printifyProduct.variants?.find((v) => v.is_enabled) ?? printifyProduct.variants?.[0];
+      const defaultVariantId = firstEnabledVariant?.id;
+      if (defaultVariantId !== undefined) {
+        const variantImages = images.filter(
+          (i) => i.src && Array.isArray(i.variant_ids) && i.variant_ids.includes(defaultVariantId)
+        );
+        candidateImages = variantImages.length > 0 ? variantImages : images.filter((i) => i.src);
+      } else {
+        candidateImages = images.filter((i) => i.src);
+      }
+    }
+
+    // URL dedup
     const seen = new Set<string>();
     const mockupUrls: string[] = [];
-    for (const img of images) {
-      if (img.src && !seen.has(img.src)) {
-        seen.add(img.src);
-        mockupUrls.push(img.src);
-      }
+    for (const img of candidateImages) {
+      if (!seen.has(img.src)) { seen.add(img.src); mockupUrls.push(img.src); }
     }
 
     // Save back to our DB so they persist
