@@ -111,20 +111,52 @@ const PLACEMENT_SUFFIX: Record<string, string> = {
   label:         ", collar folded to clearly show the neck label/tag inside the garment",
 };
 
-// ─── Virtual Try-On model images (neutral poses, diverse models) ─────────────
-// These are hosted in our own Vercel Blob so fal.ai can reliably download them.
-// Uploaded once via /api/ai-mockup/seed-models (run once after deploy).
-const TRYON_MODELS = [
-  "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=400&q=80&fit=crop",
-  "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&q=80&fit=crop",
-  "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400&q=80&fit=crop",
-  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80&fit=crop",
-  "https://images.unsplash.com/photo-1488716820095-cbe80883c496?w=400&q=80&fit=crop",
-  "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80&fit=crop",
+// ─── Virtual Try-On model images ─────────────────────────────────────────────
+// Neutral standing poses, diverse models. Using Picsum for reliable access.
+// These get re-hosted to Vercel Blob on first use so fal.ai can always download them.
+const TRYON_MODEL_SOURCES = [
+  // Diverse models in neutral poses — IDs chosen for plain/light clothing
+  "https://images.pexels.com/photos/1681010/pexels-photo-1681010.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop",
+  "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop",
+  "https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop",
+  "https://images.pexels.com/photos/1130626/pexels-photo-1130626.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop",
+  "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop",
+  "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop",
 ];
 
-function randomTryOnModel(): string {
-  return TRYON_MODELS[Math.floor(Math.random() * TRYON_MODELS.length)];
+// In-memory cache: original URL → Vercel Blob URL
+// Persists for the lifetime of the server process (resets on cold start, refills as needed).
+const modelBlobCache = new Map<string, string>();
+
+/**
+ * Fetch a model image from its source URL and re-host it on Vercel Blob.
+ * Cached so each image is only uploaded once per server process.
+ * fal.ai can always download from Vercel Blob (public CDN).
+ */
+async function getModelBlobUrl(sourceUrl: string): Promise<string> {
+  const cached = modelBlobCache.get(sourceUrl);
+  if (cached) return cached;
+
+  const res = await fetch(sourceUrl, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; ContentFlywheel/1.0)" },
+  });
+  if (!res.ok) throw new Error(`Failed to fetch model image (${res.status}): ${sourceUrl}`);
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+  // Derive a stable key from the URL so repeated cold-starts reuse the same blob
+  const slug = sourceUrl.replace(/[^a-z0-9]/gi, "-").slice(-60);
+  const blob = await put(`pod-mockups/tryon-models/${slug}.jpg`, buffer, {
+    access: "public",
+    contentType: "image/jpeg",
+    addRandomSuffix: false,
+  });
+
+  modelBlobCache.set(sourceUrl, blob.url);
+  return blob.url;
+}
+
+function randomTryOnModelSource(): string {
+  return TRYON_MODEL_SOURCES[Math.floor(Math.random() * TRYON_MODEL_SOURCES.length)];
 }
 
 // Map blueprint title to cloth_type for CatVTON
@@ -140,7 +172,8 @@ async function generateTryOnMockup(
   garmentImageUrl: string,
   blueprintTitle: string | null
 ): Promise<string> {
-  const humanImageUrl = randomTryOnModel();
+  // Re-host the model image on Vercel Blob so fal.ai can reliably download it
+  const humanImageUrl = await getModelBlobUrl(randomTryOnModelSource());
   const clothType = getClothType(blueprintTitle);
 
   const res = await fetch("https://fal.run/fal-ai/cat-vton", {
@@ -167,52 +200,6 @@ async function generateTryOnMockup(
   const data = await res.json() as { image?: { url: string }; images?: Array<{ url: string }> };
   const url = data.image?.url ?? data.images?.[0]?.url;
   if (!url) throw new Error("No image returned from try-on");
-  return url;
-}
-
-// ─── img2img — uses the real design as reference ─────────────────────────────
-async function generateImg2ImgMockup(
-  designUrl: string,
-  prompt: string,
-  style: string,
-  flat = false
-): Promise<string> {
-  const lightingStyle = STYLE_MAP[style] ?? STYLE_MAP.lifestyle;
-  // Low strength (0.35–0.45) forces the model to generate a real product photo
-  // and use the design image only as a loose style/colour reference.
-  // High strength kept the dark background of the logo and produced a mess.
-  const fullPrompt = flat
-    ? `${prompt}. ${lightingStyle}. The design from the reference image is printed on the front of the product. Product is the main subject, not the design. No person in shot. Clean, sharp, professional. Photorealistic, 8K, commercial product photography.`
-    : `${prompt}. ${lightingStyle}. IMPORTANT: A real person must be visible wearing the garment. Full body lifestyle photo. The garment has the same graphic design as shown in the reference image printed on the front. Person is the main subject. Sharp focus, professional. Photorealistic, 8K, commercial product photography.`;
-
-  const res = await fetch("https://fal.run/fal-ai/flux/dev/image-to-image", {
-    method: "POST",
-    headers: {
-      Authorization: `Key ${FAL_API_KEY()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      prompt: fullPrompt,
-      image_url: designUrl,
-      // 0.85 strength: high enough to generate a person wearing the garment,
-      // while the Printify product photo provides colour/design reference.
-      strength: flat ? 0.75 : 0.85,
-      image_size: flat ? "square_hd" : "portrait_4_3",
-      num_inference_steps: 32,
-      guidance_scale: 4.5,
-      num_images: 1,
-      enable_safety_checker: true,
-    }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`fal.ai img2img error: ${text.slice(0, 300)}`);
-  }
-
-  const data = await res.json() as { images?: Array<{ url: string }> };
-  const url = data.images?.[0]?.url;
-  if (!url) throw new Error("No image returned from img2img");
   return url;
 }
 
@@ -282,36 +269,31 @@ export async function POST(req: Request) {
       }
     }
 
-    // ── Build prompt ──────────────────────────────────────────────────────────
+    // ── Build prompt (used for text fallback) ─────────────────────────────────
     const placementSuffix = PLACEMENT_SUFFIX[placement] ?? "";
-    // Extract the garment colour from the product's variants so mockups match
     const garmentColor = extractDominantColor(product.variants);
     const colorPrefix = garmentColor ? `${garmentColor} ` : "";
     let basePrompt: string;
 
     if (isFlat) {
       const flatBase = getProductPrompt(product.blueprintTitle, true);
-      // Insert colour before the garment noun — match "of a " or "of an "
       basePrompt = garmentColor
         ? flatBase.replace(/\bof (a|an) /i, `of $1 ${colorPrefix}`)
         : flatBase;
     } else {
       const model = randomModel();
       const productBase = getProductPrompt(product.blueprintTitle, false).replace("person", model);
-      // Insert colour before the garment type — match "wearing a " or "wearing an "
       const productContext = garmentColor
         ? productBase.replace(/\b(wearing (?:a|an)) /i, `$1 ${colorPrefix}`)
         : productBase;
-      // Use the product title as a direct design description so the AI renders something close to the real design
-      const brandContext = product.title ? `, with a "${product.title}" graphic printed on the front` : "";
+      const brandContext = product.title ? `, design themed around "${product.title}"` : "";
       basePrompt = `${productContext}${brandContext}${placementSuffix}`;
     }
 
     // ── Generate ──────────────────────────────────────────────────────────────
-    // For lifestyle shots: use CatVTON virtual try-on with the product's front design file.
-    // Using the design file (not a Printify product photo) avoids wrong colour/garment-type issues.
-    // CatVTON composites the design onto a model wearing the correct garment type.
-    // Falls back to text-to-image for flat lay or if no design file exists.
+    // For lifestyle shots with a design file: use CatVTON virtual try-on.
+    // The model image is re-hosted to Vercel Blob so fal.ai can always download it.
+    // For flat lay or no design file: fall back to text-to-image.
     let imageUrl: string;
     if (!isFlat && designFileUrl) {
       imageUrl = await generateTryOnMockup(designFileUrl, product.blueprintTitle ?? null);
