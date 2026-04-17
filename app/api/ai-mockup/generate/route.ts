@@ -338,13 +338,23 @@ export async function POST(req: Request) {
       basePrompt = `${productContext}${brandContext}${placementSuffix}`;
     }
 
+    // ── Resolve best garment image for CatVTON ───────────────────────────────
+    // Prefer a Printify product mockup (shows the actual garment colour + design)
+    // over the raw design file (graphic only, no garment colour).
+    // Printify URLs don't contain blob.vercel-storage.com.
+    const allMockupUrls = (product.mockupUrls as string[] | null) ?? [];
+    const printifyMockupUrl = allMockupUrls.find(
+      (u) => u && !u.includes("blob.vercel-storage.com") && !u.includes("blob.core.windows.net")
+    ) ?? null;
+    const garmentImageUrl = printifyMockupUrl ?? designFileUrl;
+
     // ── Generate ──────────────────────────────────────────────────────────────
-    // For lifestyle shots with a design file: use CatVTON virtual try-on.
-    // The model image is re-hosted to Vercel Blob so fal.ai can always download it.
-    // For flat lay or no design file: fall back to text-to-image.
+    // For lifestyle shots: use CatVTON with the Printify product mockup as the
+    // garment image — this gives CatVTON the real garment colour and shape.
+    // Falls back to the raw design file, then text-to-image if neither exists.
     let imageUrl: string;
-    if (!isFlat && designFileUrl) {
-      imageUrl = await generateTryOnMockup(designFileUrl, product.blueprintTitle ?? null, style);
+    if (!isFlat && garmentImageUrl) {
+      imageUrl = await generateTryOnMockup(garmentImageUrl, product.blueprintTitle ?? null, style);
     } else {
       imageUrl = await generateTextMockup(basePrompt, style, isFlat);
     }
