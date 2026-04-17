@@ -52,7 +52,7 @@ export async function GET(req: Request) {
       `/shops/${settings.printifyShopId}/products/${product.printifyProductId}.json`,
       settings.printifyApiKey
     ) as {
-      images?: Array<{ src: string; position?: string; is_default?: boolean; variant_ids?: number[] }>;
+      images?: Array<{ src: string; position?: string; is_default?: boolean; is_selected_for_publishing?: boolean; variant_ids?: number[] }>;
     };
 
     const images = printifyProduct.images ?? [];
@@ -60,17 +60,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ mockupUrls: [], message: "No mockups generated yet — try again in a moment" });
     }
 
-    // Deduplicate by URL. Printify may return the same image multiple times across variants.
-    // Keep all unique images — this includes flat, person/lifestyle, folded, etc.
-    // Put is_default / is_selected_for_publishing images first so the best shots appear at the top.
-    const sortedImages = [...images].sort((a, b) => {
-      const aScore = (a.is_default ? 2 : 0) + (a.is_selected_for_publishing ? 1 : 0);
-      const bScore = (b.is_default ? 2 : 0) + (b.is_selected_for_publishing ? 1 : 0);
-      return bScore - aScore;
-    });
+    // Products with many color variants have one image per (variant × view type) — potentially
+    // hundreds of URLs. Use is_selected_for_publishing to get the curated set Printify shows
+    // in their UI (Front, Back, Person 1, Person 2, etc.). Fall back to is_default if needed.
+    const publishingImages = images.filter((i) => i.is_selected_for_publishing && i.src);
+    const defaultImages = images.filter((i) => i.is_default && i.src);
+    const candidateImages = publishingImages.length > 0 ? publishingImages
+      : defaultImages.length > 0 ? defaultImages
+      : images;
+
     const seen = new Set<string>();
     const mockupUrls: string[] = [];
-    for (const img of sortedImages) {
+    for (const img of candidateImages) {
       if (img.src && !seen.has(img.src)) {
         seen.add(img.src);
         mockupUrls.push(img.src);
