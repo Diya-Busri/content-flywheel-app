@@ -137,24 +137,39 @@ const MODEL_CONTEXT_BY_STYLE: Record<string, string> = {
   outdoor:   "outdoor park with trees, golden hour sunlight, editorial fashion photography",
 };
 
-// In-memory cache: "${style}-${subject}" → Vercel Blob URL
+// ─── Garment description for model photo prompt ───────────────────────────────
+// Tells the model generation what garment to wear so CatVTON composites correctly.
+function getGarmentDescription(blueprintTitle: string | null): string {
+  const t = (blueprintTitle ?? "").toLowerCase();
+  if (t.includes("zip")) return "plain white zip-up hoodie";
+  if (t.includes("hooded sweatshirt") || t.includes("hoodie")) return "plain white pullover hoodie with hood down";
+  if (t.includes("sweatshirt") || t.includes("crewneck")) return "plain white crewneck sweatshirt";
+  if (t.includes("t-shirt") || t.includes("tee")) return "plain white t-shirt";
+  if (t.includes("jacket")) return "plain white jacket";
+  if (t.includes("long sleeve")) return "plain white long sleeve shirt";
+  return "plain white t-shirt"; // safe default
+}
+
+// In-memory cache: "${style}-${garmentSlug}-${subject}" → Vercel Blob URL
 const modelPhotoCache = new Map<string, string>();
 
 /**
  * Generate a full-body model photo with flux/schnell then host on Vercel Blob.
- * Cached per style+subject combo so each unique combo is only generated once.
- * fal.ai can always access Vercel Blob URLs.
+ * Prompt includes the correct garment type so CatVTON composites onto the right garment.
+ * Cached per style+garment+subject combo. fal.ai can always access Vercel Blob URLs.
  */
-async function getGeneratedModelBlobUrl(style: string): Promise<string> {
+async function getGeneratedModelBlobUrl(style: string, blueprintTitle: string | null): Promise<string> {
   const styleKey = MODEL_CONTEXT_BY_STYLE[style] ? style : "lifestyle";
   const subject = MODEL_SUBJECTS[Math.floor(Math.random() * MODEL_SUBJECTS.length)];
-  const cacheKey = `${styleKey}-${subject.replace(/\s+/g, "-")}`;
+  const garment = getGarmentDescription(blueprintTitle);
+  const garmentSlug = garment.replace(/\s+/g, "-").replace(/[^a-z0-9-]/gi, "").slice(0, 20);
+  const cacheKey = `${styleKey}-${garmentSlug}-${subject.replace(/\s+/g, "-")}`;
 
   const cached = modelPhotoCache.get(cacheKey);
   if (cached) return cached;
 
   const context = MODEL_CONTEXT_BY_STYLE[styleKey];
-  const prompt = `Full body portrait photo of ${subject} wearing a plain white t-shirt and dark jeans. ${context}. Person visible from head to toe, facing forward, relaxed natural pose. High quality photorealistic photo.`;
+  const prompt = `Full body portrait photo of ${subject} wearing a plain white ${garment} and dark jeans. ${context}. Person visible from head to toe, facing forward, relaxed natural pose. High quality photorealistic photo.`;
 
   const genRes = await fetch("https://fal.run/fal-ai/flux/schnell", {
     method: "POST",
@@ -205,8 +220,8 @@ async function generateTryOnMockup(
   blueprintTitle: string | null,
   style: string
 ): Promise<string> {
-  // Generate a full-body model photo with the right style background, hosted on Vercel Blob
-  const humanImageUrl = await getGeneratedModelBlobUrl(style);
+  // Generate a full-body model photo wearing the correct garment type, hosted on Vercel Blob
+  const humanImageUrl = await getGeneratedModelBlobUrl(style, blueprintTitle);
   const clothType = getClothType(blueprintTitle);
 
   const res = await fetch("https://fal.run/fal-ai/cat-vton", {
