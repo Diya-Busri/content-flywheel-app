@@ -53,6 +53,7 @@ export async function GET(req: Request) {
       settings.printifyApiKey
     ) as {
       images?: Array<{ src: string; position?: string; is_default?: boolean; is_selected_for_publishing?: boolean; variant_ids?: number[] }>;
+      variants?: Array<{ id: number; is_enabled: boolean }>;
     };
 
     const images = printifyProduct.images ?? [];
@@ -60,21 +61,30 @@ export async function GET(req: Request) {
       return NextResponse.json({ mockupUrls: [], message: "No mockups generated yet — try again in a moment" });
     }
 
-    // Products with many color variants have one image per (variant × view type).
-    // Pick one image per unique position — preferring is_default or is_selected_for_publishing —
-    // so we get exactly one of each view (Front, Back, Folded, Person 1, Person 2, etc.)
-    // matching what Printify shows in their own UI.
-    const byPosition = new Map<string, typeof images[number]>();
-    for (const img of images) {
-      if (!img.src) continue;
-      // Use position as key; fall back to URL so images without position are still included
-      const key = img.position ? String(img.position) : img.src;
-      const existing = byPosition.get(key);
-      if (!existing || img.is_default || img.is_selected_for_publishing) {
-        byPosition.set(key, img);
-      }
+    // Printify's `position` field only has 3 values: "front", "back", "other".
+    // All person/lifestyle/folded views share "other", so position-based dedup collapses them to 1.
+    //
+    // Fix: filter to images for one variant only (the first enabled one).
+    // Each view type has exactly one image per variant, so this gives us all distinct views
+    // (Front, Back, Folded, Person 1, Person 2, etc.) without duplicating across colours.
+    const firstEnabledVariant = printifyProduct.variants?.find((v) => v.is_enabled) ?? printifyProduct.variants?.[0];
+    const defaultVariantId = firstEnabledVariant?.id;
+
+    let candidateImages = images.filter((i) => i.src);
+    if (defaultVariantId !== undefined) {
+      const variantImages = candidateImages.filter(
+        (i) => Array.isArray(i.variant_ids) && i.variant_ids.includes(defaultVariantId)
+      );
+      // Only use variant filter if it returned results
+      if (variantImages.length > 0) candidateImages = variantImages;
     }
-    const mockupUrls: string[] = [...byPosition.values()].map((i) => i.src);
+
+    // URL dedup (safety net)
+    const seen = new Set<string>();
+    const mockupUrls: string[] = [];
+    for (const img of candidateImages) {
+      if (!seen.has(img.src)) { seen.add(img.src); mockupUrls.push(img.src); }
+    }
 
     // Save back to our DB so they persist
     await db
