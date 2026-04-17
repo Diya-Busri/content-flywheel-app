@@ -113,7 +113,7 @@ export async function POST(request: Request) {
       productDescription: description,
       videoStyle: style,
       platform: "tiktok",
-      targetDurationSec: targetDurationSec != null && targetDurationSec >= 15 && targetDurationSec <= 60 ? targetDurationSec : undefined,
+      targetDurationSec: targetDurationSec != null && targetDurationSec >= 15 && targetDurationSec <= 120 ? targetDurationSec : undefined,
       hookStyle: hookStyle as HookStyle | undefined,
       tone: tone as ScriptTone | undefined,
       regenerateSection,

@@ -115,6 +115,7 @@ export default function TikTokShopFlow() {
   const [affiliateVideoGenerating, setAffiliateVideoGenerating] = useState(false);
   const [affiliateVideoUrl, setAffiliateVideoUrl] = useState<string | null>(null);
   const [affiliateVideoError, setAffiliateVideoError] = useState<string | null>(null);
+  const [expandedScriptIndex, setExpandedScriptIndex] = useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -373,19 +374,21 @@ export default function TikTokShopFlow() {
       const voiceoverUrl = typeof voData.url === "string" ? voData.url.trim() : "";
       if (!voiceoverUrl.startsWith("http")) throw new Error("No voiceover URL returned.");
 
-      const captionLine = fullScript.replace(/\r?\n/g, " ").trim();
+      // Split into 3 scenes (hook / body / CTA) so each gets its own Ken Burns segment
+      const totalDur = Math.max(10, targetDurationSec || 30);
+      const hookText = script.scenes.hook.trim();
+      const bodyParts = [script.scenes.pain, script.scenes.solution];
+      if (script.scenes.proof_points?.length) bodyParts.push(script.scenes.proof_points.join(" "));
+      const bodyText = bodyParts.filter(Boolean).join(" ").trim();
+      const ctaText = script.scenes.cta.trim();
+      // Allocate: hook 25%, body 55%, cta 20% — min 3s each
+      const hookDur = Math.max(3, Math.round(totalDur * 0.25));
+      const ctaDur = Math.max(3, Math.round(totalDur * 0.20));
+      const bodyDur = Math.max(3, totalDur - hookDur - ctaDur);
       const scenes_json = [
-        {
-          scene_number: 1,
-          duration: Math.max(10, targetDurationSec || 30),
-          script_text: captionLine,
-          image_url: imageUrl,
-          video_url: null,
-          caption: captionLine,
-          animation_type: "image",
-          voiceover_url: null,
-          section_label: "Affiliate clip",
-        },
+        { scene_number: 1, duration: hookDur, script_text: hookText, image_url: imageUrl, video_url: null, caption: hookText, animation_type: "image", voiceover_url: null, section_label: "Hook" },
+        { scene_number: 2, duration: bodyDur, script_text: bodyText, image_url: imageUrl, video_url: null, caption: bodyText, animation_type: "image", voiceover_url: null, section_label: "Body" },
+        { scene_number: 3, duration: ctaDur, script_text: ctaText, image_url: imageUrl, video_url: null, caption: ctaText, animation_type: "image", voiceover_url: null, section_label: "CTA" },
       ];
       const variation =
         (script as ScriptResult & { title?: string }).title ?? `Script ${selectedScriptIndex + 1}`;
@@ -645,7 +648,12 @@ export default function TikTokShopFlow() {
                     <button
                       key={opt.seconds}
                       type="button"
-                      onClick={() => setTargetDurationSec(opt.seconds)}
+                      onClick={() => {
+                        if (opt.seconds !== targetDurationSec) {
+                          setTargetDurationSec(opt.seconds);
+                          setScriptResults([]); // clear stale scripts so user regenerates at new length
+                        }
+                      }}
                       className={`rounded-lg border-2 p-3 text-left transition-all ${
                         selected
                           ? "border-orange-500 bg-orange-500/20"
@@ -681,12 +689,30 @@ export default function TikTokShopFlow() {
               <>
                 <p className="text-sm text-gray-600 dark:text-gray-400">4 script variations ready. Continue to render a video or open video creation guides.</p>
                 <div className="space-y-2">
-                  {scriptResults.map((s, i) => (
-                    <div key={i} className="rounded-lg border border-[#E5E7EB] dark:border-[#2A2A2A] p-3">
-                      <p className="text-xs font-medium text-orange-400 mb-1">{(s as ScriptResult & { title?: string }).title ?? `Script ${i + 1}`}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">{s.scenes.hook}</p>
-                    </div>
-                  ))}
+                  {scriptResults.map((s, i) => {
+                    const isExpanded = expandedScriptIndex === i;
+                    return (
+                      <div key={i} className="rounded-lg border border-[#E5E7EB] dark:border-[#2A2A2A] overflow-hidden">
+                        <button
+                          type="button"
+                          className="w-full p-3 text-left hover:bg-gray-50 dark:hover:bg-[#1f1f1f] transition-colors"
+                          onClick={() => setExpandedScriptIndex(isExpanded ? null : i)}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-medium text-orange-400">{(s as ScriptResult & { title?: string }).title ?? `Script ${i + 1}`}</p>
+                            <span className="text-xs text-gray-400">{isExpanded ? "▲ Hide" : "▼ Full script"}</span>
+                          </div>
+                          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">{s.scenes.hook}</p>
+                        </button>
+                        {isExpanded && (
+                          <div className="border-t border-[#E5E7EB] dark:border-[#2A2A2A] px-3 py-3 bg-gray-50 dark:bg-[#111]">
+                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Full script</p>
+                            <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{s.fullScript}</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" onClick={() => setStep(2)}>Back</Button>
@@ -748,24 +774,41 @@ export default function TikTokShopFlow() {
                 {scriptResults.map((s, i) => {
                   const title = (s as ScriptResult & { title?: string }).title ?? `Script ${i + 1}`;
                   const selected = selectedScriptIndex === i;
+                  const isExpanded = expandedScriptIndex === i + 10; // offset to not conflict with Step 3
                   return (
-                    <button
+                    <div
                       key={i}
-                      type="button"
-                      onClick={() => {
-                        setSelectedScriptIndex(i);
-                        setAffiliateVideoUrl(null);
-                        setAffiliateVideoError(null);
-                      }}
-                      className={`w-full rounded-lg border-2 p-3 text-left transition-all ${
+                      className={`rounded-lg border-2 overflow-hidden transition-all ${
                         selected
                           ? "border-orange-500 bg-orange-500/15"
-                          : "border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F] hover:border-gray-300 dark:hover:border-[#3A3A3A]"
+                          : "border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#0F0F0F]"
                       }`}
                     >
-                      <p className="text-xs font-medium text-orange-400">{title}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 mt-1">{s.scenes.hook}</p>
-                    </button>
+                      <button
+                        type="button"
+                        className="w-full p-3 text-left"
+                        onClick={() => {
+                          setSelectedScriptIndex(i);
+                          setAffiliateVideoUrl(null);
+                          setAffiliateVideoError(null);
+                        }}
+                      >
+                        <p className="text-xs font-medium text-orange-400">{title}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{s.scenes.hook}</p>
+                      </button>
+                      <div className="px-3 pb-2">
+                        <button
+                          type="button"
+                          className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 underline"
+                          onClick={() => setExpandedScriptIndex(isExpanded ? null : i + 10)}
+                        >
+                          {isExpanded ? "Hide full script ▲" : "View full script ▼"}
+                        </button>
+                        {isExpanded && (
+                          <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed mt-2 pb-1">{s.fullScript}</p>
+                        )}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
