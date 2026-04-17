@@ -2450,6 +2450,51 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">{selectedProduct.title}</h2>
               {selectedProduct.blueprintTitle && <p className="text-sm text-gray-500">{selectedProduct.blueprintTitle}</p>}
               {selectedProduct.printProviderTitle && <p className="text-xs text-gray-400 mt-0.5">{selectedProduct.printProviderTitle}</p>}
+
+              {/* Colour swatches from variants */}
+              {(() => {
+                const variants = (selectedProduct.variants as Array<{ title?: string }> | null) ?? [];
+                const colorMap: Record<string, string> = {
+                  "black": "#1a1a1a", "white": "#ffffff", "navy": "#1b2a4a", "navy blue": "#1b2a4a",
+                  "grey": "#9ca3af", "gray": "#9ca3af", "charcoal": "#4b5563", "dark heather": "#374151",
+                  "heather grey": "#d1d5db", "ash": "#e5e7eb", "red": "#dc2626", "burgundy": "#7f1d1d",
+                  "maroon": "#7f1d1d", "forest green": "#166534", "olive": "#65a30d", "green": "#16a34a",
+                  "blue": "#2563eb", "royal blue": "#1d4ed8", "sky blue": "#38bdf8", "light blue": "#bae6fd",
+                  "yellow": "#facc15", "mustard": "#ca8a04", "orange": "#ea580c", "pink": "#f472b6",
+                  "light pink": "#fbcfe8", "purple": "#9333ea", "lavender": "#c4b5fd", "brown": "#92400e",
+                  "tan": "#d97706", "beige": "#fef3c7", "cream": "#fef9c3", "sand": "#fef08a",
+                  "coral": "#fb7185", "teal": "#0d9488", "mint": "#a7f3d0", "dark navy": "#0f172a",
+                  "sport grey": "#d1d5db", "military green": "#4d7c0f", "carolina blue": "#7dd3fc",
+                };
+                const uniqueColors = [...new Set(
+                  variants.map((v) => {
+                    const title = (v.title ?? "").toLowerCase();
+                    // Variant titles are usually "Color / Size" — take the part before "/"
+                    return title.split("/")[0].trim();
+                  }).filter(Boolean)
+                )];
+                if (uniqueColors.length === 0) return null;
+                return (
+                  <div className="mt-4">
+                    <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-2">Available Colours <span className="text-gray-300">({uniqueColors.length})</span></p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {uniqueColors.map((color) => {
+                        const hex = colorMap[color] ?? null;
+                        return (
+                          <div
+                            key={color}
+                            title={color.charAt(0).toUpperCase() + color.slice(1)}
+                            className="w-6 h-6 rounded-full border-2 border-white dark:border-[#2A2A2A] shadow-sm ring-1 ring-gray-200 dark:ring-[#3A3A3A] cursor-default"
+                            style={{ backgroundColor: hex ?? "#e5e7eb" }}
+                          />
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1.5">{uniqueColors.length} colour{uniqueColors.length !== 1 ? "s" : ""} available</p>
+                  </div>
+                );
+              })()}
+
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className={`text-xs font-medium px-2 py-1 rounded-full ${selectedProduct.printifyStatus === "synced" ? "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400" : "bg-gray-100 text-gray-500 dark:bg-[#2A2A2A] dark:text-gray-400"}`}>
                   {selectedProduct.printifyStatus === "synced" ? "✓ Synced to Printify" : "Draft"}
