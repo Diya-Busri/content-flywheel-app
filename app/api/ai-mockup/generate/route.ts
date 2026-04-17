@@ -243,28 +243,15 @@ export async function POST(req: Request) {
       const productContext = garmentColor
         ? productBase.replace(/\b(wearing (?:a|an)) /i, `$1 ${colorPrefix}`)
         : productBase;
-      const brandContext = product.title ? `, design themed around "${product.title}"` : "";
+      // Use the product title as a direct design description so the AI renders something close to the real design
+      const brandContext = product.title ? `, with a "${product.title}" graphic printed on the front` : "";
       basePrompt = `${productContext}${brandContext}${placementSuffix}`;
     }
 
     // ── Generate ──────────────────────────────────────────────────────────────
-    // If the product has Printify mockup images (flat-lay product shots with the real design
-    // already rendered on the product), use the first one as the img2img reference.
-    // This gives a lifestyle shot that shows the actual design on the garment, not a generic one.
-    // Fall back to text-to-image if no Printify mockups exist yet.
-    const printifyMockups = ((product.mockupUrls as string[] | null) ?? []).filter(
-      (u) => !u.includes("blob.vercel-storage.com") && !u.includes("blob.core.windows.net")
-    );
-    const printifyFlatLayUrl = printifyMockups[0] ?? null;
-
-    let imageUrl: string;
-    if (!isFlat && printifyFlatLayUrl) {
-      // Use Printify flat-lay as img2img source — it shows the real design on the product.
-      // Medium strength (0.65) = keep the product/design, change the background/context to lifestyle.
-      imageUrl = await generateImg2ImgMockup(printifyFlatLayUrl, basePrompt, style, false);
-    } else {
-      imageUrl = await generateTextMockup(basePrompt, style, isFlat);
-    }
+    // Text-to-image reliably generates a person wearing the garment.
+    // img2img from flat product shots just tweaks the flat image — never generates a person.
+    const imageUrl = await generateTextMockup(basePrompt, style, isFlat);
 
     // ── Persist to Vercel Blob ────────────────────────────────────────────────
     const imageRes = await fetch(imageUrl);
