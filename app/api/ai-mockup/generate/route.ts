@@ -307,17 +307,13 @@ export async function POST(req: Request) {
     }
 
     // ── Generate ──────────────────────────────────────────────────────────────
-    // For lifestyle shots: use CatVTON virtual try-on if we have a Printify product photo.
-    // CatVTON composites the exact garment (with real design) onto a model photo — pixel accurate.
-    // Falls back to text-to-image if no Printify mockup exists yet, or for flat/non-lifestyle styles.
-    const printifyMockups = ((product.mockupUrls as string[] | null) ?? []).filter(
-      (u) => u && !u.includes("blob.vercel-storage.com") && !u.includes("blob.core.windows.net")
-    );
-    const garmentImageUrl = printifyMockups[0] ?? null;
-
+    // For lifestyle shots: use CatVTON virtual try-on with the product's front design file.
+    // Using the design file (not a Printify product photo) avoids wrong colour/garment-type issues.
+    // CatVTON composites the design onto a model wearing the correct garment type.
+    // Falls back to text-to-image for flat lay or if no design file exists.
     let imageUrl: string;
-    if (!isFlat && garmentImageUrl) {
-      imageUrl = await generateTryOnMockup(garmentImageUrl, product.blueprintTitle ?? null);
+    if (!isFlat && designFileUrl) {
+      imageUrl = await generateTryOnMockup(designFileUrl, product.blueprintTitle ?? null);
     } else {
       imageUrl = await generateTextMockup(basePrompt, style, isFlat);
     }
