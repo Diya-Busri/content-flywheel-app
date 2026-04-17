@@ -96,13 +96,30 @@ export async function GET(req: Request) {
     }
     console.log(`[printify/product-images] final mockupUrls count: ${mockupUrls.length}`);
 
+    // DEBUG: return raw structure so we can inspect it (remove after debugging)
+    const debugInfo = {
+      totalImages: images.length,
+      totalVariants: variants.length,
+      firstVariantId: defaultVariantId,
+      variantImagesCount: candidateImages.length,
+      uniquePositions: [...new Set(images.map(i => i.position))],
+      sampleImages: images.slice(0, 3).map(i => ({
+        position: i.position,
+        is_default: i.is_default,
+        is_selected_for_publishing: i.is_selected_for_publishing,
+        variant_ids_length: i.variant_ids?.length,
+        first_variant_id: i.variant_ids?.[0],
+      })),
+    };
+    console.log("[printify/product-images] DEBUG:", JSON.stringify(debugInfo));
+
     // Save back to our DB so they persist
     await db
       .update(podProductsTable)
       .set({ mockupUrls })
       .where(and(eq(podProductsTable.id, productId), eq(podProductsTable.userId, userId)));
 
-    return NextResponse.json({ mockupUrls });
+    return NextResponse.json({ mockupUrls, _debug: debugInfo });
   } catch (err) {
     console.error("[printify/product-images] GET:", err);
     return NextResponse.json(
