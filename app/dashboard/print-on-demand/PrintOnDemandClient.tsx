@@ -1291,7 +1291,15 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       const guide = await guideRes.json().catch(() => ({}));
       if (!guideRes.ok) throw new Error(guide.error ?? "Video guide generation failed");
 
-      // Step 3: Store guide in sessionStorage and navigate to video guide
+      // Step 3: Inject real mockup images directly into scene image_urls so the guide
+      // opens with the actual product photos instead of generating new AI images.
+      if (mockupUrls.length > 0 && Array.isArray(guide.scenes)) {
+        guide.scenes = guide.scenes.map((scene: Record<string, unknown>, i: number) => ({
+          ...scene,
+          image_url: mockupUrls[i % mockupUrls.length],
+        }));
+      }
+
       sessionStorage.setItem("videoCreationGuide", JSON.stringify({
         ...guide,
         scriptTitle: `${selectedProduct.title ?? "Merch"} Promo Video`,
