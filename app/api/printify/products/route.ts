@@ -153,13 +153,17 @@ export async function PATCH(req: Request) {
         {
           variant_ids: enabledVariantIds,
           placeholders: (() => {
-            // Build placeholders from all placements that have an image
-            const allImages: Array<{ position: string; printifyImageId: string }> =
+            // Build placeholders from all placements that have an image.
+            // Only include positions Printify accepts as standard placeholder positions.
+            // "label"/"inside_label" requires a separate print_areas entry — skip for now.
+            const VALID_PRINTIFY_POSITIONS = new Set(["front", "back", "left_sleeve", "right_sleeve", "sleeve_left", "sleeve_right"]);
+            const allImages: Array<{ position: string; printifyImageId: string }> = (
               placementImages && placementImages.length > 0
                 ? placementImages
                 : printifyImageId
                 ? [{ position: "front", printifyImageId }]
-                : [];
+                : []
+            ).filter(({ position }) => VALID_PRINTIFY_POSITIONS.has(position));
 
             if (allImages.length === 0) {
               // No images provided — include empty front placeholder so Printify accepts the payload
