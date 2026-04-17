@@ -1096,11 +1096,11 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
         if (uploadData.imageId) placementImages.push({ position: p.position, printifyImageId: uploadData.imageId });
       }
 
-      // Step 2: Sync to Printify with uploaded image IDs
+      // Step 2: Sync to Printify with uploaded image IDs (no variants override — use what's stored in DB)
       const res = await fetch("/api/printify/products", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: selectedProduct.id, variants: [], placementImages }),
+        body: JSON.stringify({ productId: selectedProduct.id, placementImages }),
       });
       const data = await res.json() as { error?: string; mockupUrls?: string[] };
       if (!res.ok) throw new Error(data.error ?? "Sync failed");

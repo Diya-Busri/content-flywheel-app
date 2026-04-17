@@ -132,7 +132,12 @@ export async function PATCH(req: Request) {
     }
 
     // Build Printify product payload
-    const variantList = (variants ?? localProduct.variants ?? []) as Array<{ id: number; price: number; enabled: boolean }>;
+    const variantList = (
+      Array.isArray(variants) && variants.length > 0 ? variants : localProduct.variants ?? []
+    ) as Array<{ id: number; price: number; enabled: boolean }>;
+    if (variantList.length === 0) {
+      return NextResponse.json({ error: "No variants found. Open the product wizard and complete the Variants step first." }, { status: 400 });
+    }
     const enabledVariantIds = variantList.filter((v) => v.enabled !== false).map((v) => v.id);
 
     const printifyPayload: Record<string, unknown> = {
