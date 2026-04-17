@@ -753,10 +753,37 @@ export default function TikTokShopFlow() {
               Video Creator
             </CardTitle>
             <CardDescription className="text-gray-600 dark:text-gray-400">
-              Pick a script variation, choose a voice, and generate a vertical 9:16 MP4: ElevenLabs voiceover, your product image, and burned-in captions—same export pipeline as Template Studio.
+              Pick a script and open the full Video Creation Guide to generate AI scene images, animate them, and export a polished MP4 — or use Quick Export for a fast product-photo video.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Primary: Full Video Creation Guide */}
+            <div className="rounded-lg border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/20 p-4 space-y-3">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">Recommended: Full Video Creation Guide</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">AI-generated scene images, Ken Burns animations, voiceover sync, captions — same quality as Digital Products videos.</p>
+              <div className="space-y-2">
+                {scriptResults.map((s, i) => {
+                  const title = (s as ScriptResult & { title?: string }).title ?? `Script ${i + 1}`;
+                  return (
+                    <Button
+                      key={i}
+                      onClick={() => goToVideoCustomization(s)}
+                      className="w-full gap-2 bg-orange-500 hover:bg-orange-600 justify-start"
+                      size="sm"
+                    >
+                      <FileText className="w-4 h-4 shrink-0" />
+                      Create Guide — {title}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            <details className="group">
+              <summary className="cursor-pointer text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 select-none list-none flex items-center gap-1">
+                <span className="group-open:hidden">▶</span><span className="hidden group-open:inline">▼</span>
+                Quick Export (raw product photo, no AI scenes)
+              </summary>
+              <div className="mt-4 space-y-4">
             <div>
               <Label className="mb-2 block">Script variation</Label>
               <div className="space-y-2">
@@ -844,17 +871,16 @@ export default function TikTokShopFlow() {
             <Button
               onClick={runGenerateAffiliateVideo}
               disabled={affiliateVideoGenerating}
-              className="w-full gap-2 bg-orange-500 hover:bg-orange-600"
+              className="w-full gap-2"
+              variant="outline"
             >
               {affiliateVideoGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clapperboard className="w-4 h-4" />}
-              {affiliateVideoGenerating ? "Generating video…" : "Generate Video"}
+              {affiliateVideoGenerating ? "Generating…" : "Quick Export MP4"}
             </Button>
+            </div>
+            </details>
             <div className="flex gap-2 pt-2">
               <Button variant="outline" onClick={() => setStep(3)}>Back</Button>
-              <Button variant="outline" onClick={() => setStep(5)} className="flex-1 gap-2">
-                Continue to Video Creation Guides
-                <ArrowRight className="w-4 h-4" />
-              </Button>
             </div>
           </CardContent>
         </Card>
