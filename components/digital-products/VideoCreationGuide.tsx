@@ -1446,18 +1446,26 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       setLastCompiledVideoUrl(url);
       setVideoSocialCaptions(null); // reset previous captions
       // Auto-generate social captions for the exported video
-      if (productId) {
-        setVideoSocialCaptionsLoading(true);
-        fetch(`/api/products/${encodeURIComponent(productId)}/social-captions`, { method: "POST" })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((d: { tiktok_title?: string; tiktok?: string; instagram_title?: string; instagram?: string; youtube_title?: string; twitter?: string } | null) => {
-            if (d?.tiktok || d?.instagram || d?.twitter) {
-              setVideoSocialCaptions({ tiktok_title: d.tiktok_title ?? "", tiktok: d.tiktok ?? "", instagram_title: d.instagram_title ?? "", instagram: d.instagram ?? "", youtube_title: d.youtube_title ?? "", twitter: d.twitter ?? "" });
-            }
-          })
-          .catch(() => {})
-          .finally(() => setVideoSocialCaptionsLoading(false));
-      }
+      setVideoSocialCaptionsLoading(true);
+      const captionsRequest = productId
+        ? fetch(`/api/products/${encodeURIComponent(productId)}/social-captions`, { method: "POST" })
+        : fetch("/api/videos/social-captions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: effectiveProductName || scriptTitle || guide.productName || "Video",
+              script: [displayScript.hook, displayScript.body, displayScript.cta].filter(Boolean).join("\n\n"),
+            }),
+          });
+      captionsRequest
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { tiktok_title?: string; tiktok?: string; instagram_title?: string; instagram?: string; youtube_title?: string; twitter?: string } | null) => {
+          if (d?.tiktok || d?.instagram || d?.twitter) {
+            setVideoSocialCaptions({ tiktok_title: d.tiktok_title ?? "", tiktok: d.tiktok ?? "", instagram_title: d.instagram_title ?? "", instagram: d.instagram ?? "", youtube_title: d.youtube_title ?? "", twitter: d.twitter ?? "" });
+          }
+        })
+        .catch(() => {})
+        .finally(() => setVideoSocialCaptionsLoading(false));
       // Trigger download directly via a link click (avoids popup blocker)
       const a = document.createElement("a");
       a.href = url;
