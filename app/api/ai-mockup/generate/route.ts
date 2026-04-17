@@ -111,52 +111,84 @@ const PLACEMENT_SUFFIX: Record<string, string> = {
   label:         ", collar folded to clearly show the neck label/tag inside the garment",
 };
 
-// ─── Virtual Try-On model images ─────────────────────────────────────────────
-// Neutral standing poses, diverse models. Using Picsum for reliable access.
-// These get re-hosted to Vercel Blob on first use so fal.ai can always download them.
-const TRYON_MODEL_SOURCES = [
-  // Diverse models in neutral poses — IDs chosen for plain/light clothing
-  "https://images.pexels.com/photos/1681010/pexels-photo-1681010.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop",
-  "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop",
-  "https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop",
-  "https://images.pexels.com/photos/1130626/pexels-photo-1130626.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop",
-  "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop",
-  "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&fit=crop",
+// ─── Model photo generation for virtual try-on ───────────────────────────────
+// We generate the model photo on the fly using flux/schnell so we can guarantee:
+//   • Full-body / upper-body shot (no headshots — CatVTON needs the full torso)
+//   • Plain white clothing (ideal base for design compositing)
+//   • Style-appropriate background (makes the Style selector actually useful)
+//   • Diverse models
+// Generated photos are uploaded to Vercel Blob and cached per style+model combo.
+
+const MODEL_SUBJECTS = [
+  "a young Black woman",
+  "a young white man",
+  "a young South Asian woman",
+  "a young Latino man",
+  "a young East Asian woman",
+  "a young white woman",
+  "a young Black man",
+  "a young Middle Eastern woman",
 ];
 
-// In-memory cache: original URL → Vercel Blob URL
-// Persists for the lifetime of the server process (resets on cold start, refills as needed).
-const modelBlobCache = new Map<string, string>();
+// Background context per style — this is what makes style meaningful
+const MODEL_CONTEXT_BY_STYLE: Record<string, string> = {
+  lifestyle: "standing on a city street, natural daylight, casual lifestyle photography",
+  studio:    "clean white studio background, soft studio lighting, professional fashion photo",
+  outdoor:   "outdoor park with trees, golden hour sunlight, editorial fashion photography",
+};
+
+// In-memory cache: "${style}-${subject}" → Vercel Blob URL
+const modelPhotoCache = new Map<string, string>();
 
 /**
- * Fetch a model image from its source URL and re-host it on Vercel Blob.
- * Cached so each image is only uploaded once per server process.
- * fal.ai can always download from Vercel Blob (public CDN).
+ * Generate a full-body model photo with flux/schnell then host on Vercel Blob.
+ * Cached per style+subject combo so each unique combo is only generated once.
+ * fal.ai can always access Vercel Blob URLs.
  */
-async function getModelBlobUrl(sourceUrl: string): Promise<string> {
-  const cached = modelBlobCache.get(sourceUrl);
+async function getGeneratedModelBlobUrl(style: string): Promise<string> {
+  const styleKey = MODEL_CONTEXT_BY_STYLE[style] ? style : "lifestyle";
+  const subject = MODEL_SUBJECTS[Math.floor(Math.random() * MODEL_SUBJECTS.length)];
+  const cacheKey = `${styleKey}-${subject.replace(/\s+/g, "-")}`;
+
+  const cached = modelPhotoCache.get(cacheKey);
   if (cached) return cached;
 
-  const res = await fetch(sourceUrl, {
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; ContentFlywheel/1.0)" },
-  });
-  if (!res.ok) throw new Error(`Failed to fetch model image (${res.status}): ${sourceUrl}`);
+  const context = MODEL_CONTEXT_BY_STYLE[styleKey];
+  const prompt = `Full body portrait photo of ${subject} wearing a plain white t-shirt and dark jeans. ${context}. Person visible from head to toe, facing forward, relaxed natural pose. High quality photorealistic photo.`;
 
-  const buffer = Buffer.from(await res.arrayBuffer());
-  // Derive a stable key from the URL so repeated cold-starts reuse the same blob
-  const slug = sourceUrl.replace(/[^a-z0-9]/gi, "-").slice(-60);
-  const blob = await put(`pod-mockups/tryon-models/${slug}.jpg`, buffer, {
+  const genRes = await fetch("https://fal.run/fal-ai/flux/schnell", {
+    method: "POST",
+    headers: { Authorization: `Key ${FAL_API_KEY()}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      prompt,
+      image_size: "portrait_4_3",
+      num_inference_steps: 4,
+      num_images: 1,
+      enable_safety_checker: true,
+    }),
+  });
+
+  if (!genRes.ok) {
+    const text = await genRes.text();
+    throw new Error(`Model photo generation failed: ${text.slice(0, 200)}`);
+  }
+
+  const genData = await genRes.json() as { images?: Array<{ url: string }> };
+  const modelUrl = genData.images?.[0]?.url;
+  if (!modelUrl) throw new Error("No model image generated");
+
+  // Upload to Vercel Blob for a stable URL fal.ai can always download
+  const imgRes = await fetch(modelUrl);
+  const buf = Buffer.from(await imgRes.arrayBuffer());
+  const slug = cacheKey.replace(/[^a-z0-9-]/gi, "").toLowerCase().slice(0, 60);
+  const blob = await put(`pod-mockups/tryon-models/${slug}.jpg`, buf, {
     access: "public",
     contentType: "image/jpeg",
     addRandomSuffix: false,
   });
 
-  modelBlobCache.set(sourceUrl, blob.url);
+  modelPhotoCache.set(cacheKey, blob.url);
   return blob.url;
-}
-
-function randomTryOnModelSource(): string {
-  return TRYON_MODEL_SOURCES[Math.floor(Math.random() * TRYON_MODEL_SOURCES.length)];
 }
 
 // Map blueprint title to cloth_type for CatVTON
@@ -170,10 +202,11 @@ function getClothType(blueprintTitle: string | null): "upper" | "lower" | "overa
 // ─── Virtual Try-On via CatVTON ───────────────────────────────────────────────
 async function generateTryOnMockup(
   garmentImageUrl: string,
-  blueprintTitle: string | null
+  blueprintTitle: string | null,
+  style: string
 ): Promise<string> {
-  // Re-host the model image on Vercel Blob so fal.ai can reliably download it
-  const humanImageUrl = await getModelBlobUrl(randomTryOnModelSource());
+  // Generate a full-body model photo with the right style background, hosted on Vercel Blob
+  const humanImageUrl = await getGeneratedModelBlobUrl(style);
   const clothType = getClothType(blueprintTitle);
 
   const res = await fetch("https://fal.run/fal-ai/cat-vton", {
@@ -296,7 +329,7 @@ export async function POST(req: Request) {
     // For flat lay or no design file: fall back to text-to-image.
     let imageUrl: string;
     if (!isFlat && designFileUrl) {
-      imageUrl = await generateTryOnMockup(designFileUrl, product.blueprintTitle ?? null);
+      imageUrl = await generateTryOnMockup(designFileUrl, product.blueprintTitle ?? null, style);
     } else {
       imageUrl = await generateTextMockup(basePrompt, style, isFlat);
     }
