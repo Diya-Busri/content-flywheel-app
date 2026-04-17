@@ -248,12 +248,10 @@ export async function POST(req: Request) {
     }
 
     // ── Generate ──────────────────────────────────────────────────────────────
-    let imageUrl: string;
-    if (designFileUrl) {
-      imageUrl = await generateImg2ImgMockup(designFileUrl, basePrompt, style, isFlat);
-    } else {
-      imageUrl = await generateTextMockup(basePrompt, style, isFlat);
-    }
+    // Always use text-to-image: img2img with dark/complex logos bleeds the design
+    // background into the output. Text generation produces clean lifestyle/product shots.
+    // Printify's own renders already show the exact design accurately.
+    const imageUrl = await generateTextMockup(basePrompt, style, isFlat);
 
     // ── Persist to Vercel Blob ────────────────────────────────────────────────
     const imageRes = await fetch(imageUrl);

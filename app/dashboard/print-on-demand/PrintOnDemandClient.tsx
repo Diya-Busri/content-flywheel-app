@@ -1069,14 +1069,47 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     if (!selectedProduct) return;
     setSyncing(true);
     try {
+      // Step 1: Upload the front design (and any extra placements) to Printify's image library
+      const placementImages: Array<{ position: string; printifyImageId: string }> = [];
+
+      if (selectedProduct.designFileUrl) {
+        const uploadRes = await fetch("/api/printify/upload-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageUrl: selectedProduct.designFileUrl, fileName: selectedProduct.designFileName ?? "front-design.png" }),
+        });
+        const uploadData = await uploadRes.json() as { imageId?: string; error?: string };
+        if (!uploadRes.ok) throw new Error(uploadData.error ?? "Design upload failed");
+        if (uploadData.imageId) placementImages.push({ position: "front", printifyImageId: uploadData.imageId });
+      }
+
+      // Upload any extra placements (back, sleeves, label)
+      const extraPlacements = (selectedProduct.placements as Array<{ position: string; designFileUrl: string; designFileName?: string }> | null) ?? [];
+      for (const p of extraPlacements) {
+        if (!p.designFileUrl || p.position === "front") continue;
+        const uploadRes = await fetch("/api/printify/upload-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageUrl: p.designFileUrl, fileName: p.designFileName ?? `${p.position}-design.png` }),
+        });
+        const uploadData = await uploadRes.json() as { imageId?: string };
+        if (uploadData.imageId) placementImages.push({ position: p.position, printifyImageId: uploadData.imageId });
+      }
+
+      // Step 2: Sync to Printify with uploaded image IDs
       const res = await fetch("/api/printify/products", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: selectedProduct.id, variants: [], printifyImageId: null }),
+        body: JSON.stringify({ productId: selectedProduct.id, variants: [], placementImages }),
       });
-      const data = await res.json() as { error?: string };
+      const data = await res.json() as { error?: string; mockupUrls?: string[] };
       if (!res.ok) throw new Error(data.error ?? "Sync failed");
-      const updated = { ...selectedProduct, printifyStatus: "synced" } as SelectPodProduct;
+
+      const updated = {
+        ...selectedProduct,
+        printifyStatus: "synced",
+        ...(data.mockupUrls && data.mockupUrls.length > 0 ? { mockupUrls: data.mockupUrls } : {}),
+      } as SelectPodProduct;
       setSelectedProduct(updated);
       setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       toast({ title: "Synced to Printify!", description: "Your product is now live in Printify." });
