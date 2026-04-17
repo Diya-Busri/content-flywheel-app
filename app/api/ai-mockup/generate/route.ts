@@ -124,7 +124,7 @@ async function generateImg2ImgMockup(
   // High strength kept the dark background of the logo and produced a mess.
   const fullPrompt = flat
     ? `${prompt}. ${lightingStyle}. The design from the reference image is printed on the front of the product. Product is the main subject, not the design. No person in shot. Clean, sharp, professional. Photorealistic, 8K, commercial product photography.`
-    : `${prompt}. ${lightingStyle}. The person is wearing the garment — it is a real physical product. The artwork/logo from the reference image is printed on the front of the garment. Show the full garment and person, not just the design. Sharp focus, professional. Photorealistic, 8K, commercial product photography.`;
+    : `${prompt}. ${lightingStyle}. IMPORTANT: A real person must be visible wearing the garment. Full body lifestyle photo. The garment has the same graphic design as shown in the reference image printed on the front. Person is the main subject. Sharp focus, professional. Photorealistic, 8K, commercial product photography.`;
 
   const res = await fetch("https://fal.run/fal-ai/flux/dev/image-to-image", {
     method: "POST",
@@ -135,9 +135,9 @@ async function generateImg2ImgMockup(
     body: JSON.stringify({
       prompt: fullPrompt,
       image_url: designUrl,
-      // 0.65 strength: keeps product shape/design from the Printify reference image,
-      // transforms background/context into a lifestyle/person shot.
-      strength: flat ? 0.75 : 0.65,
+      // 0.85 strength: high enough to generate a person wearing the garment,
+      // while the Printify product photo provides colour/design reference.
+      strength: flat ? 0.75 : 0.85,
       image_size: flat ? "square_hd" : "portrait_4_3",
       num_inference_steps: 32,
       guidance_scale: 4.5,
