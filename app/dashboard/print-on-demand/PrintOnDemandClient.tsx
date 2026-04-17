@@ -2376,14 +2376,32 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                     </p>
                   </div>
                 </div>
+
+                {/* Printify person mockups CTA — shows exact design on real people */}
+                {selectedProduct.printifyProductId && (
+                  <a
+                    href={`https://printify.com/app/store/products/${selectedProduct.printifyProductId}/edit`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full mb-3 flex items-center justify-center gap-2 rounded-xl border-2 border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/20 py-2.5 text-sm font-semibold text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    View Person Mockups in Printify
+                  </a>
+                )}
+                {!selectedProduct.printifyProductId && (
+                  <p className="text-[11px] text-gray-400 italic mb-3">Sync to Printify to access Person 1–6 mockups with your exact design.</p>
+                )}
+
                 <Button
                   onClick={handleGenerateLifestyle}
                   disabled={generatingLifestyle || generatingMockup}
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2 font-semibold"
+                  variant="outline"
+                  className="w-full gap-2 font-semibold border-gray-200 dark:border-[#2A2A2A]"
                 >
                   {generatingLifestyle
                     ? <><Loader2 className="w-4 h-4 animate-spin" />Generating lifestyle shot...</>
-                    : <><Sparkles className="w-4 h-4" />Generate Lifestyle Shot</>}
+                    : <><Sparkles className="w-4 h-4" />Generate AI Lifestyle Shot</>}
                 </Button>
 
                 {/* More AI mockup styles (collapsible) */}
