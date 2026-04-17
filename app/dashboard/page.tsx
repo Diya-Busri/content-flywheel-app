@@ -15,6 +15,7 @@ import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, desc, isNull, and, count, gte, sql } from "drizzle-orm";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
+import { brandProfilesTable } from "@/db/schema/brand-profiles-schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -158,10 +159,14 @@ async function getEmailSubscriberCount(userId: string): Promise<number> {
 
 async function getChecklistData(userId: string): Promise<ChecklistData> {
   try {
-    const [bvRow, products] = await Promise.all([
+    const [bvRow, bpRow, products] = await Promise.all([
       db.select({ id: brandVoiceTable.id, brandName: brandVoiceTable.brandName })
         .from(brandVoiceTable)
         .where(eq(brandVoiceTable.userId, userId))
+        .limit(1),
+      db.select({ brandName: brandProfilesTable.brandName })
+        .from(brandProfilesTable)
+        .where(eq(brandProfilesTable.userId, userId))
         .limit(1),
       db.select({ marketingAssets: productsTable.marketingAssets })
         .from(productsTable)
@@ -169,7 +174,7 @@ async function getChecklistData(userId: string): Promise<ChecklistData> {
         .limit(20),
     ]);
 
-    const hasBrandVoice = !!(bvRow[0]?.brandName?.trim());
+    const hasBrandVoice = !!(bvRow[0]?.brandName?.trim()) || !!(bpRow[0]?.brandName?.trim());
     const hasProduct = products.length > 0;
     let hasThumbnail = false;
     let hasPromoVideo = false;

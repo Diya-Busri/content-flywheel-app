@@ -56,9 +56,9 @@ export function GettingStartedChecklist({ hasBrandVoice, hasProduct, hasThumbnai
   const steps: Step[] = [
     {
       id: "brand-voice",
-      label: "Set your Brand Voice",
+      label: "Set up brand profile",
       description: "Tell the AI your brand name, niche, and tone so every output sounds like you.",
-      href: "/dashboard/brand-voice",
+      href: "/dashboard/settings#brand-profile",
       done: hasBrandVoice,
     },
     {
