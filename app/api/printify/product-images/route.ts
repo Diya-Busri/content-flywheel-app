@@ -57,34 +57,44 @@ export async function GET(req: Request) {
     };
 
     const images = printifyProduct.images ?? [];
+    const variants = printifyProduct.variants ?? [];
+
+    // Debug: log image/variant structure so we can understand the data shape
+    console.log(`[printify/product-images] total images: ${images.length}, total variants: ${variants.length}`);
+    console.log(`[printify/product-images] first 5 images:`, JSON.stringify(images.slice(0, 5).map((i) => ({
+      src: i.src?.slice(-40),
+      position: i.position,
+      is_default: i.is_default,
+      is_selected_for_publishing: i.is_selected_for_publishing,
+      variant_ids_count: i.variant_ids?.length,
+      first_variant_id: i.variant_ids?.[0],
+    })), null, 2));
+    console.log(`[printify/product-images] first 3 variants:`, JSON.stringify(variants.slice(0, 3)));
+
     if (images.length === 0) {
       return NextResponse.json({ mockupUrls: [], message: "No mockups generated yet — try again in a moment" });
     }
 
-    // Printify's `position` field only has 3 values: "front", "back", "other".
-    // All person/lifestyle/folded views share "other", so position-based dedup collapses them to 1.
-    //
-    // Fix: filter to images for one variant only (the first enabled one).
-    // Each view type has exactly one image per variant, so this gives us all distinct views
-    // (Front, Back, Folded, Person 1, Person 2, etc.) without duplicating across colours.
-    const firstEnabledVariant = printifyProduct.variants?.find((v) => v.is_enabled) ?? printifyProduct.variants?.[0];
+    const firstEnabledVariant = variants.find((v) => v.is_enabled) ?? variants[0];
     const defaultVariantId = firstEnabledVariant?.id;
+    console.log(`[printify/product-images] defaultVariantId: ${defaultVariantId}`);
 
     let candidateImages = images.filter((i) => i.src);
     if (defaultVariantId !== undefined) {
       const variantImages = candidateImages.filter(
         (i) => Array.isArray(i.variant_ids) && i.variant_ids.includes(defaultVariantId)
       );
-      // Only use variant filter if it returned results
+      console.log(`[printify/product-images] variantImages for id ${defaultVariantId}: ${variantImages.length}`);
       if (variantImages.length > 0) candidateImages = variantImages;
     }
 
-    // URL dedup (safety net)
+    // URL dedup
     const seen = new Set<string>();
     const mockupUrls: string[] = [];
     for (const img of candidateImages) {
       if (!seen.has(img.src)) { seen.add(img.src); mockupUrls.push(img.src); }
     }
+    console.log(`[printify/product-images] final mockupUrls count: ${mockupUrls.length}`);
 
     // Save back to our DB so they persist
     await db
