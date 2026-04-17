@@ -236,8 +236,13 @@ function ProfitCalculator({ avgSalePrice }: { avgSalePrice: number }) {
   );
 }
 
+// ─── Helper: is this URL an AI-generated mockup (Vercel Blob) or Printify? ────
+function isAiMockup(url: string): boolean {
+  return url.includes("blob.vercel-storage.com") || url.includes("blob.core.windows.net");
+}
+
 // ─── Mockup grid with download + share ───────────────────────────────────────
-function MockupGrid({ mockups, productTitle }: { mockups: string[]; productTitle: string }) {
+function MockupGrid({ mockups, productTitle, label }: { mockups: string[]; productTitle: string; label?: string }) {
   const { toast } = useToast();
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
@@ -276,7 +281,8 @@ function MockupGrid({ mockups, productTitle }: { mockups: string[]; productTitle
   };
 
   return (
-    <div className="mt-4 space-y-3">
+    <div className="mt-3 space-y-3">
+      {label && <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">{label}</p>}
       <div className="grid grid-cols-2 gap-3">
         {mockups.map((url, i) => (
           <div key={i} className="group relative rounded-xl overflow-hidden border border-gray-100 dark:border-[#2A2A2A] aspect-square bg-gray-50 dark:bg-[#2A2A2A]">
@@ -2319,15 +2325,55 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
             <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Mockups</p>
 
-              {/* ── Hero: Lifestyle Shot (AI person wearing it) ── */}
-              <div className="rounded-xl border border-orange-200 dark:border-orange-900/40 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/10 p-3.5 mb-3">
-                <div className="flex items-start gap-2.5 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center flex-shrink-0">
-                    <span className="text-base">👤</span>
+              {/* ── Section 1: Printify Official Product Photos ── */}
+              <div className="mb-4">
+                <div className="flex items-start gap-2.5 mb-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm">📦</span>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Lifestyle Shot</p>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">AI generates a photo of someone wearing your product on the street</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Product Photos</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                      Official renders from Printify — flat lay, front, back, folded &amp; more
+                    </p>
+                  </div>
+                </div>
+                {selectedProduct.printifyProductId ? (
+                  <Button
+                    onClick={handleFetchPrintifyMockups}
+                    disabled={generatingMockup}
+                    variant="outline"
+                    className="w-full gap-2 font-semibold border-gray-200 dark:border-[#2A2A2A]"
+                  >
+                    {generatingMockup
+                      ? <><Loader2 className="w-4 h-4 animate-spin" />Loading...</>
+                      : <><RefreshCw className="w-4 h-4" />Get Printify Mockups</>}
+                  </Button>
+                ) : (
+                  <p className="text-[11px] text-gray-400 italic">Sync to Printify first to get official product photos.</p>
+                )}
+                {/* Printify mockup grid */}
+                {(() => {
+                  const printifyMockups = ((selectedProduct.mockupUrls as string[]) ?? []).filter((u) => !isAiMockup(u));
+                  return printifyMockups.length > 0
+                    ? <MockupGrid mockups={printifyMockups} productTitle={selectedProduct.title} />
+                    : null;
+                })()}
+              </div>
+
+              <div className="border-t border-gray-100 dark:border-[#2A2A2A] my-3" />
+
+              {/* ── Section 2: AI Lifestyle Shots (person wearing it) ── */}
+              <div>
+                <div className="flex items-start gap-2.5 mb-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm">👤</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Lifestyle Shots</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                      AI-generated photos of someone wearing your product — great for social media
+                    </p>
                   </div>
                 </div>
                 <Button
@@ -2339,79 +2385,62 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                     ? <><Loader2 className="w-4 h-4 animate-spin" />Generating lifestyle shot...</>
                     : <><Sparkles className="w-4 h-4" />Generate Lifestyle Shot</>}
                 </Button>
-              </div>
 
-              {/* ── Printify official mockups (when synced) ── */}
-              {selectedProduct.printifyProductId && (
-                <div className="mb-3">
-                  <Button
-                    onClick={handleFetchPrintifyMockups}
-                    disabled={generatingMockup}
-                    variant="outline"
-                    className="w-full gap-2 font-semibold border-gray-200 dark:border-[#2A2A2A]"
-                  >
-                    {generatingMockup
-                      ? <><Loader2 className="w-4 h-4 animate-spin" />Loading...</>
-                      : <><RefreshCw className="w-4 h-4" />Get Printify Mockups</>}
-                  </Button>
-                  <p className="text-[10px] text-gray-400 text-center mt-1.5">Official renders from Printify — wearing, flat lay, folded &amp; more</p>
-                </div>
-              )}
-
-              {/* ── More AI mockup styles ── */}
-              <details className="mt-1">
-                <summary className="text-[10px] uppercase tracking-widest text-gray-400 cursor-pointer select-none mb-2 hover:text-gray-600 transition-colors flex items-center gap-1">
-                  ✦ More AI mockup styles
-                </summary>
-                <div className="mt-2">
-                  {/* Style selector */}
-                  <div className="grid grid-cols-2 gap-1.5 mb-3">
-                    {MOCKUP_STYLES.map((s) => (
-                      <button key={s.id} type="button" onClick={() => setMockupStyle(s.id)}
-                        className={`rounded-lg border p-2 text-center text-xs font-medium transition-all ${mockupStyle === s.id ? "border-orange-500 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
-                        <span className="block font-semibold">{s.label}</span>
-                        <span className="text-gray-400 text-[10px]">{s.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Placement selector */}
-                  {(() => {
-                    const productPlacements = (selectedProduct.placements as Array<{ position: string }> | null) ?? [];
-                    const availablePlacements = [
-                      { id: "front", label: "Front" },
-                      ...productPlacements
-                        .filter((p) => p.position !== "front")
-                        .map((p) => ({
-                          id: p.position,
-                          label: PLACEMENTS.find((pl) => pl.id === p.position)?.label ?? p.position,
-                        })),
-                    ];
-                    if (availablePlacements.length <= 1) return null;
-                    return (
-                      <div className="mb-3">
-                        <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-1.5">Mockup view</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {availablePlacements.map((p) => (
-                            <button key={p.id} type="button" onClick={() => setMockupPlacement(p.id)}
-                              className={`text-xs px-3 py-1 rounded-full border transition-all ${mockupPlacement === p.id ? "bg-orange-500 border-orange-500 text-white" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
-                              {p.label}
-                            </button>
-                          ))}
+                {/* More AI mockup styles (collapsible) */}
+                <details className="mt-2">
+                  <summary className="text-[10px] uppercase tracking-widest text-gray-400 cursor-pointer select-none mb-2 hover:text-gray-600 transition-colors flex items-center gap-1">
+                    ✦ More AI mockup styles
+                  </summary>
+                  <div className="mt-2">
+                    <div className="grid grid-cols-2 gap-1.5 mb-3">
+                      {MOCKUP_STYLES.map((s) => (
+                        <button key={s.id} type="button" onClick={() => setMockupStyle(s.id)}
+                          className={`rounded-lg border p-2 text-center text-xs font-medium transition-all ${mockupStyle === s.id ? "border-orange-500 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
+                          <span className="block font-semibold">{s.label}</span>
+                          <span className="text-gray-400 text-[10px]">{s.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {(() => {
+                      const productPlacements = (selectedProduct.placements as Array<{ position: string }> | null) ?? [];
+                      const availablePlacements = [
+                        { id: "front", label: "Front" },
+                        ...productPlacements
+                          .filter((p) => p.position !== "front")
+                          .map((p) => ({
+                            id: p.position,
+                            label: PLACEMENTS.find((pl) => pl.id === p.position)?.label ?? p.position,
+                          })),
+                      ];
+                      if (availablePlacements.length <= 1) return null;
+                      return (
+                        <div className="mb-3">
+                          <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-1.5">Mockup view</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {availablePlacements.map((p) => (
+                              <button key={p.id} type="button" onClick={() => setMockupPlacement(p.id)}
+                                className={`text-xs px-3 py-1 rounded-full border transition-all ${mockupPlacement === p.id ? "bg-orange-500 border-orange-500 text-white" : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 hover:border-orange-300"}`}>
+                                {p.label}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
+                    <Button onClick={handleGenerateMockup} disabled={generatingMockup || generatingLifestyle} className="w-full bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-black gap-2">
+                      {generatingMockup ? <><Loader2 className="w-4 h-4 animate-spin" />Generating...</> : <><Sparkles className="w-4 h-4" />Generate with selected style</>}
+                    </Button>
+                  </div>
+                </details>
 
-                  <Button onClick={handleGenerateMockup} disabled={generatingMockup || generatingLifestyle} className="w-full bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-black gap-2">
-                    {generatingMockup ? <><Loader2 className="w-4 h-4 animate-spin" />Generating...</> : <><Sparkles className="w-4 h-4" />Generate with selected style</>}
-                  </Button>
-                </div>
-              </details>
-
-              {((selectedProduct.mockupUrls as string[]) ?? []).length > 0 && (
-                <MockupGrid mockups={(selectedProduct.mockupUrls as string[]) ?? []} productTitle={selectedProduct.title} />
-              )}
+                {/* AI lifestyle mockup grid */}
+                {(() => {
+                  const aiMockups = ((selectedProduct.mockupUrls as string[]) ?? []).filter(isAiMockup);
+                  return aiMockups.length > 0
+                    ? <MockupGrid mockups={aiMockups} productTitle={selectedProduct.title} />
+                    : null;
+                })()}
+              </div>
             </div>
           </div>
 
