@@ -123,8 +123,8 @@ async function generateImg2ImgMockup(
   // and use the design image only as a loose style/colour reference.
   // High strength kept the dark background of the logo and produced a mess.
   const fullPrompt = flat
-    ? `${prompt}. ${lightingStyle}. Artwork printed on the product inspired by the reference image. No person in shot. Clean, sharp, professional. Photorealistic, 8K, commercial product photography.`
-    : `${prompt}. ${lightingStyle}. Graphic design printed on the garment inspired by the reference image — artwork clearly visible on the fabric. Sharp focus, professional. Photorealistic, 8K, commercial product photography.`;
+    ? `${prompt}. ${lightingStyle}. The design from the reference image is printed on the front of the product. Product is the main subject, not the design. No person in shot. Clean, sharp, professional. Photorealistic, 8K, commercial product photography.`
+    : `${prompt}. ${lightingStyle}. The person is wearing the garment — it is a real physical product. The artwork/logo from the reference image is printed on the front of the garment. Show the full garment and person, not just the design. Sharp focus, professional. Photorealistic, 8K, commercial product photography.`;
 
   const res = await fetch("https://fal.run/fal-ai/flux/dev/image-to-image", {
     method: "POST",
@@ -135,7 +135,9 @@ async function generateImg2ImgMockup(
     body: JSON.stringify({
       prompt: fullPrompt,
       image_url: designUrl,
-      strength: flat ? 0.45 : 0.38,
+      // Higher strength = more creative freedom to generate a real product photo.
+      // Lower strength kept too much of the raw design (black bg, text) in the output.
+      strength: flat ? 0.82 : 0.78,
       image_size: flat ? "square_hd" : "portrait_4_3",
       num_inference_steps: 32,
       guidance_scale: 4.5,
