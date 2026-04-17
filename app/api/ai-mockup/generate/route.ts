@@ -135,9 +135,9 @@ async function generateImg2ImgMockup(
     body: JSON.stringify({
       prompt: fullPrompt,
       image_url: designUrl,
-      // Higher strength = more creative freedom to generate a real product photo.
-      // Lower strength kept too much of the raw design (black bg, text) in the output.
-      strength: flat ? 0.82 : 0.78,
+      // 0.65 strength: keeps product shape/design from the Printify reference image,
+      // transforms background/context into a lifestyle/person shot.
+      strength: flat ? 0.75 : 0.65,
       image_size: flat ? "square_hd" : "portrait_4_3",
       num_inference_steps: 32,
       guidance_scale: 4.5,
@@ -248,10 +248,23 @@ export async function POST(req: Request) {
     }
 
     // ── Generate ──────────────────────────────────────────────────────────────
-    // Always use text-to-image: img2img with dark/complex logos bleeds the design
-    // background into the output. Text generation produces clean lifestyle/product shots.
-    // Printify's own renders already show the exact design accurately.
-    const imageUrl = await generateTextMockup(basePrompt, style, isFlat);
+    // If the product has Printify mockup images (flat-lay product shots with the real design
+    // already rendered on the product), use the first one as the img2img reference.
+    // This gives a lifestyle shot that shows the actual design on the garment, not a generic one.
+    // Fall back to text-to-image if no Printify mockups exist yet.
+    const printifyMockups = ((product.mockupUrls as string[] | null) ?? []).filter(
+      (u) => !u.includes("blob.vercel-storage.com") && !u.includes("blob.core.windows.net")
+    );
+    const printifyFlatLayUrl = printifyMockups[0] ?? null;
+
+    let imageUrl: string;
+    if (!isFlat && printifyFlatLayUrl) {
+      // Use Printify flat-lay as img2img source — it shows the real design on the product.
+      // Medium strength (0.65) = keep the product/design, change the background/context to lifestyle.
+      imageUrl = await generateImg2ImgMockup(printifyFlatLayUrl, basePrompt, style, false);
+    } else {
+      imageUrl = await generateTextMockup(basePrompt, style, isFlat);
+    }
 
     // ── Persist to Vercel Blob ────────────────────────────────────────────────
     const imageRes = await fetch(imageUrl);
