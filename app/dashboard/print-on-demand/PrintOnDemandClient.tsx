@@ -653,6 +653,9 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [captions, setCaptions] = useState<string[]>([]);
   const [copiedCaptionIdx, setCopiedCaptionIdx] = useState<number | null>(null);
 
+  // ── Promo video state ────────────────────────────────────────────────────────
+  const [generatingPromoVideo, setGeneratingPromoVideo] = useState(false);
+
   // ── Sync state ───────────────────────────────────────────────────────────────
   const [syncing, setSyncing] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -1222,6 +1225,48 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       setTimeout(() => setCopiedCaptionIdx(null), 2000);
     } catch {
       toast({ title: "Copy failed", variant: "destructive" });
+    }
+  };
+
+  const handleCreatePromoVideo = async () => {
+    if (!selectedProduct) return;
+    setGeneratingPromoVideo(true);
+    try {
+      // Step 1: Generate promo script from product details
+      const scriptRes = await fetch("/api/pod/promo-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: selectedProduct.id }),
+      });
+      const scriptData = await scriptRes.json() as { hook?: string; body?: string; cta?: string; productName?: string; error?: string };
+      if (!scriptRes.ok) throw new Error(scriptData.error ?? "Script generation failed");
+
+      // Step 2: Generate video guide using the script + mockup images as stock images
+      const mockupUrls = (selectedProduct.mockupUrls as string[] | null) ?? [];
+      const guideRes = await fetch("/api/video-guide/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hook: scriptData.hook ?? "",
+          body: scriptData.body ?? "",
+          cta: scriptData.cta ?? "",
+          productName: scriptData.productName ?? selectedProduct.title ?? "",
+          platforms: ["tiktok"],
+          ...(mockupUrls.length > 0 ? { stockImageUrls: mockupUrls.slice(0, 6) } : {}),
+        }),
+      });
+      const guide = await guideRes.json().catch(() => ({}));
+      if (!guideRes.ok) throw new Error(guide.error ?? "Video guide generation failed");
+
+      // Step 3: Store guide in sessionStorage and navigate to video guide
+      sessionStorage.setItem("videoCreationGuide", JSON.stringify({
+        ...guide,
+        scriptTitle: `${selectedProduct.title ?? "Merch"} Promo Video`,
+      }));
+      router.push("/dashboard/digital-products/video-guide");
+    } catch (err) {
+      toast({ title: "Video generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+      setGeneratingPromoVideo(false);
     }
   };
 
@@ -2420,6 +2465,23 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 Generate 3–5 AI mockups in different styles, then use them in TikTok videos and your email list to drive sales.
               </p>
+            </div>
+
+            {/* Promo Video Guide */}
+            <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Promo Video</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Generate a full TikTok/Instagram promo video with AI scenes, voiceover and captions.</p>
+              <Button
+                onClick={handleCreatePromoVideo}
+                disabled={generatingPromoVideo}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2"
+              >
+                {generatingPromoVideo ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />Creating promo video…</>
+                ) : (
+                  <><Sparkles className="w-4 h-4" />Create Promo Video</>
+                )}
+              </Button>
             </div>
 
             {/* TikTok Caption Generator */}
