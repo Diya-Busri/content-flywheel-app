@@ -111,6 +111,64 @@ const PLACEMENT_SUFFIX: Record<string, string> = {
   label:         ", collar folded to clearly show the neck label/tag inside the garment",
 };
 
+// ─── Virtual Try-On model images (neutral poses, diverse models) ─────────────
+// These are fal.ai's own example model images — known to work with CatVTON
+const TRYON_MODELS = [
+  "https://storage.googleapis.com/falserverless/catvton/man5.jpg",
+  "https://storage.googleapis.com/falserverless/catvton/man1.jpg",
+  "https://storage.googleapis.com/falserverless/catvton/woman1.jpg",
+  "https://storage.googleapis.com/falserverless/catvton/woman2.jpg",
+  "https://storage.googleapis.com/falserverless/catvton/man2.jpg",
+  "https://storage.googleapis.com/falserverless/catvton/woman3.jpg",
+];
+
+function randomTryOnModel(): string {
+  return TRYON_MODELS[Math.floor(Math.random() * TRYON_MODELS.length)];
+}
+
+// Map blueprint title to cloth_type for CatVTON
+function getClothType(blueprintTitle: string | null): "upper" | "lower" | "overall" {
+  const t = (blueprintTitle ?? "").toLowerCase();
+  if (t.includes("hoodie") || t.includes("sweatshirt") || t.includes("t-shirt") || t.includes("tee") || t.includes("jacket") || t.includes("top")) return "upper";
+  if (t.includes("jogger") || t.includes("pant") || t.includes("short") || t.includes("legging")) return "lower";
+  return "upper"; // default to upper for most garments
+}
+
+// ─── Virtual Try-On via CatVTON ───────────────────────────────────────────────
+async function generateTryOnMockup(
+  garmentImageUrl: string,
+  blueprintTitle: string | null
+): Promise<string> {
+  const humanImageUrl = randomTryOnModel();
+  const clothType = getClothType(blueprintTitle);
+
+  const res = await fetch("https://fal.run/fal-ai/cat-vton", {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${FAL_API_KEY()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      human_image_url: humanImageUrl,
+      garment_image_url: garmentImageUrl,
+      cloth_type: clothType,
+      image_size: "portrait_4_3",
+      num_inference_steps: 30,
+      guidance_scale: 2.5,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`fal.ai try-on error: ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json() as { image?: { url: string }; images?: Array<{ url: string }> };
+  const url = data.image?.url ?? data.images?.[0]?.url;
+  if (!url) throw new Error("No image returned from try-on");
+  return url;
+}
+
 // ─── img2img — uses the real design as reference ─────────────────────────────
 async function generateImg2ImgMockup(
   designUrl: string,
@@ -249,9 +307,20 @@ export async function POST(req: Request) {
     }
 
     // ── Generate ──────────────────────────────────────────────────────────────
-    // Text-to-image reliably generates a person wearing the garment.
-    // img2img from flat product shots just tweaks the flat image — never generates a person.
-    const imageUrl = await generateTextMockup(basePrompt, style, isFlat);
+    // For lifestyle shots: use CatVTON virtual try-on if we have a Printify product photo.
+    // CatVTON composites the exact garment (with real design) onto a model photo — pixel accurate.
+    // Falls back to text-to-image if no Printify mockup exists yet, or for flat/non-lifestyle styles.
+    const printifyMockups = ((product.mockupUrls as string[] | null) ?? []).filter(
+      (u) => u && !u.includes("blob.vercel-storage.com") && !u.includes("blob.core.windows.net")
+    );
+    const garmentImageUrl = printifyMockups[0] ?? null;
+
+    let imageUrl: string;
+    if (!isFlat && garmentImageUrl) {
+      imageUrl = await generateTryOnMockup(garmentImageUrl, product.blueprintTitle ?? null);
+    } else {
+      imageUrl = await generateTextMockup(basePrompt, style, isFlat);
+    }
 
     // ── Persist to Vercel Blob ────────────────────────────────────────────────
     const imageRes = await fetch(imageUrl);
