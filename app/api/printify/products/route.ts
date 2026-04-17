@@ -132,9 +132,27 @@ export async function PATCH(req: Request) {
     }
 
     // Build Printify product payload
-    const variantList = (
+    let variantList = (
       Array.isArray(variants) && variants.length > 0 ? variants : localProduct.variants ?? []
     ) as Array<{ id: number; price: number; enabled: boolean }>;
+
+    // Auto-fetch variants from Printify catalog if none are saved yet
+    if (variantList.length === 0 && localProduct.blueprintId && localProduct.printProviderId) {
+      try {
+        const catalogVariants = await printifyFetch(
+          `/catalog/blueprints/${localProduct.blueprintId}/print_providers/${localProduct.printProviderId}/variants.json`,
+          settings.printifyApiKey
+        ) as { variants?: Array<{ id: number; title?: string }> };
+        if (catalogVariants.variants && catalogVariants.variants.length > 0) {
+          variantList = catalogVariants.variants.map((v) => ({ id: v.id, price: 2500, enabled: true }));
+          // Save to DB so future syncs don't need to re-fetch
+          await db.update(podProductsTable)
+            .set({ variants: variantList as typeof localProduct.variants })
+            .where(and(eq(podProductsTable.id, productId), eq(podProductsTable.userId, userId)));
+        }
+      } catch { /* Non-fatal — will hit the guard below if still empty */ }
+    }
+
     if (variantList.length === 0) {
       return NextResponse.json({ error: "No variants found. Open the product wizard and complete the Variants step first." }, { status: 400 });
     }
