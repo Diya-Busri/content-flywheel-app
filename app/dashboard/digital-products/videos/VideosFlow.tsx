@@ -217,24 +217,49 @@ export default function VideosFlow() {
         });
       }
 
-      const res = await fetch("/api/video-guide/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          hook: script.hook,
-          body: script.body,
-          cta: script.cta,
-          productName: (productName || "").trim() || undefined,
-          productId: productId || undefined,
-          platforms: selectedPlatformIds.length > 0 ? selectedPlatformIds : ["tiktok"],
-          ...(logoDataUrl && { logoDataUrl }),
+      // Generate guide + voiceover in parallel
+      const fullScriptText = [script.hook, script.body, script.cta].filter(Boolean).join("\n\n");
+      const voiceId = selectedVoiceId || voices[0]?.voice_id || "";
+
+      const [guideRes, voiceoverUrl] = await Promise.all([
+        fetch("/api/video-guide/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hook: script.hook,
+            body: script.body,
+            cta: script.cta,
+            productName: (productName || "").trim() || undefined,
+            productId: productId || undefined,
+            platforms: selectedPlatformIds.length > 0 ? selectedPlatformIds : ["tiktok"],
+            ...(logoDataUrl && { logoDataUrl }),
+          }),
         }),
-      });
-      const guide = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(guide.error || `Request failed: ${res.status}`);
+        voiceId
+          ? fetch("/api/ai-coach/voice-over", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ script: fullScriptText, voiceId }),
+            })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((d: { url?: string } | null) => (typeof d?.url === "string" && d.url.startsWith("http") ? d.url : null))
+              .catch(() => null)
+          : Promise.resolve(null),
+      ]);
+
+      const guide = await guideRes.json().catch(() => ({}));
+      if (!guideRes.ok) {
+        throw new Error(guide.error || `Request failed: ${guideRes.status}`);
       }
-      sessionStorage.setItem("videoCreationGuide", JSON.stringify({ ...guide, scriptTitle: script.title, preferredVoiceId: selectedVoiceId, scriptsForGuide: selectedScripts, productIdForGuide: productId || undefined }));
+      sessionStorage.setItem("videoCreationGuide", JSON.stringify({
+        ...guide,
+        scriptTitle: script.title,
+        preferredVoiceId: selectedVoiceId,
+        scriptsForGuide: selectedScripts,
+        productIdForGuide: productId || undefined,
+        // Pre-inject voiceover so guide opens with audio ready
+        ...(voiceoverUrl ? { timelineVoiceoverUrl: voiceoverUrl } : {}),
+      }));
       setVideoReady(true);
       setGenerateProgress(null);
       // Auto-navigate after 1.8s — user can also click "View Video Guide →" to go instantly
