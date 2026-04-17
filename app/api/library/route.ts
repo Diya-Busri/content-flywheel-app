@@ -214,9 +214,8 @@ export async function GET(request: NextRequest) {
     if (typeFilter === "bundles") {
       items = items.filter((i) => i.type === "product" && i.bundleId != null);
     } else if (typeFilter === "timeline") {
-      items = items.filter(
-        (i) => i.type === "video" && Array.isArray(i.platforms) && i.platforms.includes("video-timeline")
-      );
+      // "My Videos" shows all compiled/exported videos: timeline series AND video-guide (Digital Products, TikTok Shop)
+      items = items.filter((i) => i.type === "video");
     } else if (typeFilter !== "all") {
       // Tab "scripts" sends type=scripts; LibraryItem uses type "script". Tab "products" sends type=products; we use "product".
       const matchType =

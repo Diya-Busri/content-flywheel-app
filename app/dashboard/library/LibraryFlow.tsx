@@ -511,7 +511,9 @@ export default function LibraryFlow() {
 
   const searchQuery = search.trim().toLowerCase();
   const filtered = items.filter((item) => itemMatchesLibrarySearch(item, searchQuery));
-  const timelineSeriesSections = tab === "timeline" ? groupTimelineVideosBySeries(filtered) : [];
+  const timelineOnlyFiltered = tab === "timeline" ? filtered.filter(isTimelineVideoItem) : [];
+  const compiledVideoFiltered = tab === "timeline" ? filtered.filter((i) => !isTimelineVideoItem(i) && i.type === "video") : [];
+  const timelineSeriesSections = tab === "timeline" ? groupTimelineVideosBySeries(timelineOnlyFiltered) : [];
   const timelineHasNamedSeries = timelineSeriesSections.some((s) => s.seriesTitle !== null);
 
   const getEditLink = (item: LibraryItem) => {
@@ -925,6 +927,63 @@ export default function LibraryFlow() {
             </Card>
           ) : tab === "timeline" ? (
             <div className="space-y-10">
+              {/* Compiled videos (TikTok Shop, Digital Products, Video Guides) */}
+              {compiledVideoFiltered.length > 0 && (
+                <section>
+                  {timelineOnlyFiltered.length > 0 && (
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Compiled Videos</h2>
+                  )}
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                    {compiledVideoFiltered.map((video) => {
+                      const downloadUrl = getVideoDownloadUrl(video);
+                      return (
+                        <Card key={video.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
+                          <div className="relative aspect-video bg-gray-200 dark:bg-[#2A2A2A] rounded-t-lg flex items-center justify-center overflow-hidden">
+                            {downloadUrl ? (
+                              <video src={downloadUrl} className="w-full h-full object-cover" muted playsInline />
+                            ) : (
+                              <div className="text-4xl" aria-hidden>🎬</div>
+                            )}
+                          </div>
+                          <CardHeader className="pb-2 pt-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <CardTitle className="text-base truncate text-gray-900 dark:text-white min-w-0">{video.title}</CardTitle>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                                    <MoreVertical className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                                    onClick={() => handleDelete(video)}
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">{formatDate(video.createdAt)}</p>
+                          </CardHeader>
+                          <CardContent className="pt-0 flex gap-2 flex-wrap">
+                            {downloadUrl && (
+                              <Button variant="outline" size="sm" className="flex-1 min-w-0" asChild>
+                                <a href={downloadUrl} download target="_blank" rel="noopener noreferrer">
+                                  <Download className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                                  Download
+                                </a>
+                              </Button>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+              {/* Timeline series videos */}
               {timelineSeriesSections.map((section) => {
                 if (section.items.length === 0) return null;
                 const showHeading =
