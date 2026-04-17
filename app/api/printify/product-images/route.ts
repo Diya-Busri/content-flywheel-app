@@ -60,15 +60,32 @@ export async function GET(req: Request) {
       return NextResponse.json({ mockupUrls: [], message: "No mockups generated yet — try again in a moment" });
     }
 
-    // Extract unique src URLs (Printify may return dupes across variants)
-    const seen = new Set<string>();
-    const mockupUrls: string[] = [];
+    // Group by position and pick one representative image per view type.
+    // Prefer is_default images; fall back to first in group.
+    // This gives us one clean image for each view (Front, Back, Person 1, Person 2, etc.)
+    const byPosition = new Map<string, typeof images[number]>();
     for (const img of images) {
-      if (img.src && !seen.has(img.src)) {
-        seen.add(img.src);
-        mockupUrls.push(img.src);
+      if (!img.src) continue;
+      const pos = img.position ?? "unknown";
+      const existing = byPosition.get(pos);
+      if (!existing || img.is_default) {
+        byPosition.set(pos, img);
       }
     }
+
+    // Order: front first, then back variants, then person/lifestyle, then everything else
+    const POSITION_ORDER = ["front", "back", "back_2", "folded", "front_collar_closeup",
+      "person_1", "person_2", "person_3", "person_4", "person_5", "person_6",
+      "person_7", "person_8", "person_9", "person_10"];
+    const sorted = [...byPosition.entries()].sort(([a], [b]) => {
+      const ai = POSITION_ORDER.indexOf(a);
+      const bi = POSITION_ORDER.indexOf(b);
+      if (ai === -1 && bi === -1) return a.localeCompare(b);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+    const mockupUrls: string[] = sorted.map(([, img]) => img.src);
 
     // Save back to our DB so they persist
     await db
