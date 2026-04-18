@@ -156,7 +156,9 @@ export async function PATCH(req: Request) {
     if (variantList.length === 0) {
       return NextResponse.json({ error: "No variants found. Open the product wizard and complete the Variants step first." }, { status: 400 });
     }
-    const enabledVariantIds = variantList.filter((v) => v.enabled !== false).map((v) => v.id);
+    // Printify requires ALL variant IDs in print_areas.variant_ids — is_enabled on each
+    // variant controls availability for sale. Using only enabled IDs causes error 8251.
+    const allVariantIds = variantList.map((v) => v.id);
 
     const printifyPayload: Record<string, unknown> = {
       title: localProduct.title,
@@ -169,7 +171,7 @@ export async function PATCH(req: Request) {
       })),
       print_areas: [
         {
-          variant_ids: enabledVariantIds,
+          variant_ids: allVariantIds,
           placeholders: (() => {
             // Build placeholders from all placements that have an image.
             // Only include positions Printify accepts as standard placeholder positions.
