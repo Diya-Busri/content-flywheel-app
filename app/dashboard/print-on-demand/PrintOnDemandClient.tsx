@@ -642,6 +642,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [studioSpacing, setStudioSpacing] = useState(0.08);
   const [studioColor, setStudioColor] = useState("#FFFFFF");
   const [studioBg, setStudioBg] = useState("#000000");
+  const [selectedGarmentColor, setSelectedGarmentColor] = useState<string | null>(null);
   const [studioUppercase, setStudioUppercase] = useState(true);
   const [studioExporting, setStudioExporting] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -2501,17 +2502,38 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                     <div className="flex flex-wrap gap-1.5">
                       {uniqueColors.map((color) => {
                         const hex = colorMap[color] ?? null;
+                        const isSelected = selectedGarmentColor === color;
                         return (
-                          <div
+                          <button
                             key={color}
+                            type="button"
                             title={color.charAt(0).toUpperCase() + color.slice(1)}
-                            className="w-6 h-6 rounded-full border-2 border-white dark:border-[#2A2A2A] shadow-sm ring-1 ring-gray-200 dark:ring-[#3A3A3A] cursor-default"
+                            onClick={() => {
+                              setSelectedGarmentColor(color);
+                              if (hex) {
+                                // Determine if garment is dark or light using relative luminance
+                                const r = parseInt(hex.slice(1, 3), 16) / 255;
+                                const g = parseInt(hex.slice(3, 5), 16) / 255;
+                                const b = parseInt(hex.slice(5, 7), 16) / 255;
+                                const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                                const isDark = luminance < 0.45;
+                                setStudioBg(hex);
+                                setStudioColor(isDark ? "#FFFFFF" : "#000000");
+                              }
+                            }}
+                            className={`w-6 h-6 rounded-full border-2 shadow-sm ring-1 transition-all ${isSelected ? "border-orange-500 ring-orange-400 scale-110" : "border-white dark:border-[#2A2A2A] ring-gray-200 dark:ring-[#3A3A3A]"}`}
                             style={{ backgroundColor: hex ?? "#e5e7eb" }}
                           />
                         );
                       })}
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-1.5">{uniqueColors.length} colour{uniqueColors.length !== 1 ? "s" : ""} available</p>
+                    <p className="text-[10px] text-gray-400 mt-1.5">
+                      {selectedGarmentColor ? (
+                        <span className="text-orange-500 font-medium">{selectedGarmentColor.charAt(0).toUpperCase() + selectedGarmentColor.slice(1)} selected</span>
+                      ) : (
+                        <>{uniqueColors.length} colour{uniqueColors.length !== 1 ? "s" : ""} — click to match design</>
+                      )}
+                    </p>
                   </div>
                 );
               })()}
