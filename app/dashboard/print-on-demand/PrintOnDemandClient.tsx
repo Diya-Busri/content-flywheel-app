@@ -654,6 +654,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [generatingLifestyle, setGeneratingLifestyle] = useState(false);
   const [mockupStyle, setMockupStyle] = useState("lifestyle");
   const [mockupPlacement, setMockupPlacement] = useState("front");
+  const [selectedGarmentMockup, setSelectedGarmentMockup] = useState<string | null>(null);
 
   // ── Caption state ─────────────────────────────────────────────────────────────
   const [generatingCaptions, setGeneratingCaptions] = useState(false);
@@ -1266,7 +1267,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       const res = await fetch("/api/ai-mockup/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: selectedProduct.id, style: mockupStyle, placement: mockupPlacement }),
+        body: JSON.stringify({ productId: selectedProduct.id, style: mockupStyle, placement: mockupPlacement, ...(selectedGarmentMockup ? { garmentImageUrl: selectedGarmentMockup } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -1288,7 +1289,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       const res = await fetch("/api/ai-mockup/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: selectedProduct.id, style: "lifestyle", placement: "front" }),
+        body: JSON.stringify({ productId: selectedProduct.id, style: "lifestyle", placement: "front", ...(selectedGarmentMockup ? { garmentImageUrl: selectedGarmentMockup } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -2483,6 +2484,42 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 {!selectedProduct.printifyProductId && (
                   <p className="text-[11px] text-gray-400 italic mb-3">Sync to Printify to access Person 1–6 mockups with your exact design.</p>
                 )}
+
+                {/* Colour selector — pick which Printify product photo to base the lifestyle shot on */}
+                {(() => {
+                  const allUrls = (selectedProduct.mockupUrls as string[] | null) ?? [];
+                  const printifyPhotos = allUrls.filter(
+                    (u) => u && !u.includes("blob.vercel-storage.com") && !u.includes("blob.core.windows.net")
+                  );
+                  if (printifyPhotos.length === 0) return (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mb-2">💡 Sync to Printify first, then get Printify Mockups — this lets the AI use your exact design and colour.</p>
+                  );
+                  return (
+                    <div className="mb-3">
+                      <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-1.5">Pick colour to generate in</p>
+                      <div className="flex flex-wrap gap-2">
+                        {printifyPhotos.map((url, i) => (
+                          <button
+                            key={url}
+                            type="button"
+                            onClick={() => setSelectedGarmentMockup(selectedGarmentMockup === url ? null : url)}
+                            className={`relative w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${selectedGarmentMockup === url ? "border-orange-500 scale-110" : "border-transparent hover:border-orange-300"}`}
+                            title={`Colour option ${i + 1}`}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt={`Colour ${i + 1}`} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                        {selectedGarmentMockup && (
+                          <button type="button" onClick={() => setSelectedGarmentMockup(null)}
+                            className="text-[10px] text-gray-400 hover:text-gray-600 self-center ml-1">
+                            Any
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <Button
                   onClick={handleGenerateLifestyle}

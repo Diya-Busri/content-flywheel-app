@@ -293,7 +293,8 @@ export async function POST(req: Request) {
       productId,
       style = "lifestyle",
       placement = "front",
-    } = await req.json() as { productId?: string; style?: string; placement?: string };
+      garmentImageUrl: garmentImageUrlOverride,
+    } = await req.json() as { productId?: string; style?: string; placement?: string; garmentImageUrl?: string };
 
     if (!productId) return NextResponse.json({ error: "productId required" }, { status: 400 });
 
@@ -338,15 +339,16 @@ export async function POST(req: Request) {
       basePrompt = `${productContext}${brandContext}${placementSuffix}`;
     }
 
-    // ── Resolve best garment image for CatVTON ───────────────────────────────
-    // CatVTON requires a proper product/garment photo (showing the garment shape).
-    // A raw design file (graphic-only PNG) has no garment shape — CatVTON will
-    // invent a garment outline (often a tank top) from the graphic dimensions.
-    // Only use CatVTON when we have a real Printify product mockup.
+    // ── Resolve garment image for CatVTON ────────────────────────────────────
+    // CatVTON requires a proper product/garment photo (showing the garment shape
+    // and the actual design). A raw design graphic has no garment shape and will
+    // produce wrong garment shapes (e.g. tank top instead of hoodie).
+    // Priority: explicit override from client → first Printify flat product photo.
     const allMockupUrls = (product.mockupUrls as string[] | null) ?? [];
-    const printifyMockupUrl = allMockupUrls.find(
-      (u) => u && !u.includes("blob.vercel-storage.com") && !u.includes("blob.core.windows.net")
-    ) ?? null;
+    const printifyMockupUrl = garmentImageUrlOverride ??
+      allMockupUrls.find(
+        (u) => u && !u.includes("blob.vercel-storage.com") && !u.includes("blob.core.windows.net")
+      ) ?? null;
 
     // ── Generate ──────────────────────────────────────────────────────────────
     // Use CatVTON only when a proper Printify product mockup is available.
