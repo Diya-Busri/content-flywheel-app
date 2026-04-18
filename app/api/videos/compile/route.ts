@@ -119,6 +119,14 @@ export async function POST(request: NextRequest) {
           ? "16:9"
           : undefined;
 
+    const VALID_PRESETS = new Set(["ultrafast", "superfast", "veryfast", "faster", "fast", "medium"]);
+    const requestedPreset = typeof (body as { videoPreset?: string }).videoPreset === "string"
+      ? (body as { videoPreset: string }).videoPreset.trim()
+      : null;
+    const callerPreset = requestedPreset && VALID_PRESETS.has(requestedPreset)
+      ? requestedPreset as "ultrafast" | "superfast" | "veryfast" | "faster" | "fast" | "medium"
+      : null;
+
     const guideRaw = (body as { guideScenes?: unknown }).guideScenes;
     let sceneRows: SceneRow[];
     /** Supabase path segment after userId/ */
@@ -335,6 +343,7 @@ export async function POST(request: NextRequest) {
         bgmVolume: BGM_MIX_VOLUME,
         ...(outputAspect ? { outputAspect } : {}),
         ...compileQuality,
+        ...(callerPreset ? { videoPreset: callerPreset } : {}),
       });
       const buffer = await readFile(finalPath);
       const fileName = `compiled-${Date.now()}.mp4`;

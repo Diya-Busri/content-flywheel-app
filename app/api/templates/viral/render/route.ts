@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     const screenshotPage = async (html: string): Promise<Buffer> => {
       const page = await browser.newPage();
       await page.setViewport({ width: vpWidth, height: vpHeight, deviceScaleFactor: 1 });
-      await page.setContent(html, { waitUntil: "networkidle0" });
+      await page.setContent(html, { waitUntil: "domcontentloaded" });
       const buf = Buffer.from(await page.screenshot({ type: "png" }));
       await page.close();
       return buf;

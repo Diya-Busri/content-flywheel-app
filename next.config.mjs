@@ -33,6 +33,9 @@ const nextConfig = {
       "/api/templates/viral/export": [
         "./node_modules/@sparticuz/chromium-min/**/*",
       ],
+      "/api/templates/viral/render": [
+        "./node_modules/@sparticuz/chromium-min/**/*",
+      ],
       "/api/templates/kinetic/export": [
         "./node_modules/@sparticuz/chromium-min/**/*",
       ],

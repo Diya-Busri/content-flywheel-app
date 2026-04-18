@@ -5582,6 +5582,7 @@ export default function TemplateStudioClient() {
                         voiceoverUrl,
                         backgroundMusic: viralBgm,
                         outputAspect: viralFormLength === "long" ? "16:9" : "9:16",
+                        videoPreset: "ultrafast",
                       }),
                     });
                     if (!compileRes.ok) { const j = await compileRes.json().catch(() => ({})); throw new Error((j as {error?:string}).error ?? "Compile failed"); }
