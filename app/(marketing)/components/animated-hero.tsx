@@ -25,7 +25,7 @@ export default function AnimatedHero() {
       <div className="flex flex-col sm:flex-row justify-center gap-3 pt-6">
         <Button asChild size="lg" className="font-medium">
           <Link href="/dashboard">
-            Start Free <ArrowRight className="ml-2 h-4 w-4" />
+            Get Started <ArrowRight className="ml-2 h-4 w-4" />
           </Link>
         </Button>
         <Button asChild size="lg" variant="outline" className="font-medium">
@@ -34,7 +34,7 @@ export default function AnimatedHero() {
           </Link>
         </Button>
       </div>
-      <p className="text-sm text-muted-foreground pt-2">No credit card required · Cancel anytime</p>
+      <p className="text-sm text-muted-foreground pt-2">No per-sale fees · Cancel anytime</p>
     </motion.div>
   );
 } 

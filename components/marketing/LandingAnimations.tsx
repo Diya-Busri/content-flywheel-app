@@ -235,7 +235,7 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
               >
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }}>
                   <Link href="/sign-up" className="px-7 py-3.5 bg-orange-500 hover:bg-orange-400 rounded-xl font-bold text-base inline-flex items-center justify-center gap-2 text-white shadow-xl shadow-orange-500/30 transition-colors">
-                    Start for free <ArrowRight className="h-4 w-4" />
+                    Get Started <ArrowRight className="h-4 w-4" />
                   </Link>
                 </motion.div>
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
@@ -251,7 +251,7 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                 transition={{ duration: 0.6, delay: 0.5 }}
                 className="flex flex-wrap gap-5 text-sm text-white/40"
               >
-                {["No credit card required", "Free trial included", "Cancel anytime"].map((t) => (
+                {["No per-sale fees", "All features included", "Cancel anytime"].map((t) => (
                   <span key={t} className="flex items-center gap-1.5">
                     <Check className="w-4 h-4 text-green-500" /> {t}
                   </span>
@@ -468,7 +468,7 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                   </motion.div>
                   <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                     <Link href="/sign-up" className="inline-flex items-center gap-2 rounded-xl border border-white/10 hover:bg-white/5 px-8 py-4 text-base font-bold text-white transition-colors">
-                      Start free trial
+                      Get Started
                     </Link>
                   </motion.div>
                 </div>
@@ -491,7 +491,7 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                 { value: "sell", q: "How do I sell products and get paid?", a: "Your store connects to Stripe. Buyers pay by card, Stripe sends the money to your account, and we automatically email the buyer their download link." },
                 { value: "fees", q: "Are there any per-sale fees?", a: "No. We charge a flat monthly subscription. You keep everything Stripe sends you (minus Stripe's standard fee of ~1.4% + 20p)." },
                 { value: "email", q: "Is email marketing included?", a: "Yes. Collect subscribers, send broadcasts, and build automated drip sequences. All built in — no Mailchimp or ConvertKit required." },
-                { value: "trial", q: "What's included in the free trial?", a: "Full access to the platform. No credit card required. Test everything before deciding to subscribe." },
+                { value: "start", q: "How do I get started?", a: "Sign up and get immediate access to the full platform. Choose a monthly or annual plan and start building your first digital product right away." },
                 { value: "cancel", q: "Can I cancel anytime?", a: "Yes. Cancel from your dashboard settings at any time. Your subscription stays active until the end of the billing period." },
               ].map((item) => (
                 <AccordionItem key={item.value} value={item.value}
@@ -549,14 +549,14 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                     </span>
                   </h2>
                   <p className="mt-5 text-lg text-white/40 max-w-lg mx-auto">
-                    Join thousands of creators building real income with digital products. Start free — no credit card needed.
+                    Join thousands of creators building real income with digital products. One plan, everything included.
                   </p>
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }} className="mt-8 inline-block">
                     <Link href="/sign-up" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-10 py-4 text-base font-bold text-white shadow-2xl shadow-orange-500/30 transition-colors">
-                      Start creating for free <ArrowRight className="h-5 w-5" />
+                      Start Creating <ArrowRight className="h-5 w-5" />
                     </Link>
                   </motion.div>
-                  <p className="mt-5 text-sm text-white/20">Free trial • No credit card • Cancel anytime</p>
+                  <p className="mt-5 text-sm text-white/20">No per-sale fees • Cancel anytime</p>
                 </div>
               </div>
             </div>

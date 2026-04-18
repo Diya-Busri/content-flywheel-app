@@ -295,7 +295,7 @@ export default function PricingPage() {
                     )}
                   </motion.button>
 
-                  <p className="text-center text-xs text-white/20 mt-3">No credit card required to try</p>
+                  <p className="text-center text-xs text-white/20 mt-3">No per-sale fees. Cancel anytime.</p>
                 </motion.div>
               );
             })}
@@ -392,7 +392,7 @@ export default function PricingPage() {
             <h2 className="text-2xl font-bold text-white text-center mb-8">Questions</h2>
             <div className="space-y-3">
               {[
-                { q: "Is there a free trial?", a: "Yes — you get full access to try the platform before subscribing. No credit card required." },
+                { q: "How do I get started?", a: "Sign up and pick a plan — monthly or annual. You get immediate access to all features from day one." },
                 { q: "Are there per-sale fees?", a: "No. We charge a flat subscription. You keep everything Stripe pays you, minus Stripe's standard card fee (~1.4% + 20p)." },
                 { q: "What happens if I cancel?", a: "Your subscription stays active until the end of the billing period. After that, no further charges." },
                 { q: "Can I switch between monthly and annual?", a: "Yes. Contact us and we'll sort it out, or manage it directly from your billing portal." },

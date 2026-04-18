@@ -76,7 +76,7 @@ export function LandingNavbar() {
               Sign In
             </Link>
             <Link href="/sign-up" className="px-5 py-2.5 bg-orange-500 hover:bg-orange-400 rounded-xl font-bold text-sm text-white transition-all hover:scale-105 shadow-lg shadow-orange-500/25">
-              Start free →
+              Get Started →
             </Link>
           </SignedOut>
           <SignedIn>
@@ -120,7 +120,7 @@ export function LandingNavbar() {
                 Sign In
               </Link>
               <Link href="/sign-up" onClick={() => setMobileOpen(false)} className="rounded-xl px-4 py-3 bg-orange-500 hover:bg-orange-400 font-bold text-center text-white text-sm transition-colors">
-                Start free →
+                Get Started →
               </Link>
             </SignedOut>
             <SignedIn>
