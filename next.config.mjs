@@ -27,6 +27,16 @@ const nextConfig = {
       "ffprobe-static",
       "fluent-ffmpeg",
     ],
+    // Ensure chromium-min binary files (fonts.tar.br etc.) are included in the
+    // Puppeteer routes — Vercel's file tracer misses binary assets in bin/
+    outputFileTracingIncludes: {
+      "/api/templates/viral/export": [
+        "./node_modules/@sparticuz/chromium-min/**/*",
+      ],
+      "/api/templates/kinetic/export": [
+        "./node_modules/@sparticuz/chromium-min/**/*",
+      ],
+    },
     // Exclude puppeteer from API routes that don't use it (reduces deploy bundle; avoids "Deploying outputs" internal error)
     outputFileTracingExcludes: {
       "/api/video-guide/**": ["**/node_modules/puppeteer/**", "**/node_modules/puppeteer-core/**"],

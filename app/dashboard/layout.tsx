@@ -10,6 +10,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { DashboardLayoutClient } from "@/components/dashboard-layout-client";
 import { DashboardSetupError } from "@/components/dashboard-setup-error";
+import { DashboardUpgradeWall } from "@/components/dashboard-upgrade-wall";
 import { getDisabledFeatures } from "@/lib/feature-flags";
 import { getHiddenFeaturesByUseCases, USE_CASES } from "@/lib/use-cases";
 
@@ -84,7 +85,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const isAdmin = adminEmail && userEmail.trim().toLowerCase() === adminEmail;
 
   if (!isAdmin && !hasActiveSubscription(profile)) {
-    redirect("/pricing");
+    return <DashboardUpgradeWall userEmail={userEmail} />;
   }
 
   const disabledFeatures = await getDisabledFeatures(userId);

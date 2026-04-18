@@ -35,8 +35,22 @@ export const createProfile = async (data: InsertProfile) => {
       status: profileData.status || "active"
     });
     
-    const [newProfile] = await db.insert(profilesTable).values(profileData).returning();
-    return newProfile;
+    // Use onConflictDoNothing to handle the race condition where the Clerk webhook
+    // creates the profile at the same time as this fallback call.
+    const [newProfile] = await db
+      .insert(profilesTable)
+      .values(profileData)
+      .onConflictDoNothing()
+      .returning();
+
+    if (newProfile) return newProfile;
+
+    // Profile already existed (webhook beat us) — fetch and return it
+    const [existing] = await db
+      .select()
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, profileData.userId));
+    return existing;
   } catch (error) {
     console.error("Error creating profile:", error);
     throw new Error("Failed to create profile");
