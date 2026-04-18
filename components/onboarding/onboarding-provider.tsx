@@ -32,12 +32,15 @@ type OnboardingProviderProps = {
   markDashboardSeen?: boolean;
   /** When true, mark firstProduct as done */
   hasProduct?: boolean;
+  /** When false, suppress the welcome modal until billing is complete */
+  hasActiveSubscription?: boolean;
 };
 
 export function OnboardingProvider({
   children,
   markDashboardSeen = false,
   hasProduct = false,
+  hasActiveSubscription = false,
 }: OnboardingProviderProps) {
   const pathname = usePathname();
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
@@ -132,7 +135,7 @@ export function OnboardingProvider({
     }
   }, [steps, fetchOnboarding]);
 
-  const showModal = !loading && !onboardingCompleted && steps?.modalDismissed !== true;
+  const showModal = !loading && !onboardingCompleted && steps?.modalDismissed !== true && hasActiveSubscription;
 
   const handleStepComplete = useCallback((step: number) => {
     if (step === 2) {
