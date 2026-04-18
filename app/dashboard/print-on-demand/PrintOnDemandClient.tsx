@@ -673,6 +673,11 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [bulkPrice, setBulkPrice] = useState("");
   const [savingPricing, setSavingPricing] = useState(false);
 
+  // ── Stock limit state ────────────────────────────────────────────────────────
+  const [editingStock, setEditingStock] = useState(false);
+  const [stockLimitInput, setStockLimitInput] = useState("");
+  const [savingStock, setSavingStock] = useState(false);
+
   // ── Printify connect state ───────────────────────────────────────────────────
   const [apiKey, setApiKey] = useState("");
   const [connecting, setConnecting] = useState(false);
@@ -1160,6 +1165,29 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
     } finally {
       setSavingPricing(false);
+    }
+  };
+
+  const handleSaveStockLimit = async (limitValue: number | null) => {
+    if (!selectedProduct) return;
+    setSavingStock(true);
+    try {
+      const res = await fetch("/api/pod/update-product", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: selectedProduct.id, stockLimit: limitValue }),
+      });
+      if (!res.ok) throw new Error("Failed to save stock limit");
+      const updated = { ...selectedProduct, stockLimit: limitValue } as SelectPodProduct;
+      setSelectedProduct(updated);
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setEditingStock(false);
+      setStockLimitInput("");
+      toast({ title: limitValue ? `Limited to ${limitValue} units` : "Set to unlimited" });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setSavingStock(false);
     }
   };
 
@@ -2578,6 +2606,11 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 <span className={`text-xs font-medium px-2 py-1 rounded-full ${selectedProduct.printifyStatus === "synced" ? "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400" : "bg-gray-100 text-gray-500 dark:bg-[#2A2A2A] dark:text-gray-400"}`}>
                   {selectedProduct.printifyStatus === "synced" ? "✓ Synced to Printify" : "Draft"}
                 </span>
+                {selectedProduct.stockLimit && (
+                  <span className="text-xs font-medium px-2 py-1 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400">
+                    🔒 Limited {selectedProduct.stockLimit}
+                  </span>
+                )}
               </div>
               {selectedProduct.designFileUrl && (
                 <button
@@ -2713,6 +2746,74 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 </div>
               );
             })()}
+
+            {/* Stock Limit */}
+            <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">📦 Stock Limit</p>
+                  {!editingStock && (
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white mt-0.5">
+                      {selectedProduct.stockLimit ? `Limited to ${selectedProduct.stockLimit} units` : "Unlimited"}
+                    </p>
+                  )}
+                </div>
+                {!editingStock && (
+                  <button
+                    type="button"
+                    onClick={() => { setEditingStock(true); setStockLimitInput(selectedProduct.stockLimit ? String(selectedProduct.stockLimit) : ""); }}
+                    className="text-xs font-medium text-orange-500 hover:text-orange-600 border border-orange-200 dark:border-orange-800/50 rounded-lg px-3 py-1.5"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+              {editingStock && (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setStockLimitInput(""); }}
+                      className={`flex-1 text-xs font-medium rounded-xl py-2 border transition-all ${stockLimitInput === "" ? "bg-orange-500 text-white border-orange-500" : "border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-gray-400"}`}
+                    >
+                      Unlimited
+                    </button>
+                    {["50", "100", "250", "500"].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setStockLimitInput(n)}
+                        className={`flex-1 text-xs font-medium rounded-xl py-2 border transition-all ${stockLimitInput === n ? "bg-orange-500 text-white border-orange-500" : "border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-gray-400"}`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      value={stockLimitInput}
+                      onChange={(e) => setStockLimitInput(e.target.value)}
+                      placeholder="Custom number (or leave blank for unlimited)"
+                      className="flex-1 border border-gray-200 dark:border-[#2A2A2A] rounded-xl px-3 py-2 text-sm bg-transparent text-gray-900 dark:text-white outline-none"
+                    />
+                    <Button
+                      onClick={() => handleSaveStockLimit(stockLimitInput ? parseInt(stockLimitInput, 10) : null)}
+                      disabled={savingStock}
+                      className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5 shrink-0"
+                    >
+                      {savingStock ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                      Save
+                    </Button>
+                    <button type="button" onClick={() => setEditingStock(false)} className="text-xs text-gray-400 hover:text-gray-600 shrink-0">Cancel</button>
+                  </div>
+                </div>
+              )}
+              {selectedProduct.stockLimit && !editingStock && (
+                <p className="text-[10px] text-gray-400 mt-1">This is a limited drop — you control when to close sales manually via Printify.</p>
+              )}
+            </div>
 
             <div className="rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/10 border border-orange-100 dark:border-orange-900/30 p-4">
               <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-2">Marketing Tip</p>

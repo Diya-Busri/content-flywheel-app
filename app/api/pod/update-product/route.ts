@@ -14,14 +14,16 @@ export async function PATCH(req: Request) {
       productId: string;
       blueprintImageUrl?: string;
       variants?: Array<{ id: number; price: number; enabled?: boolean; title?: string }>;
+      stockLimit?: number | null;
     };
-    const { productId, blueprintImageUrl, variants } = body;
+    const { productId, blueprintImageUrl, variants, stockLimit } = body;
 
     if (!productId) return NextResponse.json({ error: "productId required" }, { status: 400 });
 
     const updateFields: Record<string, unknown> = {};
     if (blueprintImageUrl !== undefined) updateFields.blueprintImageUrl = blueprintImageUrl;
     if (variants !== undefined) updateFields.variants = variants;
+    if (stockLimit !== undefined) updateFields.stockLimit = stockLimit;
 
     if (Object.keys(updateFields).length === 0) {
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });

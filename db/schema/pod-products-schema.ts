@@ -40,6 +40,9 @@ export const podProductsTable = pgTable("pod_products", {
     enabled: boolean;
   }>>().default([]),
 
+  // Limited edition / stock
+  stockLimit: integer("stock_limit"),   // null = unlimited
+
   // Status
   status: text("status").default("draft"), // draft | ready | published
 
