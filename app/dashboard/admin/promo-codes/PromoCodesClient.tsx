@@ -17,9 +17,8 @@ function randomCode(): string {
 }
 
 function formatDiscount(code: SelectPromoCode): string {
-  return code.discountType === "percent"
-    ? `${code.discountValue}% off`
-    : `£${code.discountValue} off`;
+  if (code.discountPercent > 0) return `${code.discountPercent}% off`;
+  return `£${(code.discountAmount / 100).toFixed(2)} off`;
 }
 
 function planLabel(plan: string): string {
@@ -331,21 +330,21 @@ export default function PromoCodesClient({ initialCodes }: Props) {
                 <td className="px-4 py-3">
                   <div className="flex flex-col gap-0.5">
                     <span className="text-gray-700 font-medium">
-                      {c.uses} / {c.maxUses ?? "∞"}
+                      {c.usedCount} / {c.maxUses ?? "∞"}
                     </span>
-                    {c.uses === 0 ? (
+                    {c.usedCount === 0 ? (
                       <span className="text-xs text-gray-400">Not used yet</span>
-                    ) : c.maxUses !== null && c.uses >= c.maxUses ? (
+                    ) : c.maxUses !== null && c.usedCount >= c.maxUses ? (
                       <span className="text-xs text-red-500 font-medium">Limit reached</span>
                     ) : (
-                      <span className="text-xs text-amber-600 font-medium">{c.uses} use{c.uses !== 1 ? "s" : ""}</span>
+                      <span className="text-xs text-amber-600 font-medium">{c.usedCount} use{c.usedCount !== 1 ? "s" : ""}</span>
                     )}
                   </div>
                 </td>
                 <td className="px-4 py-3">
                   {(() => {
                     const isExpired = c.expiresAt && new Date(c.expiresAt) < new Date();
-                    const isExhausted = c.maxUses !== null && c.uses >= c.maxUses;
+                    const isExhausted = c.maxUses !== null && c.usedCount >= c.maxUses;
                     if (c.status !== "active" || isExpired || isExhausted) {
                       const label = isExpired ? "Expired" : isExhausted ? "Exhausted" : "Inactive";
                       return (
