@@ -199,22 +199,68 @@ export async function PATCH(req: Request) {
 
     let printifyProductId = localProduct.printifyProductId;
 
-    if (printifyProductId) {
-      // Update existing Printify product
-      await printifyFetch(
-        `/shops/${resolvedShopId}/products/${printifyProductId}.json`,
-        settings.printifyApiKey,
-        { method: "PUT", body: JSON.stringify(printifyPayload) }
-      );
-    } else {
-      // Create new Printify product
-      const created = await printifyFetch(
-        `/shops/${resolvedShopId}/products.json`,
-        settings.printifyApiKey,
-        { method: "POST", body: JSON.stringify(printifyPayload) }
-      );
-      printifyProductId = created.id;
+    /** Remap sleeve position names if Printify rejects them (some blueprints use sleeve_left/sleeve_right, others use left_sleeve/right_sleeve) */
+    function remapSleevePositions(payload: Record<string, unknown>): Record<string, unknown> {
+      const printAreas = payload.print_areas as Array<{ variant_ids: number[]; placeholders: Array<{ position: string; images: unknown[] }> }>;
+      return {
+        ...payload,
+        print_areas: printAreas.map((pa) => ({
+          ...pa,
+          placeholders: pa.placeholders.map((ph) => ({
+            ...ph,
+            position:
+              ph.position === "left_sleeve" ? "sleeve_left"
+              : ph.position === "right_sleeve" ? "sleeve_right"
+              : ph.position === "sleeve_left" ? "left_sleeve"
+              : ph.position === "sleeve_right" ? "right_sleeve"
+              : ph.position,
+          })),
+        })),
+      };
     }
+
+    async function printifySync(payload: Record<string, unknown>): Promise<string> {
+      const isPlaceholderError = (err: unknown) =>
+        err instanceof Error && err.message.includes("422") && err.message.toLowerCase().includes("placeholder");
+
+      if (printifyProductId) {
+        try {
+          await printifyFetch(
+            `/shops/${resolvedShopId}/products/${printifyProductId}.json`,
+            settings.printifyApiKey,
+            { method: "PUT", body: JSON.stringify(payload) }
+          );
+        } catch (err) {
+          if (!isPlaceholderError(err)) throw err;
+          // Retry with remapped sleeve position names
+          await printifyFetch(
+            `/shops/${resolvedShopId}/products/${printifyProductId}.json`,
+            settings.printifyApiKey,
+            { method: "PUT", body: JSON.stringify(remapSleevePositions(payload)) }
+          );
+        }
+        return printifyProductId;
+      } else {
+        let created: { id: string };
+        try {
+          created = await printifyFetch(
+            `/shops/${resolvedShopId}/products.json`,
+            settings.printifyApiKey,
+            { method: "POST", body: JSON.stringify(payload) }
+          );
+        } catch (err) {
+          if (!isPlaceholderError(err)) throw err;
+          created = await printifyFetch(
+            `/shops/${resolvedShopId}/products.json`,
+            settings.printifyApiKey,
+            { method: "POST", body: JSON.stringify(remapSleevePositions(payload)) }
+          );
+        }
+        return created.id;
+      }
+    }
+
+    printifyProductId = await printifySync(printifyPayload);
 
     // Auto-fetch Printify's generated mockup images straight after sync
     let printifyMockupUrls: string[] = [];
