@@ -276,13 +276,14 @@ async function renderImageSegment(
     kenZoomMax <= 2;
   const delta = useSubtleZoom ? kenZoomMax! - 1 : 0;
   /** Comma inside max() must be escaped for the filtergraph. */
-  // Zoom speed: 0.0025/frame → ~37% zoom over 150 frames (6s), clearly visible motion.
-  // Pan: drift 4% of width left→right so the image never looks truly frozen.
+  // Scale source to 2× output so zoompan has room to zoom up to 1.6× without hitting edges.
+  // Centering formula: x=(iw-outW/zoom)/2, y=(ih-outH/zoom)/2 keeps the crop centred at all zoom levels.
+  // (The old formula iw/2-(iw/zoom/2) was wrong when iw >> outW — produced a tiny sliver for 9:16.)
   const kenBurnsToYuv = useSubtleZoom
     ? `${coverCrop},setsar=1:1,` +
-      `scale=8000:-1,zoompan=z='1+${delta}*on/max(1\\,${dFrames}-1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${dFrames}:s=${width}x${height}:fps=${FPS},format=yuv420p`
+      `scale=iw*2:ih*2,zoompan=z='1+${delta}*on/max(1\\,${dFrames}-1)':x='(iw-${width}/zoom)/2':y='(ih-${height}/zoom)/2':d=${dFrames}:s=${width}x${height}:fps=${FPS},format=yuv420p`
     : `${coverCrop},setsar=1:1,` +
-      `scale=8000:-1,zoompan=z='min(zoom+0.0025,1.6)':x='iw/2-(iw/zoom/2)+iw*0.04*on/max(1\\,${dFrames}-1)':y='ih/2-(ih/zoom/2)':d=${dFrames}:s=${width}x${height}:fps=${FPS},format=yuv420p`;
+      `scale=iw*2:ih*2,zoompan=z='min(zoom+0.0025,1.5)':x='(iw-${width}/zoom)/2':y='(ih-${height}/zoom)/2':d=${dFrames}:s=${width}x${height}:fps=${FPS},format=yuv420p`;
   let baseVf = opts?.staticShot ? staticToYuv : kenBurnsToYuv;
   let vf = baseVf;
   if (dialogueLine?.trim()) {

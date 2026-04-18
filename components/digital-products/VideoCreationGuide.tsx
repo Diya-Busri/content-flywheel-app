@@ -1411,10 +1411,12 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             script_text?: string;
             caption?: string;
             voiceover_url?: string;
+            disableKenBurns?: boolean;
           } = {
             duration: VIDEO_GUIDE_TIMELINE_SCENE_SEC,
             image_url,
             video_url,
+            disableKenBurns: true,
           };
           if (caption) {
             row.script_text = caption;
@@ -1460,6 +1462,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           duration: 4,
           image_url: productThumbnailUrl,
           video_url: null,
+          disableKenBurns: true,
         });
       }
 
@@ -1743,7 +1746,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           if (!image_url) return null;
           const vo = (isHttp(voUrls[i]) ? voUrls[i] : null) ?? (isHttp(guideCoachVoiceoverUrls[i]) ? guideCoachVoiceoverUrls[i].trim() : null);
           const caption = buildGuideSceneCaptionText(i).trim();
-          return { duration: VIDEO_GUIDE_TIMELINE_SCENE_SEC, image_url, video_url: null as string | null, ...(caption ? { script_text: caption, caption } : {}), ...(vo ? { voiceover_url: vo } : {}) };
+          return { duration: VIDEO_GUIDE_TIMELINE_SCENE_SEC, image_url, video_url: null as string | null, disableKenBurns: true as const, ...(caption ? { script_text: caption, caption } : {}), ...(vo ? { voiceover_url: vo } : {}) };
         })
         .filter((r): r is NonNullable<typeof r> => r !== null);
 
