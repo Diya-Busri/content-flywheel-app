@@ -96,7 +96,7 @@ async function runExport(jobId: string, userId: string, params: {
     const screenshotHtml = async (html: string) => {
       const page = await browser.newPage();
       await page.setViewport({ width: vpWidth, height: vpHeight, deviceScaleFactor: 1 });
-      await page.setContent(html, { waitUntil: "networkidle0" });
+      await page.setContent(html, { waitUntil: "domcontentloaded" });
       const imgPath = join(workDir, `slide_${fileCounter++}.png`);
       await page.screenshot({ path: imgPath as `${string}.png`, type: "png" });
       await page.close();
