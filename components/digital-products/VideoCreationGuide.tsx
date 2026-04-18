@@ -45,6 +45,7 @@ import {
   ExternalLink,
   Trash2,
   Pause,
+  Sparkles,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -500,6 +501,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       .then((d: { balance?: number }) => setCreditBalance(d.balance ?? 0))
       .catch(() => setCreditBalance(0));
   }, []);
+  /** "Generate Everything" one-tap flow: images → voiceovers → compile MP4 */
+  const [autoGeneratingAll, setAutoGeneratingAll] = useState(false);
+  const [autoGeneratePhase, setAutoGeneratePhase] = useState<string | null>(null);
   /** When true, we auto-export once all animated scene videos + voiceovers are ready. */
   const [autoExportWhenAnimationsReady, setAutoExportWhenAnimationsReady] = useState(false);
   const autoExportStartedRef = useRef(false);
@@ -1676,6 +1680,108 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     },
     [generateVoiceover, libraryScriptId]
   );
+
+  /**
+   * One-tap "Generate Everything": images → per-scene voiceovers → compile MP4.
+   * Skips steps that are already done.
+   */
+  const handleGenerateEverything = useCallback(async () => {
+    if (scenes.length === 0) {
+      toast({ title: "No scenes", description: "Add a scene breakdown first.", variant: "destructive" });
+      return;
+    }
+    setAutoGeneratingAll(true);
+    try {
+      // Step 1: Generate images (skip scenes that already have one)
+      setAutoGeneratePhase("Generating images…");
+      const mergedImgUrls: Record<number, string> = { ...guideSceneImageUrls };
+      for (let i = 0; i < scenes.length; i++) {
+        if (mergedImgUrls[i]?.trim()) continue;
+        setAutoGeneratePhase(`Generating image ${i + 1} of ${scenes.length}…`);
+        setGuideSceneImageLoadingIndex(i);
+        try {
+          const url = await fetchGuideSceneImageUrl(i);
+          if (url) { mergedImgUrls[i] = url; setGuideSceneImageUrls((prev) => ({ ...prev, [i]: url })); }
+        } catch { /* non-fatal */ }
+      }
+      setGuideSceneImageLoadingIndex(null);
+
+      // Step 2: Per-scene voiceovers (skip scenes that already have one)
+      setAutoGeneratePhase("Generating voiceovers…");
+      const texts = getSceneTexts();
+      const voUrls: (string | null)[] = scenes.map((_, i) => guideCoachVoiceoverUrls[i]?.trim() || perSceneUrls[i]?.trim() || null);
+      for (let i = 0; i < scenes.length; i++) {
+        if (voUrls[i]) continue;
+        setAutoGeneratePhase(`Generating voiceover ${i + 1} of ${scenes.length}…`);
+        await generateOneSceneVoiceover(i, texts[i], voUrls);
+        if (voUrls[i]) setGuideCoachVoiceoverUrls((prev) => ({ ...prev, [i]: voUrls[i]! }));
+      }
+
+      // Step 3: Compile MP4
+      setAutoGeneratePhase("Compiling video…");
+      const isHttp = (s: string | null | undefined) => { const t = (s ?? "").trim(); return t.startsWith("http://") || t.startsWith("https://"); };
+      const guideScenes = scenes
+        .map((_, i) => {
+          const image_url = isHttp(mergedImgUrls[i]) ? mergedImgUrls[i].trim() : null;
+          if (!image_url) return null;
+          const vo = (isHttp(voUrls[i]) ? voUrls[i] : null) ?? (isHttp(guideCoachVoiceoverUrls[i]) ? guideCoachVoiceoverUrls[i].trim() : null);
+          const caption = buildGuideSceneCaptionText(i).trim();
+          return { duration: VIDEO_GUIDE_TIMELINE_SCENE_SEC, image_url, video_url: null as string | null, ...(caption ? { script_text: caption, caption } : {}), ...(vo ? { voiceover_url: vo } : {}) };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+
+      if (guideScenes.length === 0) {
+        toast({ title: "No scene images", description: "Image generation produced no results. Try again.", variant: "destructive" });
+        return;
+      }
+
+      const compileRes = await fetch("/api/videos/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenes: guideScenes }),
+      });
+      if (!compileRes.ok) {
+        const err = await compileRes.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || "Compile failed");
+      }
+      const compileData = await compileRes.json() as { videoUrl?: string; jobId?: string };
+
+      let finalVideoUrl = compileData.videoUrl;
+      if (!finalVideoUrl && compileData.jobId) {
+        setAutoGeneratePhase("Compiling… (this may take a minute)");
+        for (let poll = 0; poll < 60; poll++) {
+          await new Promise((r) => setTimeout(r, 5000));
+          const statusRes = await fetch(`/api/videos/compile/run?jobId=${compileData.jobId}`);
+          const statusData = await statusRes.json() as { status?: string; videoUrl?: string };
+          if (statusData.videoUrl) { finalVideoUrl = statusData.videoUrl; break; }
+          if (statusData.status === "failed") throw new Error("Video compile failed");
+        }
+      }
+
+      if (finalVideoUrl) {
+        setLastCompiledVideoUrl(finalVideoUrl);
+        toast({ title: "Video ready!", description: "Your compiled MP4 is ready to download." });
+      } else {
+        toast({ title: "Compile timed out", description: "The video is still processing — check back shortly.", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Generation failed", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
+    } finally {
+      setAutoGeneratingAll(false);
+      setAutoGeneratePhase(null);
+      setGuideSceneImageLoadingIndex(null);
+    }
+  }, [
+    scenes,
+    guideSceneImageUrls,
+    guideCoachVoiceoverUrls,
+    perSceneUrls,
+    fetchGuideSceneImageUrl,
+    getSceneTexts,
+    generateOneSceneVoiceover,
+    buildGuideSceneCaptionText,
+    toast,
+  ]);
 
   const handleGeneratePerSceneVoiceover = useCallback(async () => {
     const texts = getSceneTexts();
@@ -3214,11 +3320,44 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               );
             })}
 
+            {/* ── Generate Everything button ─────────────────────────────── */}
+            <Card className="mt-6 border-2 border-orange-400 dark:border-orange-500 bg-orange-50 dark:bg-orange-950/20">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-foreground flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-orange-500" />
+                      Generate Everything
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-muted-foreground mt-1">
+                      Auto-generate images + voiceovers + compile MP4 in one go.
+                    </p>
+                    {autoGeneratePhase && (
+                      <p className="text-xs text-orange-600 dark:text-orange-400 mt-1.5 animate-pulse">{autoGeneratePhase}</p>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="gap-2 bg-orange-500 hover:bg-orange-600 text-white shrink-0"
+                    onClick={handleGenerateEverything}
+                    disabled={autoGeneratingAll || scenes.length === 0}
+                  >
+                    {autoGeneratingAll ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" />Generating…</>
+                    ) : (
+                      <><Sparkles className="w-4 h-4" />Generate Everything</>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {(() => {
               const someSceneHasMedia = scenes.some((_, i) => !!(guideSceneImageUrls[i]?.trim() || guideSceneVideoUrls[i]?.trim()));
               const allScenesHaveMedia = scenes.length > 0 && scenes.every((_, i) => !!(guideSceneImageUrls[i]?.trim() || guideSceneVideoUrls[i]?.trim()));
               return (
-                <Card className={`mt-6 border-2 transition-colors ${allScenesHaveMedia ? "border-orange-400 dark:border-orange-500 bg-orange-50 dark:bg-orange-950/20" : "border-gray-200 dark:border-border bg-gray-50 dark:bg-card"}`}>
+                <Card className={`mt-4 border-2 transition-colors ${allScenesHaveMedia ? "border-gray-300 dark:border-border bg-gray-50 dark:bg-card" : "border-gray-200 dark:border-border bg-gray-50 dark:bg-card"}`}>
                   <CardContent className="pt-6 pb-6">
                     <div className="flex flex-col gap-4">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -3228,7 +3367,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                             Sync &amp; Export Full Video
                           </p>
                           <p className="text-sm text-gray-600 dark:text-muted-foreground mt-1">
-                            Once your scenes have images and animations, compile them all into one MP4 to download and post.
+                            Once your scenes have images, compile them all into one MP4 to download and post.
                           </p>
                           {!canCompileServerSideVoice && someSceneHasMedia && (
                             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5">
