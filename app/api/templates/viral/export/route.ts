@@ -107,19 +107,19 @@ async function runExport(jobId: string, userId: string, params: {
       if (item.kind === "intro") {
         const html = is16x9 ? renderIntroSlide16x9(vt, topic, isQuiz, rounds.length) : renderIntroSlide(vt, topic, isQuiz, rounds.length);
         const imgPath = await screenshotHtml(html);
-        compileScenes.push({ duration: slideDuration, image_url: null, video_url: null, localImagePath: imgPath });
+        compileScenes.push({ duration: slideDuration, image_url: null, video_url: null, localImagePath: imgPath, disableKenBurns: true });
         continue;
       }
       if (item.kind === "outro") {
         const html = is16x9 ? renderOutroSlide16x9(vt, topic, isQuiz) : renderOutroSlide(vt, topic, isQuiz);
         const imgPath = await screenshotHtml(html);
-        compileScenes.push({ duration: slideDuration, image_url: null, video_url: null, localImagePath: imgPath });
+        compileScenes.push({ duration: slideDuration, image_url: null, video_url: null, localImagePath: imgPath, disableKenBurns: true });
         continue;
       }
       if (item.kind === "cta") {
         const html = is16x9 ? renderCTASlide16x9(vt, "mid") : renderCTASlide(vt, "mid");
         const imgPath = await screenshotHtml(html);
-        compileScenes.push({ duration: slideDuration, image_url: null, video_url: null, localImagePath: imgPath });
+        compileScenes.push({ duration: slideDuration, image_url: null, video_url: null, localImagePath: imgPath, disableKenBurns: true });
         continue;
       }
       const i = item.roundIndex;
@@ -139,10 +139,10 @@ async function runExport(jobId: string, userId: string, params: {
           ? renderQuizSlide16x9(vt, r.question ?? "", r.options ?? [], r.correctIndex ?? 0, r.explanation, r.emoji, i, rounds.length, true)
           : renderQuizSlide(vt, r.question ?? "", r.options ?? [], r.correctIndex ?? 0, r.explanation, i, rounds.length, true);
         const revealedPath = await screenshotHtml(revealedHtml);
-        compileScenes.push({ duration: Math.round(slideDuration / 2), image_url: null, video_url: null, localImagePath: imgPath });
-        compileScenes.push({ duration: Math.round(slideDuration / 2), image_url: null, video_url: null, localImagePath: revealedPath });
+        compileScenes.push({ duration: Math.round(slideDuration / 2), image_url: null, video_url: null, localImagePath: imgPath, disableKenBurns: true });
+        compileScenes.push({ duration: Math.round(slideDuration / 2), image_url: null, video_url: null, localImagePath: revealedPath, disableKenBurns: true });
       } else {
-        compileScenes.push({ duration: slideDuration, image_url: null, video_url: null, localImagePath: imgPath });
+        compileScenes.push({ duration: slideDuration, image_url: null, video_url: null, localImagePath: imgPath, disableKenBurns: true });
       }
     }
 
@@ -155,6 +155,8 @@ async function runExport(jobId: string, userId: string, params: {
       outputAspect: is16x9 ? "16:9" : "9:16",
       bgmPath,
       bgmVolume: BGM_MIX_VOLUME,
+      videoPreset: "ultrafast",
+      crf: 28,
     });
 
     // Upload to Supabase

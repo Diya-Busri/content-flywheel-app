@@ -5581,10 +5581,16 @@ export default function TemplateStudioClient() {
                       if (!poll.ok) continue;
                       const job = await poll.json() as { status: string; videoUrl?: string; error?: string };
                       if (job.status === "completed" && job.videoUrl) {
+                        // Fetch as blob first — <a download> is ignored for cross-origin URLs
+                        const blob = await fetch(job.videoUrl).then(r => r.blob());
+                        const blobUrl = URL.createObjectURL(blob);
                         const a = document.createElement("a");
-                        a.href = job.videoUrl;
+                        a.href = blobUrl;
                         a.download = `${buildViralExportFilenameBase(viralData.topic || "", seriesShowTitle, episodeNumber)}.mp4`;
+                        document.body.appendChild(a);
                         a.click();
+                        document.body.removeChild(a);
+                        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
                         toast({ title: "MP4 ready", description: "Check your Downloads folder." });
                         return;
                       }
