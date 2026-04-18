@@ -668,6 +668,11 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [publishing, setPublishing] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  // ── Pricing editor state ─────────────────────────────────────────────────────
+  const [editingPricing, setEditingPricing] = useState(false);
+  const [bulkPrice, setBulkPrice] = useState("");
+  const [savingPricing, setSavingPricing] = useState(false);
+
   // ── Printify connect state ───────────────────────────────────────────────────
   const [apiKey, setApiKey] = useState("");
   const [connecting, setConnecting] = useState(false);
@@ -1124,6 +1129,37 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       toast({ title: "Sync failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSavePricing = async () => {
+    if (!selectedProduct) return;
+    const priceVal = parseFloat(bulkPrice);
+    if (isNaN(priceVal) || priceVal <= 0) {
+      toast({ title: "Enter a valid price", variant: "destructive" });
+      return;
+    }
+    setSavingPricing(true);
+    try {
+      const storedVariants = (selectedProduct.variants as Array<{ id: number; price: number; title?: string; enabled?: boolean }> | null) ?? [];
+      const updatedVariants = storedVariants.map((v) => ({ ...v, price: Math.round(priceVal * 100) }));
+      // Save to DB
+      const res = await fetch("/api/pod/update-product", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: selectedProduct.id, variants: updatedVariants }),
+      });
+      if (!res.ok) throw new Error("Failed to save pricing");
+      const updated = { ...selectedProduct, variants: updatedVariants } as SelectPodProduct;
+      setSelectedProduct(updated);
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setEditingPricing(false);
+      setBulkPrice("");
+      toast({ title: "Pricing saved!", description: connected ? "Re-sync to Printify to apply the new prices." : "Prices updated." });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setSavingPricing(false);
     }
   };
 
@@ -2604,16 +2640,76 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               )}
             </div>
 
-            {/* Profit Calculator */}
+            {/* Pricing Editor + Profit Calculator */}
             {(() => {
               const storedVariants = (selectedProduct.variants as Array<{ id: number; price: number; title?: string; enabled?: boolean }> | null) ?? [];
               const enabledVariants = storedVariants.filter(v => v.enabled !== false && v.price > 0);
               if (enabledVariants.length === 0) return null;
               const avgPrice = enabledVariants.reduce((s, v) => s + v.price, 0) / enabledVariants.length / 100;
               return (
-                <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">💰 Profit Calculator</p>
-                  <ProfitCalculator avgSalePrice={avgPrice} />
+                <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4 space-y-4">
+                  {/* Sale price row */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">💰 Sale Price</p>
+                      {!editingPricing && (
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white mt-0.5">£{avgPrice.toFixed(2)}</p>
+                      )}
+                    </div>
+                    {!editingPricing && (
+                      <button
+                        type="button"
+                        onClick={() => { setEditingPricing(true); setBulkPrice(avgPrice.toFixed(2)); }}
+                        className="text-xs font-medium text-orange-500 hover:text-orange-600 border border-orange-200 dark:border-orange-800/50 rounded-lg px-3 py-1.5"
+                      >
+                        Edit Price
+                      </button>
+                    )}
+                  </div>
+
+                  {editingPricing && (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Set price for all variants</p>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 flex-1 border border-gray-200 dark:border-[#2A2A2A] rounded-xl px-3 py-2">
+                            <span className="text-sm font-semibold text-gray-500">£</span>
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              value={bulkPrice}
+                              onChange={(e) => setBulkPrice(e.target.value)}
+                              className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
+                              placeholder="25.00"
+                              autoFocus
+                            />
+                          </div>
+                          <Button
+                            onClick={handleSavePricing}
+                            disabled={savingPricing}
+                            className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5 shrink-0"
+                          >
+                            {savingPricing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                            Save
+                          </Button>
+                          <button
+                            type="button"
+                            onClick={() => { setEditingPricing(false); setBulkPrice(""); }}
+                            className="text-xs text-gray-400 hover:text-gray-600 shrink-0"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">{storedVariants.length} variant{storedVariants.length !== 1 ? "s" : ""} — all set to the same price. Re-sync after saving to update Printify.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Profit Calculator */}
+                  <div className="pt-1 border-t border-gray-100 dark:border-[#2A2A2A]">
+                    <ProfitCalculator avgSalePrice={avgPrice} />
+                  </div>
                 </div>
               );
             })()}
