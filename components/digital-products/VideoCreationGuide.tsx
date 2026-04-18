@@ -1085,8 +1085,24 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     [getSceneTexts, scenes, stripMarkdown]
   );
 
+  // Product mockup URLs injected by the POD promo flow — cycle through these instead of
+  // calling the generic AI image generator, so every scene shows the actual product.
+  const podProductImageUrls = useMemo<string[]>(() => {
+    if (!Array.isArray(guide.scenes)) return [];
+    return guide.scenes
+      .map((s) => (s as Record<string, unknown>).image_url)
+      .filter((u): u is string => typeof u === "string" && u.trim().startsWith("http"))
+      .filter((u, idx, arr) => arr.indexOf(u) === idx); // dedupe
+  }, [guide.scenes]);
+
   const fetchGuideSceneImageUrl = useCallback(
     async (i: number): Promise<string | null> => {
+      // If this guide was launched from a POD product (scenes have image_url), cycle through
+      // the product's own mockup images rather than generating random AI images.
+      if (podProductImageUrls.length > 0) {
+        return podProductImageUrls[i % podProductImageUrls.length];
+      }
+
       const scene = scenes[i];
       if (!scene) return null;
       const prompt = getSceneFullPrompt(scene).trim();
@@ -1119,7 +1135,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       }
       return url;
     },
-    [scenes, getSceneFullPrompt, toast, wrapVideoGuideImagePromptForDalle]
+    [podProductImageUrls, scenes, getSceneFullPrompt, toast, wrapVideoGuideImagePromptForDalle]
   );
 
   const allAnimatedVideosReady = scenes.length > 0 && scenes.every((_, i) => !!guideSceneVideoUrls[i]?.trim());
@@ -1738,22 +1754,22 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       const compileRes = await fetch("/api/videos/compile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes: guideScenes }),
+        body: JSON.stringify({ guideScenes }),
       });
       if (!compileRes.ok) {
         const err = await compileRes.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || "Compile failed");
       }
-      const compileData = await compileRes.json() as { videoUrl?: string; jobId?: string };
+      const compileData = await compileRes.json() as { url?: string; jobId?: string };
 
-      let finalVideoUrl = compileData.videoUrl;
+      let finalVideoUrl = compileData.url;
       if (!finalVideoUrl && compileData.jobId) {
         setAutoGeneratePhase("Compiling… (this may take a minute)");
         for (let poll = 0; poll < 60; poll++) {
           await new Promise((r) => setTimeout(r, 5000));
-          const statusRes = await fetch(`/api/videos/compile/run?jobId=${compileData.jobId}`);
-          const statusData = await statusRes.json() as { status?: string; videoUrl?: string };
-          if (statusData.videoUrl) { finalVideoUrl = statusData.videoUrl; break; }
+          const statusRes = await fetch(`/api/videos/compile/status/${compileData.jobId}`);
+          const statusData = await statusRes.json() as { status?: string; url?: string };
+          if (statusData.url) { finalVideoUrl = statusData.url; break; }
           if (statusData.status === "failed") throw new Error("Video compile failed");
         }
       }
