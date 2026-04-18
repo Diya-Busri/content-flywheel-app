@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { Resend } from "resend";
 import { checkApiRateLimit, getClientIp } from "@/lib/rate-limit-api";
+import { createProfile, getProfileByUserId } from "@/db/queries/profiles-queries";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,7 @@ const FROM_EMAIL = "Content Flywheel <hello@contentflywheel.co.uk>";
 
 type ClerkEmailAddress = { id: string; email_address?: string };
 type ClerkUserPayload = {
+  id?: string;
   email_addresses?: ClerkEmailAddress[];
   primary_email_address_id?: string | null;
   first_name?: string | null;
@@ -81,6 +83,20 @@ export async function POST(req: Request) {
     const data = payload.data;
     const email = getEmail(data);
     const name = getName(data);
+    const userId = data.id;
+
+    // Create profile row for new user
+    if (userId) {
+      try {
+        const existing = await getProfileByUserId(userId);
+        if (!existing) {
+          await createProfile({ userId, email: email ?? undefined, membership: "free" });
+          console.log(`[Clerk webhook] Created profile for new user ${userId}`);
+        }
+      } catch (err) {
+        console.error("[Clerk webhook] Failed to create profile:", err);
+      }
+    }
 
     if (RESEND_API_KEY && email) {
       const resend = new Resend(RESEND_API_KEY);
