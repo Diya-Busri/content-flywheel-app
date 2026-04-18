@@ -5558,8 +5558,8 @@ export default function TemplateStudioClient() {
                 <Button type="button" size="sm" disabled={viralExporting} onClick={async () => {
                   setViralExporting(true);
                   try {
-                    // Start background job — returns immediately with jobId
-                    const res = await fetch("/api/templates/viral/export", {
+                    // Step 1: Render slides + TTS → Supabase image/audio URLs
+                    const renderRes = await fetch("/api/templates/viral/render", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
@@ -5570,35 +5570,39 @@ export default function TemplateStudioClient() {
                         backgroundMusic: viralBgm,
                       }),
                     });
-                    if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error((j as {error?:string}).error ?? "Export failed"); }
-                    const { jobId } = await res.json() as { jobId: string };
+                    if (!renderRes.ok) { const j = await renderRes.json().catch(() => ({})); throw new Error((j as {error?:string}).error ?? "Render failed"); }
+                    const { guideScenes, voiceoverUrl } = await renderRes.json() as { guideScenes: object[]; voiceoverUrl: string };
 
-                    // Poll for completion (up to 5 minutes)
-                    const deadline = Date.now() + 5 * 60 * 1000;
-                    while (Date.now() < deadline) {
-                      await new Promise(r => setTimeout(r, 4000));
-                      const poll = await fetch(`/api/templates/viral/export/status/${jobId}`);
-                      if (!poll.ok) continue;
-                      const job = await poll.json() as { status: string; videoUrl?: string; error?: string };
-                      if (job.status === "completed" && job.videoUrl) {
-                        // Fetch as blob first — <a download> is ignored for cross-origin URLs
-                        const blob = await fetch(job.videoUrl).then(r => r.blob());
-                        const blobUrl = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = blobUrl;
-                        a.download = `${buildViralExportFilenameBase(viralData.topic || "", seriesShowTitle, episodeNumber)}.mp4`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-                        toast({ title: "MP4 ready", description: "Check your Downloads folder." });
-                        return;
-                      }
-                      if (job.status === "failed") {
-                        throw new Error(job.error ?? "Export failed");
-                      }
-                    }
-                    throw new Error("Export timed out — please try again.");
+                    // Step 2: Compile via shared video compile route (same as Video Guide)
+                    const compileRes = await fetch("/api/videos/compile", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        guideScenes,
+                        voiceoverUrl,
+                        backgroundMusic: viralBgm,
+                        outputAspect: viralFormLength === "long" ? "16:9" : "9:16",
+                      }),
+                    });
+                    if (!compileRes.ok) { const j = await compileRes.json().catch(() => ({})); throw new Error((j as {error?:string}).error ?? "Compile failed"); }
+                    const compileData = await compileRes.json() as { url?: string; jobId?: string; error?: string; code?: string };
+                    if (compileData.code === "NO_VIDEO_CREDITS") throw new Error("You need video credits to export.");
+
+                    // Get final URL — direct or via job polling (same as Video Guide)
+                    const finalUrl = compileData.url ?? (compileData.jobId ? await pollCompileJob(compileData.jobId, "Exporting") : null);
+                    if (!finalUrl) throw new Error(compileData.error ?? "Export failed");
+
+                    // Blob download — works for cross-origin Supabase URLs
+                    const blob = await fetch(finalUrl).then(r => r.blob());
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = blobUrl;
+                    a.download = `${buildViralExportFilenameBase(viralData.topic || "", seriesShowTitle, episodeNumber)}.mp4`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+                    toast({ title: "MP4 ready", description: "Check your Downloads folder." });
                   } catch (e) {
                     toast({ title: "Export failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
                   } finally { setViralExporting(false); }

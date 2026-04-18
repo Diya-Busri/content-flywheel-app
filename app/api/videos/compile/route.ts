@@ -50,6 +50,7 @@ type SceneRow = {
   voiceoverUrl?: string | null;
   script_text?: string;
   caption?: string | null;
+  disableKenBurns?: boolean;
 };
 
 function storageErrorMessage(err: unknown): string {
@@ -188,6 +189,7 @@ export async function POST(request: NextRequest) {
         image_url: imageUrl,
         video_url: videoUrl || null,
         dialogue,
+        disableKenBurns: s.disableKenBurns === true ? true : undefined,
       };
     });
 
