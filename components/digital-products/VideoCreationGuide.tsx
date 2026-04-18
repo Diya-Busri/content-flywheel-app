@@ -1469,6 +1469,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         body: JSON.stringify({
           guideScenes,
           backgroundMusic: "none",
+          outputAspect: guide.videoFormat?.aspectRatio === "16:9" ? "16:9" : "9:16",
           ...(sendVoiceoverUrl ? { voiceoverUrl: sendVoiceoverUrl } : {}),
         }),
       });
@@ -1754,7 +1755,10 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       const compileRes = await fetch("/api/videos/compile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guideScenes }),
+        body: JSON.stringify({
+          guideScenes,
+          outputAspect: guide.videoFormat?.aspectRatio === "16:9" ? "16:9" : "9:16",
+        }),
       });
       if (!compileRes.ok) {
         const err = await compileRes.json().catch(() => ({}));
