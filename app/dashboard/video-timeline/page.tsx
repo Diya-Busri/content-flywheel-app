@@ -3531,8 +3531,9 @@ export default function VideoTimelinePage() {
     // ── Standard path: full FFmpeg compile ────────────────────────────────────
     // Build the request body: prefer scriptId (server loads scenes), fall back to inline guideScenes.
     let compileBody: Record<string, unknown>;
+    const exportAspect = (selectedTemplate?.aspectRatio ?? aspectRatio) === "9:16" ? "9:16" : "16:9";
     if (scriptId?.trim()) {
-      compileBody = { scriptId: scriptId.trim(), transition: sceneTransitionType };
+      compileBody = { scriptId: scriptId.trim(), transition: sceneTransitionType, outputAspect: exportAspect };
     } else {
       // No saved script — send the current timeline scenes inline as guideScenes.
       const guideScenes = scenes
@@ -3555,6 +3556,7 @@ export default function VideoTimelinePage() {
         guideScenes,
         voiceoverUrl: voiceoverUrl?.trim() || null,
         transition: sceneTransitionType,
+        outputAspect: exportAspect,
       };
     }
     setCompileLoading(true);

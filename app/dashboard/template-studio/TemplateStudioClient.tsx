@@ -2613,7 +2613,7 @@ export default function TemplateStudioClient() {
           scriptId: saveData.id,
           transition: "fade",
           backgroundMusic: storyBackgroundMusic,
-          ...((mode === "15" && storyVideoFormat === "long") || isFinanceDocMode ? { outputAspect: "16:9" } : {}),
+          outputAspect: (mode === "15" && storyVideoFormat === "short") ? "9:16" : "16:9",
         }),
       });
       const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; jobId?: string; error?: string; code?: string };
@@ -2717,7 +2717,7 @@ export default function TemplateStudioClient() {
           scriptId,
           transition: "fade",
           backgroundMusic: storyBackgroundMusic,
-          ...((mode === "15" && storyVideoFormat === "long") || isFinanceDocMode ? { outputAspect: "16:9" } : {}),
+          outputAspect: (mode === "15" && storyVideoFormat === "short") ? "9:16" : "16:9",
         }),
       });
       const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; jobId?: string; error?: string };
