@@ -5558,6 +5558,7 @@ export default function TemplateStudioClient() {
                 <Button type="button" size="sm" disabled={viralExporting} onClick={async () => {
                   setViralExporting(true);
                   try {
+                    // Start background job — returns immediately with jobId
                     const res = await fetch("/api/templates/viral/export", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
@@ -5570,14 +5571,28 @@ export default function TemplateStudioClient() {
                       }),
                     });
                     if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error((j as {error?:string}).error ?? "Export failed"); }
-                    const blob = await res.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `${buildViralExportFilenameBase(viralData.topic || "", seriesShowTitle, episodeNumber)}.mp4`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    toast({ title: "MP4 downloading", description: "Check your Downloads folder." });
+                    const { jobId } = await res.json() as { jobId: string };
+
+                    // Poll for completion (up to 5 minutes)
+                    const deadline = Date.now() + 5 * 60 * 1000;
+                    while (Date.now() < deadline) {
+                      await new Promise(r => setTimeout(r, 4000));
+                      const poll = await fetch(`/api/templates/viral/export/status/${jobId}`);
+                      if (!poll.ok) continue;
+                      const job = await poll.json() as { status: string; videoUrl?: string; error?: string };
+                      if (job.status === "completed" && job.videoUrl) {
+                        const a = document.createElement("a");
+                        a.href = job.videoUrl;
+                        a.download = `${buildViralExportFilenameBase(viralData.topic || "", seriesShowTitle, episodeNumber)}.mp4`;
+                        a.click();
+                        toast({ title: "MP4 ready", description: "Check your Downloads folder." });
+                        return;
+                      }
+                      if (job.status === "failed") {
+                        throw new Error(job.error ?? "Export failed");
+                      }
+                    }
+                    throw new Error("Export timed out — please try again.");
                   } catch (e) {
                     toast({ title: "Export failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
                   } finally { setViralExporting(false); }

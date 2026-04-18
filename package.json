@@ -75,6 +75,7 @@
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.36.3",
     "@vercel/blob": "^0.25.0",
+    "@vercel/functions": "^2.0.0",
     "@whop-apps/sdk": "^0.0.1-canary.109",
     "canvas-confetti": "^1.9.3",
     "class-variance-authority": "^0.7.0",
