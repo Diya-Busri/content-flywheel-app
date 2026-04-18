@@ -401,6 +401,19 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     }
   }, [guide.scenes?.length]);
 
+  // Pre-populate scene images from injected image_url (set by POD promo video flow)
+  useEffect(() => {
+    if (!Array.isArray(guide.scenes)) return;
+    const initial: Record<number, string> = {};
+    guide.scenes.forEach((s, i) => {
+      const url = (s as Record<string, unknown>).image_url;
+      if (typeof url === "string" && url.trim()) initial[i] = url.trim();
+    });
+    if (Object.keys(initial).length > 0) setGuideSceneImageUrls(initial);
+  // Run once when guide scenes first arrive
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guide.scenes?.length]);
+
   useEffect(() => {
     if (showConfig && ELEVENLABS_VOICES.some((v) => v.voiceId === voiceId)) {
       setConfig((c) => (c.selectedVoice === voiceId ? c : { ...c, selectedVoice: voiceId }));
