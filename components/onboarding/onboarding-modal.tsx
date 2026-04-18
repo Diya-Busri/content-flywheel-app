@@ -452,16 +452,6 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
       </div>
 
       {/* Skip button - top right */}
-      <div className="absolute top-4 right-4">
-        <button
-          type="button"
-          onClick={handleSkip}
-          className="rounded-lg p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-300"
-          aria-label="Skip onboarding"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
     </div>
   );
 }
