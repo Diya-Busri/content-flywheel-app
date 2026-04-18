@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {
   Loader2,
@@ -1423,6 +1424,8 @@ export default function TemplateStudioClient() {
         });
         return true;
       } catch (e) {
+        const msg = e instanceof Error ? e.message : "Something went wrong";
+        const isCreditsError = msg.toLowerCase().includes("video credit");
         toast({
           title:
             mode === "8"
@@ -1432,8 +1435,15 @@ export default function TemplateStudioClient() {
                 : mode === "15"
                   ? "Story Video failed"
                   : "AI Story failed",
-          description: e instanceof Error ? e.message : "Something went wrong",
+          description: msg,
           variant: "destructive",
+          ...(isCreditsError && {
+            action: (
+              <ToastAction altText="Buy credits" onClick={() => { window.location.href = "/dashboard/video-credits"; }}>
+                Buy Credits
+              </ToastAction>
+            ),
+          }),
         });
         return false;
       } finally {
