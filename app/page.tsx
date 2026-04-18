@@ -74,8 +74,8 @@ export default async function HomePage() {
             </div>
             <div>
               <h4 className="text-xs font-bold uppercase tracking-widest text-white/30 mb-4">Contact</h4>
-              <a href="mailto:hello@contentflywheel.co.uk" className="text-sm text-orange-400 hover:text-orange-300 transition-colors">
-                hello@contentflywheel.co.uk
+              <a href="mailto:contentflywheel@gmail.com" className="text-sm text-orange-400 hover:text-orange-300 transition-colors">
+                contentflywheel@gmail.com
               </a>
             </div>
           </div>
