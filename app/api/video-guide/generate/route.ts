@@ -328,6 +328,65 @@ Return ONLY this JSON object (no markdown). Include ONLY platforms in the list. 
 Include platformGuides ONLY for these platform IDs: ${platforms.join(", ")}. contentCalendar and repurposingGuide tailored to selected platforms. Output ONLY the JSON object.`;
 }
 
+function buildRevealBriefPrompt(productName: string, hook: string, body: string, cta: string): string {
+  return `You are a creative director for a drop-culture clothing brand. Generate a 4-scene product reveal video brief.
+
+PRODUCT NAME: "${productName}"
+HOOK: "${hook}"
+BODY: "${body}"
+CTA: "${cta}"
+
+Rules:
+- Exactly 4 scenes, 4 seconds each (0-4s, 4-8s, 8-12s, 12-16s)
+- Dark, dramatic, high-contrast lighting throughout
+- Close-up and medium product shots ONLY — NO people, no lifestyle
+- Minimal text overlays: brand name + 1-word tagline per scene
+- Scene 1 (0-4s): Close-up of product chest/front, dark moody lighting
+- Scene 2 (4-8s): Different angle or detail shot of the product
+- Scene 3 (8-12s): Back or folded product shot, dramatic
+- Scene 4 (12-16s): Product in context (hanging, flat lay), text shows brand/CTA
+
+Each aiPrompt MUST be 50-80 words, describing a dark product-only shot: product placement, surface/background, lighting type and direction, camera angle, art style (cinematic/editorial), color palette (dark, muted), mood (mysterious, premium), "vertical 9:16", quality keywords.
+
+Return ONLY this JSON object (no markdown, no code fences):
+{
+  "storytellingFramework": "Product Reveal",
+  "frameworkRationale": "Dark drop-culture reveal for clothing brand — identity over features.",
+  "scenes": [
+    {
+      "scene": "Scene 1 - Front Detail",
+      "timing": "0-4s",
+      "visualDirection": {
+        "aiPrompt": "50-80 word cinematic product-only prompt here",
+        "cameraAngle": "close-up",
+        "lightingMood": "dark/moody",
+        "colorPalette": "dark, desaturated, high contrast",
+        "mediaType": "still image"
+      },
+      "textOverlay": {
+        "exactText": "${productName}",
+        "fontStyle": "Bold sans-serif",
+        "size": "medium",
+        "position": "bottom third",
+        "color": "white with black shadow",
+        "animation": "fade in",
+        "timingNote": "Appears at 2s"
+      },
+      "transition": { "toNextScene": "quick cut", "effects": "none", "pacing": "slow (2-3s)" },
+      "audio": { "musicVolume": "medium", "beatDrops": "none", "soundEffects": "none", "mood": "tense" }
+    }
+  ],
+  "engagementTriggers": [
+    "First frame is dark product close-up — works as thumbnail",
+    "Minimal text lets the product speak",
+    "Slow pacing creates mystique",
+    "No people — identity projection"
+  ]
+}
+
+Generate all 4 scenes following the same structure. Output ONLY the JSON object.`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -355,6 +414,7 @@ export async function POST(request: NextRequest) {
       regenerateScenesOnly,
       source: sourceReq,
       targetSceneCount: targetSceneCountReq,
+      videoStyle,
     } = body as {
       hook?: string;
       body?: string;
@@ -370,6 +430,7 @@ export async function POST(request: NextRequest) {
       regenerateScenesOnly?: boolean;
       source?: string;
       targetSceneCount?: number;
+      videoStyle?: string;
     };
     const targetSceneCount =
       typeof targetSceneCountReq === "number" && targetSceneCountReq >= 4 && targetSceneCountReq <= 50
@@ -454,21 +515,25 @@ export async function POST(request: NextRequest) {
     } | null = null;
 
     if (apiKey) {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
+      const isReveal = videoStyle === "reveal";
+      const briefMessages = isReveal
+        ? [
             {
-              role: "system",
+              role: "system" as const,
+              content: "You are a creative director for a drop-culture clothing brand. Return only valid JSON.",
+            },
+            {
+              role: "user" as const,
+              content: buildRevealBriefPrompt(productNameRes, hook || "", bodyText || "", cta || ""),
+            },
+          ]
+        : [
+            {
+              role: "system" as const,
               content: STORYTELLING_FRAMEWORK_SYSTEM.replace(/vertical 9:16/gi, videoFormat.aspectPhrase),
             },
             {
-              role: "user",
+              role: "user" as const,
               content: buildCreativeBriefPrompt(
                 productNameRes,
                 productDesc,
@@ -477,10 +542,19 @@ export async function POST(request: NextRequest) {
                 cta || "",
                 durationSeconds,
                 videoFormat,
-                targetSceneCount
+                isReveal ? 4 : targetSceneCount
               ),
             },
-          ],
+          ];
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: briefMessages,
           temperature: 0.7,
           max_tokens: 8192,
         }),

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: "OPENAI_API_KEY not configured" }, { status: 503 });
 
-    const body = await request.json().catch(() => ({})) as { productId?: string };
+    const body = await request.json().catch(() => ({})) as { productId?: string; template?: "promo" | "reveal" };
     if (!body.productId) return NextResponse.json({ error: "productId required" }, { status: 400 });
 
     const [product] = await db
@@ -42,8 +42,21 @@ export async function POST(request: Request) {
     const productName = product.title?.trim() || "Custom Merch";
     const productType = product.blueprintTitle?.trim() || "clothing";
     const brandVoice = await getBrandVoice(userId).catch(() => "");
+    const template = body.template === "reveal" ? "reveal" : "promo";
 
-    const prompt = `Write a short-form vertical video script (TikTok/Instagram Reels style) to promote a print-on-demand product.
+    const prompt = template === "reveal"
+      ? `Write a short drop/reveal teaser script for a clothing brand product.
+PRODUCT NAME: "${productName}"
+PRODUCT TYPE: ${productType}
+
+Return ONLY valid JSON with this exact shape:
+{ "hook": "...", "body": "...", "cta": "..." }
+
+Rules:
+- hook: 1 short, mysterious sentence. No more than 8 words. Examples: "Some wear it. Some earn it." / "Built for the quiet ones." / "You either get it or you don't."
+- body: 2-3 very short sentences, poetic and minimal. Evoke identity and exclusivity, not features. Max 30 words.
+- cta: 1 short teaser sentence suggesting limited availability. Max 12 words. Examples: "Limited drop. Link in bio." / "Only for those who know."`
+      : `Write a short-form vertical video script (TikTok/Instagram Reels style) to promote a print-on-demand product.
 
 PRODUCT NAME: "${productName}"
 PRODUCT TYPE: ${productType}
