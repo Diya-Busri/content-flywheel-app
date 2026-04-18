@@ -677,6 +677,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [editingStock, setEditingStock] = useState(false);
   const [stockLimitInput, setStockLimitInput] = useState("");
   const [savingStock, setSavingStock] = useState(false);
+  const [markingSoldOut, setMarkingSoldOut] = useState(false);
 
   // ── Printify connect state ───────────────────────────────────────────────────
   const [apiKey, setApiKey] = useState("");
@@ -1188,6 +1189,28 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
     } finally {
       setSavingStock(false);
+    }
+  };
+
+  const handleMarkSoldOut = async () => {
+    if (!selectedProduct) return;
+    setMarkingSoldOut(true);
+    try {
+      const res = await fetch("/api/printify/unpublish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: selectedProduct.id }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to unpublish");
+      const updated = { ...selectedProduct, printifyStatus: "synced", status: "draft" } as SelectPodProduct;
+      setSelectedProduct(updated);
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      toast({ title: "Sold out — removed from store", description: "Product is unpublished from Printify. Re-publish when ready for a new drop." });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setMarkingSoldOut(false);
     }
   };
 
@@ -2811,7 +2834,20 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 </div>
               )}
               {selectedProduct.stockLimit && !editingStock && (
-                <p className="text-[10px] text-gray-400 mt-1">This is a limited drop — you control when to close sales manually via Printify.</p>
+                <div className="mt-3 space-y-2">
+                  <p className="text-[10px] text-gray-400">Limited drop — when you&apos;ve hit your number, mark it sold out to remove it from your store instantly.</p>
+                  {selectedProduct.printifyStatus === "published" && (
+                    <Button
+                      onClick={handleMarkSoldOut}
+                      disabled={markingSoldOut}
+                      variant="outline"
+                      className="w-full border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 gap-2"
+                    >
+                      {markingSoldOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "🚫"}
+                      {markingSoldOut ? "Closing drop…" : "Mark as Sold Out"}
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
 
