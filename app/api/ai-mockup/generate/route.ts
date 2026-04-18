@@ -339,22 +339,22 @@ export async function POST(req: Request) {
     }
 
     // ── Resolve best garment image for CatVTON ───────────────────────────────
-    // Prefer a Printify product mockup (shows the actual garment colour + design)
-    // over the raw design file (graphic only, no garment colour).
-    // Printify URLs don't contain blob.vercel-storage.com.
+    // CatVTON requires a proper product/garment photo (showing the garment shape).
+    // A raw design file (graphic-only PNG) has no garment shape — CatVTON will
+    // invent a garment outline (often a tank top) from the graphic dimensions.
+    // Only use CatVTON when we have a real Printify product mockup.
     const allMockupUrls = (product.mockupUrls as string[] | null) ?? [];
     const printifyMockupUrl = allMockupUrls.find(
       (u) => u && !u.includes("blob.vercel-storage.com") && !u.includes("blob.core.windows.net")
     ) ?? null;
-    const garmentImageUrl = printifyMockupUrl ?? designFileUrl;
 
     // ── Generate ──────────────────────────────────────────────────────────────
-    // For lifestyle shots: use CatVTON with the Printify product mockup as the
-    // garment image — this gives CatVTON the real garment colour and shape.
-    // Falls back to the raw design file, then text-to-image if neither exists.
+    // Use CatVTON only when a proper Printify product mockup is available.
+    // Without it, fall back to text-to-image which always generates the correct
+    // garment type from the prompt.
     let imageUrl: string;
-    if (!isFlat && garmentImageUrl) {
-      imageUrl = await generateTryOnMockup(garmentImageUrl, product.blueprintTitle ?? null, style);
+    if (!isFlat && printifyMockupUrl) {
+      imageUrl = await generateTryOnMockup(printifyMockupUrl, product.blueprintTitle ?? null, style);
     } else {
       imageUrl = await generateTextMockup(basePrompt, style, isFlat);
     }
