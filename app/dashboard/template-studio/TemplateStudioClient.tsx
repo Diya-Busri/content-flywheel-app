@@ -2505,9 +2505,9 @@ export default function TemplateStudioClient() {
         setAutoGenerateProgress({ done: i + 1, total });
       }
 
-      // Step 2: Animate scenes (skipped for Finance/History/Tech Documentary — uses Ken Burns on images instead)
+      // Step 2: Animate scenes (skipped for Finance/History/Tech Documentary and Satisfying Build — uses static images instead)
       const latestVideoUrls: Record<number, string> = { ...sceneVideoUrls };
-      if (!isFinanceDocMode) {
+      if (!isFinanceDocMode && mode !== "8") {
       setAutoGeneratePhase("Animating scenes");
       setAutoGenerateProgress({ done: 0, total });
       const aspectRatio = (mode === "15") ? "16:9" : "9:16";
@@ -2588,28 +2588,28 @@ export default function TemplateStudioClient() {
       // Step 4: Compile MP4
       setAutoGeneratePhase("Stitching video");
       setAutoGenerateProgress(null);
-      const scenes_json = ordered.map((scene) => {
-        const imgUrl = latestImageUrls[scene.sceneNumber] ?? null;
-        const vidUrl = isFinanceDocMode ? null : (latestVideoUrls[scene.sceneNumber] ?? null);
-        // Mode 8 (Satisfying Build): prefer static image with Ken Burns disabled over Kling clip.
-        // Kling clips may be expired/missing; image is always present after generation step.
-        const useStaticImage = mode === "8";
-        return {
-          scene_number: scene.sceneNumber,
-          duration: isFinanceDocMode ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION,
-          script_text: scene.dialogue?.trim() ?? "",
-          image_url: useStaticImage ? imgUrl : (imgUrl ?? null),
-          // Mode 17 documentary: use image (Ken Burns) not Kling clip — Kling clips are 5s fixed
-          // which makes a 35-scene video only 3 mins. Ken Burns fills the full voiceover duration.
-          // Mode 8: use video clip if available, fall back to image so compile never has empty scenes.
-          video_url: useStaticImage ? null : (vidUrl ?? null),
-          voiceover_url: latestVoiceoverUrls[scene.sceneNumber] ?? null,
-          caption: scene.dialogue?.trim() ?? null,
-          animation_type: "video",
-          section_label: `Scene ${scene.sceneNumber}`,
-          ...(useStaticImage ? { disableKenBurns: true } : {}),
-        };
-      });
+      const useStaticImage = mode === "8";
+      const scenes_json = ordered
+        .map((scene) => {
+          const imgUrl = latestImageUrls[scene.sceneNumber] ?? null;
+          const vidUrl = isFinanceDocMode ? null : (latestVideoUrls[scene.sceneNumber] ?? null);
+          return {
+            scene_number: scene.sceneNumber,
+            duration: isFinanceDocMode ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION,
+            script_text: scene.dialogue?.trim() ?? "",
+            image_url: imgUrl,
+            // Mode 8 (Satisfying Build): static images only — Kling clips not generated, not needed.
+            // Mode 17+ documentary: Ken Burns on images (no Kling).
+            video_url: (useStaticImage || isFinanceDocMode) ? null : (vidUrl ?? null),
+            voiceover_url: latestVoiceoverUrls[scene.sceneNumber] ?? null,
+            caption: scene.dialogue?.trim() ?? null,
+            animation_type: "video",
+            section_label: `Scene ${scene.sceneNumber}`,
+            ...(useStaticImage ? { disableKenBurns: true } : {}),
+          };
+        })
+        // Drop any scene where both image and video are missing — compile rejects those with 400
+        .filter((s) => s.image_url || s.video_url);
       const saveRes = await fetch("/api/saved-scripts", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
