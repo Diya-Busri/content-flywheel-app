@@ -673,6 +673,10 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [creating, setCreating] = useState(false);
 
   // ── Pricing editor state ─────────────────────────────────────────────────────
+  // Per-colour Printify mockup map — populated when user clicks "Get Printify Mockups"
+  // { "black": ["url1", "url2"], "white": ["url3", "url4"] }
+  const [mockupsByColour, setMockupsByColour] = useState<Record<string, string[]>>({});
+
   const [editingPricing, setEditingPricing] = useState(false);
   const [bulkPrice, setBulkPrice] = useState("");
   // Per-colour prices used while the pricing editor is open: { "Black": "25.00", "White": "28.00" }
@@ -1272,17 +1276,21 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     setGeneratingMockup(true);
     try {
       const res = await fetch(`/api/printify/product-images?productId=${selectedProduct.id}`, { cache: "no-store" });
-      const data = await res.json() as { mockupUrls?: string[]; message?: string; error?: string };
+      const data = await res.json() as { mockupUrls?: string[]; imagesByColour?: Record<string, string[]>; message?: string; error?: string };
       if (!res.ok) throw new Error(data.error);
       const mockupUrls = data.mockupUrls ?? [];
       if (mockupUrls.length === 0) {
         toast({ title: "No mockups yet", description: data.message ?? "Printify may still be generating them — try again in a moment." });
         return;
       }
+      if (data.imagesByColour && Object.keys(data.imagesByColour).length > 0) {
+        setMockupsByColour(data.imagesByColour);
+      }
       const updated = { ...selectedProduct, mockupUrls } as SelectPodProduct;
       setSelectedProduct(updated);
       setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-      toast({ title: `${mockupUrls.length} Printify mockups loaded!` });
+      const colourCount = Object.keys(data.imagesByColour ?? {}).length;
+      toast({ title: `${mockupUrls.length} Printify mockups loaded!`, description: colourCount > 1 ? `${colourCount} colours available — click a colour swatch to switch.` : undefined });
     } catch (err) {
       toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
     } finally {
@@ -2579,12 +2587,17 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                 ) : (
                   <p className="text-[11px] text-gray-400 italic">Sync to Printify first to get official product photos.</p>
                 )}
-                {/* Printify mockup grid */}
+                {/* Printify mockup grid — filtered by selected colour if available */}
                 {(() => {
-                  const printifyMockups = ((selectedProduct.mockupUrls as string[]) ?? []).filter((u) => !isAiMockup(u));
-                  return printifyMockups.length > 0
-                    ? <MockupGrid mockups={printifyMockups} productTitle={selectedProduct.title} />
+                  const allPrintifyMockups = ((selectedProduct.mockupUrls as string[]) ?? []).filter((u) => !isAiMockup(u));
+                  if (allPrintifyMockups.length === 0) return null;
+                  // If user has selected a colour AND we have per-colour data, show that colour's photos
+                  const colourKey = selectedGarmentColor?.toLowerCase() ?? "";
+                  const colourMockups = colourKey && mockupsByColour[colourKey]?.length
+                    ? mockupsByColour[colourKey]!
                     : null;
+                  const displayMockups = colourMockups ?? allPrintifyMockups;
+                  return <MockupGrid mockups={displayMockups} productTitle={selectedProduct.title} />;
                 })()}
               </div>
 

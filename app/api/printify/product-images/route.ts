@@ -53,12 +53,36 @@ export async function GET(req: Request) {
       settings.printifyApiKey
     ) as {
       images?: Array<{ src: string; position?: string; is_default?: boolean; is_selected_for_publishing?: boolean; variant_ids?: number[] }>;
-      variants?: Array<{ id: number; is_enabled: boolean }>;
+      variants?: Array<{ id: number; title?: string; is_enabled: boolean }>;
     };
 
     const images = printifyProduct.images ?? [];
     if (images.length === 0) {
       return NextResponse.json({ mockupUrls: [], message: "No mockups generated yet — try again in a moment" });
+    }
+
+    // Build variant ID → colour name map from Printify variant titles ("Black / S" → "black")
+    const variantColourMap: Record<number, string> = {};
+    for (const v of printifyProduct.variants ?? []) {
+      const colour = (v.title ?? "").split("/")[0].trim().toLowerCase();
+      if (colour) variantColourMap[v.id] = colour;
+    }
+
+    // Build per-colour image sets: each image has variant_ids — map to colours
+    const imagesByColour: Record<string, string[]> = {};
+    for (const img of images) {
+      if (!img.src) continue;
+      const colours = new Set<string>();
+      for (const vid of img.variant_ids ?? []) {
+        const colour = variantColourMap[vid];
+        if (colour) colours.add(colour);
+      }
+      for (const colour of colours) {
+        if (!imagesByColour[colour]) imagesByColour[colour] = [];
+        if (!imagesByColour[colour]!.includes(img.src)) {
+          imagesByColour[colour]!.push(img.src);
+        }
+      }
     }
 
     // Strategy: Printify stores one image per (variant × view type). With many colour variants
@@ -103,7 +127,8 @@ export async function GET(req: Request) {
       .set({ mockupUrls })
       .where(and(eq(podProductsTable.id, productId), eq(podProductsTable.userId, userId)));
 
-    return NextResponse.json({ mockupUrls });
+    // Return both the default set AND per-colour map (colour map not persisted — client holds it in state)
+    return NextResponse.json({ mockupUrls, imagesByColour });
   } catch (err) {
     console.error("[printify/product-images] GET:", err);
     return NextResponse.json(
