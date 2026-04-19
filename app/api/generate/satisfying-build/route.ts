@@ -58,7 +58,7 @@ function normalizeScenesFromParsed(parsed: unknown): SatisfyingBuildScene[] {
   ) {
     raw = (parsed as { scenes: unknown[] }).scenes;
   }
-  return raw.slice(0, 8).map((s: unknown, i: number) => {
+  return raw.slice(0, 20).map((s: unknown, i: number) => {
     const row = s as Record<string, unknown>;
     const voiceover =
       typeof row.voiceover === "string" ? String(row.voiceover).trim() : "";
@@ -149,6 +149,9 @@ export async function POST(request: NextRequest) {
     const isRealisticPhoto = imageStyle === "Realistic Photography" || buildStyle === "Construction Time-lapse";
     const isTransformation = buildStyle === "Transformation";
     const isTimelapse = buildStyle === "Construction Time-lapse";
+    const sceneCount = typeof body.scene_count === "number" && body.scene_count >= 4 && body.scene_count <= 20
+      ? Math.floor(body.scene_count)
+      : 8;
 
     if (!whatBuilding) {
       return NextResponse.json(
@@ -165,19 +168,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const last = sceneCount;
+    const mid = Math.round(sceneCount * 0.6);
+    const q1 = Math.round(sceneCount * 0.25);
+    const q3 = Math.round(sceneCount * 0.85);
     const sceneStructure = isTimelapse
       ? `- Scene 1: empty site / raw starting materials — establishes the scale and setting
-- Scenes 2–3: groundwork and foundations being laid
-- Scenes 4–5: main structure or core build taking visible shape
-- Scenes 6–7: finishing details, final touches, craftsmanship close-ups
-- Scene 8: completed build in full — wide beauty shot showing the finished result`
+- Scenes 2–${q1}: groundwork and foundations being laid
+- Scenes ${q1 + 1}–${mid}: main structure or core build taking visible shape
+- Scenes ${mid + 1}–${q3}: finishing details, final touches, craftsmanship close-ups
+- Scenes ${q3 + 1}–${last}: completed build in full — wide beauty shots showing the finished result`
       : isTransformation
-      ? `- Scenes 1–2: BEFORE — show the starting point or current state in full detail; establish what exists before transformation begins
-- Scenes 3–6: DURING — show the transformation actively happening; each scene captures a distinct stage of progress
-- Scenes 7–8: AFTER — reveal the final result; scene 8 is a side-by-side or direct comparison showing how dramatically things have changed`
+      ? `- Scenes 1–${q1}: BEFORE — show the starting point in full detail; establish what exists before the transformation
+- Scenes ${q1 + 1}–${q3}: DURING — show the transformation actively happening; each scene captures a distinct stage of progress
+- Scenes ${q3 + 1}–${last}: AFTER — reveal the final result; last scene is a dramatic comparison showing how much things changed`
       : `- Scene 1: character arrives or finds the project site
-- Scenes 2–7: progressive build steps
-- Scene 8: big reveal of the finished build`;
+- Scenes 2–${last - 1}: progressive build steps, each showing a new stage of the build
+- Scene ${last}: big reveal of the finished build`;
 
     const imagePromptStyle = isTimelapse
       ? `Image prompt style — CONSTRUCTION TIME-LAPSE (real people, real builds):
@@ -203,7 +210,7 @@ export async function POST(request: NextRequest) {
 
     const systemPrompt = `You are a writer for satisfying build short-form videos.
 
-Generate exactly 8 scenes as a JSON object (use a top-level key "scenes" whose value is an array of 8 objects).
+Generate exactly ${sceneCount} scenes as a JSON object (use a top-level key "scenes" whose value is an array of ${sceneCount} objects).
 
 Scene structure:
 ${sceneStructure}

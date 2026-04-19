@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import {
   SATISFYING_BUILD_CHARACTER_TYPES,
   SATISFYING_BUILD_IMAGE_STYLE_OPTIONS,
+  SATISFYING_BUILD_SCENE_COUNT_OPTIONS,
   SATISFYING_BUILD_STYLE_OPTIONS,
   SATISFYING_BUILD_TONE_OPTIONS,
   OPENING_HOOK_STYLE_PRESETS,
@@ -31,6 +32,8 @@ export type SatisfyingBuildSetupProps = {
   setOpeningHook: (v: string) => void;
   imageStyle: string;
   setImageStyle: (v: string) => void;
+  sceneCount: string;
+  setSceneCount: (v: string) => void;
 };
 
 export function SatisfyingBuildSetup({
@@ -46,6 +49,8 @@ export function SatisfyingBuildSetup({
   setOpeningHook,
   imageStyle,
   setImageStyle,
+  sceneCount,
+  setSceneCount,
 }: SatisfyingBuildSetupProps) {
   return (
     <>
@@ -114,6 +119,21 @@ export function SatisfyingBuildSetup({
           storageKey="template-studio/satisfying-build/tone"
           addPlaceholder="Add custom tone"
         />
+      </div>
+      <div className="space-y-2">
+        <Label>Number of scenes</Label>
+        <Select value={sceneCount} onValueChange={setSceneCount}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SATISFYING_BUILD_SCENE_COUNT_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="space-y-2">
         <Label>Hook style presets</Label>

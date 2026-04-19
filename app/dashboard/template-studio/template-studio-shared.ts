@@ -122,6 +122,12 @@ export const SATISFYING_BUILD_IMAGE_STYLE_OPTIONS = [
   { value: "Realistic Photography", label: "Realistic Photography" },
 ] as const;
 
+export const SATISFYING_BUILD_SCENE_COUNT_OPTIONS = [
+  { value: "8", label: "8 scenes (~40 sec)" },
+  { value: "12", label: "12 scenes (~1 min)" },
+  { value: "16", label: "16 scenes (~80 sec)" },
+] as const;
+
 export const SATISFYING_BUILD_TONE_OPTIONS = [
   { value: "Satisfying", label: "Satisfying" },
   { value: "Dramatic", label: "Dramatic" },
