@@ -1302,10 +1302,15 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     if (!selectedProduct) return;
     setGeneratingMockup(true);
     try {
+      // Resolve best garment image for CatVTON — prioritise the selected colour's Printify
+      // photo so the virtual try-on composites onto the correct coloured garment
+      const colourKey = selectedGarmentColor?.toLowerCase() ?? "";
+      const colourGarmentUrl = colourKey && mockupsByColour[colourKey]?.[0];
+      const garmentImageUrl = selectedGarmentMockup || colourGarmentUrl || undefined;
       const res = await fetch("/api/ai-mockup/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: selectedProduct.id, style: mockupStyle, placement: mockupPlacement, ...(selectedGarmentMockup ? { garmentImageUrl: selectedGarmentMockup } : {}) }),
+        body: JSON.stringify({ productId: selectedProduct.id, style: mockupStyle, placement: mockupPlacement, ...(garmentImageUrl ? { garmentImageUrl } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -1324,10 +1329,13 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
     if (!selectedProduct) return;
     setGeneratingLifestyle(true);
     try {
+      const colourKey = selectedGarmentColor?.toLowerCase() ?? "";
+      const colourGarmentUrl = colourKey && mockupsByColour[colourKey]?.[0];
+      const garmentImageUrl = selectedGarmentMockup || colourGarmentUrl || undefined;
       const res = await fetch("/api/ai-mockup/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: selectedProduct.id, style: "lifestyle", placement: "front", ...(selectedGarmentMockup ? { garmentImageUrl: selectedGarmentMockup } : {}) }),
+        body: JSON.stringify({ productId: selectedProduct.id, style: "lifestyle", placement: "front", ...(garmentImageUrl ? { garmentImageUrl } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
