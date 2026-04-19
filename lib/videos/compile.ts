@@ -324,7 +324,8 @@ async function renderVideoSegment(
   height: number,
   dialogueLine?: string | null
 ): Promise<void> {
-  const scale = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`;
+  // Cover-crop: scale up until both dimensions meet target, then center-crop — no black bars.
+  const scale = `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2`;
   let vf = scale;
   if (dialogueLine?.trim()) {
     const fontFile = resolveDrawtextFontFile();
