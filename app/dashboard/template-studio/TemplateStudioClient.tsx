@@ -5582,7 +5582,9 @@ export default function TemplateStudioClient() {
                       const job = await poll.json() as { status: string; videoUrl?: string; error?: string };
                       if (job.status === "completed" && job.videoUrl) {
                         // Fetch as blob — <a download> is ignored for cross-origin URLs
-                        const blob = await fetch(job.videoUrl).then(r => r.blob());
+                        const dlRes = await fetch(job.videoUrl);
+                        if (!dlRes.ok) throw new Error(`Download failed (${dlRes.status}) — please try again`);
+                        const blob = await dlRes.blob();
                         const blobUrl = URL.createObjectURL(blob);
                         const a = document.createElement("a");
                         a.href = blobUrl;
