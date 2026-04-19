@@ -146,8 +146,9 @@ export async function POST(request: NextRequest) {
           : "";
     const imageStyle =
       typeof body.image_style === "string" ? body.image_style.trim() : "Miniature/Stylized";
-    const isRealisticPhoto = imageStyle === "Realistic Photography";
+    const isRealisticPhoto = imageStyle === "Realistic Photography" || buildStyle === "Construction Time-lapse";
     const isTransformation = buildStyle === "Transformation";
+    const isTimelapse = buildStyle === "Construction Time-lapse";
 
     if (!whatBuilding) {
       return NextResponse.json(
@@ -164,7 +165,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sceneStructure = isTransformation
+    const sceneStructure = isTimelapse
+      ? `- Scene 1: empty site / raw starting materials — establishes the scale and setting
+- Scenes 2–3: groundwork and foundations being laid
+- Scenes 4–5: main structure or core build taking visible shape
+- Scenes 6–7: finishing details, final touches, craftsmanship close-ups
+- Scene 8: completed build in full — wide beauty shot showing the finished result`
+      : isTransformation
       ? `- Scenes 1–2: BEFORE — show the starting point or current state in full detail; establish what exists before transformation begins
 - Scenes 3–6: DURING — show the transformation actively happening; each scene captures a distinct stage of progress
 - Scenes 7–8: AFTER — reveal the final result; scene 8 is a side-by-side or direct comparison showing how dramatically things have changed`
@@ -172,7 +179,15 @@ export async function POST(request: NextRequest) {
 - Scenes 2–7: progressive build steps
 - Scene 8: big reveal of the finished build`;
 
-    const imagePromptStyle = isRealisticPhoto
+    const imagePromptStyle = isTimelapse
+      ? `Image prompt style — CONSTRUCTION TIME-LAPSE (real people, real builds):
+- Every image prompt must look like a real photo taken on-site during an actual construction project.
+- Use documentary/GoPro/drone photography language: "wide-angle site photograph", "golden hour construction photo", "drone aerial shot", "close-up of hands working", "workers in hi-vis vests", "muddy boots", "raw timber", "concrete pour", "steel framing", etc.
+- People should be actively working — digging, hammering, laying, cutting, measuring.
+- Environment should feel real: weather, dirt, dust, scaffolding, power tools, materials stacked on site.
+- Never mention cartoon, illustration, miniature, toy, stylized, or 3D render.
+- No character seeds or fictional characters — these are real anonymous construction workers.`
+      : isRealisticPhoto
       ? `Image prompt style — REALISTIC PHOTOGRAPHY:
 - Write image prompts as real-world photographic scenes, NOT cartoon, miniature, toy, or illustrated.
 - Use photography language: "DSLR photograph", "natural daylight", "shallow depth of field", "photorealistic", "cinematic still frame", "film grain", "golden hour light", etc.
@@ -181,6 +196,10 @@ export async function POST(request: NextRequest) {
       : `Image prompt style — STYLIZED/MINIATURE (default):
 - Write image prompts in a stylized, cinematic, miniature-world aesthetic appropriate for the build_style.
 - May reference miniature scale, toy-like quality, stop-motion feel, or stylized rendering as fits the scene.`;
+
+    const dialogueRule = isTimelapse
+      ? `- dialogue and voiceover may both be left empty — this style works as pure visuals with music. Only add text if the opening_hook is set.`
+      : `- voiceover should be the main narration; if dialogue is used, it should complement voiceover, not contradict it.`;
 
     const systemPrompt = `You are a writer for satisfying build short-form videos.
 
@@ -192,9 +211,9 @@ ${sceneStructure}
 Each scene object must include:
 - scene_number (number, 1–8)
 - title (string, short chapter title)
-- dialogue (string, optional on-screen line; may be empty if voiceover carries the script)
+- dialogue (string, optional on-screen line; leave empty for time-lapse style)
 - image_prompt (string, detailed still-frame image description for image generation; no text or lettering in the image)
-- voiceover (string, spoken narration for ~5 seconds, natural and paced; this is the primary script audio)
+- voiceover (string, spoken narration for ~5 seconds; leave empty for time-lapse/no-voiceover style)
 
 Apply these inputs consistently across all scenes:
 - character_type
@@ -207,7 +226,7 @@ Apply these inputs consistently across all scenes:
 ${imagePromptStyle}
 
 Rules:
-- voiceover should be the main narration; if dialogue is used, it should complement voiceover, not contradict it.
+- ${dialogueRule}
 - image_prompt must describe one single cinematic still (no panels, grids, or multi-frame layouts).
 - If opening_hook is provided, scene 1 voiceover/dialogue must start with that exact hook text.
 
@@ -270,13 +289,16 @@ Generate the 8-scene satisfying build episode now.`;
     let scenes = normalizeScenesFromParsed(parsed);
     scenes = applyOpeningHookToScenes(scenes, openingHook);
 
-    const character_seed = await generateStoryCharacterSeed(apiKey, {
-      characterTypesLine: characterType,
-      themeOrBuilding: whatBuilding,
-      templateName: "Satisfying Build",
-      flavorLine: `${buildStyle}, ${tone}`,
-    });
-    scenes = prependCharacterSeedToSceneImagePrompts(scenes, character_seed);
+    // Time-lapse style has no fictional character — skip identity lock seed
+    if (!isTimelapse) {
+      const character_seed = await generateStoryCharacterSeed(apiKey, {
+        characterTypesLine: characterType,
+        themeOrBuilding: whatBuilding,
+        templateName: "Satisfying Build",
+        flavorLine: `${buildStyle}, ${tone}`,
+      });
+      scenes = prependCharacterSeedToSceneImagePrompts(scenes, character_seed);
+    }
 
     const hashtags = [
       "#SatisfyingBuild",

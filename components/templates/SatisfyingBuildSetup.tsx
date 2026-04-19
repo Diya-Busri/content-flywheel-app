@@ -77,6 +77,13 @@ export function SatisfyingBuildSetup({
           storageKey="template-studio/satisfying-build/build-style"
           addPlaceholder="Add custom build style"
         />
+        {buildStyle === "Construction Time-lapse" && (
+          <div className="rounded-md bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 p-2.5 text-xs text-orange-800 dark:text-orange-300 space-y-1">
+            <p className="font-semibold">📹 Time-lapse style</p>
+            <p>Generates realistic construction photography — real people, real tools, real builds. Like pool builds, home renovations, woodworking on TikTok.</p>
+            <p className="font-medium">👆 Turn off Voiceover at the top for a pure visual experience — just add music in the editor.</p>
+          </div>
+        )}
         {buildStyle === "Transformation" && (
           <p className="text-xs text-muted-foreground">
             Scenes will follow a Before → During → After arc showing the full transformation.

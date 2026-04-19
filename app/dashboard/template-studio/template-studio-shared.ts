@@ -105,6 +105,7 @@ export const SATISFYING_BUILD_CHARACTER_TYPES = [
 ] as const;
 
 export const SATISFYING_BUILD_STYLE_OPTIONS = [
+  { value: "Construction Time-lapse", label: "🏗️ Construction Time-lapse (real people building)" },
   { value: "Miniature Construction", label: "Miniature Construction" },
   { value: "Giant Object Build", label: "Giant Object Build" },
   { value: "Impossible Engineering", label: "Impossible Engineering" },
