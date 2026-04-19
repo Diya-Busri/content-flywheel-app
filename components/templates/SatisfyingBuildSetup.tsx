@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   SATISFYING_BUILD_CHARACTER_TYPES,
+  SATISFYING_BUILD_IMAGE_STYLE_OPTIONS,
   SATISFYING_BUILD_STYLE_OPTIONS,
   SATISFYING_BUILD_TONE_OPTIONS,
   OPENING_HOOK_STYLE_PRESETS,
@@ -28,6 +29,8 @@ export type SatisfyingBuildSetupProps = {
   setTone: (v: string) => void;
   openingHook: string;
   setOpeningHook: (v: string) => void;
+  imageStyle: string;
+  setImageStyle: (v: string) => void;
 };
 
 export function SatisfyingBuildSetup({
@@ -41,6 +44,8 @@ export function SatisfyingBuildSetup({
   setTone,
   openingHook,
   setOpeningHook,
+  imageStyle,
+  setImageStyle,
 }: SatisfyingBuildSetupProps) {
   return (
     <>
@@ -72,6 +77,26 @@ export function SatisfyingBuildSetup({
           storageKey="template-studio/satisfying-build/build-style"
           addPlaceholder="Add custom build style"
         />
+        {buildStyle === "Transformation" && (
+          <p className="text-xs text-muted-foreground">
+            Scenes will follow a Before → During → After arc showing the full transformation.
+          </p>
+        )}
+      </div>
+      <div className="space-y-2">
+        <CreatableSelectField
+          label="Image style"
+          value={imageStyle}
+          onValueChange={setImageStyle}
+          options={SATISFYING_BUILD_IMAGE_STYLE_OPTIONS}
+          storageKey="template-studio/satisfying-build/image-style"
+          addPlaceholder="Add custom image style"
+        />
+        {imageStyle === "Realistic Photography" && (
+          <p className="text-xs text-muted-foreground">
+            Images will use realistic photography — natural lighting, real textures, no cartoons or miniatures.
+          </p>
+        )}
       </div>
       <div className="space-y-2">
         <CreatableSelectField

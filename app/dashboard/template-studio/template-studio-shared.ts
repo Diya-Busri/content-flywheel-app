@@ -113,6 +113,12 @@ export const SATISFYING_BUILD_STYLE_OPTIONS = [
   { value: "Futuristic Sci-Fi Build", label: "Futuristic Sci-Fi Build" },
   { value: "Nature Survival Build", label: "Nature Survival Build" },
   { value: "Luxury Architecture Build", label: "Luxury Architecture Build" },
+  { value: "Transformation", label: "Transformation (Before → During → After)" },
+] as const;
+
+export const SATISFYING_BUILD_IMAGE_STYLE_OPTIONS = [
+  { value: "Miniature/Stylized", label: "Miniature / Stylized (default)" },
+  { value: "Realistic Photography", label: "Realistic Photography" },
 ] as const;
 
 export const SATISFYING_BUILD_TONE_OPTIONS = [

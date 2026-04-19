@@ -125,9 +125,8 @@ export async function POST(request: NextRequest) {
     const whatBuilding =
       typeof body.what_building === "string" ? body.what_building.trim() : "";
     const buildStyle =
-      typeof body.build_style === "string" &&
-      BUILD_STYLES.includes(body.build_style as (typeof BUILD_STYLES)[number])
-        ? body.build_style
+      typeof body.build_style === "string" && body.build_style.trim().length > 0
+        ? body.build_style.trim()
         : "Miniature Construction";
     const tone =
       typeof body.tone === "string" && TONES.includes(body.tone as (typeof TONES)[number])
@@ -145,6 +144,10 @@ export async function POST(request: NextRequest) {
         : typeof body.openingHook === "string"
           ? body.openingHook.trim()
           : "";
+    const imageStyle =
+      typeof body.image_style === "string" ? body.image_style.trim() : "Miniature/Stylized";
+    const isRealisticPhoto = imageStyle === "Realistic Photography";
+    const isTransformation = buildStyle === "Transformation";
 
     if (!whatBuilding) {
       return NextResponse.json(
@@ -161,14 +164,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const sceneStructure = isTransformation
+      ? `- Scenes 1–2: BEFORE — show the starting point or current state in full detail; establish what exists before transformation begins
+- Scenes 3–6: DURING — show the transformation actively happening; each scene captures a distinct stage of progress
+- Scenes 7–8: AFTER — reveal the final result; scene 8 is a side-by-side or direct comparison showing how dramatically things have changed`
+      : `- Scene 1: character arrives or finds the project site
+- Scenes 2–7: progressive build steps
+- Scene 8: big reveal of the finished build`;
+
+    const imagePromptStyle = isRealisticPhoto
+      ? `Image prompt style — REALISTIC PHOTOGRAPHY:
+- Write image prompts as real-world photographic scenes, NOT cartoon, miniature, toy, or illustrated.
+- Use photography language: "DSLR photograph", "natural daylight", "shallow depth of field", "photorealistic", "cinematic still frame", "film grain", "golden hour light", etc.
+- Describe real materials, textures, and environments exactly as they would appear in a photograph.
+- Never mention "miniature", "tiny", "Lego", "cartoon", "3D render", "illustration", or "stylized".`
+      : `Image prompt style — STYLIZED/MINIATURE (default):
+- Write image prompts in a stylized, cinematic, miniature-world aesthetic appropriate for the build_style.
+- May reference miniature scale, toy-like quality, stop-motion feel, or stylized rendering as fits the scene.`;
+
     const systemPrompt = `You are a writer for satisfying build short-form videos.
 
 Generate exactly 8 scenes as a JSON object (use a top-level key "scenes" whose value is an array of 8 objects).
 
-Structure:
-- Scene 1: character arrives or finds the project site
-- Scenes 2–7: progressive build steps
-- Scene 8: big reveal of the finished build
+Scene structure:
+${sceneStructure}
 
 Each scene object must include:
 - scene_number (number, 1–8)
@@ -185,6 +204,8 @@ Apply these inputs consistently across all scenes:
 - episode_number
 - opening_hook (optional)
 
+${imagePromptStyle}
+
 Rules:
 - voiceover should be the main narration; if dialogue is used, it should complement voiceover, not contradict it.
 - image_prompt must describe one single cinematic still (no panels, grids, or multi-frame layouts).
@@ -196,6 +217,7 @@ Return ONLY valid JSON. Prefer shape: { "scenes": [ ... 8 objects ... ] }. If yo
 what_building: ${whatBuilding}
 build_style: ${buildStyle}
 tone: ${tone}
+image_style: ${imageStyle}
 episode_number: ${episodeNumber}
 opening_hook: ${openingHook || "(none)"}
 

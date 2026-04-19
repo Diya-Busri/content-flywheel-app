@@ -328,6 +328,7 @@ export default function TemplateStudioClient() {
   const [satisfyingBuildStyle, setSatisfyingBuildStyle] = useState("Miniature Construction");
   const [satisfyingBuildTone, setSatisfyingBuildTone] = useState("Satisfying");
   const [satisfyingOpeningHook, setSatisfyingOpeningHook] = useState("");
+  const [satisfyingImageStyle, setSatisfyingImageStyle] = useState("Miniature/Stylized");
   const [cookingChefType, setCookingChefType] = useState("Home Cook");
   const [cookingDishName, setCookingDishName] = useState("");
   const [cookingStyle, setCookingStyle] = useState("Cozy Home Kitchen");
@@ -1233,6 +1234,7 @@ export default function TemplateStudioClient() {
                           what_building: whatBuilding.trim(),
                           build_style: satisfyingBuildStyle,
                           tone: satisfyingBuildTone,
+                          image_style: satisfyingImageStyle,
                           episode_number: episodeForApi,
                           ...(satisfyingOpeningHook.trim()
                             ? { opening_hook: satisfyingOpeningHook.trim() }
@@ -3978,6 +3980,8 @@ export default function TemplateStudioClient() {
                 setTone={setSatisfyingBuildTone}
                 openingHook={satisfyingOpeningHook}
                 setOpeningHook={setSatisfyingOpeningHook}
+                imageStyle={satisfyingImageStyle}
+                setImageStyle={setSatisfyingImageStyle}
               />
             )}
 
