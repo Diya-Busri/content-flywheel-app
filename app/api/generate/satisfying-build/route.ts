@@ -301,28 +301,48 @@ Generate the 8-scene satisfying build episode now.`;
       scenes = prependCharacterSeedToSceneImagePrompts(scenes, character_seed);
     }
 
-    const hashtags = [
-      "#SatisfyingBuild",
-      "#OddlySatisfying",
-      "#MiniBuild",
-      "#ASMRBuild",
-      "#AIGenerated",
-      "#ShortForm",
-      "#Reels",
-      "#TikTok",
-      "#BuildInPublic",
-      "#CreativeProcess",
-      "#StopMotionVibes",
-      "#TinyWorld",
-      "#CraftTok",
-      "#EngineeringArt",
-      "#ContentCreator",
-    ];
+    const hashtags = isTimelapse
+      ? [
+          "#Construction",
+          "#BuildWithMe",
+          "#Satisfying",
+          "#OddlySatisfying",
+          "#Timelapse",
+          "#ConstructionTikTok",
+          "#BuildProgress",
+          "#DIY",
+          "#HomeRenovation",
+          "#BeforeAndAfter",
+          "#Reels",
+          "#TikTok",
+          "#ContentCreator",
+        ]
+      : [
+          "#SatisfyingBuild",
+          "#OddlySatisfying",
+          "#MiniBuild",
+          "#ASMRBuild",
+          "#AIGenerated",
+          "#ShortForm",
+          "#Reels",
+          "#TikTok",
+          "#BuildInPublic",
+          "#CreativeProcess",
+          "#StopMotionVibes",
+          "#TinyWorld",
+          "#CraftTok",
+          "#EngineeringArt",
+          "#ContentCreator",
+        ];
     const socialMediaPack = {
-      caption: `Episode ${episodeNumber}: ${whatBuilding} — ${buildStyle} energy. 🔨✨`,
+      caption: isTimelapse
+        ? `Watch ${whatBuilding} go from nothing to finished 🏗️🔨 #construction #satisfying`
+        : `Episode ${episodeNumber}: ${whatBuilding} — ${buildStyle} energy. 🔨✨`,
       title: `Episode ${episodeNumber}: ${whatBuilding} (${tone}) 🎬`,
       hashtags,
-      youtubeDescription: `A ${tone.toLowerCase()} satisfying build: ${whatBuilding} in ${buildStyle} style with a ${characterType.toLowerCase()} lead. Eight scenes from arrival to the final reveal.`,
+      youtubeDescription: isTimelapse
+        ? `Satisfying construction time-lapse: ${whatBuilding}. Eight scenes showing the full build from empty site to finished reveal.`
+        : `A ${tone.toLowerCase()} satisfying build: ${whatBuilding} in ${buildStyle} style with a ${characterType.toLowerCase()} lead. Eight scenes from arrival to the final reveal.`,
     };
 
     await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[satisfying-build] credit deduction failed:", e));
