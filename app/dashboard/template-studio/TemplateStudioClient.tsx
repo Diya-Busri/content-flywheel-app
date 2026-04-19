@@ -2485,7 +2485,12 @@ export default function TemplateStudioClient() {
             const imageBody: Record<string, unknown> = { prompt: scene.imagePrompt };
             if (mode === "15") imageBody.storyVideoFormat = storyVideoFormat;
             if (mode === "7") imageBody.aiStoryLocked = true;
-            if (mode === "8") { imageBody.photoreal = true; imageBody.identityLock = true; }
+            if (mode === "8") {
+            imageBody.photoreal = true;
+            // Construction Time-lapse has no fictional character — skip identity lock
+            // (it confuses DALL-E and causes failures for realistic construction photos)
+            imageBody.identityLock = satisfyingBuildStyle !== "Construction Time-lapse";
+          }
             res = await fetch("/api/generate-image", {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify(imageBody),
@@ -2503,6 +2508,15 @@ export default function TemplateStudioClient() {
           // Non-fatal: continue with other scenes
         }
         setAutoGenerateProgress({ done: i + 1, total });
+      }
+
+      // Guard: if no images were generated at all, abort before spending credits on compile
+      const imageCount = Object.keys(latestImageUrls).length;
+      if (imageCount === 0) {
+        throw new Error("No scene images were generated. Check your video credits and try generating images individually first.");
+      }
+      if (imageCount < ordered.length) {
+        toast({ title: `${imageCount}/${ordered.length} images ready`, description: "Some images failed to generate — continuing with available scenes.", variant: "default" });
       }
 
       // Step 2: Animate scenes (skipped for Finance/History/Tech Documentary and Satisfying Build — uses static images instead)
@@ -2639,7 +2653,7 @@ export default function TemplateStudioClient() {
           setAutoGenerateError("You need video credits to export. Buy credits to continue.");
           return;
         }
-        throw new Error(compileData.error ?? "Compile failed");
+        throw new Error(compileData.error ?? `Compile failed (HTTP ${compileRes.status})`);
       }
 
       let finalUrl = compileData.url ?? "";
