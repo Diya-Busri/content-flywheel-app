@@ -10,6 +10,7 @@ import {
   ArrowLeft, RefreshCw, ChevronDown, ChevronUp, Wand2, Shuffle,
   Download, Share2, Copy, Check, Layers, Flame,
 } from "lucide-react";
+import { HexColorPicker } from "react-colorful";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -647,6 +648,8 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   const [studioExporting, setStudioExporting] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiStyle, setAiStyle] = useState("bold");
+  const [aiTextColor, setAiTextColor] = useState("#FFFFFF"); // auto-set by garment colour
+  const [aiTextColorPickerOpen, setAiTextColorPickerOpen] = useState(false);
   const [generatingDesign, setGeneratingDesign] = useState(false);
 
   // ── Mockup state ─────────────────────────────────────────────────────────────
@@ -749,7 +752,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       const res = await fetch("/api/ai-design/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: aiPrompt.trim(), style: aiStyle }),
+        body: JSON.stringify({ prompt: aiPrompt.trim(), style: aiStyle, textColor: aiTextColor }),
       });
       const data = await res.json() as { url?: string; error?: string; code?: string; redirectTo?: string };
       if (res.status === 402) {
@@ -1862,6 +1865,52 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                     </div>
                   </div>
 
+                  {/* Text colour picker */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm">Text / graphic colour</Label>
+                      <span className="text-[10px] text-gray-400">
+                        {selectedGarmentColor ? "Auto-set from garment · override below" : "Select a garment colour above to auto-set"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setAiTextColorPickerOpen((o) => !o)}
+                        className="w-9 h-9 rounded-lg border-2 border-gray-200 dark:border-[#2A2A2A] shadow-sm flex-shrink-0 transition-transform hover:scale-105"
+                        style={{ backgroundColor: aiTextColor }}
+                        title="Pick text colour"
+                      />
+                      <div className="flex gap-2">
+                        {["#FFFFFF", "#000000", "#FF6B35", "#FFD700", "#00C49A", "#4F8EF7"].map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => { setAiTextColor(c); setAiTextColorPickerOpen(false); }}
+                            className={`w-6 h-6 rounded-full border-2 shadow-sm transition-all hover:scale-110 ${aiTextColor === c ? "border-orange-500 scale-110" : "border-white dark:border-[#2A2A2A]"}`}
+                            style={{ backgroundColor: c, outline: c === "#FFFFFF" ? "1px solid #e5e7eb" : undefined }}
+                            title={c}
+                          />
+                        ))}
+                      </div>
+                      <input
+                        type="text"
+                        value={aiTextColor}
+                        onChange={(e) => {
+                          const v = e.target.value.trim();
+                          if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) setAiTextColor(v.length === 7 ? v : aiTextColor);
+                        }}
+                        className="w-24 text-xs font-mono rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#0F0F0F] px-2 py-1.5 text-gray-800 dark:text-gray-200"
+                        placeholder="#FFFFFF"
+                      />
+                    </div>
+                    {aiTextColorPickerOpen && (
+                      <div className="mt-3">
+                        <HexColorPicker color={aiTextColor} onChange={setAiTextColor} style={{ width: "100%" }} />
+                      </div>
+                    )}
+                  </div>
+
                   {/* Generate button */}
                   <Button
                     type="button"
@@ -2643,6 +2692,8 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                                 const isDark = luminance < 0.45;
                                 setStudioBg(hex);
                                 setStudioColor(isDark ? "#FFFFFF" : "#000000");
+                                // Auto-set AI text colour to match garment contrast
+                                setAiTextColor(isDark ? "#FFFFFF" : "#000000");
                               }
                             }}
                             className={`w-6 h-6 rounded-full border-2 shadow-sm ring-1 transition-all ${isSelected ? "border-orange-500 ring-orange-400 scale-110" : "border-white dark:border-[#2A2A2A] ring-gray-200 dark:ring-[#3A3A3A]"}`}

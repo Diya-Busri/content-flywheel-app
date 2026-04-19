@@ -44,10 +44,13 @@ function promptHasText(prompt: string): boolean {
 }
 
 /** Generate with fal-ai/ideogram/v2 — excellent text rendering */
-async function generateWithIdeogram(prompt: string, style: string): Promise<string> {
+async function generateWithIdeogram(prompt: string, style: string, colorHint: string): Promise<string> {
   const styleSuffix = STYLE_SUFFIXES[style] ?? STYLE_SUFFIXES.bold;
   const ideogramStyle = IDEOGRAM_STYLE_MAP[style] ?? "DESIGN";
-  const fullPrompt = `${prompt}, ${styleSuffix}, t-shirt graphic, isolated on white background`;
+  const colorClause = colorHint !== "white" && colorHint !== "#FFFFFF"
+    ? `, ${colorHint} text and graphic elements`
+    : ", white text and graphic elements";
+  const fullPrompt = `${prompt}${colorClause}, ${styleSuffix}, t-shirt graphic, isolated on white background`;
 
   const res = await fetch("https://fal.run/fal-ai/ideogram/v2", {
     method: "POST",
@@ -75,9 +78,12 @@ async function generateWithIdeogram(prompt: string, style: string): Promise<stri
 }
 
 /** Generate with fal-ai/flux/schnell — fast graphic generation (no text) */
-async function generateWithFlux(prompt: string, style: string): Promise<string> {
+async function generateWithFlux(prompt: string, style: string, colorHint: string): Promise<string> {
   const styleSuffix = STYLE_SUFFIXES[style] ?? STYLE_SUFFIXES.bold;
-  const fullPrompt = `${prompt}, ${styleSuffix}, t-shirt graphic, isolated design, transparent background, high quality`;
+  const colorClause = colorHint !== "white" && colorHint !== "#FFFFFF"
+    ? `, ${colorHint} graphic elements`
+    : "";
+  const fullPrompt = `${prompt}${colorClause}, ${styleSuffix}, t-shirt graphic, isolated design, transparent background, high quality`;
 
   const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
     method: "POST",
@@ -151,13 +157,36 @@ export async function POST(request: Request) {
 
   let prompt: string;
   let style: string;
+  let textColor: string;
   try {
-    const body = await request.json() as { prompt?: string; style?: string };
+    const body = await request.json() as { prompt?: string; style?: string; textColor?: string };
     prompt = (body.prompt ?? "").trim();
     style = body.style ?? "bold";
+    // textColor is a hex string like "#FFFFFF" or "#000000"
+    const rawColor = (body.textColor ?? "#FFFFFF").trim();
+    textColor = /^#[0-9A-Fa-f]{6}$/.test(rawColor) ? rawColor : "#FFFFFF";
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
+
+  // Convert hex to human-readable colour name hint for the prompt
+  function hexToColorHint(hex: string): string {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const luminance = 0.2126 * (r / 255) + 0.7152 * (g / 255) + 0.0722 * (b / 255);
+    if (luminance > 0.9) return "white";
+    if (luminance < 0.1) return "black";
+    // Named colour approximation
+    if (r > 200 && g < 100 && b < 100) return "red";
+    if (r > 200 && g > 150 && b < 80) return "orange";
+    if (r > 200 && g > 200 && b < 80) return "yellow";
+    if (r < 80 && g > 150 && b < 80) return "green";
+    if (r < 80 && g < 80 && b > 180) return "blue";
+    if (r > 100 && g < 80 && b > 150) return "purple";
+    return hex; // fallback to raw hex
+  }
+  const colorHint = hexToColorHint(textColor);
 
   if (!prompt) return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
 
@@ -166,8 +195,8 @@ export async function POST(request: Request) {
   let rawImageUrl: string;
   try {
     rawImageUrl = useIdeogram
-      ? await generateWithIdeogram(prompt, style)
-      : await generateWithFlux(prompt, style);
+      ? await generateWithIdeogram(prompt, style, colorHint)
+      : await generateWithFlux(prompt, style, colorHint);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Generation failed" },
