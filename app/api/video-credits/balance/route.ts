@@ -17,6 +17,7 @@ export async function GET() {
     return NextResponse.json({ balance: profile?.videoCredits ?? 0 });
   } catch (err) {
     console.error("[video-credits/balance]", err);
-    return NextResponse.json({ balance: 0 });
+    // Return 500 so the client can distinguish "definitely 0 credits" from "couldn't check"
+    return NextResponse.json({ error: "Failed to fetch balance" }, { status: 500 });
   }
 }

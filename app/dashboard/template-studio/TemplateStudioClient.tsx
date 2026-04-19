@@ -2447,13 +2447,22 @@ export default function TemplateStudioClient() {
     setAutoGenerateProgress(null);
 
     try {
-      // Check credits
-      const creditRes = await fetch("/api/video-credits/balance");
-      const creditData = (await creditRes.json().catch(() => ({}))) as { balance?: number };
-      if ((creditData.balance ?? 0) < 1) {
-        toast({ title: "No video credits", description: "Buy credits to generate a full video.", variant: "destructive" });
-        setAutoGenerateError("You need at least 1 video credit. Buy credits to continue.");
-        return;
+      // Check credits — only block if we get a definitive balance of 0.
+      // If the balance check itself errors (DB timeout, network blip), proceed anyway;
+      // the downstream generate-image and compile APIs will catch it with a 402.
+      try {
+        const creditRes = await fetch("/api/video-credits/balance");
+        if (creditRes.ok) {
+          const creditData = (await creditRes.json().catch(() => ({}))) as { balance?: number };
+          if (typeof creditData.balance === "number" && creditData.balance < 1) {
+            toast({ title: "No video credits", description: "Buy credits to generate a full video.", variant: "destructive" });
+            setAutoGenerateError("You need at least 1 video credit. Buy credits to continue.");
+            return;
+          }
+        }
+        // If creditRes is not ok (500 = DB error etc.), silently proceed
+      } catch {
+        // Network error checking credits — proceed and let downstream APIs handle it
       }
 
       const ordered = [...aiStoryScenes].sort((a, b) => a.sceneNumber - b.sceneNumber);
