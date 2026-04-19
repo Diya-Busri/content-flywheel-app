@@ -2466,6 +2466,65 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
             <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Mockups</p>
 
+              {/* ── Colour picker strip ── */}
+              {(() => {
+                const variants = (selectedProduct.variants as Array<{ title?: string }> | null) ?? [];
+                const colorMap: Record<string, string> = {
+                  "black": "#1a1a1a", "white": "#ffffff", "navy": "#1b2a4a", "navy blue": "#1b2a4a",
+                  "grey": "#9ca3af", "gray": "#9ca3af", "charcoal": "#4b5563", "dark heather": "#374151",
+                  "heather grey": "#d1d5db", "ash": "#e5e7eb", "red": "#dc2626", "burgundy": "#7f1d1d",
+                  "maroon": "#7f1d1d", "forest green": "#166534", "olive": "#65a30d", "green": "#16a34a",
+                  "blue": "#2563eb", "royal blue": "#1d4ed8", "sky blue": "#38bdf8", "light blue": "#bae6fd",
+                  "yellow": "#facc15", "mustard": "#ca8a04", "orange": "#ea580c", "pink": "#f472b6",
+                  "light pink": "#fbcfe8", "purple": "#9333ea", "lavender": "#c4b5fd", "brown": "#92400e",
+                  "tan": "#d97706", "beige": "#fef3c7", "cream": "#fef9c3", "sand": "#fef08a",
+                  "coral": "#fb7185", "teal": "#0d9488", "mint": "#a7f3d0", "dark navy": "#0f172a",
+                  "sport grey": "#d1d5db", "military green": "#4d7c0f", "carolina blue": "#7dd3fc",
+                };
+                const uniqueColors = [...new Set(
+                  variants.map((v) => (v.title ?? "").toLowerCase().split("/")[0].trim()).filter(Boolean)
+                )];
+                if (uniqueColors.length === 0) return null;
+                return (
+                  <div className="mb-4 flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] uppercase tracking-widest text-gray-400 flex-shrink-0">Colour:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {uniqueColors.map((color) => {
+                        const hex = colorMap[color] ?? null;
+                        const isSelected = selectedGarmentColor === color;
+                        return (
+                          <button
+                            key={color}
+                            type="button"
+                            title={color.charAt(0).toUpperCase() + color.slice(1)}
+                            onClick={() => {
+                              setSelectedGarmentColor(color);
+                              if (hex) {
+                                const r = parseInt(hex.slice(1, 3), 16) / 255;
+                                const g = parseInt(hex.slice(3, 5), 16) / 255;
+                                const b = parseInt(hex.slice(5, 7), 16) / 255;
+                                const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                                const isDark = luminance < 0.45;
+                                setStudioBg(hex);
+                                setStudioColor(isDark ? "#FFFFFF" : "#000000");
+                                setAiTextColor(isDark ? "#FFFFFF" : "#000000");
+                              }
+                            }}
+                            className={`w-7 h-7 rounded-full border-2 shadow-sm ring-1 transition-all hover:scale-110 ${isSelected ? "border-orange-500 ring-orange-400 scale-110" : "border-white dark:border-[#2A2A2A] ring-gray-200 dark:ring-[#3A3A3A]"}`}
+                            style={{ backgroundColor: hex ?? "#e5e7eb", outline: color === "white" ? "1px solid #e5e7eb" : undefined }}
+                          />
+                        );
+                      })}
+                    </div>
+                    {selectedGarmentColor && (
+                      <span className="text-xs font-medium text-orange-500 ml-1">
+                        {selectedGarmentColor.charAt(0).toUpperCase() + selectedGarmentColor.slice(1)}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* ── Section 1: Printify Official Product Photos ── */}
               <div className="mb-4">
                 <div className="flex items-start gap-2.5 mb-2.5">
