@@ -290,8 +290,9 @@ Generate the 8-scene satisfying build episode now.`;
     scenes = applyOpeningHookToScenes(scenes, openingHook);
 
     // Time-lapse style has no fictional character — skip identity lock seed
+    let character_seed = "";
     if (!isTimelapse) {
-      const character_seed = await generateStoryCharacterSeed(apiKey, {
+      character_seed = await generateStoryCharacterSeed(apiKey, {
         characterTypesLine: characterType,
         themeOrBuilding: whatBuilding,
         templateName: "Satisfying Build",
