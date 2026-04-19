@@ -284,6 +284,41 @@ async function generateTextMockup(prompt: string, style: string, flat = false): 
   return url;
 }
 
+// ─── Flat lay from existing product image (img2img) ───────────────────────────
+// Uses the Printify product mockup as the image reference so the actual design
+// is preserved. FLUX img2img re-styles it as a clean overhead flat lay shot.
+async function generateFlatLayFromImage(sourceImageUrl: string, prompt: string): Promise<string> {
+  const fullPrompt = `${prompt}. White background, overhead studio lighting, clean flat lay product photography, sharp focus, commercial product photo. The exact same graphic design must be clearly visible on the garment.`;
+
+  const res = await fetch("https://fal.run/fal-ai/flux/dev/image-to-image", {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${FAL_API_KEY()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt: fullPrompt,
+      image_url: sourceImageUrl,
+      strength: 0.55, // preserve design details while changing angle/style
+      image_size: "square_hd",
+      num_inference_steps: 28,
+      guidance_scale: 3.5,
+      num_images: 1,
+      enable_safety_checker: true,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    // Non-fatal: fall back to text-only generation
+    console.warn("[ai-mockup] flat lay img2img failed, using text fallback:", text.slice(0, 200));
+    return "";
+  }
+
+  const data = await res.json() as { images?: Array<{ url: string }> };
+  return data.images?.[0]?.url ?? "";
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -351,12 +386,16 @@ export async function POST(req: Request) {
       ) ?? null;
 
     // ── Generate ──────────────────────────────────────────────────────────────
-    // Use CatVTON only when a proper Printify product mockup is available.
-    // Without it, fall back to text-to-image which always generates the correct
-    // garment type from the prompt.
+    // Lifestyle/Studio/Outdoor: use CatVTON virtual try-on with Printify mockup.
+    // Flat lay: use img2img from the Printify mockup so the actual design is
+    //   preserved (text-only FLUX has no design reference and generates blank garments).
     let imageUrl: string;
     if (!isFlat && printifyMockupUrl) {
       imageUrl = await generateTryOnMockup(printifyMockupUrl, product.blueprintTitle ?? null, style);
+    } else if (isFlat && printifyMockupUrl) {
+      imageUrl = await generateFlatLayFromImage(printifyMockupUrl, basePrompt);
+      // If img2img fails for any reason, fall back to text generation
+      if (!imageUrl) imageUrl = await generateTextMockup(basePrompt, style, isFlat);
     } else {
       imageUrl = await generateTextMockup(basePrompt, style, isFlat);
     }

@@ -2093,21 +2093,38 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   ]);
 
   const handleRegenerateScript = useCallback(async () => {
-    const hasScripts = scripts.length > 0 && currentAngleIndex >= 0 && currentAngleIndex < scripts.length;
-    const canRegenerate = (productId || libraryScriptId) && hasScripts;
+    // hasScripts: at least one script exists (gives us product context).
+    // currentAngleIndex may be BEYOND scripts.length when the user navigates to
+    // an angle that hasn't been generated yet — that's valid, we just generate it.
+    const hasProductContext = scripts.length > 0 || !!guide.productName;
+    const canRegenerate = hasProductContext && (productId || libraryScriptId || guide.productName);
     if (!canRegenerate) {
       toast({ title: "Cannot regenerate", description: "Product or script missing.", variant: "destructive" });
       return;
     }
-    const angle = scripts[currentAngleIndex].title;
+    // Angle name: use the existing script title if in-bounds, else use the named angle
+    const angle = currentAngleIndex < scripts.length
+      ? scripts[currentAngleIndex].title
+      : angles[currentAngleIndex]?.name ?? "Story Angle";
     setRegeneratingScript(true);
     try {
-      const url = productId
-        ? "/api/digital-products/regenerate-script"
-        : "/api/video-guide/regenerate-angle";
-      const body = productId
-        ? { productId, angle }
-        : { libraryScriptId, angle };
+      let url: string;
+      let body: Record<string, unknown>;
+      if (productId) {
+        url = "/api/digital-products/regenerate-script";
+        body = { productId, angle };
+      } else if (libraryScriptId) {
+        url = "/api/video-guide/regenerate-angle";
+        body = { libraryScriptId, angle };
+      } else {
+        // Inline mode: pass product context directly — no saved ID needed
+        url = "/api/video-guide/regenerate-angle";
+        body = {
+          productName: guide.productName ?? "",
+          productDescription: (guide as { productDescription?: string }).productDescription ?? "",
+          angle,
+        };
+      }
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2119,7 +2136,13 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       if (newScript) {
         setScripts((prev) => {
           const next = [...prev];
-          next[currentAngleIndex] = { ...newScript, id: next[currentAngleIndex].id };
+          if (currentAngleIndex < next.length) {
+            // Replace existing script, preserving its id
+            next[currentAngleIndex] = { ...newScript, id: next[currentAngleIndex].id };
+          } else {
+            // Angle didn't have a script yet — insert at the right slot
+            next[currentAngleIndex] = newScript;
+          }
           return next;
         });
         toast({ title: "Script updated", description: `New "${angle}" variation ready.` });
@@ -2133,7 +2156,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     } finally {
       setRegeneratingScript(false);
     }
-  }, [productId, libraryScriptId, scripts, currentAngleIndex, toast]);
+  }, [productId, libraryScriptId, guide, scripts, currentAngleIndex, toast]);
 
   const backHref = backUrl ?? "/dashboard/digital-products/results";
   const backLabel = isYouTubeMode ? "Back to Scripts" : "Back to Results";

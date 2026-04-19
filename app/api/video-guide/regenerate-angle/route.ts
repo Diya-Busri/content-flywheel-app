@@ -57,36 +57,48 @@ export async function POST(request: NextRequest) {
         ? (body.angle as (typeof SCRIPT_ANGLES)[number])
         : "Story Angle";
 
-    if (!libraryScriptId) {
-      return NextResponse.json({ error: "libraryScriptId required" }, { status: 400 });
-    }
+    // Inline mode: caller passes productName/productDescription directly (no saved library entry yet)
+    const inlineProductName = typeof body.productName === "string" ? body.productName.trim() : "";
+    const inlineProductDescription = typeof body.productDescription === "string" ? body.productDescription.trim() : "";
 
-    const [row] = await db
-      .select()
-      .from(scriptsTable)
-      .where(
-        and(
-          eq(scriptsTable.id, libraryScriptId),
-          eq(scriptsTable.userId, userId),
-          isNull(scriptsTable.deletedAt)
+    let productName: string;
+    let description: string;
+
+    if (libraryScriptId) {
+      // Load product context from saved library entry
+      const [row] = await db
+        .select()
+        .from(scriptsTable)
+        .where(
+          and(
+            eq(scriptsTable.id, libraryScriptId),
+            eq(scriptsTable.userId, userId),
+            isNull(scriptsTable.deletedAt)
+          )
         )
-      )
-      .limit(1);
-    if (!row) return NextResponse.json({ error: "Script not found" }, { status: 404 });
-    const isVideoGuide = row.platform === "video-guide" || row.platform === "content-studio";
-    if (!isVideoGuide || !row.content) {
-      return NextResponse.json({ error: "Not a video guide" }, { status: 400 });
+        .limit(1);
+      if (!row) return NextResponse.json({ error: "Script not found" }, { status: 404 });
+      const isVideoGuide = row.platform === "video-guide" || row.platform === "content-studio";
+      if (!isVideoGuide || !row.content) {
+        return NextResponse.json({ error: "Not a video guide" }, { status: 400 });
+      }
+      let guide: { productName?: string; productDescription?: string };
+      try {
+        guide = JSON.parse(row.content) as { productName?: string; productDescription?: string };
+      } catch {
+        return NextResponse.json({ error: "Invalid guide content" }, { status: 400 });
+      }
+      productName = (guide.productName ?? "").trim();
+      description = ((guide as { productDescription?: string }).productDescription ?? "").trim();
+    } else if (inlineProductName) {
+      // Inline mode: use product context passed directly in the request body
+      productName = inlineProductName;
+      description = inlineProductDescription;
+    } else {
+      return NextResponse.json({ error: "libraryScriptId or productName required" }, { status: 400 });
     }
 
-    let guide: { productName?: string; productDescription?: string };
-    try {
-      guide = JSON.parse(row.content) as { productName?: string; productDescription?: string };
-    } catch {
-      return NextResponse.json({ error: "Invalid guide content" }, { status: 400 });
-    }
-    const productName = (guide.productName ?? "").trim();
     const title = cleanProductTitle(productName) || productName || "Product";
-    const description = ((guide as { productDescription?: string }).productDescription ?? "").trim();
     const niche = "general audience";
 
     const apiKey = process.env.OPENAI_API_KEY?.trim();
