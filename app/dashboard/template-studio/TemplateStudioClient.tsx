@@ -2588,19 +2588,28 @@ export default function TemplateStudioClient() {
       // Step 4: Compile MP4
       setAutoGeneratePhase("Stitching video");
       setAutoGenerateProgress(null);
-      const scenes_json = ordered.map((scene) => ({
-        scene_number: scene.sceneNumber,
-        duration: isFinanceDocMode ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION,
-        script_text: scene.dialogue?.trim() ?? "",
-        image_url: latestImageUrls[scene.sceneNumber] ?? null,
-        // Mode 17 documentary: use image (Ken Burns) not Kling clip — Kling clips are 5s fixed
-        // which makes a 35-scene video only 3 mins. Ken Burns fills the full voiceover duration.
-        video_url: isFinanceDocMode ? null : (latestVideoUrls[scene.sceneNumber] ?? null),
-        voiceover_url: latestVoiceoverUrls[scene.sceneNumber] ?? null,
-        caption: scene.dialogue?.trim() ?? null,
-        animation_type: "video",
-        section_label: `Scene ${scene.sceneNumber}`,
-      }));
+      const scenes_json = ordered.map((scene) => {
+        const imgUrl = latestImageUrls[scene.sceneNumber] ?? null;
+        const vidUrl = isFinanceDocMode ? null : (latestVideoUrls[scene.sceneNumber] ?? null);
+        // Mode 8 (Satisfying Build): prefer static image with Ken Burns disabled over Kling clip.
+        // Kling clips may be expired/missing; image is always present after generation step.
+        const useStaticImage = mode === "8";
+        return {
+          scene_number: scene.sceneNumber,
+          duration: isFinanceDocMode ? FINANCE_DOC_SCENE_DURATION : TIMELINE_SCENE_DURATION,
+          script_text: scene.dialogue?.trim() ?? "",
+          image_url: useStaticImage ? imgUrl : (imgUrl ?? null),
+          // Mode 17 documentary: use image (Ken Burns) not Kling clip — Kling clips are 5s fixed
+          // which makes a 35-scene video only 3 mins. Ken Burns fills the full voiceover duration.
+          // Mode 8: use video clip if available, fall back to image so compile never has empty scenes.
+          video_url: useStaticImage ? null : (vidUrl ?? null),
+          voiceover_url: latestVoiceoverUrls[scene.sceneNumber] ?? null,
+          caption: scene.dialogue?.trim() ?? null,
+          animation_type: "video",
+          section_label: `Scene ${scene.sceneNumber}`,
+          ...(useStaticImage ? { disableKenBurns: true } : {}),
+        };
+      });
       const saveRes = await fetch("/api/saved-scripts", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2617,7 +2626,9 @@ export default function TemplateStudioClient() {
           scriptId: saveData.id,
           transition: "fade",
           backgroundMusic: storyBackgroundMusic,
-          outputAspect: (mode === "15" && storyVideoFormat === "short") ? "9:16" : "16:9",
+          outputAspect: (mode === "15" && storyVideoFormat === "short") ? "9:16"
+            : (mode === "8") ? "9:16"
+            : "16:9",
         }),
       });
       const compileData = (await compileRes.json().catch(() => ({}))) as { url?: string; jobId?: string; error?: string; code?: string };
