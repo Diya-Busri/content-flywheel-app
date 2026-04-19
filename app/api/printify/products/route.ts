@@ -136,21 +136,30 @@ export async function PATCH(req: Request) {
       Array.isArray(variants) && variants.length > 0 ? variants : localProduct.variants ?? []
     ) as Array<{ id: number; price: number; enabled: boolean }>;
 
-    // Auto-fetch variants from Printify catalog if none are saved yet
-    if (variantList.length === 0 && localProduct.blueprintId && localProduct.printProviderId) {
+    /** Fetch all valid variant IDs for this blueprint+print_provider from the Printify catalog */
+    async function fetchCatalogVariantList(): Promise<Array<{ id: number; price: number; enabled: boolean }> | null> {
+      if (!localProduct.blueprintId || !localProduct.printProviderId) return null;
       try {
         const catalogVariants = await printifyFetch(
           `/catalog/blueprints/${localProduct.blueprintId}/print_providers/${localProduct.printProviderId}/variants.json`,
           settings.printifyApiKey
         ) as { variants?: Array<{ id: number; title?: string }> };
         if (catalogVariants.variants && catalogVariants.variants.length > 0) {
-          variantList = catalogVariants.variants.map((v) => ({ id: v.id, price: 2500, enabled: true }));
-          // Save to DB so future syncs don't need to re-fetch
-          await db.update(podProductsTable)
-            .set({ variants: variantList as typeof localProduct.variants })
-            .where(and(eq(podProductsTable.id, productId), eq(podProductsTable.userId, userId)));
+          return catalogVariants.variants.map((v) => ({ id: v.id, price: 2500, enabled: true }));
         }
-      } catch { /* Non-fatal — will hit the guard below if still empty */ }
+      } catch { /* non-fatal */ }
+      return null;
+    }
+
+    // Auto-fetch variants from Printify catalog if none are saved yet
+    if (variantList.length === 0) {
+      const fresh = await fetchCatalogVariantList();
+      if (fresh) {
+        variantList = fresh;
+        await db.update(podProductsTable)
+          .set({ variants: variantList as typeof localProduct.variants })
+          .where(and(eq(podProductsTable.id, productId), eq(podProductsTable.userId, userId)));
+      }
     }
 
     if (variantList.length === 0) {
@@ -221,44 +230,61 @@ export async function PATCH(req: Request) {
       };
     }
 
+    /** Rebuild payload with fresh catalog variants — fixes stale IDs that cause error 8251 */
+    async function payloadWithFreshVariants(payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+      const fresh = await fetchCatalogVariantList();
+      if (!fresh || fresh.length === 0) return null;
+      // Preserve user-set prices where IDs overlap
+      const priceMap = new Map(variantList.map((v) => [v.id, v.price]));
+      const merged = fresh.map((v) => ({ id: v.id, price: priceMap.get(v.id) ?? 2500, enabled: true }));
+      await db.update(podProductsTable)
+        .set({ variants: merged as typeof localProduct.variants })
+        .where(and(eq(podProductsTable.id, productId), eq(podProductsTable.userId, userId)));
+      const freshIds = merged.map((v) => v.id);
+      const printAreas = payload.print_areas as Array<{ variant_ids: number[]; placeholders: unknown[] }>;
+      return {
+        ...payload,
+        variants: merged.map((v) => ({ id: v.id, price: v.price, is_enabled: true })),
+        print_areas: printAreas.map((pa) => ({ ...pa, variant_ids: freshIds })),
+      };
+    }
+
     async function printifySync(payload: Record<string, unknown>): Promise<string> {
       const isPlaceholderError = (err: unknown) =>
         err instanceof Error && err.message.includes("422") && err.message.toLowerCase().includes("placeholder");
+      const is8251Error = (err: unknown) =>
+        err instanceof Error && err.message.includes("8251");
+
+      async function attempt(p: Record<string, unknown>, method: "POST" | "PUT", url: string): Promise<{ id?: string }> {
+        try {
+          return await printifyFetch(url, settings.printifyApiKey, { method, body: JSON.stringify(p) }) as { id?: string };
+        } catch (err) {
+          if (isPlaceholderError(err)) {
+            return await printifyFetch(url, settings.printifyApiKey, { method, body: JSON.stringify(remapSleevePositions(p)) }) as { id?: string };
+          }
+          if (is8251Error(err)) {
+            // Stale variant IDs — re-fetch from catalog and retry once
+            const freshPayload = await payloadWithFreshVariants(p);
+            if (!freshPayload) throw err;
+            try {
+              return await printifyFetch(url, settings.printifyApiKey, { method, body: JSON.stringify(freshPayload) }) as { id?: string };
+            } catch (err2) {
+              if (isPlaceholderError(err2)) {
+                return await printifyFetch(url, settings.printifyApiKey, { method, body: JSON.stringify(remapSleevePositions(freshPayload)) }) as { id?: string };
+              }
+              throw err2;
+            }
+          }
+          throw err;
+        }
+      }
 
       if (printifyProductId) {
-        try {
-          await printifyFetch(
-            `/shops/${resolvedShopId}/products/${printifyProductId}.json`,
-            settings.printifyApiKey,
-            { method: "PUT", body: JSON.stringify(payload) }
-          );
-        } catch (err) {
-          if (!isPlaceholderError(err)) throw err;
-          // Retry with remapped sleeve position names
-          await printifyFetch(
-            `/shops/${resolvedShopId}/products/${printifyProductId}.json`,
-            settings.printifyApiKey,
-            { method: "PUT", body: JSON.stringify(remapSleevePositions(payload)) }
-          );
-        }
+        await attempt(payload, "PUT", `/shops/${resolvedShopId}/products/${printifyProductId}.json`);
         return printifyProductId;
       } else {
-        let created: { id: string };
-        try {
-          created = await printifyFetch(
-            `/shops/${resolvedShopId}/products.json`,
-            settings.printifyApiKey,
-            { method: "POST", body: JSON.stringify(payload) }
-          );
-        } catch (err) {
-          if (!isPlaceholderError(err)) throw err;
-          created = await printifyFetch(
-            `/shops/${resolvedShopId}/products.json`,
-            settings.printifyApiKey,
-            { method: "POST", body: JSON.stringify(remapSleevePositions(payload)) }
-          );
-        }
-        return created.id;
+        const created = await attempt(payload, "POST", `/shops/${resolvedShopId}/products.json`);
+        return created.id!;
       }
     }
 
