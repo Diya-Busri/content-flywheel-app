@@ -2471,22 +2471,97 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
             {/* 3D design-on-product preview (if we have blueprint image) or flat design */}
             {selectedProduct.designFileUrl && (
               <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-                  {selectedProduct.blueprintImageUrl ? "Product Preview" : "Design File"}
-                </p>
-                {selectedProduct.blueprintImageUrl ? (
-                  <DesignOnProductPreview
-                    blueprintImage={selectedProduct.blueprintImageUrl}
-                    designUrl={selectedProduct.designFileUrl}
-                    blueprintTitle={selectedProduct.blueprintTitle}
-                    className="w-full max-h-72 object-contain"
-                  />
-                ) : (
-                  <div className="w-full max-h-64 bg-gray-50 dark:bg-[#2A2A2A] rounded-xl flex items-center justify-center overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={selectedProduct.designFileUrl} alt="Design" className="max-h-64 w-auto object-contain p-4" />
-                  </div>
-                )}
+                {/* Header + colour swatches */}
+                {(() => {
+                  const variants = (selectedProduct.variants as Array<{ title?: string }> | null) ?? [];
+                  const colourMap: Record<string, string> = {
+                    "black": "#1a1a1a", "white": "#ffffff", "navy": "#1b2a4a", "navy blue": "#1b2a4a",
+                    "grey": "#9ca3af", "gray": "#9ca3af", "charcoal": "#4b5563", "dark heather": "#374151",
+                    "heather grey": "#d1d5db", "ash": "#e5e7eb", "red": "#dc2626", "burgundy": "#7f1d1d",
+                    "maroon": "#7f1d1d", "forest green": "#166534", "olive": "#65a30d", "green": "#16a34a",
+                    "blue": "#2563eb", "royal blue": "#1d4ed8", "sky blue": "#38bdf8", "light blue": "#bae6fd",
+                    "yellow": "#facc15", "mustard": "#ca8a04", "orange": "#ea580c", "pink": "#f472b6",
+                    "light pink": "#fbcfe8", "purple": "#9333ea", "lavender": "#c4b5fd", "brown": "#92400e",
+                    "tan": "#d97706", "beige": "#fef3c7", "cream": "#fef9c3", "sand": "#fef08a",
+                    "coral": "#fb7185", "teal": "#0d9488", "mint": "#a7f3d0", "dark navy": "#0f172a",
+                    "sport grey": "#d1d5db", "military green": "#4d7c0f", "carolina blue": "#7dd3fc",
+                  };
+                  const uniqueColors = [...new Set(
+                    variants.map((v) => (v.title ?? "").toLowerCase().split("/")[0].trim()).filter(Boolean)
+                  )];
+                  return (
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+                        {selectedProduct.blueprintImageUrl ? "Product Preview" : "Design File"}
+                      </p>
+                      {uniqueColors.length > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          {uniqueColors.map((color) => {
+                            const hex = colourMap[color] ?? null;
+                            const isSelected = selectedGarmentColor === color;
+                            return (
+                              <button
+                                key={color}
+                                type="button"
+                                title={color.charAt(0).toUpperCase() + color.slice(1)}
+                                onClick={() => {
+                                  setSelectedGarmentColor(isSelected ? null : color);
+                                  if (hex && !isSelected) {
+                                    const r = parseInt(hex.slice(1, 3), 16) / 255;
+                                    const g = parseInt(hex.slice(3, 5), 16) / 255;
+                                    const b = parseInt(hex.slice(5, 7), 16) / 255;
+                                    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                                    const isDark = luminance < 0.45;
+                                    setStudioBg(hex);
+                                    setStudioColor(isDark ? "#FFFFFF" : "#000000");
+                                    setAiTextColor(isDark ? "#FFFFFF" : "#000000");
+                                  }
+                                }}
+                                className={`w-5 h-5 rounded-full border-2 shadow-sm ring-1 transition-all ${isSelected ? "border-orange-500 ring-orange-400 scale-110" : "border-white dark:border-[#2A2A2A] ring-gray-200 dark:ring-[#3A3A3A] hover:scale-110"}`}
+                                style={{ backgroundColor: hex ?? "#e5e7eb" }}
+                              />
+                            );
+                          })}
+                          {selectedGarmentColor && (
+                            <span className="text-[10px] text-orange-500 font-medium capitalize ml-0.5">{selectedGarmentColor}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Preview image — show colour-matched Printify photo if available, else blueprint overlay */}
+                {(() => {
+                  const colourKey = selectedGarmentColor?.toLowerCase() ?? "";
+                  const colourPhoto = colourKey && mockupsByColour[colourKey]?.[0];
+                  if (colourPhoto) {
+                    return (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={colourPhoto}
+                        alt={`${selectedGarmentColor} hoodie`}
+                        className="w-full max-h-72 object-contain rounded-xl"
+                      />
+                    );
+                  }
+                  if (selectedProduct.blueprintImageUrl) {
+                    return (
+                      <DesignOnProductPreview
+                        blueprintImage={selectedProduct.blueprintImageUrl}
+                        designUrl={selectedProduct.designFileUrl}
+                        blueprintTitle={selectedProduct.blueprintTitle}
+                        className="w-full max-h-72 object-contain"
+                      />
+                    );
+                  }
+                  return (
+                    <div className="w-full max-h-64 bg-gray-50 dark:bg-[#2A2A2A] rounded-xl flex items-center justify-center overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={selectedProduct.designFileUrl} alt="Design" className="max-h-64 w-auto object-contain p-4" />
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
