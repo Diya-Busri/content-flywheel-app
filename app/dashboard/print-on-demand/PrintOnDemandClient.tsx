@@ -675,6 +675,8 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
   // ── Pricing editor state ─────────────────────────────────────────────────────
   const [editingPricing, setEditingPricing] = useState(false);
   const [bulkPrice, setBulkPrice] = useState("");
+  // Per-colour prices used while the pricing editor is open: { "Black": "25.00", "White": "28.00" }
+  const [perColourPrices, setPerColourPrices] = useState<Record<string, string>>({});
   const [savingPricing, setSavingPricing] = useState(false);
 
   // ── Stock limit state ────────────────────────────────────────────────────────
@@ -1144,15 +1146,39 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
 
   const handleSavePricing = async () => {
     if (!selectedProduct) return;
-    const priceVal = parseFloat(bulkPrice);
-    if (isNaN(priceVal) || priceVal <= 0) {
-      toast({ title: "Enter a valid price", variant: "destructive" });
-      return;
-    }
     setSavingPricing(true);
     try {
       const storedVariants = (selectedProduct.variants as Array<{ id: number; price: number; title?: string; enabled?: boolean }> | null) ?? [];
-      const updatedVariants = storedVariants.map((v) => ({ ...v, price: Math.round(priceVal * 100) }));
+
+      // Helper: extract colour from variant title "Black / S" → "Black"
+      const getColour = (title?: string) => (title ?? "").split(" / ")[0]?.trim() ?? "";
+
+      let updatedVariants: typeof storedVariants;
+
+      if (Object.keys(perColourPrices).length > 0) {
+        // Per-colour mode: apply each colour's price to all its size variants
+        updatedVariants = storedVariants.map((v) => {
+          const colour = getColour(v.title);
+          const colourPrice = perColourPrices[colour];
+          if (colourPrice !== undefined) {
+            const priceVal = parseFloat(colourPrice);
+            if (!isNaN(priceVal) && priceVal > 0) {
+              return { ...v, price: Math.round(priceVal * 100) };
+            }
+          }
+          return v;
+        });
+      } else {
+        // Bulk fallback
+        const priceVal = parseFloat(bulkPrice);
+        if (isNaN(priceVal) || priceVal <= 0) {
+          toast({ title: "Enter a valid price", variant: "destructive" });
+          setSavingPricing(false);
+          return;
+        }
+        updatedVariants = storedVariants.map((v) => ({ ...v, price: Math.round(priceVal * 100) }));
+      }
+
       // Save to DB
       const res = await fetch("/api/pod/update-product", {
         method: "PATCH",
@@ -1165,6 +1191,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       setEditingPricing(false);
       setBulkPrice("");
+      setPerColourPrices({});
       toast({ title: "Pricing saved!", description: connected ? "Re-sync to Printify to apply the new prices." : "Prices updated." });
     } catch (err) {
       toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
@@ -2852,62 +2879,137 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
               return (
                 <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4 space-y-4">
                   {/* Sale price row */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">💰 Sale Price</p>
-                      {!editingPricing && (
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white mt-0.5">£{avgPrice.toFixed(2)}</p>
-                      )}
-                    </div>
-                    {!editingPricing && (
-                      <button
-                        type="button"
-                        onClick={() => { setEditingPricing(true); setBulkPrice(avgPrice.toFixed(2)); }}
-                        className="text-xs font-medium text-orange-500 hover:text-orange-600 border border-orange-200 dark:border-orange-800/50 rounded-lg px-3 py-1.5"
-                      >
-                        Edit Price
-                      </button>
-                    )}
-                  </div>
+                  {(() => {
+                    // Group variants by colour for per-colour pricing
+                    const getColour = (title?: string) => (title ?? "").split(" / ")[0]?.trim() ?? "";
+                    const colourGroups: Record<string, { avgPrice: number }> = {};
+                    for (const v of enabledVariants) {
+                      const colour = getColour(v.title);
+                      if (!colourGroups[colour]) colourGroups[colour] = { avgPrice: 0 };
+                      colourGroups[colour]!.avgPrice += v.price / 100;
+                    }
+                    // Average price per colour (in case sizes differ in price)
+                    const colourCounts: Record<string, number> = {};
+                    for (const v of enabledVariants) {
+                      const colour = getColour(v.title);
+                      colourCounts[colour] = (colourCounts[colour] ?? 0) + 1;
+                    }
+                    const colours = Object.keys(colourGroups);
+                    const colourAvgPrices: Record<string, number> = {};
+                    for (const colour of colours) {
+                      colourAvgPrices[colour] = colourGroups[colour]!.avgPrice / (colourCounts[colour] ?? 1);
+                    }
+                    const multiColour = colours.length > 1;
 
-                  {editingPricing && (
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Set price for all variants</p>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1.5 flex-1 border border-gray-200 dark:border-[#2A2A2A] rounded-xl px-3 py-2">
-                            <span className="text-sm font-semibold text-gray-500">£</span>
-                            <input
-                              type="number"
-                              min="0.01"
-                              step="0.01"
-                              value={bulkPrice}
-                              onChange={(e) => setBulkPrice(e.target.value)}
-                              className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
-                              placeholder="25.00"
-                              autoFocus
-                            />
+                    return (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">💰 Sale Price</p>
+                            {!editingPricing && (
+                              multiColour ? (
+                                <div className="mt-1 space-y-0.5">
+                                  {colours.map((colour) => (
+                                    <p key={colour} className="text-sm font-bold text-gray-900 dark:text-white">
+                                      {colour}: £{colourAvgPrices[colour]!.toFixed(2)}
+                                    </p>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-0.5">£{avgPrice.toFixed(2)}</p>
+                              )
+                            )}
                           </div>
-                          <Button
-                            onClick={handleSavePricing}
-                            disabled={savingPricing}
-                            className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5 shrink-0"
-                          >
-                            {savingPricing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                            Save
-                          </Button>
-                          <button
-                            type="button"
-                            onClick={() => { setEditingPricing(false); setBulkPrice(""); }}
-                            className="text-xs text-gray-400 hover:text-gray-600 shrink-0"
-                          >
-                            Cancel
-                          </button>
+                          {!editingPricing && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingPricing(true);
+                                setBulkPrice(avgPrice.toFixed(2));
+                                // Initialise per-colour prices from current variant prices
+                                const init: Record<string, string> = {};
+                                for (const colour of colours) {
+                                  init[colour] = colourAvgPrices[colour]!.toFixed(2);
+                                }
+                                setPerColourPrices(init);
+                              }}
+                              className="text-xs font-medium text-orange-500 hover:text-orange-600 border border-orange-200 dark:border-orange-800/50 rounded-lg px-3 py-1.5"
+                            >
+                              Edit Price
+                            </button>
+                          )}
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1">{storedVariants.length} variant{storedVariants.length !== 1 ? "s" : ""} — all set to the same price. Re-sync after saving to update Printify.</p>
-                      </div>
-                    </div>
-                  )}
+
+                        {editingPricing && (
+                          <div className="space-y-3">
+                            {/* Per-colour price inputs */}
+                            {colours.map((colour) => (
+                              <div key={colour}>
+                                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{colour}</p>
+                                <div className="flex items-center gap-1.5 border border-gray-200 dark:border-[#2A2A2A] rounded-xl px-3 py-2">
+                                  <span className="text-sm font-semibold text-gray-500">£</span>
+                                  <input
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    value={perColourPrices[colour] ?? colourAvgPrices[colour]!.toFixed(2)}
+                                    onChange={(e) => setPerColourPrices((prev) => ({ ...prev, [colour]: e.target.value }))}
+                                    className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
+                                    placeholder="25.00"
+                                    autoFocus={colours.indexOf(colour) === 0}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                            {/* Set all to same price shortcut */}
+                            {multiColour && (
+                              <div>
+                                <p className="text-xs text-gray-400 mb-1">Or set all colours to the same price:</p>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1.5 flex-1 border border-gray-200 dark:border-[#2A2A2A] rounded-xl px-3 py-2">
+                                    <span className="text-sm text-gray-500">£</span>
+                                    <input
+                                      type="number"
+                                      min="0.01"
+                                      step="0.01"
+                                      value={bulkPrice}
+                                      onChange={(e) => {
+                                        setBulkPrice(e.target.value);
+                                        // Apply to all colours instantly
+                                        const v = e.target.value;
+                                        setPerColourPrices(Object.fromEntries(colours.map((c) => [c, v])));
+                                      }}
+                                      className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white outline-none"
+                                      placeholder="25.00"
+                                    />
+                                  </div>
+                                  <span className="text-xs text-gray-400">→ all</span>
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 pt-1">
+                              <Button
+                                onClick={handleSavePricing}
+                                disabled={savingPricing}
+                                className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+                              >
+                                {savingPricing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                                Save
+                              </Button>
+                              <button
+                                type="button"
+                                onClick={() => { setEditingPricing(false); setBulkPrice(""); setPerColourPrices({}); }}
+                                className="text-xs text-gray-400 hover:text-gray-600"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                            <p className="text-[10px] text-gray-400">Re-sync to Printify after saving to apply new prices.</p>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {/* Profit Calculator */}
                   <div className="pt-1 border-t border-gray-100 dark:border-[#2A2A2A]">
