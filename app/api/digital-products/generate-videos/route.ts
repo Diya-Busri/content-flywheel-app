@@ -194,8 +194,13 @@ export async function POST(request: NextRequest) {
           )
         );
       if (product?.marketingAssets && typeof product.marketingAssets === "object") {
-        const ma = product.marketingAssets as { thumbnailUrl?: string };
-        if (ma.thumbnailUrl) imageUrl = ma.thumbnailUrl;
+        const ma = product.marketingAssets as {
+          thumbnailUrl?: string | null;
+          coverThumbnailUrl?: string | null;
+          bookMockupUrl?: string | null;
+        };
+        // Prefer actual book cover thumbnail → DALL-E book mockup → generic AI thumbnail
+        imageUrl = ma.coverThumbnailUrl || ma.bookMockupUrl || ma.thumbnailUrl || null;
       }
     }
 

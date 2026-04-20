@@ -470,8 +470,15 @@ export async function POST(request: NextRequest) {
         productNameRes = cleanProductTitle(rawTitle) || rawTitle || productNameRes;
         const maDesc = (product.marketingAssets as { productDescription?: string } | null)?.productDescription;
         if (typeof maDesc === "string" && maDesc.trim()) productDesc = maDesc;
-        const ma = product.marketingAssets as { thumbnailUrl?: string; galleryUrls?: string[] } | null;
-        if (ma?.thumbnailUrl) stockImages = [ma.thumbnailUrl];
+        const ma = product.marketingAssets as {
+          thumbnailUrl?: string | null;
+          coverThumbnailUrl?: string | null;
+          bookMockupUrl?: string | null;
+          galleryUrls?: string[];
+        } | null;
+        // Prefer the actual book cover thumbnail → DALL-E book mockup → generic AI thumbnail
+        const heroImage = ma?.coverThumbnailUrl || ma?.bookMockupUrl || ma?.thumbnailUrl || null;
+        if (heroImage) stockImages = [heroImage];
         if (Array.isArray(ma?.galleryUrls)) stockImages = [...stockImages, ...ma.galleryUrls];
         productNicheRes = String(product.niche ?? "").trim();
       }
