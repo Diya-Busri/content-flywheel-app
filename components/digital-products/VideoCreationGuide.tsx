@@ -264,7 +264,19 @@ function parseSceneOverlayObjs(rawOverlay: unknown): TextOverlayObj[] {
   return [];
 }
 
-type VisualDirection = { aiPrompt?: string; cameraAngle?: string; lightingMood?: string; colorPalette?: string; mediaType?: string };
+type VisualDirection = {
+  aiPrompt?: string;
+  cameraAngle?: string;
+  lightingMood?: string;
+  colorPalette?: string;
+  mediaType?: string;
+  // Dark Infographic fields
+  slideType?: "funnel" | "vs_comparison" | "steps" | "stat_callout" | "text_hook";
+  slideTitle?: string;
+  slidePoints?: string[];
+  highlightWord?: string;
+  textHook?: string;
+};
 
 export type VideoGuideData = {
   script: { hook: string; body: string; cta: string };
@@ -301,6 +313,8 @@ export type VideoGuideData = {
   storytellingFramework?: string;
   frameworkRationale?: string;
   engagementTriggers?: string[];
+  /** Video style chosen by the user on the VideosFlow page. */
+  videoStyle?: string;
 };
 
 export type ScriptForGuide = { id: string; title: string; length: number; hook: string; body: string; cta: string };
@@ -3261,6 +3275,106 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                       const sceneIs169 = sceneAr === "16:9";
                       const sceneImgUrl = guideSceneImageUrls[i];
                       const sceneBusy = guideSceneImageLoadingIndex === i || guideBulkImagesLoading;
+
+                      // ── Dark Infographic: show slide preview card instead of AI prompt + generate button ──
+                      if (vd?.mediaType === "dark_infographic") {
+                        const slideRef = (el: HTMLDivElement | null) => {
+                          if (el) (window as Record<string, unknown>)[`__infographic_slide_${i}`] = el;
+                        };
+                        const accentColors = ["#22d3ee", "#a3e635", "#fbbf24", "#f472b6", "#818cf8"];
+                        const accent = accentColors[i % accentColors.length];
+
+                        const handleExportSlide = async () => {
+                          const el = (window as Record<string, unknown>)[`__infographic_slide_${i}`] as HTMLElement | undefined;
+                          if (!el) return;
+                          try {
+                            const html2canvas = (await import("html2canvas")).default;
+                            const canvas = await html2canvas(el, { backgroundColor: "#000000", scale: 2, useCORS: true });
+                            const link = document.createElement("a");
+                            link.download = `scene-${i + 1}-infographic.png`;
+                            link.href = canvas.toDataURL("image/png");
+                            link.click();
+                          } catch {
+                            toast({ title: "Export failed", description: "Could not capture the slide", variant: "destructive" });
+                          }
+                        };
+
+                        return (
+                          <div className="space-y-3">
+                            <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Slide preview</p>
+
+                            {/* Slide preview card — black bg, bold sans, accent colours */}
+                            <div
+                              ref={slideRef}
+                              className="relative rounded-xl overflow-hidden w-full max-w-sm mx-auto"
+                              style={{ background: "#000", aspectRatio: "9/16", fontFamily: "'Inter', 'Helvetica Neue', sans-serif", padding: "5%" }}
+                            >
+                              {/* Slide type badge */}
+                              {vd.slideType && (
+                                <span
+                                  className="absolute top-4 right-4 text-[10px] uppercase tracking-widest font-bold px-2 py-1 rounded"
+                                  style={{ background: accent, color: "#000" }}
+                                >
+                                  {vd.slideType.replace(/_/g, " ")}
+                                </span>
+                              )}
+
+                              {/* Slide title */}
+                              {vd.slideTitle && (
+                                <p className="text-white font-bold mb-4 leading-tight" style={{ fontSize: "clamp(14px, 4vw, 20px)", marginTop: "10%" }}>
+                                  {vd.slideTitle.split(" ").map((word, wi) =>
+                                    word.toLowerCase() === vd.highlightWord?.toLowerCase()
+                                      ? <span key={wi} style={{ color: "#facc15" }}>{word} </span>
+                                      : <span key={wi}>{word} </span>
+                                  )}
+                                </p>
+                              )}
+
+                              {/* Slide points */}
+                              {Array.isArray(vd.slidePoints) && vd.slidePoints.length > 0 && (
+                                <ul className="space-y-2 mb-6" style={{ listStyle: "none", padding: 0 }}>
+                                  {vd.slidePoints.map((pt, pi) => (
+                                    <li key={pi} className="flex items-start gap-2 text-white" style={{ fontSize: "clamp(11px, 3vw, 14px)" }}>
+                                      <span className="shrink-0 mt-0.5 w-2 h-2 rounded-full" style={{ background: accentColors[pi % accentColors.length], marginTop: 4 }} />
+                                      <span>{pt}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+
+                              {/* Divider */}
+                              <div className="absolute left-[5%] right-[5%]" style={{ bottom: "22%", height: 1, background: "#333" }} />
+
+                              {/* Text hook — large bold bottom text */}
+                              {vd.textHook && (
+                                <p
+                                  className="absolute left-[5%] right-[5%] font-black leading-tight"
+                                  style={{ bottom: "6%", fontSize: "clamp(16px, 5vw, 26px)", color: "#fff" }}
+                                >
+                                  {vd.textHook.split(" ").map((word, wi) =>
+                                    word.toLowerCase() === vd.highlightWord?.toLowerCase()
+                                      ? <span key={wi} style={{ color: "#facc15" }}>{word} </span>
+                                      : <span key={wi}>{word} </span>
+                                  )}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Export button */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleExportSlide}
+                              className="gap-1.5"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Export Slide as PNG
+                            </Button>
+                          </div>
+                        );
+                      }
+
+                      // ── Default: AI image prompt + generate button ──
                       return (
                         <div>
                           <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Visual / AI image prompt</p>

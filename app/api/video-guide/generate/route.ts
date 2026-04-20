@@ -328,6 +328,94 @@ Return ONLY this JSON object (no markdown). Include ONLY platforms in the list. 
 Include platformGuides ONLY for these platform IDs: ${platforms.join(", ")}. contentCalendar and repurposingGuide tailored to selected platforms. Output ONLY the JSON object.`;
 }
 
+function buildDarkInfographicPrompt(
+  productName: string,
+  productDesc: string,
+  hook: string,
+  body: string,
+  cta: string,
+  durationSeconds?: number,
+  targetSceneCount?: number
+): string {
+  const lengthOpt = durationSeconds != null ? getVideoLengthOptionOrDefault(durationSeconds) : null;
+  const sceneCount = targetSceneCount ?? lengthOpt?.scenesMin ?? 5;
+  const durationSec = lengthOpt?.durationSec ?? 30;
+  return `Product: "${productName}"
+${productDesc ? `Description: ${productDesc}` : ""}
+Script Hook: "${hook}"
+Script Body: "${(body || "").slice(0, 400)}"
+Script CTA: "${cta}"
+
+Generate a DARK INFOGRAPHIC video brief with exactly ${sceneCount} scenes (total ~${durationSec}s).
+
+This style uses bold text slides on a BLACK background — no AI characters, no lifestyle photography.
+Each slide type conveys information visually with text, labels, bullet points, and one highlighted word.
+
+For EACH scene return:
+- "slideType": one of "funnel" | "vs_comparison" | "steps" | "stat_callout" | "text_hook"
+- "slideTitle": short heading for the slide (5-8 words, sentence case)
+- "slidePoints": array of 2-4 bullet points or labels relevant to the script content
+- "highlightWord": the single most important word on the slide — shown in yellow/accent
+- "textHook": the large bold bottom text overlay (mirrors or expands the voiceover line)
+- "mediaType": always "dark_infographic"
+
+Also set textOverlay.exactText = the textHook value (for voiceover mapping).
+Do NOT include aiPrompt, cameraAngle, or lightingMood fields.
+
+Slide type guide:
+- "text_hook": Opening hook — huge bold statement, 1-3 words dominant. Good for Scene 1.
+- "stat_callout": A specific number/statistic with context (e.g. "83% of creators quit in year 1").
+- "vs_comparison": Two-column Left vs Right comparison (e.g. "Before / After", "Old way / New way").
+- "steps": Numbered steps list (e.g. "Step 1 → Step 2 → Step 3"). Good for value/process scenes.
+- "funnel": Top-to-bottom funnel or pyramid with 3-4 levels. Good for "why most people fail" scenes.
+
+Scene flow for ${sceneCount} scenes:
+- Scene 1: text_hook (pattern interrupt, matches the hook line)
+- Scene 2: stat_callout or vs_comparison (agitate the problem)
+- Scenes 3–${sceneCount - 1}: steps or funnel (value / solution from the body)
+- Scene ${sceneCount}: text_hook or stat_callout (CTA urgency)
+
+Return ONLY this JSON object (no markdown, no code fences):
+{
+  "storytellingFramework": "Dark Infographic",
+  "frameworkRationale": "Bold graphic slides educate and sell without characters or AI imagery.",
+  "scenes": [
+    {
+      "scene": "Scene 1 - Hook",
+      "timing": "0-${Math.round(durationSec / sceneCount)}s",
+      "visualDirection": {
+        "slideType": "text_hook",
+        "slideTitle": "Short heading here",
+        "slidePoints": ["Point 1", "Point 2"],
+        "highlightWord": "keyword",
+        "textHook": "BOLD BOTTOM TEXT",
+        "mediaType": "dark_infographic"
+      },
+      "textOverlay": {
+        "exactText": "BOLD BOTTOM TEXT",
+        "fontStyle": "Bold sans-serif",
+        "size": "large",
+        "position": "bottom third",
+        "color": "white",
+        "animation": "word-by-word reveal",
+        "timingNote": "0.3s per word"
+      },
+      "transition": { "toNextScene": "quick cut", "effects": "none", "pacing": "fast (0.5-1s)" },
+      "audio": { "musicVolume": "quiet", "beatDrops": "none", "soundEffects": "none", "mood": "focused" }
+    }
+  ],
+  "engagementTriggers": [
+    "First frame: huge bold text on black — instant pattern interrupt",
+    "Yellow highlight draws the eye to the key word",
+    "No characters = no distraction from the message",
+    "Stat slides build credibility fast",
+    "CTA slide: contrasting accent colour for the action word"
+  ]
+}
+
+Generate all ${sceneCount} scenes. Output ONLY the JSON object.`;
+}
+
 function buildRevealBriefPrompt(productName: string, hook: string, body: string, cta: string): string {
   return `You are a creative director for a drop-culture clothing brand. Generate a 4-scene product reveal video brief.
 
@@ -523,6 +611,7 @@ export async function POST(request: NextRequest) {
 
     if (apiKey) {
       const isReveal = videoStyle === "reveal";
+      const isDarkInfographic = videoStyle === "dark_infographic";
       const briefMessages = isReveal
         ? [
             {
@@ -532,6 +621,25 @@ export async function POST(request: NextRequest) {
             {
               role: "user" as const,
               content: buildRevealBriefPrompt(productNameRes, hook || "", bodyText || "", cta || ""),
+            },
+          ]
+        : isDarkInfographic
+        ? [
+            {
+              role: "system" as const,
+              content: "You are a graphic design director specialising in dark infographic short-form video slides. Return only valid JSON.",
+            },
+            {
+              role: "user" as const,
+              content: buildDarkInfographicPrompt(
+                productNameRes,
+                productDesc,
+                hook || "",
+                bodyText || "",
+                cta || "",
+                durationSeconds,
+                targetSceneCount
+              ),
             },
           ]
         : [
@@ -549,7 +657,7 @@ export async function POST(request: NextRequest) {
                 cta || "",
                 durationSeconds,
                 videoFormat,
-                isReveal ? 4 : targetSceneCount
+                targetSceneCount
               ),
             },
           ];
@@ -865,6 +973,7 @@ export async function POST(request: NextRequest) {
       repurposingGuide,
       thumbnailGuide,
       ...(typeof logoDataUrl === "string" && logoDataUrl.startsWith("data:") && { logoDataUrl }),
+      ...(videoStyle && { videoStyle }),
     };
 
     // Save video guide to library so it appears in My Library alongside products and scripts

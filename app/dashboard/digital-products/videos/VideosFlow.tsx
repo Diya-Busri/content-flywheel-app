@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Check, Play, Loader2, User, Image, Package, Sparkles, AlertCircle, FileText, Plus, X, BookOpen, PartyPopper } from "lucide-react";
+import { ArrowLeft, Check, Play, Loader2, User, Image, Package, Sparkles, AlertCircle, FileText, Plus, X, BookOpen, PartyPopper, BarChart2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { VIDEO_GUIDE_PLATFORMS } from "@/lib/video-guide-platforms";
 import { cleanProductTitle } from "@/lib/product-title";
@@ -55,6 +55,7 @@ const VIDEO_STYLES = [
   { id: "broll", label: "B-roll + Text", icon: Image, desc: "Recommended for faceless" },
   { id: "showcase", label: "Product Showcase", icon: Package, desc: "Voiceover" },
   { id: "explainer", label: "Animated Explainer", icon: Sparkles, desc: "Graphics only" },
+  { id: "dark_infographic", label: "Dark Infographic", icon: BarChart2, desc: "Bold text + diagram slides on dark bg" },
 ];
 
 export default function VideosFlow() {
@@ -232,6 +233,7 @@ export default function VideosFlow() {
             productName: (productName || "").trim() || undefined,
             productId: productId || undefined,
             platforms: selectedPlatformIds.length > 0 ? selectedPlatformIds : ["tiktok"],
+            videoStyle: videoStyle || undefined,
             ...(logoDataUrl && { logoDataUrl }),
           }),
         }),
@@ -475,6 +477,11 @@ export default function VideosFlow() {
                 <CardTitle className="text-lg text-foreground">Visual customization</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
+                {videoStyle === "dark_infographic" ? (
+                  <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                    Dark Infographic style uses a fixed black background with bold text slides — no background selection needed.
+                  </div>
+                ) : (
                 <div>
                   <Label className="text-foreground">Background style</Label>
                   <div className="grid gap-2 mt-2">
@@ -498,6 +505,7 @@ export default function VideosFlow() {
                     ))}
                   </div>
                 </div>
+                )}
                 <div>
                   <Label className="text-foreground">Text caption style</Label>
                   <p className="text-xs text-muted-foreground mb-2">5 visual presets (click to select)</p>
