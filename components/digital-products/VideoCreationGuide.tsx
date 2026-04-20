@@ -3401,8 +3401,69 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                               {/* ── Slide-type graphic + points ── */}
                               {(() => {
                                 const pts = Array.isArray(vd.slidePoints) ? vd.slidePoints : [];
+                                const isLastScene = i === scenes.length - 1;
+                                const isFirstScene = i === 0;
                                 /** Truncate long strings to fit SVG text nodes */
                                 const tr = (s: string, max = 22) => s.length > max ? s.slice(0, max - 1) + "…" : s;
+
+                                /* ── Last scene: product book cover ── */
+                                if (isLastScene && productThumbnailUrl) {
+                                  return (
+                                    <div style={{ margin: "10px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                                      <img
+                                        src={productThumbnailUrl}
+                                        alt="Product cover"
+                                        crossOrigin="anonymous"
+                                        style={{
+                                          maxHeight: 195,
+                                          maxWidth: "80%",
+                                          objectFit: "contain",
+                                          borderRadius: 10,
+                                          boxShadow: `0 0 28px ${accent}55, 0 0 8px ${accent}33`,
+                                          display: "block",
+                                        }}
+                                      />
+                                    </div>
+                                  );
+                                }
+
+                                /* ── First scene: lightning bolt hook graphic ── */
+                                if (isFirstScene) {
+                                  const rads = [0, 45, 90, 135, 180, 225, 270, 315].map((d) => (d * Math.PI) / 180);
+                                  return (
+                                    <div style={{ margin: "10px 0" }}>
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                        {/* Outer glow ring */}
+                                        <circle cx="150" cy="85" r="78" fill="none" stroke={accent} strokeWidth="1" opacity="0.1" />
+                                        <circle cx="150" cy="85" r="60" fill="none" stroke={accent} strokeWidth="1" opacity="0.16" />
+                                        {/* 8 radiating tick marks */}
+                                        {rads.map((r, ri) => (
+                                          <line
+                                            key={ri}
+                                            x1={150 + Math.cos(r) * 62} y1={85 + Math.sin(r) * 62}
+                                            x2={150 + Math.cos(r) * 78} y2={85 + Math.sin(r) * 78}
+                                            stroke={accent} strokeWidth="1.5" opacity="0.35"
+                                          />
+                                        ))}
+                                        {/* Lightning bolt — filled glow layer */}
+                                        <polygon
+                                          points="168,18 106,98 142,98 116,158 194,78 158,78"
+                                          fill={accent} opacity="0.15"
+                                        />
+                                        {/* Lightning bolt — bright stroke */}
+                                        <polygon
+                                          points="168,18 106,98 142,98 116,158 194,78 158,78"
+                                          fill="none" stroke={accent} strokeWidth="2" opacity="0.9"
+                                        />
+                                        {/* Hot core highlight */}
+                                        <polygon
+                                          points="162,30 118,94 146,94 124,148 184,84 156,84"
+                                          fill={accent} opacity="0.07"
+                                        />
+                                      </svg>
+                                    </div>
+                                  );
+                                }
                                 /** Split a string into two SVG-friendly lines */
                                 const twoLines = (s: string, max = 14): [string, string] => {
                                   if (s.length <= max) return [s, ""];
