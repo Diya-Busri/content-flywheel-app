@@ -469,6 +469,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const [copyFormatByScene, setCopyFormatByScene] = useState<Record<number, PromptPlatform>>({});
   /** Per-scene: "still" = Still Image, "video" = Video Clip (adds motion instructions). */
   const [mediaTypeByScene, setMediaTypeByScene] = useState<Record<number, "still" | "video">>({});
+  /** Refs to rendered dark-infographic slide DOM elements — used for html2canvas export + MP4 compile. */
+  const darkSlideRefs = useRef<(HTMLDivElement | null)[]>([]);
   /** DALL·E scene stills for Video Timeline (same flow as Template Studio AI Story). */
   const [guideSceneImageUrls, setGuideSceneImageUrls] = useState<Record<number, string>>({});
   const [guideSceneVideoUrls, setGuideSceneVideoUrls] = useState<Record<number, string>>({});
@@ -1556,6 +1558,82 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     productThumbnailUrl,
     productId,
     buildGuideSceneCaptionText,
+    toast,
+  ]);
+
+  /** Compile Dark Infographic slides → MP4 via backend FFmpeg pipeline. */
+  const handleCompileInfographic = useCallback(async () => {
+    if (scenes.length === 0) {
+      toast({ title: "No scenes", description: "Add a scene breakdown first.", variant: "destructive" });
+      return;
+    }
+    setGuideFullVideoLoading(true);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const slideImages: string[] = [];
+      for (let i = 0; i < scenes.length; i++) {
+        const el = darkSlideRefs.current[i];
+        if (!el) throw new Error(`Slide ${i + 1} not rendered — scroll through all scenes first so every slide loads.`);
+        const canvas = await html2canvas(el, { backgroundColor: "#000000", scale: 2, useCORS: true });
+        slideImages.push(canvas.toDataURL("image/png"));
+      }
+      const voiceoverUrls = scenes.map((_, i) =>
+        guideCoachVoiceoverUrls[i]?.trim() || perSceneUrls[i]?.trim() || ""
+      );
+      const sceneDurations = scenes.map((s) => {
+        const t = parseSceneTiming(s.timing ?? "0-0");
+        return Math.max(2, t.endSec - t.startSec);
+      });
+      const res = await fetch("/api/video-guide/compile-infographic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slideImages,
+          voiceoverUrls,
+          sceneDurations,
+          productName: effectiveProductName || guide.productName || "",
+          libraryScriptId: libraryScriptId || "",
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { videoUrl?: string; error?: string };
+      if (!res.ok) throw new Error(data.error || "Compile failed");
+      if (!data.videoUrl) throw new Error("No video URL returned");
+      setLastCompiledVideoUrl(data.videoUrl);
+      const a = document.createElement("a");
+      a.href = data.videoUrl;
+      a.download = `infographic-${Date.now()}.mp4`;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast({
+        title: "Dark Infographic video ready ✅",
+        description: "Downloading now.",
+        duration: 60000,
+        action: (
+          <ToastAction altText="Open in new tab" onClick={() => window.open(data.videoUrl, "_blank", "noopener,noreferrer")}>
+            Open
+          </ToastAction>
+        ),
+      });
+    } catch (e) {
+      toast({
+        title: "Compile failed",
+        description: e instanceof Error ? e.message : "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setGuideFullVideoLoading(false);
+    }
+  }, [
+    scenes,
+    darkSlideRefs,
+    guideCoachVoiceoverUrls,
+    perSceneUrls,
+    effectiveProductName,
+    guide.productName,
+    libraryScriptId,
     toast,
   ]);
 
@@ -3279,13 +3357,13 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                       // ── Dark Infographic: show slide preview card instead of AI prompt + generate button ──
                       if (vd?.mediaType === "dark_infographic") {
                         const slideRef = (el: HTMLDivElement | null) => {
-                          if (el) (window as Record<string, unknown>)[`__infographic_slide_${i}`] = el;
+                          darkSlideRefs.current[i] = el;
                         };
                         const accentColors = ["#22d3ee", "#a3e635", "#fbbf24", "#f472b6", "#818cf8"];
                         const accent = accentColors[i % accentColors.length];
 
                         const handleExportSlide = async () => {
-                          const el = (window as Record<string, unknown>)[`__infographic_slide_${i}`] as HTMLElement | undefined;
+                          const el = darkSlideRefs.current[i];
                           if (!el) return;
                           try {
                             const html2canvas = (await import("html2canvas")).default;
@@ -3514,8 +3592,13 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             </Card>
 
             {(() => {
-              const someSceneHasMedia = scenes.some((_, i) => !!(guideSceneImageUrls[i]?.trim() || guideSceneVideoUrls[i]?.trim()));
-              const allScenesHaveMedia = scenes.length > 0 && scenes.every((_, i) => !!(guideSceneImageUrls[i]?.trim() || guideSceneVideoUrls[i]?.trim()));
+              const isDarkInfographic = guide.videoStyle === "dark_infographic";
+              const someSceneHasMedia = isDarkInfographic
+                ? scenes.length > 0
+                : scenes.some((_, i) => !!(guideSceneImageUrls[i]?.trim() || guideSceneVideoUrls[i]?.trim()));
+              const allScenesHaveMedia = isDarkInfographic
+                ? scenes.length > 0
+                : scenes.length > 0 && scenes.every((_, i) => !!(guideSceneImageUrls[i]?.trim() || guideSceneVideoUrls[i]?.trim()));
               return (
                 <Card className={`mt-4 border-2 transition-colors ${allScenesHaveMedia ? "border-gray-300 dark:border-border bg-gray-50 dark:bg-card" : "border-gray-200 dark:border-border bg-gray-50 dark:bg-card"}`}>
                   <CardContent className="pt-6 pb-6">
@@ -3524,36 +3607,45 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                         <div>
                           <p className="font-semibold text-foreground flex items-center gap-2">
                             <Film className="w-4 h-4 text-orange-500" />
-                            Sync &amp; Export Full Video
+                            {isDarkInfographic ? "Compile Infographic Slides" : "Sync \u0026 Export Full Video"}
                           </p>
                           <p className="text-sm text-gray-600 dark:text-muted-foreground mt-1">
-                            Once your scenes have images, compile them all into one MP4 to download and post.
+                            {isDarkInfographic
+                              ? "Render your infographic slides into a single MP4 to download and post."
+                              : "Once your scenes have images, compile them all into one MP4 to download and post."}
                           </p>
-                          {!canCompileServerSideVoice && someSceneHasMedia && (
+                          {!isDarkInfographic && !canCompileServerSideVoice && someSceneHasMedia && (
                             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5">
                               Tip: Add scene voiceovers first to include audio in the compiled video.
                             </p>
                           )}
+                          {isDarkInfographic && (
+                            <p className="text-xs text-cyan-600 dark:text-cyan-400 mt-1.5">
+                              Tip: Add a voiceover to each scene above for audio in the compiled video.
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="gap-2 border-gray-300 dark:border-border"
-                            onClick={handleGenerateAllGuideImagesAndOpenTimeline}
-                            disabled={scenes.length === 0 || guideBulkImagesLoading}
-                          >
-                            <Film className="w-4 h-4" />
-                            Open in Timeline
-                          </Button>
+                          {!isDarkInfographic && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-2 border-gray-300 dark:border-border"
+                              onClick={handleGenerateAllGuideImagesAndOpenTimeline}
+                              disabled={scenes.length === 0 || guideBulkImagesLoading}
+                            >
+                              <Film className="w-4 h-4" />
+                              Open in Timeline
+                            </Button>
+                          )}
                           <Button
                             type="button"
                             size="sm"
                             className={`gap-2 transition-colors ${allScenesHaveMedia ? "bg-orange-500 hover:bg-orange-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"}`}
-                            onClick={handleMakeFullVideoMp4}
+                            onClick={isDarkInfographic ? handleCompileInfographic : handleMakeFullVideoMp4}
                             disabled={!someSceneHasMedia || guideFullVideoLoading}
-                            title={!someSceneHasMedia ? "Generate images for your scenes first" : "Compile all scenes into one MP4"}
+                            title={!someSceneHasMedia ? (isDarkInfographic ? "Add scenes first" : "Generate images for your scenes first") : "Compile all scenes into one MP4"}
                           >
                             {guideFullVideoLoading ? (
                               <>
