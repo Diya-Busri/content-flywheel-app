@@ -3406,30 +3406,40 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                 /** Truncate long strings to fit SVG text nodes */
                                 const tr = (s: string, max = 22) => s.length > max ? s.slice(0, max - 1) + "…" : s;
 
-                                /* ── Last scene: product book cover ── */
-                                if (isLastScene && productThumbnailUrl) {
+                                /* ── Last scene: CTA star burst ── */
+                                if (isLastScene) {
                                   return (
-                                    <div style={{ margin: "10px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                                      <img
-                                        src={productThumbnailUrl}
-                                        alt="Product cover"
-                                        crossOrigin="anonymous"
-                                        style={{
-                                          maxHeight: 195,
-                                          maxWidth: "80%",
-                                          objectFit: "contain",
-                                          borderRadius: 10,
-                                          boxShadow: `0 0 28px ${accent}55, 0 0 8px ${accent}33`,
-                                          display: "block",
-                                        }}
-                                      />
+                                    <div style={{ margin: "10px 0" }}>
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                        {/* Outer pulse rings */}
+                                        <circle cx="150" cy="85" r="76" fill="none" stroke={accent} strokeWidth="1" opacity="0.09" />
+                                        <circle cx="150" cy="85" r="60" fill="none" stroke={accent} strokeWidth="1" opacity="0.14" />
+                                        {/* 5-pointed star (outer r=52, inner r=21) */}
+                                        <polygon
+                                          points="150,33 162,67 198,67 170,89 180,124 150,104 120,124 130,89 102,67 138,67"
+                                          fill={accent} opacity="0.18" stroke={accent} strokeWidth="1.5" strokeOpacity="0.85"
+                                        />
+                                        {/* Inner glow disc */}
+                                        <circle cx="150" cy="85" r="16" fill={accent} opacity="0.18" />
+                                        <circle cx="150" cy="85" r="5" fill={accent} opacity="0.95" />
+                                        {/* 8 short burst lines from behind star */}
+                                        {[0,45,90,135,180,225,270,315].map((deg, di) => {
+                                          const r = (deg * Math.PI) / 180;
+                                          return (
+                                            <line key={di}
+                                              x1={150 + Math.cos(r) * 62} y1={85 + Math.sin(r) * 62}
+                                              x2={150 + Math.cos(r) * 76} y2={85 + Math.sin(r) * 76}
+                                              stroke={accent} strokeWidth="1.5" opacity="0.3"
+                                            />
+                                          );
+                                        })}
+                                      </svg>
                                     </div>
                                   );
                                 }
 
                                 /* ── First scene: lightning bolt hook graphic ── */
                                 if (isFirstScene) {
-                                  const rads = [0, 45, 90, 135, 180, 225, 270, 315].map((d) => (d * Math.PI) / 180);
                                   return (
                                     <div style={{ margin: "10px 0" }}>
                                       <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
@@ -3437,29 +3447,22 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                         <circle cx="150" cy="85" r="78" fill="none" stroke={accent} strokeWidth="1" opacity="0.1" />
                                         <circle cx="150" cy="85" r="60" fill="none" stroke={accent} strokeWidth="1" opacity="0.16" />
                                         {/* 8 radiating tick marks */}
-                                        {rads.map((r, ri) => (
-                                          <line
-                                            key={ri}
-                                            x1={150 + Math.cos(r) * 62} y1={85 + Math.sin(r) * 62}
-                                            x2={150 + Math.cos(r) * 78} y2={85 + Math.sin(r) * 78}
-                                            stroke={accent} strokeWidth="1.5" opacity="0.35"
-                                          />
-                                        ))}
+                                        {[0,45,90,135,180,225,270,315].map((deg, di) => {
+                                          const r = (deg * Math.PI) / 180;
+                                          return (
+                                            <line key={di}
+                                              x1={150 + Math.cos(r) * 62} y1={85 + Math.sin(r) * 62}
+                                              x2={150 + Math.cos(r) * 78} y2={85 + Math.sin(r) * 78}
+                                              stroke={accent} strokeWidth="1.5" opacity="0.35"
+                                            />
+                                          );
+                                        })}
                                         {/* Lightning bolt — filled glow layer */}
-                                        <polygon
-                                          points="168,18 106,98 142,98 116,158 194,78 158,78"
-                                          fill={accent} opacity="0.15"
-                                        />
+                                        <polygon points="168,18 106,98 142,98 116,158 194,78 158,78" fill={accent} opacity="0.15" />
                                         {/* Lightning bolt — bright stroke */}
-                                        <polygon
-                                          points="168,18 106,98 142,98 116,158 194,78 158,78"
-                                          fill="none" stroke={accent} strokeWidth="2" opacity="0.9"
-                                        />
+                                        <polygon points="168,18 106,98 142,98 116,158 194,78 158,78" fill="none" stroke={accent} strokeWidth="2" opacity="0.9" />
                                         {/* Hot core highlight */}
-                                        <polygon
-                                          points="162,30 118,94 146,94 124,148 184,84 156,84"
-                                          fill={accent} opacity="0.07"
-                                        />
+                                        <polygon points="162,30 118,94 146,94 124,148 184,84 156,84" fill={accent} opacity="0.07" />
                                       </svg>
                                     </div>
                                   );
@@ -3617,24 +3620,73 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   );
                                 }
 
-                                /* ── Text Hook: diagonal speed-line graphic ── */
+                                /* ── Text Hook / empty: position-based variety graphic ── */
                                 if (vd.slideType === "text_hook" || pts.length === 0) {
+                                  const slot = i % 3; // cycles 0→1→2 for middle scenes
+
+                                  /* Rising bars chart */
+                                  if (slot === 0) return (
+                                    <div style={{ margin: "10px 0" }}>
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                        {/* Y-axis */}
+                                        <line x1="28" y1="10" x2="28" y2="152" stroke={accent} strokeWidth="1" opacity="0.35" />
+                                        <polygon points="24,14 28,4 32,14" fill={accent} opacity="0.5" />
+                                        {/* X-axis */}
+                                        <line x1="28" y1="152" x2="285" y2="152" stroke={accent} strokeWidth="1" opacity="0.35" />
+                                        {/* 5 ascending bars */}
+                                        {[
+                                          { x: 42,  h: 28,  o: 0.28 },
+                                          { x: 90,  h: 55,  o: 0.42 },
+                                          { x: 138, h: 85,  o: 0.57 },
+                                          { x: 186, h: 112, o: 0.72 },
+                                          { x: 234, h: 138, o: 0.9  },
+                                        ].map((b, bi) => (
+                                          <rect key={bi} x={b.x} y={152 - b.h} width="34" height={b.h}
+                                            fill={accent} opacity={b.o} rx="3" />
+                                        ))}
+                                        {/* Trend line */}
+                                        <polyline points="59,124 107,97 155,67 203,40 251,14"
+                                          fill="none" stroke={accent} strokeWidth="1.5" opacity="0.45" strokeDasharray="4 3" />
+                                      </svg>
+                                    </div>
+                                  );
+
+                                  /* Bullseye / target rings */
+                                  if (slot === 1) return (
+                                    <div style={{ margin: "10px 0" }}>
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                        <circle cx="150" cy="85" r="76" fill="none" stroke={accent} strokeWidth="1"   opacity="0.1"  />
+                                        <circle cx="150" cy="85" r="58" fill="none" stroke={accent} strokeWidth="1.5" opacity="0.18" />
+                                        <circle cx="150" cy="85" r="40" fill="none" stroke={accent} strokeWidth="1.5" opacity="0.3"  />
+                                        <circle cx="150" cy="85" r="22" fill={accent}              opacity="0.12"
+                                          stroke={accent} strokeWidth="1.5" strokeOpacity="0.6" />
+                                        <circle cx="150" cy="85" r="7"  fill={accent}              opacity="0.9"  />
+                                        {/* Crosshair */}
+                                        <line x1="70"  y1="85" x2="122" y2="85" stroke={accent} strokeWidth="1" opacity="0.3" />
+                                        <line x1="178" y1="85" x2="230" y2="85" stroke={accent} strokeWidth="1" opacity="0.3" />
+                                        <line x1="150" y1="9"  x2="150" y2="57" stroke={accent} strokeWidth="1" opacity="0.3" />
+                                        <line x1="150" y1="113" x2="150" y2="161" stroke={accent} strokeWidth="1" opacity="0.3" />
+                                      </svg>
+                                    </div>
+                                  );
+
+                                  /* Triple upward chevrons — momentum */
                                   return (
                                     <div style={{ margin: "10px 0" }}>
                                       <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
-                                        {/* Diagonal speed lines — wide to narrow, left to right */}
-                                        <line x1="-30" y1="200" x2="210" y2="-60" stroke={accent} strokeWidth="48" strokeLinecap="round" opacity="0.05" />
-                                        <line x1="20" y1="200" x2="260" y2="-60" stroke={accent} strokeWidth="24" strokeLinecap="round" opacity="0.07" />
-                                        <line x1="80" y1="200" x2="320" y2="-60" stroke={accent} strokeWidth="12" strokeLinecap="round" opacity="0.09" />
-                                        <line x1="140" y1="200" x2="380" y2="-60" stroke={accent} strokeWidth="5" strokeLinecap="round" opacity="0.12" />
-                                        <line x1="185" y1="200" x2="425" y2="-60" stroke={accent} strokeWidth="2" strokeLinecap="round" opacity="0.15" />
-                                        {/* Central diamond */}
-                                        <polygon points="150,62 170,85 150,108 130,85" fill="none" stroke={accent} strokeWidth="1.5" opacity="0.7" />
-                                        <polygon points="150,72 162,85 150,98 138,85" fill={accent} opacity="0.15" />
-                                        <circle cx="150" cy="85" r="3" fill={accent} opacity="0.9" />
-                                        {/* Thin horizontal rule */}
-                                        <line x1="40" y1="85" x2="122" y2="85" stroke={accent} strokeWidth="1" opacity="0.25" />
-                                        <line x1="178" y1="85" x2="260" y2="85" stroke={accent} strokeWidth="1" opacity="0.25" />
+                                        {/* Chevron 1 — faintest, lowest */}
+                                        <polyline points="70,138 150,98 230,138"
+                                          fill="none" stroke={accent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.25" />
+                                        {/* Chevron 2 — mid */}
+                                        <polyline points="70,108 150,68 230,108"
+                                          fill="none" stroke={accent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.55" />
+                                        {/* Chevron 3 — brightest, highest */}
+                                        <polyline points="70,78 150,38 230,78"
+                                          fill="none" stroke={accent} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
+                                        {/* Peak dot */}
+                                        <circle cx="150" cy="38" r="5" fill={accent} opacity="0.95" />
+                                        {/* Faint vertical guide */}
+                                        <line x1="150" y1="48" x2="150" y2="160" stroke={accent} strokeWidth="1" opacity="0.12" strokeDasharray="4 4" />
                                       </svg>
                                     </div>
                                   );
