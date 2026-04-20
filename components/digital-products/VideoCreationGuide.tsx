@@ -3387,16 +3387,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                               className="relative rounded-xl overflow-hidden w-full max-w-sm mx-auto"
                               style={{ background: "#000", aspectRatio: "9/16", fontFamily: "'Inter', 'Helvetica Neue', sans-serif", padding: "5%" }}
                             >
-                              {/* Slide type badge */}
-                              {vd.slideType && (
-                                <span
-                                  className="absolute top-4 right-4 text-[10px] uppercase tracking-widest font-bold px-2 py-1 rounded"
-                                  style={{ background: accent, color: "#000" }}
-                                >
-                                  {vd.slideType.replace(/_/g, " ")}
-                                </span>
-                              )}
-
                               {/* Slide title */}
                               {vd.slideTitle && (
                                 <p className="text-white font-bold mb-4 leading-tight" style={{ fontSize: "clamp(14px, 4vw, 20px)", marginTop: "10%" }}>
@@ -3566,23 +3556,24 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   );
                                 }
 
-                                /* ── Text Hook: decorative quote graphic ── */
+                                /* ── Text Hook: diagonal speed-line graphic ── */
                                 if (vd.slideType === "text_hook" || pts.length === 0) {
                                   return (
                                     <div style={{ margin: "10px 0" }}>
-                                      <svg viewBox="0 0 300 180" width="100%" style={{ height: 180, display: "block" }} xmlns="http://www.w3.org/2000/svg">
-                                        {/* Giant opening quote mark */}
-                                        <text x="30" y="120" fill={accent} fontSize="160" fontWeight="900" fontFamily="Georgia, serif" opacity="0.18">&ldquo;</text>
-                                        {/* Decorative horizontal lines */}
-                                        <line x1="30" y1="155" x2="270" y2="155" stroke={accent} strokeWidth="1" opacity="0.3" />
-                                        <line x1="30" y1="163" x2="200" y2="163" stroke={accent} strokeWidth="1" opacity="0.2" />
-                                        <line x1="30" y1="171" x2="140" y2="171" stroke={accent} strokeWidth="1" opacity="0.12" />
-                                        {/* Closing quote mark bottom-right */}
-                                        <text x="200" y="160" fill={accent} fontSize="80" fontWeight="900" fontFamily="Georgia, serif" opacity="0.13">&rdquo;</text>
-                                        {/* Small accent dot */}
-                                        <circle cx="150" cy="88" r="4" fill={accent} opacity="0.5" />
-                                        <circle cx="150" cy="88" r="14" fill="none" stroke={accent} strokeWidth="1" opacity="0.2" />
-                                        <circle cx="150" cy="88" r="26" fill="none" stroke={accent} strokeWidth="1" opacity="0.1" />
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                        {/* Diagonal speed lines — wide to narrow, left to right */}
+                                        <line x1="-30" y1="200" x2="210" y2="-60" stroke={accent} strokeWidth="48" strokeLinecap="round" opacity="0.05" />
+                                        <line x1="20" y1="200" x2="260" y2="-60" stroke={accent} strokeWidth="24" strokeLinecap="round" opacity="0.07" />
+                                        <line x1="80" y1="200" x2="320" y2="-60" stroke={accent} strokeWidth="12" strokeLinecap="round" opacity="0.09" />
+                                        <line x1="140" y1="200" x2="380" y2="-60" stroke={accent} strokeWidth="5" strokeLinecap="round" opacity="0.12" />
+                                        <line x1="185" y1="200" x2="425" y2="-60" stroke={accent} strokeWidth="2" strokeLinecap="round" opacity="0.15" />
+                                        {/* Central diamond */}
+                                        <polygon points="150,62 170,85 150,108 130,85" fill="none" stroke={accent} strokeWidth="1.5" opacity="0.7" />
+                                        <polygon points="150,72 162,85 150,98 138,85" fill={accent} opacity="0.15" />
+                                        <circle cx="150" cy="85" r="3" fill={accent} opacity="0.9" />
+                                        {/* Thin horizontal rule */}
+                                        <line x1="40" y1="85" x2="122" y2="85" stroke={accent} strokeWidth="1" opacity="0.25" />
+                                        <line x1="178" y1="85" x2="260" y2="85" stroke={accent} strokeWidth="1" opacity="0.25" />
                                       </svg>
                                     </div>
                                   );
