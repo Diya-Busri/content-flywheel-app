@@ -3566,8 +3566,29 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   );
                                 }
 
-                                /* ── text_hook + default: standard bullet list ── */
-                                if (pts.length === 0) return null;
+                                /* ── Text Hook: decorative quote graphic ── */
+                                if (vd.slideType === "text_hook" || pts.length === 0) {
+                                  return (
+                                    <div style={{ margin: "10px 0" }}>
+                                      <svg viewBox="0 0 300 180" width="100%" style={{ height: 180, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                        {/* Giant opening quote mark */}
+                                        <text x="30" y="120" fill={accent} fontSize="160" fontWeight="900" fontFamily="Georgia, serif" opacity="0.18">&ldquo;</text>
+                                        {/* Decorative horizontal lines */}
+                                        <line x1="30" y1="155" x2="270" y2="155" stroke={accent} strokeWidth="1" opacity="0.3" />
+                                        <line x1="30" y1="163" x2="200" y2="163" stroke={accent} strokeWidth="1" opacity="0.2" />
+                                        <line x1="30" y1="171" x2="140" y2="171" stroke={accent} strokeWidth="1" opacity="0.12" />
+                                        {/* Closing quote mark bottom-right */}
+                                        <text x="200" y="160" fill={accent} fontSize="80" fontWeight="900" fontFamily="Georgia, serif" opacity="0.13">&rdquo;</text>
+                                        {/* Small accent dot */}
+                                        <circle cx="150" cy="88" r="4" fill={accent} opacity="0.5" />
+                                        <circle cx="150" cy="88" r="14" fill="none" stroke={accent} strokeWidth="1" opacity="0.2" />
+                                        <circle cx="150" cy="88" r="26" fill="none" stroke={accent} strokeWidth="1" opacity="0.1" />
+                                      </svg>
+                                    </div>
+                                  );
+                                }
+
+                                /* ── Default: standard bullet list ── */
                                 return (
                                   <ul className="space-y-2 mb-4" style={{ listStyle: "none", padding: 0 }}>
                                     {pts.map((pt, pi) => (
