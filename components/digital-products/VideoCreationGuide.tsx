@@ -472,29 +472,19 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   /** Refs to rendered dark-infographic slide DOM elements — used for html2canvas export + MP4 compile. */
   const darkSlideRefs = useRef<(HTMLDivElement | null)[]>([]);
   /**
-   * Shuffled graphic type order for Dark Infographic slides.
-   * Seeded from the script hook + cta text so:
-   *   - Same video → same order every render (stable UX)
-   *   - Different video / product → different shuffle (real variety)
+   * Randomly shuffled graphic types for Dark Infographic slides.
+   * useState initialiser runs once on mount → fresh random order every
+   * time the guide loads (new video = new shuffle), stable while on-page,
+   * and guaranteed no repeats across all 7 designs within a single video.
    */
-  const darkInfographicGraphicOrder = useMemo(() => {
-    const TYPES = ["bolt", "bars", "bullseye", "chevrons", "star", "diamond", "rings"] as const;
-    type G = typeof TYPES[number];
-    const seed = (guide.script?.hook ?? "") + (guide.script?.cta ?? "");
-    // djb2 hash of script content
-    let h = 5381;
-    for (let j = 0; j < seed.length; j++) { h = (((h << 5) + h) + seed.charCodeAt(j)) | 0; }
-    // xorshift32 seeded PRNG
-    let s = Math.abs(h) || 1;
-    const rand = () => { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return (s >>> 0) / 4294967296; };
-    // Fisher-Yates shuffle
-    const arr: G[] = [...TYPES];
-    for (let j = arr.length - 1; j > 0; j--) {
-      const k = Math.floor(rand() * (j + 1));
-      [arr[j], arr[k]] = [arr[k], arr[j]];
+  const [darkInfographicGraphicOrder] = useState<string[]>(() => {
+    const types = ["bolt", "bars", "bullseye", "chevrons", "star", "diamond", "rings"];
+    for (let j = types.length - 1; j > 0; j--) {
+      const k = Math.floor(Math.random() * (j + 1));
+      [types[j], types[k]] = [types[k], types[j]];
     }
-    return arr;
-  }, [guide.script?.hook, guide.script?.cta]);
+    return types;
+  });
   /** DALL·E scene stills for Video Timeline (same flow as Template Studio AI Story). */
   const [guideSceneImageUrls, setGuideSceneImageUrls] = useState<Record<number, string>>({});
   const [guideSceneVideoUrls, setGuideSceneVideoUrls] = useState<Record<number, string>>({});
