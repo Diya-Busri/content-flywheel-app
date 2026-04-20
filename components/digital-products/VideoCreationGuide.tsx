@@ -3408,17 +3408,177 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                 </p>
                               )}
 
-                              {/* Slide points */}
-                              {Array.isArray(vd.slidePoints) && vd.slidePoints.length > 0 && (
-                                <ul className="space-y-2 mb-6" style={{ listStyle: "none", padding: 0 }}>
-                                  {vd.slidePoints.map((pt, pi) => (
-                                    <li key={pi} className="flex items-start gap-2 text-white" style={{ fontSize: "clamp(11px, 3vw, 14px)" }}>
-                                      <span className="shrink-0 mt-0.5 w-2 h-2 rounded-full" style={{ background: accentColors[pi % accentColors.length], marginTop: 4 }} />
-                                      <span>{pt}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
+                              {/* ── Slide-type graphic + points ── */}
+                              {(() => {
+                                const pts = Array.isArray(vd.slidePoints) ? vd.slidePoints : [];
+                                /** Truncate long strings to fit SVG text nodes */
+                                const tr = (s: string, max = 22) => s.length > max ? s.slice(0, max - 1) + "…" : s;
+                                /** Split a string into two SVG-friendly lines */
+                                const twoLines = (s: string, max = 14): [string, string] => {
+                                  if (s.length <= max) return [s, ""];
+                                  const words = s.split(" ");
+                                  let l1 = "";
+                                  for (const w of words) {
+                                    if ((l1 + (l1 ? " " : "") + w).length > max) break;
+                                    l1 += (l1 ? " " : "") + w;
+                                  }
+                                  return [l1 || s.slice(0, max), s.slice(l1.length).trim()];
+                                };
+
+                                /* ── Funnel ── */
+                                if (vd.slideType === "funnel") {
+                                  const layers = [
+                                    { pts: "10,2 290,2 252,64 48,64",  fill: "rgba(0,212,255,0.2)",  stroke: "#00D4FF", cy: 38, col: "#00D4FF" },
+                                    { pts: "48,68 252,68 215,130 85,130", fill: "rgba(0,255,136,0.2)", stroke: "#00FF88", cy: 104, col: "#00FF88" },
+                                    { pts: "85,134 215,134 188,194 112,194", fill: "rgba(163,230,53,0.2)", stroke: "#a3e635", cy: 170, col: "#a3e635" },
+                                  ];
+                                  return (
+                                    <div style={{ margin: "10px 0" }}>
+                                      <svg viewBox="0 0 300 200" width="100%" style={{ height: 200, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                        {layers.map((l, li) => {
+                                          const [line1, line2] = twoLines(pts[li] ?? `Layer ${li + 1}`, 26);
+                                          return (
+                                            <g key={li}>
+                                              <polygon points={l.pts} fill={l.fill} stroke={l.stroke} strokeWidth="1.5" />
+                                              {line2 ? (
+                                                <>
+                                                  <text x="150" y={l.cy - 6} textAnchor="middle" fill={l.col} fontSize="10" fontWeight="bold" fontFamily="sans-serif">{line1}</text>
+                                                  <text x="150" y={l.cy + 8} textAnchor="middle" fill={l.col} fontSize="10" fontWeight="bold" fontFamily="sans-serif">{tr(line2, 26)}</text>
+                                                </>
+                                              ) : (
+                                                <text x="150" y={l.cy + 4} textAnchor="middle" fill={l.col} fontSize="10" fontWeight="bold" fontFamily="sans-serif">{line1}</text>
+                                              )}
+                                            </g>
+                                          );
+                                        })}
+                                      </svg>
+                                    </div>
+                                  );
+                                }
+
+                                /* ── Steps ── */
+                                if (vd.slideType === "steps") {
+                                  const boxes = [
+                                    { x: 5,   col: "#00D4FF", fill: "rgba(0,212,255,0.15)",   cx: 46  },
+                                    { x: 109, col: "#00FF88", fill: "rgba(0,255,136,0.15)",   cx: 150 },
+                                    { x: 213, col: "#FFD700", fill: "rgba(255,215,0,0.15)",   cx: 254 },
+                                  ];
+                                  return (
+                                    <div style={{ margin: "10px 0" }}>
+                                      <svg viewBox="0 0 300 125" width="100%" style={{ height: 125, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                        {boxes.map((b, bi) => {
+                                          const label = pts[bi] ?? `Step ${bi + 1}`;
+                                          const [l1, l2] = twoLines(label, 12);
+                                          return (
+                                            <g key={bi}>
+                                              <rect x={b.x} y="5" width="82" height="115" rx="8" fill={b.fill} stroke={b.col} strokeWidth="1.5" />
+                                              {/* Step number */}
+                                              <text x={b.cx} y="44" textAnchor="middle" fill={b.col} fontSize="28" fontWeight="900" fontFamily="sans-serif">{bi + 1}</text>
+                                              {/* Label line 1 */}
+                                              <text x={b.cx} y="68" textAnchor="middle" fill="white" fontSize="9" fontFamily="sans-serif">{l1}</text>
+                                              {/* Label line 2 if needed */}
+                                              {l2 && <text x={b.cx} y="80" textAnchor="middle" fill="white" fontSize="9" fontFamily="sans-serif">{tr(l2, 12)}</text>}
+                                              {/* Arrow to next box */}
+                                              {bi < 2 && (
+                                                <>
+                                                  <line x1={b.x + 85} y1="62" x2={b.x + 100} y2="62" stroke={b.col} strokeWidth="1.5" />
+                                                  <polygon points={`${b.x + 99},57 ${b.x + 106},62 ${b.x + 99},67`} fill={b.col} />
+                                                </>
+                                              )}
+                                            </g>
+                                          );
+                                        })}
+                                      </svg>
+                                    </div>
+                                  );
+                                }
+
+                                /* ── Stat Callout ── */
+                                if (vd.slideType === "stat_callout") {
+                                  const rawStat = pts[0] ?? "";
+                                  const m = rawStat.match(/(\d[\d,.]*([\s]*[%xX+kmKMbB])?)/);
+                                  const bigStat = m ? m[0].trim() : tr(rawStat, 6);
+                                  const caption = rawStat.replace(bigStat, "").replace(/^[-–:,\s]+/, "").trim();
+                                  const restPoints = pts.slice(1);
+                                  return (
+                                    <div style={{ margin: "10px 0" }}>
+                                      <svg viewBox="0 0 300 145" width="100%" style={{ height: 145, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                        {/* Dashed ring */}
+                                        <circle cx="150" cy="70" r="66" fill="rgba(255,215,0,0.07)" stroke="#FFD700" strokeWidth="1.5" strokeDasharray="6 4" />
+                                        {/* Big number */}
+                                        <text x="150" y="85" textAnchor="middle" fill="#FFD700" fontSize="56" fontWeight="900" fontFamily="sans-serif">{bigStat}</text>
+                                        {/* Caption inside ring */}
+                                        {caption && (
+                                          <text x="150" y="106" textAnchor="middle" fill="rgba(255,255,255,0.7)" fontSize="10" fontFamily="sans-serif">{tr(caption, 30)}</text>
+                                        )}
+                                      </svg>
+                                      {/* Remaining points below the ring */}
+                                      {restPoints.length > 0 && (
+                                        <ul style={{ listStyle: "none", padding: 0, margin: "6px 0 0" }}>
+                                          {restPoints.map((pt, pi) => (
+                                            <li key={pi} className="flex items-start gap-2 text-white" style={{ fontSize: "clamp(10px, 2.5vw, 13px)", marginBottom: 4 }}>
+                                              <span className="shrink-0 rounded-full" style={{ width: 7, height: 7, background: accentColors[(pi + 1) % accentColors.length], marginTop: 4, flexShrink: 0 }} />
+                                              <span>{pt}</span>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </div>
+                                  );
+                                }
+
+                                /* ── VS Comparison ── */
+                                if (vd.slideType === "vs_comparison") {
+                                  const leftLabel = pts[0] ?? "Option A";
+                                  const rightLabel = pts[1] ?? "Option B";
+                                  const extra = pts.slice(2);
+                                  const [ll1, ll2] = twoLines(leftLabel, 13);
+                                  const [rl1, rl2] = twoLines(rightLabel, 13);
+                                  return (
+                                    <div style={{ margin: "10px 0" }}>
+                                      <svg viewBox="0 0 300 155" width="100%" style={{ height: 155, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                        {/* Left circle — pink/red */}
+                                        <circle cx="82" cy="70" r="62" fill="rgba(255,107,157,0.18)" stroke="#FF6B9D" strokeWidth="1.5" />
+                                        <text x="82" y={ll2 ? "66" : "74"} textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="sans-serif">{ll1}</text>
+                                        {ll2 && <text x="82" y="80" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="sans-serif">{tr(ll2, 13)}</text>}
+                                        <text x="82" y="145" textAnchor="middle" fill="#FF6B9D" fontSize="9" fontWeight="bold" fontFamily="sans-serif">Option A</text>
+
+                                        {/* VS badge */}
+                                        <text x="150" y="78" textAnchor="middle" fill="#FFD700" fontSize="20" fontWeight="900" fontFamily="sans-serif">VS</text>
+
+                                        {/* Right circle — green */}
+                                        <circle cx="218" cy="70" r="62" fill="rgba(0,255,136,0.18)" stroke="#00FF88" strokeWidth="1.5" />
+                                        <text x="218" y={rl2 ? "66" : "74"} textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="sans-serif">{rl1}</text>
+                                        {rl2 && <text x="218" y="80" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="sans-serif">{tr(rl2, 13)}</text>}
+                                        <text x="218" y="145" textAnchor="middle" fill="#00FF88" fontSize="9" fontWeight="bold" fontFamily="sans-serif">Option B</text>
+                                      </svg>
+                                      {extra.length > 0 && (
+                                        <ul style={{ listStyle: "none", padding: 0, margin: "4px 0 0" }}>
+                                          {extra.map((pt, pi) => (
+                                            <li key={pi} className="flex items-start gap-2 text-white" style={{ fontSize: "clamp(10px, 2.5vw, 13px)", marginBottom: 4 }}>
+                                              <span className="shrink-0 rounded-full" style={{ width: 7, height: 7, background: accentColors[(pi + 2) % accentColors.length], marginTop: 4 }} />
+                                              <span>{pt}</span>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </div>
+                                  );
+                                }
+
+                                /* ── text_hook + default: standard bullet list ── */
+                                if (pts.length === 0) return null;
+                                return (
+                                  <ul className="space-y-2 mb-4" style={{ listStyle: "none", padding: 0 }}>
+                                    {pts.map((pt, pi) => (
+                                      <li key={pi} className="flex items-start gap-2 text-white" style={{ fontSize: "clamp(11px, 3vw, 14px)" }}>
+                                        <span className="shrink-0 w-2 h-2 rounded-full" style={{ background: accentColors[pi % accentColors.length], marginTop: 4, flexShrink: 0 }} />
+                                        <span>{pt}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                );
+                              })()}
 
                               {/* Divider */}
                               <div className="absolute left-[5%] right-[5%]" style={{ bottom: "22%", height: 1, background: "#333" }} />
