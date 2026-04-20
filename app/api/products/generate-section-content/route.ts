@@ -83,8 +83,7 @@ Generate 300–600 words of ${typeLabel} content that fits this section and prod
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        // gpt-4o: quality for long-form section content
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

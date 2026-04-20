@@ -178,7 +178,7 @@ Generate 8 scenes that tell a cohesive micro-story in this tone and style. Every
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: "gpt-4o",
+          model: "gpt-4o-mini",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },

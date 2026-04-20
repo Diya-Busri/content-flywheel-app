@@ -253,9 +253,8 @@ export async function generateProductContent(params: GenerateProductContentParam
   const { format = "ebook" } = paramsWithCleanTitle;
   const { prompt, useGpt4, maxTokens } = buildPrompt(paramsWithCleanTitle);
 
-  // gpt-4o when useGpt4: full product section content in one shot (quality); gpt-4o-mini: cost-saving fallback
   const completion = await openai.chat.completions.create({
-    model: useGpt4 ? "gpt-4o" : "gpt-4o-mini",
+    model: "gpt-4o-mini",
     messages: [
       { role: "system", content: SYSTEM_PREMIUM },
       { role: "user", content: prompt },
@@ -644,11 +643,10 @@ Return ONLY valid JSON: {"body": "<p>...</p>", "imagePrompt": "optional one sent
             ? "You write Notion setup guide content. Describe databases, views, filters, templates. No workbook-style content. Return only valid JSON with body and optional imagePrompt. No markdown."
             : SYSTEM_PREMIUM;
 
-  // gpt-4o: quality matters for long-form section content; max_tokens capped for speed
   const completion = await withRetry429(
     () =>
       openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemMessage },
           { role: "user", content: prompt },

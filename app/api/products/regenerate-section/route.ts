@@ -77,8 +77,7 @@ Rewrite with the new tone while keeping the same information. Return as HTML onl
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        // gpt-4o: section content rewrite, quality matters
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",

@@ -46,9 +46,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Could not split script into scenes. Try separating each scene with a blank line." }, { status: 400 });
     }
 
-    // Ask GPT-4o to add visual description and caption for each segment
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",

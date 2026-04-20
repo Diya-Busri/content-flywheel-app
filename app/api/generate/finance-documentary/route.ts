@@ -219,7 +219,7 @@ Return ONLY valid JSON:
 }`;
 
     const outlineRes = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: outlineSystemPrompt },
         { role: "user", content: outlineUserPrompt },
@@ -291,7 +291,7 @@ Return ONLY valid JSON:
 }`;
 
       const res = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: expandSystemPrompt },
           { role: "user", content: expandPrompt },

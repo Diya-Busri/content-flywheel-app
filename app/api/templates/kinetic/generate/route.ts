@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     const productCtx = body.productName ? `Product being promoted: ${body.productName}` : "";
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
