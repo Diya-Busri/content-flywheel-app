@@ -1,3 +1,14 @@
+/**
+ * POST /api/video-guide/generate-diagram
+ *
+ * Standalone endpoint for generating a Napkin AI diagram for a single
+ * Dark Infographic slide. Can also be called from the frontend to
+ * regenerate a specific scene's diagram.
+ *
+ * Body: { slideTitle, slidePoints, slideType, sceneContext? }
+ * Returns: { diagramUrl: string } | { error: string }
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
@@ -14,21 +25,18 @@ export async function POST(request: NextRequest) {
     const rl = await checkApiRateLimit(userId);
     if (rl) return rl;
 
-    const apiKey = process.env.OPENAI_API_KEY?.trim();
-    if (!apiKey) return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 503 });
-
     const body = (await request.json().catch(() => ({}))) as {
       slideType?: string;
       slideTitle?: string;
       slidePoints?: string[];
-      highlightWord?: string;
-      accentColour?: string;
+      sceneContext?: string;
     };
 
     const {
       slideType = "text_hook",
       slideTitle = "",
       slidePoints = [],
+      sceneContext = "",
     } = body;
 
     const diagramUrl = await generateDiagramForScene({
@@ -36,13 +44,18 @@ export async function POST(request: NextRequest) {
       slideType,
       slideTitle,
       slidePoints,
-      apiKey,
+      sceneContext,
     });
 
-    if (!diagramUrl) return NextResponse.json({ error: "Diagram generation failed" }, { status: 422 });
+    if (!diagramUrl) {
+      return NextResponse.json({ error: "Diagram generation failed" }, { status: 422 });
+    }
     return NextResponse.json({ diagramUrl });
   } catch (err) {
     console.error("[/api/video-guide/generate-diagram]", err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed" },
+      { status: 500 }
+    );
   }
 }

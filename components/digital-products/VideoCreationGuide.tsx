@@ -3418,7 +3418,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                               {(() => {
                                 const pts = Array.isArray(vd.slidePoints) ? vd.slidePoints : [];
 
-                                /* ── Mermaid diagram (server-generated PNG) takes priority ── */
+                                /* ── Napkin AI diagram (server-generated PNG) takes priority ── */
                                 if (vd.diagramUrl && i !== scenes.length - 1) {
                                   return (
                                     <div style={{ margin: "10px 0", display: "flex", justifyContent: "center" }}>
@@ -3426,7 +3426,14 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                         src={vd.diagramUrl}
                                         alt="Diagram"
                                         crossOrigin="anonymous"
-                                        style={{ width: "100%", maxHeight: 200, objectFit: "contain", borderRadius: 8, display: "block" }}
+                                        style={{
+                                          width: "100%",
+                                          maxHeight: 200,
+                                          objectFit: "contain",
+                                          borderRadius: 8,
+                                          display: "block",
+                                          filter: "invert(1)",
+                                        }}
                                       />
                                     </div>
                                   );

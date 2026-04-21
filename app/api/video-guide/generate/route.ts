@@ -940,22 +940,28 @@ export async function POST(request: NextRequest) {
         };
       }) ?? null;
 
-    // For dark infographic: generate Mermaid diagrams in parallel for each scene
-    if (isDarkInfographic && scenesWithFormat && apiKey) {
-      const accentColors = ["#22d3ee", "#a3e635", "#fbbf24", "#f472b6", "#818cf8"];
+    // For dark infographic: generate Napkin AI diagrams in parallel for each scene
+    if (isDarkInfographic && scenesWithFormat && process.env.NAPKIN_API_TOKEN) {
       try {
         const { generateDiagramForScene } = await import("@/lib/video-guide/generate-diagram");
         const results = await Promise.allSettled(
-          scenesWithFormat.map((scene, idx) => {
-            const vd = scene.visualDirection as { slideType?: string; slideTitle?: string; slidePoints?: string[] } | undefined;
+          scenesWithFormat.map((scene) => {
+            const vd = scene.visualDirection as {
+              slideType?: string;
+              slideTitle?: string;
+              slidePoints?: string[];
+            } | undefined;
             const st = vd?.slideType;
-            if (!st || st === "text_hook") return Promise.resolve(null);
+            if (!st) return Promise.resolve(null);
+            // Use text overlay as scene context (voiceover not yet generated)
+            const to = scene.textOverlay as { exactText?: string } | null | undefined;
+            const sceneContext = to?.exactText ?? scene.scene ?? "";
             return generateDiagramForScene({
               userId,
               slideType: st,
               slideTitle: vd?.slideTitle ?? "",
               slidePoints: vd?.slidePoints ?? [],
-              apiKey,
+              sceneContext,
             }).catch(() => null);
           })
         );
@@ -967,7 +973,7 @@ export async function POST(request: NextRequest) {
           }
         });
       } catch (e) {
-        console.warn("[video-guide] diagram batch failed (non-fatal):", e);
+        console.warn("[video-guide] Napkin diagram batch failed (non-fatal):", e);
       }
     }
 
