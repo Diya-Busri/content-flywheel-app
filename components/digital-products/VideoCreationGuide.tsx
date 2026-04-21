@@ -3393,19 +3393,52 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                           }
                         };
 
+                        // Hoist pts / helpers so both the graphic IIFE and the bullet list can use them
+                        const slidePts = Array.isArray(vd.slidePoints) ? vd.slidePoints : [];
+                        const slideTr = (s: string, max = 22) => s.length > max ? s.slice(0, max - 1) + "…" : s;
+                        const slideTwoLines = (s: string, max = 14): [string, string] => {
+                          if (s.length <= max) return [s, ""];
+                          const words = s.split(" ");
+                          let l1 = "";
+                          for (const w of words) {
+                            if ((l1 + (l1 ? " " : "") + w).length > max) break;
+                            l1 += (l1 ? " " : "") + w;
+                          }
+                          return [l1 || s.slice(0, max), s.slice(l1.length).trim()];
+                        };
+
                         return (
                           <div className="space-y-3">
                             <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Slide preview</p>
 
-                            {/* Slide preview card — black bg, bold sans, accent colours */}
+                            {/* Slide preview card — flex column, fills 9:16 with no dead zones */}
                             <div
                               ref={slideRef}
-                              className="relative rounded-xl overflow-hidden w-full max-w-sm mx-auto"
-                              style={{ background: "#000", backgroundImage: "radial-gradient(ellipse at 20% 20%, rgba(255,215,0,0.15) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(255,215,0,0.1) 0%, transparent 50%)", aspectRatio: "9/16", fontFamily: "'Inter', 'Helvetica Neue', sans-serif", padding: "5%" }}
+                              className="rounded-xl overflow-hidden w-full max-w-sm mx-auto"
+                              style={{
+                                background: "#000",
+                                backgroundImage: "radial-gradient(ellipse at 20% 20%, rgba(255,215,0,0.15) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(255,215,0,0.1) 0%, transparent 50%)",
+                                aspectRatio: "9/16",
+                                fontFamily: "'Inter', 'Helvetica Neue', sans-serif",
+                                display: "flex",
+                                flexDirection: "column",
+                                padding: "5%",
+                                boxSizing: "border-box",
+                              }}
                             >
-                              {/* Slide title */}
+                              {/* Scene number badge + slide type label */}
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, flexShrink: 0 }}>
+                                <span style={{ background: accent, color: "#000", fontWeight: 900, fontSize: 10, padding: "2px 8px", borderRadius: 99 }}>
+                                  {String(i + 1).padStart(2, "0")}
+                                </span>
+                                <span style={{ color: "rgba(255,255,255,0.25)", fontSize: 9, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
+                                  {vd.slideType?.replace(/_/g, " ") ?? ""}
+                                </span>
+                              </div>
+
+                              {/* Title */}
                               {vd.slideTitle && (
-                                <p className="text-white font-bold mb-4 leading-tight" style={{ fontSize: "clamp(14px, 4vw, 20px)", marginTop: "10%" }}>
+                                <p style={{ color: "white", fontWeight: 800, fontSize: "clamp(13px, 3.8vw, 19px)", lineHeight: 1.25, margin: "0 0 10px", flexShrink: 0 }}>
                                   {vd.slideTitle.split(" ").map((word, wi) =>
                                     word.toLowerCase() === vd.highlightWord?.toLowerCase()
                                       ? <span key={wi} style={{ color: "#facc15" }}>{word} </span>
@@ -3414,21 +3447,24 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                 </p>
                               )}
 
-                              {/* ── Slide-type graphic + points ── */}
+                              {/* ── Graphic area (flex: 1, fills middle) ── */}
+                              <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
                               {(() => {
-                                const pts = Array.isArray(vd.slidePoints) ? vd.slidePoints : [];
+                                const pts = slidePts;
+                                const tr = slideTr;
+                                const twoLines = slideTwoLines;
 
                                 /* ── Napkin AI diagram (server-generated PNG) takes priority ── */
                                 if (vd.diagramUrl && i !== scenes.length - 1) {
                                   return (
-                                    <div style={{ margin: "10px 0", display: "flex", justifyContent: "center" }}>
+                                    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                                       <img
                                         src={vd.diagramUrl}
                                         alt="Diagram"
                                         crossOrigin="anonymous"
                                         style={{
                                           width: "100%",
-                                          maxHeight: 200,
+                                          maxHeight: "100%",
                                           objectFit: "contain",
                                           borderRadius: 8,
                                           display: "block",
@@ -3442,13 +3478,13 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                 /* ── Last scene: always show the product mockup ── */
                                 if (i === scenes.length - 1 && productThumbnailUrl) {
                                   return (
-                                    <div style={{ margin: "12px 0", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                                    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                                       <img
                                         src={productThumbnailUrl}
                                         alt="Product mockup"
                                         crossOrigin="anonymous"
                                         style={{
-                                          maxHeight: 200,
+                                          maxHeight: "100%",
                                           maxWidth: "85%",
                                           objectFit: "contain",
                                           borderRadius: 12,
@@ -3460,21 +3496,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   );
                                 }
 
-                                /** Truncate long strings to fit SVG text nodes */
-                                const tr = (s: string, max = 22) => s.length > max ? s.slice(0, max - 1) + "…" : s;
-
-                                /** Split a string into two SVG-friendly lines */
-                                const twoLines = (s: string, max = 14): [string, string] => {
-                                  if (s.length <= max) return [s, ""];
-                                  const words = s.split(" ");
-                                  let l1 = "";
-                                  for (const w of words) {
-                                    if ((l1 + (l1 ? " " : "") + w).length > max) break;
-                                    l1 += (l1 ? " " : "") + w;
-                                  }
-                                  return [l1 || s.slice(0, max), s.slice(l1.length).trim()];
-                                };
-
                                 /* ── Funnel ── */
                                 if (vd.slideType === "funnel") {
                                   const layers = [
@@ -3483,8 +3504,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                     { pts: "85,134 215,134 188,194 112,194", fill: "rgba(163,230,53,0.2)", stroke: "#a3e635", cy: 170, col: "#a3e635" },
                                   ];
                                   return (
-                                    <div style={{ margin: "10px 0" }}>
-                                      <svg viewBox="0 0 300 200" width="100%" style={{ height: 200, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                      <svg viewBox="0 0 300 200" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
                                         {layers.map((l, li) => {
                                           const [line1, line2] = twoLines(pts[li] ?? `Layer ${li + 1}`, 26);
                                           return (
@@ -3514,8 +3535,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                     { x: 213, col: "#FFD700", fill: "rgba(255,215,0,0.15)",   cx: 254 },
                                   ];
                                   return (
-                                    <div style={{ margin: "10px 0" }}>
-                                      <svg viewBox="0 0 300 125" width="100%" style={{ height: 125, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                      <svg viewBox="0 0 300 125" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
                                         {boxes.map((b, bi) => {
                                           const label = pts[bi] ?? `Step ${bi + 1}`;
                                           const [l1, l2] = twoLines(label, 12);
@@ -3551,8 +3572,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   const caption = rawStat.replace(bigStat, "").replace(/^[-–:,\s]+/, "").trim();
                                   const restPoints = pts.slice(1);
                                   return (
-                                    <div style={{ margin: "10px 0" }}>
-                                      <svg viewBox="0 0 300 145" width="100%" style={{ height: 145, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                      <svg viewBox="0 0 300 145" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
                                         {/* Dashed ring */}
                                         <circle cx="150" cy="70" r="66" fill="rgba(255,215,0,0.07)" stroke="#FFD700" strokeWidth="1.5" strokeDasharray="6 4" />
                                         {/* Big number */}
@@ -3585,8 +3606,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   const [ll1, ll2] = twoLines(leftLabel, 13);
                                   const [rl1, rl2] = twoLines(rightLabel, 13);
                                   return (
-                                    <div style={{ margin: "10px 0" }}>
-                                      <svg viewBox="0 0 300 155" width="100%" style={{ height: 155, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                      <svg viewBox="0 0 300 155" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
                                         {/* Left circle — pink/red */}
                                         <circle cx="82" cy="70" r="62" fill="rgba(255,107,157,0.18)" stroke="#FF6B9D" strokeWidth="1.5" />
                                         <text x="82" y={ll2 ? "66" : "74"} textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="sans-serif">{ll1}</text>
@@ -3622,8 +3643,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
                                   /* ⚡ Lightning bolt */
                                   if (gType === "bolt") return (
-                                    <div style={{ margin: "10px 0" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
                                         <circle cx="150" cy="85" r="78" fill="none" stroke={accent} strokeWidth="1" opacity="0.1" />
                                         <circle cx="150" cy="85" r="60" fill="none" stroke={accent} strokeWidth="1" opacity="0.16" />
                                         {[0,45,90,135,180,225,270,315].map((deg, di) => {
@@ -3639,8 +3660,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
                                   /* 📊 Rising bars chart */
                                   if (gType === "bars") return (
-                                    <div style={{ margin: "10px 0" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
                                         <line x1="28" y1="10" x2="28" y2="152" stroke={accent} strokeWidth="1" opacity="0.35" />
                                         <polygon points="24,14 28,4 32,14" fill={accent} opacity="0.5" />
                                         <line x1="28" y1="152" x2="285" y2="152" stroke={accent} strokeWidth="1" opacity="0.35" />
@@ -3654,8 +3675,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
                                   /* 🎯 Bullseye / target */
                                   if (gType === "bullseye") return (
-                                    <div style={{ margin: "10px 0" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
                                         <circle cx="150" cy="85" r="76" fill="none" stroke={accent} strokeWidth="1"   opacity="0.1"  />
                                         <circle cx="150" cy="85" r="58" fill="none" stroke={accent} strokeWidth="1.5" opacity="0.18" />
                                         <circle cx="150" cy="85" r="40" fill="none" stroke={accent} strokeWidth="1.5" opacity="0.3"  />
@@ -3671,8 +3692,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
                                   /* ∧∧∧ Triple upward chevrons */
                                   if (gType === "chevrons") return (
-                                    <div style={{ margin: "10px 0" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
                                         <polyline points="70,138 150,98 230,138" fill="none" stroke={accent} strokeWidth="3"   strokeLinecap="round" strokeLinejoin="round" opacity="0.25" />
                                         <polyline points="70,108 150,68  230,108" fill="none" stroke={accent} strokeWidth="3"   strokeLinecap="round" strokeLinejoin="round" opacity="0.55" />
                                         <polyline points="70,78  150,38  230,78"  fill="none" stroke={accent} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.9"  />
@@ -3684,8 +3705,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
                                   /* ⭐ 5-pointed star burst */
                                   if (gType === "star") return (
-                                    <div style={{ margin: "10px 0" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
                                         <circle cx="150" cy="85" r="76" fill="none" stroke={accent} strokeWidth="1" opacity="0.09" />
                                         <circle cx="150" cy="85" r="60" fill="none" stroke={accent} strokeWidth="1" opacity="0.14" />
                                         <polygon points="150,33 162,67 198,67 170,89 180,124 150,104 120,124 130,89 102,67 138,67" fill={accent} opacity="0.18" stroke={accent} strokeWidth="1.5" strokeOpacity="0.85" />
@@ -3701,8 +3722,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
                                   /* ◆ Central diamond with speed lines */
                                   if (gType === "diamond") return (
-                                    <div style={{ margin: "10px 0" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
                                         <line x1="-30" y1="200" x2="210" y2="-60" stroke={accent} strokeWidth="48" strokeLinecap="round" opacity="0.05" />
                                         <line x1="20"  y1="200" x2="260" y2="-60" stroke={accent} strokeWidth="24" strokeLinecap="round" opacity="0.07" />
                                         <line x1="80"  y1="200" x2="320" y2="-60" stroke={accent} strokeWidth="12" strokeLinecap="round" opacity="0.09" />
@@ -3719,8 +3740,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
                                   /* ○ Concentric pulse rings */
                                   return (
-                                    <div style={{ margin: "10px 0" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ height: 170, display: "block" }} xmlns="http://www.w3.org/2000/svg">
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
                                         <circle cx="150" cy="85" r="76" fill="none" stroke={accent} strokeWidth="1"   opacity="0.08" strokeDasharray="6 4" />
                                         <circle cx="150" cy="85" r="58" fill="none" stroke={accent} strokeWidth="1"   opacity="0.14" strokeDasharray="6 4" />
                                         <circle cx="150" cy="85" r="40" fill="none" stroke={accent} strokeWidth="1.5" opacity="0.24" />
@@ -3736,36 +3757,37 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   );
                                 }
 
-                                /* ── Default: standard bullet list ── */
+                                /* ── Default: bullet list ── */
                                 return (
-                                  <ul className="space-y-2 mb-4" style={{ listStyle: "none", padding: 0 }}>
+                                  <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                                     {pts.map((pt, pi) => (
-                                      <li key={pi} className="flex items-start gap-2 text-white" style={{ fontSize: "clamp(11px, 3vw, 14px)" }}>
-                                        <span className="shrink-0 w-2 h-2 rounded-full" style={{ background: accentColors[pi % accentColors.length], marginTop: 4, flexShrink: 0 }} />
+                                      <li key={pi} style={{ display: "flex", alignItems: "flex-start", gap: 6, color: "rgba(255,255,255,0.85)", fontSize: "clamp(10px, 2.8vw, 13px)", marginBottom: 5 }}>
+                                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: accentColors[pi % accentColors.length], marginTop: 3, flexShrink: 0 }} />
                                         <span>{pt}</span>
                                       </li>
                                     ))}
                                   </ul>
                                 );
                               })()}
+                              </div>{/* /graphic area */}
 
-                              {/* Divider */}
-                              <div className="absolute left-[5%] right-[5%]" style={{ bottom: "22%", height: 1, background: "#333" }} />
-
-                              {/* Text hook — large bold bottom text */}
-                              {vd.textHook && (
-                                <p
-                                  className="absolute left-[5%] right-[5%] font-black leading-tight"
-                                  style={{ bottom: "6%", fontSize: "clamp(16px, 5vw, 26px)", color: "#fff" }}
-                                >
-                                  {vd.textHook.split(" ").map((word, wi) =>
-                                    word.toLowerCase() === vd.highlightWord?.toLowerCase()
-                                      ? <span key={wi} style={{ color: "#facc15" }}>{word} </span>
-                                      : <span key={wi}>{word} </span>
-                                  )}
-                                </p>
-                              )}
-                            </div>
+                              {/* ── Bottom: divider + textHook ── */}
+                              <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: 10, paddingTop: 8, flexShrink: 0 }}>
+                                {vd.textHook ? (
+                                  <p style={{ color: "white", fontWeight: 900, fontSize: "clamp(13px, 4.5vw, 22px)", lineHeight: 1.1, margin: 0 }}>
+                                    {vd.textHook.split(" ").map((word, wi) =>
+                                      word.toLowerCase() === vd.highlightWord?.toLowerCase()
+                                        ? <span key={wi} style={{ color: "#facc15" }}>{word} </span>
+                                        : <span key={wi}>{word} </span>
+                                    )}
+                                  </p>
+                                ) : (
+                                  <p style={{ color: "rgba(255,255,255,0.18)", fontSize: 10, margin: 0, fontStyle: "italic" }}>
+                                    {slidePts[0]?.slice(0, 40) ?? ""}
+                                  </p>
+                                )}
+                              </div>
+                            </div>{/* /slide card */}
 
                             {/* Export button */}
                             <Button
