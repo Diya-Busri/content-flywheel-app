@@ -38,6 +38,7 @@ export async function generateDiagramForScene({
       console.warn("[generate-diagram] NAPKIN_API_TOKEN not set — skipping diagram generation");
       return null;
     }
+    console.log("[generate-diagram] Token present, calling Napkin API for slideType:", slideType);
 
     const supabase = getSupabaseAdmin();
     if (!supabase) return null;
@@ -51,6 +52,7 @@ export async function generateDiagramForScene({
       .filter(Boolean)
       .join("\n");
 
+    console.log("[generate-diagram] POST", `${NAPKIN_BASE}/visual`, "payload length:", textPayload.length);
     const createRes = await fetch(`${NAPKIN_BASE}/visual`, {
       method: "POST",
       headers: {
@@ -66,15 +68,19 @@ export async function generateDiagramForScene({
       signal: AbortSignal.timeout(15_000),
     });
 
+    const createBody = await createRes.text().catch(() => "");
+    console.log("[generate-diagram] Napkin create response:", createRes.status, createBody.slice(0, 500));
+
     if (!createRes.ok) {
-      console.error("[generate-diagram] Napkin create failed:", createRes.status, await createRes.text().catch(() => ""));
+      console.error("[generate-diagram] Napkin create failed:", createRes.status, createBody);
       return null;
     }
 
-    const createData = (await createRes.json()) as { request_id?: string };
+    let createData: { request_id?: string } = {};
+    try { createData = JSON.parse(createBody); } catch { /* non-JSON */ }
     const requestId = createData.request_id;
     if (!requestId) {
-      console.error("[generate-diagram] No request_id in Napkin response");
+      console.error("[generate-diagram] No request_id in Napkin response. Full body:", createBody.slice(0, 1000));
       return null;
     }
 
