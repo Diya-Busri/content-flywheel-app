@@ -3415,6 +3415,28 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                               {/* ── Slide-type graphic + points ── */}
                               {(() => {
                                 const pts = Array.isArray(vd.slidePoints) ? vd.slidePoints : [];
+
+                                /* ── Last scene: always show the product mockup ── */
+                                if (i === scenes.length - 1 && productThumbnailUrl) {
+                                  return (
+                                    <div style={{ margin: "12px 0", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                                      <img
+                                        src={productThumbnailUrl}
+                                        alt="Product mockup"
+                                        crossOrigin="anonymous"
+                                        style={{
+                                          maxHeight: 200,
+                                          maxWidth: "85%",
+                                          objectFit: "contain",
+                                          borderRadius: 12,
+                                          display: "block",
+                                          filter: `drop-shadow(0 0 18px ${accent}66)`,
+                                        }}
+                                      />
+                                    </div>
+                                  );
+                                }
+
                                 /** Truncate long strings to fit SVG text nodes */
                                 const tr = (s: string, max = 22) => s.length > max ? s.slice(0, max - 1) + "…" : s;
 
