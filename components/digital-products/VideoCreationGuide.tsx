@@ -3483,7 +3483,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                               )}
 
                               {/* ── Graphic area (flex: 1, fills middle) ── */}
-                              <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
+                              <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 100, overflow: "hidden" }}>
                               {(() => {
                                 const pts = slidePts;
                                 const tr = slideTr;
@@ -3540,7 +3540,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   ];
                                   return (
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                                      <svg viewBox="0 0 300 200" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
+                                      <svg viewBox="0 0 300 200" width="100%" style={{ flex: 1, display: "block", minHeight: 80 }} xmlns="http://www.w3.org/2000/svg">
                                         {layers.map((l, li) => {
                                           const [line1, line2] = twoLines(pts[li] ?? `Layer ${li + 1}`, 26);
                                           return (
@@ -3571,7 +3571,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   ];
                                   return (
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                                      <svg viewBox="0 0 300 125" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
+                                      <svg viewBox="0 0 300 125" width="100%" style={{ flex: 1, display: "block", minHeight: 80 }} xmlns="http://www.w3.org/2000/svg">
                                         {boxes.map((b, bi) => {
                                           const label = pts[bi] ?? `Step ${bi + 1}`;
                                           const [l1, l2] = twoLines(label, 12);
@@ -3608,7 +3608,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   const restPoints = pts.slice(1);
                                   return (
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                                      <svg viewBox="0 0 300 145" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
+                                      <svg viewBox="0 0 300 145" width="100%" style={{ flex: 1, display: "block", minHeight: 80 }} xmlns="http://www.w3.org/2000/svg">
                                         {/* Dashed ring */}
                                         <circle cx="150" cy="70" r="66" fill="rgba(255,215,0,0.07)" stroke="#FFD700" strokeWidth="1.5" strokeDasharray="6 4" />
                                         {/* Big number */}
@@ -3642,7 +3642,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   const [rl1, rl2] = twoLines(rightLabel, 13);
                                   return (
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                                      <svg viewBox="0 0 300 155" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
+                                      <svg viewBox="0 0 300 155" width="100%" style={{ flex: 1, display: "block", minHeight: 80 }} xmlns="http://www.w3.org/2000/svg">
                                         {/* Left circle — pink/red */}
                                         <circle cx="82" cy="70" r="62" fill="rgba(255,107,157,0.18)" stroke="#FF6B9D" strokeWidth="1.5" />
                                         <text x="82" y={ll2 ? "66" : "74"} textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="sans-serif">{ll1}</text>
@@ -3679,7 +3679,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   /* ⚡ Lightning bolt */
                                   if (gType === "bolt") return (
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 80 }} xmlns="http://www.w3.org/2000/svg">
                                         <circle cx="150" cy="85" r="78" fill="none" stroke={accent} strokeWidth="1" opacity="0.1" />
                                         <circle cx="150" cy="85" r="60" fill="none" stroke={accent} strokeWidth="1" opacity="0.16" />
                                         {[0,45,90,135,180,225,270,315].map((deg, di) => {
@@ -3696,7 +3696,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   /* 📊 Rising bars chart */
                                   if (gType === "bars") return (
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 80 }} xmlns="http://www.w3.org/2000/svg">
                                         <line x1="28" y1="10" x2="28" y2="152" stroke={accent} strokeWidth="1" opacity="0.35" />
                                         <polygon points="24,14 28,4 32,14" fill={accent} opacity="0.5" />
                                         <line x1="28" y1="152" x2="285" y2="152" stroke={accent} strokeWidth="1" opacity="0.35" />
@@ -3711,7 +3711,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   /* 🎯 Bullseye / target */
                                   if (gType === "bullseye") return (
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 80 }} xmlns="http://www.w3.org/2000/svg">
                                         <circle cx="150" cy="85" r="76" fill="none" stroke={accent} strokeWidth="1"   opacity="0.1"  />
                                         <circle cx="150" cy="85" r="58" fill="none" stroke={accent} strokeWidth="1.5" opacity="0.18" />
                                         <circle cx="150" cy="85" r="40" fill="none" stroke={accent} strokeWidth="1.5" opacity="0.3"  />
@@ -3728,7 +3728,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   /* ∧∧∧ Triple upward chevrons */
                                   if (gType === "chevrons") return (
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 80 }} xmlns="http://www.w3.org/2000/svg">
                                         <polyline points="70,138 150,98 230,138" fill="none" stroke={accent} strokeWidth="3"   strokeLinecap="round" strokeLinejoin="round" opacity="0.25" />
                                         <polyline points="70,108 150,68  230,108" fill="none" stroke={accent} strokeWidth="3"   strokeLinecap="round" strokeLinejoin="round" opacity="0.55" />
                                         <polyline points="70,78  150,38  230,78"  fill="none" stroke={accent} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.9"  />
@@ -3741,7 +3741,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   /* ⭐ 5-pointed star burst */
                                   if (gType === "star") return (
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 80 }} xmlns="http://www.w3.org/2000/svg">
                                         <circle cx="150" cy="85" r="76" fill="none" stroke={accent} strokeWidth="1" opacity="0.09" />
                                         <circle cx="150" cy="85" r="60" fill="none" stroke={accent} strokeWidth="1" opacity="0.14" />
                                         <polygon points="150,33 162,67 198,67 170,89 180,124 150,104 120,124 130,89 102,67 138,67" fill={accent} opacity="0.18" stroke={accent} strokeWidth="1.5" strokeOpacity="0.85" />
@@ -3758,7 +3758,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   /* ◆ Central diamond with speed lines */
                                   if (gType === "diamond") return (
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 80 }} xmlns="http://www.w3.org/2000/svg">
                                         <line x1="-30" y1="200" x2="210" y2="-60" stroke={accent} strokeWidth="48" strokeLinecap="round" opacity="0.05" />
                                         <line x1="20"  y1="200" x2="260" y2="-60" stroke={accent} strokeWidth="24" strokeLinecap="round" opacity="0.07" />
                                         <line x1="80"  y1="200" x2="320" y2="-60" stroke={accent} strokeWidth="12" strokeLinecap="round" opacity="0.09" />
@@ -3776,7 +3776,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                                   /* ○ Concentric pulse rings */
                                   return (
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 0 }} xmlns="http://www.w3.org/2000/svg">
+                                      <svg viewBox="0 0 300 170" width="100%" style={{ flex: 1, display: "block", minHeight: 80 }} xmlns="http://www.w3.org/2000/svg">
                                         <circle cx="150" cy="85" r="76" fill="none" stroke={accent} strokeWidth="1"   opacity="0.08" strokeDasharray="6 4" />
                                         <circle cx="150" cy="85" r="58" fill="none" stroke={accent} strokeWidth="1"   opacity="0.14" strokeDasharray="6 4" />
                                         <circle cx="150" cy="85" r="40" fill="none" stroke={accent} strokeWidth="1.5" opacity="0.24" />
