@@ -2395,48 +2395,83 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           </div>
         )}
 
+        {/* ── Script finalisation panel ── */}
         {scripts.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 p-4 rounded-lg border border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                Guide ready
-              </span>
-              <span className="text-gray-300 dark:text-muted-foreground">|</span>
+          <div className="mb-8 rounded-xl border border-orange-200 dark:border-orange-800/50 bg-orange-50/40 dark:bg-orange-950/10 overflow-hidden">
+            {/* Header row */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-orange-200 dark:border-orange-800/40 bg-orange-50 dark:bg-orange-950/20">
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCurrentAngleIndex((prev) => (prev - 1 + 4) % 4)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-muted rounded text-foreground transition-colors"
-                  aria-label="Previous angle"
-                >
-                  ← Previous
-                </button>
-                <span className="font-medium text-foreground min-w-[200px] text-center">
-                  {(angles[currentAngleIndex]?.name ?? effectiveScriptTitle ?? `Angle ${currentAngleIndex + 1}`)} ({currentAngleIndex + 1} of {scripts.length})
+                <FileText className="w-4 h-4 text-orange-500 shrink-0" />
+                <span className="text-sm font-semibold text-foreground">
+                  Your script
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setCurrentAngleIndex((prev) => (prev + 1) % 4)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-muted rounded text-foreground transition-colors"
-                  aria-label="Next angle"
-                >
-                  Next →
-                </button>
+                {scripts.length > 1 && (
+                  <span className="text-xs text-gray-500 dark:text-muted-foreground">
+                    — pick an angle below
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {productId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-gray-600 dark:text-muted-foreground hover:text-orange-500 gap-1"
+                    onClick={handleRegenerateScript}
+                    disabled={regeneratingScript || !hasProductName}
+                  >
+                    {regeneratingScript ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                    Regenerate
+                  </Button>
+                )}
               </div>
             </div>
-            {productId && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted gap-1.5"
-                onClick={handleRegenerateScript}
-                disabled={regeneratingScript || !hasProductName}
-              >
-                {regeneratingScript ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                Regenerate This Angle
-              </Button>
+
+            {/* Angle tabs (only when multiple scripts) */}
+            {scripts.length > 1 && (
+              <div className="flex flex-wrap gap-1.5 px-5 pt-3 pb-0">
+                {scripts.map((s, idx) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setCurrentAngleIndex(idx)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                      currentAngleIndex === idx
+                        ? "bg-orange-500 text-white border-orange-500"
+                        : "border-orange-200 dark:border-orange-800/50 text-gray-600 dark:text-muted-foreground hover:border-orange-400 hover:text-foreground"
+                    }`}
+                  >
+                    {angles[idx]?.name ?? s.title ?? `Angle ${idx + 1}`}
+                  </button>
+                ))}
+              </div>
             )}
+
+            {/* Script preview */}
+            <div className="px-5 py-4 space-y-3">
+              {/* Hook */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 mb-1">Hook</p>
+                <p className="text-sm text-foreground leading-relaxed line-clamp-3">
+                  {displayScript.hook || <span className="text-muted-foreground italic">No hook yet</span>}
+                </p>
+              </div>
+              {/* CTA preview */}
+              {displayScript.cta && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 mb-1">CTA</p>
+                  <p className="text-sm text-foreground leading-relaxed line-clamp-2">{displayScript.cta}</p>
+                </div>
+              )}
+              <div className="flex items-center gap-2 pt-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                <span className="text-xs text-green-700 dark:text-green-400 font-medium">
+                  {scripts.length > 1
+                    ? `Using angle: ${angles[currentAngleIndex]?.name ?? `Angle ${currentAngleIndex + 1}`} — scroll down to edit`
+                    : "Script loaded — scroll down to edit hook, body & CTA"}
+                </span>
+              </div>
+            </div>
           </div>
         )}
 
