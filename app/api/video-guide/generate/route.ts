@@ -609,9 +609,10 @@ export async function POST(request: NextRequest) {
       engagementTriggers?: string[];
     } | null = null;
 
+    const isDarkInfographic = videoStyle === "dark_infographic";
+
     if (apiKey) {
       const isReveal = videoStyle === "reveal";
-      const isDarkInfographic = videoStyle === "dark_infographic";
       const briefMessages = isReveal
         ? [
             {
