@@ -940,6 +940,37 @@ export async function POST(request: NextRequest) {
         };
       }) ?? null;
 
+    // For dark infographic: generate Mermaid diagrams in parallel for each scene
+    if (isDarkInfographic && scenesWithFormat && apiKey) {
+      const accentColors = ["#22d3ee", "#a3e635", "#fbbf24", "#f472b6", "#818cf8"];
+      try {
+        const { generateDiagramForScene } = await import("@/lib/video-guide/generate-diagram");
+        const results = await Promise.allSettled(
+          scenesWithFormat.map((scene, idx) => {
+            const vd = scene.visualDirection as { slideType?: string; slideTitle?: string; slidePoints?: string[] } | undefined;
+            const st = vd?.slideType;
+            if (!st || st === "text_hook") return Promise.resolve(null);
+            return generateDiagramForScene({
+              userId,
+              slideType: st,
+              slideTitle: vd?.slideTitle ?? "",
+              slidePoints: vd?.slidePoints ?? [],
+              apiKey,
+            }).catch(() => null);
+          })
+        );
+        results.forEach((result, idx) => {
+          const url = result.status === "fulfilled" ? result.value : null;
+          if (url) {
+            const vd = scenesWithFormat[idx].visualDirection as Record<string, unknown> | undefined;
+            if (vd) vd.diagramUrl = url;
+          }
+        });
+      } catch (e) {
+        console.warn("[video-guide] diagram batch failed (non-fatal):", e);
+      }
+    }
+
     const guide = {
       script: { hook: hook || "", body: bodyText || "", cta: cta || "" },
       scenePrompts,

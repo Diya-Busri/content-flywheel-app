@@ -276,6 +276,8 @@ type VisualDirection = {
   slidePoints?: string[];
   highlightWord?: string;
   textHook?: string;
+  /** Rendered Mermaid diagram PNG URL (generated server-side, stored in Supabase) */
+  diagramUrl?: string;
 };
 
 export type VideoGuideData = {
@@ -3399,7 +3401,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                             <div
                               ref={slideRef}
                               className="relative rounded-xl overflow-hidden w-full max-w-sm mx-auto"
-                              style={{ background: "#000", aspectRatio: "9/16", fontFamily: "'Inter', 'Helvetica Neue', sans-serif", padding: "5%" }}
+                              style={{ background: "#000", backgroundImage: "radial-gradient(ellipse at 20% 20%, rgba(255,215,0,0.15) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(255,215,0,0.1) 0%, transparent 50%)", aspectRatio: "9/16", fontFamily: "'Inter', 'Helvetica Neue', sans-serif", padding: "5%" }}
                             >
                               {/* Slide title */}
                               {vd.slideTitle && (
@@ -3415,6 +3417,20 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                               {/* ── Slide-type graphic + points ── */}
                               {(() => {
                                 const pts = Array.isArray(vd.slidePoints) ? vd.slidePoints : [];
+
+                                /* ── Mermaid diagram (server-generated PNG) takes priority ── */
+                                if (vd.diagramUrl && i !== scenes.length - 1) {
+                                  return (
+                                    <div style={{ margin: "10px 0", display: "flex", justifyContent: "center" }}>
+                                      <img
+                                        src={vd.diagramUrl}
+                                        alt="Diagram"
+                                        crossOrigin="anonymous"
+                                        style={{ width: "100%", maxHeight: 200, objectFit: "contain", borderRadius: 8, display: "block" }}
+                                      />
+                                    </div>
+                                  );
+                                }
 
                                 /* ── Last scene: always show the product mockup ── */
                                 if (i === scenes.length - 1 && productThumbnailUrl) {
