@@ -168,20 +168,20 @@ The user has uploaded proof they created their video. Generate the following. Re
 {
   "tiktok": {
     "titleVariations": ["5 optimized title options with emoji for TikTok"],
-    "descriptionVariations": ["3 description variations with CTAs"],
+    "descriptionVariations": ["3 description variations, each 150-300 characters long, with a strong hook sentence, 1-2 sentences of value/story, and a clear CTA — ready to paste directly into TikTok"],
     "hashtags": ["30 relevant hashtags - mix of high-volume and niche"],
     "bestPostingTimes": "When to post on TikTok (specific days/times)",
     "suggestedSounds": ["3-5 trending/suggested sounds or audio styles"]
   },
   "instagramReels": {
-    "captionVariations": ["5 longer-form caption options with storytelling"],
+    "captionVariations": ["5 caption options, each 200-400 characters, written with storytelling — open with a hook line, 2-3 sentences of relatable story or value, end with a CTA. Use line breaks for readability."],
     "hashtags": ["30 Instagram-specific hashtags"],
     "storySequenceSuggestions": ["3-5 story ideas to tease the reel before posting"],
     "bestPostingTimes": "Best times for Instagram Reels"
   },
   "youtubeShorts": {
     "titleVariations": ["5 SEO-optimized title variations for Shorts"],
-    "descriptionWithKeywords": "Full description with keywords for SEO",
+    "descriptionWithKeywords": "3-5 sentence description with keywords for SEO — include what the video is about, who it helps, and a CTA with a link placeholder",
     "tagsList": ["list", "of", "relevant", "tags"],
     "thumbnailTextSuggestions": ["3-5 short text ideas for thumbnail"]
   },
