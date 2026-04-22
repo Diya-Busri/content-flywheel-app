@@ -212,7 +212,9 @@ export default function ResultsFlow() {
   /** Navigate to the video customization page (step 4) with the given script. User must complete customization there before generating the guide. */
   const goToVideoCustomization = (script: ScriptForDisplay) => {
     try {
-      sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify([script]));
+      // Put the selected script first; keep all others so angle tabs appear in the guide
+      const allScripts = [script, ...scripts.filter((s) => s.id !== script.id)];
+      sessionStorage.setItem("selectedScriptsForVideos", JSON.stringify(allScripts));
       sessionStorage.setItem("productContextForVideos", JSON.stringify({ productId: productId || undefined }));
     } catch {
       // ignore
