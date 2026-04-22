@@ -155,7 +155,7 @@ export default function VideoGuidePage() {
         if (!res.ok) throw new Error("Failed to load guide");
         return res.json();
       })
-      .then((script: { content?: string; title?: string; platform?: string; productId?: string | null }) => {
+      .then(async (script: { content?: string; title?: string; platform?: string; productId?: string | null }) => {
         const isVideoGuide = script.platform === "video-guide" || script.platform === "content-studio";
         if (!isVideoGuide || !script.content) {
           setError("This library item is not a video guide.");
@@ -167,8 +167,9 @@ export default function VideoGuidePage() {
           const title = script.title?.replace(/^Video Guide:\s*/i, "") || "";
           setScriptTitle(title);
           if (script.productId) setProductIdForGuide(script.productId);
-          // Build a single script entry so "Regenerate This Angle" works when opening from library
-          const singleScript = {
+
+          // Build the current script entry
+          const currentScript = {
             id: scriptId,
             title: title || "Script",
             length: 30,
@@ -176,7 +177,48 @@ export default function VideoGuidePage() {
             body: data.script.body,
             cta: data.script.cta,
           };
-          setScriptsForGuide([singleScript]);
+
+          // If this guide belongs to a product, fetch all sibling scripts for angle tabs
+          if (script.productId) {
+            try {
+              const siblingsRes = await fetch(
+                `/api/library/scripts?productId=${encodeURIComponent(script.productId)}&platform=video-guide`,
+                { cache: "no-store" }
+              );
+              if (siblingsRes.ok) {
+                const siblings = (await siblingsRes.json()) as Array<{
+                  id: string;
+                  title?: string;
+                  content?: string;
+                }>;
+                const angleScripts = siblings
+                  .map((s) => {
+                    try {
+                      const c = typeof s.content === "string" ? JSON.parse(s.content) : s.content;
+                      if (!c?.script?.hook) return null;
+                      return {
+                        id: s.id,
+                        title: (s.title ?? "").replace(/^Video Guide:\s*/i, "") || "Script",
+                        length: 30,
+                        hook: c.script.hook,
+                        body: c.script.body ?? "",
+                        cta: c.script.cta ?? "",
+                      };
+                    } catch { return null; }
+                  })
+                  .filter((s): s is NonNullable<typeof s> => s !== null);
+
+                if (angleScripts.length > 1) {
+                  // Put current script first, keep others after
+                  const others = angleScripts.filter((s) => s.id !== scriptId);
+                  setScriptsForGuide([currentScript, ...others]);
+                  return;
+                }
+              }
+            } catch { /* fall through to single script */ }
+          }
+
+          setScriptsForGuide([currentScript]);
         } else {
           setError("Invalid guide data.");
         }

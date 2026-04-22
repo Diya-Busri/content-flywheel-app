@@ -3,17 +3,28 @@ import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { scriptsTable } from "@/db/schema/library-schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const { searchParams } = new URL(request.url);
+    const productId = searchParams.get("productId");
+    const platform = searchParams.get("platform");
+
+    const conditions = [
+      eq(scriptsTable.userId, userId),
+      isNull(scriptsTable.deletedAt),
+      ...(productId ? [eq(scriptsTable.productId, productId)] : []),
+      ...(platform ? [eq(scriptsTable.platform, platform)] : []),
+    ];
+
     const rows = await db
       .select()
       .from(scriptsTable)
-      .where(eq(scriptsTable.userId, userId))
+      .where(and(...conditions))
       .orderBy(desc(scriptsTable.createdAt));
 
     return NextResponse.json(rows);
