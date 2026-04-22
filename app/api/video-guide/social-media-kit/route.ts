@@ -95,14 +95,16 @@ export async function POST(request: NextRequest) {
           { status: 404 }
         );
       }
-      let content: { script?: { hook?: string; body?: string; cta?: string }; productName?: string; productDescription?: string; timelineSceneSlots?: unknown[] };
+      let content: { script?: { hook?: string; body?: string; cta?: string }; productName?: string; productDescription?: string; timelineSceneSlots?: unknown[]; videoStyle?: string };
       try {
         content = typeof row.content === "string" ? JSON.parse(row.content) : (row.content as typeof content) ?? {};
       } catch {
         return NextResponse.json({ error: "Invalid script content" }, { status: 400 });
       }
+      // Dark infographic guides export slides directly — no Video Timeline required
+      const isDarkInfographic = content.videoStyle === "dark_infographic";
       const slots = content.timelineSceneSlots;
-      if (!Array.isArray(slots) || slots.length === 0) {
+      if (!isDarkInfographic && (!Array.isArray(slots) || slots.length === 0)) {
         return NextResponse.json(
           { error: "Use the Video Timeline first to build your video, then you can generate your Social Media Kit here without uploading proof." },
           { status: 400 }
