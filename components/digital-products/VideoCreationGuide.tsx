@@ -4174,6 +4174,99 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 </Card>
               );
             })()}
+
+            {/* ── Inline Social Media Kit for Dark Infographic ── */}
+            {isDarkInfographicStyle && (
+              <Card className="mt-4 border-orange-200 dark:border-orange-800/40 bg-orange-50/30 dark:bg-orange-950/10">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+                    <Share2 className="w-4 h-4 text-orange-500" />
+                    Titles, Descriptions &amp; Hashtags
+                  </CardTitle>
+                  <CardDescription className="text-gray-600 dark:text-muted-foreground text-sm">
+                    Ready-to-use captions and hashtags for TikTok, Instagram and YouTube.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {!socialKit ? (
+                    <Button
+                      className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                      disabled={socialKitLoading || !libraryScriptId}
+                      onClick={handleSocialKitGenerateWithoutProof}
+                    >
+                      {socialKitLoading ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>
+                      ) : (
+                        <><Share2 className="w-4 h-4" /> Generate Titles &amp; Hashtags</>
+                      )}
+                    </Button>
+                  ) : (
+                    <div className="space-y-5">
+                      <div className="flex gap-2 flex-wrap">
+                        <Button
+                          variant="outline" size="sm"
+                          className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground"
+                          onClick={() => copyToClipboard(socialKitToText(socialKit), "Social Media Kit")}
+                        >
+                          <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy All
+                        </Button>
+                        <Button
+                          variant="outline" size="sm"
+                          className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground"
+                          onClick={() => setSocialKit(null)}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Regenerate
+                        </Button>
+                      </div>
+                      {[
+                        {
+                          key: "tiktok", label: "TikTok",
+                          rows: [
+                            { name: "Titles", value: socialKit.tiktok.titleVariations?.join("\n") },
+                            { name: "Description", value: socialKit.tiktok.descriptionVariations?.[0] },
+                            { name: "Hashtags", value: socialKit.tiktok.hashtags?.join(" ") },
+                          ],
+                        },
+                        {
+                          key: "instagram", label: "Instagram Reels",
+                          rows: [
+                            { name: "Caption", value: socialKit.instagramReels.captionVariations?.[0] },
+                            { name: "Hashtags", value: socialKit.instagramReels.hashtags?.join(" ") },
+                          ],
+                        },
+                        {
+                          key: "youtube", label: "YouTube Shorts",
+                          rows: [
+                            { name: "Titles", value: socialKit.youtubeShorts.titleVariations?.join("\n") },
+                            { name: "Description", value: socialKit.youtubeShorts.descriptionWithKeywords },
+                            { name: "Tags", value: socialKit.youtubeShorts.tagsList?.join(", ") },
+                          ],
+                        },
+                      ].map((platform) => (
+                        <div key={platform.key} className="rounded-lg border border-gray-200 dark:border-border bg-white dark:bg-background p-4 space-y-3">
+                          <p className="text-xs font-bold text-foreground uppercase tracking-wide">{platform.label}</p>
+                          {platform.rows.map((row) => (
+                            <div key={row.name}>
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-orange-500 font-medium text-xs uppercase tracking-wide">{row.name}</p>
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-foreground transition-colors"
+                                  onClick={() => copyToClipboard(row.value ?? "", row.name)}
+                                >
+                                  <Copy className="w-3 h-3" /> Copy
+                                </button>
+                              </div>
+                              <p className="text-sm text-gray-600 dark:text-muted-foreground whitespace-pre-wrap">{row.value || "—"}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="editing" className="mt-6 space-y-4">
