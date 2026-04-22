@@ -45,6 +45,7 @@ import {
   CalendarClock,
   Send,
   Lightbulb,
+  Share2,
 } from "lucide-react";
 import { getTemplateStudioPrefill, clearTemplateStudioPrefill } from "@/lib/template-studio-prefill";
 import { setVideoPrefill, getTimelineUrl } from "@/lib/video-prefill";
@@ -505,6 +506,8 @@ export default function TemplateStudioClient() {
   const [animeStoryPhase, setAnimeStoryPhase] = useState<string | null>(null);
   const [animeStoryVideoUrl, setAnimeStoryVideoUrl] = useState<string | null>(null);
   const [animeStoryCurrentScene, setAnimeStoryCurrentScene] = useState(0);
+  const [animeStorySocialKit, setAnimeStorySocialKit] = useState<{ tiktok: { titles: string[]; description: string; hashtags: string }; instagram: { caption: string; hashtags: string }; youtube: { titles: string[]; description: string } } | null>(null);
+  const [animeStorySocialKitLoading, setAnimeStorySocialKitLoading] = useState(false);
 
   // ── Stickman Story Video state (mode 20) ─────────────────────────────────────
   const [stickmanStoryPremise, setStickmanStoryPremise] = useState("");
@@ -519,6 +522,8 @@ export default function TemplateStudioClient() {
   const [stickmanStoryPhase, setStickmanStoryPhase] = useState<string | null>(null);
   const [stickmanStoryVideoUrl, setStickmanStoryVideoUrl] = useState<string | null>(null);
   const [stickmanStoryCurrentScene, setStickmanStoryCurrentScene] = useState(0);
+  const [stickmanStorySocialKit, setStickmanStorySocialKit] = useState<{ tiktok: { titles: string[]; description: string; hashtags: string }; instagram: { caption: string; hashtags: string }; youtube: { titles: string[]; description: string } } | null>(null);
+  const [stickmanStorySocialKitLoading, setStickmanStorySocialKitLoading] = useState(false);
   const [storyVideoExportError, setStoryVideoExportError] = useState<string | null>(null);
   // Auto full-video generation state
   const [autoGenerating, setAutoGenerating] = useState(false);
@@ -5774,12 +5779,47 @@ export default function TemplateStudioClient() {
               </div>
             )}
             {animeStoryVideoUrl ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <video src={animeStoryVideoUrl} controls className="w-full max-w-sm mx-auto rounded-xl" style={{ aspectRatio: "9/16" }} />
-                <div className="flex gap-2 justify-center">
+                <div className="flex gap-2 justify-center flex-wrap">
                   <a href={animeStoryVideoUrl} download="anime-story.mp4" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition">
                     <Download className="w-4 h-4" /> Download MP4
                   </a>
+                  <a href="https://www.tiktok.com/upload" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-black hover:bg-gray-900 text-white text-sm font-semibold transition">📱 Post to TikTok</a>
+                  <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white text-sm font-semibold transition">📸 Instagram</a>
+                  <a href="https://studio.youtube.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition">🎬 YouTube</a>
+                </div>
+                {/* Social Media Kit */}
+                <div className="border-t pt-4 mt-2">
+                  <p className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                    <Share2 className="w-4 h-4 text-orange-500" /> Titles, Descriptions &amp; Hashtags
+                  </p>
+                  {animeStorySocialKitLoading && <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="w-3 h-3 animate-spin" /> Generating your social kit…</div>}
+                  {animeStorySocialKit && !animeStorySocialKitLoading && (
+                    <div className="space-y-4">
+                      {[
+                        { label: "TikTok", rows: [{ name: "Titles", value: animeStorySocialKit.tiktok.titles?.join("\n") }, { name: "Description", value: animeStorySocialKit.tiktok.description }, { name: "Hashtags", value: animeStorySocialKit.tiktok.hashtags }] },
+                        { label: "Instagram", rows: [{ name: "Caption", value: animeStorySocialKit.instagram.caption }, { name: "Hashtags", value: animeStorySocialKit.instagram.hashtags }] },
+                        { label: "YouTube Shorts", rows: [{ name: "Titles", value: animeStorySocialKit.youtube.titles?.join("\n") }, { name: "Description", value: animeStorySocialKit.youtube.description }] },
+                      ].map(platform => (
+                        <div key={platform.label} className="rounded-lg border border-gray-200 dark:border-border bg-gray-50 dark:bg-card p-3 space-y-3">
+                          <p className="text-xs font-bold uppercase tracking-wide text-foreground">{platform.label}</p>
+                          {platform.rows.map(row => (
+                            <div key={row.name}>
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-orange-500 font-medium text-xs uppercase tracking-wide">{row.name}</p>
+                                <button type="button" className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-foreground transition" onClick={() => { void navigator.clipboard.writeText(row.value ?? ""); toast({ title: "Copied!" }); }}>
+                                  <Copy className="w-3 h-3" /> Copy
+                                </button>
+                              </div>
+                              <p className="text-xs text-gray-600 dark:text-muted-foreground whitespace-pre-wrap">{row.value || "—"}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                      <button type="button" className="text-xs text-orange-500 hover:underline" onClick={() => { setAnimeStorySocialKit(null); setAnimeStorySocialKitLoading(true); fetch("/api/templates/social-kit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: animeStoryPremise }) }).then(r => r.json()).then((d: { kit?: typeof animeStorySocialKit }) => { if (d.kit) setAnimeStorySocialKit(d.kit); }).catch(() => {}).finally(() => setAnimeStorySocialKitLoading(false)); }}>↻ Regenerate</button>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -5849,6 +5889,11 @@ export default function TemplateStudioClient() {
                           setAnimeStoryVideoUrl(exportData.url ?? null);
                           setAnimeStoryPhase(null);
                           toast({ title: "Video ready! 🎌" });
+                          // Auto-generate social kit
+                          setAnimeStorySocialKit(null);
+                          setAnimeStorySocialKitLoading(true);
+                          fetch("/api/templates/social-kit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: animeStoryPremise, narration: scenes.slice(0, 3).map((s: { narration?: string }) => s.narration ?? "").join(" ") }) })
+                            .then(r => r.json()).then((d: { kit?: typeof animeStorySocialKit }) => { if (d.kit) setAnimeStorySocialKit(d.kit); }).catch(() => {}).finally(() => setAnimeStorySocialKitLoading(false));
                         } catch (e) {
                           setAnimeStoryPhase(null);
                           toast({ title: "Failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
@@ -5892,12 +5937,47 @@ export default function TemplateStudioClient() {
               </div>
             )}
             {stickmanStoryVideoUrl ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <video src={stickmanStoryVideoUrl} controls className="w-full max-w-sm mx-auto rounded-xl" style={{ aspectRatio: "9/16" }} />
-                <div className="flex gap-2 justify-center">
+                <div className="flex gap-2 justify-center flex-wrap">
                   <a href={stickmanStoryVideoUrl} download="stickman-story.mp4" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition">
                     <Download className="w-4 h-4" /> Download MP4
                   </a>
+                  <a href="https://www.tiktok.com/upload" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-black hover:bg-gray-900 text-white text-sm font-semibold transition">📱 Post to TikTok</a>
+                  <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white text-sm font-semibold transition">📸 Instagram</a>
+                  <a href="https://studio.youtube.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition">🎬 YouTube</a>
+                </div>
+                {/* Social Media Kit */}
+                <div className="border-t pt-4 mt-2">
+                  <p className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                    <Share2 className="w-4 h-4 text-orange-500" /> Titles, Descriptions &amp; Hashtags
+                  </p>
+                  {stickmanStorySocialKitLoading && <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="w-3 h-3 animate-spin" /> Generating your social kit…</div>}
+                  {stickmanStorySocialKit && !stickmanStorySocialKitLoading && (
+                    <div className="space-y-4">
+                      {[
+                        { label: "TikTok", rows: [{ name: "Titles", value: stickmanStorySocialKit.tiktok.titles?.join("\n") }, { name: "Description", value: stickmanStorySocialKit.tiktok.description }, { name: "Hashtags", value: stickmanStorySocialKit.tiktok.hashtags }] },
+                        { label: "Instagram", rows: [{ name: "Caption", value: stickmanStorySocialKit.instagram.caption }, { name: "Hashtags", value: stickmanStorySocialKit.instagram.hashtags }] },
+                        { label: "YouTube Shorts", rows: [{ name: "Titles", value: stickmanStorySocialKit.youtube.titles?.join("\n") }, { name: "Description", value: stickmanStorySocialKit.youtube.description }] },
+                      ].map(platform => (
+                        <div key={platform.label} className="rounded-lg border border-gray-200 dark:border-border bg-gray-50 dark:bg-card p-3 space-y-3">
+                          <p className="text-xs font-bold uppercase tracking-wide text-foreground">{platform.label}</p>
+                          {platform.rows.map(row => (
+                            <div key={row.name}>
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-orange-500 font-medium text-xs uppercase tracking-wide">{row.name}</p>
+                                <button type="button" className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-foreground transition" onClick={() => { void navigator.clipboard.writeText(row.value ?? ""); toast({ title: "Copied!" }); }}>
+                                  <Copy className="w-3 h-3" /> Copy
+                                </button>
+                              </div>
+                              <p className="text-xs text-gray-600 dark:text-muted-foreground whitespace-pre-wrap">{row.value || "—"}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                      <button type="button" className="text-xs text-orange-500 hover:underline" onClick={() => { setStickmanStorySocialKit(null); setStickmanStorySocialKitLoading(true); fetch("/api/templates/social-kit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: stickmanStoryPremise }) }).then(r => r.json()).then((d: { kit?: typeof stickmanStorySocialKit }) => { if (d.kit) setStickmanStorySocialKit(d.kit); }).catch(() => {}).finally(() => setStickmanStorySocialKitLoading(false)); }}>↻ Regenerate</button>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -5967,6 +6047,11 @@ export default function TemplateStudioClient() {
                           setStickmanStoryVideoUrl(exportData.url ?? null);
                           setStickmanStoryPhase(null);
                           toast({ title: "Video ready! ✏️" });
+                          // Auto-generate social kit
+                          setStickmanStorySocialKit(null);
+                          setStickmanStorySocialKitLoading(true);
+                          fetch("/api/templates/social-kit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: stickmanStoryPremise, narration: scenes.slice(0, 3).map((s: { narration?: string }) => s.narration ?? "").join(" ") }) })
+                            .then(r => r.json()).then((d: { kit?: typeof stickmanStorySocialKit }) => { if (d.kit) setStickmanStorySocialKit(d.kit); }).catch(() => {}).finally(() => setStickmanStorySocialKitLoading(false));
                         } catch (e) {
                           setStickmanStoryPhase(null);
                           toast({ title: "Failed", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
