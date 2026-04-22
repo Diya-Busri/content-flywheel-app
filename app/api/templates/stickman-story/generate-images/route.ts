@@ -26,39 +26,48 @@ export async function POST(request: NextRequest) {
     const scenes = Array.isArray(body.scenes) ? body.scenes : [];
     if (scenes.length === 0) return NextResponse.json({ error: "No scenes provided" }, { status: 400 });
 
-    const imageUrls: string[] = [];
+    // Generate all scene images in parallel (max 4 concurrent) for speed
+    const CONCURRENCY = 4;
+    const imageUrls: string[] = new Array(scenes.length).fill("");
 
-    for (let i = 0; i < scenes.length; i++) {
-      if (i > 0) await sleep(400);
-
+    const generateOne = async (i: number): Promise<void> => {
       const visualDescription = scenes[i]?.visualDescription ?? "";
       const prompt = `2D cartoon animation style, stickman characters with large round circle heads and simple black stick bodies, colorful illustrated background scene, flat color environment with buildings trees and sky, story animation art style similar to kurzgesagt or draw my life, ${visualDescription}, vibrant pastel colors, clean cartoon illustration, no text, no watermark`;
 
-      const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
-        method: "POST",
-        headers: {
-          Authorization: `Key ${FAL_API_KEY()}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt,
-          image_size: "portrait_4_3",
-          num_inference_steps: 4,
-          num_images: 1,
-          enable_safety_checker: true,
-        }),
-      });
+      try {
+        const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
+          method: "POST",
+          headers: {
+            Authorization: `Key ${FAL_API_KEY()}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prompt,
+            image_size: "portrait_4_3",
+            num_inference_steps: 4,
+            num_images: 1,
+            enable_safety_checker: true,
+          }),
+          signal: AbortSignal.timeout(30_000),
+        });
 
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "unknown");
-        console.error(`[templates/stickman-story/generate-images] fal.ai scene ${i + 1} failed: ${errText}`);
-        imageUrls.push("");
-        continue;
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "unknown");
+          console.error(`[stickman-story/generate-images] fal.ai scene ${i + 1} failed: ${errText}`);
+          return;
+        }
+
+        const data = (await res.json()) as { images?: Array<{ url: string }> };
+        imageUrls[i] = data.images?.[0]?.url ?? "";
+      } catch (err) {
+        console.error(`[stickman-story/generate-images] scene ${i + 1} error:`, err);
       }
+    };
 
-      const data = (await res.json()) as { images?: Array<{ url: string }> };
-      const url = data.images?.[0]?.url ?? "";
-      imageUrls.push(url);
+    // Process in batches of CONCURRENCY
+    for (let batch = 0; batch < scenes.length; batch += CONCURRENCY) {
+      const batchIndices = Array.from({ length: Math.min(CONCURRENCY, scenes.length - batch) }, (_, k) => batch + k);
+      await Promise.all(batchIndices.map(generateOne));
     }
 
     return NextResponse.json({ imageUrls });
