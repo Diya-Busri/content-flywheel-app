@@ -603,11 +603,21 @@ export default function LibraryFlow() {
     }
     const url = getVideoDownloadUrl(item);
     if (!url) {
-      toast({
-        title: "No downloadable video yet",
-        description: "Open Editor and export MP4 first. Then download will be available here.",
-        variant: "destructive",
-      });
+      // No compiled MP4 yet — take them straight to the editor to export
+      const editLink = getEditLink(item);
+      if (editLink && editLink !== "/dashboard/library") {
+        toast({
+          title: "Not exported yet",
+          description: "Taking you to the editor — compile to MP4 there to download.",
+        });
+        router.push(editLink);
+      } else {
+        toast({
+          title: "No downloadable video yet",
+          description: "Open the Editor, compile to MP4, then come back to download.",
+          variant: "destructive",
+        });
+      }
       return;
     }
     const a = document.createElement("a");
