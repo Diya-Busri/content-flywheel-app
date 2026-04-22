@@ -5782,9 +5782,9 @@ export default function TemplateStudioClient() {
               <div className="space-y-4">
                 <video src={animeStoryVideoUrl} controls className="w-full max-w-sm mx-auto rounded-xl" style={{ aspectRatio: "9/16" }} />
                 <div className="flex gap-2 justify-center flex-wrap">
-                  <a href={animeStoryVideoUrl} download="anime-story.mp4" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition">
+                  <button type="button" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition" onClick={() => { fetch(animeStoryVideoUrl!).then(r => r.blob()).then(blob => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "anime-story.mp4"; a.click(); URL.revokeObjectURL(a.href); }).catch(() => window.open(animeStoryVideoUrl!, "_blank")); }}>
                     <Download className="w-4 h-4" /> Download MP4
-                  </a>
+                  </button>
                   <a href="https://www.tiktok.com/upload" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-black hover:bg-gray-900 text-white text-sm font-semibold transition">📱 Post to TikTok</a>
                   <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white text-sm font-semibold transition">📸 Instagram</a>
                   <a href="https://studio.youtube.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition">🎬 YouTube</a>
@@ -5940,9 +5940,9 @@ export default function TemplateStudioClient() {
               <div className="space-y-4">
                 <video src={stickmanStoryVideoUrl} controls className="w-full max-w-sm mx-auto rounded-xl" style={{ aspectRatio: "9/16" }} />
                 <div className="flex gap-2 justify-center flex-wrap">
-                  <a href={stickmanStoryVideoUrl} download="stickman-story.mp4" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition">
+                  <button type="button" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition" onClick={() => { fetch(stickmanStoryVideoUrl!).then(r => r.blob()).then(blob => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "stickman-story.mp4"; a.click(); URL.revokeObjectURL(a.href); }).catch(() => window.open(stickmanStoryVideoUrl!, "_blank")); }}>
                     <Download className="w-4 h-4" /> Download MP4
-                  </a>
+                  </button>
                   <a href="https://www.tiktok.com/upload" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-black hover:bg-gray-900 text-white text-sm font-semibold transition">📱 Post to TikTok</a>
                   <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white text-sm font-semibold transition">📸 Instagram</a>
                   <a href="https://studio.youtube.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition">🎬 YouTube</a>
