@@ -807,6 +807,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   }, [socialKitProofFile, script, guide, effectiveProductName, toast]);
 
   const hasTimelineUsage = Array.isArray(guide.timelineSceneSlots) && guide.timelineSceneSlots.length > 0;
+  const isDarkInfographicStyle = guide.videoStyle === "dark_infographic";
   const handleSocialKitGenerateWithoutProof = useCallback(async () => {
     if (!libraryScriptId) return;
     setSocialKitLoading(true);
@@ -4269,16 +4270,20 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
           <TabsContent value="social-kit" className="mt-6 space-y-4" id="social-media-kit-section">
             {!socialKit ? (
-              hasTimelineUsage && libraryScriptId ? (
+              (hasTimelineUsage || isDarkInfographicStyle) && libraryScriptId ? (
                 <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
                   <CardContent className="pt-6 pb-6">
                     <div className="flex flex-col items-center text-center max-w-md mx-auto">
                       <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-4">
                         <Video className="w-8 h-8 text-green-500" />
                       </div>
-                      <h3 className="text-lg font-semibold text-foreground mb-2">You&apos;ve used the Video Timeline</h3>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">
+                        {isDarkInfographicStyle ? "Your infographic slides are ready" : "You've used the Video Timeline"}
+                      </h3>
                       <p className="text-gray-600 dark:text-muted-foreground text-sm mb-6">
-                        Generate your Social Media Kit with titles, hashtags, and captions—no proof upload needed.
+                        {isDarkInfographicStyle
+                          ? "Generate your Social Media Kit with titles, hashtags, and captions to go with your slides."
+                          : "Generate your Social Media Kit with titles, hashtags, and captions—no proof upload needed."}
                       </p>
                       <Button
                         className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
