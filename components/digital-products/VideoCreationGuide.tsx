@@ -1634,6 +1634,22 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           </ToastAction>
         ),
       });
+      // Auto-generate Social Media Kit (titles, descriptions, hashtags) after compile
+      if (libraryScriptId && !socialKit) {
+        setSocialKitLoading(true);
+        const form = new FormData();
+        form.append("libraryScriptId", libraryScriptId);
+        form.append("scriptHook", displayScript.hook ?? "");
+        form.append("scriptBody", displayScript.body ?? "");
+        form.append("scriptCta", displayScript.cta ?? "");
+        form.append("productName", (effectiveProductName && cleanProductTitle(effectiveProductName)) || effectiveProductName || "Product");
+        form.append("productDescription", (guide as { productDescription?: string }).productDescription ?? "");
+        fetch("/api/video-guide/social-media-kit", { method: "POST", body: form })
+          .then((r) => r.json().catch(() => ({})))
+          .then((d: { kit?: SocialMediaKit }) => { if (d.kit) { setSocialKit(d.kit); try { sessionStorage.setItem(SOCIAL_KIT_STORAGE_KEY, JSON.stringify(d.kit)); } catch { /* ignore */ } } })
+          .catch(() => {})
+          .finally(() => setSocialKitLoading(false));
+      }
     } catch (e) {
       toast({
         title: "Compile failed",
@@ -1649,8 +1665,10 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     guideCoachVoiceoverUrls,
     perSceneUrls,
     effectiveProductName,
-    guide.productName,
+    guide,
     libraryScriptId,
+    displayScript,
+    socialKit,
     toast,
   ]);
 
