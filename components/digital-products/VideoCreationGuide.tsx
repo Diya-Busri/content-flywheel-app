@@ -2403,12 +2403,10 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-orange-200 dark:border-orange-800/40 bg-orange-50 dark:bg-orange-950/20">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-orange-500 shrink-0" />
-                <span className="text-sm font-semibold text-foreground">
-                  Your script
-                </span>
+                <span className="text-sm font-semibold text-foreground">Your script</span>
                 {scripts.length > 1 && (
                   <span className="text-xs text-gray-500 dark:text-muted-foreground">
-                    — pick an angle below
+                    — {angles[currentAngleIndex]?.name ?? `Angle ${currentAngleIndex + 1}`}
                   </span>
                 )}
               </div>
@@ -2428,50 +2426,54 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               </div>
             </div>
 
-            {/* Angle tabs (only when multiple scripts) */}
-            {scripts.length > 1 && (
-              <div className="flex flex-wrap gap-1.5 px-5 pt-3 pb-0">
-                {scripts.map((s, idx) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setCurrentAngleIndex(idx)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                      currentAngleIndex === idx
-                        ? "bg-orange-500 text-white border-orange-500"
-                        : "border-orange-200 dark:border-orange-800/50 text-gray-600 dark:text-muted-foreground hover:border-orange-400 hover:text-foreground"
-                    }`}
-                  >
-                    {angles[idx]?.name ?? s.title ?? `Angle ${idx + 1}`}
-                  </button>
-                ))}
-              </div>
-            )}
-
             {/* Script preview */}
             <div className="px-5 py-4 space-y-3">
-              {/* Hook */}
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 mb-1">Hook</p>
                 <p className="text-sm text-foreground leading-relaxed line-clamp-3">
                   {displayScript.hook || <span className="text-muted-foreground italic">No hook yet</span>}
                 </p>
               </div>
-              {/* CTA preview */}
               {displayScript.cta && (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 mb-1">CTA</p>
                   <p className="text-sm text-foreground leading-relaxed line-clamp-2">{displayScript.cta}</p>
                 </div>
               )}
-              <div className="flex items-center gap-2 pt-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                <span className="text-xs text-green-700 dark:text-green-400 font-medium">
-                  {scripts.length > 1
-                    ? `Using angle: ${angles[currentAngleIndex]?.name ?? `Angle ${currentAngleIndex + 1}`} — scroll down to edit`
-                    : "Script loaded — scroll down to edit hook, body & CTA"}
-                </span>
-              </div>
+
+              {/* Arrow navigation between angles */}
+              {scripts.length > 1 ? (
+                <div className="flex items-center justify-between pt-1 border-t border-orange-100 dark:border-orange-800/30 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentAngleIndex((i) => Math.max(0, i - 1))}
+                    disabled={currentAngleIndex === 0}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-muted-foreground hover:text-orange-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </button>
+                  <span className="text-xs text-gray-400 dark:text-muted-foreground">
+                    {currentAngleIndex + 1} / {scripts.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentAngleIndex((i) => Math.min(scripts.length - 1, i + 1))}
+                    disabled={currentAngleIndex === scripts.length - 1}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-muted-foreground hover:text-orange-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 pt-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                  <span className="text-xs text-green-700 dark:text-green-400 font-medium">
+                    Script loaded — scroll down to edit hook, body &amp; CTA
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
