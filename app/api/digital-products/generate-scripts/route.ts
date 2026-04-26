@@ -66,6 +66,8 @@ export async function POST(request: NextRequest) {
     const intent = typeof body.intent === "string" ? body.intent.trim() : "";
 
     const targetDurationSec = typeof body.targetDurationSec === "number" ? body.targetDurationSec : 30;
+    const hookType = typeof body.hookType === "string" ? body.hookType.trim() : "negative";
+    const scriptPlatform = typeof body.platform === "string" ? body.platform.trim() : "tiktok";
     const lengthOpt = getVideoLengthOptionOrDefault(targetDurationSec);
     const { durationSec, wordsMin, wordsMax } = lengthOpt;
 
@@ -190,27 +192,49 @@ Return ONLY valid JSON:
   ]
 }`;
     } else {
+      // Hook type instructions
+      const hookTypeInstructions: Record<string, string> = {
+        negative: `HOOK STYLE — NEGATIVE (Pain Point / Frustration):
+Open with a pain point, failure, or frustration the viewer deeply recognises.
+Examples: "I wasted 3 years trying to figure this out...", "The reason you keep failing at this has nothing to do with motivation...", "Nobody warns you about this part..."
+Lead with what's NOT working. Make them feel seen in their struggle. Do NOT open with the product name.`,
+        positive: `HOOK STYLE — POSITIVE (Aspiration / Win):
+Open with an exciting outcome, win, or aspiration the viewer wants.
+Examples: "I finally found the thing that actually works...", "This one change gave me results in 7 days...", "What if you could [desired outcome] without [common obstacle]..."
+Lead with the dream result. Make them believe it's achievable. Do NOT open with the product name.`,
+        question: `HOOK STYLE — QUESTION (Curiosity Gap):
+Open with a direct question that creates a curiosity gap or challenges a belief.
+Examples: "Did you know most people are doing this completely wrong?", "What would happen if you stopped [common habit]?", "Why does [common approach] never seem to work?"
+Lead with a question that makes them stop and think. The answer must be revealed in the video. Do NOT open with the product name.`,
+        social_proof: `HOOK STYLE — SOCIAL PROOF (Results / Credibility):
+Open with a result, transformation, or credibility signal.
+Examples: "Over 500 people used this exact method to...", "I went from [before] to [after] in just [timeframe]...", "The same system that helped [type of person] achieve [outcome]..."
+Lead with proof — real numbers, real outcomes, real credibility. Do NOT open with the product name.`,
+      };
+
+      const hookInstruction = hookTypeInstructions[hookType] ?? hookTypeInstructions.negative;
+
+      const ctaInstruction =
+        scriptPlatform === "instagram"
+          ? `CTA (last few seconds): One clear action. Tell them to comment a specific KEYWORD to get the link — pick the most relevant keyword for this product (e.g., TOOLS, FREE, LINK, GUIDE, TIPS, COPY, ACCESS, DOWNLOAD). Format example: "Comment TOOLS below and I'll send you the link." Feel urgent but natural. Do NOT say "link in bio" for Instagram.`
+          : `CTA (last few seconds): One clear action. Point them to "link in bio". Urgent but natural. No desperation.`;
+
       systemPrompt = `You are an expert short-form video scriptwriter for TikTok and Instagram Reels.
 Write scripts that feel human, conversational and emotionally engaging.
 
 Rules:
-- Hook MUST open with a pain point, bold claim, or curiosity gap — never with the product name
+- ${hookInstruction}
 - Never start with "Meet [name]" or "Are you struggling" — be more specific and real
 - The product name should only appear ONCE in the entire script, naturally
 - Write like a real person talking, not an ad
 - Use short punchy sentences. Max 15 words per sentence.
 - Body should agitate the problem before presenting the solution
-- CTA should feel urgent but not desperate
-
-Pain point hooks that work:
-- "I wasted 3 years trying to figure this out..."
-- "Nobody talks about why journaling actually fails..."
-- "The reason you keep starting over has nothing to do with motivation..."
+- ${ctaInstruction}
 
 Write the script in this structure:
-HOOK (0-3s): One sentence. Pain point or curiosity gap only.
+HOOK (0-3s): One sentence only. Must match the hook style above.
 BODY (3-25s): Agitate the problem (2 sentences), then introduce the solution naturally (2-3 sentences), then social proof or outcome (1-2 sentences)
-CTA (25-30s): One clear action. Urgent but natural.
+CTA (25-30s): Follow the CTA instruction above exactly.
 ${brandVoice ? `\n${brandVoice}` : ""}
 Return only valid JSON with a "scripts" array. Each item has title, hook, body, cta (strings). No markdown, no code fences.`;
 

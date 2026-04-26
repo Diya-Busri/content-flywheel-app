@@ -49,6 +49,16 @@ import { cleanProductTitle, replaceProductTitleInText } from "@/lib/product-titl
 const LENGTH_OPTIONS = [15, 30, 60, 90] as const;
 type LengthOption = (typeof LENGTH_OPTIONS)[number];
 
+type HookType = "negative" | "positive" | "question" | "social_proof";
+type ScriptPlatform = "tiktok" | "instagram";
+
+const HOOK_TYPES: Array<{ value: HookType; emoji: string; label: string; description: string }> = [
+  { value: "negative", emoji: "😤", label: "Negative", description: "Pain point / frustration" },
+  { value: "positive", emoji: "🎯", label: "Positive", description: "Aspiration / win" },
+  { value: "question", emoji: "🤔", label: "Question", description: "Curiosity gap" },
+  { value: "social_proof", emoji: "⭐", label: "Social Proof", description: "Results / credibility" },
+];
+
 const CHAR_LIMITS: Record<LengthOption, { hook: number; body: number; cta: number }> = {
   15: { hook: 50, body: 150, cta: 50 },
   30: { hook: 100, body: 300, cta: 100 },
@@ -232,6 +242,8 @@ export default function ScriptsFlow() {
   const [scriptVideoLengthSec, setScriptVideoLengthSec] = useState(DEFAULT_VIDEO_LENGTH_SEC);
   const [regeneratingScripts, setRegeneratingScripts] = useState(false);
   const [brandVoiceName, setBrandVoiceName] = useState<string | null>(null);
+  const [hookType, setHookType] = useState<HookType>("negative");
+  const [scriptPlatform, setScriptPlatform] = useState<ScriptPlatform>("tiktok");
 
   useEffect(() => {
     fetch("/api/brand-voice")
@@ -335,6 +347,8 @@ export default function ScriptsFlow() {
             body: JSON.stringify({
               productId: productIdFromUrl,
               targetDurationSec: scriptVideoLengthSec,
+              hookType,
+              platform: scriptPlatform,
             }),
           });
           const genData = (await genRes.json().catch(() => ({}))) as {
@@ -412,7 +426,10 @@ export default function ScriptsFlow() {
   const selectAll = () => setScripts((prev) => prev.map((s) => ({ ...s, isSelected: true })));
   const deselectAll = () => setScripts((prev) => prev.map((s) => ({ ...s, isSelected: false })));
 
-  const runRegenerateWithDuration = async (targetSec: number) => {
+  const runRegenerateWithDuration = async (
+    targetSec: number,
+    opts?: { hookType?: HookType; platform?: ScriptPlatform }
+  ) => {
     if (!productIdFromUrl || scripts.length === 0) return;
     setRegeneratingScripts(true);
     try {
@@ -422,6 +439,8 @@ export default function ScriptsFlow() {
         body: JSON.stringify({
           productId: productIdFromUrl,
           targetDurationSec: targetSec,
+          hookType: opts?.hookType ?? hookType,
+          platform: opts?.platform ?? scriptPlatform,
         }),
       });
       const genData = (await genRes.json().catch(() => ({}))) as {
@@ -467,6 +486,20 @@ export default function ScriptsFlow() {
     setScripts((prev) => prev.map((s) => ({ ...s, length: newSec as LengthOption })));
     if (scripts.length > 0 && productIdFromUrl) {
       runRegenerateWithDuration(newSec);
+    }
+  };
+
+  const handleHookTypeChange = (newHookType: HookType) => {
+    setHookType(newHookType);
+    if (scripts.length > 0 && productIdFromUrl) {
+      runRegenerateWithDuration(scriptVideoLengthSec, { hookType: newHookType, platform: scriptPlatform });
+    }
+  };
+
+  const handlePlatformChange = (newPlatform: ScriptPlatform) => {
+    setScriptPlatform(newPlatform);
+    if (scripts.length > 0 && productIdFromUrl) {
+      runRegenerateWithDuration(scriptVideoLengthSec, { hookType, platform: newPlatform });
     }
   };
 
@@ -576,6 +609,71 @@ export default function ScriptsFlow() {
         </Card>
       ) : (
         <>
+          {productIdFromUrl && (
+            <div className="mb-6 space-y-6">
+              {/* Hook Type Selector */}
+              <div>
+                <Label className="text-gray-900 dark:text-white block mb-1">Hook Type</Label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Choose the emotion your hook leads with — changes how every script opens</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {HOOK_TYPES.map((ht) => {
+                    const selected = hookType === ht.value;
+                    return (
+                      <button
+                        key={ht.value}
+                        type="button"
+                        disabled={regeneratingScripts}
+                        onClick={() => handleHookTypeChange(ht.value)}
+                        className={`rounded-lg border-2 p-3 text-left transition-all ${
+                          selected
+                            ? "border-orange-500 bg-orange-500/10 dark:bg-orange-900/40"
+                            : "border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A] hover:border-gray-300 dark:hover:border-[#3A3A3A]"
+                        }`}
+                      >
+                        <span className="block text-lg mb-0.5">{ht.emoji}</span>
+                        <span className={`block font-semibold text-sm ${selected ? "text-orange-600 dark:text-orange-400" : "text-gray-900 dark:text-white"}`}>{ht.label}</span>
+                        <span className="block text-xs mt-0.5 text-gray-500 dark:text-gray-400">{ht.description}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Platform Toggle */}
+              <div>
+                <Label className="text-gray-900 dark:text-white block mb-1">Platform</Label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Changes the CTA style in all generated scripts</p>
+                <div className="flex gap-2">
+                  {(["tiktok", "instagram"] as const).map((p) => {
+                    const selected = scriptPlatform === p;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        disabled={regeneratingScripts}
+                        onClick={() => handlePlatformChange(p)}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                          selected
+                            ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400"
+                            : "border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-[#1A1A1A] hover:border-gray-300 dark:hover:border-[#3A3A3A]"
+                        }`}
+                      >
+                        <span>{p === "tiktok" ? "🎵" : "📸"}</span>
+                        <span>{p === "tiktok" ? "TikTok" : "Instagram"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {scriptPlatform === "instagram" && (
+                  <p className="text-xs text-orange-500 dark:text-orange-400 mt-2 flex items-center gap-1.5">
+                    <span>💡</span>
+                    <span>Instagram CTAs will use "Comment [KEYWORD] for the link" instead of "link in bio"</span>
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {productIdFromUrl && (
             <div className="mb-6">
               <Label className="text-gray-900 dark:text-white block mb-2">Video length (controls all scripts)</Label>
