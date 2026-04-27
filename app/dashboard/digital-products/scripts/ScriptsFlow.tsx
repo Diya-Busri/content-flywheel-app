@@ -412,6 +412,7 @@ export default function ScriptsFlow() {
       setLoading(false);
     }, 2000);
     return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productIdFromUrl]);
 
   const updateScript = (id: string, updates: Partial<ScriptData>) => {
@@ -667,7 +668,7 @@ export default function ScriptsFlow() {
                 {scriptPlatform === "instagram" && (
                   <p className="text-xs text-orange-500 dark:text-orange-400 mt-2 flex items-center gap-1.5">
                     <span>💡</span>
-                    <span>Instagram CTAs will use "Comment [KEYWORD] for the link" instead of "link in bio"</span>
+                    <span>Instagram CTAs will use &ldquo;Comment [KEYWORD] for the link&rdquo; instead of &ldquo;link in bio&rdquo;</span>
                   </p>
                 )}
               </div>
