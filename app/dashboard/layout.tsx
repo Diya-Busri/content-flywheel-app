@@ -96,15 +96,16 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     : null;
   const userHidden = getHiddenFeaturesByUseCases(selectedUseCases);
 
-  // User's explicit feature selections override global admin flags —
-  // if a user has enabled a use case in Settings, those feature keys
-  // should always show even if an admin flag globally disables them.
+  // Admin flags always win — user use-case selections cannot override a global OFF flag.
+  // userHidden are features hidden because the user hasn't selected a relevant use case.
+  // User explicit keys only override userHidden (use-case hiding), not admin flags.
   const userExplicitKeys = selectedUseCases && selectedUseCases.length > 0
     ? new Set(USE_CASES.filter(uc => selectedUseCases.includes(uc.id)).flatMap(uc => uc.featureKeys))
     : new Set<string>();
-  const effectiveAdminDisabled = new Set([...disabledFeatures].filter(k => !userExplicitKeys.has(k)));
+  const effectiveUserHidden = new Set([...userHidden].filter(k => !userExplicitKeys.has(k)));
 
-  const allDisabled = [...new Set([...effectiveAdminDisabled, ...userHidden])];
+  // Admin flags take absolute priority — merge after so they can't be overridden
+  const allDisabled = [...new Set([...effectiveUserHidden, ...disabledFeatures])];
 
   return (
     <DashboardLayoutClient profile={profile} userEmail={userEmail} disabledFeatures={allDisabled}>
