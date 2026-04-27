@@ -17,7 +17,13 @@ export const FEATURE_KEYS = {
   SCRIPT_CHECKER: "script_checker",
   DIGITAL_PRODUCTS: "digital_products",
   TIKTOK_SHOP: "tiktok_shop",
+  PRINT_ON_DEMAND: "print_on_demand",
+  EMAIL_MARKETING: "email_marketing",
   GOAL_TRACKER: "goal_tracker",
+  DROP_CAMPAIGN: "drop_campaign",
+  GROW_HUB: "grow_hub",
+  CAPTION_LIBRARY: "caption_library",
+  YOUTUBE_UPLOAD: "youtube_upload",
   INVITE_CREATORS: "invite_creators",
 } as const;
 

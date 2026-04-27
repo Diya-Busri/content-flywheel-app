@@ -56,7 +56,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true, featureKey: "template_studio" },
         { href: "/dashboard/video-timeline", icon: <Film size={18} />, label: "Video Timeline", emoji: "🎬", featureKey: "video_timeline" },
         { href: "/dashboard/video-credits", icon: <Film size={18} />, label: "Video Credits", emoji: "🎥", featureKey: "video_credits" },
-        { href: "/dashboard/content-studio/youtube-upload", icon: <Youtube size={18} />, label: "Upload to YouTube", emoji: "▶️", activeWhenStartsWith: true },
+        { href: "/dashboard/content-studio/youtube-upload", icon: <Youtube size={18} />, label: "Upload to YouTube", emoji: "▶️", activeWhenStartsWith: true, featureKey: "youtube_upload" },
       ],
     },
     {
@@ -65,7 +65,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚", featureKey: "my_library" },
         { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅", featureKey: "content_calendar" },
         { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅", featureKey: "script_checker" },
-        { href: "/dashboard/caption-library", icon: <BookMarked size={18} />, label: "Caption Library", emoji: "🔖", activeWhenStartsWith: true },
+        { href: "/dashboard/caption-library", icon: <BookMarked size={18} />, label: "Caption Library", emoji: "🔖", activeWhenStartsWith: true, featureKey: "caption_library" },
       ],
     },
     {
@@ -81,8 +81,8 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       items: [
         { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧", activeWhenStartsWith: true, featureKey: "email_marketing" },
         { href: "/dashboard/goals", icon: <Target size={18} />, label: "Track Goals", emoji: "🎯", activeWhenStartsWith: true, featureKey: "goal_tracker" },
-        { href: "/dashboard/drop-campaign", icon: <Zap size={18} />, label: "Drop Campaign", emoji: "🚀", activeWhenStartsWith: true },
-        { href: "/dashboard/grow", icon: <TrendingUp size={18} />, label: "Grow Hub", emoji: "📈", activeWhenStartsWith: true },
+        { href: "/dashboard/drop-campaign", icon: <Zap size={18} />, label: "Drop Campaign", emoji: "🚀", activeWhenStartsWith: true, featureKey: "drop_campaign" },
+        { href: "/dashboard/grow", icon: <TrendingUp size={18} />, label: "Grow Hub", emoji: "📈", activeWhenStartsWith: true, featureKey: "grow_hub" },
       ],
     },
   ].map((group) => ({ ...group, items: group.items.filter((item) => !item.featureKey || !disabled.has(item.featureKey)) }));
