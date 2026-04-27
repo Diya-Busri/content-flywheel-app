@@ -17,10 +17,37 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Content Flywheel - AI Video Generation for Social Media",
+  title: "Content Flywheel — Create & Sell Digital Products with AI",
   description:
-    "Turn products into sales-driving videos for TikTok, Instagram, and YouTube. AI-powered video creation focused on conversion, not vanity metrics.",
+    "Build ebooks, planners and templates with AI. Sell from your own store. Market with email sequences, affiliates and discount codes. All in one platform.",
+  metadataBase: new URL("https://contentflywheel.co.uk"),
   icons: { icon: "/icon.svg" },
+  alternates: {
+    canonical: "https://contentflywheel.co.uk",
+  },
+  openGraph: {
+    title: "Content Flywheel — Create & Sell Digital Products with AI",
+    description:
+      "Build ebooks, planners and templates with AI. Sell from your own store. Market with email sequences, affiliates and discount codes. All in one platform.",
+    url: "https://contentflywheel.co.uk",
+    siteName: "Content Flywheel",
+    locale: "en_GB",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Content Flywheel — Create & Sell Digital Products with AI",
+    description:
+      "Build ebooks, planners and templates with AI. Sell from your own store. Market with email sequences, affiliates and discount codes.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
+  },
 };
 
 // Root layout is synchronous - no blocking auth() call. Sign-in/sign-up pages load instantly.
