@@ -183,10 +183,14 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
               transition={{ duration: 0.2 }}
             >
               <div className="hidden md:block">
-                <Image src="/logo.png" alt="Content Flywheel" width={130} height={36} className="h-9 w-auto object-contain" />
+                <span className="text-xl font-bold tracking-tight">
+                  <span className="text-white">Content</span><span className="text-orange-500">Flywheel</span>
+                </span>
               </div>
               <div className="block md:hidden text-center">
-                <Image src="/logo.png" alt="CF" width={32} height={32} className="h-8 w-auto object-contain" />
+                <span className="text-lg font-bold tracking-tight">
+                  <span className="text-white">C</span><span className="text-orange-500">F</span>
+                </span>
               </div>
             </motion.div>
           </Link>
