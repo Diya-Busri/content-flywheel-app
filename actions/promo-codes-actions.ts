@@ -77,9 +77,9 @@ export async function validateAndApplyPromoCodeAction(
     const row = await getPromoCodeByCode(code);
 
     if (!row) return { isSuccess: false, message: "Invalid promo code" };
-    if (row.status !== "active") return { isSuccess: false, message: "Promo code is no longer active" };
+    if (!row.active) return { isSuccess: false, message: "Promo code is no longer active" };
     if (row.expiresAt && row.expiresAt < new Date()) return { isSuccess: false, message: "Promo code has expired" };
-    if (row.maxUses !== null && row.uses >= row.maxUses) return { isSuccess: false, message: "Promo code has reached its usage limit" };
+    if (row.maxUses !== null && row.usedCount >= row.maxUses) return { isSuccess: false, message: "Promo code has reached its usage limit" };
     if (row.plan !== "both" && row.plan !== plan) {
       return { isSuccess: false, message: `This code is only valid for the ${row.plan} plan` };
     }

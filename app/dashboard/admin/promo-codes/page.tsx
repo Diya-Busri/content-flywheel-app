@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Trash2, RefreshCw, Copy, Check, Tag, Shuffle, X } from "lucide-react";
+import { Loader2, Plus, Trash2, RefreshCw, Copy, Check, Tag, Shuffle, X, ChevronDown, ChevronUp, Users } from "lucide-react";
 
 type DiscountType = "percent" | "fixed";
 type Plan = "monthly" | "yearly" | "both";
@@ -26,6 +26,13 @@ type PromoCode = {
 };
 
 type Toast = { msg: string; ok: boolean };
+
+type UseRecord = {
+  id: string;
+  userId: string;
+  usedAt: string;
+  email: string | null;
+};
 
 function generateRandomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -47,6 +54,9 @@ export default function AdminPromoCodesPage() {
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [usesData, setUsesData] = useState<Record<string, UseRecord[]>>({});
+  const [usesLoading, setUsesLoading] = useState<string | null>(null);
 
   // Form state
   const [code, setCode] = useState("");
@@ -118,6 +128,25 @@ export default function AdminPromoCodesPage() {
       setTimeout(() => setCopied(null), 2000);
     } catch {
       showToast("Could not copy to clipboard", false);
+    }
+  }
+
+  async function toggleUses(pc: PromoCode) {
+    if (expandedId === pc.id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(pc.id);
+    if (usesData[pc.id]) return; // already loaded
+    setUsesLoading(pc.id);
+    try {
+      const res = await fetch(`/api/admin/promo-codes/${pc.id}/uses`);
+      const data = (await res.json().catch(() => ({}))) as { uses?: UseRecord[] };
+      setUsesData((prev) => ({ ...prev, [pc.id]: data.uses ?? [] }));
+    } catch {
+      showToast("Failed to load uses", false);
+    } finally {
+      setUsesLoading(null);
     }
   }
 
@@ -376,8 +405,8 @@ export default function AdminPromoCodesPage() {
                   const isExpired = !!pc.expiresAt && new Date(pc.expiresAt) < new Date();
                   const isExhausted = pc.maxUses !== null && pc.usedCount >= pc.maxUses;
                   return (
+                    <React.Fragment key={pc.id}>
                     <tr
-                      key={pc.id}
                       className="border-b border-[#E5E7EB] dark:border-white/10 last:border-0 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
                     >
                       {/* Code */}
@@ -432,13 +461,23 @@ export default function AdminPromoCodesPage() {
                           <span>
                             <span className="font-medium text-gray-900 dark:text-white">{pc.usedCount}</span>
                             <span className="text-muted-foreground"> / {pc.maxUses ?? "∞"}</span>
+                            {pc.maxUses !== null && (
+                              <span className="text-xs text-muted-foreground ml-1">({pc.maxUses - pc.usedCount} left)</span>
+                            )}
                           </span>
                           {pc.usedCount === 0 ? (
                             <span className="text-xs text-muted-foreground">Not used yet</span>
                           ) : isExhausted ? (
                             <span className="text-xs text-red-500 font-medium">Limit reached</span>
                           ) : (
-                            <span className="text-xs text-amber-600 font-medium">{pc.usedCount} use{pc.usedCount !== 1 ? "s" : ""}</span>
+                            <button
+                              onClick={() => void toggleUses(pc)}
+                              className="text-xs text-orange-500 hover:text-orange-600 font-medium flex items-center gap-0.5"
+                            >
+                              <Users className="w-3 h-3" />
+                              {pc.usedCount} use{pc.usedCount !== 1 ? "s" : ""}
+                              {expandedId === pc.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                            </button>
                           )}
                         </div>
                       </td>
@@ -492,6 +531,39 @@ export default function AdminPromoCodesPage() {
                         </Button>
                       </td>
                     </tr>
+                    {/* Expanded uses row */}
+                    {expandedId === pc.id && (
+                      <tr className="bg-orange-500/5 dark:bg-orange-900/10">
+                        <td colSpan={8} className="px-6 py-3">
+                          {usesLoading === pc.id ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground py-1">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              Loading users...
+                            </div>
+                          ) : !usesData[pc.id]?.length ? (
+                            <p className="text-sm text-muted-foreground py-1">No usage records found.</p>
+                          ) : (
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                Users who used {pc.code}
+                              </p>
+                              {usesData[pc.id].map((u) => (
+                                <div key={u.id} className="flex items-center gap-4 text-sm py-1 border-b border-orange-200/30 dark:border-orange-800/20 last:border-0">
+                                  <span className="font-medium text-gray-900 dark:text-white min-w-[200px]">
+                                    {u.email ?? u.userId}
+                                  </span>
+                                  <span className="text-muted-foreground text-xs">
+                                    Used {new Date(u.usedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground font-mono opacity-60">{u.userId}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>

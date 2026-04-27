@@ -345,7 +345,7 @@ export default function PromoCodesClient({ initialCodes }: Props) {
                   {(() => {
                     const isExpired = c.expiresAt && new Date(c.expiresAt) < new Date();
                     const isExhausted = c.maxUses !== null && c.usedCount >= c.maxUses;
-                    if (c.status !== "active" || isExpired || isExhausted) {
+                    if (!c.active || isExpired || isExhausted) {
                       const label = isExpired ? "Expired" : isExhausted ? "Exhausted" : "Inactive";
                       return (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600">

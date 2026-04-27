@@ -26,6 +26,6 @@ export async function deletePromoCode(id: string): Promise<void> {
 export async function incrementPromoCodeUses(id: string): Promise<void> {
   await db
     .update(promoCodesTable)
-    .set({ uses: sql`${promoCodesTable.uses} + 1` })
+    .set({ usedCount: sql`${promoCodesTable.usedCount} + 1` })
     .where(eq(promoCodesTable.id, id));
 }
