@@ -24,8 +24,7 @@ export async function POST() {
         { status: 503 }
       );
     }
-    // GA endpoint (released March 2025) — replaces the old beta /v1/realtime/sessions
-    const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+    const response = await fetch("https://api.openai.com/v1/realtime/sessions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
