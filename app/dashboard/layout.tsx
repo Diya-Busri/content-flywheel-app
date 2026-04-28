@@ -104,8 +104,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     : new Set<string>();
   const effectiveUserHidden = new Set([...userHidden].filter(k => !userExplicitKeys.has(k)));
 
-  // Admin flags take absolute priority — merge after so they can't be overridden
-  const allDisabled = [...new Set([...effectiveUserHidden, ...disabledFeatures])];
+  // Admin always sees everything — feature flags only apply to regular users
+  const allDisabled = isAdmin ? [] : [...new Set([...effectiveUserHidden, ...disabledFeatures])];
 
   return (
     <DashboardLayoutClient profile={profile} userEmail={userEmail} disabledFeatures={allDisabled}>
