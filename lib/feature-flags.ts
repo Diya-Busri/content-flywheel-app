@@ -58,7 +58,7 @@ export async function getDisabledFeatures(userId: string): Promise<Set<string>> 
 
     const disabled = new Set<string>();
     for (const [key, enabled] of resolved) {
-      if (!enabled) disabled.add(key);
+      if (!enabled) disabled.add(key.replace(/-/g, "_"));
     }
     return disabled;
   } catch {
