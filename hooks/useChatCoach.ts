@@ -4,10 +4,10 @@ import { useState, useCallback, useEffect, useRef } from "react";
 
 const STORAGE_KEY = "ai-coach-history";
 
-const IMAGE_ACTION_WORDS = /\b(create|make|generate|draw|show\s+me)\b/i;
-const IMAGE_SUBJECT_WORDS = /\b(image|picture|photo|illustration)s?\b/i;
+const IMAGE_ACTION_WORDS = /\b(create|make|generate|draw|show\s+me|design|build|produce|give\s+me|i\s+want\s+a|can\s+you\s+make)\b/i;
+const IMAGE_SUBJECT_WORDS = /\b(image|picture|photo|illustration|design|graphic|poster|thumbnail|banner|visual|mockup|logo|flyer|infographic|artwork|cover)s?\b/i;
 
-/** Detect if the user message is requesting an image (e.g. "generate an image of a cat"). */
+/** Detect if the user message is requesting an image or design. */
 export function isImageRequest(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
@@ -25,13 +25,13 @@ export type CoachMessage = {
   /** User message: uploaded PDF/txt with extracted text */
   attachedFiles?: { name: string; text: string }[];
   /** User message: attached video files. blobUrl is session-only (not persisted). */
-  attachedVideos?: { name: string; blobUrl?: string }[];
+  attachedVideos?: { name: string; blobUrl?: string; transcript?: string }[];
 };
 
 export type SendMessageAttachments = {
   imageUrls?: string[];
   attachedFiles?: { name: string; text: string }[];
-  attachedVideos?: { name: string; blobUrl?: string }[];
+  attachedVideos?: { name: string; blobUrl?: string; transcript?: string }[];
 };
 
 function loadStoredMessages(persist: boolean): CoachMessage[] {
@@ -200,8 +200,8 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
           ? {
               imageUrls: m.imageUrls,
               attachedFiles: m.attachedFiles,
-              // Strip blobUrl — server only needs the filename
-              attachedVideos: m.attachedVideos?.map((v) => ({ name: v.name })),
+              // Strip blobUrl — server only needs filename + transcript
+              attachedVideos: m.attachedVideos?.map((v) => ({ name: v.name, transcript: v.transcript })),
             }
           : {}),
       }));

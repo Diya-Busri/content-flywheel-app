@@ -1175,7 +1175,7 @@ function ChatPanel({
 
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<{ name: string; text: string }[]>([]);
-  const [pendingVideos, setPendingVideos] = useState<{ name: string; blobUrl: string }[]>([]);
+  const [pendingVideos, setPendingVideos] = useState<{ name: string; blobUrl: string; transcript?: string; transcribing?: boolean }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -1511,7 +1511,27 @@ function ChatPanel({
           setPendingImageUrls((prev) => [...prev, dataUrl]);
         } else if (videoTypes.includes(file.type) || /\.(mp4|mov|avi|webm|mkv|mpeg|mpg)$/i.test(lowerName)) {
           const blobUrl = URL.createObjectURL(file);
-          setPendingVideos((prev) => [...prev, { name: file.name, blobUrl }]);
+          setPendingVideos((prev) => [...prev, { name: file.name, blobUrl, transcribing: true }]);
+          // Transcribe in background via Whisper
+          (async () => {
+            try {
+              const form = new FormData();
+              form.append("file", file);
+              const res = await fetch("/api/transcribe-video", { method: "POST", body: form });
+              const data = await res.json().catch(() => ({})) as { transcript?: string; error?: string };
+              setPendingVideos((prev) =>
+                prev.map((v) => v.blobUrl === blobUrl ? { ...v, transcript: data.transcript, transcribing: false } : v)
+              );
+              if (!data.transcript) {
+                toast({ title: "Could not transcribe video", description: data.error ?? "Unknown error" });
+              }
+            } catch {
+              setPendingVideos((prev) =>
+                prev.map((v) => v.blobUrl === blobUrl ? { ...v, transcribing: false } : v)
+              );
+              toast({ title: "Could not transcribe video", description: "Network error" });
+            }
+          })();
         } else if (file.type === "application/pdf" || lowerName.endsWith(".pdf")) {
           try {
             const text = await extractPdfText(file);
@@ -1634,7 +1654,12 @@ function ChatPanel({
     const hasImages = pendingImageUrls.length > 0;
     const hasFiles = pendingFiles.length > 0;
     const hasVideos = pendingVideos.length > 0;
+    const isTranscribing = pendingVideos.some((v) => v.transcribing);
     if ((!value && !hasImages && !hasFiles && !hasVideos) || isLoading) return;
+    if (isTranscribing) {
+      toast({ title: "Still transcribing…", description: "Please wait a moment before sending." });
+      return;
+    }
     ta.value = "";
     const attachments =
       hasImages || hasFiles || hasVideos
@@ -2337,8 +2362,13 @@ function ChatPanel({
                   preload="metadata"
                 />
                 <span className="absolute bottom-0 left-0 right-0 text-[9px] text-white bg-black/60 rounded-b-lg px-1 truncate leading-tight py-0.5">
-                  {v.name}
+                  {v.transcribing ? "Transcribing…" : v.transcript ? "✓ Transcribed" : v.name}
                 </span>
+                {v.transcribing && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg">
+                    <Loader2 className="h-5 w-5 text-white animate-spin" />
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => removePendingVideo(i)}
