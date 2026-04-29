@@ -1493,13 +1493,13 @@ function ChatPanel({
 
   const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files;
-      if (!files?.length) return;
+      const rawFiles = e.target.files;
+      if (!rawFiles?.length) return;
+      const files = Array.from(rawFiles); // copy before clearing so the FileList isn't emptied
       e.target.value = "";
       const imageTypes = ["image/jpeg", "image/png", "image/webp"];
       const videoTypes = ["video/mp4", "video/quicktime", "video/x-msvideo", "video/webm", "video/x-matroska", "video/mpeg"];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      for (const file of files) {
         const lowerName = file.name.toLowerCase();
         if (imageTypes.includes(file.type) || /\.(jpe?g|png|webp)$/i.test(lowerName)) {
           const dataUrl = await new Promise<string>((resolve, reject) => {
