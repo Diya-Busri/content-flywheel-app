@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Send, Loader2, Volume2, VolumeX, ImagePlus, Plus, Search, Trash2, Mic, Phone, PhoneOff, Paperclip, FileText, X, ChevronDown, ChevronLeft, ChevronRight, Package, Copy, BookOpen, Sparkles, Save, Pencil, Download, Pin, AudioLines, Play, Square } from "lucide-react";
+import { Send, Loader2, Volume2, VolumeX, ImagePlus, Plus, Search, Trash2, Mic, Phone, PhoneOff, Paperclip, FileText, X, ChevronDown, ChevronLeft, ChevronRight, Package, Copy, BookOpen, Sparkles, Save, Pencil, Download, Pin, AudioLines, Play, Square, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1175,6 +1175,7 @@ function ChatPanel({
 
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<{ name: string; text: string }[]>([]);
+  const [pendingVideos, setPendingVideos] = useState<{ name: string; blobUrl: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -1496,6 +1497,7 @@ function ChatPanel({
       if (!files?.length) return;
       e.target.value = "";
       const imageTypes = ["image/jpeg", "image/png", "image/webp"];
+      const videoTypes = ["video/mp4", "video/quicktime", "video/x-msvideo", "video/webm", "video/x-matroska", "video/mpeg"];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const lowerName = file.name.toLowerCase();
@@ -1507,6 +1509,9 @@ function ChatPanel({
             reader.readAsDataURL(file);
           });
           setPendingImageUrls((prev) => [...prev, dataUrl]);
+        } else if (videoTypes.includes(file.type) || /\.(mp4|mov|avi|webm|mkv|mpeg|mpg)$/i.test(lowerName)) {
+          const blobUrl = URL.createObjectURL(file);
+          setPendingVideos((prev) => [...prev, { name: file.name, blobUrl }]);
         } else if (file.type === "application/pdf" || lowerName.endsWith(".pdf")) {
           try {
             const text = await extractPdfText(file);
@@ -1521,7 +1526,7 @@ function ChatPanel({
           const text = await readFileAsText(file);
           setPendingFiles((prev) => [...prev, { name: file.name, text }]);
         } else {
-          toast({ title: "Unsupported file type", description: "Use images (jpg, png, webp), PDF, or txt." });
+          toast({ title: "Unsupported file type", description: "Use images (jpg, png, webp), videos (mp4, mov, webm), PDF, or txt." });
         }
       }
     },
@@ -1534,6 +1539,13 @@ function ChatPanel({
 
   const removePendingFile = useCallback((index: number) => {
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const removePendingVideo = useCallback((index: number) => {
+    setPendingVideos((prev) => {
+      URL.revokeObjectURL(prev[index].blobUrl);
+      return prev.filter((_, i) => i !== index);
+    });
   }, []);
 
   const replayAudio = useCallback(
@@ -1595,6 +1607,10 @@ function ChatPanel({
     setPlayingIndex(null);
     setPendingImageUrls([]);
     setPendingFiles([]);
+    setPendingVideos((prev) => {
+      prev.forEach((v) => URL.revokeObjectURL(v.blobUrl));
+      return [];
+    });
     Object.values(messageAudioUrls).forEach(URL.revokeObjectURL);
     setMessageAudioUrls({});
     clearChat();
@@ -1617,15 +1633,21 @@ function ChatPanel({
     const value = ta.value.trim();
     const hasImages = pendingImageUrls.length > 0;
     const hasFiles = pendingFiles.length > 0;
-    if ((!value && !hasImages && !hasFiles) || isLoading) return;
+    const hasVideos = pendingVideos.length > 0;
+    if ((!value && !hasImages && !hasFiles && !hasVideos) || isLoading) return;
     ta.value = "";
     const attachments =
-      hasImages || hasFiles
-        ? { imageUrls: pendingImageUrls.length ? pendingImageUrls : undefined, attachedFiles: pendingFiles.length ? pendingFiles : undefined }
+      hasImages || hasFiles || hasVideos
+        ? {
+            imageUrls: hasImages ? pendingImageUrls : undefined,
+            attachedFiles: hasFiles ? pendingFiles : undefined,
+            attachedVideos: hasVideos ? pendingVideos : undefined,
+          }
         : undefined;
-    sendMessage(value || (hasImages || hasFiles ? "(no text)" : ""), attachments);
+    sendMessage(value || "(no text)", attachments);
     setPendingImageUrls([]);
     setPendingFiles([]);
+    setPendingVideos([]);
     ta.style.height = "auto";
   };
 
@@ -1633,7 +1655,11 @@ function ChatPanel({
     const ta = textareaRef.current;
     if (!ta) return;
     const value = ta.value.trim();
-    if (!value || isLoading) return;
+    if (isLoading) return;
+    if (!value) {
+      toast({ title: "Type an image description first", description: "Describe the image you want to generate, then click the button." });
+      return;
+    }
     ta.value = "";
     generateImage(value);
     ta.style.height = "auto";
@@ -2024,6 +2050,30 @@ function ChatPanel({
                         ))}
                       </div>
                     )}
+                    {msg.role === "user" && msg.attachedVideos && msg.attachedVideos.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {msg.attachedVideos.map((v, j) => (
+                          v.blobUrl ? (
+                            <div key={j} className="relative">
+                              <video
+                                src={v.blobUrl}
+                                className="rounded-lg max-h-32 w-auto border border-white/20 bg-black"
+                                controls
+                                preload="metadata"
+                              />
+                            </div>
+                          ) : (
+                            <span
+                              key={j}
+                              className="inline-flex items-center gap-1 rounded-md bg-white/20 px-2 py-1 text-xs"
+                            >
+                              <Video className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate max-w-[120px]">{v.name}</span>
+                            </span>
+                          )
+                        ))}
+                      </div>
+                    )}
                     {msg.role === "user" && msg.attachedFiles && msg.attachedFiles.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         {msg.attachedFiles.map((f, j) => (
@@ -2038,7 +2088,7 @@ function ChatPanel({
                       </div>
                     )}
                     {(msg.role === "user" && msg.content && msg.content !== "(no text)" && (
-                      <span className={(msg.imageUrls?.length || msg.attachedFiles?.length) ? "block mt-2" : ""}>
+                      <span className={(msg.imageUrls?.length || msg.attachedFiles?.length || msg.attachedVideos?.length) ? "block mt-2" : ""}>
                         {stripMarkdown(msg.content)}
                       </span>
                     )) ||
@@ -2259,7 +2309,7 @@ function ChatPanel({
       </div>
 
       <div className="shrink-0 border-t border-border bg-card px-4 py-4">
-        {(pendingImageUrls.length > 0 || pendingFiles.length > 0) && (
+        {(pendingImageUrls.length > 0 || pendingFiles.length > 0 || pendingVideos.length > 0) && (
           <div className="mx-auto max-w-[52rem] flex flex-wrap gap-2 mb-2">
             {pendingImageUrls.map((url, i) => (
               <div key={`img-${i}`} className="relative inline-block">
@@ -2273,6 +2323,27 @@ function ChatPanel({
                   onClick={() => removePendingImage(i)}
                   className="absolute -top-1.5 -right-1.5 rounded-full bg-red-500 text-white p-0.5 hover:bg-red-600"
                   aria-label="Remove image"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+            {pendingVideos.map((v, i) => (
+              <div key={`vid-${i}`} className="relative inline-block">
+                <video
+                  src={v.blobUrl}
+                  className="h-14 w-24 rounded-lg object-cover border border-border bg-black"
+                  muted
+                  preload="metadata"
+                />
+                <span className="absolute bottom-0 left-0 right-0 text-[9px] text-white bg-black/60 rounded-b-lg px-1 truncate leading-tight py-0.5">
+                  {v.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removePendingVideo(i)}
+                  className="absolute -top-1.5 -right-1.5 rounded-full bg-red-500 text-white p-0.5 hover:bg-red-600"
+                  aria-label="Remove video"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -2298,14 +2369,6 @@ function ChatPanel({
           </div>
         )}
         <div className="mx-auto max-w-[52rem] flex gap-2 items-end">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,application/pdf,.pdf,text/plain,.txt"
-            multiple
-            className="hidden"
-            onChange={handleFileSelect}
-          />
           <textarea
             ref={textareaRef}
             placeholder={isRecording ? "Speak now…" : "Ask your coach or describe an image…"}
@@ -2320,18 +2383,28 @@ function ChatPanel({
               "disabled:cursor-not-allowed disabled:opacity-50"
             )}
           />
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading || isRecording}
-            className="shrink-0 h-10 w-10 border-border"
+          <label
+            htmlFor="coach-file-input"
+            className={cn(
+              "shrink-0 h-10 w-10 border border-border rounded-md flex items-center justify-center cursor-pointer",
+              "bg-background hover:bg-accent hover:text-accent-foreground transition-colors",
+              (isLoading || isRecording) && "pointer-events-none opacity-50 cursor-not-allowed"
+            )}
             title="Attach file (images, PDF, txt)"
             aria-label="Attach file"
           >
+            <input
+              id="coach-file-input"
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,video/mp4,video/quicktime,video/x-msvideo,video/webm,video/x-matroska,.mp4,.mov,.avi,.webm,.mkv,application/pdf,.pdf,text/plain,.txt"
+              multiple
+              className="hidden"
+              onChange={handleFileSelect}
+              disabled={isLoading || isRecording}
+            />
             <Paperclip className="h-4 w-4" />
-          </Button>
+          </label>
           <Button
             type="button"
             variant="outline"
@@ -2339,7 +2412,8 @@ function ChatPanel({
             onClick={handleGenerateImage}
             disabled={isLoading || isRecording}
             className="shrink-0 h-10 w-10 border-border"
-            title="Generate image"
+            title="Generate AI image from your description"
+            aria-label="Generate AI image"
           >
             <ImagePlus className="h-4 w-4" />
           </Button>

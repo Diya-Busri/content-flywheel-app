@@ -24,11 +24,14 @@ export type CoachMessage = {
   imageUrls?: string[];
   /** User message: uploaded PDF/txt with extracted text */
   attachedFiles?: { name: string; text: string }[];
+  /** User message: attached video files. blobUrl is session-only (not persisted). */
+  attachedVideos?: { name: string; blobUrl?: string }[];
 };
 
 export type SendMessageAttachments = {
   imageUrls?: string[];
   attachedFiles?: { name: string; text: string }[];
+  attachedVideos?: { name: string; blobUrl?: string }[];
 };
 
 function loadStoredMessages(persist: boolean): CoachMessage[] {
@@ -104,7 +107,12 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
     if (onMessagesChange != null) return;
     if (!persist || messages.length === 0) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+      const toStore = messages.map((m) =>
+        m.attachedVideos?.length
+          ? { ...m, attachedVideos: m.attachedVideos.map((v) => ({ name: v.name })) }
+          : m
+      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
     } catch {
       // ignore
     }
@@ -170,13 +178,15 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
       const trimmed = content.trim();
       const hasImages = (attachments?.imageUrls?.length ?? 0) > 0;
       const hasFiles = (attachments?.attachedFiles?.length ?? 0) > 0;
-      if ((!trimmed && !hasImages && !hasFiles) || isLoading) return;
+      const hasVideos = (attachments?.attachedVideos?.length ?? 0) > 0;
+      if ((!trimmed && !hasImages && !hasFiles && !hasVideos) || isLoading) return;
 
       const userMessage: CoachMessage = {
         role: "user",
         content: trimmed || "(no text)",
         imageUrls: attachments?.imageUrls,
         attachedFiles: attachments?.attachedFiles,
+        attachedVideos: attachments?.attachedVideos,
       };
       setMessages((prev) => [...prev, userMessage]);
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
@@ -186,8 +196,13 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
       const body = messageList.map((m) => ({
         role: m.role,
         content: m.content,
-        ...(m.role === "user" && (m.imageUrls?.length || m.attachedFiles?.length)
-          ? { imageUrls: m.imageUrls, attachedFiles: m.attachedFiles }
+        ...(m.role === "user" && (m.imageUrls?.length || m.attachedFiles?.length || m.attachedVideos?.length)
+          ? {
+              imageUrls: m.imageUrls,
+              attachedFiles: m.attachedFiles,
+              // Strip blobUrl — server only needs the filename
+              attachedVideos: m.attachedVideos?.map((v) => ({ name: v.name })),
+            }
           : {}),
       }));
 
