@@ -129,7 +129,7 @@ type IncomingMessage = {
   content: string;
   imageUrls?: string[];
   attachedFiles?: { name: string; text: string }[];
-  attachedVideos?: { name: string }[];
+  attachedVideos?: { name: string; transcript?: string }[];
 };
 
 function toOpenAIContent(m: IncomingMessage): string | OpenAI.Chat.ChatCompletionContentPart[] {
@@ -148,7 +148,11 @@ function toOpenAIContent(m: IncomingMessage): string | OpenAI.Chat.ChatCompletio
   }
   if (hasVideos) {
     for (const v of m.attachedVideos!) {
-      textParts.push(`User attached a video clip: ${v.name}. Note: you cannot watch the video, but acknowledge it and help based on the filename and context the user provides.`);
+      if (v.transcript) {
+        textParts.push(`User attached a video: ${v.name}\n\nVideo transcript:\n${v.transcript}`);
+      } else {
+        textParts.push(`User attached a video: ${v.name}. No transcript available — help based on filename and context provided.`);
+      }
     }
   }
   const parts: OpenAI.Chat.ChatCompletionContentPart[] = [

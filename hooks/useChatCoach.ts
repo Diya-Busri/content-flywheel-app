@@ -25,13 +25,13 @@ export type CoachMessage = {
   /** User message: uploaded PDF/txt with extracted text */
   attachedFiles?: { name: string; text: string }[];
   /** User message: attached video files. blobUrl is session-only (not persisted). */
-  attachedVideos?: { name: string; blobUrl?: string }[];
+  attachedVideos?: { name: string; blobUrl?: string; transcript?: string }[];
 };
 
 export type SendMessageAttachments = {
   imageUrls?: string[];
   attachedFiles?: { name: string; text: string }[];
-  attachedVideos?: { name: string; blobUrl?: string }[];
+  attachedVideos?: { name: string; blobUrl?: string; transcript?: string }[];
 };
 
 function loadStoredMessages(persist: boolean): CoachMessage[] {
@@ -200,8 +200,8 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
           ? {
               imageUrls: m.imageUrls,
               attachedFiles: m.attachedFiles,
-              // Strip blobUrl — server only needs the filename
-              attachedVideos: m.attachedVideos?.map((v) => ({ name: v.name })),
+              // Strip blobUrl — server only needs filename + transcript
+              attachedVideos: m.attachedVideos?.map((v) => ({ name: v.name, transcript: v.transcript })),
             }
           : {}),
       }));
