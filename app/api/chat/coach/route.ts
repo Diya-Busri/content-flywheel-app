@@ -129,6 +129,7 @@ type IncomingMessage = {
   content: string;
   imageUrls?: string[];
   attachedFiles?: { name: string; text: string }[];
+  attachedVideos?: { name: string }[];
 };
 
 function toOpenAIContent(m: IncomingMessage): string | OpenAI.Chat.ChatCompletionContentPart[] {
@@ -136,12 +137,18 @@ function toOpenAIContent(m: IncomingMessage): string | OpenAI.Chat.ChatCompletio
 
   const hasImages = Array.isArray(m.imageUrls) && m.imageUrls.length > 0;
   const hasFiles = Array.isArray(m.attachedFiles) && m.attachedFiles.length > 0;
-  if (!hasImages && !hasFiles) return m.content;
+  const hasVideos = Array.isArray(m.attachedVideos) && m.attachedVideos.length > 0;
+  if (!hasImages && !hasFiles && !hasVideos) return m.content;
 
   const textParts: string[] = [m.content];
   if (hasFiles) {
     for (const f of m.attachedFiles!) {
       textParts.push(`User uploaded a file: ${f.name}\n\n${f.text}`);
+    }
+  }
+  if (hasVideos) {
+    for (const v of m.attachedVideos!) {
+      textParts.push(`User attached a video clip: ${v.name}. Note: you cannot watch the video, but acknowledge it and help based on the filename and context the user provides.`);
     }
   }
   const parts: OpenAI.Chat.ChatCompletionContentPart[] = [
