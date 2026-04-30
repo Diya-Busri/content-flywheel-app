@@ -5,7 +5,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 const STORAGE_KEY = "ai-coach-history";
 
 const IMAGE_ACTION_WORDS = /\b(create|make|generate|draw|show\s+me|design|build|produce|give\s+me|i\s+want\s+a|can\s+you\s+make)\b/i;
-const IMAGE_SUBJECT_WORDS = /\b(image|picture|photo|illustration|design|graphic|poster|thumbnail|banner|visual|mockup|logo|flyer|infographic|artwork|cover)s?\b/i;
+const IMAGE_SUBJECT_WORDS = /\b(image|picture|photo|illustration|design|graphic|poster|thumbnail|banner|visual|mockup|logo|flyer|infographic|artwork|cover|background|wallpaper|header|hero|icon|sticker|meme|frame|slide|creative|ad|reel\s+cover|story\s+post|story\s+background|post\s+background)s?\b/i;
 
 /** Detect if the user message is requesting an image or design. */
 export function isImageRequest(text: string): boolean {
