@@ -359,6 +359,8 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
+const TIKTOK_URL_RE = /https?:\/\/(?:www\.)?tiktok\.com\/@([\w.]+)/i;
+
 export default function AICoachPage() {
   const pathname = usePathname();
   const pageContext = pathname ?? "";
@@ -1666,8 +1668,6 @@ function ChatPanel({
       }
     };
   }, [audioRef, audioUrlsRef]);
-
-  const TIKTOK_URL_RE = /https?:\/\/(?:www\.)?tiktok\.com\/@([\w.]+)/i;
 
   const handleSend = () => {
     const ta = textareaRef.current;
