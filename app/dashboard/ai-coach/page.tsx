@@ -1,6 +1,5 @@
 "use client";
 
-import { upload } from "@vercel/blob/client";
 import { usePathname } from "next/navigation";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
@@ -1522,6 +1521,7 @@ function ChatPanel({
           // Upload to Vercel Blob first (bypasses Vercel function body limit), then transcribe
           (async () => {
             try {
+              const { upload } = await import("@vercel/blob/client");
               const uploaded = await upload(
                 `coach-videos/${Date.now()}-${file.name}`,
                 file,
