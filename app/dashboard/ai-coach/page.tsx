@@ -1510,6 +1510,14 @@ function ChatPanel({
           });
           setPendingImageUrls((prev) => [...prev, dataUrl]);
         } else if (videoTypes.includes(file.type) || /\.(mp4|mov|avi|webm|mkv|mpeg|mpg)$/i.test(lowerName)) {
+          const MAX_VIDEO_BYTES = 20 * 1024 * 1024; // 20 MB — safe below Vercel's 25 MB limit
+          if (file.size > MAX_VIDEO_BYTES) {
+            toast({
+              title: "Video too large",
+              description: `Max size is 20 MB. This file is ${(file.size / 1024 / 1024).toFixed(1)} MB — try trimming it to a shorter clip.`,
+            });
+            continue;
+          }
           const blobUrl = URL.createObjectURL(file);
           setPendingVideos((prev) => [...prev, { name: file.name, blobUrl, transcribing: true }]);
           // Transcribe in background via Whisper
