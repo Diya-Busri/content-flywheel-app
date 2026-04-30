@@ -18,8 +18,7 @@ function parseHandle(input: string): string | null {
   return m ? m[1] : null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function safeNum(v: any): number | undefined {
+function safeNum(v: unknown): number | undefined {
   const n = Number(v);
   return isNaN(n) ? undefined : n;
 }
@@ -68,10 +67,14 @@ export async function POST(req: Request) {
       );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = JSON.parse(scriptMatch[1]) as Record<string, any>;
+    type TikTokScope = Record<string, Record<string, unknown>>;
+    type TikTokVideo = { id: string; desc: string; createTime: number; stats: Record<string, number>; video: Record<string, number> };
+    type TikTokUser = { uniqueId: string; nickname: string; signature: string; verified: boolean; privateAccount: boolean };
+    type TikTokStats = { followerCount: number; followingCount: number; heartCount: number; videoCount: number };
+
+    const data = JSON.parse(scriptMatch[1]) as { __DEFAULT_SCOPE__: TikTokScope };
     const scope = data?.["__DEFAULT_SCOPE__"] ?? {};
-    const userDetail = scope["webapp.user-detail"];
+    const userDetail = scope["webapp.user-detail"] as { userInfo?: { user?: TikTokUser; stats?: TikTokStats } } | undefined;
 
     if (!userDetail) {
       return NextResponse.json({ error: "User not found or account is private" }, { status: 422 });
@@ -79,12 +82,11 @@ export async function POST(req: Request) {
 
     const { user, stats } = userDetail?.userInfo ?? {};
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rawVideos: any[] = scope["webapp.user-post"]?.itemList ?? [];
+    const rawVideos = ((scope["webapp.user-post"] as { itemList?: TikTokVideo[] })?.itemList ?? []);
     const videos = rawVideos.slice(0, 30).map((v) => ({
-      id: v.id as string,
-      description: (v.desc as string) ?? "",
-      createdAt: v.createTime ? new Date((v.createTime as number) * 1000).toISOString().split("T")[0] : undefined,
+      id: v.id,
+      description: v.desc ?? "",
+      createdAt: v.createTime ? new Date(v.createTime * 1000).toISOString().split("T")[0] : undefined,
       views: safeNum(v.stats?.playCount),
       likes: safeNum(v.stats?.diggCount),
       comments: safeNum(v.stats?.commentCount),
@@ -101,11 +103,11 @@ export async function POST(req: Request) {
       handle,
       profileUrl,
       profile: {
-        username: user?.uniqueId as string | undefined,
-        nickname: user?.nickname as string | undefined,
-        bio: user?.signature as string | undefined,
-        verified: user?.verified as boolean | undefined,
-        private: user?.privateAccount as boolean | undefined,
+        username: user?.uniqueId,
+        nickname: user?.nickname,
+        bio: user?.signature,
+        verified: user?.verified,
+        private: user?.privateAccount,
       },
       stats: {
         followers: safeNum(stats?.followerCount),
