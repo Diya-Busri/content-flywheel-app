@@ -364,6 +364,9 @@ export default function AICoachPage() {
   const pageContext = pathname ?? "";
   const { user } = useUser();
   const firstName = (user?.firstName?.trim() || user?.firstName) ?? "";
+  const userEmail = user?.primaryEmailAddress?.emailAddress?.trim().toLowerCase() ?? "";
+  const adminEmail = (process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "").trim().toLowerCase();
+  const isAdminUser = !!adminEmail && userEmail === adminEmail;
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -372,6 +375,7 @@ export default function AICoachPage() {
   const [promptToSend, setPromptToSend] = useState<string | null>(null);
   const [promptsLibraryOpen, setPromptsLibraryOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [fetchingTikTok, setFetchingTikTok] = useState(false);
   const [coachMode, setCoachMode] = useState<string>("business");
   const [coachSettings, setCoachSettings] = useState<{
     memoryEnabled: boolean;
@@ -1663,6 +1667,8 @@ function ChatPanel({
     };
   }, [audioRef, audioUrlsRef]);
 
+  const TIKTOK_URL_RE = /https?:\/\/(?:www\.)?tiktok\.com\/@([\w.]+)/i;
+
   const handleSend = () => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -1676,6 +1682,62 @@ function ChatPanel({
       toast({ title: "Still transcribing…", description: "Please wait a moment before sending." });
       return;
     }
+
+    // Admin-only: detect TikTok URLs and auto-enrich with account data
+    const tiktokMatch = isAdminUser ? value.match(TIKTOK_URL_RE) : null;
+    if (tiktokMatch) {
+      ta.value = "";
+      setFetchingTikTok(true);
+      const originalText = value;
+      const tiktokUrl = tiktokMatch[0];
+      (async () => {
+        try {
+          const res = await fetch("/api/tiktok-analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: tiktokUrl }),
+          });
+          const data = await res.json().catch(() => ({}));
+          let enriched = originalText;
+          if (res.ok && data.stats) {
+            const { profile, stats, derived, recentVideos } = data;
+            const videoLines = (recentVideos as Array<{ description: string; views?: number; likes?: number; comments?: number; shares?: number; createdAt?: string }>)
+              .map((v, i) => `  ${i + 1}. "${v.description.slice(0, 80)}" — ${v.views?.toLocaleString() ?? "?"} views, ${v.likes?.toLocaleString() ?? "?"} likes, ${v.comments?.toLocaleString() ?? "?"} comments, ${v.shares?.toLocaleString() ?? "?"} shares${v.createdAt ? ` (${v.createdAt})` : ""}`)
+              .join("\n");
+            enriched = `${originalText}
+
+[TikTok Account Data for @${profile.username ?? data.handle}]
+Followers: ${stats.followers?.toLocaleString() ?? "?"}
+Following: ${stats.following?.toLocaleString() ?? "?"}
+Total Likes: ${stats.totalLikes?.toLocaleString() ?? "?"}
+Total Videos: ${stats.videoCount?.toLocaleString() ?? "?"}
+Avg views (last ${derived.videosAnalyzed} videos): ${derived.avgViewsLast30Videos?.toLocaleString() ?? "?"}
+Top video: "${derived.topVideoDescription?.slice(0, 100)}" (${derived.topVideoViews?.toLocaleString() ?? "?"} views)
+
+Recent Videos:
+${videoLines}`;
+          } else {
+            toast({ title: "TikTok fetch failed", description: (data as { error?: string }).error ?? "Could not load account data", duration: 4000 });
+          }
+          const attachments = hasImages || hasFiles || hasVideos ? {
+            imageUrls: hasImages ? pendingImageUrls : undefined,
+            attachedFiles: hasFiles ? pendingFiles : undefined,
+            attachedVideos: hasVideos ? pendingVideos : undefined,
+          } : undefined;
+          sendMessage(enriched, attachments);
+          setPendingImageUrls([]);
+          setPendingFiles([]);
+          setPendingVideos([]);
+        } catch {
+          toast({ title: "TikTok fetch failed", description: "Network error", duration: 4000 });
+          sendMessage(originalText);
+        } finally {
+          setFetchingTikTok(false);
+        }
+      })();
+      return;
+    }
+
     ta.value = "";
     const attachments =
       hasImages || hasFiles || hasVideos
@@ -1709,7 +1771,7 @@ function ChatPanel({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      if (!fetchingTikTok) handleSend();
     }
   };
 
@@ -2510,10 +2572,11 @@ function ChatPanel({
             type="button"
             size="icon"
             onClick={handleSend}
-            disabled={isLoading}
+            disabled={isLoading || fetchingTikTok}
             className="bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 shrink-0 h-10 w-10"
+            title={fetchingTikTok ? "Fetching TikTok data…" : undefined}
           >
-            {isLoading ? (
+            {isLoading || fetchingTikTok ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Send className="h-4 w-4" />
