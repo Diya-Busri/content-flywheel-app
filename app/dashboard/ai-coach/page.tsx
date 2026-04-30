@@ -1,5 +1,6 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
 import { usePathname } from "next/navigation";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
@@ -1512,12 +1513,19 @@ function ChatPanel({
         } else if (videoTypes.includes(file.type) || /\.(mp4|mov|avi|webm|mkv|mpeg|mpg)$/i.test(lowerName)) {
           const blobUrl = URL.createObjectURL(file);
           setPendingVideos((prev) => [...prev, { name: file.name, blobUrl, transcribing: true }]);
-          // Transcribe in background via Whisper
+          // Upload to Vercel Blob first (bypasses Vercel function body limit), then transcribe
           (async () => {
             try {
-              const form = new FormData();
-              form.append("file", file);
-              const res = await fetch("/api/transcribe-video", { method: "POST", body: form });
+              const uploaded = await upload(
+                `coach-videos/${Date.now()}-${file.name}`,
+                file,
+                { access: "public", handleUploadUrl: "/api/upload-video-blob" }
+              );
+              const res = await fetch("/api/transcribe-video", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: uploaded.url, filename: file.name }),
+              });
               const data = await res.json().catch(() => ({})) as { transcript?: string; error?: string };
               if (!res.ok) {
                 setPendingVideos((prev) =>
@@ -1526,7 +1534,6 @@ function ChatPanel({
                 toast({ title: "Could not transcribe video", description: data.error ?? `Server error ${res.status}` });
                 return;
               }
-              // Empty transcript = no speech detected; still attach the video
               const transcript = data.transcript || undefined;
               setPendingVideos((prev) =>
                 prev.map((v) => v.blobUrl === blobUrl ? { ...v, transcript, transcribing: false } : v)
@@ -1534,11 +1541,11 @@ function ChatPanel({
               if (!transcript) {
                 toast({ title: "No speech detected", description: "Video attached — the AI will be told no audio was found.", duration: 4000 });
               }
-            } catch {
+            } catch (err) {
               setPendingVideos((prev) =>
                 prev.map((v) => v.blobUrl === blobUrl ? { ...v, transcribing: false } : v)
               );
-              toast({ title: "Could not transcribe video", description: "Network error" });
+              toast({ title: "Could not transcribe video", description: err instanceof Error ? err.message : "Upload failed" });
             }
           })();
         } else if (file.type === "application/pdf" || lowerName.endsWith(".pdf")) {
