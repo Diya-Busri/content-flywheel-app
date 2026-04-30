@@ -209,10 +209,19 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
       const isImage = isImageRequest(trimmed);
       if (isImage) {
         try {
+          // Enrich the prompt with any attached video transcripts or image context
+          let imagePrompt = trimmed;
+          if (attachments?.attachedVideos?.length) {
+            const videoContext = attachments.attachedVideos
+              .filter((v) => v.transcript)
+              .map((v) => `Video "${v.name}" transcript: ${v.transcript}`)
+              .join("\n\n");
+            if (videoContext) imagePrompt = `${trimmed}\n\nContext:\n${videoContext}`;
+          }
           const res = await fetch("/api/chat/coach/generate-image", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: trimmed, aspectRatio: "16:9" }),
+            body: JSON.stringify({ prompt: imagePrompt, aspectRatio: "16:9" }),
           });
           const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
           if (data.url) {
