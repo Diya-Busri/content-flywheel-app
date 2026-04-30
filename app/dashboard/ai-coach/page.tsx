@@ -376,7 +376,7 @@ export default function AICoachPage() {
   const [promptToSend, setPromptToSend] = useState<string | null>(null);
   const [promptsLibraryOpen, setPromptsLibraryOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [fetchingTikTok, setFetchingTikTok] = useState(false);
+
   const [coachMode, setCoachMode] = useState<string>("business");
   const [coachSettings, setCoachSettings] = useState<{
     memoryEnabled: boolean;
@@ -1687,7 +1687,6 @@ function ChatPanel({
     const tiktokMatch = isAdminUser ? value.match(TIKTOK_URL_RE) : null;
     if (tiktokMatch) {
       ta.value = "";
-      setFetchingTikTok(true);
       const originalText = value;
       const tiktokUrl = tiktokMatch[0];
       (async () => {
@@ -1732,7 +1731,7 @@ ${videoLines}`;
           toast({ title: "TikTok fetch failed", description: "Network error", duration: 4000 });
           sendMessage(originalText);
         } finally {
-          setFetchingTikTok(false);
+          // done
         }
       })();
       return;
@@ -1771,7 +1770,7 @@ ${videoLines}`;
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (!fetchingTikTok) handleSend();
+      handleSend();
     }
   };
 
@@ -2572,11 +2571,10 @@ ${videoLines}`;
             type="button"
             size="icon"
             onClick={handleSend}
-            disabled={isLoading || fetchingTikTok}
+            disabled={isLoading}
             className="bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 shrink-0 h-10 w-10"
-            title={fetchingTikTok ? "Fetching TikTok data…" : undefined}
           >
-            {isLoading || fetchingTikTok ? (
+            {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Send className="h-4 w-4" />
