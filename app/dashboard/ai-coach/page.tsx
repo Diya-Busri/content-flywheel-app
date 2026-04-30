@@ -1519,11 +1519,20 @@ function ChatPanel({
               form.append("file", file);
               const res = await fetch("/api/transcribe-video", { method: "POST", body: form });
               const data = await res.json().catch(() => ({})) as { transcript?: string; error?: string };
+              if (!res.ok) {
+                setPendingVideos((prev) =>
+                  prev.map((v) => v.blobUrl === blobUrl ? { ...v, transcribing: false } : v)
+                );
+                toast({ title: "Could not transcribe video", description: data.error ?? `Server error ${res.status}` });
+                return;
+              }
+              // Empty transcript = no speech detected; still attach the video
+              const transcript = data.transcript || undefined;
               setPendingVideos((prev) =>
-                prev.map((v) => v.blobUrl === blobUrl ? { ...v, transcript: data.transcript, transcribing: false } : v)
+                prev.map((v) => v.blobUrl === blobUrl ? { ...v, transcript, transcribing: false } : v)
               );
-              if (!data.transcript) {
-                toast({ title: "Could not transcribe video", description: data.error ?? "Unknown error" });
+              if (!transcript) {
+                toast({ title: "No speech detected", description: "Video attached — the AI will be told no audio was found.", duration: 4000 });
               }
             } catch {
               setPendingVideos((prev) =>
