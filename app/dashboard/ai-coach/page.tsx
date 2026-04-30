@@ -1182,6 +1182,7 @@ function ChatPanel({
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<{ name: string; text: string }[]>([]);
   const [pendingVideos, setPendingVideos] = useState<{ name: string; blobUrl: string; transcript?: string; transcribing?: boolean }[]>([]);
+  const [fetchingTikTok, setFetchingTikTok] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -1677,7 +1678,7 @@ function ChatPanel({
     const hasFiles = pendingFiles.length > 0;
     const hasVideos = pendingVideos.length > 0;
     const isTranscribing = pendingVideos.some((v) => v.transcribing);
-    if ((!value && !hasImages && !hasFiles && !hasVideos) || isLoading) return;
+    if ((!value && !hasImages && !hasFiles && !hasVideos) || isLoading || fetchingTikTok) return;
     if (isTranscribing) {
       toast({ title: "Still transcribing…", description: "Please wait a moment before sending." });
       return;
@@ -1687,6 +1688,7 @@ function ChatPanel({
     const tiktokMatch = isAdminUser ? value.match(TIKTOK_URL_RE) : null;
     if (tiktokMatch) {
       ta.value = "";
+      setFetchingTikTok(true);
       const originalText = value;
       const tiktokUrl = tiktokMatch[0];
       (async () => {
@@ -1731,7 +1733,7 @@ ${videoLines}`;
           toast({ title: "TikTok fetch failed", description: "Network error", duration: 4000 });
           sendMessage(originalText);
         } finally {
-          // done
+          setFetchingTikTok(false);
         }
       })();
       return;
@@ -1770,7 +1772,7 @@ ${videoLines}`;
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      if (!fetchingTikTok) handleSend();
     }
   };
 
@@ -2571,10 +2573,11 @@ ${videoLines}`;
             type="button"
             size="icon"
             onClick={handleSend}
-            disabled={isLoading}
+            disabled={isLoading || fetchingTikTok}
             className="bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 shrink-0 h-10 w-10"
+            title={fetchingTikTok ? "Fetching TikTok data…" : undefined}
           >
-            {isLoading ? (
+            {isLoading || fetchingTikTok ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Send className="h-4 w-4" />
