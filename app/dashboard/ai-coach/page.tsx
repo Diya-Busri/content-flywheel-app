@@ -1016,6 +1016,7 @@ export default function AICoachPage() {
             previousSummaries={previousSummaries}
             onMemorySettingsOpen={() => setMemorySetupModalOpen(true)}
             onMemoryToggle={handleMemoryToggle}
+            isAdminUser={isAdminUser}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 bg-background">
@@ -1080,6 +1081,7 @@ type ChatPanelProps = {
   previousSummaries: string[];
   onMemorySettingsOpen: () => void;
   onMemoryToggle: (checked: boolean) => void;
+  isAdminUser: boolean;
 };
 
 type SpeechRecognitionInstance = {
@@ -1154,6 +1156,7 @@ function ChatPanel({
   previousSummaries,
   onMemorySettingsOpen,
   onMemoryToggle,
+  isAdminUser,
 }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
