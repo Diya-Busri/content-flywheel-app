@@ -1670,6 +1670,13 @@ function ChatPanel({
     };
   }, [audioRef, audioUrlsRef]);
 
+  // Re-focus textarea after AI finishes responding so Enter always works
+  useEffect(() => {
+    if (!isLoading && !fetchingTikTok) {
+      textareaRef.current?.focus();
+    }
+  }, [isLoading, fetchingTikTok]);
+
   const handleSend = () => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -2483,7 +2490,8 @@ ${videoLines}`;
             placeholder={isRecording ? "Speak now…" : "Ask your coach or describe an image…"}
             onKeyDown={handleKeyDown}
             onInput={handleTextareaInput}
-            disabled={isLoading}
+            disabled={isLoading || fetchingTikTok}
+            autoFocus
             rows={1}
             className={cn(
               "flex-1 min-h-[2.5rem] max-h-[9rem] resize-none overflow-y-auto rounded-md border border-input",
