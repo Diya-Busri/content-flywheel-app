@@ -2484,7 +2484,10 @@ ${videoLines}`;
             ))}
           </div>
         )}
-        <div className="mx-auto max-w-[52rem] flex gap-2 items-end">
+        <form
+          className="mx-auto max-w-[52rem] flex gap-2 items-end"
+          onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+        >
           <textarea
             ref={textareaRef}
             placeholder={isRecording ? "Speak now…" : "Ask your coach or describe an image…"}
@@ -2578,9 +2581,8 @@ ${videoLines}`;
             )}
           </Button>
           <Button
-            type="button"
+            type="submit"
             size="icon"
-            onClick={handleSend}
             disabled={isLoading || fetchingTikTok}
             className="bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 shrink-0 h-10 w-10"
             title={fetchingTikTok ? "Fetching TikTok data…" : undefined}
@@ -2591,7 +2593,7 @@ ${videoLines}`;
               <Send className="h-4 w-4" />
             )}
           </Button>
-        </div>
+        </form>
       </div>
       </>
       )}
