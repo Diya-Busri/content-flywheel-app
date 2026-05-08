@@ -11,6 +11,7 @@ import { ReviewsCarousel } from "@/components/marketing/reviews-carousel";
 import { LandingNavbar } from "@/components/marketing/landing-navbar";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { LandingAnimations } from "@/components/marketing/LandingAnimations";
+import HeroSection from "@/components/marketing/HeroSection";
 
 export const metadata: Metadata = {
   title: "Content Flywheel — Create & Sell Digital Products with AI",
@@ -42,6 +43,7 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] overflow-x-hidden">
       <LandingNavbar />
+      <HeroSection />
       <LandingAnimations reviews={reviews} />
 
       {/* Static footer — server rendered */}

@@ -1,9 +1,9 @@
 "use client";
 
-import { motion, useScroll, useTransform, useInView, AnimatePresence } from "framer-motion";
+import { motion, useInView } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Check, Star, Zap, TrendingUp, Users, Package, Mail, Tag, Link2, ShoppingBag } from "lucide-react";
+import { ArrowRight, Check, Star, Package, Mail, Tag, Link2, ShoppingBag } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -48,96 +48,6 @@ function AnimatedNumber({ target, suffix = "" }: { target: number; suffix?: stri
   return <span ref={ref}>{count.toLocaleString()}{suffix}</span>;
 }
 
-/* ─────────────── hero mock dashboard ─────────────── */
-const PRODUCTS = [
-  { title: "90-Day Content Planner", price: "£19", sales: 47, color: "from-orange-500/20 to-orange-600/5", badge: "🔥" },
-  { title: "Instagram Caption Guide", price: "£12", sales: 83, color: "from-blue-500/20 to-blue-600/5", badge: "⭐" },
-  { title: "Viral Hook Workbook",     price: "£27", sales: 31, color: "from-purple-500/20 to-purple-600/5", badge: "🚀" },
-];
-
-function MockDashboard() {
-  const [active, setActive] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setActive((a) => (a + 1) % PRODUCTS.length), 2200);
-    return () => clearInterval(t);
-  }, []);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: 40, rotateY: -10 }}
-      animate={{ opacity: 1, x: 0, rotateY: 0 }}
-      transition={{ duration: 0.9, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
-      style={{ perspective: 1000 }}
-      className="relative hidden lg:block"
-    >
-      {/* Glow */}
-      <div className="absolute inset-0 bg-orange-500/20 blur-3xl rounded-3xl scale-110 pointer-events-none" />
-
-      <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
-        {/* Top bar */}
-        <div className="flex items-center justify-between mb-5">
-          <span className="text-white font-bold text-sm">My Store</span>
-          <motion.span
-            animate={{ opacity: [1, 0.5, 1] }}
-            transition={{ repeat: Infinity, duration: 2 }}
-            className="text-xs bg-green-500/20 text-green-400 border border-green-500/30 px-3 py-1 rounded-full font-semibold"
-          >
-            ● Live
-          </motion.span>
-        </div>
-
-        {/* Product rows */}
-        <div className="space-y-3 mb-5">
-          {PRODUCTS.map((p, i) => (
-            <motion.div
-              key={p.title}
-              animate={{ scale: active === i ? 1.02 : 1, opacity: active === i ? 1 : 0.65 }}
-              transition={{ duration: 0.3 }}
-              className={`flex items-center justify-between rounded-xl px-4 py-3 bg-gradient-to-r ${p.color} border border-white/5`}
-            >
-              <div>
-                <p className="font-semibold text-white text-sm">{p.badge} {p.title}</p>
-                <p className="text-xs text-white/40">{p.sales} sales</p>
-              </div>
-              <span className="font-bold text-orange-400 text-sm">{p.price}</span>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: "Revenue", value: "£1,847" },
-            { label: "Orders", value: "161" },
-            { label: "Subs", value: "924" },
-          ].map((s) => (
-            <div key={s.label} className="bg-white/5 border border-white/5 rounded-xl p-3 text-center">
-              <p className="font-bold text-white text-base">{s.value}</p>
-              <p className="text-[10px] text-white/40 mt-0.5">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Floating badges */}
-      <motion.div
-        animate={{ y: [0, -8, 0] }}
-        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-        className="absolute -top-5 -right-5 bg-orange-500 text-white rounded-2xl px-4 py-2.5 shadow-xl shadow-orange-500/40 text-sm font-bold rotate-3 whitespace-nowrap"
-      >
-        🚀 AI-built in 2 mins
-      </motion.div>
-      <motion.div
-        animate={{ y: [0, 8, 0] }}
-        transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut" }}
-        className="absolute -bottom-5 -left-5 bg-white/10 border border-white/20 backdrop-blur-sm text-white rounded-2xl px-4 py-2.5 shadow-xl text-sm font-bold -rotate-2 whitespace-nowrap"
-      >
-        💳 Stripe built-in
-      </motion.div>
-    </motion.div>
-  );
-}
-
 /* ─────────────── feature cards ─────────────── */
 const FEATURES = [
   { icon: Package,    emoji: "📦", title: "AI Product Creator",  desc: "Describe your idea — our AI writes, formats, and designs the full product in minutes.", badge: "Most popular" },
@@ -150,132 +60,8 @@ const FEATURES = [
 
 /* ─────────────── main export ─────────────── */
 export function LandingAnimations({ reviews }: { reviews: { text: string; name: string; rating?: number }[] }) {
-  const heroRef = useRef(null);
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
-  const heroY = useTransform(scrollYProgress, [0, 1], ["0%", "20%"]);
-  const heroOpacity = useTransform(scrollYProgress, [0, 0.7], [1, 0]);
-
   return (
-    <main className="pt-16">
-
-      {/* ─── HERO ─── */}
-      <section ref={heroRef} className="relative min-h-screen flex items-center overflow-hidden bg-[#0a0a0a]">
-        {/* Animated background */}
-        <div className="absolute inset-0 pointer-events-none" aria-hidden>
-          <motion.div
-            animate={{ scale: [1, 1.15, 1], opacity: [0.15, 0.25, 0.15] }}
-            transition={{ repeat: Infinity, duration: 8, ease: "easeInOut" }}
-            className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-orange-600 rounded-full blur-[120px]"
-          />
-          <motion.div
-            animate={{ scale: [1, 1.1, 1], opacity: [0.08, 0.15, 0.08] }}
-            transition={{ repeat: Infinity, duration: 10, delay: 2, ease: "easeInOut" }}
-            className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-orange-400 rounded-full blur-[100px]"
-          />
-          {/* Grid overlay */}
-          <div
-            className="absolute inset-0 opacity-[0.03]"
-            style={{ backgroundImage: "linear-gradient(white 1px,transparent 1px),linear-gradient(90deg,white 1px,transparent 1px)", backgroundSize: "60px 60px" }}
-          />
-        </div>
-
-        <motion.div style={{ y: heroY, opacity: heroOpacity }} className="relative max-w-7xl mx-auto px-4 sm:px-6 w-full py-24 lg:py-32">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-
-            {/* Left */}
-            <div className="space-y-7">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-sm font-semibold"
-              >
-                <motion.span animate={{ rotate: [0, 15, -15, 0] }} transition={{ repeat: Infinity, duration: 2 }}>⚡</motion.span>
-                AI-Powered Digital Product Platform
-              </motion.div>
-
-              <motion.h1
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: 0.1 }}
-                className="text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-[1.05] tracking-tight text-white"
-              >
-                Create, sell &{" "}
-                <br className="hidden sm:block" />
-                market{" "}
-                <span className="relative inline-block">
-                  <span className="bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 bg-clip-text text-transparent">
-                    digital products
-                  </span>
-                  <motion.span
-                    initial={{ scaleX: 0 }}
-                    animate={{ scaleX: 1 }}
-                    transition={{ duration: 0.6, delay: 0.8 }}
-                    style={{ originX: 0 }}
-                    className="absolute -bottom-1 left-0 right-0 h-[3px] bg-gradient-to-r from-orange-400 to-orange-600 rounded-full"
-                  />
-                </span>
-                <br />in minutes.
-              </motion.h1>
-
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.25 }}
-                className="text-lg text-white/50 leading-relaxed max-w-lg"
-              >
-                Build ebooks, planners & templates with AI. Sell from your own branded store. Grow with email marketing, affiliates, and discount codes.
-              </motion.p>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.35 }}
-                className="flex flex-col sm:flex-row gap-3 pt-1"
-              >
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }}>
-                  <Link href="/sign-up" className="px-7 py-3.5 bg-orange-500 hover:bg-orange-400 rounded-xl font-bold text-base inline-flex items-center justify-center gap-2 text-white shadow-xl shadow-orange-500/30 transition-colors">
-                    Get Started <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </motion.div>
-                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  <Link href="#how-it-works" className="px-7 py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold text-base inline-flex items-center justify-center text-white transition-colors">
-                    See how it works
-                  </Link>
-                </motion.div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.6, delay: 0.5 }}
-                className="flex flex-wrap gap-5 text-sm text-white/40"
-              >
-                {["No per-sale fees", "All features included", "Cancel anytime"].map((t) => (
-                  <span key={t} className="flex items-center gap-1.5">
-                    <Check className="w-4 h-4 text-green-500" /> {t}
-                  </span>
-                ))}
-              </motion.div>
-            </div>
-
-            {/* Right */}
-            <MockDashboard />
-          </div>
-        </motion.div>
-
-        {/* Scroll indicator */}
-        <motion.div
-          animate={{ y: [0, 8, 0], opacity: [0.4, 1, 0.4] }}
-          transition={{ repeat: Infinity, duration: 2 }}
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-white/30"
-        >
-          <span className="text-xs font-medium tracking-widest uppercase">Scroll</span>
-          <div className="w-5 h-8 rounded-full border border-white/20 flex items-start justify-center p-1.5">
-            <motion.div animate={{ y: [0, 10, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} className="w-1 h-1 rounded-full bg-orange-400" />
-          </div>
-        </motion.div>
-      </section>
+    <main>
 
       {/* ─── STATS BAR ─── */}
       <section className="border-y border-white/5 bg-white/[0.02] py-12">
