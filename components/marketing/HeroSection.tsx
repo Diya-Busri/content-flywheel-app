@@ -34,9 +34,9 @@ export default function HeroSection() {
             AI factory for faceless creators
           </div>
           <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-6xl">
-            Spin a faceless business —{" "}
+            Spin a faceless business.{" "}
             <span className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">
-              straight into TikTok Shop.
+              Straight into TikTok Shop.
             </span>
           </h1>
           <p className="mt-6 text-lg leading-8 text-slate-600 sm:text-xl">
