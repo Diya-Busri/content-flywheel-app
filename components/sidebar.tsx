@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import Link from "next/link";
 import Image from "next/image";
@@ -66,6 +66,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅", featureKey: "content_calendar" },
         { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅", featureKey: "script_checker" },
         { href: "/dashboard/caption-library", icon: <BookMarked size={18} />, label: "Caption Library", emoji: "🔖", activeWhenStartsWith: true, featureKey: "caption_library" },
+        { href: "/dashboard/todo", icon: <ListTodo size={18} />, label: "To-Do List", emoji: "✅", activeWhenStartsWith: true },
       ],
     },
     {
