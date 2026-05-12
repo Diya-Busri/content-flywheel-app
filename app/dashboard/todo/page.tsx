@@ -77,6 +77,7 @@ export default function TodoPage() {
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set());
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
@@ -85,6 +86,7 @@ export default function TodoPage() {
   const priorityRef = useRef<HTMLDivElement>(null);
   const categoryRef = useRef<HTMLDivElement>(null);
   const savedRef = useRef<HTMLDivElement>(null);
+  const dateRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -108,6 +110,7 @@ export default function TodoPage() {
       if (priorityRef.current && !priorityRef.current.contains(e.target as Node)) setPriorityOpen(false);
       if (categoryRef.current && !categoryRef.current.contains(e.target as Node)) setCategoryOpen(false);
       if (savedRef.current && !savedRef.current.contains(e.target as Node)) setSavedOpen(false);
+      if (dateRef.current && !dateRef.current.contains(e.target as Node)) setDateOpen(false);
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
@@ -244,10 +247,44 @@ export default function TodoPage() {
           </div>
 
           {/* Due date */}
-          <div className="relative flex items-center">
-            <Calendar className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 pointer-events-none" />
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-              className="h-8 pl-7 pr-2 text-xs rounded-md border border-input bg-background hover:bg-accent transition-colors focus:outline-none focus:ring-1 focus:ring-ring" />
+          <div className="relative" ref={dateRef}>
+            <button type="button" onClick={() => setDateOpen(v => !v)}
+              className={cn(
+                "flex items-center gap-1.5 h-8 px-2.5 rounded-md border text-xs transition-colors",
+                dueDate ? "border-primary/60 bg-primary/10 text-primary" : "border-input bg-background hover:bg-accent text-muted-foreground"
+              )}>
+              <Calendar className="w-3 h-3" />
+              {dueDate ? formatDate(dueDate) : "Schedule"}
+              {dueDate && (
+                <span onClick={e => { e.stopPropagation(); setDueDate(""); }}
+                  className="ml-0.5 hover:text-destructive">
+                  <X className="w-3 h-3" />
+                </span>
+              )}
+            </button>
+            {dateOpen && (
+              <div className="absolute top-full mt-1 left-0 z-10 bg-popover border border-border rounded-md shadow-md w-48 py-1">
+                {[
+                  { label: "Today",    value: new Date().toISOString().slice(0, 10) },
+                  { label: "Tomorrow", value: new Date(Date.now() + 86400000).toISOString().slice(0, 10) },
+                ].map(opt => (
+                  <button key={opt.label} type="button"
+                    onClick={() => { setDueDate(opt.value); setDateOpen(false); }}
+                    className={cn(
+                      "flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent transition-colors",
+                      dueDate === opt.value && "font-medium text-primary"
+                    )}>
+                    <Calendar className="w-3 h-3 text-muted-foreground" />
+                    {opt.label}
+                  </button>
+                ))}
+                <div className="border-t border-border mt-1 pt-1 px-3 pb-1.5">
+                  <p className="text-[10px] text-muted-foreground mb-1">Custom date</p>
+                  <input type="date" value={dueDate} onChange={e => { setDueDate(e.target.value); setDateOpen(false); }}
+                    className="w-full h-7 px-2 text-xs rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring" />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Category */}
