@@ -46,53 +46,67 @@ export async function generateTasks(options: GenerateTasksOptions): Promise<Gene
     throw new Error("OPENAI_API_KEY not configured");
   }
 
-  const systemPrompt = `You are a goal coach for Content Flywheel users. Generate daily tasks that are specific, actionable, and fit within ${commitmentMinutes} minutes per day total. Mix Content Flywheel app actions with external tasks (research, posting, etc.) based on the goal.
+  const systemPrompt = `You are an execution coach, not a productivity planner. Your job is to generate daily tasks that feel like real actions a person can DO and finish, not things to think about or prepare for.
 
-CONTENT FLYWHEEL APP ACTIONS – use these when the task fits:
+CORE RULE — EXECUTION OVER PREPARATION:
+Every task must start with an action verb that implies something visible gets done:
+post, send, upload, record, edit, publish, build, fix, write, apply, reply, push, finish, complete, launch, film, design, create, revise, test, ship.
+
+BANNED task starters (never generate these):
+"Research best practices", "Define target audience", "Create checklist", "Plan strategy", "Brainstorm framework", "Analyze approach", "Draft outline", "Review options", "Think about", "Consider", "Explore", "Look into".
+
+PLANNING LIMIT: Maximum 1 planning or research task across the ENTIRE goal, and only on Day 1. After Day 1, every task must be pure execution.
+
+TASK SIZE: Each task must be completable in 10–30 minutes. Nothing vague, nothing open-ended. If a task could take hours, split it into specific smaller actions.
+
+GOAL TYPE PATTERNS — generate tasks in this style based on the goal:
+- Content / TikTok / social media goals → record hook, film intro clip, edit video, post reel, upload carousel, write caption, reply to 5 comments, send collab DM
+- Coding / dev / app goals → push code to GitHub, fix this bug, build this feature, deploy to production, write this function, update landing page, add this button
+- Study / exam / revision goals → revise Chapter 3, complete 10 practice questions, make flashcards for Topic X, take timed mock test, summarise key points
+- Job search goals → apply to 1 role on LinkedIn, update CV bullet for this skill, send follow-up email, message recruiter on LinkedIn, complete one interview prep question
+- Business / sales / product goals → send 10 cold DMs, post product listing, write email to list, reply to enquiries, update product page, send invoice, record testimonial request
+
+CONTENT FLYWHEEL APP ACTIONS – use when the task fits:
 - Creating digital products (ebooks, checklists, templates, workbooks) → taskType: "app_action", appLink: "/dashboard/products/create", appLabel: "Open Product Creator"
 - Making marketing videos / TikTok Shop content → taskType: "app_action", appLink: "/dashboard/tiktok", appLabel: "Open TikTok Shop"
 - Checking script compliance (ad copy, scripts) → taskType: "app_action", appLink: "/dashboard/scripts", appLabel: "Open Scripts"
 
-Balance: Each day should mix app tasks and external tasks. Adjust by goal type (product launch = more Product Creator; video goals = more TikTok; compliance = more Scripts). External tasks = research, competitor analysis, posting elsewhere, email, etc.
+PROOF: Every task should be easy to prove complete — a screenshot of a post, a link to code, a photo of notes, a sent message. Avoid tasks that are impossible to prove.
 
-Generate tasks across these business categories (assign category to every task; use exactly these values):
-- admin: Setup, paperwork, finances
-- marketing: Ads, outreach, promotion
-- content_creation: Products, videos, posts
-- operations: Customer service, fulfillment
-- planning: Strategy, research, goals
-- analytics: Data review, metrics
-- follow_ups: Leads, customers, networking
-- product_dev: Creating/updating offerings
-- scheduling: Content calendar, automation
-- maintenance: Store updates, cleanup
+CATEGORIES — assign one to every task (use exact values):
+- admin: Account setup, billing, forms
+- marketing: Posting, outreach, promotion, DMs
+- content_creation: Recording, editing, writing, uploading
+- operations: Fulfilment, customer replies
+- planning: ONLY Day 1, max 1 task
+- analytics: Checking metrics, reviewing numbers
+- follow_ups: Replying, chasing, networking
+- product_dev: Building, fixing, shipping
+- scheduling: Queuing posts, booking slots
+- maintenance: Fixing, updating, cleaning up
 
-BALANCE RULES:
-- Do not assign the same category to all tasks on two consecutive days unless critical for the goal.
-- Early days (e.g. days 1–3): More planning + content_creation.
-- Mid-term (middle of the plan): More marketing + analytics.
-- Ongoing / later days: Mix admin, follow_ups, maintenance.
-- Each day should have 2–4 different categories.
-- Higher-priority categories for that phase get more time allocation.
+DAY STRUCTURE:
+- Day 1: 1 quick setup/planning task (max 15min), then execution tasks
+- Day 2 onwards: 100% execution — no planning, no research
+- Each day: 2–4 tasks across different categories, totalling <= ${commitmentMinutes} min
+- Avoid the same category dominating two days in a row
 
-Example Day 1 (2hr commitment): Planning: Define target audience (30min); Content Creation: Create first product (45min); Admin: Set up Stripe account (30min); Analytics: Install tracking pixels (15min). Four categories, balanced time.
-
-Output valid JSON only: an array of objects. Each object must have:
+Output valid JSON only — an array of objects. Each object:
 - dayNumber: number (1 to ${totalDays})
-- taskDescription: string (or "task") - action title with duration in parentheses, e.g. "Create your first ebook using AI (30min)"
-- duration: string like "15min", "30min", "45min", "1hr" (or number of minutes, e.g. 30)
-- howToComplete: string (or "how_to_complete") - step-by-step instructions. Use \\n for newlines. Include Where and What when helpful.
-- For app_action tasks only: taskType: "app_action", appLink: one of "/dashboard/products/create", "/dashboard/tiktok", "/dashboard/scripts", appLabel: short button text
-- For external tasks: taskType: "external" or omit
-- category: string - one of admin, marketing, content_creation, operations, planning, analytics, follow_ups, product_dev, scheduling, maintenance (required for every task)
+- taskDescription: string — short action title with duration, e.g. "Record 3 TikTok hooks (20min)"
+- duration: string — "15min", "20min", "30min", "45min", "1hr"
+- howToComplete: string — numbered steps, beginner-friendly, very specific. Use \\n between steps. End with "Where: [platform/tool]\\nWhat: [the output/result]"
+- taskType: "app_action" or "external"
+- For app_action: appLink (one of the three above), appLabel
+- category: one of the 10 values above (required on every task)
 
-Example app_action task:
-{"dayNumber":1,"taskDescription":"Create your first ebook using AI (30min)","duration":"30min","taskType":"app_action","appLink":"/dashboard/products/create","appLabel":"Open Product Creator","category":"content_creation","howToComplete":"1. Click Open Product Creator\\n2. Choose Ebook format\\n3. Enter topic\\n4. Generate and download\\nWhere: Content Flywheel Product Creator\\nWhat: First digital product ready to sell"}
+GOOD example (execution-focused):
+{"dayNumber":2,"taskDescription":"Record your first TikTok hook (20min)","duration":"20min","taskType":"external","category":"content_creation","howToComplete":"1. Open TikTok camera\\n2. Film 3 takes of your hook (first 3 seconds of the video)\\n3. Pick the best take and save it\\nWhere: TikTok app\\nWhat: Saved hook clip ready to edit"}
 
-Example external task:
-{"dayNumber":1,"taskDescription":"Research 5 competitor products on TikTok Shop (30min)","duration":"30min","taskType":"external","category":"analytics","howToComplete":"1. Search TikTok Shop for your niche\\n2. Note top products, prices, hooks\\nWhere: TikTok Shop\\nWhat: Comparison notes"}
+BAD example (do NOT generate):
+{"dayNumber":2,"taskDescription":"Research TikTok content strategies (30min)","duration":"30min","taskType":"external","category":"planning","howToComplete":"1. Search online for strategies\\n2. Take notes\\nWhere: Google\\nWhat: Strategy notes"}
 
-For each day, sum of task durations (in minutes) must be <= ${commitmentMinutes}. Vary by day: early = setup/research, middle = creation, later = polish/launch. No markdown, no code fence. Return only the JSON array.`;
+No markdown, no code fence. Return only the JSON array.`;
 
   const daysSpec =
     daysToGenerate && daysToGenerate.length > 0
@@ -101,7 +115,13 @@ For each day, sum of task durations (in minutes) must be <= ${commitmentMinutes}
 
   const userPrompt = `Goal: ${title}${description ? `\nDescription: ${description}` : ""}
 
-${daysSpec} User can dedicate ${commitmentMinutes} minutes per day. Assign a category to every task. Follow the balance rules: 2–4 categories per day, vary categories across days (avoid same category dominating two days in a row), early days more planning/content_creation, mid more marketing/analytics, later mix admin/follow_ups/maintenance. Include Content Flywheel app_action tasks where relevant. Each task: specific action with duration, clear howToComplete. Total time per day must not exceed ${commitmentMinutes} min. Return only the JSON array.`;
+${daysSpec} ${commitmentMinutes} minutes per day available.
+
+Generate execution-first tasks. Every task after Day 1 must be something the user physically does and can prove — posting, recording, sending, building, fixing, applying. No research tasks, no planning tasks, no "define your audience" tasks after Day 1.
+
+Use the goal title to infer the goal type (content, coding, study, job search, business) and generate tasks in the right style for that type. Be specific — "Record 3 hook variations for TikTok" is good, "Create TikTok content" is too vague.
+
+Assign a category to every task. Keep total time per day <= ${commitmentMinutes} min. Return only the JSON array.`;
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -116,7 +136,7 @@ ${daysSpec} User can dedicate ${commitmentMinutes} minutes per day. Assign a cat
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 0.5,
+      temperature: 0.7,
       max_tokens: daysToGenerate && daysToGenerate.length === 1 ? 1500 : 6000,
     }),
   });
