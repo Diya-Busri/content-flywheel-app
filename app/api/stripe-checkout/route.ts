@@ -147,6 +147,9 @@ export async function POST(request: NextRequest) {
       success_url: `${baseUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/pricing`,
       client_reference_id: userId,
+      subscription_data: {
+        trial_period_days: 7,
+      },
       metadata: {
         promoCode: body.promoCode?.trim().toUpperCase() || "",
         userId,

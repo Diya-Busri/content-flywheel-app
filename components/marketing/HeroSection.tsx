@@ -44,7 +44,7 @@ export default function HeroSection() {
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link href="/signup" className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:shadow-xl hover:shadow-orange-500/40">
-              Start free — 100 video credits
+              Start free trial
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
             </Link>
             <Link href="#demo" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-8 py-4 text-base font-semibold text-slate-900 transition hover:border-slate-300 hover:bg-slate-50">
@@ -53,7 +53,7 @@ export default function HeroSection() {
             </Link>
           </div>
           <p className="mt-8 text-sm text-slate-500">
-            Built for first-time creators · No credit card to start · TikTok Shop + Stripe ready
+            7-day free trial · Cancel anytime · TikTok Shop + Stripe ready
           </p>
         </div>
         <div className="mt-20">

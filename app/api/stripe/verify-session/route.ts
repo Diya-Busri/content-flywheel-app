@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       stripeSubscriptionId: subscriptionId,
       stripePriceId: stripePriceId ?? undefined,
       membership: "pro",
-      status: "active",
+      status: subscription.status === "trialing" ? "trialing" : "active",
       planDuration,
       billingCycleEnd,
     });

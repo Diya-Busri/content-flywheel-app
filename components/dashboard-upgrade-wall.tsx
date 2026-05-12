@@ -124,10 +124,10 @@ export function DashboardUpgradeWall({ userEmail }: { userEmail: string }) {
                       <Loader2 className="h-4 w-4 animate-spin" /> Redirecting…
                     </span>
                   ) : (
-                    "Get started →"
+                    "Start 7-day free trial →"
                   )}
                 </button>
-                <p className="text-center text-xs text-white/20 mt-3">No per-sale fees. Cancel anytime.</p>
+                <p className="text-center text-xs text-white/20 mt-3">No charge for 7 days. Cancel anytime.</p>
               </div>
             ))}
           </div>
