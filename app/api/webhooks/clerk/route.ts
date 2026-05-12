@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { Resend } from "resend";
-import { checkApiRateLimit, getClientIp } from "@/lib/rate-limit-api";
 import { createProfile, getProfileByUserId } from "@/db/queries/profiles-queries";
 
 export const runtime = "nodejs";
@@ -31,15 +30,9 @@ function getEmail(data: ClerkUserPayload): string | null {
   return typeof email === "string" && email.length > 0 ? email : null;
 }
 
-function getName(data: ClerkUserPayload): string {
-  const first = data.first_name?.trim();
-  const last = data.last_name?.trim();
-  return [first, last].filter(Boolean).join(" ") || "there";
-}
 
 export async function POST(req: Request) {
-  const rl = await checkApiRateLimit(getClientIp(req));
-  if (rl) return rl;
+  // No rate limiting — Svix signature verification is the security layer for webhooks
   if (!WEBHOOK_SECRET) {
     console.error("[Clerk webhook] CLERK_WEBHOOK_SECRET is not set");
     return NextResponse.json(
@@ -82,7 +75,6 @@ export async function POST(req: Request) {
   if (payload.type === "user.created") {
     const data = payload.data;
     const email = getEmail(data);
-    const name = getName(data);
     const userId = data.id;
 
     // Create profile row for new user
@@ -96,6 +88,10 @@ export async function POST(req: Request) {
       } catch (err) {
         console.error("[Clerk webhook] Failed to create profile:", err);
       }
+    }
+
+    if (!RESEND_API_KEY) {
+      console.error("[Clerk webhook] RESEND_API_KEY is not set — welcome email skipped");
     }
 
     if (RESEND_API_KEY && email) {
