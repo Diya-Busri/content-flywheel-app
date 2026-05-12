@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Flame, Lock, Loader2, CheckCircle2, ChevronRight, ExternalLink, Download, Share2, Trophy, Calendar } from "lucide-react";
+import { ArrowLeft, Flame, Lock, Loader2, CheckCircle2, ChevronRight, ExternalLink, Download, Share2, Trophy, Calendar, Sparkles } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -37,6 +37,7 @@ import {
   TASK_CATEGORIES,
 } from "@/lib/goals/categories";
 import { ProofModal } from "./ProofModal";
+import { TaskAIPanel } from "@/components/goals/TaskAIPanel";
 
 type Goal = {
   id: string;
@@ -187,6 +188,7 @@ export default function GoalDetailFlow({ goalId, initialGoal = null, initialTask
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [proofModalTaskId, setProofModalTaskId] = useState<string | null>(null);
   const [viewProofTask, setViewProofTask] = useState<Task | null>(null);
+  const [aiPanelTaskId, setAiPanelTaskId] = useState<string | null>(null);
   const [skippingDay, setSkippingDay] = useState(false);
   const { toast } = useToast();
 
@@ -1223,6 +1225,16 @@ export default function GoalDetailFlow({ goalId, initialGoal = null, initialTask
                                           </CollapsibleContent>
                                         </Collapsible>
                                       )}
+                                      {!task.isCompleted && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setAiPanelTaskId(task.id)}
+                                          className="inline-flex items-center gap-1.5 text-xs font-medium text-orange-500 hover:text-orange-400 transition-colors mt-1 w-fit"
+                                        >
+                                          <Sparkles className="w-3 h-3" />
+                                          Need help?
+                                        </button>
+                                      )}
                                     </div>
                                     {updatingTaskId === task.id && (
                                       <Loader2 className="w-4 h-4 animate-spin text-slate-400 shrink-0" />
@@ -1386,6 +1398,16 @@ export default function GoalDetailFlow({ goalId, initialGoal = null, initialTask
                                     </div>
                                   </CollapsibleContent>
                                 </Collapsible>
+                              )}
+                              {!task.isCompleted && (
+                                <button
+                                  type="button"
+                                  onClick={() => setAiPanelTaskId(task.id)}
+                                  className="inline-flex items-center gap-1.5 text-xs font-medium text-orange-500 hover:text-orange-400 transition-colors mt-1 w-fit"
+                                >
+                                  <Sparkles className="w-3 h-3" />
+                                  Need help?
+                                </button>
                               )}
                             </div>
                             {updatingTaskId === task.id && (
@@ -1574,6 +1596,23 @@ export default function GoalDetailFlow({ goalId, initialGoal = null, initialTask
           </Button>
         </>
       )}
+
+      {/* AI Execution Coach panel */}
+      {(() => {
+        const aiTask = aiPanelTaskId ? tasks.find((t) => t.id === aiPanelTaskId) : null;
+        if (!aiTask || !goal) return null;
+        const todayCompleted = todayTasks.filter((t) => t.isCompleted).length;
+        return (
+          <TaskAIPanel
+            open={!!aiPanelTaskId}
+            onClose={() => setAiPanelTaskId(null)}
+            task={aiTask}
+            goal={goal}
+            completedTaskCount={todayCompleted}
+            totalTaskCount={todayTasks.length}
+          />
+        );
+      })()}
     </main>
   );
 }

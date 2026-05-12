@@ -209,6 +209,7 @@ export async function POST(req: Request) {
       messages,
       pageContext,
       productId,
+      taskContext,
       coachMode: requestedMode,
       memoryEnabled,
       previousSummaries,
@@ -218,6 +219,15 @@ export async function POST(req: Request) {
       messages?: IncomingMessage[];
       pageContext?: string;
       productId?: string;
+      taskContext?: {
+        taskDescription: string;
+        goalTitle: string;
+        category?: string | null;
+        currentDay: number;
+        totalDays: number;
+        completedCount: number;
+        totalCount: number;
+      } | null;
       coachMode?: string;
       memoryEnabled?: boolean;
       previousSummaries?: string[];
@@ -296,7 +306,25 @@ export async function POST(req: Request) {
       }
     }
 
-    const systemParts = [systemPrompt, personalisation, pageNote, memoryBlock, productContext].filter(Boolean);
+    let taskContextBlock = "";
+    if (taskContext && typeof taskContext.taskDescription === "string" && taskContext.taskDescription.trim()) {
+      const catLabel = taskContext.category
+        ? taskContext.category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+        : null;
+      taskContextBlock = [
+        `ACTIVE TASK CONTEXT:`,
+        `The user is currently working on this specific task: "${taskContext.taskDescription.trim()}"`,
+        `Goal they are working towards: "${taskContext.goalTitle}"`,
+        catLabel ? `Task category: ${catLabel}` : null,
+        `Progress: Day ${taskContext.currentDay} of ${taskContext.totalDays} · ${taskContext.completedCount} of ${taskContext.totalCount} tasks completed today`,
+        ``,
+        `Your role right now is their execution coach for THIS task. Every response must help them complete it.`,
+        `Be specific to the task — never give generic advice. Ask follow-up questions if needed.`,
+        `If they seem stuck or unmotivated, acknowledge it briefly and give them the smallest next action.`,
+      ].filter(Boolean).join("\n");
+    }
+
+    const systemParts = [systemPrompt, personalisation, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
     const openai = new OpenAI({ apiKey });
     const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
