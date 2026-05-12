@@ -94,6 +94,15 @@ export async function PATCH(
       }
     }
 
+    if (Object.keys(updates).length === 0) {
+      const [current] = await db
+        .select()
+        .from(dailyTasksTable)
+        .where(and(eq(dailyTasksTable.id, taskId), eq(dailyTasksTable.goalId, goalId)));
+      if (!current) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      return NextResponse.json(current);
+    }
+
     const [updated] = await db
       .update(dailyTasksTable)
       .set(updates)
