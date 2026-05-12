@@ -64,6 +64,16 @@ export type UseChatCoachOptions = {
   onAssistantComplete?: (text: string) => void;
   /** When set, coach API injects this product's details into the system prompt. */
   productId?: string | null;
+  /** When set, coach API injects task context so responses are specific to the active task. */
+  taskContext?: {
+    taskDescription: string;
+    goalTitle: string;
+    category?: string | null;
+    currentDay: number;
+    totalDays: number;
+    completedCount: number;
+    totalCount: number;
+  } | null;
   /** Coach mode id: business | finance | content | goals | general. Sent to API to select system prompt. */
   coachMode?: string;
   /** Memory feature: include name context and previous summaries in system prompt. */
@@ -80,6 +90,7 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
     onMessagesChange,
     onAssistantComplete,
     productId,
+    taskContext,
     coachMode = "business",
     memoryEnabled = false,
     userName = "",
@@ -266,6 +277,7 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
             messages: body,
             pageContext,
             productId: productId ?? undefined,
+            taskContext: taskContext ?? undefined,
             coachMode,
             memoryEnabled,
             userName: userName || undefined,
