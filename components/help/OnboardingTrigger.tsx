@@ -40,15 +40,20 @@ export function OnboardingTrigger() {
 
     if (hasSeenOnboarding()) return;
 
-    // Mark immediately so a fast refresh doesn't double-trigger
-    markOnboardingDone();
+    // Only start the tour once the user has an active subscription (don't fire on upgrade wall)
+    fetch("/api/payment-status")
+      .then((r) => r.json())
+      .then(({ hasActiveSubscription }) => {
+        if (!hasActiveSubscription) return;
 
-    // Short delay so the dashboard fully renders before the tour starts
-    const tid = setTimeout(() => {
-      startFullAppTour(router);
-    }, 1800);
+        // Mark immediately so a fast refresh doesn't double-trigger
+        markOnboardingDone();
 
-    return () => clearTimeout(tid);
+        setTimeout(() => {
+          startFullAppTour(router);
+        }, 1800);
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn]);
 

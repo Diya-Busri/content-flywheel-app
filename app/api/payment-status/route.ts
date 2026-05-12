@@ -15,7 +15,10 @@ export async function GET() {
     }
     const profile = await getProfileByUserId(userId);
     const paymentFailed = profile?.status === "payment_failed" || false;
-    return NextResponse.json({ paymentFailed });
+    const activeStatuses = ["active", "trialing"];
+    const hasActiveSubscription =
+      profile?.membership === "pro" && activeStatuses.includes(profile?.status ?? "");
+    return NextResponse.json({ paymentFailed, hasActiveSubscription });
   } catch (error) {
     console.error("[payment-status] Error:", error);
     return NextResponse.json({ paymentFailed: false }, { status: 200 });
