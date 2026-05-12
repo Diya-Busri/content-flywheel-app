@@ -19,6 +19,7 @@ const NAV_LINKS = [
   { label: "Features", id: "features", href: "/#features" },
   { label: "How it Works", id: "how-it-works", href: "/#how-it-works" },
   { label: "Pricing", id: null, href: "/pricing" },
+  { label: "Community", id: null, href: "https://www.skool.com/content-flywheel-7716", external: true },
 ];
 
 export function LandingNavbar() {
@@ -44,12 +45,13 @@ export function LandingNavbar() {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-8">
-          {NAV_LINKS.map(({ label, id, href }) => (
+          {NAV_LINKS.map(({ label, id, href, external }) => (
             <a
               key={label}
               href={href}
               onClick={(e) => handleNavClick(e, id, href)}
               className="text-slate-900 hover:text-orange-600 transition-colors text-sm font-medium"
+              {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
             >
               {label}
             </a>
@@ -91,12 +93,13 @@ export function LandingNavbar() {
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="md:hidden bg-white border-t border-slate-200 px-4 py-4 flex flex-col gap-1">
-          {NAV_LINKS.map(({ label, id, href }) => (
+          {NAV_LINKS.map(({ label, id, href, external }) => (
             <a
               key={label}
               href={href}
               onClick={(e) => { handleNavClick(e, id, href); setMobileOpen(false); }}
               className="rounded-xl px-4 py-3 text-slate-900 hover:text-orange-600 hover:bg-slate-50 transition-colors text-sm font-medium"
+              {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
             >
               {label}
             </a>

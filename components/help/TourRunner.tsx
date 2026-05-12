@@ -145,9 +145,15 @@ export function TourRunner() {
 
     hasRun.current = true;
 
-    // Small delay to let the page finish rendering
+    // Small delay to let the page finish rendering, then guard on subscription
     const tid = setTimeout(() => {
-      runPageTour(pageIndex, pageTour, router);
+      fetch("/api/payment-status")
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (!data?.hasActiveSubscription) { clearTourState(); return; }
+          runPageTour(pageIndex, pageTour, router);
+        })
+        .catch(() => { clearTourState(); });
     }, 800);
 
     return tid;
