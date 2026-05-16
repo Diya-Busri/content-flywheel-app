@@ -2316,8 +2316,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
   );
 
   useEffect(() => {
-    if (addImageModalOpen && addImageTab === "stock" && unsplashPhotos.length === 0 && !unsplashLoading) {
-      searchUnsplash("nature");
+    if (addImageModalOpen && addImageTab === "stock" && photos.length === 0 && !isLoadingPhotos) {
+      searchPhotos("nature");
     }
   }, [addImageModalOpen, addImageTab]); // eslint-disable-line react-hooks/exhaustive-deps -- only run when modal/tab opens
 
@@ -4622,10 +4622,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       </>
                     )}
                   </div>
-                  {/* Placed elements layer: pointer-events auto on all pages so text boxes are selectable and the panel (same state) can update colour; click on empty space deselects. */}
+                  {/* Placed elements layer: z-[35] so it sits above the rich-text content area (z-25) on all pages, enabling drag on content pages too. Click on empty space de-selects; also passes the click through to any underlying contentEditable text element so text editing keeps working. */}
                   <div
-                    className="absolute inset-0 z-20"
-                    style={{ pointerEvents: "auto" }}
+                    className="absolute inset-0 z-[35]"
+                    style={{ pointerEvents: displayPageElements.length > 0 || selectedElement != null ? "auto" : "none" }}
                     onClick={(e) => {
                       const insidePlacedElement = (e.target as HTMLElement).closest("[data-placed-element]");
                       if (insidePlacedElement) {
@@ -4636,6 +4636,20 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       setEditingTextBoxId(null);
                       deselectText();
                       setCoverBackHintDismissed(true);
+                      // Pass click through to underlying contentEditable text for text editing
+                      const layer = e.currentTarget as HTMLElement;
+                      layer.style.pointerEvents = "none";
+                      const underEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+                      layer.style.pointerEvents = "auto";
+                      if (underEl && contentAreaRef.current?.contains(underEl)) {
+                        const syntheticClick = new MouseEvent("click", {
+                          bubbles: true,
+                          cancelable: true,
+                          clientX: e.clientX,
+                          clientY: e.clientY,
+                        });
+                        underEl.dispatchEvent(syntheticClick);
+                      }
                     }}
                     role="presentation"
                   >
@@ -5894,7 +5908,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   <p className="text-[10px] text-[#555] mt-1">Photos by Pexels (pexels.com)</p>
                 </div>
 
-                {/* Add Image modal: Stock (Unsplash) or AI-generated */}
+                {/* Add Image modal: Stock (Pexels) or AI-generated */}
                 <Dialog open={addImageModalOpen} onOpenChange={setAddImageModalOpen}>
                   <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
                     <DialogHeader>
@@ -5903,35 +5917,35 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         Add Image
                       </DialogTitle>
                       <DialogDescription>
-                        Search stock photos (Unsplash), generate an image with AI, or upload your own image (JPG, PNG, WEBP). The image will be added to the current page and can be moved and resized on the canvas.
+                        Search free stock photos (Pexels), generate an image with AI, or upload your own image (JPG, PNG, WEBP). The image will be added to the current page and can be moved and resized on the canvas.
                       </DialogDescription>
                     </DialogHeader>
                     <Tabs value={addImageTab} onValueChange={(v) => setAddImageTab(v as "stock" | "ai" | "upload")} className="flex-1 min-h-0 flex flex-col">
                       <TabsList className="grid w-full grid-cols-3 mb-4">
-                        <TabsTrigger value="stock">Search stock (Unsplash)</TabsTrigger>
+                        <TabsTrigger value="stock">Stock photos (Pexels)</TabsTrigger>
                         <TabsTrigger value="ai">Generate AI image</TabsTrigger>
                         <TabsTrigger value="upload">Upload file</TabsTrigger>
                       </TabsList>
                       <TabsContent value="stock" className="mt-0 flex-1 min-h-0 flex flex-col overflow-hidden">
                         <div className="flex gap-2 mb-3">
                           <Input
-                            placeholder="Search Unsplash..."
-                            value={unsplashQuery}
-                            onChange={(e) => setUnsplashQuery(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && searchUnsplash()}
+                            placeholder="Search Pexels..."
+                            value={photoSearch}
+                            onChange={(e) => setPhotoSearch(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && searchPhotos(photoSearch || undefined)}
                             className="flex-1"
                           />
-                          <Button type="button" onClick={() => searchUnsplash()} disabled={unsplashLoading}>
-                            {unsplashLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
+                          <Button type="button" onClick={() => searchPhotos(photoSearch || undefined)} disabled={isLoadingPhotos}>
+                            {isLoadingPhotos ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
                           </Button>
                         </div>
-                        {unsplashLoading ? (
+                        {isLoadingPhotos ? (
                           <div className="flex justify-center py-12">
                             <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
                           </div>
-                        ) : unsplashPhotos.length > 0 ? (
+                        ) : photos.length > 0 ? (
                           <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 overflow-y-auto max-h-[320px] pr-1">
-                            {unsplashPhotos.map((photo) => {
+                            {photos.map((photo) => {
                               const photoUrl = photo.fullUrl ?? photo.url ?? "";
                               if (!photoUrl) return null;
                               return (
@@ -5947,17 +5961,18 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             })}
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-500 py-8 text-center">Enter a search term and click Search. Free stock photos (Unsplash or Pexels).</p>
+                          <p className="text-sm text-gray-500 py-8 text-center">Enter a search term and click Search. Free stock photos by Pexels.</p>
                         )}
-                        {unsplashTotalPages > 1 && unsplashPhotos.length > 0 && (
+                        {photoTotalPages > 1 && photos.length > 0 && (
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             className="mt-2 w-full"
-                            onClick={() => searchUnsplash(undefined, unsplashPage + 1)}
-                            disabled={unsplashLoading || unsplashPage >= unsplashTotalPages}
+                            onClick={() => searchPhotos(photoCurrentQuery || undefined, photoPage + 1, true)}
+                            disabled={isLoadingMorePhotos || photoPage >= photoTotalPages}
                           >
+                            {isLoadingMorePhotos ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                             Load more
                           </Button>
                         )}
