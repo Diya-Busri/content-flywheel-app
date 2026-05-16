@@ -1337,31 +1337,17 @@ export default function DiscoverFlow() {
         // ignore
       }
 
-      const TIMEOUT_MS = 20 * 60 * 1000; // 20 min — poll until then; on timeout show "Still generating" if not done
-      const result = await runPollLoop(productId, TIMEOUT_MS);
-
+      // Redirect to library immediately — generation continues on the server.
+      // DigitalProductsLanding picks up ?generatingId and polls in the background.
       clearInterval(stepInterval);
-      if (result.outcome === "completed") {
-        // Redirect immediately with no delay so user lands in the editor as soon as generation is done
-        if (alsoGenerateVideos) {
-          router.push(`/dashboard/digital-products/scripts?productId=${encodeURIComponent(result.productId)}&intent=video-guide`);
-        } else {
-          router.push(`/dashboard/digital-products/${result.productId}/edit?created=1`);
-        }
-        setGenerating(false);
-        setGenerateProgress(null);
-        setGenerateStepIndex(GENERATE_STEPS.length - 1);
-        return;
-      }
-      if (result.outcome === "failed") {
-        setCreateError(result.error ?? "Product generation failed. Please try again.");
-        toast({ title: "Generation failed", description: result.error, variant: "destructive" });
-        return;
-      }
-      if (result.outcome === "timeout_still_generating") {
-        setTimeoutStillGenerating(result.productId);
-        return;
-      }
+      const dest = alsoGenerateVideos
+        ? `/dashboard/digital-products?generatingId=${productId}&intent=video-guide${facelessOrPersonal ? `&contentStyle=${encodeURIComponent(facelessOrPersonal)}` : ""}`
+        : `/dashboard/digital-products?generatingId=${productId}`;
+      router.push(dest);
+      setGenerating(false);
+      setGenerateProgress(null);
+      setGenerateStepIndex(0);
+      return;
     } catch (err) {
       console.error("Product generation failed:", err);
       const message = err instanceof Error ? err.message : "Failed to generate product. Please try again.";
@@ -1394,7 +1380,7 @@ export default function DiscoverFlow() {
 
   return (
     <main className={wrapperClass}>
-      {/* Generating product overlay - blocks entire screen, no navigation until complete */}
+      {/* Generating overlay — only visible briefly while the create API call is in flight (<3s); redirects immediately once productId is returned. Also shows on error. */}
       {(generating || createError || timeoutStillGenerating) && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/98 backdrop-blur-md p-6" role="alert" aria-live="polite">
           {timeoutStillGenerating ? (
