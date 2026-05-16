@@ -83,7 +83,6 @@ export async function POST(
       n: 1,
       size: "1024x1024",
       quality: "hd",
-      style: "natural",
       response_format: "b64_json",
     });
 
