@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -109,6 +110,8 @@ const FORMAT_LABELS: Record<string, string> = {
 };
 
 export default function DigitalProductsLanding() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [myProducts, setMyProducts] = useState<MyProduct[]>([]);
   const [myProductsLoading, setMyProductsLoading] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -121,6 +124,51 @@ export default function DigitalProductsLanding() {
   const [bundleError, setBundleError] = useState<string | null>(null);
   const [repurposeProduct, setRepurposeProduct] = useState<{ id: string; title: string } | null>(null);
   const { toast } = useToast();
+
+  // Background generation banner — polls the product until done, then shows a "ready" banner.
+  const [bgGeneratingId, setBgGeneratingId] = useState<string | null>(null);
+  const [bgGeneratingDone, setBgGeneratingDone] = useState(false);
+  const [bgGeneratingFailed, setBgGeneratingFailed] = useState(false);
+  const bgProductIdRef = useRef<string | null>(null);
+  const bgIntentRef = useRef<string | null>(null);
+  const bgContentStyleRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const id = searchParams.get("generatingId");
+    if (!id) return;
+    bgProductIdRef.current = id;
+    bgIntentRef.current = searchParams.get("intent");
+    bgContentStyleRef.current = searchParams.get("contentStyle");
+    setBgGeneratingId(id);
+    setBgGeneratingDone(false);
+    setBgGeneratingFailed(false);
+    // Remove query params from URL so a reload doesn't restart polling
+    router.replace("/dashboard/digital-products");
+
+    let cancelled = false;
+    const INTERVAL = 3000;
+    const poll = async () => {
+      while (!cancelled) {
+        try {
+          const res = await fetch(`/api/products/${id}`);
+          if (!res.ok) { await new Promise(r => setTimeout(r, INTERVAL)); continue; }
+          const data = await res.json().catch(() => ({}));
+          const status = data?.status;
+          const sections: Array<{ content?: string; contentHtml?: string }> = data?.content?.sections ?? [];
+          const hasContent = sections.length > 0 && sections.every(s => ((s?.content ?? s?.contentHtml ?? "").trim().length > 0));
+          if (status === "failed") { if (!cancelled) { setBgGeneratingFailed(true); setBgGeneratingId(null); } return; }
+          if (status === "draft" && hasContent) {
+            if (!cancelled) { setBgGeneratingDone(true); setBgGeneratingId(null); }
+            return;
+          }
+        } catch { /* transient error, keep polling */ }
+        await new Promise(r => setTimeout(r, INTERVAL));
+      }
+    };
+    poll();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // only on mount — searchParams is stable from the initial URL
 
   useEffect(() => {
     try {
@@ -238,6 +286,49 @@ export default function DigitalProductsLanding() {
   return (
     <main className="min-h-screen p-6 md:p-10">
       <div className="max-w-5xl mx-auto">
+        {/* Background generation banner */}
+        {(bgGeneratingId || bgGeneratingDone || bgGeneratingFailed) && (
+          <div className={`mb-4 rounded-lg border px-4 py-3 flex items-center justify-between gap-3 ${bgGeneratingFailed ? "border-red-400/40 bg-red-500/10" : bgGeneratingDone ? "border-green-500/40 bg-green-500/10" : "border-orange-500/40 bg-orange-500/10"}`}>
+            <div className="flex items-center gap-3 min-w-0">
+              {bgGeneratingId && <Loader2 className="w-4 h-4 animate-spin text-orange-500 shrink-0" />}
+              {bgGeneratingDone && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />}
+              {bgGeneratingFailed && <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
+              <span className="text-sm font-medium truncate">
+                {bgGeneratingId && "Your product is generating in the background — you can use the app freely."}
+                {bgGeneratingDone && "Your product is ready!"}
+                {bgGeneratingFailed && "Generation failed. Open the product to retry."}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {bgGeneratingDone && bgProductIdRef.current && (
+                <Button
+                  size="sm"
+                  className="bg-orange-500 hover:bg-orange-600 text-white h-8 text-xs px-3"
+                  onClick={() => {
+                    setBgGeneratingDone(false);
+                    const id = bgProductIdRef.current!;
+                    if (bgIntentRef.current === "video-guide") {
+                      router.push(`/dashboard/digital-products/scripts?productId=${encodeURIComponent(id)}&intent=video-guide${bgContentStyleRef.current ? `&contentStyle=${encodeURIComponent(bgContentStyleRef.current)}` : ""}`);
+                    } else {
+                      router.push(`/dashboard/digital-products/${id}/edit?created=1`);
+                    }
+                  }}
+                >
+                  Open Product →
+                </Button>
+              )}
+              <button
+                type="button"
+                onClick={() => { setBgGeneratingId(null); setBgGeneratingDone(false); setBgGeneratingFailed(false); }}
+                className="p-1 rounded text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                aria-label="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Dismissable banner for new users */}
         {!bannerDismissed && (
           <div className="mb-6 rounded-lg border border-orange-500/40 bg-orange-500/10 px-4 py-3 flex items-center justify-between gap-4">
