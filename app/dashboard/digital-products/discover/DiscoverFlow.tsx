@@ -1344,7 +1344,7 @@ export default function DiscoverFlow() {
       if (result.outcome === "completed") {
         // Redirect immediately with no delay so user lands in the editor as soon as generation is done
         if (alsoGenerateVideos) {
-          router.push(`/dashboard/digital-products/scripts?productId=${encodeURIComponent(result.productId)}&intent=video-guide`);
+          router.push(`/dashboard/digital-products/scripts?productId=${encodeURIComponent(result.productId)}&intent=video-guide${facelessOrPersonal ? `&contentStyle=${facelessOrPersonal}` : ""}`);
         } else {
           router.push(`/dashboard/digital-products/${result.productId}/edit?created=1`);
         }

@@ -219,6 +219,19 @@ Lead with proof — real numbers, real outcomes, real credibility. Do NOT open w
           ? `CTA (last few seconds): One clear action. Tell them to comment a specific KEYWORD to get the link — pick the most relevant keyword for this product (e.g., TOOLS, FREE, LINK, GUIDE, TIPS, COPY, ACCESS, DOWNLOAD). Format example: "Comment TOOLS below and I'll send you the link." Feel urgent but natural. Do NOT say "link in bio" for Instagram.`
           : `CTA (last few seconds): One clear action. Point them to "link in bio". Urgent but natural. No desperation.`;
 
+      const contentStyleInstruction =
+        contentStyle === "faceless"
+          ? `CONTENT STYLE — FACELESS:
+Write for voiceover delivery. Never use "I" or personal stories. Use anonymous, relatable framing:
+"Most people don't realise...", "Here's what nobody tells you...", "The reason this never works is..."
+Scripts must work as text overlays on B-roll or screen recordings — no on-camera references.`
+          : contentStyle === "personal"
+            ? `CONTENT STYLE — PERSONAL BRAND:
+Write in first person. Use personal stories and experiences naturally.
+"When I was struggling with...", "I discovered this by accident...", "This changed everything for me..."
+Write for talking-head, on-camera delivery. Build trust through authenticity and personal connection.`
+            : "";
+
       systemPrompt = `You are an expert short-form video scriptwriter for TikTok and Instagram Reels.
 Write scripts that feel human, conversational and emotionally engaging.
 
@@ -230,7 +243,7 @@ Rules:
 - Use short punchy sentences. Max 15 words per sentence.
 - Body should agitate the problem before presenting the solution
 - ${ctaInstruction}
-
+${contentStyleInstruction ? `\n${contentStyleInstruction}` : ""}
 Write the script in this structure:
 HOOK (0-3s): One sentence only. Must match the hook style above.
 BODY (3-25s): Agitate the problem (2 sentences), then introduce the solution naturally (2-3 sentences), then social proof or outcome (1-2 sentences)
