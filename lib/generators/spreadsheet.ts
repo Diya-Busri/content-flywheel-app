@@ -1,139 +1,295 @@
 import type { ProductDetails } from "./types";
 
+// ── HTML parsing helpers ─────────────────────────────────────────────────────
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+}
+
+interface ParsedTable {
+  headers: string[];
+  rows: string[][];
+}
+
+function parseHtmlTable(html: string): ParsedTable | null {
+  const tableMatch = /<table[^>]*>([\s\S]*?)<\/table>/i.exec(html);
+  if (!tableMatch) return null;
+  const tableHtml = tableMatch[1];
+
+  const headers: string[] = [];
+  const thRegex = /<th[^>]*>([\s\S]*?)<\/th>/gi;
+  let m;
+  while ((m = thRegex.exec(tableHtml)) !== null) {
+    const h = stripHtml(m[1]);
+    if (h) headers.push(h);
+  }
+
+  const rows: string[][] = [];
+  const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  while ((m = trRegex.exec(tableHtml)) !== null) {
+    const rowHtml = m[1];
+    if (/<th/i.test(rowHtml)) continue;
+    const cells: string[] = [];
+    const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    let td;
+    while ((td = tdRegex.exec(rowHtml)) !== null) {
+      cells.push(stripHtml(td[1]));
+    }
+    if (cells.length > 0) rows.push(cells);
+  }
+
+  return headers.length > 0 ? { headers, rows } : null;
+}
+
+function extractFormulas(html: string): string[] {
+  const formulas: string[] = [];
+  const codeRegex = /<code[^>]*>([\s\S]*?)<\/code>/gi;
+  let m;
+  while ((m = codeRegex.exec(html)) !== null) {
+    const text = stripHtml(m[1]).trim();
+    if (text.startsWith("=")) formulas.push(text);
+  }
+  return formulas;
+}
+
+function sectionPlainText(html: string): string[] {
+  return html
+    .replace(/<table[\s\S]*?<\/table>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .split("\n")
+    .map((l) => l.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").trim())
+    .filter(Boolean);
+}
+
+// ── Colour palette ───────────────────────────────────────────────────────────
+
+const ORANGE = "FFF97316";
+const ORANGE_LIGHT = "FFFFF7ED";
+const WHITE = "FFFFFFFF";
+const DARK = "FF1F2937";
+const GREY_BORDER = "FFD1D5DB";
+const ROW_ALT = "FFF9FAFB";
+
+// ── Main generator ───────────────────────────────────────────────────────────
+
 export async function generateSpreadsheet(details: ProductDetails): Promise<ArrayBuffer> {
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
-  const title = details.title || "Spreadsheet Tutorial";
+  workbook.creator = "Content Flywheel";
+  workbook.created = new Date();
+
+  const title = details.title || "Spreadsheet";
   const sections = details.sections || [];
 
-  // ── Sheet 1: Tutorial Guide ──────────────────────────────────────────────
-  const guide = workbook.addWorksheet("📖 Tutorial Guide", {
-    properties: { tabColor: { argb: "FFF97316" } },
-  });
+  const FIXED_IDS = new Set(["outcome-promise", "fast-start", "framework", "disclaimer"]);
 
-  guide.getColumn(1).width = 4;   // left margin
-  guide.getColumn(2).width = 90;  // content
+  // Separate sections: instructions vs data tabs
+  const instructionSections = sections.filter(
+    (s) => FIXED_IDS.has(s.title?.toLowerCase().replace(/\s+/g, "-")) ||
+      /^(outcome|quick wins|framework|disclaimer|overview|introduction|tips|getting started)/i.test(s.title)
+  );
+  const dataSections = sections.filter((s) => !instructionSections.includes(s));
+
+  // ── Tab 1: Instructions ──────────────────────────────────────────────────
+  const instructions = workbook.addWorksheet("📋 How to Use", {
+    properties: { tabColor: { argb: ORANGE } },
+  });
+  instructions.getColumn(1).width = 3;
+  instructions.getColumn(2).width = 80;
 
   // Title banner
-  const titleRow = guide.addRow(["", title]);
-  titleRow.height = 44;
+  const titleRow = instructions.addRow(["", title]);
+  titleRow.height = 48;
   const titleCell = titleRow.getCell(2);
-  titleCell.font = { bold: true, size: 22, color: { argb: "FFFFFFFF" } };
-  titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF97316" } };
-  titleCell.alignment = { vertical: "middle" };
+  titleCell.font = { bold: true, size: 20, color: { argb: WHITE } };
+  titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ORANGE } };
+  titleCell.alignment = { vertical: "middle", wrapText: false };
 
-  guide.addRow([]); // spacer
+  instructions.addRow([]);
 
-  // Sections
-  sections.forEach((section, i) => {
-    // Section heading
-    const headingRow = guide.addRow(["", `${i + 1}. ${section.title}`]);
-    headingRow.height = 26;
-    const headingCell = headingRow.getCell(2);
-    headingCell.font = { bold: true, size: 13, color: { argb: "FFF97316" } };
-    headingCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF7ED" } };
-    headingCell.alignment = { vertical: "middle" };
+  const subRow = instructions.addRow(["", "📖 Getting Started"]);
+  subRow.getCell(2).font = { bold: true, size: 13, color: { argb: ORANGE } };
+  subRow.height = 22;
 
-    // Section body — strip HTML and split into lines
-    const lines = section.body
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/p>/gi, "\n")
-      .replace(/<[^>]*>/g, "")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean);
+  instructions.addRow([]);
 
-    lines.forEach((line) => {
-      const bodyRow = guide.addRow(["", line]);
-      bodyRow.height = 18;
-      const bodyCell = bodyRow.getCell(2);
-      bodyCell.font = { size: 11, color: { argb: "FF374151" } };
-      bodyCell.alignment = { wrapText: true, vertical: "top" };
+  // What's in this spreadsheet
+  const tabNames = dataSections.map((s) => `• ${s.title}`);
+  if (tabNames.length) {
+    const sheetListRow = instructions.addRow(["", "This workbook contains the following tabs:"]);
+    sheetListRow.getCell(2).font = { bold: true, size: 11, color: { argb: DARK } };
+    tabNames.forEach((name) => {
+      const r = instructions.addRow(["", name]);
+      r.getCell(2).font = { size: 11, color: { argb: DARK } };
+      r.height = 18;
     });
-
-    guide.addRow([]); // spacer after section
-  });
-
-  // ── Sheet 2: Template ────────────────────────────────────────────────────
-  const template = workbook.addWorksheet("📋 Template", {
-    properties: { tabColor: { argb: "FF2C3E50" } },
-  });
-
-  // Pick relevant columns based on the product title
-  const titleLower = title.toLowerCase();
-  let columns: string[];
-
-  if (/budget|expense|financ|money|spend|cost/.test(titleLower)) {
-    columns = ["Date", "Description", "Category", "Amount (£)", "Type", "Notes"];
-  } else if (/project|task|todo|plan|roadmap/.test(titleLower)) {
-    columns = ["Task", "Assignee", "Priority", "Status", "Due Date", "Done?", "Notes"];
-  } else if (/sales|revenue|crm|client|lead|deal/.test(titleLower)) {
-    columns = ["Date", "Client", "Product/Service", "Amount (£)", "Stage", "Follow-up", "Notes"];
-  } else if (/inventor|stock|product|warehouse/.test(titleLower)) {
-    columns = ["Item Name", "SKU", "Qty In Stock", "Unit Price (£)", "Total Value", "Location", "Notes"];
-  } else if (/habit|goal|routine|daily|weekly/.test(titleLower)) {
-    columns = ["Date", "Habit / Goal", "Target", "Actual", "% Complete", "Streak", "Notes"];
-  } else if (/content|social|post|schedule|calendar/.test(titleLower)) {
-    columns = ["Date", "Platform", "Content Type", "Topic / Caption", "Status", "Engagement", "Notes"];
-  } else if (/invoice|billing|payment|client/.test(titleLower)) {
-    columns = ["Invoice #", "Client", "Date Issued", "Due Date", "Amount (£)", "Status", "Notes"];
-  } else if (/employee|staff|hr|rota|shift/.test(titleLower)) {
-    columns = ["Employee", "Role", "Hours", "Rate (£)", "Total Pay", "Week", "Notes"];
-  } else {
-    columns = ["Date", "Name / Item", "Category", "Value", "Status", "Notes"];
+    instructions.addRow([]);
   }
 
-  template.columns = columns.map((col) => ({
-    header: col,
-    key: col.toLowerCase().replace(/[\s/()£#?!]/g, "_"),
-    width: col.length <= 8 ? 13 : col.length <= 16 ? 20 : 26,
-  }));
+  // Instruction sections content
+  const srcSections = instructionSections.length > 0 ? instructionSections : sections.slice(0, 2);
+  for (const section of srcSections) {
+    const hRow = instructions.addRow(["", section.title]);
+    hRow.height = 24;
+    const hCell = hRow.getCell(2);
+    hCell.font = { bold: true, size: 12, color: { argb: ORANGE } };
+    hCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ORANGE_LIGHT } };
 
-  // Style header row
-  const headerRow = template.getRow(1);
-  headerRow.height = 26;
-  headerRow.eachCell((cell) => {
-    cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF97316" } };
-    cell.alignment = { vertical: "middle", horizontal: "center" };
-    cell.border = { bottom: { style: "medium", color: { argb: "FFFFE4C4" } } };
-  });
+    const lines = sectionPlainText(section.body);
+    for (const line of lines.slice(0, 20)) {
+      const r = instructions.addRow(["", line]);
+      r.getCell(2).font = { size: 10, color: { argb: DARK } };
+      r.getCell(2).alignment = { wrapText: true };
+      r.height = 16;
+    }
+    instructions.addRow([]);
+  }
 
-  // 20 alternating data rows
-  for (let r = 0; r < 20; r++) {
-    const dataRow = template.addRow(
-      columns.map(() => "")
-    );
-    dataRow.height = 20;
-    if (r % 2 === 0) {
-      dataRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
-        if (colNum <= columns.length) {
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF7ED" } };
+  // ── Data tabs: one per section with a table ──────────────────────────────
+  for (const section of dataSections) {
+    const parsed = parseHtmlTable(section.body);
+    const formulas = extractFormulas(section.body);
+    const sheetName = section.title.replace(/[*?:\\/\[\]]/g, "").slice(0, 31);
+
+    const ws = workbook.addWorksheet(sheetName, {
+      properties: { tabColor: { argb: ORANGE } },
+    });
+
+    if (parsed && parsed.headers.length > 0) {
+      // Set column widths
+      parsed.headers.forEach((h, i) => {
+        ws.getColumn(i + 1).width = Math.max(14, Math.min(35, h.length + 6));
+      });
+
+      // Header row
+      const headerRow = ws.addRow(parsed.headers);
+      headerRow.height = 28;
+      headerRow.eachCell((cell, colNum) => {
+        if (colNum <= parsed.headers.length) {
+          cell.font = { bold: true, size: 11, color: { argb: WHITE } };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ORANGE } };
+          cell.alignment = { vertical: "middle", horizontal: "center" };
+          cell.border = {
+            bottom: { style: "medium", color: { argb: ORANGE_LIGHT } },
+            right: { style: "thin", color: { argb: GREY_BORDER } },
+          };
         }
       });
+
+      // Sample data rows
+      for (let i = 0; i < parsed.rows.length; i++) {
+        const row = parsed.rows[i];
+        const dr = ws.addRow(row);
+        dr.height = 20;
+        const isAlt = i % 2 === 1;
+        dr.eachCell({ includeEmpty: true }, (cell, colNum) => {
+          if (colNum <= parsed.headers.length) {
+            if (isAlt) {
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ROW_ALT } };
+            }
+            cell.border = {
+              bottom: { style: "thin", color: { argb: GREY_BORDER } },
+              right: { style: "thin", color: { argb: GREY_BORDER } },
+            };
+            cell.font = { size: 10, color: { argb: DARK } };
+          }
+        });
+      }
+
+      // 40 blank rows for user data
+      const sampleCount = parsed.rows.length;
+      for (let i = 0; i < 40; i++) {
+        const blank = ws.addRow(Array(parsed.headers.length).fill(""));
+        blank.height = 20;
+        const isAlt = (sampleCount + i) % 2 === 1;
+        blank.eachCell({ includeEmpty: true }, (cell, colNum) => {
+          if (colNum <= parsed.headers.length) {
+            if (isAlt) {
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ROW_ALT } };
+            }
+            cell.border = {
+              bottom: { style: "thin", color: { argb: GREY_BORDER } },
+              right: { style: "thin", color: { argb: GREY_BORDER } },
+            };
+          }
+        });
+      }
+
+      // Auto-filter
+      ws.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: 1, column: parsed.headers.length },
+      };
+
+      // Freeze header row
+      ws.views = [{ state: "frozen", xSplit: 0, ySplit: 1 }];
+
+      // Formulas section below data
+      if (formulas.length > 0) {
+        ws.addRow([]);
+        const fHeaderRow = ws.addRow(["📐 Useful Formulas"]);
+        fHeaderRow.getCell(1).font = { bold: true, size: 11, color: { argb: ORANGE } };
+        fHeaderRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ORANGE_LIGHT } };
+
+        for (const formula of formulas) {
+          const fRow = ws.addRow([formula]);
+          fRow.getCell(1).font = { size: 10, color: { argb: DARK }, name: "Courier New" };
+        }
+      }
+    } else {
+      // Section has no table — show plain text content
+      ws.getColumn(1).width = 80;
+      const hRow = ws.addRow([section.title]);
+      hRow.height = 28;
+      hRow.getCell(1).font = { bold: true, size: 14, color: { argb: WHITE } };
+      hRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ORANGE } };
+      ws.addRow([]);
+
+      const lines = sectionPlainText(section.body);
+      for (const line of lines.slice(0, 50)) {
+        const r = ws.addRow([line]);
+        r.getCell(1).font = { size: 10, color: { argb: DARK } };
+        r.getCell(1).alignment = { wrapText: true };
+        r.height = 16;
+      }
     }
   }
 
-  // Auto-filter on header
-  template.autoFilter = {
-    from: { row: 1, column: 1 },
-    to: { row: 1, column: columns.length },
-  };
-
-  // ── Sheet 3: Notes ───────────────────────────────────────────────────────
-  const notes = workbook.addWorksheet("📝 Notes", {
-    properties: { tabColor: { argb: "FF27AE60" } },
-  });
-  notes.getColumn(1).width = 70;
-
-  const notesTitle = notes.addRow([`Notes — ${title}`]);
-  notesTitle.getCell(1).font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } };
-  notesTitle.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF97316" } };
-  notesTitle.height = 30;
-
-  for (let i = 0; i < 30; i++) {
-    const row = notes.addRow([""]);
-    row.height = 20;
+  // If no data sections had tables, fall back to a generic template
+  if (dataSections.length === 0 || dataSections.every((s) => !parseHtmlTable(s.body))) {
+    const template = workbook.addWorksheet("📊 Template", {
+      properties: { tabColor: { argb: "FF2C3E50" } },
+    });
+    const defaultCols = ["Date", "Description", "Category", "Amount", "Status", "Notes"];
+    template.columns = defaultCols.map((col) => ({
+      header: col,
+      key: col.toLowerCase(),
+      width: 18,
+    }));
+    const headerRow = template.getRow(1);
+    headerRow.height = 26;
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: WHITE }, size: 11 };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ORANGE } };
+      cell.alignment = { vertical: "middle", horizontal: "center" };
+    });
+    for (let r = 0; r < 50; r++) {
+      template.addRow(Array(defaultCols.length).fill("")).height = 20;
+    }
+    template.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: defaultCols.length } };
+    template.views = [{ state: "frozen", xSplit: 0, ySplit: 1 }];
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
