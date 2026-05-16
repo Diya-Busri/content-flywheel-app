@@ -332,8 +332,8 @@ export async function generateProductOutline(params: GenerateProductContentParam
       formatStructureNote = "Course outline: mod1, mod2, ... (modules with lessons).";
       break;
     case "spreadsheet":
-      sectionCountHint = `step1, step2, step3, step4, step5, step6, disclaimer`;
-      formatStructureNote = "Spreadsheet tutorial: step-by-step sections.";
+      sectionCountHint = `outcome-promise, fast-start, overview, setup, tab1, tab2, tab3, formulas, tips, disclaimer`;
+      formatStructureNote = "SPREADSHEET TEMPLATE: Each section describes one tab or feature of the spreadsheet. Use <table> with real column headers and sample rows. Show actual formulas (=SUM, =IF, =COUNTIF). Minimal prose — lead with the table structure, then explain each column briefly.";
       break;
     default:
       sectionCountHint = `outcome-promise, fast-start, framework, intro, ${numChapters} sections, disclaimer`;
@@ -549,6 +549,9 @@ export async function generateSingleSectionBody(
     normalizedFormat === "journal" &&
     (/^p\d+$/.test(section.id) || section.id.startsWith("p") || (!isFixedSection && !isLastSection));
 
+  const isSpreadsheetSection =
+    normalizedFormat === "spreadsheet" && !isFixedSection;
+
   // EBOOK/GUIDE: 20-80 pages, teaching tone, big headers, callout boxes, step-by-step, case study, summary, CTA
   const ebookGuideInstruction = isEbookGuideMainSection
     ? `This is an EBOOK/GUIDE section. Teaching/explanatory tone. Structure: step-by-step learning, examples, one case study in <div class="callout"> or <div class="example-box">, summary, CTA. Use big headers (<h2>, <h3>), clean structure, callout boxes for key tips. 500-800 words of HTML. No fill-in blanks or workbook exercises.`
@@ -578,6 +581,11 @@ export async function generateSingleSectionBody(
     ? `This is a COURSE OUTLINE module. Output: module overview (1–2 paragraphs), <h3>Learning objectives</h3><ul>...</ul>, <h3>Lessons</h3><ol><li>Lesson title: short description.</li></ol>, <h3>Resources</h3>, key takeaways. Use benefit-driven lesson titles. 500–700 words of HTML.`
     : "";
 
+  // SPREADSHEET: Show actual table structure with column headers, sample rows, and real formulas.
+  const spreadsheetInstruction = isSpreadsheetSection
+    ? `This is a SPREADSHEET TEMPLATE section. Output the actual spreadsheet structure for this tab/feature. Lead with a <table> showing real column headers (e.g. Date, Category, Amount, Notes) and 3-5 sample data rows with realistic values. After the table, briefly explain what each column does in 1-2 sentences each. Include at least 2 real formula examples relevant to this tab (e.g. =SUM(C2:C100), =IF(B2="Food",C2,0), =COUNTIF(B:B,"Income")). Use <code> for formulas. Keep prose minimal — the table and formulas ARE the content. 300-500 words of HTML.`
+    : "";
+
   // JOURNAL: Date field, 2-3 reflection prompts, writing space, affirmation. Aesthetic, whitespace, mindset tone.
   const journalInstruction = isJournalPrompt
     ? `This is a JOURNAL page. Repeating daily structure. Include: (1) Date field: "Date: _______________", (2) 2-3 reflection prompts as <h3> or <p>, (3) <div class="writing-space"> for writing space (use lines or blank area), (4) Affirmation section. Mindset/reflective tone. Lots of whitespace. Use minimal HTML. No long paragraphs.`
@@ -590,7 +598,8 @@ export async function generateSingleSectionBody(
     plannerInstruction ||
     checklistInstruction ||
     courseInstruction ||
-    journalInstruction;
+    journalInstruction ||
+    spreadsheetInstruction;
   const baseRequirements = formatSpecificRequirement
     ? formatSpecificRequirement
     : `${wordHint} of HTML. Use <p>, <strong>, <em>, <h2>, <h3>, <ul>, <ol>, <li>. No markdown. Include hook, main content, examples, action items, summary where appropriate.`;
@@ -610,7 +619,9 @@ export async function generateSingleSectionBody(
                 ? "Format is NOTION: setup guide for databases/views. No workbook content."
                 : normalizedFormat === "course"
                   ? "Format is COURSE: module with lessons, objectives, resources."
-                  : "";
+                  : normalizedFormat === "spreadsheet"
+                    ? "Format is SPREADSHEET: show actual table structure with column headers, sample data rows, and real formulas. Lead with <table>. Minimal prose."
+                    : "";
 
   const prompt = `Product: "${productName}". Niche: ${niche}.
 ${ctx}
@@ -641,7 +652,9 @@ Return ONLY valid JSON: {"body": "<p>...</p>", "imagePrompt": "optional one sent
           ? "You write journal page content. Output date field, reflection prompts, writing space, affirmation. Mindset tone, lots of whitespace. Return only valid JSON with body and optional imagePrompt. No markdown."
           : normalizedFormat === "notion"
             ? "You write Notion setup guide content. Describe databases, views, filters, templates. No workbook-style content. Return only valid JSON with body and optional imagePrompt. No markdown."
-            : SYSTEM_PREMIUM;
+            : normalizedFormat === "spreadsheet"
+              ? "You write spreadsheet template content. Lead every section with an HTML <table> showing real column headers and sample data rows. Include actual formula examples using <code>. Minimal prose — the table structure IS the content. Return only valid JSON with body and optional imagePrompt. No markdown."
+              : SYSTEM_PREMIUM;
 
   const completion = await withRetry429(
     () =>
