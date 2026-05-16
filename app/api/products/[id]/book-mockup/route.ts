@@ -74,17 +74,18 @@ export async function POST(
 
     const openai = new OpenAI({ apiKey });
     const response = await openai.images.generate({
-      model: "dall-e-3",
+      model: "gpt-image-1",
       prompt,
       n: 1,
       size: "1024x1024",
-      quality: "hd",
+      quality: "high",
     });
 
-    const url = (response.data ?? [])[0]?.url;
-    if (!url) {
+    const b64 = (response.data ?? [])[0]?.b64_json;
+    if (!b64) {
       return NextResponse.json({ error: "Image generation returned no data" }, { status: 500 });
     }
+    const url = `data:image/png;base64,${b64}`;
 
     // Save to marketingAssets
     const currentAssets = (product.marketingAssets ?? {}) as Record<string, unknown>;
