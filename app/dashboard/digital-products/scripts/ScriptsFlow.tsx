@@ -232,6 +232,7 @@ export default function ScriptsFlow() {
   const productIdFromUrl = searchParams.get("productId");
   const intentVideoGuide = searchParams.get("intent") === "video-guide";
   const fromVideoFlow = searchParams.get("from") === "video-flow";
+  const contentStyleFromUrl = searchParams.get("contentStyle") ?? (typeof window !== "undefined" ? localStorage.getItem("discovery-content-style") ?? "" : "");
   const [loading, setLoading] = useState(true);
   const [scripts, setScripts] = useState<ScriptData[]>([]);
   const [editModal, setEditModal] = useState<{ scriptId: string; section: SectionType } | null>(null);
@@ -349,6 +350,7 @@ export default function ScriptsFlow() {
               targetDurationSec: scriptVideoLengthSec,
               hookType,
               platform: scriptPlatform,
+              contentStyle: contentStyleFromUrl,
             }),
           });
           const genData = (await genRes.json().catch(() => ({}))) as {
@@ -442,6 +444,7 @@ export default function ScriptsFlow() {
           targetDurationSec: targetSec,
           hookType: opts?.hookType ?? hookType,
           platform: opts?.platform ?? scriptPlatform,
+          contentStyle: contentStyleFromUrl,
         }),
       });
       const genData = (await genRes.json().catch(() => ({}))) as {

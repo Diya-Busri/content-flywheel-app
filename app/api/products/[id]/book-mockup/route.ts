@@ -11,14 +11,10 @@ import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
-import { getSupabaseAdmin } from "@/lib/supabase/server";
-import { put } from "@vercel/blob";
 import OpenAI from "openai";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const BUCKET = "product-images";
 
 function buildMockupPrompt(title: string, niche: string, format: string): string {
   const isWorkbook = /workbook|worksheet|planner/i.test(format);
@@ -78,53 +74,18 @@ export async function POST(
 
     const openai = new OpenAI({ apiKey });
     const response = await openai.images.generate({
-      model: "dall-e-3",
+      model: "gpt-image-1",
       prompt,
       n: 1,
       size: "1024x1024",
-      quality: "hd",
-      style: "natural",
-      response_format: "b64_json",
+      quality: "high",
     });
 
-    const first = (response.data ?? [])[0];
-    const b64 = (first as { b64_json?: string } | undefined)?.b64_json;
+    const b64 = (response.data ?? [])[0]?.b64_json;
     if (!b64) {
       return NextResponse.json({ error: "Image generation returned no data" }, { status: 500 });
     }
-
-    const buffer = Buffer.from(b64, "base64");
-    let url: string;
-
-    // Try Vercel Blob first, then Supabase, then data URL fallback
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
-      try {
-        const blob = await put(
-          `book-mockups/${productId}/mockup-${Date.now()}.png`,
-          buffer,
-          { access: "public", contentType: "image/png", addRandomSuffix: false }
-        );
-        url = blob.url;
-      } catch {
-        url = `data:image/png;base64,${b64}`;
-      }
-    } else {
-      const supabase = getSupabaseAdmin();
-      if (supabase) {
-        const path = `book-mockups/${productId}/mockup.png`;
-        const { error } = await supabase.storage
-          .from(BUCKET)
-          .upload(path, buffer, { contentType: "image/png", upsert: true });
-        if (!error) {
-          const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-          url = urlData.publicUrl;
-        } else {
-          url = `data:image/png;base64,${b64}`;
-        }
-      } else {
-        url = `data:image/png;base64,${b64}`;
-      }
-    }
+    const url = `data:image/png;base64,${b64}`;
 
     // Save to marketingAssets
     const currentAssets = (product.marketingAssets ?? {}) as Record<string, unknown>;

@@ -39,23 +39,32 @@ function getOpenAI(): OpenAI {
 /** Background-only prompt: no title or text in the image. Title is overlaid as HTML/CSS in the UI. */
 function buildPrompt(
   style: ThumbnailStyleId,
-  _productTitle: string,
+  productTitle: string,
   productType: string,
   niche: string
 ): string {
   const styleDesc = STYLE_PROMPTS[style];
   const typeLabel =
     productType?.toLowerCase().includes("workbook")
-      ? "workbook"
+      ? "spiral-bound workbook"
       : productType?.toLowerCase().includes("planner")
-        ? "planner"
+        ? "daily planner"
         : productType?.toLowerCase().includes("journal")
-          ? "journal"
+          ? "hardcover journal"
           : productType?.toLowerCase().includes("spreadsheet")
-            ? "spreadsheet template"
-            : "ebook";
+            ? "spreadsheet template on a laptop screen"
+            : productType?.toLowerCase().includes("checklist")
+              ? "checklist printable"
+              : productType?.toLowerCase().includes("notion")
+                ? "Notion template dashboard on a screen"
+                : "ebook";
 
-  return `Professional digital product mockup: elegant 3D ${typeLabel} mockup on a premium background, theme: ${niche || "digital products"}. ${styleDesc}. Modern, clean, marketplace-ready. High quality, professional lighting, attractive colors. No text, no words, no letters on the image.`;
+  const nicheDesc = niche || "digital products";
+  const titleHint = productTitle
+    ? `representing "${productTitle.slice(0, 50)}"`
+    : "";
+
+  return `Professional digital product mockup: elegant 3D ${typeLabel} mockup on a premium background, themed around ${nicheDesc} ${titleHint}. ${styleDesc}. Modern, clean, marketplace-ready. High quality, professional lighting, attractive colors. The product looks distinct and specific to its type. No text, no words, no letters visible anywhere in the image.`;
 }
 
 export type GenerateThumbnailResult = { url: string; cached: boolean };
@@ -81,30 +90,22 @@ export async function generateThumbnail(
   );
 
   const response = await openai.images.generate({
-    model: "dall-e-3",
+    model: "gpt-image-1",
     prompt,
     n: 1,
-    size: "1792x1024",
-    quality: "standard",
-    style: "natural",
-    response_format: "url",
+    size: "1536x1024",
+    quality: "medium",
   });
 
-  const imageUrl = response.data[0]?.url;
-  if (!imageUrl || typeof imageUrl !== "string") {
-    throw new Error("DALL-E did not return an image URL.");
+  const b64 = response.data[0]?.b64_json;
+  if (!b64) {
+    throw new Error("Image generation returned no data.");
   }
-
-  const imageRes = await fetch(imageUrl);
-  if (!imageRes.ok) {
-    throw new Error(`Failed to fetch generated image: ${imageRes.status}`);
-  }
-  const arrayBuffer = await imageRes.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  const buffer = Buffer.from(b64, "base64");
 
   const supabase = getSupabaseAdmin();
   if (!supabase) {
-    return { url: imageUrl, cached: false };
+    return { url: `data:image/png;base64,${b64}`, cached: false };
   }
 
   const ext = "png";
@@ -131,8 +132,8 @@ export async function generateThumbnail(
   }
 
   if (uploadResult.error) {
-    console.warn("[thumbnail-dalle] Supabase upload failed, using DALL-E URL:", uploadResult.error.message);
-    return { url: imageUrl, cached: false };
+    console.warn("[thumbnail-dalle] Supabase upload failed, using data URL:", uploadResult.error.message);
+    return { url: `data:image/png;base64,${b64}`, cached: false };
   }
 
   const { data: urlData } = supabase.storage

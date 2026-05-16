@@ -32,31 +32,24 @@ export async function generateProductImage(
   const fullPrompt = `Professional digital product illustration: ${prompt}. Context: "${context.productName}" for ${context.niche} audience. Clean, modern, high-quality. No text in image. Suitable for digital PDF.`;
 
   const response = await client.images.generate({
-    model: "dall-e-3",
+    model: "gpt-image-1",
     prompt: fullPrompt,
     n: 1,
     size: "1024x1024",
-    quality: "standard",
-    style: "natural",
-    response_format: "url",
+    quality: "low",
   });
 
-  const url = response.data[0]?.url;
-  if (!url || typeof url !== "string") {
-    throw new Error("DALL-E did not return an image URL.");
+  const b64 = response.data[0]?.b64_json;
+  if (!b64) {
+    throw new Error("Image generation returned no data.");
   }
 
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    console.warn("[generateProductImages] BLOB_READ_WRITE_TOKEN not set. Returning temporary OpenAI URL.");
-    return url;
+    console.warn("[generateProductImages] BLOB_READ_WRITE_TOKEN not set. Returning data URL.");
+    return `data:image/png;base64,${b64}`;
   }
 
-  const imageRes = await fetch(url);
-  if (!imageRes.ok) {
-    throw new Error(`Failed to fetch generated image: ${imageRes.status}`);
-  }
-  const arrayBuffer = await imageRes.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  const buffer = Buffer.from(b64, "base64");
 
   const folder = context.format ? `${context.format}-images` : "product-images";
   const ext = "png";

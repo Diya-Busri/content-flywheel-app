@@ -11,7 +11,12 @@ const PRODUCT_EDITOR_PREVIEW_CSS =
   ".product-editor-preview-layout h3 { margin-top: calc(var(--section-spacing, 2rem) * 0.75); margin-bottom: calc(var(--paragraph-spacing, 1rem) * 0.75); text-align: var(--text-align, left); } " +
   ".product-editor-preview-layout section { margin-bottom: var(--section-spacing, 2rem); } " +
   ".product-editor-preview-layout ul, .product-editor-preview-layout ol { margin-bottom: var(--paragraph-spacing, 1rem); padding-left: 1.5rem; text-align: var(--text-align, left); } " +
-  ".product-editor-preview-layout li { margin-bottom: 0.5rem; }";
+  ".product-editor-preview-layout li { margin-bottom: 0.5rem; } " +
+  ".product-editor-preview-layout table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.875rem; } " +
+  ".product-editor-preview-layout th { background: #f0f4f8; font-weight: 600; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; } " +
+  ".product-editor-preview-layout td { padding: 0.45rem 0.75rem; border: 1px solid #cbd5e1; vertical-align: top; } " +
+  ".product-editor-preview-layout tr:nth-child(even) td { background: #f8fafc; } " +
+  ".product-editor-preview-layout code { background: #f1f5f9; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.85em; font-family: monospace; }";
 
 export function ProductEditorView() {
   const ctx = useContext(ProductEditorContext);

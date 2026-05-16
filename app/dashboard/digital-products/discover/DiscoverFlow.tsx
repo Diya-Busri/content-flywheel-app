@@ -168,7 +168,7 @@ function progressForStep(step: number): number {
 const PRODUCT_FORMATS = [
   { id: "ebook", label: "Ebook/Guide", icon: BookOpen, desc: "PDF with chapters & TOC" },
   { id: "workbook", label: "Workbook", icon: ClipboardList, desc: "Fill-in worksheets & exercises" },
-  { id: "spreadsheet", label: "Spreadsheet Tutorial Guide", icon: Sheet, desc: "Step-by-step instructions to build your spreadsheet in Excel/Google Sheets. Learn formulas, formatting, and advanced features. Downloads as a PDF tutorial." },
+  { id: "spreadsheet", label: "Spreadsheet Template", icon: Sheet, desc: "Ready-to-use spreadsheet layouts with column setups, real formulas, and sample data. Includes setup guide and formula reference. Delivered as a PDF." },
   { id: "notion", label: "Notion Template", icon: FileStack, desc: "Databases & templates" },
   { id: "course", label: "Course Outline", icon: GraduationCap, desc: "Modules & lessons structure" },
   { id: "checklist", label: "Checklist Pack", icon: ListChecks, desc: "Printable action checklists" },
@@ -217,7 +217,7 @@ const DEFAULT_CUSTOMIZATION: CustomizationOptions = {
 const FORMAT_LABELS: Record<string, string> = {
   ebook: "Ebook",
   workbook: "Workbook",
-  spreadsheet: "Spreadsheet Tutorial",
+  spreadsheet: "Spreadsheet Template",
   notion: "Notion Template",
   course: "Course Outline",
   checklist: "Checklist",
@@ -2598,6 +2598,7 @@ export default function DiscoverFlow() {
               <CardContent className="p-5">
                 <p className="font-semibold text-foreground mb-4">Basic</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {productFormat !== "spreadsheet" && (
                   <div>
                     <Label className="text-foreground">Number of chapters/sections</Label>
                     <select
@@ -2614,6 +2615,8 @@ export default function DiscoverFlow() {
                       <p className="text-xs text-muted-foreground mt-1">Planners use 7 sections (intro + 3 planning layouts + disclaimer).</p>
                     )}
                   </div>
+                  )}
+                  {productFormat !== "spreadsheet" && (
                   <div>
                     <Label className="text-foreground">Content length per chapter</Label>
                     <select
@@ -2626,6 +2629,7 @@ export default function DiscoverFlow() {
                       <option value="long">Long (~1200 words)</option>
                     </select>
                   </div>
+                  )}
                   <div>
                     <Label className="text-foreground">Content style</Label>
                     <select
@@ -2823,7 +2827,7 @@ export default function DiscoverFlow() {
                   {/* Spreadsheet */}
                   {productFormat === "spreadsheet" && (
                     <div className="space-y-3">
-                      <p className="font-medium text-foreground">Spreadsheet Tutorial</p>
+                      <p className="font-medium text-foreground">Spreadsheet Template</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <Label className="text-foreground text-sm">Number of tutorials</Label>

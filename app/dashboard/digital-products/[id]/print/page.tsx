@@ -264,6 +264,11 @@ export default function ProductPrintPage() {
             .print-content { padding: 24px; min-height: 100%; }
             .product-editor-preview-layout p { margin-bottom: ${layout.paragraphSpacing ?? 1}rem; line-height: ${layout.lineHeight ?? 1.6}; text-align: ${layout.alignment ?? "left"}; }
             .product-editor-preview-layout h2, .product-editor-preview-layout h3 { margin-top: ${(layout.sectionSpacing ?? 2) * 0.75}rem; margin-bottom: ${layout.paragraphSpacing ?? 1}rem; }
+            .product-editor-preview-layout table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.875rem; }
+            .product-editor-preview-layout th { background: #f0f4f8; font-weight: 600; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; }
+            .product-editor-preview-layout td { padding: 0.45rem 0.75rem; border: 1px solid #cbd5e1; vertical-align: top; }
+            .product-editor-preview-layout tr:nth-child(even) td { background: #f8fafc; }
+            .product-editor-preview-layout code { background: #f1f5f9; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.85em; font-family: monospace; }
             /* Print: no scroll – each page is one sheet */
             @media print {
               .print-view-root { overflow: visible !important; height: auto !important; }
