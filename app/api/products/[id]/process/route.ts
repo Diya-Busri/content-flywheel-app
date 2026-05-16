@@ -188,15 +188,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         bodiesAndPrompts.push({ bodyHtml, imagePrompt });
       }
 
-      const imageUrls = await Promise.all(
-        batch.map((section) => {
-          const prompt = `Professional illustration of ${section.title}, clean minimalist style, suitable for a digital product`;
-          return generateProductImage(prompt, imageContext).catch((err) => {
-            console.warn("[products/process] Image gen failed for", section.id, err);
-            return undefined;
-          });
-        })
-      );
+      // Spreadsheets use tables/formulas as content — decorative images add no value and slow generation
+      const imageUrls = format === "spreadsheet"
+        ? batch.map(() => undefined)
+        : await Promise.all(
+          batch.map((section) => {
+            const prompt = `Professional illustration of ${section.title}, clean minimalist style, suitable for a digital product`;
+            return generateProductImage(prompt, imageContext).catch((err) => {
+              console.warn("[products/process] Image gen failed for", section.id, err);
+              return undefined;
+            });
+          })
+        );
 
       for (let j = 0; j < batch.length; j++) {
         const imageUrl = imageUrls[j] ?? undefined;

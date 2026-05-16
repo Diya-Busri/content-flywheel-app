@@ -551,6 +551,8 @@ export async function generateSingleSectionBody(
 
   const isSpreadsheetSection =
     normalizedFormat === "spreadsheet" && !isFixedSection;
+  const spreadsheetDifficulty = customizationOptions?.spreadsheet?.difficulty ?? "beginner";
+  const spreadsheetIncludePractice = customizationOptions?.spreadsheet?.includePracticeExercises ?? true;
 
   // EBOOK/GUIDE: 20-80 pages, teaching tone, big headers, callout boxes, step-by-step, case study, summary, CTA
   const ebookGuideInstruction = isEbookGuideMainSection
@@ -583,7 +585,7 @@ export async function generateSingleSectionBody(
 
   // SPREADSHEET: Show actual table structure with column headers, sample rows, and real formulas.
   const spreadsheetInstruction = isSpreadsheetSection
-    ? `This is a SPREADSHEET TEMPLATE section. Output the actual spreadsheet structure for this tab/feature. Lead with a <table> showing real column headers (e.g. Date, Category, Amount, Notes) and 3-5 sample data rows with realistic values. After the table, briefly explain what each column does in 1-2 sentences each. Include at least 2 real formula examples relevant to this tab (e.g. =SUM(C2:C100), =IF(B2="Food",C2,0), =COUNTIF(B:B,"Income")). Use <code> for formulas. Keep prose minimal — the table and formulas ARE the content. 300-500 words of HTML.`
+    ? `This is a SPREADSHEET TEMPLATE section (difficulty: ${spreadsheetDifficulty}). Output the actual spreadsheet structure for this tab/feature. Lead with a <table> showing real column headers (e.g. Date, Category, Amount, Notes) and 3-5 sample data rows with realistic values. After the table, briefly explain what each column does in 1-2 sentences each. Include at least 2 real formula examples relevant to this tab — ${spreadsheetDifficulty === "beginner" ? "keep formulas simple: =SUM(), =AVERAGE(), =COUNT()" : spreadsheetDifficulty === "intermediate" ? "use mid-level formulas: =IF(), =COUNTIF(), =VLOOKUP()" : "use advanced formulas: =ARRAYFORMULA(), =QUERY(), =INDEX(MATCH())"} — use <code> for formulas. Keep prose minimal — the table and formulas ARE the content.${spreadsheetIncludePractice ? " End with a short 'Practice Exercise' box: one task the reader can do using this tab." : ""} 300-500 words of HTML.`
     : "";
 
   // JOURNAL: Date field, 2-3 reflection prompts, writing space, affirmation. Aesthetic, whitespace, mindset tone.
