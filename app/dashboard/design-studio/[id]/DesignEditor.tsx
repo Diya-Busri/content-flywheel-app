@@ -758,18 +758,22 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign }: 
       <div>
         <p className={sec}>Align to canvas</p>
         <div className="grid grid-cols-3 gap-1.5">
-          {([
-            ["left", <MoveLeft className="w-3.5 h-3.5" />, "Left"],
-            ["center-h", <AlignHorizontalJustifyCenter className="w-3.5 h-3.5" />, "Center"],
-            ["right", <MoveRight className="w-3.5 h-3.5" />, "Right"],
-            ["top", <MoveUp className="w-3.5 h-3.5" />, "Top"],
-            ["center-v", <AlignVerticalJustifyCenter className="w-3.5 h-3.5" />, "Middle"],
-            ["bottom", <MoveDown className="w-3.5 h-3.5" />, "Bottom"],
-          ] as const).map(([dir, icon, label]) => (
-            <Button key={dir} size="sm" variant="outline" className={`h-7 text-[10px] flex items-center gap-1 ${isDark ? "border-[#2A2A2A] text-gray-300" : ""}`} onClick={() => onAlign(dir as never)}>
-              {icon}{label}
-            </Button>
-          ))}
+          {(["left","center-h","right","top","center-v","bottom"] as const).map((dir) => {
+            const icons: Record<string, React.ReactNode> = {
+              "left": <MoveLeft className="w-3.5 h-3.5" />,
+              "center-h": <AlignHorizontalJustifyCenter className="w-3.5 h-3.5" />,
+              "right": <MoveRight className="w-3.5 h-3.5" />,
+              "top": <MoveUp className="w-3.5 h-3.5" />,
+              "center-v": <AlignVerticalJustifyCenter className="w-3.5 h-3.5" />,
+              "bottom": <MoveDown className="w-3.5 h-3.5" />,
+            };
+            const labels: Record<string, string> = { "left":"Left","center-h":"Center","right":"Right","top":"Top","center-v":"Middle","bottom":"Bottom" };
+            return (
+              <Button key={dir} size="sm" variant="outline" className={`h-7 text-[10px] flex items-center gap-1 ${isDark ? "border-[#2A2A2A] text-gray-300" : ""}`} onClick={() => onAlign(dir)}>
+                {icons[dir]}{labels[dir]}
+              </Button>
+            );
+          })}
         </div>
       </div>
 
