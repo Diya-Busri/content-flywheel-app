@@ -16,13 +16,18 @@ const BUCKET = "timeline-media";
 const SIZE_16_9 = "1792x1024" as const;
 const SIZE_SQUARE = "1024x1024" as const;
 
+const PEOPLE_KEYWORDS = /\bperson|people|someone|woman|man|girl|boy|human|face|portrait\b/i;
+
 /**
- * Enhance prompt for DALL-E: append default style unless user specified a style.
- * Script-sourced prompts often already include "photorealistic, b-roll" — preserve those.
+ * Enhance prompt for DALL-E: append a suitable style suffix unless user specified one.
+ * Avoid forcing "photorealistic" on people prompts — that raises content policy flags.
  */
 function enhancePrompt(userPrompt: string): string {
   const trimmed = userPrompt.trim();
   if (STYLE_KEYWORDS.test(trimmed)) return trimmed;
+  if (PEOPLE_KEYWORDS.test(trimmed)) {
+    return `${trimmed}. Vibrant digital illustration, modern aesthetic style, professional quality.`;
+  }
   return `${trimmed}. Photorealistic, professional b-roll style, suitable for video.`;
 }
 
