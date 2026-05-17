@@ -5190,7 +5190,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   <Sparkles className="w-3.5 h-3.5" /> AI
                 </TabsTrigger>
               </TabsList>
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 min-h-0 overflow-y-auto">
               <TabsContent value="content" className="mt-0 p-4 space-y-3">
                 <BrandVoiceIndicator />
                 <ReadyToSellChecklist

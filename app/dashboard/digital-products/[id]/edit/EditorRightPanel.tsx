@@ -14,7 +14,7 @@ export type EditorRightPanelProps = {
 export function EditorRightPanel({ children, isDark }: EditorRightPanelProps) {
   return (
     <aside
-      className={`w-[380px] shrink-0 border-l flex flex-col overflow-y-auto ${
+      className={`w-[380px] shrink-0 border-l flex flex-col overflow-hidden ${
         isDark ? "border-[#2A2A2A] bg-[#1A1A1A]" : "border-gray-200 bg-white"
       }`}
     >
