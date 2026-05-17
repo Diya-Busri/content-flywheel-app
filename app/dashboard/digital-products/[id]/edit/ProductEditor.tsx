@@ -104,7 +104,7 @@ import { SalesPageCard } from "@/components/product-editor/SalesPageCard";
 import { ThumbnailVariantPicker } from "@/components/product-editor/ThumbnailVariantPicker";
 import { RevenueTracker } from "@/components/product-editor/RevenueTracker";
 
-type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string; imageHeightPx?: number; imageX?: number; imageY?: number };
+type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string; imageHeightPx?: number; imageWidthPx?: number; imageX?: number; imageY?: number; imageBgRemoved?: boolean };
 
 export type TextStyles = Record<string, string>;
 
@@ -1084,7 +1084,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [selectedGeneratePageIds, setSelectedGeneratePageIds] = useState<Set<string> | null>(null);
   const [showAlignGuides, setShowAlignGuides] = useState(false);
   const [resizingImageId, setResizingImageId] = useState<string | null>(null);
-  const resizeStartRef = useRef<{ y: number; height: number } | null>(null);
+  const resizeStartRef = useRef<{ y: number; height: number; x?: number; width?: number } | null>(null);
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
   const [showAutoDesignChoiceDialog, setShowAutoDesignChoiceDialog] = useState(false);
   const [brandProfile, setBrandProfile] = useState<{
@@ -3780,8 +3780,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
     const onMove = (e: MouseEvent) => {
       if (!resizeStartRef.current) return;
       const dy = e.clientY - resizeStartRef.current.y;
-      const newHeight = Math.max(120, resizeStartRef.current.height + dy);
-      setSections((prev) => prev.map((s) => s.id === resizingImageId ? { ...s, imageHeightPx: newHeight } : s));
+      const newHeight = Math.max(80, resizeStartRef.current.height + dy);
+      if (resizeStartRef.current.x !== undefined && resizeStartRef.current.width !== undefined) {
+        // Corner resize: update both width and height
+        const dx = e.clientX - resizeStartRef.current.x;
+        const newWidth = Math.max(80, resizeStartRef.current.width + dx);
+        setSections((prev) => prev.map((s) => s.id === resizingImageId ? { ...s, imageHeightPx: newHeight, imageWidthPx: newWidth } : s));
+      } else {
+        setSections((prev) => prev.map((s) => s.id === resizingImageId ? { ...s, imageHeightPx: newHeight } : s));
+      }
     };
     const onUp = () => {
       setResizingImageId(null);
@@ -5193,9 +5200,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     const section = sections[currentPageIndex - 1];
                     if (!section?.imageUrl || section.imageX === undefined) return null;
                     const imgHeight = section.imageHeightPx ?? Math.round(effectiveCanvasHeight * 0.8);
+                    const imgWidth = section.imageWidthPx ?? CANVAS_WIDTH;
                     return (
                       <div
-                        style={{ position: "absolute", left: section.imageX, top: section.imageY ?? 0, width: CANVAS_WIDTH, height: imgHeight, cursor: "move", zIndex: 30, userSelect: "none" }}
+                        style={{ position: "absolute", left: section.imageX, top: section.imageY ?? 0, width: imgWidth, height: imgHeight, cursor: "move", zIndex: 30, userSelect: "none" }}
                         className="group"
                         onMouseDown={(e) => {
                           if ((e.target as HTMLElement).closest("[data-resize-handle]")) return;
@@ -5208,17 +5216,26 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         {regeneratingSectionImageId === section.id ? (
                           <div className="w-full h-full flex items-center justify-center bg-gray-100"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
                         ) : (
-                          <img src={section.imageUrl} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff", display: "block", userSelect: "none" }} />
+                          <img src={section.imageUrl} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "contain", background: section.imageBgRemoved ? "transparent" : "transparent", display: "block", userSelect: "none", mixBlendMode: section.imageBgRemoved ? "screen" : "normal" }} />
                         )}
-                        {/* Resize handle */}
-                        <div data-resize-handle className="absolute bottom-0 left-0 right-0 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-s-resize"
-                          style={{ background: "rgba(0,0,0,0.18)", zIndex: 31 }}
+                        {/* Bottom-centre height resize handle */}
+                        <div data-resize-handle className="absolute bottom-0 left-8 right-8 h-3 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-s-resize" style={{ zIndex: 31 }}
                           onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeStartRef.current = { y: e.clientY, height: imgHeight }; setResizingImageId(section.id); }}>
-                          <div className="w-8 h-1 rounded-full bg-white/70" />
+                          <div className="w-8 h-1 rounded-full bg-black/30" />
+                        </div>
+                        {/* Bottom-right corner resize handle */}
+                        <div data-resize-handle className="absolute bottom-0 right-0 w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity cursor-se-resize flex items-end justify-end" style={{ zIndex: 32 }}
+                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeStartRef.current = { y: e.clientY, height: imgHeight, x: e.clientX, width: imgWidth }; setResizingImageId(section.id); }}>
+                          <div className="w-3 h-3 border-r-2 border-b-2 border-black/50 rounded-br-sm" />
                         </div>
                         {/* Action buttons */}
-                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 32 }}>
-                          <button onClick={() => setSections((prev) => { const next = prev.map((s) => s.id === section.id ? { ...s, imageX: undefined, imageY: undefined } : s); saveToServer({ content: { sections: next } }); return next; })}
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 33 }}>
+                          <button
+                            onClick={() => setSections((prev) => { const next = prev.map((s) => s.id === section.id ? { ...s, imageBgRemoved: !s.imageBgRemoved } : s); saveToServer({ content: { sections: next } }); return next; })}
+                            className={`p-1.5 rounded text-[10px] font-medium px-2 ${section.imageBgRemoved ? "bg-orange-500 text-white" : "bg-black/60 hover:bg-black/80 text-white"}`}
+                            title={section.imageBgRemoved ? "Restore background" : "Remove background"}
+                          >{section.imageBgRemoved ? "BG: Off" : "Remove BG"}</button>
+                          <button onClick={() => setSections((prev) => { const next = prev.map((s) => s.id === section.id ? { ...s, imageX: undefined, imageY: undefined, imageWidthPx: undefined } : s); saveToServer({ content: { sections: next } }); return next; })}
                             className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white text-[10px] font-medium px-2" title="Reset position">Reset</button>
                           <button onClick={() => handleRegenerateSectionImage(section.id)} disabled={!!regeneratingSectionImageId}
                             className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white" title="Regenerate"><RefreshCw className="w-3.5 h-3.5" /></button>
