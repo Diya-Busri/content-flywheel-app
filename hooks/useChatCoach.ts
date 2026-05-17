@@ -4,8 +4,18 @@ import { useState, useCallback, useEffect, useRef } from "react";
 
 const STORAGE_KEY = "ai-coach-history";
 
-const IMAGE_ACTION_WORDS = /\b(create|make|generate|draw|show\s+me|design|build|produce|give\s+me|i\s+want\s+a|can\s+you\s+make)\b/i;
+const IMAGE_ACTION_WORDS = /\b(create|make|generate|draw|show\s+me|design|build|produce|give\s+me|i\s+want\s+a|can\s+you\s+make|can\s+u\s+make|can\s+u\s+create|can\s+u\s+generate)\b/i;
 const IMAGE_SUBJECT_WORDS = /\b(image|picture|photo|illustration|design|graphic|poster|thumbnail|banner|visual|mockup|logo|flyer|infographic|artwork|cover|background|wallpaper|header|hero|icon|sticker|meme|frame|slide|creative|ad|reel\s+cover|story\s+post|story\s+background|post\s+background)s?\b/i;
+
+// Strip conversational prefix ("can u create me some as aesthetic images of") → extract the actual description
+const IMAGE_PREFIX_RE = /^(?:can\s+(?:u|you)\s+)?(?:create|make|generate|draw|design|build|produce|give\s+me|show\s+me|i\s+want\s+a|can\s+you\s+make)\s+(?:me\s+)?(?:some\s+)?(?:as\s+)?(?:(?:a|an|some|few|the)\s+)?(?:aesthetic\s+)?(?:image|picture|photo|illustration|design|graphic|poster|thumbnail|banner|visual|mockup|logo|flyer|infographic|artwork|cover|background|icon|sticker|meme|frame|slide|creative|ad)s?\s+(?:of\s+|for\s+|showing\s+)?/i;
+
+/** Strip conversational preamble from an image request to get a clean DALL-E prompt. */
+export function extractImagePrompt(text: string): string {
+  const stripped = text.trim().replace(IMAGE_PREFIX_RE, "").trim();
+  // If we stripped too much and nothing meaningful remains, use full text
+  return stripped.length > 5 ? stripped : text.trim();
+}
 
 /** Detect if the user message is requesting an image or design. */
 export function isImageRequest(text: string): boolean {
@@ -220,14 +230,14 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
       const isImage = isImageRequest(trimmed);
       if (isImage) {
         try {
-          // Enrich the prompt with any attached video transcripts or image context
-          let imagePrompt = trimmed;
+          // Extract the actual description from conversational preamble ("can u create me some as aesthetic images of X" → "X")
+          let imagePrompt = extractImagePrompt(trimmed);
           if (attachments?.attachedVideos?.length) {
             const videoContext = attachments.attachedVideos
               .filter((v) => v.transcript)
               .map((v) => `Video "${v.name}" transcript: ${v.transcript}`)
               .join("\n\n");
-            if (videoContext) imagePrompt = `${trimmed}\n\nContext:\n${videoContext}`;
+            if (videoContext) imagePrompt = `${imagePrompt}\n\nContext:\n${videoContext}`;
           }
           const res = await fetch("/api/chat/coach/generate-image", {
             method: "POST",
@@ -245,21 +255,23 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
               return next;
             });
           } else {
+            const reason = data.error ? `\n\nReason: ${data.error}` : "";
             setMessages((prev) => {
               const next = [...prev];
               const last = next[next.length - 1];
               if (last?.role === "assistant") {
-                next[next.length - 1] = { ...last, content: "Couldn't generate that one, try describing it differently." };
+                next[next.length - 1] = { ...last, content: `Couldn't generate that one — try rephrasing the description.${reason}` };
               }
               return next;
             });
           }
-        } catch {
+        } catch (err) {
+          const reason = err instanceof Error ? `\n\nReason: ${err.message}` : "";
           setMessages((prev) => {
             const next = [...prev];
             const last = next[next.length - 1];
             if (last?.role === "assistant") {
-              next[next.length - 1] = { ...last, content: "Couldn't generate that one, try describing it differently." };
+              next[next.length - 1] = { ...last, content: `Couldn't generate that one — try rephrasing the description.${reason}` };
             }
             return next;
           });
