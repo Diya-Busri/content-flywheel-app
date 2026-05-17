@@ -9,7 +9,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
-import { ChevronLeft, Check, Loader2, Sparkles, RefreshCw, Eye, Video, X } from "lucide-react";
+import { ChevronLeft, Check, Loader2, Sparkles, RefreshCw, Eye, Video, X, ImageIcon } from "lucide-react";
 
 export type EditorToolbarProps = {
   productTitle: string;
@@ -26,6 +26,9 @@ export type EditorToolbarProps = {
   showCreatedBanner: boolean;
   onGenerateVideos: () => void;
   onDismissCreatedBanner: () => void;
+  onGenerateImages: () => void;
+  generateImagesLoading: boolean;
+  generateImagesProgress?: { done: number; total: number } | null;
 };
 
 export function EditorToolbar({
@@ -43,6 +46,9 @@ export function EditorToolbar({
   showCreatedBanner,
   onGenerateVideos,
   onDismissCreatedBanner,
+  onGenerateImages,
+  generateImagesLoading,
+  generateImagesProgress,
 }: EditorToolbarProps) {
   return (
     <>
@@ -140,20 +146,54 @@ export function EditorToolbar({
                   Apply a new AI-generated design (colours, fonts, cover image)
                 </TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={
+                      isDark
+                        ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white"
+                        : "border-gray-200 text-gray-700 hover:bg-gray-100"
+                    }
+                    onClick={onGenerateImages}
+                    disabled={generateImagesLoading || autoDesignLoading || regenerateDesignLoading}
+                  >
+                    {generateImagesLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {generateImagesProgress && (
+                          <span className="ml-1.5 text-xs">{generateImagesProgress.done}/{generateImagesProgress.total}</span>
+                        )}
+                      </>
+                    ) : (
+                      <ImageIcon className="w-4 h-4" />
+                    )}
+                    <span className="hidden sm:inline ml-1.5">
+                      {generateImagesLoading ? "Generating…" : "Generate Images"}
+                    </span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Auto-generate an AI image for each content page
+                </TooltipContent>
+              </Tooltip>
             </TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-gray-400 hover:text-white hover:bg-[#2A2A2A]"
-                  onClick={onPreview}
-                >
-                  <Eye className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Preview</TooltipContent>
-            </Tooltip>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-gray-400 hover:text-white hover:bg-[#2A2A2A]"
+                    onClick={onPreview}
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Preview</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <Button
               size="sm"
               className="bg-orange-500 hover:bg-orange-600 text-white gap-2"

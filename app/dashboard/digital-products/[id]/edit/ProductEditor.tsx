@@ -1041,6 +1041,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [addImageTab, setAddImageTab] = useState<"stock" | "ai" | "upload">("stock");
   const [autoDesignLoading, setAutoDesignLoading] = useState(false);
   const [regenerateDesignLoading, setRegenerateDesignLoading] = useState(false);
+  const [generateImagesLoading, setGenerateImagesLoading] = useState(false);
+  const [generateImagesProgress, setGenerateImagesProgress] = useState<{ done: number; total: number } | null>(null);
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
   const [showAutoDesignChoiceDialog, setShowAutoDesignChoiceDialog] = useState(false);
   const [brandProfile, setBrandProfile] = useState<{
@@ -3616,6 +3618,35 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
   };
 
+  const handleGenerateImages = useCallback(async () => {
+    const contentSections = sections.filter((s) => s.id !== "cover" && s.id !== "back");
+    if (!contentSections.length) return;
+    setGenerateImagesLoading(true);
+    setGenerateImagesProgress({ done: 0, total: contentSections.length });
+    for (let i = 0; i < contentSections.length; i++) {
+      const section = contentSections[i];
+      try {
+        const prompt = `${section.title}${product?.niche ? ` — ${product.niche}` : ""} digital product illustration`;
+        const res = await fetch("/api/chat/coach/generate-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, aspectRatio: "1:1" }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.url) {
+          setSections((prev) =>
+            prev.map((s) => (s.id === section.id ? { ...s, imageUrl: data.url } : s))
+          );
+        }
+      } catch {
+        // continue to next section on error
+      }
+      setGenerateImagesProgress({ done: i + 1, total: contentSections.length });
+    }
+    setGenerateImagesLoading(false);
+    setGenerateImagesProgress(null);
+  }, [sections, product]);
+
   const handleGenerateVideos = useCallback(() => {
     const title = product?.title ?? "";
     const description = (product?.marketingAssets as { productDescription?: string } | undefined)?.productDescription ?? "";
@@ -4349,6 +4380,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
         showCreatedBanner={showCreatedBanner}
         onGenerateVideos={handleGenerateVideos}
         onDismissCreatedBanner={() => setShowCreatedBanner(false)}
+        onGenerateImages={handleGenerateImages}
+        generateImagesLoading={generateImagesLoading}
+        generateImagesProgress={generateImagesProgress}
       />
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
