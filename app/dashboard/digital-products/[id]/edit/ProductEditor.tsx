@@ -86,6 +86,7 @@ import {
 } from "@/components/ui/select";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 import { EditorToolbar } from "./EditorToolbar";
+import { EditorAIPanel } from "./EditorAIPanel";
 import { CoverPageEditor } from "./CoverPageEditor";
 import { BackCoverEditor } from "./BackCoverEditor";
 import { ContentPageEditor } from "./ContentPageEditor";
@@ -969,6 +970,17 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
   );
 });
 
+const IMAGE_STYLES: { id: string; label: string; emoji: string; suffix: string }[] = [
+  { id: "illustration", label: "Illustration", emoji: "🎨", suffix: "vibrant digital illustration, modern flat design style" },
+  { id: "realistic", label: "Realistic", emoji: "📷", suffix: "photorealistic, high quality, professional photography style" },
+  { id: "cartoon", label: "Cartoon", emoji: "🖼️", suffix: "fun cartoon style, bold outlines, bright colours" },
+  { id: "anime", label: "Anime", emoji: "⛩️", suffix: "anime style illustration, clean linework, vibrant colours" },
+  { id: "3d", label: "3D Render", emoji: "🧊", suffix: "3D render, glossy materials, soft studio lighting, modern" },
+  { id: "minimalist", label: "Minimalist", emoji: "◻️", suffix: "minimalist design, clean lines, simple shapes, white background" },
+  { id: "watercolor", label: "Watercolour", emoji: "💧", suffix: "watercolour painting, soft washes, artistic style" },
+  { id: "vintage", label: "Vintage", emoji: "📜", suffix: "vintage retro style, muted tones, classic illustration" },
+];
+
 export default function ProductEditor({ productId }: { productId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1043,6 +1055,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [regenerateDesignLoading, setRegenerateDesignLoading] = useState(false);
   const [generateImagesLoading, setGenerateImagesLoading] = useState(false);
   const [generateImagesProgress, setGenerateImagesProgress] = useState<{ done: number; total: number } | null>(null);
+  const [regeneratingSectionImageId, setRegeneratingSectionImageId] = useState<string | null>(null);
+  const [showImageStyleDialog, setShowImageStyleDialog] = useState(false);
+  const [selectedImageStyle, setSelectedImageStyle] = useState("illustration");
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
   const [showAutoDesignChoiceDialog, setShowAutoDesignChoiceDialog] = useState(false);
   const [brandProfile, setBrandProfile] = useState<{
@@ -1399,6 +1414,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   useEffect(() => {
     if (searchParams.get("created") === "1") setShowCreatedBanner(true);
+    if (searchParams.get("ai") === "1") setActiveEditorTab("ai");
   }, [searchParams]);
 
   const totalPages = Math.max(2, sections.length + 2);
@@ -3618,15 +3634,23 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
   };
 
-  const handleGenerateImages = useCallback(async () => {
+  const buildImagePrompt = useCallback((title: string, style: string) => {
+    const styleEntry = IMAGE_STYLES.find((s) => s.id === style) ?? IMAGE_STYLES[0];
+    const niche = product?.niche ? ` — ${product.niche}` : "";
+    return `${title}${niche}. ${styleEntry.suffix}.`;
+  }, [product]);
+
+  const handleGenerateImages = useCallback(async (style: string) => {
     const contentSections = sections.filter((s) => s.id !== "cover" && s.id !== "back");
     if (!contentSections.length) return;
+    setShowImageStyleDialog(false);
     setGenerateImagesLoading(true);
     setGenerateImagesProgress({ done: 0, total: contentSections.length });
+    let updatedSections = [...sections];
     for (let i = 0; i < contentSections.length; i++) {
       const section = contentSections[i];
       try {
-        const prompt = `${section.title}${product?.niche ? ` — ${product.niche}` : ""} digital product illustration`;
+        const prompt = buildImagePrompt(section.title, style);
         const res = await fetch("/api/chat/coach/generate-image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -3634,9 +3658,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
         });
         const data = await res.json().catch(() => ({}));
         if (data.url) {
-          setSections((prev) =>
-            prev.map((s) => (s.id === section.id ? { ...s, imageUrl: data.url } : s))
-          );
+          updatedSections = updatedSections.map((s) => (s.id === section.id ? { ...s, imageUrl: data.url } : s));
+          setSections(updatedSections);
+          saveToServer({ content: { sections: updatedSections } });
         }
       } catch {
         // continue to next section on error
@@ -3645,7 +3669,36 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
     setGenerateImagesLoading(false);
     setGenerateImagesProgress(null);
-  }, [sections, product]);
+  }, [sections, buildImagePrompt, saveToServer]);
+
+  const handleRegenerateSectionImage = useCallback(async (sectionId: string) => {
+    const section = sections.find((s) => s.id === sectionId);
+    if (!section) return;
+    setRegeneratingSectionImageId(sectionId);
+    try {
+      const prompt = buildImagePrompt(section.title, selectedImageStyle);
+      const res = await fetch("/api/chat/coach/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, aspectRatio: "1:1" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.url) {
+        const updatedSections = sections.map((s) => (s.id === sectionId ? { ...s, imageUrl: data.url } : s));
+        setSections(updatedSections);
+        saveToServer({ content: { sections: updatedSections } });
+      }
+    } catch {
+      // ignore
+    }
+    setRegeneratingSectionImageId(null);
+  }, [sections, selectedImageStyle, buildImagePrompt, saveToServer]);
+
+  const handleRemoveSectionImage = useCallback((sectionId: string) => {
+    const updatedSections = sections.map((s) => (s.id === sectionId ? { ...s, imageUrl: undefined } : s));
+    setSections(updatedSections);
+    saveToServer({ content: { sections: updatedSections } });
+  }, [sections, saveToServer]);
 
   const handleGenerateVideos = useCallback(() => {
     const title = product?.title ?? "";
@@ -4060,6 +4113,41 @@ export default function ProductEditor({ productId }: { productId: string }) {
         </div>
       )}
 
+      {/* Image style picker */}
+      <Dialog open={showImageStyleDialog} onOpenChange={setShowImageStyleDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Choose Image Style</DialogTitle>
+            <DialogDescription>Pick a style for your AI-generated section images.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2 py-2">
+            {IMAGE_STYLES.map((style) => (
+              <button
+                key={style.id}
+                onClick={() => setSelectedImageStyle(style.id)}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                  selectedImageStyle === style.id
+                    ? "border-orange-500 bg-orange-50 text-orange-700 font-medium"
+                    : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-700"
+                }`}
+              >
+                <span className="text-base">{style.emoji}</span>
+                {style.label}
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowImageStyleDialog(false)}>Cancel</Button>
+            <Button
+              className="bg-orange-500 hover:bg-orange-600 text-white"
+              onClick={() => handleGenerateImages(selectedImageStyle)}
+            >
+              Generate Images
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Brand profile first-time setup */}
       <Dialog open={showBrandSetupDialog} onOpenChange={setShowBrandSetupDialog}>
         <DialogContent className="max-w-md">
@@ -4380,7 +4468,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         showCreatedBanner={showCreatedBanner}
         onGenerateVideos={handleGenerateVideos}
         onDismissCreatedBanner={() => setShowCreatedBanner(false)}
-        onGenerateImages={handleGenerateImages}
+        onGenerateImages={() => setShowImageStyleDialog(true)}
         generateImagesLoading={generateImagesLoading}
         generateImagesProgress={generateImagesProgress}
       />
@@ -4619,17 +4707,36 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                 {section.title}
                               </h3>
                               {section.imageUrl?.trim() ? (
-                                <img
-                                  src={section.imageUrl}
-                                  alt=""
-                                  style={{
-                                    width: "100%",
-                                    maxHeight: "300px",
-                                    objectFit: "cover",
-                                    borderRadius: "8px",
-                                    marginBottom: "16px",
-                                  }}
-                                />
+                                <div className="group relative mb-4">
+                                  {regeneratingSectionImageId === section.id ? (
+                                    <div className="w-full h-40 flex items-center justify-center rounded-lg bg-gray-100">
+                                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                                    </div>
+                                  ) : (
+                                    <img
+                                      src={section.imageUrl}
+                                      alt=""
+                                      style={{ width: "100%", maxHeight: "300px", objectFit: "cover", borderRadius: "8px" }}
+                                    />
+                                  )}
+                                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => handleRegenerateSectionImage(section.id)}
+                                      disabled={!!regeneratingSectionImageId}
+                                      className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white"
+                                      title="Regenerate image"
+                                    >
+                                      <RefreshCw className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleRemoveSectionImage(section.id)}
+                                      className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white"
+                                      title="Remove image"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
                               ) : null}
                               <div
                                 data-section-id={section.id}
@@ -4971,7 +5078,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </div>
             )}
             <Tabs value={activeEditorTab} onValueChange={setActiveEditorTab} className="w-full flex flex-col flex-1 min-h-0">
-              <TabsList className="bg-gray-50 border-b border-gray-200 w-full grid grid-cols-7 rounded-none h-11 px-0">
+              <TabsList className="bg-gray-50 border-b border-gray-200 w-full grid grid-cols-8 rounded-none h-11 px-0">
                 <TabsTrigger value="content" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
                   <BookOpen className="w-3.5 h-3.5" /> Content
                 </TabsTrigger>
@@ -4991,7 +5098,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   <FileOutput className="w-3.5 h-3.5" /> Export
                 </TabsTrigger>
                 <TabsTrigger value="marketing" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
-                  <Megaphone className="w-3.5 h-3.5" /> Marketing
+                  <Megaphone className="w-3.5 h-3.5" /> Mktg
+                </TabsTrigger>
+                <TabsTrigger value="ai" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
+                  <Sparkles className="w-3.5 h-3.5" /> AI
                 </TabsTrigger>
               </TabsList>
               <div className="flex-1 overflow-y-auto">
@@ -6681,6 +6791,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     dismissible={true}
                   />
                 )}
+              </TabsContent>
+              <TabsContent value="ai" className="mt-0 h-full flex flex-col min-h-0">
+                <EditorAIPanel
+                  productId={product.id}
+                  sections={sections}
+                  onSectionsChange={(updated) => {
+                    setSections(updated);
+                    saveToServer({ content: { sections: updated } });
+                  }}
+                />
               </TabsContent>
               </div>
             </Tabs>
