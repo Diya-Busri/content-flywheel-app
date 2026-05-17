@@ -55,6 +55,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", emoji: "🤖", featureKey: "ai_coach" },
         { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true, featureKey: "template_studio" },
         { href: "/dashboard/video-timeline", icon: <Film size={18} />, label: "Video Timeline", emoji: "🎬", featureKey: "video_timeline" },
+        { href: "/dashboard/design-studio", icon: <Palette size={18} />, label: "Design Studio", emoji: "🎨", activeWhenStartsWith: true, featureKey: "design_studio" },
         { href: "/dashboard/video-credits", icon: <Film size={18} />, label: "Video Credits", emoji: "🎥", featureKey: "video_credits" },
         { href: "/dashboard/content-studio/youtube-upload", icon: <Youtube size={18} />, label: "Upload to YouTube", emoji: "▶️", activeWhenStartsWith: true, featureKey: "youtube_upload" },
       ],

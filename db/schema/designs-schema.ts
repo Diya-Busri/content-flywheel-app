@@ -1,0 +1,52 @@
+import { pgTable, text, timestamp, jsonb, uuid } from "drizzle-orm/pg-core";
+
+export type DesignElement = {
+  id: string;
+  type: "text" | "image" | "shape";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  opacity?: number;
+  zIndex?: number;
+  // text
+  content?: string;
+  fontSize?: number;
+  fontFamily?: string;
+  color?: string;
+  fontWeight?: string;
+  fontStyle?: string;
+  textAlign?: string;
+  lineHeight?: number;
+  // image
+  imageUrl?: string;
+  objectFit?: string;
+  // shape
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  borderRadius?: number;
+};
+
+export type DesignData = {
+  width: number;
+  height: number;
+  background: string;
+  elements: DesignElement[];
+  presetName?: string;
+};
+
+export const designsTable = pgTable("designs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull(),
+  title: text("title").notNull().default("Untitled Design"),
+  data: jsonb("data").$type<DesignData>().notNull(),
+  previewUrl: text("preview_url"),
+  deletedAt: timestamp("deleted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type InsertDesign = typeof designsTable.$inferInsert;
+export type SelectDesign = typeof designsTable.$inferSelect;

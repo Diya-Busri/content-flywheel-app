@@ -23,7 +23,7 @@ export function DashboardLayoutClient({ profile, userEmail, disabledFeatures = [
   const [showReviewPopup, setShowReviewPopup] = useState(false);
   const pathname = usePathname();
   const isVideoTimeline = pathname?.includes("/video-timeline") ?? false;
-  const isProductEditor = /\/digital-products\/[^/]+\/edit/.test(pathname ?? "");
+  const isProductEditor = /\/digital-products\/[^/]+\/edit/.test(pathname ?? "") || /\/design-studio\/[^/]+/.test(pathname ?? "");
   const needsFullHeight = isVideoTimeline || isProductEditor;
   return (
     <DashboardThemeProvider

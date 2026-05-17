@@ -1086,6 +1086,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [resizingImageId, setResizingImageId] = useState<string | null>(null);
   const resizeStartRef = useRef<{ y: number; height: number; x?: number; width?: number } | null>(null);
   const [removingBgSectionId, setRemovingBgSectionId] = useState<string | null>(null);
+  const [copiedSectionImage, setCopiedSectionImage] = useState<{ imageUrl?: string; imageUrlNoBg?: string; imageHeightPx?: number; imageWidthPx?: number; imageBgRemoved?: boolean } | null>(null);
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
   const [showAutoDesignChoiceDialog, setShowAutoDesignChoiceDialog] = useState(false);
   const [brandProfile, setBrandProfile] = useState<{
@@ -5075,6 +5076,20 @@ export default function ProductEditor({ productId }: { productId: string }) {
                               >
                                 {section.title}
                               </h3>}
+                              {copiedSectionImage && !section.imageUrl?.trim() && (
+                                <div className="mb-3 flex justify-center">
+                                  <button
+                                    onClick={() => {
+                                      const next = sections.map((s) => s.id === section.id ? { ...s, ...copiedSectionImage } : s);
+                                      setSections(next);
+                                      saveToServer({ content: { sections: next } });
+                                    }}
+                                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 transition-colors"
+                                  >
+                                    <Copy className="w-3 h-3" /> Paste image
+                                  </button>
+                                </div>
+                              )}
                               {section.imageUrl?.trim() && section.imageX === undefined ? (() => {
                                 const imgHeight = isFullPage
                                   ? (section.imageHeightPx ?? Math.round(effectiveCanvasHeight * 0.8))
@@ -5161,6 +5176,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                       </div>
                                     )}
                                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 22 }}>
+                                      <button
+                                        onClick={() => setCopiedSectionImage({ imageUrl: section.imageUrl, imageUrlNoBg: section.imageUrlNoBg, imageHeightPx: section.imageHeightPx, imageWidthPx: section.imageWidthPx, imageBgRemoved: section.imageBgRemoved })}
+                                        className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white"
+                                        title="Copy image"
+                                      >
+                                        <Copy className="w-3.5 h-3.5" />
+                                      </button>
                                       <button
                                         onClick={() => handleRemoveBg(section.id)}
                                         disabled={removingBgSectionId === section.id}
@@ -7722,9 +7744,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         {(() => {
                           const isPdfFullPage = section.imageUrl?.trim() && (!section.content || section.content.replace(/<[^>]*>/g, "").trim() === "");
                           if (isPdfFullPage) {
+                            const previewSrc = (section.imageBgRemoved && section.imageUrlNoBg) ? section.imageUrlNoBg : section.imageUrl;
                             return (
                               <img
-                                src={section.imageUrl}
+                                src={previewSrc}
                                 alt=""
                                 crossOrigin="anonymous"
                                 style={{
@@ -7733,7 +7756,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                   width: "100%",
                                   height: "100%",
                                   objectFit: "contain",
-                                  background: "#fff",
+                                  background: section.imageBgRemoved ? "transparent" : "#fff",
                                   zIndex: 5,
                                 }}
                               />
@@ -7749,7 +7772,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                 <h3 className="text-lg font-semibold" style={{ ...titleStyles, color: pageTextColor ?? titleStyles?.color ?? templatePreset.headingColor }}>{section.title}</h3>
                                 {section.imageUrl?.trim() ? (
                                   <img
-                                    src={section.imageUrl}
+                                    src={(section.imageBgRemoved && section.imageUrlNoBg) ? section.imageUrlNoBg : section.imageUrl}
                                     alt=""
                                     crossOrigin="anonymous"
                                     style={{
