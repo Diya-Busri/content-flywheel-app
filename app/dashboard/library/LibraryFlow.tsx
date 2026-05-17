@@ -809,7 +809,25 @@ export default function LibraryFlow() {
 
         <TabsContent value={tab} className="mt-0">
           {tab === "images" ? (
-            <div>
+            <div className="space-y-4">
+              {!imagesLoading && myImages.length > 0 && (
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950"
+                    onClick={async () => {
+                      if (!confirm("Delete all saved images? This cannot be undone.")) return;
+                      await fetch("/api/library/items?type=generated_image", { method: "DELETE" });
+                      setMyImages([]);
+                      toast({ title: "All images deleted" });
+                    }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete All
+                  </Button>
+                </div>
+              )}
               {imagesLoading ? (
                 <div className="py-16 flex flex-col items-center justify-center">
                   <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
@@ -828,39 +846,67 @@ export default function LibraryFlow() {
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {myImages.map((img) => (
-                    <Card key={img.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                      {img.url ? (
-                        <img src={img.url} alt={img.title} className="w-full aspect-video object-cover" />
-                      ) : (
-                        <div className="w-full aspect-video bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                          <ImageIcon className="w-10 h-10 text-gray-400" />
-                        </div>
-                      )}
-                      <CardContent className="p-3 flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{img.title}</p>
-                        {img.url && (
+                    <Card key={img.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden group">
+                      <div className="relative">
+                        {img.url ? (
+                          <img src={img.url} alt={img.title} className="w-full aspect-video object-cover" />
+                        ) : (
+                          <div className="w-full aspect-video bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                            <ImageIcon className="w-10 h-10 text-gray-400" />
+                          </div>
+                        )}
+                        <button
+                          className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                          title="Delete image"
+                          onClick={async () => {
+                            await fetch(`/api/library/items?id=${img.id}`, { method: "DELETE" });
+                            setMyImages((prev) => prev.filter((i) => i.id !== img.id));
+                            toast({ title: "Image deleted" });
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <CardContent className="p-3">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{new Date(img.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                        <div className="flex items-center gap-2">
+                          {img.url && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 gap-1.5"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(img.url!);
+                                  const blob = await res.blob();
+                                  const a = document.createElement("a");
+                                  a.href = URL.createObjectURL(blob);
+                                  a.download = `ai-image-${img.id.slice(0, 6)}.png`;
+                                  a.click();
+                                  URL.revokeObjectURL(a.href);
+                                } catch {
+                                  toast({ title: "Download failed", variant: "destructive" });
+                                }
+                              }}
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Download
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
-                            className="shrink-0 gap-1.5"
+                            className="flex-1 gap-1.5 text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950"
                             onClick={async () => {
-                              try {
-                                const res = await fetch(img.url!);
-                                const blob = await res.blob();
-                                const a = document.createElement("a");
-                                a.href = URL.createObjectURL(blob);
-                                a.download = `${img.title.replace(/\s+/g, "-")}-${img.id.slice(0, 6)}.png`;
-                                a.click();
-                                URL.revokeObjectURL(a.href);
-                              } catch {
-                                toast({ title: "Download failed", variant: "destructive" });
-                              }
+                              await fetch(`/api/library/items?id=${img.id}`, { method: "DELETE" });
+                              setMyImages((prev) => prev.filter((i) => i.id !== img.id));
+                              toast({ title: "Image deleted" });
                             }}
                           >
-                            <Download className="w-3.5 h-3.5" />
-                            Download
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete
                           </Button>
-                        )}
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
