@@ -45,6 +45,8 @@ export type DesignData = {
   background: string;
   backgroundType?: "solid" | "gradient";
   backgroundGradient?: { color1: string; color2: string; angle: number };
+  backgroundImage?: string;
+  backgroundImageFit?: "cover" | "contain";
   elements: DesignElement[];
   presetName?: string;
 };
