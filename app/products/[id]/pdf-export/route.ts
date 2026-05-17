@@ -208,6 +208,11 @@ export async function GET(
     .page-content h2, .page-content h3 { margin-top: ${sectionSpacing * 0.75}rem; margin-bottom: ${paragraphSpacing}rem; text-align: ${alignment}; }
     .page-content ul, .page-content ol { margin-bottom: ${paragraphSpacing}rem; padding-left: 1.5rem; }
     .page-content li { margin-bottom: 0.5rem; }
+    .page-content table { border-collapse: collapse; width: 100%; margin-bottom: ${paragraphSpacing}rem; font-size: 0.7rem; }
+    .page-content th, .page-content td { border: 1px solid #d1d5db; padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+    .page-content th { background-color: #f3f4f6; font-weight: 600; color: #111827; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .page-content tr:nth-child(even) td { background-color: #f9fafb; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .page-content code { background: #f3f4f6; padding: 0.1rem 0.3rem; border-radius: 3px; font-family: monospace; font-size: 0.65rem; }
     .placed-layer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; z-index: 3; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     .placed-img, .placed-icon { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   </style>
