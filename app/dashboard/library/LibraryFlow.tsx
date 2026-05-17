@@ -35,6 +35,7 @@ import {
   ImageIcon,
   ExternalLink,
   Loader2,
+  RefreshCw,
   RotateCcw,
   Trash,
   BookOpen,
@@ -372,6 +373,7 @@ export default function LibraryFlow() {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   /** Item ids whose thumbnail failed to load (404, CORS, etc.) — show placeholder instead. */
@@ -529,6 +531,51 @@ export default function LibraryFlow() {
 
   const isTrashView = tab === "trash";
   const isTimelineView = tab === "timeline";
+
+  const handleRetryGeneration = async (item: LibraryItem) => {
+    setRetryingIds((prev) => new Set(prev).add(item.id));
+    try {
+      const res = await fetch(`/api/products/${item.id}/process`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ retry: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error ?? "Retry failed");
+      }
+      toast({ title: "Regenerating", description: "Your product is generating again — it will update here when done." });
+      // Poll until done, then refresh the item status in the list
+      const poll = async () => {
+        for (let i = 0; i < 120; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          const r = await fetch(`/api/products/${item.id}`).catch(() => null);
+          if (!r?.ok) continue;
+          const data = await r.json().catch(() => ({}));
+          const status = data?.status;
+          const sections: Array<{ content?: string; contentHtml?: string }> = data?.content?.sections ?? [];
+          const hasContent = sections.length > 0 && sections.every(s => ((s?.content ?? s?.contentHtml ?? "").trim().length > 0));
+          if (status === "draft" && hasContent) {
+            setItems(prev => prev.map(p => p.id === item.id ? { ...p, status: "draft" } : p));
+            setRetryingIds(prev => { const s = new Set(prev); s.delete(item.id); return s; });
+            toast({ title: "Ready!", description: `${item.title} has been regenerated.` });
+            return;
+          }
+          if (status === "failed") {
+            setRetryingIds(prev => { const s = new Set(prev); s.delete(item.id); return s; });
+            toast({ title: "Generation failed", description: "Try clicking Retry again.", variant: "destructive" });
+            return;
+          }
+        }
+        setRetryingIds(prev => { const s = new Set(prev); s.delete(item.id); return s; });
+        toast({ title: "Still generating", description: "Check back in a few minutes.", variant: "destructive" });
+      };
+      poll();
+    } catch (err) {
+      setRetryingIds(prev => { const s = new Set(prev); s.delete(item.id); return s; });
+      toast({ title: "Retry failed", description: err instanceof Error ? err.message : "Could not retry.", variant: "destructive" });
+    }
+  };
 
   const handleDelete = async (item: LibraryItem, permanent = false) => {
     const message = permanent
@@ -1224,26 +1271,39 @@ export default function LibraryFlow() {
                             </DropdownMenu>
                           </div>
                           <CardDescription className="text-xs">
-                            {formatDate(item.createdAt)} • {statusLabel(item.status)}
+                            {formatDate(item.createdAt)} • {item.status === "generating" ? <span className="text-orange-500 font-medium">generating…</span> : statusLabel(item.status)}
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="pt-0 flex gap-2">
-                          <Button variant="outline" size="sm" className="flex-1" asChild>
-                            <Link href={getEditLink(item)}>
-                              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                              Open
-                            </Link>
-                          </Button>
-                          {item.type === "product" && (
-                            <SellOnCFButton
-                              productId={item.id}
-                              productTitle={item.title}
-                              isNativePublished={item.isNativePublished}
-                              nativePrice={item.nativePrice}
-                            />
-                          )}
-                          {item.type === "product" && (
-                            <QuickSellSheet productId={item.id} productTitle={item.title} />
+                          {item.type === "product" && item.status === "generating" ? (
+                            <Button
+                              size="sm"
+                              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                              disabled={retryingIds.has(item.id)}
+                              onClick={() => handleRetryGeneration(item)}
+                            >
+                              {retryingIds.has(item.id) ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Regenerating…</> : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Retry Generation</>}
+                            </Button>
+                          ) : (
+                            <>
+                              <Button variant="outline" size="sm" className="flex-1" asChild>
+                                <Link href={getEditLink(item)}>
+                                  <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                                  Open
+                                </Link>
+                              </Button>
+                              {item.type === "product" && (
+                                <SellOnCFButton
+                                  productId={item.id}
+                                  productTitle={item.title}
+                                  isNativePublished={item.isNativePublished}
+                                  nativePrice={item.nativePrice}
+                                />
+                              )}
+                              {item.type === "product" && (
+                                <QuickSellSheet productId={item.id} productTitle={item.title} />
+                              )}
+                            </>
                           )}
                         </CardContent>
                       </Card>
@@ -1381,7 +1441,7 @@ export default function LibraryFlow() {
                       </DropdownMenu>
                     </div>
                     <CardDescription className="text-xs">
-                      {formatDate(item.createdAt)} • {statusLabel(item.status)}
+                      {formatDate(item.createdAt)} • {item.status === "generating" ? <span className="text-orange-500 font-medium">generating…</span> : statusLabel(item.status)}
                       {item.type === "script" && item.platform && (
                         <span className="text-muted-foreground"> • From: {scriptSourceLabel(item.platform)}</span>
                       )}
@@ -1403,6 +1463,15 @@ export default function LibraryFlow() {
                           <Trash className="w-3.5 h-3.5" />
                         </Button>
                       </>
+                    ) : item.type === "product" && item.status === "generating" ? (
+                      <Button
+                        size="sm"
+                        className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                        disabled={retryingIds.has(item.id)}
+                        onClick={() => handleRetryGeneration(item)}
+                      >
+                        {retryingIds.has(item.id) ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Regenerating…</> : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Retry Generation</>}
+                      </Button>
                     ) : (
                       <>
                         <Button variant="outline" size="sm" className="flex-1" asChild>
