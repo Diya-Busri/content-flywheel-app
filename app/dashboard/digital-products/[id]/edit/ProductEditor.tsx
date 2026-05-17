@@ -104,7 +104,7 @@ import { SalesPageCard } from "@/components/product-editor/SalesPageCard";
 import { ThumbnailVariantPicker } from "@/components/product-editor/ThumbnailVariantPicker";
 import { RevenueTracker } from "@/components/product-editor/RevenueTracker";
 
-type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string; imageHeightPx?: number };
+type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string; imageHeightPx?: number; imageX?: number; imageY?: number };
 
 export type TextStyles = Record<string, string>;
 
@@ -1077,6 +1077,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [showStyleSuggestions, setShowStyleSuggestions] = useState(false);
   const [showTypographyDialog, setShowTypographyDialog] = useState(false);
   const [selectedTypographyStyle, setSelectedTypographyStyle] = useState("typography");
+  const [movingImageSectionId, setMovingImageSectionId] = useState<string | null>(null);
+  const movingImageRef = useRef<{ sectionId: string; startMouseX: number; startMouseY: number; startImageX: number; startImageY: number } | null>(null);
+  const [selectedGeneratePageIds, setSelectedGeneratePageIds] = useState<Set<string> | null>(null);
+  const [showAlignGuides, setShowAlignGuides] = useState(false);
   const [resizingImageId, setResizingImageId] = useState<string | null>(null);
   const resizeStartRef = useRef<{ y: number; height: number } | null>(null);
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
@@ -3677,7 +3681,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
   }, [product]);
 
   const handleGenerateImages = useCallback(async (style: string, customKeyword?: string) => {
-    const contentSections = sections.filter((s) => s.id !== "cover" && s.id !== "back");
+    const allContent = sections.filter((s) => s.id !== "cover" && s.id !== "back");
+    const contentSections = selectedGeneratePageIds !== null
+      ? allContent.filter((s) => selectedGeneratePageIds.has(s.id))
+      : allContent;
     if (!contentSections.length) return;
     setShowImageStyleDialog(false);
     setCustomStyleKeyword("");
@@ -3771,6 +3778,34 @@ export default function ProductEditor({ productId }: { productId: string }) {
       document.removeEventListener("mouseup", onUp);
     };
   }, [resizingImageId, saveToServer]);
+
+  // Image drag-to-move
+  useEffect(() => {
+    if (!movingImageSectionId) return;
+    const onMove = (e: MouseEvent) => {
+      if (!movingImageRef.current) return;
+      const container = canvasContainerRef.current;
+      const rect = container?.getBoundingClientRect();
+      const scale = rect ? rect.width / CANVAS_WIDTH : 1;
+      const dx = (e.clientX - movingImageRef.current.startMouseX) / scale;
+      const dy = (e.clientY - movingImageRef.current.startMouseY) / scale;
+      const newX = movingImageRef.current.startImageX + dx;
+      const newY = movingImageRef.current.startImageY + dy;
+      setSections((prev) => prev.map((s) => s.id === movingImageRef.current!.sectionId ? { ...s, imageX: newX, imageY: newY } : s));
+    };
+    const onUp = () => {
+      setMovingImageSectionId(null);
+      setShowAlignGuides(false);
+      movingImageRef.current = null;
+      setSections((prev) => { saveToServer({ content: { sections: prev } }); return prev; });
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, [movingImageSectionId, saveToServer]);
 
   const handleGenerateVideos = useCallback(() => {
     const title = product?.title ?? "";
@@ -4245,6 +4280,38 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </div>
             )}
           </div>
+          {/* Page picker */}
+          {sections.filter((s) => s.id !== "cover" && s.id !== "back").length > 1 && (
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs text-gray-500 mb-2">Apply to:</p>
+              <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                {(() => {
+                  const contentSecs = sections.filter((s) => s.id !== "cover" && s.id !== "back");
+                  return contentSecs.map((section, i) => (
+                    <label key={section.id} className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={selectedGeneratePageIds === null || selectedGeneratePageIds.has(section.id)}
+                        onChange={(e) => {
+                          if (selectedGeneratePageIds === null) {
+                            const all = new Set(contentSecs.map((s) => s.id));
+                            all.delete(section.id);
+                            setSelectedGeneratePageIds(all.size ? all : new Set([section.id]));
+                          } else {
+                            const next = new Set(selectedGeneratePageIds);
+                            if (e.target.checked) next.add(section.id); else next.delete(section.id);
+                            setSelectedGeneratePageIds(next.size === contentSecs.length ? null : next.size ? next : new Set([section.id]));
+                          }
+                        }}
+                        className="accent-orange-500"
+                      />
+                      <span className="text-gray-700">Page {i + 1}{section.title ? ` — ${section.title.slice(0, 30)}` : ""}</span>
+                    </label>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowImageStyleDialog(false); setCustomStyleKeyword(""); }}>Cancel</Button>
             <Button
@@ -4280,6 +4347,38 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </button>
             ))}
           </div>
+          {/* Page picker */}
+          {sections.filter((s) => s.id !== "cover" && s.id !== "back").length > 1 && (
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs text-gray-500 mb-2">Apply to:</p>
+              <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                {(() => {
+                  const contentSecs = sections.filter((s) => s.id !== "cover" && s.id !== "back");
+                  return contentSecs.map((section, i) => (
+                    <label key={section.id} className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={selectedGeneratePageIds === null || selectedGeneratePageIds.has(section.id)}
+                        onChange={(e) => {
+                          if (selectedGeneratePageIds === null) {
+                            const all = new Set(contentSecs.map((s) => s.id));
+                            all.delete(section.id);
+                            setSelectedGeneratePageIds(all.size ? all : new Set([section.id]));
+                          } else {
+                            const next = new Set(selectedGeneratePageIds);
+                            if (e.target.checked) next.add(section.id); else next.delete(section.id);
+                            setSelectedGeneratePageIds(next.size === contentSecs.length ? null : next.size ? next : new Set([section.id]));
+                          }
+                        }}
+                        className="accent-orange-500"
+                      />
+                      <span className="text-gray-700">Page {i + 1}{section.title ? ` — ${section.title.slice(0, 30)}` : ""}</span>
+                    </label>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowTypographyDialog(false)}>Cancel</Button>
             <Button
@@ -4857,12 +4956,29 @@ export default function ProductEditor({ productId }: { productId: string }) {
                               >
                                 {section.title}
                               </h3>}
-                              {section.imageUrl?.trim() ? (() => {
+                              {section.imageUrl?.trim() && section.imageX === undefined ? (() => {
                                 const imgHeight = isFullPage
                                   ? (section.imageHeightPx ?? Math.round(effectiveCanvasHeight * 0.8))
                                   : undefined;
                                 return (
-                                  <div className={`group relative ${isFullPage ? "" : "mb-4"}`} style={isFullPage ? { borderRadius: 0 } : {}}>
+                                  <div
+                                    className={`group relative ${isFullPage ? "" : "mb-4"}`}
+                                    style={isFullPage ? { borderRadius: 0, cursor: "move" } : {}}
+                                    onMouseDown={isFullPage ? (e) => {
+                                      if ((e.target as HTMLElement).closest("[data-resize-handle]")) return;
+                                      e.preventDefault();
+                                      const container = canvasContainerRef.current;
+                                      const imgEl = e.currentTarget as HTMLElement;
+                                      const rect = container?.getBoundingClientRect() ?? { top: 0, left: 0 };
+                                      const scale = container ? container.clientWidth / CANVAS_WIDTH : 1;
+                                      const startImageX = (imgEl.getBoundingClientRect().left - rect.left) / scale;
+                                      const startImageY = (imgEl.getBoundingClientRect().top - rect.top) / scale;
+                                      setSections((prev) => prev.map((s) => s.id === section.id ? { ...s, imageX: startImageX, imageY: startImageY } : s));
+                                      movingImageRef.current = { sectionId: section.id, startMouseX: e.clientX, startMouseY: e.clientY, startImageX, startImageY };
+                                      setMovingImageSectionId(section.id);
+                                      setShowAlignGuides(true);
+                                    } : undefined}
+                                  >
                                     {regeneratingSectionImageId === section.id ? (
                                       <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: imgHeight ?? 160 }}>
                                         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -4871,6 +4987,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                       <img
                                         src={section.imageUrl}
                                         alt=""
+                                        draggable={false}
                                         style={{
                                           width: "100%",
                                           height: imgHeight,
@@ -4885,9 +5002,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                     )}
                                     {isFullPage && (
                                       <div
+                                        data-resize-handle
                                         className="absolute bottom-0 left-0 right-0 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-s-resize select-none"
                                         style={{ background: "rgba(0,0,0,0.18)", zIndex: 20 }}
                                         onMouseDown={(e) => {
+                                          e.stopPropagation();
                                           e.preventDefault();
                                           resizeStartRef.current = { y: e.clientY, height: imgHeight ?? Math.round(effectiveCanvasHeight * 0.8) };
                                           setResizingImageId(section.id);
@@ -4998,6 +5117,62 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       ))}
                     </div>
                   </div>
+                  {/* Freely-positioned section image (after user drags it off the flow) */}
+                  {(() => {
+                    const section = sections[currentPageIndex - 1];
+                    if (!section?.imageUrl || section.imageX === undefined) return null;
+                    const imgHeight = section.imageHeightPx ?? Math.round(effectiveCanvasHeight * 0.8);
+                    return (
+                      <div
+                        style={{ position: "absolute", left: section.imageX, top: section.imageY ?? 0, width: CANVAS_WIDTH, height: imgHeight, cursor: "move", zIndex: 30, userSelect: "none" }}
+                        className="group"
+                        onMouseDown={(e) => {
+                          if ((e.target as HTMLElement).closest("[data-resize-handle]")) return;
+                          e.preventDefault();
+                          movingImageRef.current = { sectionId: section.id, startMouseX: e.clientX, startMouseY: e.clientY, startImageX: section.imageX!, startImageY: section.imageY ?? 0 };
+                          setMovingImageSectionId(section.id);
+                          setShowAlignGuides(true);
+                        }}
+                      >
+                        {regeneratingSectionImageId === section.id ? (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-100"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+                        ) : (
+                          <img src={section.imageUrl} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff", display: "block", userSelect: "none" }} />
+                        )}
+                        {/* Resize handle */}
+                        <div data-resize-handle className="absolute bottom-0 left-0 right-0 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-s-resize"
+                          style={{ background: "rgba(0,0,0,0.18)", zIndex: 31 }}
+                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeStartRef.current = { y: e.clientY, height: imgHeight }; setResizingImageId(section.id); }}>
+                          <div className="w-8 h-1 rounded-full bg-white/70" />
+                        </div>
+                        {/* Action buttons */}
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 32 }}>
+                          <button onClick={() => setSections((prev) => { const next = prev.map((s) => s.id === section.id ? { ...s, imageX: undefined, imageY: undefined } : s); saveToServer({ content: { sections: next } }); return next; })}
+                            className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white text-[10px] font-medium px-2" title="Reset position">Reset</button>
+                          <button onClick={() => handleRegenerateSectionImage(section.id)} disabled={!!regeneratingSectionImageId}
+                            className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white" title="Regenerate"><RefreshCw className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleRemoveSectionImage(section.id)}
+                            className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white" title="Remove"><X className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {/* Alignment guides — always-faint, brighter while dragging */}
+                  {isOnContentPage && (
+                    <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 40 }} aria-hidden>
+                      {/* Center vertical */}
+                      <line x1="50%" y1="0" x2="50%" y2="100%" stroke={showAlignGuides ? "rgba(99,102,241,0.7)" : "rgba(0,0,0,0.06)"} strokeWidth="1" strokeDasharray={showAlignGuides ? "6,4" : "4,8"} />
+                      {/* Center horizontal */}
+                      <line x1="0" y1="50%" x2="100%" y2="50%" stroke={showAlignGuides ? "rgba(99,102,241,0.7)" : "rgba(0,0,0,0.06)"} strokeWidth="1" strokeDasharray={showAlignGuides ? "6,4" : "4,8"} />
+                      {/* Thirds (only show while dragging) */}
+                      {showAlignGuides && <>
+                        <line x1="33.33%" y1="0" x2="33.33%" y2="100%" stroke="rgba(99,102,241,0.35)" strokeWidth="1" strokeDasharray="3,8" />
+                        <line x1="66.67%" y1="0" x2="66.67%" y2="100%" stroke="rgba(99,102,241,0.35)" strokeWidth="1" strokeDasharray="3,8" />
+                        <line x1="0" y1="33.33%" x2="100%" y2="33.33%" stroke="rgba(99,102,241,0.35)" strokeWidth="1" strokeDasharray="3,8" />
+                        <line x1="0" y1="66.67%" x2="100%" y2="66.67%" stroke="rgba(99,102,241,0.35)" strokeWidth="1" strokeDasharray="3,8" />
+                      </>}
+                    </svg>
+                  )}
                 </div>
             </div>
           </div>
