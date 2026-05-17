@@ -9,7 +9,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
-import { ChevronLeft, Check, Loader2, Sparkles, RefreshCw, Eye, Video, X, ImageIcon } from "lucide-react";
+import { ChevronLeft, Check, Loader2, Sparkles, RefreshCw, Eye, Video, X, ImageIcon, Type } from "lucide-react";
 
 export type EditorToolbarProps = {
   productTitle: string;
@@ -27,6 +27,7 @@ export type EditorToolbarProps = {
   onGenerateVideos: () => void;
   onDismissCreatedBanner: () => void;
   onGenerateImages: () => void;
+  onGenerateTypography: () => void;
   generateImagesLoading: boolean;
   generateImagesProgress?: { done: number; total: number } | null;
 };
@@ -47,6 +48,7 @@ export function EditorToolbar({
   onGenerateVideos,
   onDismissCreatedBanner,
   onGenerateImages,
+  onGenerateTypography,
   generateImagesLoading,
   generateImagesProgress,
 }: EditorToolbarProps) {
@@ -176,6 +178,27 @@ export function EditorToolbar({
                 </TooltipTrigger>
                 <TooltipContent>
                   Auto-generate an AI image for each content page
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={
+                      isDark
+                        ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white"
+                        : "border-gray-200 text-gray-700 hover:bg-gray-100"
+                    }
+                    onClick={onGenerateTypography}
+                    disabled={generateImagesLoading || autoDesignLoading || regenerateDesignLoading}
+                  >
+                    <Type className="w-4 h-4" />
+                    <span className="hidden sm:inline ml-1.5">Typography &amp; Pattern</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Generate typography or pattern designs for each content page
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
