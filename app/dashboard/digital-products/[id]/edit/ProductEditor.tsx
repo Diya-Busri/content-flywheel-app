@@ -7269,36 +7269,56 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             <div className="absolute inset-0 z-[1] pointer-events-none" style={{ backgroundColor: overlay.color, opacity: overlay.opacity ?? 0.9 }} aria-hidden />
                           </>
                         ) : null}
-                        <div
-                          className={`relative z-10 product-editor-preview-layout ${product.format === "workbook" ? "format-workbook" : ""}`}
-                          style={{ ...previewLayoutStyle, ...(bgUrl ? { backgroundColor: "transparent" } : {}), minHeight: "100%" }}
-                        >
-                          <h2 className="text-2xl font-bold border-b pb-2" style={{ color: pageTextColor ?? templatePreset.titleColor }}>{product.title}</h2>
-                          <section>
-                            <h3 className="text-lg font-semibold" style={{ ...titleStyles, color: pageTextColor ?? titleStyles?.color ?? templatePreset.headingColor }}>{section.title}</h3>
-                            {section.imageUrl?.trim() ? (
+                        {(() => {
+                          const isPdfFullPage = section.imageUrl?.trim() && (!section.content || section.content.replace(/<[^>]*>/g, "").trim() === "");
+                          if (isPdfFullPage) {
+                            return (
                               <img
                                 src={section.imageUrl}
                                 alt=""
                                 crossOrigin="anonymous"
                                 style={{
+                                  position: "absolute",
+                                  inset: 0,
                                   width: "100%",
-                                  maxHeight: "300px",
+                                  height: "100%",
                                   objectFit: "cover",
-                                  borderRadius: "8px",
-                                  marginBottom: "16px",
+                                  zIndex: 5,
                                 }}
                               />
-                            ) : null}
-                            <div className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2 [&_table]:w-full [&_table]:border-collapse [&_table]:mb-4 [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-100 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-gray-300 [&_td]:px-2 [&_td]:py-1.5 [&_td]:align-top [&_tr:nth-child(even)_td]:bg-gray-50 [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono" style={{ ...bodyStyles, color: pageTextColor ?? bodyStyles?.color ?? templatePreset.bodyColor }}>
-                              {section.content || section.contentHtml ? (
-                                <div className="preview-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.contentHtml ?? cleanMarkdownToHtml(section.content ?? "")) }} />
-                              ) : (
-                                <span className="text-[#999]">(Empty)</span>
-                              )}
+                            );
+                          }
+                          return (
+                            <div
+                              className={`relative z-10 product-editor-preview-layout ${product.format === "workbook" ? "format-workbook" : ""}`}
+                              style={{ ...previewLayoutStyle, ...(bgUrl ? { backgroundColor: "transparent" } : {}), minHeight: "100%" }}
+                            >
+                              <h2 className="text-2xl font-bold border-b pb-2" style={{ color: pageTextColor ?? templatePreset.titleColor }}>{product.title}</h2>
+                              <section>
+                                <h3 className="text-lg font-semibold" style={{ ...titleStyles, color: pageTextColor ?? titleStyles?.color ?? templatePreset.headingColor }}>{section.title}</h3>
+                                {section.imageUrl?.trim() ? (
+                                  <img
+                                    src={section.imageUrl}
+                                    alt=""
+                                    crossOrigin="anonymous"
+                                    style={{
+                                      width: "100%",
+                                      maxHeight: "300px",
+                                      objectFit: "cover",
+                                      borderRadius: "8px",
+                                      marginBottom: "16px",
+                                    }}
+                                  />
+                                ) : null}
+                                <div className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2 [&_table]:w-full [&_table]:border-collapse [&_table]:mb-4 [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-100 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-gray-300 [&_td]:px-2 [&_td]:py-1.5 [&_td]:align-top [&_tr:nth-child(even)_td]:bg-gray-50 [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono" style={{ ...bodyStyles, color: pageTextColor ?? bodyStyles?.color ?? templatePreset.bodyColor }}>
+                                  {section.content || section.contentHtml ? (
+                                    <div className="preview-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.contentHtml ?? cleanMarkdownToHtml(section.content ?? "")) }} />
+                                  ) : null}
+                                </div>
+                              </section>
                             </div>
-                          </section>
-                        </div>
+                          );
+                        })()}
                         <div className="absolute inset-0 pointer-events-none z-20">
                           {renderPlacedElements(placedElementsByPage[contentIdx + 1] ?? [])}
                         </div>
