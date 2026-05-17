@@ -22,7 +22,7 @@ type LocalMessage = {
 };
 
 const WRITE_INTENT_RE =
-  /\b(write|create|add|generate|fill|update|rewrite|replace|plan|structure|build|draft)\b.{0,40}\b(page|section|chapter|content|text|intro|introduction|outline|pages|sections|chapters|structure|layout)\b/i;
+  /\b(write|create|add|generate|fill|update|rewrite|replace|plan|structure|build|draft|make)\b.{0,50}\b(page|section|chapter|content|text|intro|introduction|outline|pages|sections|chapters|structure|layout|book|guide|template|workbook|worksheet|journal|planner|checklist|product)\b/i;
 
 const STARTER_CHIPS = [
   "Write an intro page",
@@ -121,12 +121,11 @@ export function EditorAIPanel({
     setDisplayMessages((prev) => [...prev, msg]);
   }, []);
 
-  const handleSend = useCallback(async () => {
+  const handleSend = useCallback(async (overrideValue?: string) => {
     const input = inputRef.current;
-    if (!input) return;
-    const value = input.value.trim();
+    const value = (overrideValue ?? input?.value ?? "").trim();
     if (!value || isLoading) return;
-    input.value = "";
+    if (input) input.value = "";
 
     addMessage({ role: "user", content: value });
 
@@ -194,13 +193,12 @@ export function EditorAIPanel({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      handleSend(undefined);
     }
   };
 
   const handleChip = (label: string) => {
-    if (inputRef.current) inputRef.current.value = label;
-    handleSend();
+    handleSend(label);
   };
 
   return (
@@ -274,7 +272,7 @@ export function EditorAIPanel({
         <Button
           type="button"
           size="icon"
-          onClick={handleSend}
+          onClick={() => handleSend(undefined)}
           disabled={isLoading}
           className="bg-orange-500 hover:bg-orange-600 text-white shrink-0"
         >

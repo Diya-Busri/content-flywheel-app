@@ -6792,7 +6792,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   />
                 )}
               </TabsContent>
-              <TabsContent value="ai" className="mt-0 h-full flex flex-col min-h-0">
+              </div>
+              <TabsContent value="ai" className="mt-0 flex-1 flex flex-col min-h-0 overflow-hidden">
                 <EditorAIPanel
                   productId={product.id}
                   sections={sections}
@@ -6802,7 +6803,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   }}
                 />
               </TabsContent>
-              </div>
             </Tabs>
         </EditorRightPanel>
       </div>
