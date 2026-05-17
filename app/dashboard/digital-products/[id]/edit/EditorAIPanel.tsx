@@ -1,42 +1,195 @@
 "use client";
 
-import React, { useRef, useEffect } from "react";
-import { Send, Loader2, Sparkles } from "lucide-react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
+import { Send, Loader2, Sparkles, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useChatCoach } from "@/hooks/useChatCoach";
 import { cn } from "@/lib/utils";
 
+type Section = { id: string; title: string; content: string; order: number; imageUrl?: string };
+
+type AddSectionAction = { type: "add_section"; title: string; content: string };
+type UpdateSectionAction = { type: "update_section"; sectionId: string; title?: string; content: string };
+type ReplaceAllAction = { type: "replace_all"; sections: { title: string; content: string }[] };
+type Action = AddSectionAction | UpdateSectionAction | ReplaceAllAction;
+
+type LocalMessage = {
+  role: "user" | "assistant";
+  content: string;
+  applied?: { count: number; titles: string[] };
+};
+
+const WRITE_INTENT_RE =
+  /\b(write|create|add|generate|fill|update|rewrite|replace|plan|structure|build|draft)\b.{0,40}\b(page|section|chapter|content|text|intro|introduction|outline|pages|sections|chapters|structure|layout)\b/i;
+
 const STARTER_CHIPS = [
-  "Improve my content",
-  "Suggest section titles",
-  "Write intro text for this page",
+  "Write an intro page",
+  "Add 3 pages about this topic",
+  "Plan out my whole product",
+  "Rewrite page 1",
   "How should I price this?",
-  "Give me a hook for TikTok",
-  "Make it more engaging",
+  "Give me a TikTok hook",
 ];
 
-export function EditorAIPanel({ productId }: { productId: string }) {
-  const { messages, sendMessage, isLoading } = useChatCoach("product-editor", {
-    productId,
-    coachMode: "content",
-  });
+function isWriteIntent(text: string): boolean {
+  return WRITE_INTENT_RE.test(text);
+}
+
+function applyActions(sections: Section[], actions: Action[]): Section[] {
+  let result = [...sections];
+
+  for (const action of actions) {
+    if (action.type === "add_section") {
+      const maxOrder = result.reduce((m, s) => Math.max(m, s.order), 0);
+      result.push({
+        id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        title: action.title,
+        content: action.content,
+        order: maxOrder + 1,
+      });
+    } else if (action.type === "update_section") {
+      result = result.map((s) =>
+        s.id === action.sectionId
+          ? { ...s, title: action.title ?? s.title, content: action.content }
+          : s
+      );
+    } else if (action.type === "replace_all") {
+      // Keep cover/back, replace content pages
+      const cover = result.find((s) => s.id === "cover");
+      const back = result.find((s) => s.id === "back");
+      const newSections = action.sections.map((s, i) => ({
+        id: `ai-${Date.now()}-${i}`,
+        title: s.title,
+        content: s.content,
+        order: i + 1,
+      }));
+      result = [
+        ...(cover ? [cover] : []),
+        ...newSections,
+        ...(back ? [back] : []),
+      ];
+    }
+  }
+
+  return result;
+}
+
+function summariseActions(actions: Action[]): { count: number; titles: string[] } {
+  const titles: string[] = [];
+  for (const a of actions) {
+    if (a.type === "add_section") titles.push(a.title);
+    else if (a.type === "update_section") titles.push(`Updated: ${a.sectionId}`);
+    else if (a.type === "replace_all") titles.push(...a.sections.map((s) => s.title));
+  }
+  return { count: titles.length, titles: titles.slice(0, 5) };
+}
+
+export function EditorAIPanel({
+  productId,
+  sections,
+  onSectionsChange,
+}: {
+  productId: string;
+  sections: Section[];
+  onSectionsChange: (sections: Section[]) => void;
+}) {
+  const { messages: coachMessages, sendMessage: sendCoach, isLoading: coachLoading } =
+    useChatCoach("product-editor", { productId, coachMode: "content" });
+
+  const [localMessages, setLocalMessages] = useState<LocalMessage[]>([]);
+  const [writeLoading, setWriteLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (messages.length) scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  // Merge coach messages into local display
+  const allMessages: LocalMessage[] = [
+    ...coachMessages.map((m) => ({ role: m.role, content: m.content })),
+    ...localMessages,
+  ].sort(() => 0); // keep insertion order via concat — coach messages come first
 
-  const handleSend = () => {
+  // Actually we want them interleaved by insertion. Let's just track everything locally.
+  const [displayMessages, setDisplayMessages] = useState<LocalMessage[]>([]);
+  const isLoading = coachLoading || writeLoading;
+
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [displayMessages]);
+
+  const addMessage = useCallback((msg: LocalMessage) => {
+    setDisplayMessages((prev) => [...prev, msg]);
+  }, []);
+
+  const handleSend = useCallback(async () => {
     const input = inputRef.current;
     if (!input) return;
     const value = input.value.trim();
     if (!value || isLoading) return;
     input.value = "";
-    sendMessage(value);
-  };
+
+    addMessage({ role: "user", content: value });
+
+    if (isWriteIntent(value)) {
+      // Write path — call ai-write and apply to editor
+      setWriteLoading(true);
+      addMessage({ role: "assistant", content: "Writing content…" });
+      try {
+        const res = await fetch(`/api/products/${productId}/ai-write`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            instruction: value,
+            currentSections: sections.filter((s) => s.id !== "cover" && s.id !== "back"),
+          }),
+        });
+        const data = await res.json().catch(() => ({})) as { actions?: Action[]; message?: string; error?: string };
+
+        if (!res.ok || data.error || !Array.isArray(data.actions)) {
+          setDisplayMessages((prev) => [
+            ...prev.slice(0, -1),
+            { role: "assistant", content: `Sorry, I couldn't do that. ${data.error ?? "Please try again."}` },
+          ]);
+        } else {
+          const updated = applyActions(sections, data.actions);
+          onSectionsChange(updated);
+          const summary = summariseActions(data.actions);
+          setDisplayMessages((prev) => [
+            ...prev.slice(0, -1),
+            {
+              role: "assistant",
+              content: data.message ?? "Done!",
+              applied: summary,
+            },
+          ]);
+        }
+      } catch {
+        setDisplayMessages((prev) => [
+          ...prev.slice(0, -1),
+          { role: "assistant", content: "Something went wrong. Please try again." },
+        ]);
+      } finally {
+        setWriteLoading(false);
+      }
+    } else {
+      // Chat path — stream through coach
+      sendCoach(value);
+      // Sync coach messages into displayMessages on next render via useEffect
+    }
+  }, [isLoading, productId, sections, onSectionsChange, addMessage, sendCoach]);
+
+  // Sync coach messages into displayMessages
+  const prevCoachLenRef = useRef(0);
+  useEffect(() => {
+    if (coachMessages.length > prevCoachLenRef.current) {
+      const newMsgs = coachMessages.slice(prevCoachLenRef.current);
+      setDisplayMessages((prev) => [
+        ...prev,
+        ...newMsgs.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      ]);
+      prevCoachLenRef.current = coachMessages.length;
+    }
+  }, [coachMessages]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -45,23 +198,28 @@ export function EditorAIPanel({ productId }: { productId: string }) {
     }
   };
 
+  const handleChip = (label: string) => {
+    if (inputRef.current) inputRef.current.value = label;
+    handleSend();
+  };
+
   return (
     <div className="flex flex-col h-full min-h-0">
-      {messages.length === 0 && (
+      {displayMessages.length === 0 && (
         <div className="px-4 pt-4 pb-2 space-y-3">
           <div className="flex items-center gap-2 text-orange-500">
             <Sparkles className="w-4 h-4" />
             <p className="text-sm font-medium text-gray-900">AI Product Assistant</p>
           </div>
           <p className="text-xs text-gray-500">
-            Ask me anything about your product — I can see your content and help you improve, expand, or market it.
+            Tell me what to write and I&apos;ll add it directly to your product. Or ask me anything about it.
           </p>
           <div className="flex flex-wrap gap-2 pt-1">
             {STARTER_CHIPS.map((label) => (
               <button
                 key={label}
                 type="button"
-                onClick={() => sendMessage(label)}
+                onClick={() => handleChip(label)}
                 disabled={isLoading}
                 className="rounded-full px-3 py-1.5 text-xs font-medium bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 disabled:opacity-50 disabled:pointer-events-none transition-colors"
               >
@@ -74,8 +232,8 @@ export function EditorAIPanel({ productId }: { productId: string }) {
 
       <ScrollArea className="flex-1 min-h-0 px-4">
         <div className="py-3 space-y-3">
-          {messages.map((msg, i) => (
-            <div key={i} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
+          {displayMessages.map((msg, i) => (
+            <div key={i} className={cn("flex flex-col", msg.role === "user" ? "items-end" : "items-start")}>
               <div
                 className={cn(
                   "max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap",
@@ -84,8 +242,21 @@ export function EditorAIPanel({ productId }: { productId: string }) {
                     : "bg-gray-100 text-gray-900"
                 )}
               >
-                {msg.content || (msg.role === "assistant" && isLoading && i === messages.length - 1 ? "…" : "")}
+                {msg.content || (msg.role === "assistant" && isLoading && i === displayMessages.length - 1 ? "…" : "")}
               </div>
+              {msg.applied && msg.applied.count > 0 && (
+                <div className="mt-1.5 max-w-[85%] rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700 space-y-1">
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {msg.applied.count} section{msg.applied.count !== 1 ? "s" : ""} added to your product
+                  </div>
+                  <ul className="pl-1 space-y-0.5 text-green-600">
+                    {msg.applied.titles.map((t, j) => (
+                      <li key={j}>· {t}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           ))}
           <div ref={scrollRef} />
@@ -95,7 +266,7 @@ export function EditorAIPanel({ productId }: { productId: string }) {
       <div className="p-3 border-t border-gray-200 flex gap-2 shrink-0">
         <Input
           ref={inputRef}
-          placeholder="Ask about your product…"
+          placeholder='e.g. "Write a page about budgeting tips"'
           onKeyDown={handleKeyDown}
           disabled={isLoading}
           className="flex-1 text-sm"

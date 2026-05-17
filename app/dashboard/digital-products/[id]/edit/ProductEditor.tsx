@@ -6793,7 +6793,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 )}
               </TabsContent>
               <TabsContent value="ai" className="mt-0 h-full flex flex-col min-h-0">
-                <EditorAIPanel productId={product.id} />
+                <EditorAIPanel
+                  productId={product.id}
+                  sections={sections}
+                  onSectionsChange={(updated) => {
+                    setSections(updated);
+                    saveToServer({ content: { sections: updated } });
+                  }}
+                />
               </TabsContent>
               </div>
             </Tabs>
