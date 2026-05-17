@@ -104,7 +104,7 @@ import { SalesPageCard } from "@/components/product-editor/SalesPageCard";
 import { ThumbnailVariantPicker } from "@/components/product-editor/ThumbnailVariantPicker";
 import { RevenueTracker } from "@/components/product-editor/RevenueTracker";
 
-type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string; imageHeightPx?: number; imageWidthPx?: number; imageX?: number; imageY?: number; imageBgRemoved?: boolean };
+type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string; imageUrlNoBg?: string; imageHeightPx?: number; imageWidthPx?: number; imageX?: number; imageY?: number; imageBgRemoved?: boolean };
 
 export type TextStyles = Record<string, string>;
 
@@ -1085,6 +1085,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [showAlignGuides, setShowAlignGuides] = useState(false);
   const [resizingImageId, setResizingImageId] = useState<string | null>(null);
   const resizeStartRef = useRef<{ y: number; height: number; x?: number; width?: number } | null>(null);
+  const [removingBgSectionId, setRemovingBgSectionId] = useState<string | null>(null);
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
   const [showAutoDesignChoiceDialog, setShowAutoDesignChoiceDialog] = useState(false);
   const [brandProfile, setBrandProfile] = useState<{
@@ -3770,10 +3771,50 @@ export default function ProductEditor({ productId }: { productId: string }) {
   }, [sections, selectedImageStyle, buildImagePrompt, saveToServer]);
 
   const handleRemoveSectionImage = useCallback((sectionId: string) => {
-    const updatedSections = sections.map((s) => (s.id === sectionId ? { ...s, imageUrl: undefined } : s));
+    const updatedSections = sections.map((s) => (s.id === sectionId ? { ...s, imageUrl: undefined, imageUrlNoBg: undefined, imageBgRemoved: false } : s));
     setSections(updatedSections);
     saveToServer({ content: { sections: updatedSections } });
   }, [sections, saveToServer]);
+
+  const handleRemoveBg = useCallback(async (sectionId: string) => {
+    const section = sections.find((s) => s.id === sectionId);
+    if (!section?.imageUrl) return;
+    // Toggle off if already removed
+    if (section.imageBgRemoved) {
+      const next = sections.map((s) => s.id === sectionId ? { ...s, imageBgRemoved: false } : s);
+      setSections(next);
+      saveToServer({ content: { sections: next } });
+      return;
+    }
+    // Use cached no-bg URL if available
+    if (section.imageUrlNoBg) {
+      const next = sections.map((s) => s.id === sectionId ? { ...s, imageBgRemoved: true } : s);
+      setSections(next);
+      saveToServer({ content: { sections: next } });
+      return;
+    }
+    // Call API
+    setRemovingBgSectionId(sectionId);
+    try {
+      const res = await fetch("/api/products/remove-bg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: section.imageUrl }),
+      });
+      const data = await res.json().catch(() => ({})) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        toast({ title: "Background removal failed", description: data.error ?? "Please try again.", variant: "destructive" });
+        return;
+      }
+      const next = sections.map((s) => s.id === sectionId ? { ...s, imageUrlNoBg: data.url, imageBgRemoved: true } : s);
+      setSections(next);
+      saveToServer({ content: { sections: next } });
+    } catch {
+      toast({ title: "Background removal failed", variant: "destructive" });
+    } finally {
+      setRemovingBgSectionId(null);
+    }
+  }, [sections, saveToServer, toast]);
 
   useEffect(() => {
     if (!resizingImageId) return;
@@ -5063,7 +5104,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                       </div>
                                     ) : (
                                       <img
-                                        src={section.imageUrl}
+                                        src={(section.imageBgRemoved && section.imageUrlNoBg) ? section.imageUrlNoBg : section.imageUrl}
                                         alt=""
                                         draggable={false}
                                         style={{
@@ -5074,8 +5115,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                           borderRadius: isFullPage ? 0 : "8px",
                                           display: "block",
                                           userSelect: "none",
-                                          background: "transparent",
-                                          mixBlendMode: section.imageBgRemoved ? "screen" : "normal",
                                         }}
                                       />
                                     )}
@@ -5123,10 +5162,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                     )}
                                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 22 }}>
                                       <button
-                                        onClick={() => setSections((prev) => { const next = prev.map((s) => s.id === section.id ? { ...s, imageBgRemoved: !s.imageBgRemoved } : s); saveToServer({ content: { sections: next } }); return next; })}
-                                        className={`p-1.5 rounded text-[10px] font-medium px-2 ${section.imageBgRemoved ? "bg-orange-500 text-white" : "bg-black/60 hover:bg-black/80 text-white"}`}
-                                        title={section.imageBgRemoved ? "Restore background" : "Remove background"}
-                                      >{section.imageBgRemoved ? "BG: Off" : "Remove BG"}</button>
+                                        onClick={() => handleRemoveBg(section.id)}
+                                        disabled={removingBgSectionId === section.id}
+                                        className={`p-1.5 rounded text-[10px] font-medium px-2 flex items-center gap-1 ${section.imageBgRemoved ? "bg-orange-500 text-white" : "bg-black/60 hover:bg-black/80 text-white"}`}
+                                      >
+                                        {removingBgSectionId === section.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                                        {section.imageBgRemoved ? "BG: Off" : "Remove BG"}
+                                      </button>
                                       <button
                                         onClick={() => handleRegenerateSectionImage(section.id)}
                                         disabled={!!regeneratingSectionImageId}
@@ -5248,7 +5290,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         {regeneratingSectionImageId === section.id ? (
                           <div className="w-full h-full flex items-center justify-center bg-gray-100"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
                         ) : (
-                          <img src={section.imageUrl} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "contain", background: section.imageBgRemoved ? "transparent" : "transparent", display: "block", userSelect: "none", mixBlendMode: section.imageBgRemoved ? "screen" : "normal" }} />
+                          <img src={(section.imageBgRemoved && section.imageUrlNoBg) ? section.imageUrlNoBg : section.imageUrl} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", userSelect: "none" }} />
                         )}
                         {/* Bottom-centre height resize handle */}
                         <div data-resize-handle className="absolute bottom-0 left-8 right-8 h-3 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-s-resize" style={{ zIndex: 31 }}
@@ -5263,10 +5305,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         {/* Action buttons */}
                         <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 33 }}>
                           <button
-                            onClick={() => setSections((prev) => { const next = prev.map((s) => s.id === section.id ? { ...s, imageBgRemoved: !s.imageBgRemoved } : s); saveToServer({ content: { sections: next } }); return next; })}
-                            className={`p-1.5 rounded text-[10px] font-medium px-2 ${section.imageBgRemoved ? "bg-orange-500 text-white" : "bg-black/60 hover:bg-black/80 text-white"}`}
-                            title={section.imageBgRemoved ? "Restore background" : "Remove background"}
-                          >{section.imageBgRemoved ? "BG: Off" : "Remove BG"}</button>
+                            onClick={() => handleRemoveBg(section.id)}
+                            disabled={removingBgSectionId === section.id}
+                            className={`p-1.5 rounded text-[10px] font-medium px-2 flex items-center gap-1 ${section.imageBgRemoved ? "bg-orange-500 text-white" : "bg-black/60 hover:bg-black/80 text-white"}`}
+                          >
+                            {removingBgSectionId === section.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                            {section.imageBgRemoved ? "BG: Off" : "Remove BG"}
+                          </button>
                           <button onClick={() => setSections((prev) => { const next = prev.map((s) => s.id === section.id ? { ...s, imageX: undefined, imageY: undefined, imageWidthPx: undefined } : s); saveToServer({ content: { sections: next } }); return next; })}
                             className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white text-[10px] font-medium px-2" title="Reset position">Reset</button>
                           <button onClick={() => handleRegenerateSectionImage(section.id)} disabled={!!regeneratingSectionImageId}
