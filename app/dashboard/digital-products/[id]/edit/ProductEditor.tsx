@@ -5074,27 +5074,59 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                           borderRadius: isFullPage ? 0 : "8px",
                                           display: "block",
                                           userSelect: "none",
-                                          background: isFullPage ? "#fff" : undefined,
+                                          background: "transparent",
+                                          mixBlendMode: section.imageBgRemoved ? "screen" : "normal",
                                         }}
                                       />
+                                    )}
+                                    {/* Drag-to-move hint bar */}
+                                    {isFullPage && (
+                                      <div className="absolute top-0 left-0 right-0 flex items-center justify-center gap-1.5 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none select-none" style={{ zIndex: 21 }}>
+                                        <div className="flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1 text-white text-[10px] font-medium">
+                                          <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l1.5 2h-3L8 1zm0 14l-1.5-2h3L8 15zM1 8l2-1.5v3L1 8zm14 0l-2 1.5v-3L15 8z"/></svg>
+                                          Drag to reposition
+                                        </div>
+                                      </div>
                                     )}
                                     {isFullPage && (
                                       <div
                                         data-resize-handle
-                                        className="absolute bottom-0 left-0 right-0 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-s-resize select-none"
-                                        style={{ background: "rgba(0,0,0,0.18)", zIndex: 20 }}
+                                        className="absolute bottom-0 left-8 right-8 h-3 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-s-resize select-none"
+                                        style={{ zIndex: 20 }}
                                         onMouseDown={(e) => {
                                           e.stopPropagation();
                                           e.preventDefault();
                                           resizeStartRef.current = { y: e.clientY, height: imgHeight ?? Math.round(effectiveCanvasHeight * 0.8) };
                                           setResizingImageId(section.id);
                                         }}
-                                        title="Drag to resize"
+                                        title="Drag to resize height"
                                       >
-                                        <div className="w-8 h-1 rounded-full bg-white/70" />
+                                        <div className="w-8 h-1 rounded-full bg-black/30" />
                                       </div>
                                     )}
-                                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {isFullPage && (
+                                      <div
+                                        data-resize-handle
+                                        className="absolute bottom-0 right-0 w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity cursor-se-resize flex items-end justify-end select-none"
+                                        style={{ zIndex: 21 }}
+                                        onMouseDown={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          const imgWidth = section.imageWidthPx ?? CANVAS_WIDTH;
+                                          resizeStartRef.current = { y: e.clientY, height: imgHeight ?? Math.round(effectiveCanvasHeight * 0.8), x: e.clientX, width: imgWidth };
+                                          setResizingImageId(section.id);
+                                        }}
+                                        title="Drag to resize"
+                                      >
+                                        <div className="w-3 h-3 border-r-2 border-b-2 border-black/50 rounded-br-sm" />
+                                      </div>
+                                    )}
+                                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 22 }}>
+                                      <button
+                                        onClick={() => setSections((prev) => { const next = prev.map((s) => s.id === section.id ? { ...s, imageBgRemoved: !s.imageBgRemoved } : s); saveToServer({ content: { sections: next } }); return next; })}
+                                        className={`p-1.5 rounded text-[10px] font-medium px-2 ${section.imageBgRemoved ? "bg-orange-500 text-white" : "bg-black/60 hover:bg-black/80 text-white"}`}
+                                        title={section.imageBgRemoved ? "Restore background" : "Remove background"}
+                                      >{section.imageBgRemoved ? "BG: Off" : "Remove BG"}</button>
                                       <button
                                         onClick={() => handleRegenerateSectionImage(section.id)}
                                         disabled={!!regeneratingSectionImageId}
