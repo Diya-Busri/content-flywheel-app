@@ -254,7 +254,7 @@ export function EditorAIPanel({
           <p className="text-sm font-medium text-orange-900">Choose page orientation</p>
           <div className="grid grid-cols-2 gap-2">
             {([["portrait", "📄 Portrait", "Tall pages (A4 style)"], ["landscape", "🖼️ Landscape", "Wide pages"]] as const).map(([val, label, desc]) => (
-              <button key={val} onClick={() => setColoringOrientation(val)}
+              <button key={val} onClick={() => { setColoringOrientation(val); onOrientationChange?.(val); }}
                 className={`rounded-lg border p-3 text-left transition-colors ${coloringOrientation === val ? "border-orange-500 bg-orange-100 text-orange-800" : "border-gray-200 bg-white text-gray-700 hover:border-orange-300"}`}>
                 <div className="text-sm font-medium">{label}</div>
                 <div className="text-xs text-gray-500 mt-0.5">{desc}</div>

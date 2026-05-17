@@ -4772,10 +4772,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                           width: "100%",
                                           height: imgHeight,
                                           maxHeight: isFullPage ? undefined : "300px",
-                                          objectFit: "cover",
+                                          objectFit: isFullPage ? "contain" : "cover",
                                           borderRadius: isFullPage ? 0 : "8px",
                                           display: "block",
                                           userSelect: "none",
+                                          background: isFullPage ? "#fff" : undefined,
                                         }}
                                       />
                                     )}
@@ -7288,7 +7289,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                   inset: 0,
                                   width: "100%",
                                   height: "100%",
-                                  objectFit: "cover",
+                                  objectFit: "contain",
+                                  background: "#fff",
                                   zIndex: 5,
                                 }}
                               />
