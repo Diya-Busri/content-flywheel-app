@@ -101,7 +101,6 @@ export async function POST(req: Request) {
           n: 1,
           size,
           quality: "standard",
-          response_format: "url",
         });
         imageUrl = response.data[0]?.url;
         if (imageUrl && typeof imageUrl === "string") break;
