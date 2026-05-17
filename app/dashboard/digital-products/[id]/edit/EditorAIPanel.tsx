@@ -90,10 +90,12 @@ export function EditorAIPanel({
   productId,
   sections,
   onSectionsChange,
+  onOrientationChange,
 }: {
   productId: string;
   sections: Section[];
   onSectionsChange: (sections: Section[]) => void;
+  onOrientationChange?: (orientation: "portrait" | "landscape") => void;
 }) {
   const { messages: coachMessages, sendMessage: sendCoach, isLoading: coachLoading } =
     useChatCoach("product-editor", { productId, coachMode: "content" });
@@ -157,6 +159,9 @@ export function EditorAIPanel({
 
         if (data.generateImages) {
           const resolvedType = data.bookType ?? bookType;
+          if (resolvedType === "coloring") {
+            onOrientationChange?.(orientation === "landscape" ? "landscape" : "portrait");
+          }
           const newSections = updated.filter((s) => s.id !== "cover" && s.id !== "back" && !s.imageUrl);
           for (const section of newSections) {
             try {
@@ -191,7 +196,7 @@ export function EditorAIPanel({
       setPendingInstruction(null);
       setPendingBookType(null);
     }
-  }, [productId, sections, onSectionsChange, addMessage]);
+  }, [productId, sections, onSectionsChange, onOrientationChange, addMessage]);
 
   const handleSend = useCallback(async (overrideValue?: string) => {
     const input = inputRef.current;

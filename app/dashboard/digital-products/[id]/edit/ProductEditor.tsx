@@ -314,6 +314,7 @@ type EditorSnapshot = {
 const HISTORY_LIMIT = 50;
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 1100;
+const CANVAS_LANDSCAPE_HEIGHT = 580;
 
 const SELECTION_BLOCK_SELECTOR = "h1, h2, h3, h4, p, li";
 const SELECTION_OUTLINE_STYLE = "2px dashed #f97316";
@@ -990,6 +991,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
+  const [pageOrientation, setPageOrientation] = useState<"portrait" | "landscape">("portrait");
   const [template, setTemplate] = useState("modern");
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -1195,6 +1197,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
       const data = (await res.json()) as Product;
       setProduct(data);
       setSections(data.content?.sections ?? []);
+      const savedOrientation = ((data.content as { pageOrientation?: string })?.pageOrientation ?? "portrait") as "portrait" | "landscape";
+      setPageOrientation(savedOrientation);
       const savedTemplate = ((data.designSettings as { template?: string })?.template ?? "modern") as TemplateId;
       setTemplate(savedTemplate);
       const byPage = (data.designSettings as { placedElementsByPage?: unknown[] })?.placedElementsByPage;
@@ -1418,6 +1422,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   }, [searchParams]);
 
   const totalPages = Math.max(2, sections.length + 2);
+  const effectiveCanvasHeight = pageOrientation === "landscape" ? CANVAS_LANDSCAPE_HEIGHT : CANVAS_HEIGHT;
 
   const displayPageElements = useMemo(() => {
     return sortedPageElements;
@@ -4618,7 +4623,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     position: "relative",
                     zIndex: 10,
                     width: "100%",
-                    minHeight: CANVAS_HEIGHT,
+                    minHeight: effectiveCanvasHeight,
                     padding: 0,
                     margin: 0,
                     boxSizing: "border-box",
@@ -4649,7 +4654,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       zIndex: currentPageIndex > 0 && currentPageIndex < totalPages - 1 ? 25 : 10,
                       pointerEvents: "auto",
                       ...(canvasBgUrl ? { backgroundColor: "transparent" } : {}),
-                      minHeight: CANVAS_HEIGHT,
+                      minHeight: effectiveCanvasHeight,
                     }}
                     onClick={(e) => {
                       const blockEl = (e.target as HTMLElement).closest("h1, h2, h3, h4, p, li");
@@ -4662,7 +4667,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     }}
                   >
                     {currentPageIndex === 0 || currentPageIndex === totalPages - 1 ? (
-                      <div className="min-h-[var(--canvas-height,1100px)] w-full pointer-events-none" style={{ minHeight: CANVAS_HEIGHT }} aria-label={currentPageIndex === 0 ? "Cover page" : "Back cover"} />
+                      <div className="w-full pointer-events-none" style={{ minHeight: effectiveCanvasHeight }} aria-label={currentPageIndex === 0 ? "Cover page" : "Back cover"} />
                     ) : (
                       <>
                         <h2
@@ -4711,7 +4716,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                 return (
                                   <div className={`group relative ${isFullPage ? "" : "mb-4"}`} style={isFullPage ? { margin: "8px -24px -24px", borderRadius: 0 } : {}}>
                                     {regeneratingSectionImageId === section.id ? (
-                                      <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: isFullPage ? `${CANVAS_HEIGHT - 100}px` : "160px" }}>
+                                      <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: isFullPage ? `${effectiveCanvasHeight - 60}px` : "160px" }}>
                                         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                                       </div>
                                     ) : (
@@ -4720,9 +4725,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                         alt=""
                                         style={{
                                           width: "100%",
-                                          height: isFullPage ? `${CANVAS_HEIGHT - 100}px` : undefined,
+                                          height: isFullPage ? `${effectiveCanvasHeight - 60}px` : undefined,
                                           maxHeight: isFullPage ? undefined : "300px",
-                                          objectFit: isFullPage ? "contain" : "cover",
+                                          objectFit: isFullPage ? "cover" : "cover",
                                           borderRadius: isFullPage ? 0 : "8px",
                                           display: "block",
                                           background: isFullPage ? "#fff" : undefined,
@@ -6810,7 +6815,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   sections={sections}
                   onSectionsChange={(updated) => {
                     setSections(updated);
-                    saveToServer({ content: { sections: updated } });
+                    saveToServer({ content: { sections: updated, pageOrientation } });
+                  }}
+                  onOrientationChange={(orientation) => {
+                    setPageOrientation(orientation);
+                    saveToServer({ content: { sections, pageOrientation: orientation } });
                   }}
                 />
               </TabsContent>
