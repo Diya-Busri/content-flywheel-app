@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Package, Sparkles, Check, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, RefreshCw, Package2, Pencil, ExternalLink, Repeat2, Upload } from "lucide-react";
+import { Package, Sparkles, Check, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, RefreshCw, Package2, Pencil, ExternalLink, Repeat2, Upload, PenLine } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { RepurposeDialog } from "@/components/RepurposeDialog";
 
@@ -131,6 +131,10 @@ export default function DigitalProductsLanding() {
   const [bgGeneratingFailed, setBgGeneratingFailed] = useState(false);
   const [bgSectionsDone, setBgSectionsDone] = useState(0);
   const [bgSectionsTotal, setBgSectionsTotal] = useState(0);
+  const [blankOpen, setBlankOpen] = useState(false);
+  const [blankTitle, setBlankTitle] = useState("");
+  const [blankPageCount, setBlankPageCount] = useState("5");
+  const [blankCreating, setBlankCreating] = useState(false);
   const bgProductIdRef = useRef<string | null>(null);
   const bgIntentRef = useRef<string | null>(null);
   const bgContentStyleRef = useRef<string | null>(null);
@@ -279,6 +283,25 @@ export default function DigitalProductsLanding() {
       setBundleItems((prev) => prev.map((i) => (i.productId === item.productId ? { ...i, status: "failed" as BundleItemStatus } : i)));
       toast({ title: "Retry failed", description: err instanceof Error ? err.message : "Could not retry.", variant: "destructive" });
     }
+  };
+
+  const handleCreateBlank = async () => {
+    if (!blankTitle.trim()) return;
+    setBlankCreating(true);
+    try {
+      const res = await fetch("/api/products/create-blank", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: blankTitle.trim(), pageCount: parseInt(blankPageCount) || 5 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.productId) {
+        router.push(`/dashboard/digital-products/${data.productId}/edit?ai=1`);
+      }
+    } catch {
+      // ignore
+    }
+    setBlankCreating(false);
   };
 
   const closeBundleDialog = () => {
@@ -443,7 +466,7 @@ export default function DigitalProductsLanding() {
           </div>
         )}
 
-        <div className="grid md:grid-cols-3 gap-6 items-stretch">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
           {/* LEFT CARD */}
           <Card className={CARD_CLASS}>
             <CardHeader className="pb-4">
@@ -572,6 +595,49 @@ export default function DigitalProductsLanding() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* BLANK CANVAS CARD */}
+          <Card className={CARD_CLASS}>
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-2 text-orange-500 mb-3">
+                <PenLine className="w-7 h-7" />
+                <CardTitle className="text-xl text-gray-900 dark:text-white">Start from Scratch</CardTitle>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-[#A0A0A0]">Perfect if you:</p>
+            </CardHeader>
+            <CardContent className="flex flex-col flex-1 space-y-6">
+              <ul className="space-y-2 text-sm text-gray-700 dark:text-[#E0E0E0]">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500 shrink-0" />
+                  Want full creative control
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500 shrink-0" />
+                  Making something unique (e.g. colouring book)
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500 shrink-0" />
+                  Want AI to guide you as you build
+                </li>
+              </ul>
+              <div>
+                <p className="text-sm text-gray-600 dark:text-[#A0A0A0] mb-2">What you&apos;ll do:</p>
+                <ul className="text-sm text-gray-700 dark:text-[#E0E0E0] space-y-1">
+                  <li>→ Start with blank pages</li>
+                  <li>→ Use the AI assistant to build content</li>
+                  <li>→ Add images, design & export</li>
+                </ul>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-[#A0A0A0]">Time: your pace</p>
+              <Button
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold h-12 text-base gap-2 mt-auto"
+                onClick={() => setBlankOpen(true)}
+              >
+                Start Blank
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Bottom actions */}
@@ -619,6 +685,50 @@ export default function DigitalProductsLanding() {
           to find the best place to sell.
         </p>
       </div>
+
+      {/* Start from Scratch dialog */}
+      <Dialog open={blankOpen} onOpenChange={(open) => { setBlankOpen(open); if (!open) { setBlankTitle(""); setBlankPageCount("5"); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Start from Scratch</DialogTitle>
+            <DialogDescription>Give your product a name and choose how many blank pages to start with. Your AI assistant will help you fill it in.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="blank-title">Product name</Label>
+              <Input
+                id="blank-title"
+                placeholder="e.g. Kids Colouring Book"
+                value={blankTitle}
+                onChange={(e) => setBlankTitle(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreateBlank()}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="blank-pages">Number of pages</Label>
+              <Input
+                id="blank-pages"
+                type="number"
+                min={1}
+                max={50}
+                value={blankPageCount}
+                onChange={(e) => setBlankPageCount(e.target.value)}
+              />
+              <p className="text-xs text-gray-500">You can add or remove pages later.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBlankOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-orange-500 hover:bg-orange-600 text-white"
+              onClick={handleCreateBlank}
+              disabled={!blankTitle.trim() || blankCreating}
+            >
+              {blankCreating ? <><Loader2 className="w-4 h-4 animate-spin mr-1.5" /> Creating…</> : "Create Product"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Generate Full Bundle dialog */}
       <Dialog open={bundleOpen} onOpenChange={(open) => !open && closeBundleDialog()}>
