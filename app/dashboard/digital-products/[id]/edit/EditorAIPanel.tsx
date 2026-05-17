@@ -100,7 +100,9 @@ export function EditorAIPanel({
 
   const [writeLoading, setWriteLoading] = useState(false);
   const [pendingInstruction, setPendingInstruction] = useState<string | null>(null);
+  const [pendingBookType, setPendingBookType] = useState<"coloring" | "childrens" | null>(null);
   const [coloringOrientation, setColoringOrientation] = useState<"portrait" | "landscape">("portrait");
+  const [childrensStyle, setChildrensStyle] = useState<"cartoon" | "watercolor" | "illustration">("cartoon");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -116,8 +118,16 @@ export function EditorAIPanel({
   }, []);
 
   const COLOURING_RE = /colou?ring\s*book/i;
+  const CHILDRENS_RE = /children'?s?\s*(story|picture|illustrated)?\s*book/i;
 
-  const executeWrite = useCallback(async (value: string, orientation: "portrait" | "landscape") => {
+  const CHILDRENS_STYLE_PROMPTS: Record<string, string> = {
+    cartoon: "fun cartoon illustration, bright colours, bold outlines, child-friendly, whimsical",
+    watercolor: "watercolour illustration, soft pastel colours, gentle brushstrokes, child-friendly storybook style",
+    illustration: "children's book illustration, vibrant colours, detailed, professional picture book style",
+  };
+
+  const executeWrite = useCallback(async (value: string, options: { orientation?: "portrait" | "landscape"; style?: string; bookType?: string }) => {
+    const { orientation = "portrait", style = "cartoon", bookType } = options;
     setWriteLoading(true);
     addMessage({ role: "assistant", content: "Writing content…" });
     try {
@@ -129,7 +139,7 @@ export function EditorAIPanel({
           currentSections: sections.filter((s) => s.id !== "cover" && s.id !== "back"),
         }),
       });
-      const data = await res.json().catch(() => ({})) as { actions?: Action[]; message?: string; error?: string; generateImages?: boolean };
+      const data = await res.json().catch(() => ({})) as { actions?: Action[]; message?: string; error?: string; generateImages?: boolean; bookType?: string };
 
       if (!res.ok || data.error || !Array.isArray(data.actions)) {
         setDisplayMessages((prev) => [
@@ -146,17 +156,19 @@ export function EditorAIPanel({
         ]);
 
         if (data.generateImages) {
-          const aspectRatio = orientation === "portrait" ? "9:16" : "16:9";
+          const resolvedType = data.bookType ?? bookType;
           const newSections = updated.filter((s) => s.id !== "cover" && s.id !== "back" && !s.imageUrl);
           for (const section of newSections) {
             try {
+              const isColoring = resolvedType === "coloring";
+              const aspectRatio = isColoring ? (orientation === "portrait" ? "9:16" : "16:9") : "1:1";
+              const prompt = isColoring
+                ? `${section.title}, colouring page for kids, black and white line art, bold simple outlines, no shading, white background, suitable for printing and colouring in`
+                : `${section.title}, ${CHILDRENS_STYLE_PROMPTS[style] ?? CHILDRENS_STYLE_PROMPTS.cartoon}, children's book scene`;
               const imgRes = await fetch("/api/chat/coach/generate-image", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  prompt: `${section.title}, colouring page for kids, black and white line art, bold simple outlines, no shading, white background, suitable for printing and colouring in`,
-                  aspectRatio,
-                }),
+                body: JSON.stringify({ prompt, aspectRatio }),
               });
               const imgData = await imgRes.json().catch(() => ({})) as { url?: string };
               if (imgData.url) {
@@ -177,6 +189,7 @@ export function EditorAIPanel({
     } finally {
       setWriteLoading(false);
       setPendingInstruction(null);
+      setPendingBookType(null);
     }
   }, [productId, sections, onSectionsChange, addMessage]);
 
@@ -190,10 +203,13 @@ export function EditorAIPanel({
 
     if (isWriteIntent(value)) {
       if (COLOURING_RE.test(value)) {
-        // Show orientation picker before generating
         setPendingInstruction(value);
+        setPendingBookType("coloring");
+      } else if (CHILDRENS_RE.test(value)) {
+        setPendingInstruction(value);
+        setPendingBookType("childrens");
       } else {
-        await executeWrite(value, "portrait");
+        await executeWrite(value, {});
       }
     } else {
       sendCoach(value);
@@ -227,29 +243,44 @@ export function EditorAIPanel({
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Orientation picker for colouring books */}
-      {pendingInstruction && (
+      {/* Style/orientation picker */}
+      {pendingInstruction && pendingBookType === "coloring" && (
         <div className="mx-4 mt-4 rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-3 shrink-0">
           <p className="text-sm font-medium text-orange-900">Choose page orientation</p>
           <div className="grid grid-cols-2 gap-2">
-            {([["portrait", "📄 Portrait", "Tall pages\n(A4 style)"], ["landscape", "🖼️ Landscape", "Wide pages"]] as const).map(([val, label, desc]) => (
-              <button
-                key={val}
-                onClick={() => setColoringOrientation(val)}
-                className={`rounded-lg border p-3 text-left transition-colors ${coloringOrientation === val ? "border-orange-500 bg-orange-100 text-orange-800" : "border-gray-200 bg-white text-gray-700 hover:border-orange-300"}`}
-              >
-                <div className="text-base">{label}</div>
+            {([["portrait", "📄 Portrait", "Tall pages (A4 style)"], ["landscape", "🖼️ Landscape", "Wide pages"]] as const).map(([val, label, desc]) => (
+              <button key={val} onClick={() => setColoringOrientation(val)}
+                className={`rounded-lg border p-3 text-left transition-colors ${coloringOrientation === val ? "border-orange-500 bg-orange-100 text-orange-800" : "border-gray-200 bg-white text-gray-700 hover:border-orange-300"}`}>
+                <div className="text-sm font-medium">{label}</div>
                 <div className="text-xs text-gray-500 mt-0.5">{desc}</div>
               </button>
             ))}
           </div>
-          <Button
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-            onClick={() => executeWrite(pendingInstruction, coloringOrientation)}
-            disabled={writeLoading}
-          >
+          <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+            onClick={() => executeWrite(pendingInstruction, { orientation: coloringOrientation, bookType: "coloring" })}
+            disabled={writeLoading}>
             {writeLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
             Generate Colouring Book
+          </Button>
+        </div>
+      )}
+      {pendingInstruction && pendingBookType === "childrens" && (
+        <div className="mx-4 mt-4 rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-3 shrink-0">
+          <p className="text-sm font-medium text-orange-900">Choose illustration style</p>
+          <div className="grid grid-cols-3 gap-2">
+            {([["cartoon", "🎨 Cartoon", "Bold & fun"], ["watercolor", "💧 Watercolour", "Soft & dreamy"], ["illustration", "✏️ Illustrated", "Detailed & rich"]] as const).map(([val, label, desc]) => (
+              <button key={val} onClick={() => setChildrensStyle(val)}
+                className={`rounded-lg border p-2.5 text-left transition-colors ${childrensStyle === val ? "border-orange-500 bg-orange-100 text-orange-800" : "border-gray-200 bg-white text-gray-700 hover:border-orange-300"}`}>
+                <div className="text-sm font-medium">{label}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{desc}</div>
+              </button>
+            ))}
+          </div>
+          <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+            onClick={() => executeWrite(pendingInstruction, { style: childrensStyle, bookType: "childrens" })}
+            disabled={writeLoading}>
+            {writeLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Generate Children&apos;s Book
           </Button>
         </div>
       )}
