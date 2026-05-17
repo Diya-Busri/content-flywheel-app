@@ -988,6 +988,7 @@ const IMAGE_STYLES: { id: string; label: string; emoji: string; suffix: string }
   { id: "minimalist", label: "Minimalist", emoji: "◻️", suffix: "minimalist design, clean lines, simple shapes, white background" },
   { id: "watercolor", label: "Watercolour", emoji: "💧", suffix: "watercolour painting, soft washes, artistic style" },
   { id: "vintage", label: "Vintage", emoji: "📜", suffix: "vintage retro style, muted tones, classic illustration" },
+  { id: "typography", label: "Typography", emoji: "✍️", suffix: "bold typographic design, decorative lettering, hand-lettered style, beautiful fonts, text as art" },
 ];
 
 export default function ProductEditor({ productId }: { productId: string }) {
