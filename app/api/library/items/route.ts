@@ -3,8 +3,29 @@ import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { myLibraryTable } from "@/db/schema/library-schema";
+import { eq, desc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
+
+/** GET: Fetch my_library items for the current user. ?type=generated_image|voice_over|all */
+export async function GET(req: Request) {
+  try {
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { searchParams } = new URL(req.url);
+    const typeFilter = searchParams.get("type") ?? "all";
+    const rows = await db
+      .select()
+      .from(myLibraryTable)
+      .where(eq(myLibraryTable.userId, userId))
+      .orderBy(desc(myLibraryTable.createdAt));
+    const filtered = typeFilter === "all" ? rows : rows.filter((r) => r.type === typeFilter);
+    return NextResponse.json(filtered);
+  } catch (err) {
+    console.error("[library/items] GET error:", err);
+    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
+  }
+}
 
 /**
  * POST: Save an item to my_library (e.g. generated_image, voice_over from AI Coach).

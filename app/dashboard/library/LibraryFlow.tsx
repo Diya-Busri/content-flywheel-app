@@ -72,7 +72,7 @@ import { FeaturePreviewGate } from "@/components/feature-preview-gate";
 import { QuickSellSheet } from "@/components/product-editor/QuickSellSheet";
 import { SellOnCFButton } from "@/components/product-editor/SellOnCFButton";
 
-type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "trash";
+type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "images" | "trash";
 
 type TemplatePackItem = {
   id: string;
@@ -385,6 +385,8 @@ export default function LibraryFlow() {
   const [packsLoading, setPacksLoading] = useState(false);
   const [youtubePosts, setYoutubePosts] = useState<ScheduledPostItem[]>([]);
   const [youtubeLoading, setYoutubeLoading] = useState(false);
+  const [myImages, setMyImages] = useState<{ id: string; title: string; url: string | null; createdAt: string }[]>([]);
+  const [imagesLoading, setImagesLoading] = useState(false);
   /** YouTube publish sheet state */
   const [ytPublishItem, setYtPublishItem] = useState<{
     videoId?: string;
@@ -501,12 +503,24 @@ export default function LibraryFlow() {
     }
   };
 
+  const fetchImages = async () => {
+    setImagesLoading(true);
+    try {
+      const res = await fetch("/api/library/items?type=generated_image");
+      if (!res.ok) throw new Error("Failed to load images");
+      const data = await res.json();
+      setMyImages(Array.isArray(data) ? data : []);
+    } catch {
+      toast({ title: "Could not load images", variant: "destructive" });
+    } finally {
+      setImagesLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (tab === "templates" || tab === "history") return;
-    if (tab === "youtube") {
-      fetchYouTubePosts();
-      return;
-    }
+    if (tab === "youtube") { fetchYouTubePosts(); return; }
+    if (tab === "images") { fetchImages(); return; }
     if (tab === "template-packs") fetchTemplatePacks();
     else fetchItems();
   }, [tab]);
@@ -712,6 +726,7 @@ export default function LibraryFlow() {
               <span>YouTube</span>
               <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden />
             </TabsTrigger>
+            <TabsTrigger value="images" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Images</TabsTrigger>
             <TabsTrigger value="template-packs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Template Packs</TabsTrigger>
             <TabsTrigger value="templates" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Templates</TabsTrigger>
             <TabsTrigger value="trash" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Trash</TabsTrigger>
@@ -793,7 +808,66 @@ export default function LibraryFlow() {
         </AlertDialog>
 
         <TabsContent value={tab} className="mt-0">
-          {tab === "templates" ? (
+          {tab === "images" ? (
+            <div>
+              {imagesLoading ? (
+                <div className="py-16 flex flex-col items-center justify-center">
+                  <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">Loading images...</p>
+                </div>
+              ) : myImages.length === 0 ? (
+                <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+                  <CardContent className="py-12 text-center">
+                    <ImageIcon className="w-12 h-12 text-orange-500 mx-auto mb-4" />
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No saved images yet</h2>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4 max-w-md mx-auto">
+                      Generate images in AI Coach and click &ldquo;Save to Library&rdquo; to see them here.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {myImages.map((img) => (
+                    <Card key={img.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
+                      {img.url ? (
+                        <img src={img.url} alt={img.title} className="w-full aspect-video object-cover" />
+                      ) : (
+                        <div className="w-full aspect-video bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                          <ImageIcon className="w-10 h-10 text-gray-400" />
+                        </div>
+                      )}
+                      <CardContent className="p-3 flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{img.title}</p>
+                        {img.url && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0 gap-1.5"
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(img.url!);
+                                const blob = await res.blob();
+                                const a = document.createElement("a");
+                                a.href = URL.createObjectURL(blob);
+                                a.download = `${img.title.replace(/\s+/g, "-")}-${img.id.slice(0, 6)}.png`;
+                                a.click();
+                                URL.revokeObjectURL(a.href);
+                              } catch {
+                                toast({ title: "Download failed", variant: "destructive" });
+                              }
+                            }}
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Download
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : tab === "templates" ? (
             <TemplatesClient />
           ) : tab === "history" ? (
             <HistoryClient />
