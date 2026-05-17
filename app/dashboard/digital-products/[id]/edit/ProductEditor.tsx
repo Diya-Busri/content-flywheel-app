@@ -4758,7 +4758,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                   </div>
                                 );
                               })() : null}
-                              <div
+                              {!isFullPage && <div
                                 data-section-id={section.id}
                                 data-text-type="body"
                                 className="mt-2 prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed prose-headings:mb-4 prose-headings:mt-6 prose-ul:mb-4 prose-ol:mb-4 prose-li:mb-2 cursor-text [&_.preview-content]:outline-none [&_.preview-content]:focus:outline-none [&_table]:w-full [&_table]:border-collapse [&_table]:mb-4 [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-100 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-gray-300 [&_td]:px-2 [&_td]:py-1.5 [&_td]:align-top [&_tr:nth-child(even)_td]:bg-gray-50 [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono"
@@ -4776,7 +4776,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                   }}
                                   data-placeholder="Click to add content..."
                                 />
-                              </div>
+                              </div>}
                             </section>
                           );
                         })}
