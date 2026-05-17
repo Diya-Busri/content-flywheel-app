@@ -3739,7 +3739,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
     setGenerateImagesLoading(false);
     setGenerateImagesProgress(null);
-  }, [sections, buildImagePrompt, saveToServer]);
+  }, [sections, selectedGeneratePageIds, buildImagePrompt, saveToServer]);
 
   const handleRegenerateSectionImage = useCallback(async (sectionId: string) => {
     const section = sections.find((s) => s.id === sectionId);
