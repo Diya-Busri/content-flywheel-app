@@ -12,8 +12,8 @@ const STYLE_KEYWORDS = /watercolor|oil\s*painting|sketch|minimalist|minimal|real
 
 const BUCKET = "timeline-media";
 
-/** DALL-E 3 landscape 16:9 (YouTube) — only supported landscape size for reliable 16:9. */
-const SIZE_16_9 = "1792x1024" as const;
+/** gpt-image-1 landscape (closest to 16:9) and square sizes. */
+const SIZE_16_9 = "1536x1024" as const;
 const SIZE_SQUARE = "1024x1024" as const;
 
 const PEOPLE_KEYWORDS = /\bperson|people|someone|woman|man|girl|boy|human|face|portrait\b/i;
@@ -91,41 +91,34 @@ export async function POST(req: Request) {
     const openai = new OpenAI({ apiKey });
     const enhanced = enhancePrompt(prompt);
 
-    let imageUrl: string | undefined;
+    let b64: string | undefined;
     let lastErr: unknown;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const response = await openai.images.generate({
-          model: "dall-e-3",
+          model: "gpt-image-1",
           prompt: enhanced,
           n: 1,
           size,
-          quality: "standard",
+          quality: "low",
         });
-        imageUrl = response.data[0]?.url;
-        if (imageUrl && typeof imageUrl === "string") break;
+        b64 = response.data[0]?.b64_json;
+        if (b64) break;
       } catch (e) {
         lastErr = e;
       }
     }
-    if (!imageUrl || typeof imageUrl !== "string") {
-      const msg = lastErr instanceof Error ? lastErr.message : "No image URL returned";
+    if (!b64) {
+      const msg = lastErr instanceof Error ? lastErr.message : "No image returned";
       return NextResponse.json({ error: msg }, { status: 500 });
     }
 
-    // Persist: fetch image and upload to our storage so URL is stable (for timeline/DB)
-    try {
-      const res = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
-      if (res.ok) {
-        const buf = Buffer.from(await res.arrayBuffer());
-        const contentType = res.headers.get("content-type") || "image/png";
-        const permanentUrl = await uploadImageToStorage(userId, buf, contentType);
-        if (permanentUrl) return NextResponse.json({ url: permanentUrl });
-      }
-    } catch (uploadErr) {
-      console.warn("[generate-image] Storage upload failed, returning DALL-E URL:", uploadErr);
-    }
-    return NextResponse.json({ url: imageUrl });
+    const buf = Buffer.from(b64, "base64");
+    const permanentUrl = await uploadImageToStorage(userId, buf, "image/png");
+    if (permanentUrl) return NextResponse.json({ url: permanentUrl });
+
+    // Fallback: return as data URL if storage not configured
+    return NextResponse.json({ url: `data:image/png;base64,${b64}` });
   } catch (err) {
     console.error("[chat/coach/generate-image]", err);
     const message = err instanceof Error ? err.message : "Image generation failed";
