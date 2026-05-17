@@ -971,6 +971,14 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
   );
 });
 
+const STYLE_SUGGESTIONS = [
+  "sun", "moon", "stars", "aurora", "golden hour", "sunset", "forest", "ocean", "mountains", "cosmic",
+  "botanical", "floral", "celestial", "geometric", "mandala", "abstract", "mosaic", "stained glass",
+  "paper cut", "origami", "collage", "woodcut", "linocut", "ink wash", "sketch", "hand lettered",
+  "calligraphy", "bold typography", "neon sign", "chalk art", "folk art", "pop art", "street art",
+  "impressionist", "pastel", "neon", "monochrome", "earthy tones", "jewel tones", "golden", "midnight",
+];
+
 const IMAGE_STYLES: { id: string; label: string; emoji: string; suffix: string }[] = [
   { id: "illustration", label: "Illustration", emoji: "🎨", suffix: "vibrant digital illustration, modern flat design style" },
   { id: "realistic", label: "Realistic", emoji: "📷", suffix: "photorealistic, high quality, professional photography style" },
@@ -1060,6 +1068,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [regeneratingSectionImageId, setRegeneratingSectionImageId] = useState<string | null>(null);
   const [showImageStyleDialog, setShowImageStyleDialog] = useState(false);
   const [selectedImageStyle, setSelectedImageStyle] = useState("illustration");
+  const [customStyleKeyword, setCustomStyleKeyword] = useState("");
+  const [showStyleSuggestions, setShowStyleSuggestions] = useState(false);
   const [resizingImageId, setResizingImageId] = useState<string | null>(null);
   const resizeStartRef = useRef<{ y: number; height: number } | null>(null);
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
@@ -3651,16 +3661,19 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
   };
 
-  const buildImagePrompt = useCallback((title: string, style: string) => {
-    const styleEntry = IMAGE_STYLES.find((s) => s.id === style) ?? IMAGE_STYLES[0];
+  const buildImagePrompt = useCallback((title: string, style: string, customKeyword?: string) => {
+    const suffix = customKeyword?.trim()
+      ? `${customKeyword.trim()} style`
+      : (IMAGE_STYLES.find((s) => s.id === style) ?? IMAGE_STYLES[0]).suffix;
     const niche = product?.niche ? ` — ${product.niche}` : "";
-    return `${title}${niche}. ${styleEntry.suffix}.`;
+    return `${title}${niche}. ${suffix}.`;
   }, [product]);
 
-  const handleGenerateImages = useCallback(async (style: string) => {
+  const handleGenerateImages = useCallback(async (style: string, customKeyword?: string) => {
     const contentSections = sections.filter((s) => s.id !== "cover" && s.id !== "back");
     if (!contentSections.length) return;
     setShowImageStyleDialog(false);
+    setCustomStyleKeyword("");
     setGenerateImagesLoading(true);
     setGenerateImagesProgress({ done: 0, total: contentSections.length });
     let updatedSections = [...sections];
@@ -3670,7 +3683,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         const isSectionFullPage = !section.content || section.content.replace(/<[^>]*>/g, "").trim() === "";
         const prompt = isSectionFullPage
           ? `${section.title}, colouring page for kids, black and white line art, bold simple outlines, no shading, white background, suitable for printing and colouring in`
-          : buildImagePrompt(section.title, style);
+          : buildImagePrompt(section.title, style, customKeyword);
         const aspectRatio = isSectionFullPage
           ? (pageOrientation === "landscape" ? "16:9" : "9:16")
           : "1:1";
@@ -4172,7 +4185,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
             <DialogTitle>Choose Image Style</DialogTitle>
             <DialogDescription>Pick a style for your AI-generated section images.</DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-2 py-2">
+          <div className={`grid grid-cols-2 gap-2 py-2 ${customStyleKeyword.trim() ? "opacity-40 pointer-events-none" : ""}`}>
             {IMAGE_STYLES.map((style) => (
               <button
                 key={style.id}
@@ -4188,11 +4201,48 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </button>
             ))}
           </div>
+          <div className="relative">
+            <p className="text-xs text-gray-500 mb-1.5">Or type your own style keyword</p>
+            <input
+              type="text"
+              value={customStyleKeyword}
+              onChange={(e) => { setCustomStyleKeyword(e.target.value); setShowStyleSuggestions(true); }}
+              onFocus={() => setShowStyleSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowStyleSuggestions(false), 150)}
+              placeholder='e.g. "sun", "stained glass", "golden hour"'
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+            />
+            {customStyleKeyword.trim() && (
+              <button
+                type="button"
+                onClick={() => setCustomStyleKeyword("")}
+                className="absolute right-2.5 top-[2.1rem] text-gray-400 hover:text-gray-600 text-xs"
+              >
+                ✕
+              </button>
+            )}
+            {showStyleSuggestions && (
+              <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg max-h-40 overflow-y-auto">
+                {STYLE_SUGGESTIONS.filter((s) =>
+                  !customStyleKeyword.trim() || s.includes(customStyleKeyword.toLowerCase())
+                ).map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onMouseDown={() => { setCustomStyleKeyword(suggestion); setShowStyleSuggestions(false); }}
+                    className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 capitalize"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowImageStyleDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowImageStyleDialog(false); setCustomStyleKeyword(""); }}>Cancel</Button>
             <Button
               className="bg-orange-500 hover:bg-orange-600 text-white"
-              onClick={() => handleGenerateImages(selectedImageStyle)}
+              onClick={() => handleGenerateImages(selectedImageStyle, customStyleKeyword.trim() || undefined)}
             >
               Generate Images
             </Button>
