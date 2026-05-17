@@ -23,6 +23,7 @@ export type DesignElement = {
   imageUrl?: string;
   objectFit?: string;
   // shape
+  shapeType?: string;
   fill?: string;
   stroke?: string;
   strokeWidth?: number;
