@@ -110,6 +110,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           : undefined;
 
     const subFocus = typeof body.subFocus === "string" ? body.subFocus.trim() : undefined;
+    const bundleMode = body.bundleMode === true;
     const params: GenerateProductContentParams = {
       productName,
       productDescription,
@@ -121,6 +122,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       hookTexts: hookTexts.filter(Boolean),
       ctaTexts: ctaTexts.filter(Boolean),
       customizationOptions,
+      bundleMode,
     };
 
     // 1. Generate outline (retry once on failure so products are generated no matter what)

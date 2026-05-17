@@ -41,6 +41,8 @@ export type GenerateProductContentParams = {
   hookTexts: string[];
   ctaTexts: string[];
   customizationOptions?: CustomizationOptions;
+  /** Bundle mode: generate a shorter product (fewer sections) to keep generation fast when 8 run in parallel. */
+  bundleMode?: boolean;
 };
 
 const SYSTEM_PREMIUM =
@@ -94,10 +96,10 @@ function buildPrompt(params: GenerateProductContentParams): { prompt: string; us
   if (normalizedFormat === "ebook") {
     return {
       useGpt4: true,
-      maxTokens: 16000,
+      maxTokens: params.bundleMode ? 10000 : 16000,
       prompt: `Create an EBOOK titled "${productName}" for the ${niche} niche.
 
-Write a fully prose-based ebook on ${subTopic}. 6-8 chapters. Each chapter has: title, intro paragraph, 3-4 subheadings with written content, a real-world example, and a chapter summary. No fill-in sections. No checklists. Pure educational reading content.
+Write a fully prose-based ebook on ${subTopic}. ${params.bundleMode ? "4-5 chapters" : "6-8 chapters"}. Each chapter has: title, intro paragraph, 3-4 subheadings with written content, a real-world example, and a chapter summary. No fill-in sections. No checklists. Pure educational reading content.
 
 ${ctx}
 ${SELLABLE_STRUCTURE}
@@ -182,8 +184,17 @@ Use <ul class="checklist"><li>☐ Action item.</li></ul>. Sections: outcome-prom
   if (normalizedFormat === "journal") {
     return {
       useGpt4: true,
-      maxTokens: 14000,
-      prompt: `Create a JOURNAL titled "${productName}" for the ${niche} niche.
+      maxTokens: params.bundleMode ? 8000 : 14000,
+      prompt: params.bundleMode
+        ? `Create a JOURNAL titled "${productName}" for the ${niche} niche.
+
+Generate a guided journal on ${subTopic}. Include: a brief welcome section, 7 daily journal entries (Day 1–7) each with a unique prompt specific to ${subTopic}, and a weekly reflection page. Include fill-in lines throughout.
+
+${ctx}
+${SELLABLE_STRUCTURE}
+
+Sections: outcome-promise, fast-start, framework, welcome, daily1, daily2, daily3, daily4, daily5, daily6, daily7, weekly-reflection, disclaimer. Use <div class="writing-space"> and ___ for fill-in lines. Return ONLY JSON: {"sections":[{"id":"...","title":"...","body":"..."}]}. ${htmlRules}`
+        : `Create a JOURNAL titled "${productName}" for the ${niche} niche.
 
 Generate a guided journal on ${subTopic}. Include: a brief welcome/how to use section, 30 daily journal entries each with a unique prompt, a weekly reflection page every 7 days with 4-5 deeper questions, and a monthly review page with prompts for tracking growth. Prompts must be specific to ${subTopic}, not generic. Include fill-in lines throughout.
 

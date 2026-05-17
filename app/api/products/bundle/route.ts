@@ -51,55 +51,55 @@ export async function POST(request: Request) {
       "http://localhost:3000";
 
     const bundleId = crypto.randomUUID();
-    const productIds: string[] = [];
-    const items: { productId: string; format: string; label: string }[] = [];
 
-    for (const { format, label, subFocus } of BUNDLE_FORMATS) {
-      const title = `${niche} - ${label}`;
-      const [inserted] = await db
-        .insert(productsTable)
-        .values({
-          userId,
-          title,
-          niche,
-          format,
-          content: { sections: [] },
-          designSettings,
-          placedElements: [],
-          customizationOptions: null,
-          status: "generating",
-          bundleId,
-        })
-        .returning({ id: productsTable.id });
+    // Insert all 8 products in parallel instead of serially (saves ~2-3s)
+    const insertResults = await Promise.all(
+      BUNDLE_FORMATS.map(async ({ format, label, subFocus }) => {
+        const title = `${niche} - ${label}`;
+        const [inserted] = await db
+          .insert(productsTable)
+          .values({
+            userId,
+            title,
+            niche,
+            format,
+            content: { sections: [] },
+            designSettings,
+            placedElements: [],
+            customizationOptions: null,
+            status: "generating",
+            bundleId,
+          })
+          .returning({ id: productsTable.id });
+        return inserted?.id ? { productId: inserted.id, format, label, subFocus, title } : null;
+      })
+    );
 
-      if (!inserted?.id) {
-        console.error("[products/bundle] Failed to insert product for format:", format);
-        continue;
-      }
+    const items = insertResults.filter(Boolean) as { productId: string; format: string; label: string; subFocus: string; title: string }[];
 
-      productIds.push(inserted.id);
-      items.push({ productId: inserted.id, format, label, subFocus });
+    // Stagger process calls by 500ms each to avoid hammering OpenAI rate limits simultaneously
+    items.forEach(({ productId, format, label, subFocus, title }, i) => {
+      setTimeout(() => {
+        fetch(`${base}/api/products/${productId}/process`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            niche,
+            product: { name: title, included: "", why: "" },
+            productName: title,
+            format,
+            subFocus,
+            bundleMode: true,
+            hooks: [],
+            ctas: [],
+          }),
+        }).catch((e) => {
+          console.error("[products/bundle] Failed to trigger process for", productId, e);
+        });
+      }, i * 500);
+    });
 
-      const processBody = {
-        niche,
-        product: { name: title, included: "", why: "" },
-        productName: title,
-        format,
-        subFocus,
-        hooks: [],
-        ctas: [],
-      };
-
-      fetch(`${base}/api/products/${inserted.id}/process`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(processBody),
-      }).catch((e) => {
-        console.error("[products/bundle] Failed to trigger process for", inserted.id, e);
-      });
-    }
-
-    return NextResponse.json({ productIds, items, success: true });
+    return NextResponse.json({ productIds: items.map((i) => i.productId), items, success: true });
   } catch (err) {
     console.error("[products/bundle] Failed:", err);
     return NextResponse.json(
