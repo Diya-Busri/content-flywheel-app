@@ -27,6 +27,8 @@ function stripHtmlServer(html: string): string {
  */
 export function sanitizeHtml(html: string): string {
   if (typeof html !== "string") return "";
+  // Strip literal \n escape sequences the AI occasionally outputs as text
+  html = html.replace(/\\n/g, " ").replace(/\s{2,}/g, " ");
   if (typeof window !== "undefined") {
     try {
       const DOMPurify = require("dompurify");
