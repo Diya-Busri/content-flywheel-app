@@ -3683,11 +3683,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
     if (!section) return;
     setRegeneratingSectionImageId(sectionId);
     try {
-      const prompt = buildImagePrompt(section.title, selectedImageStyle);
+      const isFullPage = !section.content || section.content.replace(/<[^>]*>/g, "").trim() === "";
+      const prompt = isFullPage
+        ? `${section.title}, colouring page for kids, black and white line art, bold simple outlines, no shading, white background, suitable for printing and colouring in`
+        : buildImagePrompt(section.title, selectedImageStyle);
+      const aspectRatio = isFullPage
+        ? (pageOrientation === "landscape" ? "16:9" : "9:16")
+        : "1:1";
       const res = await fetch("/api/chat/coach/generate-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, aspectRatio: "1:1" }),
+        body: JSON.stringify({ prompt, aspectRatio }),
       });
       const data = await res.json().catch(() => ({}));
       if (data.url) {
