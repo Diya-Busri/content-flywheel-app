@@ -9,6 +9,7 @@ import {
   AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter,
   MoveLeft, MoveRight, MoveUp, MoveDown, Undo2, Redo2,
   Underline, Strikethrough, ZoomIn, ZoomOut, FileDown, Highlighter,
+  LayoutTemplate, Images, Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +68,108 @@ function buildBg(data: DesignData): string {
   return data.background;
 }
 
+// ── Templates ──────────────────────────────────────────────────────────────
+
+type TemplateDef = { id: string; label: string; bg: string; preview: string; make: (w: number, h: number) => Partial<DesignData> & { elements: DesignElement[] } };
+
+const TEMPLATES: TemplateDef[] = [
+  {
+    id: "bold-dark", label: "Bold Dark", bg: "#0f172a", preview: "linear-gradient(135deg,#0f172a,#1e3a5f)",
+    make: (w, h) => ({
+      background: "#0f172a", backgroundType: "solid" as const,
+      elements: [
+        { id: uid(), type: "text" as const, x: Math.round(w*0.08), y: Math.round(h*0.32), width: Math.round(w*0.84), height: Math.round(h*0.18), content: "YOUR TITLE HERE", fontSize: Math.round(w*0.09), fontFamily: "Impact", color: "#ffffff", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.1, letterSpacing: 2 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.15), y: Math.round(h*0.53), width: Math.round(w*0.7), height: Math.round(h*0.08), content: "Subtitle · Date · Venue", fontSize: Math.round(w*0.028), fontFamily: "Inter", color: "#94a3b8", fontWeight: "400", textAlign: "center", zIndex: 2, lineHeight: 1.3, letterSpacing: 4 },
+        { id: uid(), type: "shape" as const, shapeType: "line-h", x: Math.round(w*0.3), y: Math.round(h*0.5), width: Math.round(w*0.4), height: 8, fill: "#f97316", zIndex: 0 },
+      ]
+    })
+  },
+  {
+    id: "orange-gradient", label: "Vibrant", bg: "", preview: "linear-gradient(135deg,#f97316,#ec4899)",
+    make: (w, h) => ({
+      background: "#f97316", backgroundType: "gradient" as const, backgroundGradient: { color1: "#f97316", color2: "#ec4899", angle: 135 },
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "star", x: Math.round(w*0.05), y: Math.round(h*0.04), width: Math.round(w*0.12), height: Math.round(w*0.12), fill: "rgba(255,255,255,0.25)", zIndex: 0 },
+        { id: uid(), type: "shape" as const, shapeType: "star", x: Math.round(w*0.78), y: Math.round(h*0.06), width: Math.round(w*0.15), height: Math.round(w*0.15), fill: "rgba(255,255,255,0.2)", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.07), y: Math.round(h*0.35), width: Math.round(w*0.86), height: Math.round(h*0.2), content: "MAKE IT\nHAPPEN", fontSize: Math.round(w*0.11), fontFamily: "Impact", color: "#ffffff", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.1, letterSpacing: 3 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.1), y: Math.round(h*0.6), width: Math.round(w*0.8), height: Math.round(h*0.07), content: "Your tagline goes here", fontSize: Math.round(w*0.03), fontFamily: "Inter", color: "rgba(255,255,255,0.9)", fontWeight: "400", textAlign: "center", zIndex: 2, lineHeight: 1.4 },
+      ]
+    })
+  },
+  {
+    id: "minimal-white", label: "Minimal", bg: "#ffffff", preview: "#ffffff",
+    make: (w, h) => ({
+      background: "#ffffff", backgroundType: "solid" as const,
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "rect", x: Math.round(w*0.08), y: Math.round(h*0.3), width: Math.round(w*0.06), height: Math.round(h*0.12), fill: "#f97316", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.18), y: Math.round(h*0.3), width: Math.round(w*0.74), height: Math.round(h*0.14), content: "Clean Heading", fontSize: Math.round(w*0.07), fontFamily: "Georgia", color: "#1a1a1a", fontWeight: "700", textAlign: "left", zIndex: 1, lineHeight: 1.2 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.18), y: Math.round(h*0.46), width: Math.round(w*0.65), height: Math.round(h*0.12), content: "A simple, elegant description for your design project.", fontSize: Math.round(w*0.025), fontFamily: "Inter", color: "#64748b", fontWeight: "400", textAlign: "left", zIndex: 2, lineHeight: 1.6 },
+        { id: uid(), type: "shape" as const, shapeType: "line-h", x: Math.round(w*0.08), y: Math.round(h*0.62), width: Math.round(w*0.84), height: 6, fill: "#e2e8f0", zIndex: 0 },
+      ]
+    })
+  },
+  {
+    id: "night-stars", label: "Night Sky", bg: "", preview: "linear-gradient(160deg,#0a1628,#1e3a5f)",
+    make: (w, h) => ({
+      background: "#0a1628", backgroundType: "gradient" as const, backgroundGradient: { color1: "#0a1628", color2: "#1e3a5f", angle: 160 },
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "star", x: Math.round(w*0.08), y: Math.round(h*0.05), width: Math.round(w*0.18), height: Math.round(w*0.18), fill: "#eab308", shadowColor: "#eab308", shadowBlur: 20, shadowX: 0, shadowY: 0, zIndex: 0 },
+        { id: uid(), type: "shape" as const, shapeType: "star", x: Math.round(w*0.72), y: Math.round(h*0.04), width: Math.round(w*0.2), height: Math.round(w*0.2), fill: "#eab308", shadowColor: "#eab308", shadowBlur: 15, shadowX: 0, shadowY: 0, zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.07), y: Math.round(h*0.38), width: Math.round(w*0.86), height: Math.round(h*0.18), content: "DREAM BIG", fontSize: Math.round(w*0.1), fontFamily: "Impact", color: "#fef3c7", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.1, letterSpacing: 5 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.1), y: Math.round(h*0.58), width: Math.round(w*0.8), height: Math.round(h*0.07), content: "Reach for the stars", fontSize: Math.round(w*0.028), fontFamily: "Dancing Script", color: "#94a3b8", fontWeight: "400", textAlign: "center", zIndex: 2, lineHeight: 1.4 },
+      ]
+    })
+  },
+  {
+    id: "bold-red", label: "Bold Red", bg: "#dc2626", preview: "linear-gradient(135deg,#dc2626,#991b1b)",
+    make: (w, h) => ({
+      background: "#dc2626", backgroundType: "solid" as const,
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "rect", x: 0, y: Math.round(h*0.38), width: w, height: Math.round(h*0.24), fill: "#991b1b", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.06), y: Math.round(h*0.4), width: Math.round(w*0.88), height: Math.round(h*0.2), content: "SALE", fontSize: Math.round(w*0.22), fontFamily: "Impact", color: "#fef08a", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.0, letterSpacing: 8 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.08), y: Math.round(h*0.65), width: Math.round(w*0.84), height: Math.round(h*0.08), content: "LIMITED TIME OFFER", fontSize: Math.round(w*0.032), fontFamily: "Inter", color: "#ffffff", fontWeight: "700", textAlign: "center", zIndex: 2, lineHeight: 1.3, letterSpacing: 4 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.1), y: Math.round(h*0.22), width: Math.round(w*0.8), height: Math.round(h*0.08), content: "DON'T MISS OUT", fontSize: Math.round(w*0.032), fontFamily: "Inter", color: "rgba(255,255,255,0.8)", fontWeight: "700", textAlign: "center", zIndex: 2, lineHeight: 1.3, letterSpacing: 3 },
+      ]
+    })
+  },
+  {
+    id: "elegant-cream", label: "Elegant", bg: "#fdf8f0", preview: "#fdf8f0",
+    make: (w, h) => ({
+      background: "#fdf8f0", backgroundType: "solid" as const,
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "diamond", x: Math.round(w*0.44), y: Math.round(h*0.12), width: Math.round(w*0.12), height: Math.round(w*0.12), fill: "#d4a574", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.08), y: Math.round(h*0.28), width: Math.round(w*0.84), height: Math.round(h*0.15), content: "Elegant Title", fontSize: Math.round(w*0.075), fontFamily: "Playfair Display", color: "#2c1810", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.2 },
+        { id: uid(), type: "shape" as const, shapeType: "line-h", x: Math.round(w*0.25), y: Math.round(h*0.45), width: Math.round(w*0.5), height: 4, fill: "#d4a574", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.12), y: Math.round(h*0.5), width: Math.round(w*0.76), height: Math.round(h*0.1), content: "A refined, timeless description\nfor your special occasion", fontSize: Math.round(w*0.026), fontFamily: "Georgia", color: "#6b4c3b", fontWeight: "400", textAlign: "center", zIndex: 2, lineHeight: 1.7 },
+      ]
+    })
+  },
+  {
+    id: "quote-card", label: "Quote", bg: "#1e293b", preview: "linear-gradient(135deg,#1e293b,#334155)",
+    make: (w, h) => ({
+      background: "#1e293b", backgroundType: "solid" as const,
+      elements: [
+        { id: uid(), type: "text" as const, x: Math.round(w*0.08), y: Math.round(h*0.12), width: Math.round(w*0.2), height: Math.round(h*0.18), content: "“", fontSize: Math.round(w*0.2), fontFamily: "Georgia", color: "#f97316", fontWeight: "700", textAlign: "left", zIndex: 0, lineHeight: 1.0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.1), y: Math.round(h*0.28), width: Math.round(w*0.8), height: Math.round(h*0.35), content: "Write something\ninspirational here", fontSize: Math.round(w*0.058), fontFamily: "Playfair Display", color: "#f1f5f9", fontWeight: "400", textAlign: "center", zIndex: 1, lineHeight: 1.5 },
+        { id: uid(), type: "shape" as const, shapeType: "line-h", x: Math.round(w*0.3), y: Math.round(h*0.66), width: Math.round(w*0.4), height: 4, fill: "#f97316", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.1), y: Math.round(h*0.7), width: Math.round(w*0.8), height: Math.round(h*0.06), content: "— Author Name", fontSize: Math.round(w*0.026), fontFamily: "Inter", color: "#64748b", fontWeight: "400", textAlign: "center", zIndex: 2, lineHeight: 1.3 },
+      ]
+    })
+  },
+  {
+    id: "social-pop", label: "Social Pop", bg: "", preview: "linear-gradient(135deg,#7c3aed,#3b82f6)",
+    make: (w, h) => ({
+      background: "#7c3aed", backgroundType: "gradient" as const, backgroundGradient: { color1: "#7c3aed", color2: "#3b82f6", angle: 135 },
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "circle", x: Math.round(w*-0.1), y: Math.round(h*-0.05), width: Math.round(w*0.5), height: Math.round(w*0.5), fill: "rgba(255,255,255,0.08)", zIndex: 0 },
+        { id: uid(), type: "shape" as const, shapeType: "circle", x: Math.round(w*0.6), y: Math.round(h*0.6), width: Math.round(w*0.55), height: Math.round(w*0.55), fill: "rgba(255,255,255,0.06)", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.07), y: Math.round(h*0.34), width: Math.round(w*0.86), height: Math.round(h*0.2), content: "NEW DROP", fontSize: Math.round(w*0.12), fontFamily: "Impact", color: "#ffffff", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.0, letterSpacing: 5 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.08), y: Math.round(h*0.57), width: Math.round(w*0.84), height: Math.round(h*0.07), content: "Check it out now 🔥", fontSize: Math.round(w*0.032), fontFamily: "Inter", color: "rgba(255,255,255,0.85)", fontWeight: "600", textAlign: "center", zIndex: 2, lineHeight: 1.3 },
+      ]
+    })
+  },
+];
+
 type DragState = { startX: number; startY: number; origX: number; origY: number };
 type ResizeState = { startX: number; startY: number; origW: number; origH: number };
 
@@ -91,6 +194,11 @@ export function DesignEditor({ designId }: { designId: string }) {
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [aiStyle, setAiStyle] = useState("bold");
   const [aiError, setAiError] = useState<string | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showUploads, setShowUploads] = useState(false);
+  const [recentUploads, setRecentUploads] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("cf_design_uploads") ?? "[]"); } catch { return []; }
+  });
 
   // Undo/redo
   const historyRef = useRef<DesignData[]>([]);
@@ -227,6 +335,24 @@ export function DesignEditor({ designId }: { designId: string }) {
     setShowShapePicker(false);
   }
 
+  function addImageUrl(url: string) {
+    const el: DesignElement = {
+      id: uid(), type: "image",
+      x: Math.round(data.width / 2 - 150), y: Math.round(data.height / 2 - 150),
+      width: 300, height: 300, imageUrl: url, objectFit: "cover", zIndex: data.elements.length,
+    };
+    updateData((prev) => ({ ...prev, elements: [...prev.elements, el] }));
+    setSelectedId(el.id);
+  }
+
+  function saveUpload(url: string) {
+    setRecentUploads((prev) => {
+      const next = [url, ...prev.filter((u) => u !== url)].slice(0, 20);
+      try { localStorage.setItem("cf_design_uploads", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
   function addImage() {
     const input = document.createElement("input");
     input.type = "file"; input.accept = "image/*";
@@ -236,13 +362,30 @@ export function DesignEditor({ designId }: { designId: string }) {
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       if (!res.ok) return;
       const { url } = await res.json();
-      const el: DesignElement = {
-        id: uid(), type: "image",
-        x: Math.round(data.width / 2 - 150), y: Math.round(data.height / 2 - 150),
-        width: 300, height: 300, imageUrl: url, objectFit: "cover", zIndex: data.elements.length,
-      };
-      updateData((prev) => ({ ...prev, elements: [...prev.elements, el] }));
-      setSelectedId(el.id);
+      saveUpload(url);
+      addImageUrl(url);
+    };
+    input.click();
+  }
+
+  function applyTemplate(tpl: TemplateDef) {
+    const patch = tpl.make(data.width, data.height);
+    updateData((prev) => ({ ...prev, ...patch }));
+    setShowTemplates(false);
+    setSelectedId(null);
+  }
+
+  function addBgImage() {
+    const input = document.createElement("input");
+    input.type = "file"; input.accept = "image/*";
+    input.onchange = async () => {
+      const file = input.files?.[0]; if (!file) return;
+      const fd = new FormData(); fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      if (!res.ok) return;
+      const { url } = await res.json();
+      saveUpload(url);
+      updateData((prev) => ({ ...prev, backgroundImage: url, backgroundImageFit: "cover" }));
     };
     input.click();
   }
@@ -519,6 +662,59 @@ export function DesignEditor({ designId }: { designId: string }) {
             )}
           </div>
 
+          {/* Templates */}
+          <div className="relative w-full">
+            <button onClick={() => { setShowTemplates((v) => !v); setShowShapePicker(false); setShowAiPanel(false); setShowUploads(false); }}
+              className={`w-full flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors ${showTemplates ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"}`}>
+              <LayoutTemplate className="w-5 h-5" />
+              <span className="text-[9px] font-medium leading-none">Templates</span>
+            </button>
+            {showTemplates && (
+              <div className={`absolute left-full top-0 ml-2 z-50 rounded-xl border shadow-xl p-4 w-80 ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
+                <p className={`text-sm font-semibold mb-1 ${isDark ? "text-white" : "text-gray-900"}`}>Templates</p>
+                <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Click to apply — replaces background &amp; adds starter elements</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {TEMPLATES.map((tpl) => (
+                    <button key={tpl.id} onClick={() => applyTemplate(tpl)}
+                      className={`rounded-xl overflow-hidden border-2 hover:border-orange-500 transition-colors text-left ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
+                      <div className="h-20" style={{ background: tpl.preview }} />
+                      <div className={`px-2 py-1.5 text-xs font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>{tpl.label}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Uploads */}
+          <div className="relative w-full">
+            <button onClick={() => { setShowUploads((v) => !v); setShowShapePicker(false); setShowAiPanel(false); setShowTemplates(false); }}
+              className={`w-full flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors ${showUploads ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"}`}>
+              <Images className="w-5 h-5" />
+              <span className="text-[9px] font-medium leading-none">Uploads</span>
+            </button>
+            {showUploads && (
+              <div className={`absolute left-full top-0 ml-2 z-50 rounded-xl border shadow-xl p-4 w-72 ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
+                <p className={`text-sm font-semibold mb-1 ${isDark ? "text-white" : "text-gray-900"}`}>My Uploads</p>
+                <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Click an image to add it to the canvas</p>
+                <Button size="sm" variant="outline" className={`w-full mb-3 gap-2 ${isDark ? "border-[#2A2A2A] text-gray-300" : ""}`} onClick={() => { addImage(); setShowUploads(false); }}>
+                  <Images className="w-4 h-4" /> Upload new image
+                </Button>
+                {recentUploads.length === 0
+                  ? <p className={`text-xs text-center py-6 ${isDark ? "text-gray-600" : "text-gray-400"}`}>No uploads yet. Upload an image to get started.</p>
+                  : <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                      {recentUploads.map((url) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <button key={url} onClick={() => { addImageUrl(url); setShowUploads(false); }} className={`rounded-lg overflow-hidden border-2 hover:border-orange-500 transition-colors ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
+                          <img src={url} alt="" className="w-full h-16 object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                }
+              </div>
+            )}
+          </div>
+
           <div className={`w-full my-2 border-t ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`} />
           <SideLabel label="BG" isDark={isDark} />
           <div className="relative w-10 h-10 rounded-lg overflow-hidden border-2 cursor-pointer shadow-sm" style={{ borderColor: isDark ? "#2A2A2A" : "#e5e7eb" }}>
@@ -541,12 +737,12 @@ export function DesignEditor({ designId }: { designId: string }) {
           ref={containerRef}
           className={`flex-1 flex items-center justify-center overflow-auto p-8 ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
           style={{ backgroundImage: isDark ? "radial-gradient(circle, #2A2A2A 1px, transparent 1px)" : "radial-gradient(circle, #d1d5db 1px, transparent 1px)", backgroundSize: "24px 24px" }}
-          onClick={() => { setSelectedId(null); setShowShapePicker(false); setShowAiPanel(false); }}
+          onClick={() => { setSelectedId(null); setShowShapePicker(false); setShowAiPanel(false); setShowTemplates(false); setShowUploads(false); }}
         >
           <div style={{ width: data.width * scale, height: data.height * scale, position: "relative", flexShrink: 0 }}>
             <div
               ref={canvasRef}
-              style={{ width: data.width, height: data.height, background: buildBg(data), position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left", overflow: "hidden", boxShadow: "0 4px 40px rgba(0,0,0,0.25)" }}
+              style={{ width: data.width, height: data.height, background: buildBg(data), backgroundImage: data.backgroundImage ? `url(${data.backgroundImage})` : undefined, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left", overflow: "hidden", boxShadow: "0 4px 40px rgba(0,0,0,0.25)" }}
               onClick={onCanvasClick}
             >
               {[...data.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map((el) => (
@@ -729,6 +925,37 @@ function CanvasPanel({ isDark, data, onUpdate, elementCount }: { isDark: boolean
               <input type="range" min={0} max={360} value={grad.angle} onChange={(e) => onUpdate({ backgroundGradient: { ...grad, angle: Number(e.target.value) } })} className="w-full" />
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Background image */}
+      <div>
+        <p className={sec}>Background Image</p>
+        {data.backgroundImage ? (
+          <div className="space-y-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={data.backgroundImage} alt="" className="w-full h-24 object-cover rounded-lg border" style={{ borderColor: isDark ? "#2A2A2A" : "#e5e7eb" }} />
+            <div className="flex gap-2">
+              <select value={data.backgroundImageFit ?? "cover"} onChange={(e) => onUpdate({ backgroundImageFit: e.target.value as "cover" | "contain" })}
+                className={`flex-1 h-8 text-xs rounded-md border px-2 ${isDark ? "bg-[#111] border-[#2A2A2A] text-white" : "bg-white border-gray-200 text-gray-900"}`}>
+                <option value="cover">Cover (fill)</option>
+                <option value="contain">Contain (fit)</option>
+              </select>
+              <button onClick={() => onUpdate({ backgroundImage: undefined })} className="px-2 h-8 rounded-md text-xs text-red-500 border hover:bg-red-50" style={{ borderColor: isDark ? "#2A2A2A" : "#e5e7eb" }}>Remove</button>
+            </div>
+          </div>
+        ) : (
+          <label className={`flex items-center justify-center gap-2 h-16 rounded-xl border-2 border-dashed cursor-pointer text-xs font-medium transition-colors ${isDark ? "border-[#2A2A2A] text-gray-500 hover:border-orange-500 hover:text-orange-500" : "border-gray-200 text-gray-400 hover:border-orange-400 hover:text-orange-500"}`}>
+            <ImageIcon className="w-4 h-4" /> Upload background image
+            <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+              const file = e.target.files?.[0]; if (!file) return;
+              const fd = new FormData(); fd.append("file", file);
+              const res = await fetch("/api/upload", { method: "POST", body: fd });
+              if (!res.ok) return;
+              const { url } = await res.json();
+              onUpdate({ backgroundImage: url, backgroundImageFit: "cover" });
+            }} />
+          </label>
         )}
       </div>
 
