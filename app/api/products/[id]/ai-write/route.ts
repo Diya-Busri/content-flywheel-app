@@ -18,7 +18,7 @@ type ReplaceAllAction = { type: "replace_all"; sections: { title: string; conten
 
 type Action = AddSectionAction | UpdateSectionAction | ReplaceAllAction;
 
-type AIWriteResponse = { actions: Action[]; message: string };
+type AIWriteResponse = { actions: Action[]; message: string; generateImages?: boolean };
 
 /**
  * POST /api/products/[id]/ai-write
@@ -66,11 +66,20 @@ export async function POST(
       ? currentSections.map((s, i) => `  ${i + 1}. [id: ${s.id}] "${s.title}" — ${s.content ? `${s.content.replace(/<[^>]+>/g, "").slice(0, 100)}…` : "(empty)"}`).join("\n")
       : "  (no sections yet)";
 
+    const isColoringBook = /colou?ring\s*book/i.test(instruction) || /colou?ring\s*book/i.test(title);
+
     const systemPrompt = [
       `You are an AI writing assistant for a digital product builder. You receive a user instruction and the current product structure, then return structured JSON describing what content to add or update.`,
       `PRODUCT: "${title}"${niche ? ` (niche: ${niche})` : ""} — format: ${format}`,
       brandVoice ? `BRAND VOICE: ${brandVoice}` : "",
-      `RULES:
+      isColoringBook
+        ? `RULES (COLOURING BOOK MODE):
+- This is a COLOURING BOOK — pages have images to colour, NOT text paragraphs
+- Each section should have a descriptive title only (e.g. "Happy Puppy", "Magic Unicorn", "Flower Garden")
+- Set content to "" (empty string) — images will be generated automatically
+- Create 5–10 pages unless the user specifies a number
+- Never return explanations outside the JSON — only return valid JSON`
+        : `RULES:
 - Write content in rich HTML using <p>, <strong>, <em>, <ul>, <li>, <h3> tags only — no markdown asterisks or hashes
 - Each section should be 100–300 words unless the user requests otherwise
 - Be specific, practical, and actionable
@@ -80,14 +89,12 @@ export async function POST(
     const userPrompt = `CURRENT SECTIONS:\n${sectionList}\n\nUSER INSTRUCTION: ${instruction}\n\nReturn a JSON object with this exact shape:
 {
   "actions": [
-    // To add a new section:
-    { "type": "add_section", "title": "Section Title", "content": "<p>HTML content here...</p>" },
-    // To update an existing section (use the id from the list above):
-    { "type": "update_section", "sectionId": "page-1", "title": "Optional new title", "content": "<p>New HTML content...</p>" },
-    // To replace all sections at once (for full restructures):
+    { "type": "add_section", "title": "Section Title", "content": "${isColoringBook ? "" : "<p>HTML content here...</p>"}" },
+    { "type": "update_section", "sectionId": "page-1", "title": "Optional new title", "content": "..." },
     { "type": "replace_all", "sections": [{ "title": "...", "content": "..." }] }
   ],
-  "message": "A short friendly confirmation of what you did (1–2 sentences)"
+  "message": "A short friendly confirmation of what you did (1–2 sentences)",
+  "generateImages": ${isColoringBook}
 }
 
 Use "replace_all" only when the user asks to restructure or plan the whole product. Use "add_section" for adding new pages. Use "update_section" to rewrite an existing page.`;
@@ -130,6 +137,7 @@ Use "replace_all" only when the user asks to restructure or plan the whole produ
     return NextResponse.json({
       actions: parsed.actions,
       message: parsed.message ?? "Done!",
+      generateImages: parsed.generateImages ?? isColoringBook,
     });
   } catch (err) {
     console.error("[ai-write]", err);

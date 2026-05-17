@@ -142,7 +142,7 @@ export function EditorAIPanel({
             currentSections: sections.filter((s) => s.id !== "cover" && s.id !== "back"),
           }),
         });
-        const data = await res.json().catch(() => ({})) as { actions?: Action[]; message?: string; error?: string };
+        const data = await res.json().catch(() => ({})) as { actions?: Action[]; message?: string; error?: string; generateImages?: boolean };
 
         if (!res.ok || data.error || !Array.isArray(data.actions)) {
           setDisplayMessages((prev) => [
@@ -150,17 +150,37 @@ export function EditorAIPanel({
             { role: "assistant", content: `Sorry, I couldn't do that. ${data.error ?? "Please try again."}` },
           ]);
         } else {
-          const updated = applyActions(sections, data.actions);
+          let updated = applyActions(sections, data.actions);
           onSectionsChange(updated);
           const summary = summariseActions(data.actions);
           setDisplayMessages((prev) => [
             ...prev.slice(0, -1),
-            {
-              role: "assistant",
-              content: data.message ?? "Done!",
-              applied: summary,
-            },
+            { role: "assistant", content: data.message ?? "Done!", applied: summary },
           ]);
+
+          // Auto-generate line-art images for colouring book pages
+          if (data.generateImages) {
+            const newSections = updated.filter((s) => s.id !== "cover" && s.id !== "back" && !s.imageUrl);
+            for (const section of newSections) {
+              try {
+                const imgRes = await fetch("/api/chat/coach/generate-image", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    prompt: `${section.title}, colouring page for kids, black and white line art, bold simple outlines, no shading, no background, suitable for printing and colouring in`,
+                    aspectRatio: "1:1",
+                  }),
+                });
+                const imgData = await imgRes.json().catch(() => ({})) as { url?: string };
+                if (imgData.url) {
+                  updated = updated.map((s) => s.id === section.id ? { ...s, imageUrl: imgData.url } : s);
+                  onSectionsChange(updated);
+                }
+              } catch {
+                // continue to next
+              }
+            }
+          }
         }
       } catch {
         setDisplayMessages((prev) => [
