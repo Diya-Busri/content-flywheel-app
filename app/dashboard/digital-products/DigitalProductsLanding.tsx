@@ -129,6 +129,8 @@ export default function DigitalProductsLanding() {
   const [bgGeneratingId, setBgGeneratingId] = useState<string | null>(null);
   const [bgGeneratingDone, setBgGeneratingDone] = useState(false);
   const [bgGeneratingFailed, setBgGeneratingFailed] = useState(false);
+  const [bgSectionsDone, setBgSectionsDone] = useState(0);
+  const [bgSectionsTotal, setBgSectionsTotal] = useState(0);
   const bgProductIdRef = useRef<string | null>(null);
   const bgIntentRef = useRef<string | null>(null);
   const bgContentStyleRef = useRef<string | null>(null);
@@ -155,7 +157,12 @@ export default function DigitalProductsLanding() {
           const data = await res.json().catch(() => ({}));
           const status = data?.status;
           const sections: Array<{ content?: string; contentHtml?: string }> = data?.content?.sections ?? [];
-          const hasContent = sections.length > 0 && sections.every(s => ((s?.content ?? s?.contentHtml ?? "").trim().length > 0));
+          const doneSections = sections.filter(s => ((s?.content ?? s?.contentHtml ?? "").trim().length > 0)).length;
+          const hasContent = sections.length > 0 && doneSections === sections.length;
+          if (!cancelled && sections.length > 0) {
+            setBgSectionsTotal(sections.length);
+            setBgSectionsDone(doneSections);
+          }
           if (status === "failed") { if (!cancelled) { setBgGeneratingFailed(true); setBgGeneratingId(null); } return; }
           if (status === "draft" && hasContent) {
             if (!cancelled) { setBgGeneratingDone(true); setBgGeneratingId(null); }
@@ -288,18 +295,26 @@ export default function DigitalProductsLanding() {
       <div className="max-w-5xl mx-auto">
         {/* Background generation banner */}
         {(bgGeneratingId || bgGeneratingDone || bgGeneratingFailed) && (
-          <div className={`mb-4 rounded-lg border px-4 py-3 flex items-center justify-between gap-3 ${bgGeneratingFailed ? "border-red-400/40 bg-red-500/10" : bgGeneratingDone ? "border-green-500/40 bg-green-500/10" : "border-orange-500/40 bg-orange-500/10"}`}>
-            <div className="flex items-center gap-3 min-w-0">
-              {bgGeneratingId && <Loader2 className="w-4 h-4 animate-spin text-orange-500 shrink-0" />}
-              {bgGeneratingDone && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />}
-              {bgGeneratingFailed && <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
-              <span className="text-sm font-medium truncate">
-                {bgGeneratingId && "Your product is generating in the background — you can use the app freely."}
-                {bgGeneratingDone && "Your product is ready!"}
-                {bgGeneratingFailed && "Generation failed. Open the product to retry."}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
+          <div className={`mb-4 rounded-lg border px-4 py-3 ${bgGeneratingFailed ? "border-red-400/40 bg-red-500/10" : bgGeneratingDone ? "border-green-500/40 bg-green-500/10" : "border-orange-500/40 bg-orange-500/10"}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {bgGeneratingId && <Loader2 className="w-4 h-4 animate-spin text-orange-500 shrink-0" />}
+                {bgGeneratingDone && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />}
+                {bgGeneratingFailed && <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
+                <span className="text-sm font-medium truncate">
+                  {bgGeneratingId && (bgSectionsTotal > 0
+                    ? `Generating sections — ${bgSectionsDone} of ${bgSectionsTotal} done`
+                    : "Your product is generating in the background — you can use the app freely.")}
+                  {bgGeneratingDone && "Your product is ready!"}
+                  {bgGeneratingFailed && "Generation failed. Open the product to retry."}
+                </span>
+                {bgGeneratingId && bgSectionsTotal > 0 && (
+                  <span className="text-xs font-semibold text-orange-400 shrink-0">
+                    {Math.round((bgSectionsDone / bgSectionsTotal) * 100)}%
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
               {bgGeneratingDone && bgProductIdRef.current && (
                 <Button
                   size="sm"
@@ -325,7 +340,18 @@ export default function DigitalProductsLanding() {
               >
                 <X className="w-4 h-4" />
               </button>
+              </div>
             </div>
+            {bgGeneratingId && bgSectionsTotal > 0 && (
+              <div className="mt-2.5">
+                <div className="w-full h-1.5 rounded-full bg-orange-500/20 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-orange-500 transition-all duration-500"
+                    style={{ width: `${Math.round((bgSectionsDone / bgSectionsTotal) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
