@@ -4364,7 +4364,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
               />
             </div>
           )}
-          <div className="space-y-1">
+          <div className="space-y-2">
             <label className="text-xs font-medium text-gray-600">Visual style <span className="text-gray-400 font-normal">(optional)</span></label>
             <input
               type="text"
@@ -4373,6 +4373,25 @@ export default function ProductEditor({ productId }: { productId: string }) {
               placeholder={selectedTypographyStyle === "typography" ? "e.g. minimalist, neon, vintage, handwritten" : "e.g. floral, geometric, boho, celestial"}
               className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
             />
+            <div className="flex flex-wrap gap-1.5">
+              {(selectedTypographyStyle === "typography"
+                ? ["Minimalist", "Bold & Modern", "Handwritten", "Neon Glow", "Art Deco", "Vintage", "Retro", "Grunge", "Pastel", "Serif Elegant"]
+                : ["Floral", "Geometric", "Boho", "Celestial", "Abstract", "Tropical", "Mandala", "Watercolour", "Paisley", "Nordic"]
+              ).map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setTypographyStyleKeyword(typographyStyleKeyword === chip ? "" : chip)}
+                  className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
+                    typographyStyleKeyword === chip
+                      ? "bg-orange-500 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
           </div>
           {/* Page picker */}
           {sections.filter((s) => s.id !== "cover" && s.id !== "back").length > 1 && (
