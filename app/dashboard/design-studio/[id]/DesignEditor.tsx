@@ -8,6 +8,7 @@ import {
   ChevronDown, FlipHorizontal, FlipVertical, RotateCw, Sparkles,
   AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter,
   MoveLeft, MoveRight, MoveUp, MoveDown, Undo2, Redo2,
+  Underline, Strikethrough, ZoomIn, ZoomOut, FileDown, Highlighter,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +89,8 @@ export function DesignEditor({ designId }: { designId: string }) {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiStyle, setAiStyle] = useState("bold");
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Undo/redo
   const historyRef = useRef<DesignData[]>([]);
@@ -247,22 +250,30 @@ export function DesignEditor({ designId }: { designId: string }) {
   async function generateAiImage() {
     if (!aiPrompt.trim()) return;
     setAiLoading(true);
+    setAiError(null);
     try {
       const res = await fetch("/api/ai-design/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: aiPrompt, style: "photo", colorHint: "" }),
+        body: JSON.stringify({ prompt: aiPrompt, style: aiStyle, textColor: "#ffffff" }),
       });
       const json = await res.json();
-      const url = json.imageUrl ?? json.url;
-      if (!url) return;
+      if (!res.ok) {
+        setAiError(json.error ?? "Generation failed. Please try again.");
+        return;
+      }
+      const url = json.url;
+      if (!url) { setAiError("No image returned. Please try again."); return; }
       const el: DesignElement = {
         id: uid(), type: "image",
         x: Math.round(data.width / 2 - 200), y: Math.round(data.height / 2 - 200),
-        width: 400, height: 400, imageUrl: url, objectFit: "cover", zIndex: data.elements.length,
+        width: 400, height: 400, imageUrl: url, objectFit: "contain", zIndex: data.elements.length,
       };
       updateData((prev) => ({ ...prev, elements: [...prev.elements, el] }));
       setSelectedId(el.id);
       setAiPrompt("");
+      setShowAiPanel(false);
+    } catch {
+      setAiError("Network error. Please try again.");
     } finally { setAiLoading(false); }
   }
 
@@ -383,6 +394,18 @@ export function DesignEditor({ designId }: { designId: string }) {
     const a = document.createElement("a"); a.href = url; a.download = `${title}.png`; a.click();
   }
 
+  async function exportPdf() {
+    const { toPng } = await import("html-to-image");
+    const { jsPDF } = await import("jspdf");
+    if (!canvasRef.current) return;
+    const url = await toPng(canvasRef.current, { width: data.width, height: data.height, pixelRatio: 2 });
+    const mmW = data.width * 0.2646;
+    const mmH = data.height * 0.2646;
+    const pdf = new jsPDF({ orientation: mmW > mmH ? "landscape" : "portrait", unit: "mm", format: [mmW, mmH] });
+    pdf.addImage(url, "PNG", 0, 0, mmW, mmH);
+    pdf.save(`${title}.pdf`);
+  }
+
   const panelCls = isDark ? "border-[#2A2A2A] bg-[#1A1A1A]" : "border-gray-200 bg-white";
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div>;
@@ -407,8 +430,15 @@ export function DesignEditor({ designId }: { designId: string }) {
           <Button size="sm" variant="ghost" onClick={undo} className={`h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Undo (⌘Z)"><Undo2 className="w-4 h-4" /></Button>
           <Button size="sm" variant="ghost" onClick={redo} className={`h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Redo (⌘⇧Z)"><Redo2 className="w-4 h-4" /></Button>
           <div className={`h-5 w-px mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+          <Button size="sm" variant="ghost" onClick={() => setScale((s) => Math.max(0.2, +(s - 0.1).toFixed(1)))} className={`h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Zoom out"><ZoomOut className="w-4 h-4" /></Button>
+          <span className={`text-xs w-12 text-center tabular-nums ${isDark ? "text-gray-400" : "text-gray-500"}`}>{Math.round(scale * 100)}%</span>
+          <Button size="sm" variant="ghost" onClick={() => setScale((s) => Math.min(2, +(s + 0.1).toFixed(1)))} className={`h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Zoom in"><ZoomIn className="w-4 h-4" /></Button>
+          <div className={`h-5 w-px mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+          <Button size="sm" variant="outline" className={`gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`} onClick={exportPdf}>
+            <FileDown className="w-4 h-4" /> PDF
+          </Button>
           <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5" onClick={exportPng}>
-            <Download className="w-4 h-4" /> Export PNG
+            <Download className="w-4 h-4" /> PNG
           </Button>
         </div>
       </header>
@@ -453,18 +483,35 @@ export function DesignEditor({ designId }: { designId: string }) {
               <span className="text-[9px] font-medium leading-none">AI Image</span>
             </button>
             {showAiPanel && (
-              <div className={`absolute left-full top-0 ml-2 z-50 rounded-xl border shadow-xl p-4 w-72 ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
-                <p className={`text-sm font-semibold mb-2 ${isDark ? "text-white" : "text-gray-900"}`}>Generate AI Image</p>
-                <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Describe what you want and AI will create it</p>
+              <div className={`absolute left-full top-0 ml-2 z-50 rounded-xl border shadow-xl p-4 w-80 ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
+                <p className={`text-sm font-semibold mb-1 ${isDark ? "text-white" : "text-gray-900"}`}>Generate AI Image</p>
+                <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Uses 1 video credit · Background auto-removed</p>
                 <textarea
                   value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder="e.g. tropical sunset beach, vibrant colours, professional photo"
+                  onChange={(e) => { setAiPrompt(e.target.value); setAiError(null); }}
+                  placeholder="e.g. golden crown on white background, detailed illustration"
                   rows={3}
                   className={`w-full text-xs rounded-lg border px-3 py-2 resize-none mb-3 ${isDark ? "bg-[#111] border-[#2A2A2A] text-white placeholder-gray-600" : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"}`}
                 />
+                <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Style</p>
+                <div className="grid grid-cols-3 gap-1.5 mb-3">
+                  {([
+                    ["bold", "Bold"],
+                    ["minimalist", "Minimal"],
+                    ["vintage", "Vintage"],
+                    ["abstract", "Abstract"],
+                    ["lineart", "Line Art"],
+                    ["typography", "Typography"],
+                  ] as const).map(([val, lbl]) => (
+                    <button key={val} onClick={() => setAiStyle(val)}
+                      className={`py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${aiStyle === val ? "bg-orange-500 text-white border-orange-500" : isDark ? "border-[#2A2A2A] text-gray-400 hover:border-gray-500" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+                {aiError && <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{aiError}</p>}
                 <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2" onClick={generateAiImage} disabled={aiLoading || !aiPrompt.trim()}>
-                  {aiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</> : <><Sparkles className="w-4 h-4" /> Generate</>}
+                  {aiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</> : <><Sparkles className="w-4 h-4" /> Generate Image</>}
                 </Button>
               </div>
             )}
@@ -592,9 +639,9 @@ function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onRotateM
       {rotateHandle}
       {editing ? (
         <textarea autoFocus value={el.content ?? ""} onChange={(e) => onUpdate({ content: e.target.value })} onBlur={() => setEditing(false)}
-          style={{ width: "100%", height: "100%", background: "transparent", border: "none", outline: "none", resize: "none", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, cursor: "text" }} />
+          style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", border: "none", outline: "none", resize: "none", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, cursor: "text" }} />
       ) : (
-        <div style={{ width: "100%", height: "100%", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, wordBreak: "break-word", whiteSpace: "pre-wrap", overflow: "hidden" }}>
+        <div style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, wordBreak: "break-word", whiteSpace: "pre-wrap", overflow: "hidden" }}>
           {el.content}
         </div>
       )}
@@ -834,11 +881,21 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign }: 
           <div className="flex gap-1">
             <Button size="sm" variant={el.fontWeight === "700" ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ fontWeight: el.fontWeight === "700" ? "400" : "700" })}><Bold className="w-3.5 h-3.5" /></Button>
             <Button size="sm" variant={el.fontStyle === "italic" ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ fontStyle: el.fontStyle === "italic" ? "normal" : "italic" })}><Italic className="w-3.5 h-3.5" /></Button>
+            <Button size="sm" variant={(el.textDecoration ?? "").includes("underline") ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ textDecoration: (el.textDecoration ?? "").includes("underline") ? (el.textDecoration ?? "").replace("underline","").trim() || undefined : ((el.textDecoration ?? "") + " underline").trim() })}><Underline className="w-3.5 h-3.5" /></Button>
+            <Button size="sm" variant={(el.textDecoration ?? "").includes("line-through") ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ textDecoration: (el.textDecoration ?? "").includes("line-through") ? (el.textDecoration ?? "").replace("line-through","").trim() || undefined : ((el.textDecoration ?? "") + " line-through").trim() })}><Strikethrough className="w-3.5 h-3.5" /></Button>
             {(["left", "center", "right"] as const).map((a) => (
               <Button key={a} size="sm" variant={el.textAlign === a ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ textAlign: a })}>
                 {a === "left" ? <AlignLeft className="w-3.5 h-3.5" /> : a === "center" ? <AlignCenter className="w-3.5 h-3.5" /> : <AlignRight className="w-3.5 h-3.5" />}
               </Button>
             ))}
+          </div>
+          <div>
+            <label className={lbl}><Highlighter className="w-3 h-3 inline mr-1" />Text highlight</label>
+            <div className="flex gap-2 items-center">
+              <input type="color" value={el.textBackground ?? "#ffff00"} onChange={(e) => onUpdate({ textBackground: e.target.value })} className="w-8 h-8 rounded cursor-pointer border-0 shrink-0" />
+              <Input value={el.textBackground ?? ""} placeholder="none" onChange={(e) => onUpdate({ textBackground: e.target.value || undefined })} className="h-8 text-xs font-mono" />
+              {el.textBackground && <Button size="sm" variant="ghost" className="h-8 text-xs text-gray-400" onClick={() => onUpdate({ textBackground: undefined })}>Clear</Button>}
+            </div>
           </div>
           <div>
             <label className={lbl}>Letter spacing: {el.letterSpacing ?? 0}px</label>

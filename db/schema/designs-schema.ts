@@ -25,8 +25,9 @@ export type DesignElement = {
   color?: string;
   fontWeight?: string;
   fontStyle?: string;
+  textDecoration?: string;
+  textBackground?: string;
   textAlign?: string;
-  lineHeight?: number;
   // image
   imageUrl?: string;
   objectFit?: string;
