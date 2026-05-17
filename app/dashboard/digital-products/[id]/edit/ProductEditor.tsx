@@ -4706,38 +4706,49 @@ export default function ProductEditor({ productId }: { productId: string }) {
                               >
                                 {section.title}
                               </h3>
-                              {section.imageUrl?.trim() ? (
-                                <div className="group relative mb-4">
-                                  {regeneratingSectionImageId === section.id ? (
-                                    <div className="w-full h-40 flex items-center justify-center rounded-lg bg-gray-100">
-                                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                              {section.imageUrl?.trim() ? (() => {
+                                const isFullPage = !section.content || section.content.replace(/<[^>]*>/g, "").trim() === "";
+                                return (
+                                  <div className={`group relative ${isFullPage ? "" : "mb-4"}`} style={isFullPage ? { margin: "8px -24px -24px", borderRadius: 0 } : {}}>
+                                    {regeneratingSectionImageId === section.id ? (
+                                      <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: isFullPage ? `${CANVAS_HEIGHT - 100}px` : "160px" }}>
+                                        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                                      </div>
+                                    ) : (
+                                      <img
+                                        src={section.imageUrl}
+                                        alt=""
+                                        style={{
+                                          width: "100%",
+                                          height: isFullPage ? `${CANVAS_HEIGHT - 100}px` : undefined,
+                                          maxHeight: isFullPage ? undefined : "300px",
+                                          objectFit: isFullPage ? "contain" : "cover",
+                                          borderRadius: isFullPage ? 0 : "8px",
+                                          display: "block",
+                                          background: isFullPage ? "#fff" : undefined,
+                                        }}
+                                      />
+                                    )}
+                                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button
+                                        onClick={() => handleRegenerateSectionImage(section.id)}
+                                        disabled={!!regeneratingSectionImageId}
+                                        className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white"
+                                        title="Regenerate image"
+                                      >
+                                        <RefreshCw className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleRemoveSectionImage(section.id)}
+                                        className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white"
+                                        title="Remove image"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
                                     </div>
-                                  ) : (
-                                    <img
-                                      src={section.imageUrl}
-                                      alt=""
-                                      style={{ width: "100%", maxHeight: "300px", objectFit: "cover", borderRadius: "8px" }}
-                                    />
-                                  )}
-                                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                      onClick={() => handleRegenerateSectionImage(section.id)}
-                                      disabled={!!regeneratingSectionImageId}
-                                      className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white"
-                                      title="Regenerate image"
-                                    >
-                                      <RefreshCw className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleRemoveSectionImage(section.id)}
-                                      className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white"
-                                      title="Remove image"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
                                   </div>
-                                </div>
-                              ) : null}
+                                );
+                              })() : null}
                               <div
                                 data-section-id={section.id}
                                 data-text-type="body"

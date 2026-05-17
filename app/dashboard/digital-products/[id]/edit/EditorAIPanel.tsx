@@ -98,18 +98,12 @@ export function EditorAIPanel({
   const { messages: coachMessages, sendMessage: sendCoach, isLoading: coachLoading } =
     useChatCoach("product-editor", { productId, coachMode: "content" });
 
-  const [localMessages, setLocalMessages] = useState<LocalMessage[]>([]);
   const [writeLoading, setWriteLoading] = useState(false);
+  const [pendingInstruction, setPendingInstruction] = useState<string | null>(null);
+  const [coloringOrientation, setColoringOrientation] = useState<"portrait" | "landscape">("portrait");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Merge coach messages into local display
-  const allMessages: LocalMessage[] = [
-    ...coachMessages.map((m) => ({ role: m.role, content: m.content })),
-    ...localMessages,
-  ].sort(() => 0); // keep insertion order via concat — coach messages come first
-
-  // Actually we want them interleaved by insertion. Let's just track everything locally.
   const [displayMessages, setDisplayMessages] = useState<LocalMessage[]>([]);
   const isLoading = coachLoading || writeLoading;
 
@@ -121,6 +115,71 @@ export function EditorAIPanel({
     setDisplayMessages((prev) => [...prev, msg]);
   }, []);
 
+  const COLOURING_RE = /colou?ring\s*book/i;
+
+  const executeWrite = useCallback(async (value: string, orientation: "portrait" | "landscape") => {
+    setWriteLoading(true);
+    addMessage({ role: "assistant", content: "Writing content…" });
+    try {
+      const res = await fetch(`/api/products/${productId}/ai-write`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instruction: value,
+          currentSections: sections.filter((s) => s.id !== "cover" && s.id !== "back"),
+        }),
+      });
+      const data = await res.json().catch(() => ({})) as { actions?: Action[]; message?: string; error?: string; generateImages?: boolean };
+
+      if (!res.ok || data.error || !Array.isArray(data.actions)) {
+        setDisplayMessages((prev) => [
+          ...prev.slice(0, -1),
+          { role: "assistant", content: `Sorry, I couldn't do that. ${data.error ?? "Please try again."}` },
+        ]);
+      } else {
+        let updated = applyActions(sections, data.actions);
+        onSectionsChange(updated);
+        const summary = summariseActions(data.actions);
+        setDisplayMessages((prev) => [
+          ...prev.slice(0, -1),
+          { role: "assistant", content: data.message ?? "Done!", applied: summary },
+        ]);
+
+        if (data.generateImages) {
+          const aspectRatio = orientation === "portrait" ? "9:16" : "16:9";
+          const newSections = updated.filter((s) => s.id !== "cover" && s.id !== "back" && !s.imageUrl);
+          for (const section of newSections) {
+            try {
+              const imgRes = await fetch("/api/chat/coach/generate-image", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  prompt: `${section.title}, colouring page for kids, black and white line art, bold simple outlines, no shading, white background, suitable for printing and colouring in`,
+                  aspectRatio,
+                }),
+              });
+              const imgData = await imgRes.json().catch(() => ({})) as { url?: string };
+              if (imgData.url) {
+                updated = updated.map((s) => s.id === section.id ? { ...s, imageUrl: imgData.url } : s);
+                onSectionsChange(updated);
+              }
+            } catch {
+              // continue to next
+            }
+          }
+        }
+      }
+    } catch {
+      setDisplayMessages((prev) => [
+        ...prev.slice(0, -1),
+        { role: "assistant", content: "Something went wrong. Please try again." },
+      ]);
+    } finally {
+      setWriteLoading(false);
+      setPendingInstruction(null);
+    }
+  }, [productId, sections, onSectionsChange, addMessage]);
+
   const handleSend = useCallback(async (overrideValue?: string) => {
     const input = inputRef.current;
     const value = (overrideValue ?? input?.value ?? "").trim();
@@ -130,72 +189,17 @@ export function EditorAIPanel({
     addMessage({ role: "user", content: value });
 
     if (isWriteIntent(value)) {
-      // Write path — call ai-write and apply to editor
-      setWriteLoading(true);
-      addMessage({ role: "assistant", content: "Writing content…" });
-      try {
-        const res = await fetch(`/api/products/${productId}/ai-write`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            instruction: value,
-            currentSections: sections.filter((s) => s.id !== "cover" && s.id !== "back"),
-          }),
-        });
-        const data = await res.json().catch(() => ({})) as { actions?: Action[]; message?: string; error?: string; generateImages?: boolean };
-
-        if (!res.ok || data.error || !Array.isArray(data.actions)) {
-          setDisplayMessages((prev) => [
-            ...prev.slice(0, -1),
-            { role: "assistant", content: `Sorry, I couldn't do that. ${data.error ?? "Please try again."}` },
-          ]);
-        } else {
-          let updated = applyActions(sections, data.actions);
-          onSectionsChange(updated);
-          const summary = summariseActions(data.actions);
-          setDisplayMessages((prev) => [
-            ...prev.slice(0, -1),
-            { role: "assistant", content: data.message ?? "Done!", applied: summary },
-          ]);
-
-          // Auto-generate line-art images for colouring book pages
-          if (data.generateImages) {
-            const newSections = updated.filter((s) => s.id !== "cover" && s.id !== "back" && !s.imageUrl);
-            for (const section of newSections) {
-              try {
-                const imgRes = await fetch("/api/chat/coach/generate-image", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    prompt: `${section.title}, colouring page for kids, black and white line art, bold simple outlines, no shading, no background, suitable for printing and colouring in`,
-                    aspectRatio: "1:1",
-                  }),
-                });
-                const imgData = await imgRes.json().catch(() => ({})) as { url?: string };
-                if (imgData.url) {
-                  updated = updated.map((s) => s.id === section.id ? { ...s, imageUrl: imgData.url } : s);
-                  onSectionsChange(updated);
-                }
-              } catch {
-                // continue to next
-              }
-            }
-          }
-        }
-      } catch {
-        setDisplayMessages((prev) => [
-          ...prev.slice(0, -1),
-          { role: "assistant", content: "Something went wrong. Please try again." },
-        ]);
-      } finally {
-        setWriteLoading(false);
+      if (COLOURING_RE.test(value)) {
+        // Show orientation picker before generating
+        setPendingInstruction(value);
+      } else {
+        await executeWrite(value, "portrait");
       }
     } else {
-      // Chat path — stream through coach
       sendCoach(value);
-      // Sync coach messages into displayMessages on next render via useEffect
     }
-  }, [isLoading, productId, sections, onSectionsChange, addMessage, sendCoach]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, executeWrite, addMessage, sendCoach]);
 
   // Sync coach messages into displayMessages
   const prevCoachLenRef = useRef(0);
@@ -223,6 +227,32 @@ export function EditorAIPanel({
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      {/* Orientation picker for colouring books */}
+      {pendingInstruction && (
+        <div className="mx-4 mt-4 rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-3 shrink-0">
+          <p className="text-sm font-medium text-orange-900">Choose page orientation</p>
+          <div className="grid grid-cols-2 gap-2">
+            {([["portrait", "📄 Portrait", "Tall pages\n(A4 style)"], ["landscape", "🖼️ Landscape", "Wide pages"]] as const).map(([val, label, desc]) => (
+              <button
+                key={val}
+                onClick={() => setColoringOrientation(val)}
+                className={`rounded-lg border p-3 text-left transition-colors ${coloringOrientation === val ? "border-orange-500 bg-orange-100 text-orange-800" : "border-gray-200 bg-white text-gray-700 hover:border-orange-300"}`}
+              >
+                <div className="text-base">{label}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{desc}</div>
+              </button>
+            ))}
+          </div>
+          <Button
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+            onClick={() => executeWrite(pendingInstruction, coloringOrientation)}
+            disabled={writeLoading}
+          >
+            {writeLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Generate Colouring Book
+          </Button>
+        </div>
+      )}
       {displayMessages.length === 0 && (
         <div className="px-4 pt-4 pb-2 space-y-3">
           <div className="flex items-center gap-2 text-orange-500">
