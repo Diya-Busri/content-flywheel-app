@@ -1043,6 +1043,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [regenerateDesignLoading, setRegenerateDesignLoading] = useState(false);
   const [generateImagesLoading, setGenerateImagesLoading] = useState(false);
   const [generateImagesProgress, setGenerateImagesProgress] = useState<{ done: number; total: number } | null>(null);
+  const [regeneratingSectionImageId, setRegeneratingSectionImageId] = useState<string | null>(null);
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
   const [showAutoDesignChoiceDialog, setShowAutoDesignChoiceDialog] = useState(false);
   const [brandProfile, setBrandProfile] = useState<{
@@ -3647,6 +3648,33 @@ export default function ProductEditor({ productId }: { productId: string }) {
     setGenerateImagesProgress(null);
   }, [sections, product]);
 
+  const handleRegenerateSectionImage = useCallback(async (sectionId: string) => {
+    const section = sections.find((s) => s.id === sectionId);
+    if (!section) return;
+    setRegeneratingSectionImageId(sectionId);
+    try {
+      const prompt = `${section.title}${product?.niche ? ` — ${product.niche}` : ""} digital product illustration`;
+      const res = await fetch("/api/chat/coach/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, aspectRatio: "1:1" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.url) {
+        setSections((prev) =>
+          prev.map((s) => (s.id === sectionId ? { ...s, imageUrl: data.url } : s))
+        );
+      }
+    } catch {
+      // ignore
+    }
+    setRegeneratingSectionImageId(null);
+  }, [sections, product]);
+
+  const handleRemoveSectionImage = useCallback((sectionId: string) => {
+    setSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, imageUrl: undefined } : s)));
+  }, []);
+
   const handleGenerateVideos = useCallback(() => {
     const title = product?.title ?? "";
     const description = (product?.marketingAssets as { productDescription?: string } | undefined)?.productDescription ?? "";
@@ -4619,17 +4647,36 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                 {section.title}
                               </h3>
                               {section.imageUrl?.trim() ? (
-                                <img
-                                  src={section.imageUrl}
-                                  alt=""
-                                  style={{
-                                    width: "100%",
-                                    maxHeight: "300px",
-                                    objectFit: "cover",
-                                    borderRadius: "8px",
-                                    marginBottom: "16px",
-                                  }}
-                                />
+                                <div className="group relative mb-4">
+                                  {regeneratingSectionImageId === section.id ? (
+                                    <div className="w-full h-40 flex items-center justify-center rounded-lg bg-gray-100">
+                                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                                    </div>
+                                  ) : (
+                                    <img
+                                      src={section.imageUrl}
+                                      alt=""
+                                      style={{ width: "100%", maxHeight: "300px", objectFit: "cover", borderRadius: "8px" }}
+                                    />
+                                  )}
+                                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => handleRegenerateSectionImage(section.id)}
+                                      disabled={!!regeneratingSectionImageId}
+                                      className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white"
+                                      title="Regenerate image"
+                                    >
+                                      <RefreshCw className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleRemoveSectionImage(section.id)}
+                                      className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white"
+                                      title="Remove image"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
                               ) : null}
                               <div
                                 data-section-id={section.id}
