@@ -2122,6 +2122,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const handleApplyColor = useCallback((color: string) => {
     setGraphicsAccentColor(color);
     setCustomColor(color);
+    // If a shape (SVG data URL) is currently selected, recolour it directly
+    if (selectedElement) {
+      const el = currentPageElements.find((e) => e.id === selectedElement);
+      if (el && el.type === "image" && el.content.startsWith("data:image/svg+xml,")) {
+        const decoded = decodeURIComponent(el.content.replace("data:image/svg+xml,", ""));
+        const recolored = decoded.replace(/#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3}/g, color);
+        const newContent = `data:image/svg+xml,${encodeURIComponent(recolored)}`;
+        setCurrentPageElements((prev) => prev.map((e) => e.id === selectedElement ? { ...e, content: newContent } : e));
+      }
+    }
     if (product) {
       setProduct((prev) =>
         prev
@@ -2135,7 +2145,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
           : null
       );
     }
-  }, [product]);
+  }, [product, selectedElement, currentPageElements, setCurrentPageElements]);
 
   const handleApplyPalette = useCallback((colors: string[]) => {
     if (colors[0]) handleApplyColor(colors[0]);
