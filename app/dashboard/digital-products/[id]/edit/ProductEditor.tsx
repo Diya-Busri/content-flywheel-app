@@ -1077,6 +1077,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [showStyleSuggestions, setShowStyleSuggestions] = useState(false);
   const [showTypographyDialog, setShowTypographyDialog] = useState(false);
   const [selectedTypographyStyle, setSelectedTypographyStyle] = useState("typography");
+  const [typographyText, setTypographyText] = useState("");
+  const [typographyStyleKeyword, setTypographyStyleKeyword] = useState("");
   const [movingImageSectionId, setMovingImageSectionId] = useState<string | null>(null);
   const movingImageRef = useRef<{ sectionId: string; startMouseX: number; startMouseY: number; startImageX: number; startImageY: number } | null>(null);
   const [selectedGeneratePageIds, setSelectedGeneratePageIds] = useState<Set<string> | null>(null);
@@ -3672,15 +3674,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
   };
 
-  const buildImagePrompt = useCallback((title: string, style: string, customKeyword?: string) => {
+  const buildImagePrompt = useCallback((title: string, style: string, customKeyword?: string, textOverride?: string) => {
+    const allStyles = [...IMAGE_STYLES, ...TYPOGRAPHY_STYLES];
     const suffix = customKeyword?.trim()
       ? `${customKeyword.trim()} style`
-      : (IMAGE_STYLES.find((s) => s.id === style) ?? IMAGE_STYLES[0]).suffix;
+      : (allStyles.find((s) => s.id === style) ?? IMAGE_STYLES[0]).suffix;
     const niche = product?.niche ? ` — ${product.niche}` : "";
-    return `${title}${niche}. ${suffix}.`;
+    const displayText = textOverride?.trim() || title;
+    return `${displayText}${niche}. ${suffix}.`;
   }, [product]);
 
-  const handleGenerateImages = useCallback(async (style: string, customKeyword?: string) => {
+  const handleGenerateImages = useCallback(async (style: string, customKeyword?: string, textOverride?: string) => {
     const allContent = sections.filter((s) => s.id !== "cover" && s.id !== "back");
     const contentSections = selectedGeneratePageIds !== null
       ? allContent.filter((s) => selectedGeneratePageIds.has(s.id))
@@ -3697,7 +3701,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         const isSectionFullPage = !section.content || section.content.replace(/<[^>]*>/g, "").trim() === "";
         const prompt = isSectionFullPage
           ? `${section.title}, colouring page for kids, black and white line art, bold simple outlines, no shading, white background, suitable for printing and colouring in`
-          : buildImagePrompt(section.title, style, customKeyword);
+          : buildImagePrompt(section.title, style, customKeyword, textOverride);
         const aspectRatio = isSectionFullPage
           ? (pageOrientation === "landscape" ? "16:9" : "9:16")
           : "1:1";
@@ -4328,8 +4332,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
       <Dialog open={showTypographyDialog} onOpenChange={setShowTypographyDialog}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Choose Style</DialogTitle>
-            <DialogDescription>Pick a style for your AI-generated section images.</DialogDescription>
+            <DialogTitle>Typography &amp; Pattern</DialogTitle>
+            <DialogDescription>Choose a style and optionally customise the text and look.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-2 py-2">
             {TYPOGRAPHY_STYLES.map((style) => (
@@ -4346,6 +4350,29 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 {style.label}
               </button>
             ))}
+          </div>
+          {/* Text override — only relevant for Typography */}
+          {selectedTypographyStyle === "typography" && (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-600">What should the text say? <span className="text-gray-400 font-normal">(optional — defaults to page title)</span></label>
+              <input
+                type="text"
+                value={typographyText}
+                onChange={(e) => setTypographyText(e.target.value)}
+                placeholder="e.g. Chapter 1, Believe in yourself…"
+                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              />
+            </div>
+          )}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-gray-600">Visual style <span className="text-gray-400 font-normal">(optional)</span></label>
+            <input
+              type="text"
+              value={typographyStyleKeyword}
+              onChange={(e) => setTypographyStyleKeyword(e.target.value)}
+              placeholder={selectedTypographyStyle === "typography" ? "e.g. minimalist, neon, vintage, handwritten" : "e.g. floral, geometric, boho, celestial"}
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            />
           </div>
           {/* Page picker */}
           {sections.filter((s) => s.id !== "cover" && s.id !== "back").length > 1 && (
@@ -4383,7 +4410,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
             <Button variant="outline" onClick={() => setShowTypographyDialog(false)}>Cancel</Button>
             <Button
               className="bg-orange-500 hover:bg-orange-600 text-white"
-              onClick={() => { setShowTypographyDialog(false); handleGenerateImages(selectedTypographyStyle); }}
+              onClick={() => {
+                setShowTypographyDialog(false);
+                handleGenerateImages(
+                  selectedTypographyStyle,
+                  typographyStyleKeyword.trim() || undefined,
+                  selectedTypographyStyle === "typography" ? (typographyText.trim() || undefined) : undefined,
+                );
+                setTypographyText("");
+                setTypographyStyleKeyword("");
+              }}
             >
               Generate
             </Button>
