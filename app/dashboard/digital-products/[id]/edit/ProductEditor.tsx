@@ -1318,7 +1318,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const saveToServer = useCallback(
     async (payload: {
-      content?: { sections: Section[] };
+      content?: { sections: Section[]; pageOrientation?: "portrait" | "landscape" };
       designSettings?: Record<string, unknown>;
       placedElements?: PlacedElement[];
       placedElementsByPage?: PlacedElement[][];
@@ -4655,6 +4655,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       pointerEvents: "auto",
                       ...(canvasBgUrl ? { backgroundColor: "transparent" } : {}),
                       minHeight: effectiveCanvasHeight,
+                      ...(() => {
+                        const s = sections[currentPageIndex - 1];
+                        const isFullPage = s?.imageUrl?.trim() && (!s.content || s.content.replace(/<[^>]*>/g, "").trim() === "");
+                        return isFullPage ? { padding: 0 } : {};
+                      })(),
                     }}
                     onClick={(e) => {
                       const blockEl = (e.target as HTMLElement).closest("h1, h2, h3, h4, p, li");
@@ -4670,31 +4675,32 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       <div className="w-full pointer-events-none" style={{ minHeight: effectiveCanvasHeight }} aria-label={currentPageIndex === 0 ? "Cover page" : "Back cover"} />
                     ) : (
                       <>
-                        <h2
-                          data-section-id="__product_title"
-                          data-text-type="heading"
-                          contentEditable
-                          suppressContentEditableWarning
-                          className="text-2xl font-bold border-b pb-2 cursor-text select-text outline-none focus:outline-none"
-                          style={{
-                            ...(product.designSettings?.textStyles?.["__product_title"]?.title ?? {}),
-                            color: currentPageTextColor ?? product.designSettings?.textStyles?.["__product_title"]?.title?.color ?? templatePreset.titleColor,
-                          }}
-                          onBlur={(e) => {
-                            const text = e.currentTarget.textContent ?? "";
-                            setProduct((p) => (p ? { ...p, title: text } : null));
-                            setSelectedTextMeta((prev) => (prev && prev.sectionId === "__product_title" ? { ...prev, content: text } : prev));
-                            saveToServer({ title: text });
-                          }}
-                        >
-                          {product.title}
-                        </h2>
                         {(sections[currentPageIndex - 1] ? [sections[currentPageIndex - 1]] : []).map((section) => {
+                          const isFullPage = section.imageUrl?.trim() && (!section.content || section.content.replace(/<[^>]*>/g, "").trim() === "");
                           const titleStyles = product.designSettings?.textStyles?.[section.id]?.title;
                           const bodyStyles = product.designSettings?.textStyles?.[section.id]?.body;
                           return (
                             <section key={section.id} data-section-id={section.id}>
-                              <h3
+                              {!isFullPage && <h2
+                                data-section-id="__product_title"
+                                data-text-type="heading"
+                                contentEditable
+                                suppressContentEditableWarning
+                                className="text-2xl font-bold border-b pb-2 cursor-text select-text outline-none focus:outline-none"
+                                style={{
+                                  ...(product.designSettings?.textStyles?.["__product_title"]?.title ?? {}),
+                                  color: currentPageTextColor ?? product.designSettings?.textStyles?.["__product_title"]?.title?.color ?? templatePreset.titleColor,
+                                }}
+                                onBlur={(e) => {
+                                  const text = e.currentTarget.textContent ?? "";
+                                  setProduct((p) => (p ? { ...p, title: text } : null));
+                                  setSelectedTextMeta((prev) => (prev && prev.sectionId === "__product_title" ? { ...prev, content: text } : prev));
+                                  saveToServer({ title: text });
+                                }}
+                              >
+                                {product.title}
+                              </h2>}
+                              {!isFullPage && <h3
                                 data-section-id={section.id}
                                 data-text-type="title"
                                 contentEditable
@@ -4710,13 +4716,12 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                 }}
                               >
                                 {section.title}
-                              </h3>
+                              </h3>}
                               {section.imageUrl?.trim() ? (() => {
-                                const isFullPage = !section.content || section.content.replace(/<[^>]*>/g, "").trim() === "";
                                 return (
-                                  <div className={`group relative ${isFullPage ? "" : "mb-4"}`} style={isFullPage ? { margin: "8px -24px -24px", borderRadius: 0 } : {}}>
+                                  <div className={`group relative ${isFullPage ? "" : "mb-4"}`} style={isFullPage ? { borderRadius: 0 } : {}}>
                                     {regeneratingSectionImageId === section.id ? (
-                                      <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: isFullPage ? `${effectiveCanvasHeight - 60}px` : "160px" }}>
+                                      <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: isFullPage ? `${effectiveCanvasHeight}px` : "160px" }}>
                                         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                                       </div>
                                     ) : (
@@ -4725,12 +4730,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                         alt=""
                                         style={{
                                           width: "100%",
-                                          height: isFullPage ? `${effectiveCanvasHeight - 60}px` : undefined,
+                                          height: isFullPage ? `${effectiveCanvasHeight}px` : undefined,
                                           maxHeight: isFullPage ? undefined : "300px",
-                                          objectFit: isFullPage ? "cover" : "cover",
+                                          objectFit: "cover",
                                           borderRadius: isFullPage ? 0 : "8px",
                                           display: "block",
-                                          background: isFullPage ? "#fff" : undefined,
                                         }}
                                       />
                                     )}
