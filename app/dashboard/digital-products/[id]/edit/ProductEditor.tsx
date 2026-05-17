@@ -3644,6 +3644,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     setShowImageStyleDialog(false);
     setGenerateImagesLoading(true);
     setGenerateImagesProgress({ done: 0, total: contentSections.length });
+    let updatedSections = [...sections];
     for (let i = 0; i < contentSections.length; i++) {
       const section = contentSections[i];
       try {
@@ -3655,9 +3656,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
         });
         const data = await res.json().catch(() => ({}));
         if (data.url) {
-          setSections((prev) =>
-            prev.map((s) => (s.id === section.id ? { ...s, imageUrl: data.url } : s))
-          );
+          updatedSections = updatedSections.map((s) => (s.id === section.id ? { ...s, imageUrl: data.url } : s));
+          setSections(updatedSections);
+          saveToServer({ content: { sections: updatedSections } });
         }
       } catch {
         // continue to next section on error
@@ -3666,7 +3667,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
     setGenerateImagesLoading(false);
     setGenerateImagesProgress(null);
-  }, [sections, buildImagePrompt]);
+  }, [sections, buildImagePrompt, saveToServer]);
 
   const handleRegenerateSectionImage = useCallback(async (sectionId: string) => {
     const section = sections.find((s) => s.id === sectionId);
@@ -3681,19 +3682,21 @@ export default function ProductEditor({ productId }: { productId: string }) {
       });
       const data = await res.json().catch(() => ({}));
       if (data.url) {
-        setSections((prev) =>
-          prev.map((s) => (s.id === sectionId ? { ...s, imageUrl: data.url } : s))
-        );
+        const updatedSections = sections.map((s) => (s.id === sectionId ? { ...s, imageUrl: data.url } : s));
+        setSections(updatedSections);
+        saveToServer({ content: { sections: updatedSections } });
       }
     } catch {
       // ignore
     }
     setRegeneratingSectionImageId(null);
-  }, [sections, selectedImageStyle, buildImagePrompt]);
+  }, [sections, selectedImageStyle, buildImagePrompt, saveToServer]);
 
   const handleRemoveSectionImage = useCallback((sectionId: string) => {
-    setSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, imageUrl: undefined } : s)));
-  }, []);
+    const updatedSections = sections.map((s) => (s.id === sectionId ? { ...s, imageUrl: undefined } : s));
+    setSections(updatedSections);
+    saveToServer({ content: { sections: updatedSections } });
+  }, [sections, saveToServer]);
 
   const handleGenerateVideos = useCallback(() => {
     const title = product?.title ?? "";
