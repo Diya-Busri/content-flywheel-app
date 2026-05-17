@@ -390,7 +390,8 @@ export function DesignEditor({ designId }: { designId: string }) {
   async function exportPng() {
     const { toPng } = await import("html-to-image");
     if (!canvasRef.current) return;
-    const url = await toPng(canvasRef.current, { width: data.width, height: data.height, pixelRatio: 2 });
+    // pixelRatio: 2/scale → output is always 2× native canvas resolution regardless of zoom
+    const url = await toPng(canvasRef.current, { pixelRatio: 2 / scale });
     const a = document.createElement("a"); a.href = url; a.download = `${title}.png`; a.click();
   }
 
@@ -398,7 +399,8 @@ export function DesignEditor({ designId }: { designId: string }) {
     const { toPng } = await import("html-to-image");
     const { jsPDF } = await import("jspdf");
     if (!canvasRef.current) return;
-    const url = await toPng(canvasRef.current, { width: data.width, height: data.height, pixelRatio: 2 });
+    // pixelRatio: 1/scale → output exactly matches native canvas resolution regardless of zoom
+    const url = await toPng(canvasRef.current, { pixelRatio: 1 / scale });
     const mmW = data.width * 0.2646;
     const mmH = data.height * 0.2646;
     const pdf = new jsPDF({ orientation: mmW > mmH ? "landscape" : "portrait", unit: "mm", format: [mmW, mmH] });
