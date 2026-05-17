@@ -969,6 +969,17 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
   );
 });
 
+const IMAGE_STYLES: { id: string; label: string; emoji: string; suffix: string }[] = [
+  { id: "illustration", label: "Illustration", emoji: "🎨", suffix: "vibrant digital illustration, modern flat design style" },
+  { id: "realistic", label: "Realistic", emoji: "📷", suffix: "photorealistic, high quality, professional photography style" },
+  { id: "cartoon", label: "Cartoon", emoji: "🖼️", suffix: "fun cartoon style, bold outlines, bright colours" },
+  { id: "anime", label: "Anime", emoji: "⛩️", suffix: "anime style illustration, clean linework, vibrant colours" },
+  { id: "3d", label: "3D Render", emoji: "🧊", suffix: "3D render, glossy materials, soft studio lighting, modern" },
+  { id: "minimalist", label: "Minimalist", emoji: "◻️", suffix: "minimalist design, clean lines, simple shapes, white background" },
+  { id: "watercolor", label: "Watercolour", emoji: "💧", suffix: "watercolour painting, soft washes, artistic style" },
+  { id: "vintage", label: "Vintage", emoji: "📜", suffix: "vintage retro style, muted tones, classic illustration" },
+];
+
 export default function ProductEditor({ productId }: { productId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1044,6 +1055,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [generateImagesLoading, setGenerateImagesLoading] = useState(false);
   const [generateImagesProgress, setGenerateImagesProgress] = useState<{ done: number; total: number } | null>(null);
   const [regeneratingSectionImageId, setRegeneratingSectionImageId] = useState<string | null>(null);
+  const [showImageStyleDialog, setShowImageStyleDialog] = useState(false);
+  const [selectedImageStyle, setSelectedImageStyle] = useState("illustration");
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
   const [showAutoDesignChoiceDialog, setShowAutoDesignChoiceDialog] = useState(false);
   const [brandProfile, setBrandProfile] = useState<{
@@ -3619,15 +3632,22 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
   };
 
-  const handleGenerateImages = useCallback(async () => {
+  const buildImagePrompt = useCallback((title: string, style: string) => {
+    const styleEntry = IMAGE_STYLES.find((s) => s.id === style) ?? IMAGE_STYLES[0];
+    const niche = product?.niche ? ` — ${product.niche}` : "";
+    return `${title}${niche}. ${styleEntry.suffix}.`;
+  }, [product]);
+
+  const handleGenerateImages = useCallback(async (style: string) => {
     const contentSections = sections.filter((s) => s.id !== "cover" && s.id !== "back");
     if (!contentSections.length) return;
+    setShowImageStyleDialog(false);
     setGenerateImagesLoading(true);
     setGenerateImagesProgress({ done: 0, total: contentSections.length });
     for (let i = 0; i < contentSections.length; i++) {
       const section = contentSections[i];
       try {
-        const prompt = `${section.title}${product?.niche ? ` — ${product.niche}` : ""} digital product illustration`;
+        const prompt = buildImagePrompt(section.title, style);
         const res = await fetch("/api/chat/coach/generate-image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -3646,14 +3666,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
     setGenerateImagesLoading(false);
     setGenerateImagesProgress(null);
-  }, [sections, product]);
+  }, [sections, buildImagePrompt]);
 
   const handleRegenerateSectionImage = useCallback(async (sectionId: string) => {
     const section = sections.find((s) => s.id === sectionId);
     if (!section) return;
     setRegeneratingSectionImageId(sectionId);
     try {
-      const prompt = `${section.title}${product?.niche ? ` — ${product.niche}` : ""} digital product illustration`;
+      const prompt = buildImagePrompt(section.title, selectedImageStyle);
       const res = await fetch("/api/chat/coach/generate-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3669,7 +3689,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       // ignore
     }
     setRegeneratingSectionImageId(null);
-  }, [sections, product]);
+  }, [sections, selectedImageStyle, buildImagePrompt]);
 
   const handleRemoveSectionImage = useCallback((sectionId: string) => {
     setSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, imageUrl: undefined } : s)));
@@ -4088,6 +4108,41 @@ export default function ProductEditor({ productId }: { productId: string }) {
         </div>
       )}
 
+      {/* Image style picker */}
+      <Dialog open={showImageStyleDialog} onOpenChange={setShowImageStyleDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Choose Image Style</DialogTitle>
+            <DialogDescription>Pick a style for your AI-generated section images.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2 py-2">
+            {IMAGE_STYLES.map((style) => (
+              <button
+                key={style.id}
+                onClick={() => setSelectedImageStyle(style.id)}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                  selectedImageStyle === style.id
+                    ? "border-orange-500 bg-orange-50 text-orange-700 font-medium"
+                    : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-700"
+                }`}
+              >
+                <span className="text-base">{style.emoji}</span>
+                {style.label}
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowImageStyleDialog(false)}>Cancel</Button>
+            <Button
+              className="bg-orange-500 hover:bg-orange-600 text-white"
+              onClick={() => handleGenerateImages(selectedImageStyle)}
+            >
+              Generate Images
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Brand profile first-time setup */}
       <Dialog open={showBrandSetupDialog} onOpenChange={setShowBrandSetupDialog}>
         <DialogContent className="max-w-md">
@@ -4408,7 +4463,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         showCreatedBanner={showCreatedBanner}
         onGenerateVideos={handleGenerateVideos}
         onDismissCreatedBanner={() => setShowCreatedBanner(false)}
-        onGenerateImages={handleGenerateImages}
+        onGenerateImages={() => setShowImageStyleDialog(true)}
         generateImagesLoading={generateImagesLoading}
         generateImagesProgress={generateImagesProgress}
       />
