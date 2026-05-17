@@ -296,7 +296,6 @@ export function DesignEditor({ designId }: { designId: string }) {
           ref={containerRef}
           className={`flex-1 flex items-center justify-center overflow-auto p-8 ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
           style={{ backgroundImage: isDark ? "radial-gradient(circle, #2A2A2A 1px, transparent 1px)" : "radial-gradient(circle, #d1d5db 1px, transparent 1px)", backgroundSize: "24px 24px" }}
-          onClick={() => setSelectedId(null)}
         >
           <div style={{ width: data.width * scale, height: data.height * scale, position: "relative", flexShrink: 0 }}>
             <div
@@ -365,7 +364,7 @@ function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onUpdate 
 
   if (el.type === "text") {
     return (
-      <div style={style} onMouseDown={(e) => onMouseDown(e, el.id)} onDoubleClick={() => setEditing(true)}>
+      <div style={style} onMouseDown={(e) => onMouseDown(e, el.id)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => setEditing(true)}>
         {editing ? (
           <textarea autoFocus value={el.content ?? ""} onChange={(e) => onUpdate({ content: e.target.value })} onBlur={() => setEditing(false)}
             style={{ width: "100%", height: "100%", background: "transparent", border: "none", outline: "none", resize: "none", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, cursor: "text" }} />
@@ -381,7 +380,7 @@ function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onUpdate 
 
   if (el.type === "image") {
     return (
-      <div style={style} onMouseDown={(e) => onMouseDown(e, el.id)}>
+      <div style={style} onMouseDown={(e) => onMouseDown(e, el.id)} onClick={(e) => e.stopPropagation()}>
         {el.imageUrl
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={el.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: (el.objectFit as "cover" | "contain" | "fill") ?? "cover", display: "block", pointerEvents: "none" }} draggable={false} />
@@ -393,7 +392,7 @@ function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onUpdate 
   }
 
   return (
-    <div style={{ ...style, background: el.fill ?? "#f97316", borderRadius: el.borderRadius ?? 0, border: el.stroke ? `${el.strokeWidth ?? 2}px solid ${el.stroke}` : undefined }} onMouseDown={(e) => onMouseDown(e, el.id)}>
+    <div style={{ ...style, background: el.fill ?? "#f97316", borderRadius: el.borderRadius ?? 0, border: el.stroke ? `${el.strokeWidth ?? 2}px solid ${el.stroke}` : undefined }} onMouseDown={(e) => onMouseDown(e, el.id)} onClick={(e) => e.stopPropagation()}>
       {selected && <ResizeHandle onMouseDown={(e) => onResizeMouseDown(e, el.id)} />}
     </div>
   );
