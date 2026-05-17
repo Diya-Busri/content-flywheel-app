@@ -66,7 +66,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!existing) return NextResponse.json({ error: "Product not found" }, { status: 404 });
     if (existing.userId !== userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const isRetry = body.retry === true && existing?.status === "failed";
+    // Allow retry for failed OR stuck-generating products (Vercel killed the function)
+    const isRetry = body.retry === true && (existing?.status === "failed" || existing?.status === "generating");
     if (isRetry) {
       await db
         .update(productsTable)
