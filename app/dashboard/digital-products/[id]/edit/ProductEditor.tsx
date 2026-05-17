@@ -104,7 +104,7 @@ import { SalesPageCard } from "@/components/product-editor/SalesPageCard";
 import { ThumbnailVariantPicker } from "@/components/product-editor/ThumbnailVariantPicker";
 import { RevenueTracker } from "@/components/product-editor/RevenueTracker";
 
-type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string };
+type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string; imageHeightPx?: number };
 
 export type TextStyles = Record<string, string>;
 
@@ -1060,6 +1060,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [regeneratingSectionImageId, setRegeneratingSectionImageId] = useState<string | null>(null);
   const [showImageStyleDialog, setShowImageStyleDialog] = useState(false);
   const [selectedImageStyle, setSelectedImageStyle] = useState("illustration");
+  const [resizingImageId, setResizingImageId] = useState<string | null>(null);
+  const resizeStartRef = useRef<{ y: number; height: number } | null>(null);
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
   const [showAutoDesignChoiceDialog, setShowAutoDesignChoiceDialog] = useState(false);
   const [brandProfile, setBrandProfile] = useState<{
@@ -3705,6 +3707,29 @@ export default function ProductEditor({ productId }: { productId: string }) {
     saveToServer({ content: { sections: updatedSections } });
   }, [sections, saveToServer]);
 
+  useEffect(() => {
+    if (!resizingImageId) return;
+    const onMove = (e: MouseEvent) => {
+      if (!resizeStartRef.current) return;
+      const dy = e.clientY - resizeStartRef.current.y;
+      const newHeight = Math.max(120, resizeStartRef.current.height + dy);
+      setSections((prev) => prev.map((s) => s.id === resizingImageId ? { ...s, imageHeightPx: newHeight } : s));
+    };
+    const onUp = () => {
+      setResizingImageId(null);
+      setSections((prev) => {
+        saveToServer({ content: { sections: prev } });
+        return prev;
+      });
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, [resizingImageId, saveToServer]);
+
   const handleGenerateVideos = useCallback(() => {
     const title = product?.title ?? "";
     const description = (product?.marketingAssets as { productDescription?: string } | undefined)?.productDescription ?? "";
@@ -4718,10 +4743,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                 {section.title}
                               </h3>}
                               {section.imageUrl?.trim() ? (() => {
+                                const imgHeight = isFullPage
+                                  ? (section.imageHeightPx ?? Math.round(effectiveCanvasHeight * 0.8))
+                                  : undefined;
                                 return (
                                   <div className={`group relative ${isFullPage ? "" : "mb-4"}`} style={isFullPage ? { borderRadius: 0 } : {}}>
                                     {regeneratingSectionImageId === section.id ? (
-                                      <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: isFullPage ? `${effectiveCanvasHeight}px` : "160px" }}>
+                                      <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: imgHeight ?? 160 }}>
                                         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                                       </div>
                                     ) : (
@@ -4730,13 +4758,28 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                         alt=""
                                         style={{
                                           width: "100%",
-                                          height: isFullPage ? `${effectiveCanvasHeight}px` : undefined,
+                                          height: imgHeight,
                                           maxHeight: isFullPage ? undefined : "300px",
                                           objectFit: "cover",
                                           borderRadius: isFullPage ? 0 : "8px",
                                           display: "block",
+                                          userSelect: "none",
                                         }}
                                       />
+                                    )}
+                                    {isFullPage && (
+                                      <div
+                                        className="absolute bottom-0 left-0 right-0 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-s-resize select-none"
+                                        style={{ background: "rgba(0,0,0,0.18)", zIndex: 20 }}
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          resizeStartRef.current = { y: e.clientY, height: imgHeight ?? Math.round(effectiveCanvasHeight * 0.8) };
+                                          setResizingImageId(section.id);
+                                        }}
+                                        title="Drag to resize"
+                                      >
+                                        <div className="w-8 h-1 rounded-full bg-white/70" />
+                                      </div>
                                     )}
                                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                       <button
