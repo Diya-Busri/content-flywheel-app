@@ -3148,8 +3148,27 @@ export default function DiscoverFlow() {
               {bundleError}
             </div>
           )}
+          {bundleItems.length > 0 && (() => {
+            const doneCount = bundleItems.filter((i) => i.status === "done" || i.status === "failed").length;
+            const total = bundleItems.length;
+            const pct = Math.round((doneCount / total) * 100);
+            return (
+              <div className="mt-3 mb-1 space-y-1.5">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{doneCount} of {total} complete</span>
+                  <span className="font-semibold text-orange-400">{pct}%</span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-orange-500 transition-all duration-500"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
           {bundleItems.length > 0 && (
-            <ul className="space-y-2 max-h-[280px] overflow-y-auto mt-3">
+            <ul className="space-y-2 max-h-[240px] overflow-y-auto mt-2">
               {bundleItems.map((item) => (
                 <li key={item.productId} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm">
                   <span className="font-medium text-foreground">{item.label}</span>
