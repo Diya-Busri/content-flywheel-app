@@ -14,6 +14,7 @@ const BUCKET = "timeline-media";
 
 /** gpt-image-1 landscape (closest to 16:9) and square sizes. */
 const SIZE_16_9 = "1536x1024" as const;
+const SIZE_PORTRAIT = "1024x1536" as const;
 const SIZE_SQUARE = "1024x1024" as const;
 
 const PEOPLE_KEYWORDS = /\bperson|people|someone|woman|man|girl|boy|human|face|portrait\b/i;
@@ -83,7 +84,7 @@ export async function POST(req: Request) {
 
     const aspectRatio = typeof body.aspectRatio === "string" ? body.aspectRatio : undefined;
     // Force 16:9 for script/section images so timeline and export are reliable
-    const size = aspectRatio === "16:9" ? SIZE_16_9 : SIZE_SQUARE;
+    const size = aspectRatio === "16:9" ? SIZE_16_9 : aspectRatio === "9:16" ? SIZE_PORTRAIT : SIZE_SQUARE;
 
     const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 503 });
