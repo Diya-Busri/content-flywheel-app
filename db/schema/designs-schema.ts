@@ -10,6 +10,14 @@ export type DesignElement = {
   rotation?: number;
   opacity?: number;
   zIndex?: number;
+  flipX?: boolean;
+  flipY?: boolean;
+  shadowColor?: string;
+  shadowBlur?: number;
+  shadowX?: number;
+  shadowY?: number;
+  letterSpacing?: number;
+  lineHeight?: number;
   // text
   content?: string;
   fontSize?: number;
@@ -34,6 +42,8 @@ export type DesignData = {
   width: number;
   height: number;
   background: string;
+  backgroundType?: "solid" | "gradient";
+  backgroundGradient?: { color1: string; color2: string; angle: number };
   elements: DesignElement[];
   presetName?: string;
 };
