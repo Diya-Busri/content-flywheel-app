@@ -188,17 +188,21 @@ export function DesignEditor({ designId }: { designId: string }) {
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showShapePicker, setShowShapePicker] = useState(false);
+  const [activePanel, setActivePanel] = useState<"shapes" | "ai" | "templates" | "uploads" | null>(null);
+  const [flyoutPos, setFlyoutPos] = useState({ x: 84, y: 60 });
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
-  const [showAiPanel, setShowAiPanel] = useState(false);
   const [aiStyle, setAiStyle] = useState("bold");
   const [aiError, setAiError] = useState<string | null>(null);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [showUploads, setShowUploads] = useState(false);
   const [recentUploads, setRecentUploads] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem("cf_design_uploads") ?? "[]"); } catch { return []; }
   });
+
+  function togglePanel(panel: "shapes" | "ai" | "templates" | "uploads", e: React.MouseEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setFlyoutPos({ x: rect.right + 8, y: Math.max(8, rect.top) });
+    setActivePanel((prev) => prev === panel ? null : panel);
+  }
 
   // Undo/redo
   const historyRef = useRef<DesignData[]>([]);
@@ -332,7 +336,7 @@ export function DesignEditor({ designId }: { designId: string }) {
     };
     updateData((prev) => ({ ...prev, elements: [...prev.elements, el] }));
     setSelectedId(el.id);
-    setShowShapePicker(false);
+    setActivePanel(null);
   }
 
   function addImageUrl(url: string) {
@@ -371,7 +375,7 @@ export function DesignEditor({ designId }: { designId: string }) {
   function applyTemplate(tpl: TemplateDef) {
     const patch = tpl.make(data.width, data.height);
     updateData((prev) => ({ ...prev, ...patch }));
-    setShowTemplates(false);
+    setActivePanel(null);
     setSelectedId(null);
   }
 
@@ -414,7 +418,7 @@ export function DesignEditor({ designId }: { designId: string }) {
       updateData((prev) => ({ ...prev, elements: [...prev.elements, el] }));
       setSelectedId(el.id);
       setAiPrompt("");
-      setShowAiPanel(false);
+      setActivePanel(null);
     } catch {
       setAiError("Network error. Please try again.");
     } finally { setAiLoading(false); }
@@ -595,125 +599,31 @@ export function DesignEditor({ designId }: { designId: string }) {
           <SideLabel label="Add" isDark={isDark} />
           <ToolBtn icon={<Type className="w-5 h-5" />} label="Text" onClick={addText} isDark={isDark} />
 
-          {/* Shapes */}
-          <div className="relative w-full">
-            <button onClick={() => { setShowShapePicker((v) => !v); setShowAiPanel(false); }}
-              className={`w-full flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors ${isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"}`}>
-              <div className="flex items-center gap-0.5"><Square className="w-5 h-5" /><ChevronDown className="w-3 h-3" /></div>
-              <span className="text-[9px] font-medium leading-none">Shapes</span>
-            </button>
-            {showShapePicker && (
-              <div className={`absolute left-full top-0 ml-2 z-50 rounded-xl border shadow-xl p-3 w-72 ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
-                <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Choose a shape</p>
-                <div className="grid grid-cols-5 gap-2">
-                  {SHAPES.map((s) => (
-                    <button key={s.id} onClick={() => addShape(s.id)} title={s.label}
-                      className={`flex flex-col items-center gap-1 p-2 rounded-lg ${isDark ? "hover:bg-white/10" : "hover:bg-gray-100"}`}>
-                      <div className="w-9 h-9">{s.render("#f97316")}</div>
-                      <span className={`text-[9px] leading-tight text-center line-clamp-1 ${isDark ? "text-gray-400" : "text-gray-500"}`}>{s.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <button onClick={(e) => togglePanel("shapes", e)}
+            className={`w-full flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors ${activePanel === "shapes" ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"}`}>
+            <div className="flex items-center gap-0.5"><Square className="w-5 h-5" /><ChevronDown className="w-3 h-3" /></div>
+            <span className="text-[9px] font-medium leading-none">Shapes</span>
+          </button>
 
           <ToolBtn icon={<ImageIcon className="w-5 h-5" />} label="Image" onClick={addImage} isDark={isDark} />
 
-          {/* AI Generate */}
-          <div className="relative w-full">
-            <button onClick={() => { setShowAiPanel((v) => !v); setShowShapePicker(false); }}
-              className={`w-full flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors ${showAiPanel ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"}`}>
-              <Sparkles className="w-5 h-5" />
-              <span className="text-[9px] font-medium leading-none">AI Image</span>
-            </button>
-            {showAiPanel && (
-              <div className={`absolute left-full top-0 ml-2 z-50 rounded-xl border shadow-xl p-4 w-80 ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
-                <p className={`text-sm font-semibold mb-1 ${isDark ? "text-white" : "text-gray-900"}`}>Generate AI Image</p>
-                <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Uses 1 video credit · Background auto-removed</p>
-                <textarea
-                  value={aiPrompt}
-                  onChange={(e) => { setAiPrompt(e.target.value); setAiError(null); }}
-                  placeholder="e.g. golden crown on white background, detailed illustration"
-                  rows={3}
-                  className={`w-full text-xs rounded-lg border px-3 py-2 resize-none mb-3 ${isDark ? "bg-[#111] border-[#2A2A2A] text-white placeholder-gray-600" : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"}`}
-                />
-                <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Style</p>
-                <div className="grid grid-cols-3 gap-1.5 mb-3">
-                  {([
-                    ["bold", "Bold"],
-                    ["minimalist", "Minimal"],
-                    ["vintage", "Vintage"],
-                    ["abstract", "Abstract"],
-                    ["lineart", "Line Art"],
-                    ["typography", "Typography"],
-                  ] as const).map(([val, lbl]) => (
-                    <button key={val} onClick={() => setAiStyle(val)}
-                      className={`py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${aiStyle === val ? "bg-orange-500 text-white border-orange-500" : isDark ? "border-[#2A2A2A] text-gray-400 hover:border-gray-500" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}>
-                      {lbl}
-                    </button>
-                  ))}
-                </div>
-                {aiError && <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{aiError}</p>}
-                <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2" onClick={generateAiImage} disabled={aiLoading || !aiPrompt.trim()}>
-                  {aiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</> : <><Sparkles className="w-4 h-4" /> Generate Image</>}
-                </Button>
-              </div>
-            )}
-          </div>
+          <button onClick={(e) => togglePanel("ai", e)}
+            className={`w-full flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors ${activePanel === "ai" ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"}`}>
+            <Sparkles className="w-5 h-5" />
+            <span className="text-[9px] font-medium leading-none">AI Image</span>
+          </button>
 
-          {/* Templates */}
-          <div className="relative w-full">
-            <button onClick={() => { setShowTemplates((v) => !v); setShowShapePicker(false); setShowAiPanel(false); setShowUploads(false); }}
-              className={`w-full flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors ${showTemplates ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"}`}>
-              <LayoutTemplate className="w-5 h-5" />
-              <span className="text-[9px] font-medium leading-none">Templates</span>
-            </button>
-            {showTemplates && (
-              <div className={`absolute left-full top-0 ml-2 z-50 rounded-xl border shadow-xl p-4 w-80 ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
-                <p className={`text-sm font-semibold mb-1 ${isDark ? "text-white" : "text-gray-900"}`}>Templates</p>
-                <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Click to apply — replaces background &amp; adds starter elements</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {TEMPLATES.map((tpl) => (
-                    <button key={tpl.id} onClick={() => applyTemplate(tpl)}
-                      className={`rounded-xl overflow-hidden border-2 hover:border-orange-500 transition-colors text-left ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
-                      <div className="h-20" style={{ background: tpl.preview }} />
-                      <div className={`px-2 py-1.5 text-xs font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>{tpl.label}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <button onClick={(e) => togglePanel("templates", e)}
+            className={`w-full flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors ${activePanel === "templates" ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"}`}>
+            <LayoutTemplate className="w-5 h-5" />
+            <span className="text-[9px] font-medium leading-none">Templates</span>
+          </button>
 
-          {/* Uploads */}
-          <div className="relative w-full">
-            <button onClick={() => { setShowUploads((v) => !v); setShowShapePicker(false); setShowAiPanel(false); setShowTemplates(false); }}
-              className={`w-full flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors ${showUploads ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"}`}>
-              <Images className="w-5 h-5" />
-              <span className="text-[9px] font-medium leading-none">Uploads</span>
-            </button>
-            {showUploads && (
-              <div className={`absolute left-full top-0 ml-2 z-50 rounded-xl border shadow-xl p-4 w-72 ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
-                <p className={`text-sm font-semibold mb-1 ${isDark ? "text-white" : "text-gray-900"}`}>My Uploads</p>
-                <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Click an image to add it to the canvas</p>
-                <Button size="sm" variant="outline" className={`w-full mb-3 gap-2 ${isDark ? "border-[#2A2A2A] text-gray-300" : ""}`} onClick={() => { addImage(); setShowUploads(false); }}>
-                  <Images className="w-4 h-4" /> Upload new image
-                </Button>
-                {recentUploads.length === 0
-                  ? <p className={`text-xs text-center py-6 ${isDark ? "text-gray-600" : "text-gray-400"}`}>No uploads yet. Upload an image to get started.</p>
-                  : <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-                      {recentUploads.map((url) => (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <button key={url} onClick={() => { addImageUrl(url); setShowUploads(false); }} className={`rounded-lg overflow-hidden border-2 hover:border-orange-500 transition-colors ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
-                          <img src={url} alt="" className="w-full h-16 object-cover" />
-                        </button>
-                      ))}
-                    </div>
-                }
-              </div>
-            )}
-          </div>
+          <button onClick={(e) => togglePanel("uploads", e)}
+            className={`w-full flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors ${activePanel === "uploads" ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"}`}>
+            <Images className="w-5 h-5" />
+            <span className="text-[9px] font-medium leading-none">Uploads</span>
+          </button>
 
           <div className={`w-full my-2 border-t ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`} />
           <SideLabel label="BG" isDark={isDark} />
@@ -737,7 +647,7 @@ export function DesignEditor({ designId }: { designId: string }) {
           ref={containerRef}
           className={`flex-1 flex items-center justify-center overflow-auto p-8 ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
           style={{ backgroundImage: isDark ? "radial-gradient(circle, #2A2A2A 1px, transparent 1px)" : "radial-gradient(circle, #d1d5db 1px, transparent 1px)", backgroundSize: "24px 24px" }}
-          onClick={() => { setSelectedId(null); setShowShapePicker(false); setShowAiPanel(false); setShowTemplates(false); setShowUploads(false); }}
+          onClick={() => { setSelectedId(null); setActivePanel(null); }}
         >
           <div style={{ width: data.width * scale, height: data.height * scale, position: "relative", flexShrink: 0 }}>
             <div
@@ -768,6 +678,98 @@ export function DesignEditor({ designId }: { designId: string }) {
                 elementCount={data.elements.length} />}
         </aside>
       </div>
+
+      {/* ── Flyout panels – fixed so they escape overflow clipping ── */}
+      {activePanel && (
+        <div style={{ position: "fixed", left: flyoutPos.x, top: flyoutPos.y, zIndex: 300, maxHeight: "calc(100vh - 16px)", overflowY: "auto" }}
+          className={`rounded-xl border shadow-2xl ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white" : "bg-white border-gray-200 text-gray-900"}`}>
+
+          {/* Shapes */}
+          {activePanel === "shapes" && (
+            <div className="p-3 w-72">
+              <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Choose a shape</p>
+              <div className="grid grid-cols-5 gap-2">
+                {SHAPES.map((s) => (
+                  <button key={s.id} onClick={() => addShape(s.id)} title={s.label}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-lg ${isDark ? "hover:bg-white/10" : "hover:bg-gray-100"}`}>
+                    <div className="w-9 h-9">{s.render("#f97316")}</div>
+                    <span className={`text-[9px] leading-tight text-center line-clamp-1 ${isDark ? "text-gray-400" : "text-gray-500"}`}>{s.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* AI Image */}
+          {activePanel === "ai" && (
+            <div className="p-4 w-80">
+              <p className="text-sm font-semibold mb-1">Generate AI Image</p>
+              <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Uses 1 video credit · Background auto-removed</p>
+              <textarea value={aiPrompt} onChange={(e) => { setAiPrompt(e.target.value); setAiError(null); }}
+                placeholder="e.g. golden crown on white background, detailed illustration"
+                rows={3}
+                className={`w-full text-xs rounded-lg border px-3 py-2 resize-none mb-3 ${isDark ? "bg-[#111] border-[#2A2A2A] text-white placeholder-gray-600" : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"}`} />
+              <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Style</p>
+              <div className="grid grid-cols-3 gap-1.5 mb-3">
+                {(["bold","minimalist","vintage","abstract","lineart","typography"] as const).map((val) => {
+                  const lbls: Record<string, string> = { bold:"Bold", minimalist:"Minimal", vintage:"Vintage", abstract:"Abstract", lineart:"Line Art", typography:"Typography" };
+                  return (
+                    <button key={val} onClick={() => setAiStyle(val)}
+                      className={`py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${aiStyle === val ? "bg-orange-500 text-white border-orange-500" : isDark ? "border-[#2A2A2A] text-gray-400 hover:border-gray-500" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}>
+                      {lbls[val]}
+                    </button>
+                  );
+                })}
+              </div>
+              {aiError && <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{aiError}</p>}
+              <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2" onClick={generateAiImage} disabled={aiLoading || !aiPrompt.trim()}>
+                {aiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</> : <><Sparkles className="w-4 h-4" /> Generate Image</>}
+              </Button>
+            </div>
+          )}
+
+          {/* Templates */}
+          {activePanel === "templates" && (
+            <div className="p-4 w-80">
+              <p className="text-sm font-semibold mb-1">Templates</p>
+              <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Click to apply — replaces background &amp; adds starter elements</p>
+              <div className="grid grid-cols-2 gap-2">
+                {TEMPLATES.map((tpl) => (
+                  <button key={tpl.id} onClick={() => applyTemplate(tpl)}
+                    className={`rounded-xl overflow-hidden border-2 hover:border-orange-500 transition-colors text-left ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
+                    <div className="h-20" style={{ background: tpl.preview }} />
+                    <div className={`px-2 py-1.5 text-xs font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>{tpl.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Uploads */}
+          {activePanel === "uploads" && (
+            <div className="p-4 w-72">
+              <p className="text-sm font-semibold mb-1">My Uploads</p>
+              <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Click an image to add it to the canvas</p>
+              <Button size="sm" variant="outline" className={`w-full mb-3 gap-2 ${isDark ? "border-[#2A2A2A] text-gray-300" : ""}`}
+                onClick={() => { addImage(); setActivePanel(null); }}>
+                <Images className="w-4 h-4" /> Upload new image
+              </Button>
+              {recentUploads.length === 0
+                ? <p className={`text-xs text-center py-6 ${isDark ? "text-gray-600" : "text-gray-400"}`}>No uploads yet.</p>
+                : <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                    {recentUploads.map((url) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <button key={url} onClick={() => { addImageUrl(url); setActivePanel(null); }}
+                        className={`rounded-lg overflow-hidden border-2 hover:border-orange-500 transition-colors ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
+                        <img src={url} alt="" className="w-full h-16 object-cover" />
+                      </button>
+                    ))}
+                  </div>
+              }
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
