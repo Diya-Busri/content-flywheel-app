@@ -3675,11 +3675,26 @@ export default function ProductEditor({ productId }: { productId: string }) {
   };
 
   const buildImagePrompt = useCallback((title: string, style: string, customKeyword?: string, textOverride?: string) => {
+    const niche = product?.niche ? `, ${product.niche}` : "";
+
+    if (style === "typography") {
+      const displayText = textOverride?.trim() || title;
+      const styleDesc = customKeyword?.trim() ?? "";
+      const styleClause = styleDesc ? `${styleDesc} lettering style, ` : "";
+      return `typography art showing the word "${displayText}", ${styleClause}decorative hand-lettered text, beautiful fonts, text as art, flat design, no people, no faces, no photography, plain or abstract background`;
+    }
+
+    if (style === "pattern") {
+      const theme = textOverride?.trim() || title;
+      const styleDesc = customKeyword?.trim() ?? "";
+      const styleClause = styleDesc ? `${styleDesc} style, ` : "";
+      return `${styleClause}seamless repeating pattern inspired by "${theme}"${niche}, decorative surface design, tileable, no text, no people, no faces`;
+    }
+
     const allStyles = [...IMAGE_STYLES, ...TYPOGRAPHY_STYLES];
     const suffix = customKeyword?.trim()
       ? `${customKeyword.trim()} style`
       : (allStyles.find((s) => s.id === style) ?? IMAGE_STYLES[0]).suffix;
-    const niche = product?.niche ? ` — ${product.niche}` : "";
     const displayText = textOverride?.trim() || title;
     return `${displayText}${niche}. ${suffix}.`;
   }, [product]);
