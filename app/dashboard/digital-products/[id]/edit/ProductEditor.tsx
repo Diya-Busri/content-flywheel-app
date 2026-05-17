@@ -5158,7 +5158,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     );
                   })()}
                   {/* Alignment guides — always-faint, brighter while dragging */}
-                  {isOnContentPage && (
+                  {currentPageIndex > 0 && currentPageIndex < totalPages - 1 && (
                     <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 40 }} aria-hidden>
                       {/* Center vertical */}
                       <line x1="50%" y1="0" x2="50%" y2="100%" stroke={showAlignGuides ? "rgba(99,102,241,0.7)" : "rgba(0,0,0,0.06)"} strokeWidth="1" strokeDasharray={showAlignGuides ? "6,4" : "4,8"} />
