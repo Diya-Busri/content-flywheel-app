@@ -988,6 +988,9 @@ const IMAGE_STYLES: { id: string; label: string; emoji: string; suffix: string }
   { id: "minimalist", label: "Minimalist", emoji: "◻️", suffix: "minimalist design, clean lines, simple shapes, white background" },
   { id: "watercolor", label: "Watercolour", emoji: "💧", suffix: "watercolour painting, soft washes, artistic style" },
   { id: "vintage", label: "Vintage", emoji: "📜", suffix: "vintage retro style, muted tones, classic illustration" },
+];
+
+const TYPOGRAPHY_STYLES: { id: string; label: string; emoji: string; suffix: string }[] = [
   { id: "typography", label: "Typography", emoji: "✍️", suffix: "bold typographic design, decorative lettering, hand-lettered style, beautiful fonts, text as art" },
   { id: "pattern", label: "Pattern", emoji: "🔷", suffix: "seamless repeating pattern, geometric motifs, decorative surface design, colourful and detailed" },
 ];
@@ -1072,6 +1075,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [selectedImageStyle, setSelectedImageStyle] = useState("illustration");
   const [customStyleKeyword, setCustomStyleKeyword] = useState("");
   const [showStyleSuggestions, setShowStyleSuggestions] = useState(false);
+  const [showTypographyDialog, setShowTypographyDialog] = useState(false);
+  const [selectedTypographyStyle, setSelectedTypographyStyle] = useState("typography");
   const [resizingImageId, setResizingImageId] = useState<string | null>(null);
   const resizeStartRef = useRef<{ y: number; height: number } | null>(null);
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
@@ -4252,6 +4257,41 @@ export default function ProductEditor({ productId }: { productId: string }) {
         </DialogContent>
       </Dialog>
 
+      {/* Typography & Pattern style picker */}
+      <Dialog open={showTypographyDialog} onOpenChange={setShowTypographyDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Choose Style</DialogTitle>
+            <DialogDescription>Pick a style for your AI-generated section images.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2 py-2">
+            {TYPOGRAPHY_STYLES.map((style) => (
+              <button
+                key={style.id}
+                onClick={() => setSelectedTypographyStyle(style.id)}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                  selectedTypographyStyle === style.id
+                    ? "border-orange-500 bg-orange-50 text-orange-700 font-medium"
+                    : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-700"
+                }`}
+              >
+                <span className="text-base">{style.emoji}</span>
+                {style.label}
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTypographyDialog(false)}>Cancel</Button>
+            <Button
+              className="bg-orange-500 hover:bg-orange-600 text-white"
+              onClick={() => { setShowTypographyDialog(false); handleGenerateImages(selectedTypographyStyle); }}
+            >
+              Generate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Brand profile first-time setup */}
       <Dialog open={showBrandSetupDialog} onOpenChange={setShowBrandSetupDialog}>
         <DialogContent className="max-w-md">
@@ -4573,6 +4613,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         onGenerateVideos={handleGenerateVideos}
         onDismissCreatedBanner={() => setShowCreatedBanner(false)}
         onGenerateImages={() => setShowImageStyleDialog(true)}
+        onGenerateTypography={() => setShowTypographyDialog(true)}
         generateImagesLoading={generateImagesLoading}
         generateImagesProgress={generateImagesProgress}
       />
