@@ -3684,7 +3684,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     return `${displayText}${niche}. ${suffix}.`;
   }, [product]);
 
-  const handleGenerateImages = useCallback(async (style: string, customKeyword?: string, textOverride?: string) => {
+  const handleGenerateImages = useCallback(async (style: string, customKeyword?: string, textOverride?: string, forceStyle?: boolean) => {
     const allContent = sections.filter((s) => s.id !== "cover" && s.id !== "back");
     const contentSections = selectedGeneratePageIds !== null
       ? allContent.filter((s) => selectedGeneratePageIds.has(s.id))
@@ -3698,7 +3698,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     for (let i = 0; i < contentSections.length; i++) {
       const section = contentSections[i];
       try {
-        const isSectionFullPage = !section.content || section.content.replace(/<[^>]*>/g, "").trim() === "";
+        const isSectionFullPage = !forceStyle && (!section.content || section.content.replace(/<[^>]*>/g, "").trim() === "");
         const prompt = isSectionFullPage
           ? `${section.title}, colouring page for kids, black and white line art, bold simple outlines, no shading, white background, suitable for printing and colouring in`
           : buildImagePrompt(section.title, style, customKeyword, textOverride);
@@ -4435,6 +4435,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   selectedTypographyStyle,
                   typographyStyleKeyword.trim() || undefined,
                   selectedTypographyStyle === "typography" ? (typographyText.trim() || undefined) : undefined,
+                  true,
                 );
                 setTypographyText("");
                 setTypographyStyleKeyword("");
