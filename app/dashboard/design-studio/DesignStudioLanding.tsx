@@ -122,6 +122,7 @@ export function DesignStudioLanding() {
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/designs")
@@ -132,6 +133,7 @@ export function DesignStudioLanding() {
 
   async function createDesign(preset: Preset) {
     setCreating(true);
+    setCreateError(null);
     try {
       const res = await fetch("/api/designs", {
         method: "POST",
@@ -147,8 +149,14 @@ export function DesignStudioLanding() {
           },
         }),
       });
-      const { design } = await res.json();
-      router.push(`/dashboard/design-studio/${design.id}`);
+      const json = await res.json();
+      if (!res.ok || !json.design?.id) {
+        setCreateError(json.error ?? "Failed to create design. Please try again.");
+        return;
+      }
+      router.push(`/dashboard/design-studio/${json.design.id}`);
+    } catch {
+      setCreateError("Network error — please try again.");
     } finally {
       setCreating(false);
     }
@@ -220,6 +228,9 @@ export function DesignStudioLanding() {
           <DialogHeader>
             <DialogTitle>Choose a canvas size</DialogTitle>
           </DialogHeader>
+          {createError && (
+            <p className="mt-2 text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{createError}</p>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2">
             {PRESETS.map((preset) => (
               <button

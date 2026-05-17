@@ -13,6 +13,7 @@
     "start": "next start",
     "lint": "next lint",
     "db:generate": "npx drizzle-kit generate",
+    "db:designs": "node scripts/run-designs-migration.mjs",
     "db:migrate": "npx drizzle-kit migrate",
     "db:ugc-lab": "node scripts/run-ugc-lab-migration.mjs",
     "db:settings": "node scripts/run-user-settings-migration.mjs",
