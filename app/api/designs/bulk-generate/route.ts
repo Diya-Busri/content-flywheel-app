@@ -20,11 +20,12 @@ type ProductInput = {
   description?: string;
 };
 
-function buildTopicPrompt(topic: string, count: number, styleDesc: string): string {
+function buildTopicPrompt(topic: string, count: number, styleDesc: string, niche?: string, tone?: string): string {
   return `You are a viral social media content strategist specialising in short-form content.
 
 Generate exactly ${count} unique social media posts for the topic: "${topic}"
 Style/Aesthetic: ${styleDesc}
+Tone: ${tone ?? "Inspirational"}${niche ? `\nTarget audience: ${niche}` : ""}
 
 Return a JSON object with a "posts" array. Each element must have EXACTLY these fields:
 - hook: A scroll-stopping opening line (5–12 words, written in ALL CAPS, punchy, no hashtags)
@@ -39,7 +40,7 @@ Rules:
 - Keep hooks under 12 words and highly specific`;
 }
 
-function buildProductsPrompt(products: ProductInput[], count: number, styleDesc: string): string {
+function buildProductsPrompt(products: ProductInput[], count: number, styleDesc: string, tone?: string): string {
   const productList = products.map((p, i) =>
     `${i + 1}. "${p.title}" (${p.format}${p.niche ? ` · ${p.niche}` : ""}${p.description ? ` · ${p.description.slice(0, 120)}` : ""})`
   ).join("\n");
@@ -52,6 +53,7 @@ Generate exactly ${count} social media posts promoting these digital products:
 ${productList}
 
 Style/Aesthetic: ${styleDesc}
+Tone: ${tone ?? "Promotional"}
 
 Spread the posts evenly across all products (roughly ${perProduct} posts per product).
 Each post must be a promotional social media post designed to drive sales/interest in the specific product.
@@ -82,20 +84,24 @@ export async function POST(request: Request) {
     topic?: string;
     count?: number;
     style?: string;
+    niche?: string;
+    tone?: string;
     products?: ProductInput[];
   };
 
   const count = Math.min(Math.max(Number(body.count) || 10, 5), 30);
   const style = typeof body.style === "string" ? body.style : "minimal-luxury";
   const styleDesc = STYLE_DESCRIPTIONS[style] ?? "engaging and professional";
+  const niche = typeof body.niche === "string" ? body.niche.trim() : undefined;
+  const tone = typeof body.tone === "string" ? body.tone : undefined;
   const products = Array.isArray(body.products) && body.products.length > 0 ? body.products : null;
   const topic = typeof body.topic === "string" ? body.topic.trim() : "";
 
   if (!products && !topic) return NextResponse.json({ error: "topic or products required" }, { status: 400 });
 
   const prompt = products
-    ? buildProductsPrompt(products, count, styleDesc)
-    : buildTopicPrompt(topic, count, styleDesc);
+    ? buildProductsPrompt(products, count, styleDesc, tone)
+    : buildTopicPrompt(topic, count, styleDesc, niche, tone);
 
   const response = await fetchOpenAIWithRetry("https://api.openai.com/v1/chat/completions", {
     method: "POST",
