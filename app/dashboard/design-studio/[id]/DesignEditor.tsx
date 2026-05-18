@@ -60,6 +60,13 @@ const QUICK_COLORS = [
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
+function hexToRgba(hex: string, opacity: number): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16) || 0;
+  const g = parseInt(h.slice(2, 4), 16) || 0;
+  const b = parseInt(h.slice(4, 6), 16) || 0;
+  return `rgba(${r},${g},${b},${opacity})`;
+}
 function buildBg(data: DesignData): string {
   if (data.backgroundType === "gradient" && data.backgroundGradient) {
     const { color1, color2, angle } = data.backgroundGradient;
@@ -841,9 +848,17 @@ export function DesignEditor({ designId }: { designId: string }) {
           <div style={{ width: data.width * scale, height: data.height * scale, position: "relative", flexShrink: 0 }}>
             <div
               ref={canvasRef}
-              style={{ width: data.width, height: data.height, background: buildBg(data), backgroundImage: data.backgroundImage ? `url(${data.backgroundImage})` : undefined, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left", overflow: "hidden", boxShadow: "0 4px 40px rgba(0,0,0,0.25)" }}
+              style={{ width: data.width, height: data.height, background: buildBg(data), backgroundImage: data.backgroundImage && !(data.backgroundImageBlur ?? 0) ? `url(${data.backgroundImage})` : undefined, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left", overflow: "hidden", boxShadow: "0 4px 40px rgba(0,0,0,0.25)" }}
               onClick={onCanvasClick}
             >
+              {/* Blurred background image layer */}
+              {data.backgroundImage && (data.backgroundImageBlur ?? 0) > 0 && (
+                <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${data.backgroundImage})`, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", filter: `blur(${data.backgroundImageBlur}px)`, transform: "scale(1.06)", transformOrigin: "center", zIndex: -1, pointerEvents: "none" }} />
+              )}
+              {/* Overlay / dim layer */}
+              {(data.backgroundImageOverlayOpacity ?? 0) > 0 && data.backgroundImage && (
+                <div style={{ position: "absolute", inset: 0, background: hexToRgba(data.backgroundImageOverlayColor ?? "#000000", data.backgroundImageOverlayOpacity ?? 0), zIndex: -1, pointerEvents: "none" }} />
+              )}
               {[...data.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map((el) => (
                 <CanvasElement key={el.id} el={el} selected={el.id === selectedId}
                   onMouseDown={onElementMouseDown}
@@ -995,6 +1010,8 @@ function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onRotateM
   const shadow = el.shadowBlur || el.shadowX || el.shadowY
     ? `drop-shadow(${el.shadowX ?? 0}px ${el.shadowY ?? 4}px ${el.shadowBlur ?? 8}px ${el.shadowColor ?? "rgba(0,0,0,0.4)"})`
     : undefined;
+  const elBlur = (el.blur ?? 0) > 0 ? `blur(${el.blur}px)` : undefined;
+  const filterVal = [shadow, elBlur].filter(Boolean).join(" ") || undefined;
 
   const flipTransform = [
     el.flipX ? "scaleX(-1)" : "",
@@ -1006,7 +1023,7 @@ function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onRotateM
     opacity: el.opacity ?? 1, cursor: "move", userSelect: "none",
     transform: `rotate(${el.rotation ?? 0}deg)${flipTransform ? ` ${flipTransform}` : ""}`,
     transformOrigin: "center center",
-    filter: shadow,
+    filter: filterVal,
     outline: selected ? "2px solid #f97316" : "none", outlineOffset: 2, zIndex: el.zIndex ?? 0,
   };
 
@@ -1201,7 +1218,25 @@ function CanvasPanel({ isDark, data, onUpdate, onApplyPalette, elementCount }: {
                 <option value="cover">Cover (fill)</option>
                 <option value="contain">Contain (fit)</option>
               </select>
-              <button onClick={() => onUpdate({ backgroundImage: undefined })} className="px-2 h-8 rounded-md text-xs text-red-500 border hover:bg-red-50" style={{ borderColor: isDark ? "#2A2A2A" : "#e5e7eb" }}>Remove</button>
+              <button onClick={() => onUpdate({ backgroundImage: undefined, backgroundImageBlur: undefined, backgroundImageOverlayOpacity: undefined })} className="px-2 h-8 rounded-md text-xs text-red-500 border hover:bg-red-50" style={{ borderColor: isDark ? "#2A2A2A" : "#e5e7eb" }}>Remove</button>
+            </div>
+            {/* Blur */}
+            <div>
+              <label className={lbl}>Blur: {data.backgroundImageBlur ?? 0}px</label>
+              <input type="range" min={0} max={20} step={0.5} value={data.backgroundImageBlur ?? 0} onChange={(e) => onUpdate({ backgroundImageBlur: Number(e.target.value) || undefined })} className="w-full" />
+            </div>
+            {/* Overlay / Dim */}
+            <div>
+              <label className={lbl}>Overlay: {Math.round((data.backgroundImageOverlayOpacity ?? 0) * 100)}%</label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={data.backgroundImageOverlayColor ?? "#000000"} onChange={(e) => onUpdate({ backgroundImageOverlayColor: e.target.value, backgroundImageOverlayOpacity: data.backgroundImageOverlayOpacity ?? 0.4 })} className="w-8 h-7 rounded cursor-pointer border-0 shrink-0" />
+                <input type="range" min={0} max={0.9} step={0.05} value={data.backgroundImageOverlayOpacity ?? 0} onChange={(e) => onUpdate({ backgroundImageOverlayOpacity: Number(e.target.value) || undefined })} className="flex-1" />
+              </div>
+              <div className="flex gap-1 mt-1">
+                <button onClick={() => onUpdate({ backgroundImageOverlayColor: "#000000", backgroundImageOverlayOpacity: 0.5 })} className={`flex-1 py-0.5 rounded text-[10px] border ${isDark ? "border-[#2A2A2A] text-gray-400" : "border-gray-200 text-gray-500"}`}>Dim</button>
+                <button onClick={() => onUpdate({ backgroundImageOverlayColor: "#ffffff", backgroundImageOverlayOpacity: 0.5 })} className={`flex-1 py-0.5 rounded text-[10px] border ${isDark ? "border-[#2A2A2A] text-gray-400" : "border-gray-200 text-gray-500"}`}>Fade</button>
+                <button onClick={() => onUpdate({ backgroundImageOverlayOpacity: undefined })} className={`flex-1 py-0.5 rounded text-[10px] border text-red-400 ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>Clear</button>
+              </div>
             </div>
           </div>
         ) : (
@@ -1482,6 +1517,10 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign, pa
               <option value="contain">Contain (fit inside)</option>
               <option value="fill">Stretch</option>
             </select>
+          </div>
+          <div>
+            <label className={lbl}>Blur: {el.blur ?? 0}px</label>
+            <input type="range" min={0} max={20} step={0.5} value={el.blur ?? 0} onChange={(e) => onUpdate({ blur: Number(e.target.value) || undefined })} className="w-full" />
           </div>
           <div>
             <Button className="w-full gap-2 bg-purple-600 hover:bg-purple-700 text-white" size="sm" onClick={removeBg} disabled={removingBg || !el.imageUrl}>

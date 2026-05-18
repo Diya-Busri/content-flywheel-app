@@ -31,6 +31,7 @@ export type DesignElement = {
   // image
   imageUrl?: string;
   objectFit?: string;
+  blur?: number;
   // shape
   shapeType?: string;
   fill?: string;
@@ -47,6 +48,9 @@ export type DesignData = {
   backgroundGradient?: { color1: string; color2: string; angle: number };
   backgroundImage?: string;
   backgroundImageFit?: "cover" | "contain";
+  backgroundImageBlur?: number;
+  backgroundImageOverlayColor?: string;
+  backgroundImageOverlayOpacity?: number;
   activePalette?: string[];
   elements: DesignElement[];
   presetName?: string;
