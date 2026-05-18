@@ -68,6 +68,64 @@ function buildBg(data: DesignData): string {
   return data.background;
 }
 
+type PaletteDef = { id: string; name: string; colors: string[] };
+const PALETTE_CATEGORIES: { id: string; label: string; palettes: PaletteDef[] }[] = [
+  {
+    id: "warm", label: "Warm",
+    palettes: [
+      { id: "sunset", name: "Sunset", colors: ["#FF6B35", "#F7C59F", "#FFE66D", "#FF9F1C", "#FFBF69"] },
+      { id: "autumn", name: "Autumn", colors: ["#D62828", "#F77F00", "#FCBF49", "#EAE2B7", "#A4303F"] },
+      { id: "terra", name: "Terra Cotta", colors: ["#E07A5F", "#F2CC8F", "#F4F1DE", "#81B29A", "#3D405B"] },
+      { id: "coral", name: "Coral", colors: ["#FF6B6B", "#FFEAA7", "#DDA0DD", "#98FB98", "#FFA07A"] },
+    ],
+  },
+  {
+    id: "cool", label: "Cool",
+    palettes: [
+      { id: "ocean", name: "Ocean", colors: ["#03045E", "#0077B6", "#00B4D8", "#90E0EF", "#CAF0F8"] },
+      { id: "arctic", name: "Arctic", colors: ["#E0FBFC", "#98C1D9", "#3D5A80", "#293241", "#EE6C4D"] },
+      { id: "lavender", name: "Lavender", colors: ["#7400B8", "#6930C3", "#5E60CE", "#5390D9", "#4EA8DE"] },
+      { id: "mint", name: "Mint", colors: ["#264653", "#2A9D8F", "#E9C46A", "#F4A261", "#E76F51"] },
+    ],
+  },
+  {
+    id: "seasonal", label: "Seasonal",
+    palettes: [
+      { id: "spring", name: "Spring", colors: ["#F72585", "#FF9AA2", "#FDFD96", "#B5EAD7", "#C7CEEA"] },
+      { id: "summer", name: "Summer", colors: ["#FFBE0B", "#FB5607", "#FF006E", "#8338EC", "#3A86FF"] },
+      { id: "fall", name: "Fall", colors: ["#6D4C3D", "#AE4E33", "#E8871A", "#F4C244", "#F4E9CD"] },
+      { id: "winter", name: "Winter", colors: ["#22223B", "#4A4E69", "#9A8C98", "#C9ADA7", "#F2E9E4"] },
+    ],
+  },
+  {
+    id: "pastel", label: "Pastel",
+    palettes: [
+      { id: "candy", name: "Candy", colors: ["#FFB5E8", "#FF9CEE", "#FFC8A2", "#D4F0F0", "#B5EAD7"] },
+      { id: "dreamy", name: "Dreamy", colors: ["#E8D5F5", "#D0E8F2", "#FAEFD4", "#F5E6E8", "#D5F5E3"] },
+      { id: "cotton", name: "Cotton", colors: ["#FCE4EC", "#F8BBD9", "#E1BEE7", "#D1C4E9", "#C5CAE9"] },
+      { id: "peach", name: "Peach", colors: ["#FFD7BA", "#FEC89A", "#FFB347", "#FFDAB9", "#F4A460"] },
+    ],
+  },
+  {
+    id: "bold", label: "Bold",
+    palettes: [
+      { id: "neon", name: "Neon", colors: ["#FF0090", "#00F5FF", "#B4FF39", "#FF6A00", "#7B00FF"] },
+      { id: "primary", name: "Primary", colors: ["#FF0000", "#0000FF", "#FFFF00", "#009900", "#FF6600"] },
+      { id: "electric", name: "Electric", colors: ["#FF3CAC", "#784BA0", "#2B86C5", "#00F2FE", "#4FACFE"] },
+      { id: "vivid", name: "Vivid", colors: ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"] },
+    ],
+  },
+  {
+    id: "earthy", label: "Earthy",
+    palettes: [
+      { id: "natural", name: "Natural", colors: ["#606C38", "#283618", "#FEFAE0", "#DDA15E", "#BC6C25"] },
+      { id: "desert", name: "Desert", colors: ["#CCD5AE", "#D4A373", "#E9EDC9", "#FEFAE0", "#FAEDCD"] },
+      { id: "forest", name: "Forest", colors: ["#386641", "#6A994E", "#A7C957", "#BC4749", "#F2E8CF"] },
+      { id: "slate", name: "Slate", colors: ["#F8FAFC", "#CBD5E1", "#64748B", "#334155", "#0F172A"] },
+    ],
+  },
+];
+
 const PATTERNS = [
   { id: "dots", label: "Dots", css: "radial-gradient(#d1d5db 1px, #ffffff 1px) center / 16px 16px" },
   { id: "grid", label: "Grid", css: "linear-gradient(#d1d5db 1px, transparent 1px) center / 20px 20px, linear-gradient(90deg, #d1d5db 1px, transparent 1px) center / 20px 20px, #ffffff" },
@@ -775,7 +833,8 @@ export function DesignEditor({ designId }: { designId: string }) {
             ? <ElementPanel el={selectedEl} isDark={isDark}
                 onUpdate={(patch) => updateElement(selectedEl.id, patch)}
                 onDelete={deleteSelected} onDuplicate={duplicateSelected}
-                onAlign={alignEl} canvasW={data.width} canvasH={data.height} />
+                onAlign={alignEl} canvasW={data.width} canvasH={data.height}
+                palette={data.activePalette} />
             : <CanvasPanel isDark={isDark} data={data}
                 onUpdate={(patch) => updateData((prev) => ({ ...prev, ...patch }))}
                 elementCount={data.elements.length} />}
@@ -980,6 +1039,7 @@ function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
 // ── Canvas settings panel ──────────────────────────────────────────────────
 
 function CanvasPanel({ isDark, data, onUpdate, elementCount }: { isDark: boolean; data: DesignData; onUpdate: (p: Partial<DesignData>) => void; elementCount: number }) {
+  const [paletteCat, setPaletteCat] = useState("warm");
   const lbl = `block text-xs mb-1.5 ${isDark ? "text-gray-400" : "text-gray-600"}`;
   const sec = `text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`;
   const isGradient = data.backgroundType === "gradient";
@@ -1048,6 +1108,49 @@ function CanvasPanel({ isDark, data, onUpdate, elementCount }: { isDark: boolean
         )}
       </div>
 
+      {/* Color Palettes */}
+      <div>
+        <p className={sec}>Color Palette</p>
+        <div className="flex flex-wrap gap-1 mb-3">
+          {PALETTE_CATEGORIES.map((cat) => (
+            <button key={cat.id} onClick={() => setPaletteCat(cat.id)}
+              className={`px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors ${paletteCat === cat.id ? "bg-orange-500 text-white border-orange-500" : isDark ? "border-[#2A2A2A] text-gray-400 hover:border-gray-500" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}>
+              {cat.label}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-1.5">
+          {(PALETTE_CATEGORIES.find((c) => c.id === paletteCat) ?? PALETTE_CATEGORIES[0]).palettes.map((pal) => {
+            const isActive = data.activePalette?.join(",") === pal.colors.join(",");
+            return (
+              <button key={pal.id} onClick={() => onUpdate({ activePalette: pal.colors })}
+                className={`w-full rounded-lg border-2 overflow-hidden transition-colors text-left ${isActive ? "border-orange-500" : isDark ? "border-[#2A2A2A] hover:border-gray-500" : "border-gray-200 hover:border-gray-400"}`}>
+                <div className="flex h-9">
+                  {pal.colors.map((c) => <div key={c} style={{ background: c, flex: 1 }} />)}
+                </div>
+                <div className={`px-2 py-0.5 text-[10px] font-medium ${isActive ? isDark ? "text-orange-400" : "text-orange-600" : isDark ? "text-gray-400" : "text-gray-500"}`}>{pal.name}</div>
+              </button>
+            );
+          })}
+        </div>
+        {data.activePalette && (
+          <button onClick={() => onUpdate({ activePalette: undefined })} className={`mt-2 text-[10px] transition-colors ${isDark ? "text-gray-600 hover:text-red-400" : "text-gray-400 hover:text-red-500"}`}>
+            Clear palette
+          </button>
+        )}
+        {data.activePalette && (
+          <div className="mt-2 flex gap-1 flex-wrap">
+            {data.activePalette.map((c) => (
+              <button key={c} onClick={() => onUpdate({ background: c, backgroundType: "solid" })}
+                title={`Set background to ${c}`}
+                className={`w-6 h-6 rounded-md border-2 hover:scale-110 transition-transform ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}
+                style={{ background: c }} />
+            ))}
+            <span className={`text-[9px] self-center ${isDark ? "text-gray-600" : "text-gray-400"}`}>tap to apply</span>
+          </div>
+        )}
+      </div>
+
       {/* Background image */}
       <div>
         <p className={sec}>Background Image</p>
@@ -1093,12 +1196,13 @@ function CanvasPanel({ isDark, data, onUpdate, elementCount }: { isDark: boolean
 
 // ── Element properties panel ───────────────────────────────────────────────
 
-function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign }: {
+function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign, palette }: {
   el: DesignElement; isDark: boolean;
   onUpdate: (p: Partial<DesignElement>) => void;
   onDelete: () => void; onDuplicate: () => void;
   onAlign: (d: "left" | "center-h" | "right" | "top" | "center-v" | "bottom") => void;
   canvasW: number; canvasH: number;
+  palette?: string[];
 }) {
   const [removingBg, setRemovingBg] = useState(false);
   const [removeBgError, setRemoveBgError] = useState<string | null>(null);
@@ -1243,6 +1347,14 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign }: 
               <input type="color" value={el.color ?? "#1a1a1a"} onChange={(e) => onUpdate({ color: e.target.value })} className="w-8 h-8 rounded cursor-pointer border-0 shrink-0" />
               <Input value={el.color ?? "#1a1a1a"} onChange={(e) => onUpdate({ color: e.target.value })} className="h-8 text-xs font-mono" />
             </div>
+            {palette && palette.length > 0 && (
+              <div className="mb-1.5">
+                <p className={`text-[9px] mb-1 uppercase tracking-widest font-bold ${isDark ? "text-gray-600" : "text-gray-400"}`}>Palette</p>
+                <div className="flex gap-1">
+                  {palette.map((c) => <button key={c} onClick={() => onUpdate({ color: c })} className={`w-6 h-6 rounded-md border-2 hover:scale-110 transition-transform ${el.color === c ? "border-orange-500" : isDark ? "border-[#2A2A2A]" : "border-gray-200"}`} style={{ background: c }} />)}
+                </div>
+              </div>
+            )}
             <div className="flex flex-wrap gap-1">
               {QUICK_COLORS.map((c) => <button key={c} onClick={() => onUpdate({ color: c })} className={`w-5 h-5 rounded border ${el.color === c ? "border-orange-500" : isDark ? "border-[#2A2A2A]" : "border-gray-200"}`} style={{ background: c }} />)}
             </div>
@@ -1298,6 +1410,14 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign }: 
               <input type="color" value={el.fill ?? "#f97316"} onChange={(e) => onUpdate({ fill: e.target.value })} className="w-8 h-8 rounded cursor-pointer border-0 shrink-0" />
               <Input value={el.fill ?? "#f97316"} onChange={(e) => onUpdate({ fill: e.target.value })} className="h-8 text-xs font-mono" />
             </div>
+            {palette && palette.length > 0 && (
+              <div className="mb-1.5">
+                <p className={`text-[9px] mb-1 uppercase tracking-widest font-bold ${isDark ? "text-gray-600" : "text-gray-400"}`}>Palette</p>
+                <div className="flex gap-1">
+                  {palette.map((c) => <button key={c} onClick={() => onUpdate({ fill: c })} className={`w-6 h-6 rounded-md border-2 hover:scale-110 transition-transform ${el.fill === c ? "border-orange-500" : isDark ? "border-[#2A2A2A]" : "border-gray-200"}`} style={{ background: c }} />)}
+                </div>
+              </div>
+            )}
             <div className="flex flex-wrap gap-1">
               {QUICK_COLORS.map((c) => <button key={c} onClick={() => onUpdate({ fill: c })} className={`w-5 h-5 rounded border ${el.fill === c ? "border-orange-500" : isDark ? "border-[#2A2A2A]" : "border-gray-200"}`} style={{ background: c }} />)}
             </div>
