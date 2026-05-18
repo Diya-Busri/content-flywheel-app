@@ -1086,12 +1086,11 @@ function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
 
 function CanvasPanel({ isDark, data, onUpdate, onApplyPalette, elementCount }: { isDark: boolean; data: DesignData; onUpdate: (p: Partial<DesignData>) => void; onApplyPalette: (pal: PaletteDef) => void; elementCount: number }) {
   const [paletteCat, setPaletteCat] = useState("warm");
-  const allPalettes = PALETTE_CATEGORIES.flatMap((c) => c.palettes);
-
   function shufflePalette() {
-    const current = allPalettes.find((p) => p.colors.join(",") === data.activePalette?.join(","));
-    const others = allPalettes.filter((p) => p !== current);
-    onApplyPalette(others[Math.floor(Math.random() * others.length)]);
+    const catPalettes = (PALETTE_CATEGORIES.find((c) => c.id === paletteCat) ?? PALETTE_CATEGORIES[0]).palettes;
+    const currentIdx = catPalettes.findIndex((p) => p.colors.join(",") === data.activePalette?.join(","));
+    const nextIdx = (currentIdx + 1) % catPalettes.length;
+    onApplyPalette(catPalettes[nextIdx]);
   }
   const lbl = `block text-xs mb-1.5 ${isDark ? "text-gray-400" : "text-gray-600"}`;
   const sec = `text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`;
