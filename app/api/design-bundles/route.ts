@@ -26,33 +26,39 @@ export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await request.json().catch(() => ({})) as {
-    title?: string;
-    style?: string;
-    slides?: SlideInput[];
-  };
+  try {
+    const body = await request.json().catch(() => ({})) as {
+      title?: string;
+      style?: string;
+      slides?: SlideInput[];
+    };
 
-  const title = typeof body.title === "string" ? body.title.trim() || "Untitled Bundle" : "Untitled Bundle";
-  const style = typeof body.style === "string" ? body.style : "minimal-luxury";
-  const slides: SlideInput[] = Array.isArray(body.slides) ? body.slides : [];
+    const title = typeof body.title === "string" ? body.title.trim() || "Untitled Bundle" : "Untitled Bundle";
+    const style = typeof body.style === "string" ? body.style : "minimal-luxury";
+    const slides: SlideInput[] = Array.isArray(body.slides) ? body.slides : [];
 
-  const [bundle] = await db
-    .insert(contentBundlesTable)
-    .values({ userId, title, style, slideCount: slides.length })
-    .returning();
+    const [bundle] = await db
+      .insert(contentBundlesTable)
+      .values({ userId, title, style, slideCount: slides.length })
+      .returning();
 
-  // Single bulk insert — one query instead of N individual round-trips
-  if (slides.length > 0) {
-    await db.insert(designsTable).values(
-      slides.map((slide, i) => ({
-        userId,
-        title: slide.title,
-        data: slide.data,
-        bundleId: bundle.id,
-        slideIndex: i,
-      }))
-    );
+    // Single bulk insert — one query instead of N individual round-trips
+    if (slides.length > 0) {
+      await db.insert(designsTable).values(
+        slides.map((slide, i) => ({
+          userId,
+          title: slide.title,
+          data: slide.data,
+          bundleId: bundle.id,
+          slideIndex: i,
+        }))
+      );
+    }
+
+    return NextResponse.json({ bundle }, { status: 201 });
+  } catch (err) {
+    console.error("[POST /api/design-bundles]", err);
+    const msg = err instanceof Error ? err.message : "Failed to create bundle";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
-
-  return NextResponse.json({ bundle }, { status: 201 });
 }

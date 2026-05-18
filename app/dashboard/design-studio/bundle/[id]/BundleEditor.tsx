@@ -9,101 +9,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
-import { SelectDesign, DesignData, DesignElement } from "@/db/schema/designs-schema";
+import { SelectDesign, DesignData } from "@/db/schema/designs-schema";
 import { SelectBundle } from "@/db/schema/bundles-schema";
+import { SlidePreview } from "@/app/dashboard/design-studio/SlidePreview";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-// ── Lightweight slide renderer (no editing) ────────────────────────────────
-
-function buildBg(data: DesignData): string {
-  if (data.backgroundType === "gradient" && data.backgroundGradient) {
-    const { color1, color2, angle } = data.backgroundGradient;
-    return `linear-gradient(${angle}deg, ${color1}, ${color2})`;
-  }
-  return data.background;
-}
-
-function SlidePreview({ data, scale }: { data: DesignData; scale: number }) {
-  return (
-    <div
-      style={{
-        width: data.width * scale,
-        height: data.height * scale,
-        background: buildBg(data),
-        backgroundImage: data.backgroundImage ? `url(${data.backgroundImage})` : undefined,
-        backgroundSize: data.backgroundImageFit ?? "cover",
-        backgroundPosition: "center",
-        position: "relative",
-        overflow: "hidden",
-        flexShrink: 0,
-      }}
-    >
-      {data.backgroundImage && (data.backgroundImageBlur ?? 0) > 0 && (
-        <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${data.backgroundImage})`, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", filter: `blur(${data.backgroundImageBlur}px)`, transform: "scale(1.06)", transformOrigin: "center", zIndex: 0, pointerEvents: "none" }} />
-      )}
-      {[...data.elements]
-        .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
-        .map((el) => <PreviewElement key={el.id} el={el} scale={scale} />)}
-    </div>
-  );
-}
-
-function PreviewElement({ el, scale }: { el: DesignElement; scale: number }) {
-  const style: React.CSSProperties = {
-    position: "absolute",
-    left: el.x * scale,
-    top: el.y * scale,
-    width: el.width * scale,
-    height: el.height * scale,
-    opacity: el.opacity ?? 1,
-    transform: `rotate(${el.rotation ?? 0}deg)`,
-    transformOrigin: "center center",
-    zIndex: el.zIndex ?? 0,
-    overflow: "hidden",
-    pointerEvents: "none",
-  };
-
-  if (el.type === "text") {
-    return (
-      <div style={style}>
-        <div style={{
-          width: "100%", height: "100%",
-          background: el.textBackground ?? "transparent",
-          fontFamily: el.fontFamily ?? "Inter",
-          fontSize: (el.fontSize ?? 32) * scale,
-          color: el.color ?? "#1a1a1a",
-          fontWeight: el.fontWeight ?? "normal",
-          fontStyle: el.fontStyle ?? "normal",
-          textDecoration: el.textDecoration,
-          textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left",
-          lineHeight: el.lineHeight ?? 1.3,
-          letterSpacing: `${(el.letterSpacing ?? 0) * scale}px`,
-          wordBreak: "break-word",
-          whiteSpace: "pre-wrap",
-          overflow: "hidden",
-        }}>{el.content}</div>
-      </div>
-    );
-  }
-
-  if (el.type === "image") {
-    return (
-      <div style={style}>
-        {el.imageUrl
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={el.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: (el.objectFit as "cover" | "contain") ?? "cover", display: "block" }} draggable={false} />
-          : <div style={{ width: "100%", height: "100%", background: "#e5e7eb" }} />}
-      </div>
-    );
-  }
-
-  // Shape — render a simple colored rect as fallback (shapes need SVGs which we keep lightweight here)
-  return (
-    <div style={{ ...style, background: el.fill ?? "#f97316", borderRadius: el.borderRadius ?? 0 }} />
-  );
-}
 
 // ── Bundle Editor ──────────────────────────────────────────────────────────
 
@@ -118,6 +29,19 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIdx, setActiveIdx] = useState(0);
+  const centerRef = useRef<HTMLDivElement>(null);
+  const [centerDims, setCenterDims] = useState({ w: 800, h: 600 });
+
+  useEffect(() => {
+    const obs = new ResizeObserver(() => {
+      if (centerRef.current) {
+        const { width, height } = centerRef.current.getBoundingClientRect();
+        setCenterDims({ w: width, h: height });
+      }
+    });
+    if (centerRef.current) obs.observe(centerRef.current);
+    return () => obs.disconnect();
+  }, []);
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState("Untitled Bundle");
   const [saving, setSaving] = useState(false);
@@ -285,15 +209,21 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
   }
 
   const activeSlide = slides[activeIdx] ?? null;
-  // Preview scale: fit the active slide into ~520px wide panel
-  const previewW = 480;
   const slideW = activeSlide?.data.width ?? 1080;
   const slideH = activeSlide?.data.height ?? 1920;
+
+  // Fit preview into available center area (account for counter + actions ~180px)
+  const maxPreviewH = Math.max(centerDims.h - 180, 300);
+  const maxPreviewW = Math.max(centerDims.w - 80, 200);
+  const byHeight = { w: (maxPreviewH * slideW) / slideH, h: maxPreviewH };
+  const byWidth = { w: maxPreviewW, h: (maxPreviewW * slideH) / slideW };
+  const useHeight = byHeight.w <= maxPreviewW;
+  const previewW = useHeight ? byHeight.w : byWidth.w;
+  const previewH = useHeight ? byHeight.h : byWidth.h;
   const previewScale = previewW / slideW;
-  const previewH = slideH * previewScale;
 
   // Thumbnail scale for navigator
-  const thumbW = 108;
+  const thumbW = 136;
   const thumbScale = thumbW / slideW;
   const thumbH = slideH * thumbScale;
 
@@ -341,7 +271,7 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* Slide navigator */}
-        <div className={`w-36 shrink-0 border-r flex flex-col overflow-y-auto ${panelCls}`}>
+        <div className={`w-52 shrink-0 border-r flex flex-col overflow-y-auto ${panelCls}`}>
           <div className="p-2 space-y-2">
             {slides.map((slide, idx) => (
               <div
@@ -350,7 +280,7 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
                 className={`group relative rounded-lg overflow-hidden cursor-pointer border-2 transition-colors ${activeIdx === idx ? "border-orange-500" : isDark ? "border-[#2A2A2A] hover:border-gray-600" : "border-gray-200 hover:border-gray-400"}`}
               >
                 {/* Thumbnail */}
-                <div style={{ width: thumbW, height: thumbH, position: "relative", overflow: "hidden", flexShrink: 0 }}>
+                <div style={{ width: thumbW, height: thumbH, position: "relative", overflow: "hidden", flexShrink: 0, margin: "0 auto" }}>
                   {slide.previewUrl
                     // eslint-disable-next-line @next/next/no-img-element
                     ? <img src={slide.previewUrl} alt="" className="w-full h-full object-cover" />
@@ -400,7 +330,7 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
         </div>
 
         {/* Center: active slide preview + actions */}
-        <div className={`flex-1 flex flex-col items-center justify-center overflow-auto gap-6 p-8 ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
+        <div ref={centerRef} className={`flex-1 flex flex-col items-center justify-center overflow-auto gap-6 p-8 ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
           style={{ backgroundImage: isDark ? "radial-gradient(circle, #2A2A2A 1px, transparent 1px)" : "radial-gradient(circle, #d1d5db 1px, transparent 1px)", backgroundSize: "24px 24px" }}>
 
           {activeSlide ? (
