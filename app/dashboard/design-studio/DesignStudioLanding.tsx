@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Palette, Trash2, MoreHorizontal, Clock } from "lucide-react";
+import { Plus, Palette, Trash2, MoreHorizontal, Clock, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -52,9 +52,11 @@ function timeAgo(date: string) {
 function DesignCard({
   design,
   onDelete,
+  onDuplicate,
 }: {
   design: SelectDesign;
   onDelete: (id: string) => void;
+  onDuplicate: (design: SelectDesign) => void;
 }) {
   const router = useRouter();
   const data = design.data as DesignData;
@@ -103,6 +105,11 @@ function DesignCard({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={(e) => { e.stopPropagation(); onDuplicate(design); }}
+            >
+              <Copy className="w-4 h-4 mr-2" /> Duplicate
+            </DropdownMenuItem>
             <DropdownMenuItem
               className="text-red-500"
               onClick={(e) => { e.stopPropagation(); onDelete(design.id); }}
@@ -167,6 +174,16 @@ export function DesignStudioLanding() {
     setDesigns((prev) => prev.filter((d) => d.id !== id));
   }
 
+  async function duplicateDesign(design: SelectDesign) {
+    const res = await fetch("/api/designs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: `Copy of ${design.title}`, data: design.data }),
+    });
+    const json = await res.json();
+    if (json.design) setDesigns((prev) => [json.design, ...prev]);
+  }
+
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="max-w-6xl mx-auto px-4 md:px-8 py-8">
@@ -215,7 +232,7 @@ export function DesignStudioLanding() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             <AnimatePresence>
               {designs.map((d) => (
-                <DesignCard key={d.id} design={d} onDelete={deleteDesign} />
+                <DesignCard key={d.id} design={d} onDelete={deleteDesign} onDuplicate={duplicateDesign} />
               ))}
             </AnimatePresence>
           </div>

@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ChevronLeft, Type, ImageIcon, Square, Trash2, Copy, Loader2, Check,
   Download, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Minus, Plus,
@@ -354,6 +355,7 @@ const MAX_HISTORY = 60;
 export function DesignEditor({ designId }: { designId: string }) {
   const { theme } = useDashboardTheme();
   const isDark = theme === "dark";
+  const router = useRouter();
 
   const [title, setTitle] = useState("Untitled Design");
   const [editingTitle, setEditingTitle] = useState(false);
@@ -750,6 +752,16 @@ export function DesignEditor({ designId }: { designId: string }) {
     const a = document.createElement("a"); a.href = url; a.download = `${title}.png`; a.click();
   }
 
+  async function duplicateDesign() {
+    const res = await fetch("/api/designs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: `Copy of ${title}`, data }),
+    });
+    const json = await res.json();
+    if (json.design?.id) router.push(`/dashboard/design-studio/${json.design.id}`);
+  }
+
   async function exportPdf() {
     const { jsPDF } = await import("jspdf");
     if (!canvasRef.current) return;
@@ -789,6 +801,9 @@ export function DesignEditor({ designId }: { designId: string }) {
           <span className={`text-xs w-12 text-center tabular-nums ${isDark ? "text-gray-400" : "text-gray-500"}`}>{Math.round(scale * 100)}%</span>
           <Button size="sm" variant="ghost" onClick={() => setScale((s) => Math.min(2, +(s + 0.1).toFixed(1)))} className={`h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Zoom in"><ZoomIn className="w-4 h-4" /></Button>
           <div className={`h-5 w-px mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+          <Button size="sm" variant="outline" className={`gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`} onClick={duplicateDesign} title="Duplicate design">
+            <Copy className="w-4 h-4" /> Duplicate
+          </Button>
           <Button size="sm" variant="outline" className={`gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`} onClick={exportPdf}>
             <FileDown className="w-4 h-4" /> PDF
           </Button>
