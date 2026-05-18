@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, uuid, integer } from "drizzle-orm/pg-core";
 
 export type DesignElement = {
   id: string;
@@ -62,6 +62,8 @@ export const designsTable = pgTable("designs", {
   title: text("title").notNull().default("Untitled Design"),
   data: jsonb("data").$type<DesignData>().notNull(),
   previewUrl: text("preview_url"),
+  bundleId: uuid("bundle_id"),
+  slideIndex: integer("slide_index"),
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

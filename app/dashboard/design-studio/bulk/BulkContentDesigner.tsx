@@ -464,6 +464,7 @@ export function BulkContentDesigner() {
   const [genError, setGenError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
+  const [bundleId, setBundleId] = useState<string | null>(null);
   const [exportingZip, setExportingZip] = useState(false);
   const [editingPost, setEditingPost] = useState<ContentRow | null>(null);
 
@@ -526,22 +527,28 @@ export function BulkContentDesigner() {
     finally { setGenerating(false); }
   }
 
-  async function saveAll() {
+  async function saveAsBundle() {
     if (posts.length === 0) return;
     setSaving(true); setSavedCount(0);
-    let saved = 0;
-    for (let i = 0; i < posts.length; i += 5) {
-      await Promise.all(posts.slice(i, i + 5).map(async (post) => {
-        const idx = posts.indexOf(post) + 1;
-        const label = post.productTitle ? `${post.productTitle} — Post ${idx}` : `${batchLabel} — Post ${idx}`;
-        await fetch("/api/designs", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: label, data: buildPostDesign(post, style, layout, label) }),
-        });
-        saved++; setSavedCount(saved);
-      }));
+    const bundleTitle = mode === "products"
+      ? `Products — ${new Date().toLocaleDateString()}`
+      : `${topic} — ${new Date().toLocaleDateString()}`;
+    const slides = posts.map((post, idx) => ({
+      title: post.productTitle ? `${post.productTitle} — Slide ${idx + 1}` : `${batchLabel} — Slide ${idx + 1}`,
+      data: buildPostDesign(post, style, layout, `Slide ${idx + 1}`),
+    }));
+    setSavedCount(Math.floor(slides.length / 2));
+    const res = await fetch("/api/design-bundles", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: bundleTitle, style, slides }),
+    });
+    const json = await res.json() as { bundle?: { id: string } };
+    setSaving(false);
+    if (json.bundle?.id) {
+      setSavedCount(slides.length);
+      setBundleId(json.bundle.id);
     }
-    setSaving(false); setStep(3);
+    setStep(3);
   }
 
   async function saveAndEdit(post: ContentRow, index: number) {
@@ -762,8 +769,8 @@ export function BulkContentDesigner() {
                   <Button variant="outline" size="sm" onClick={handleExportZip} disabled={exportingZip || posts.length === 0} className={`gap-1.5 ${isDark ? "border-white/10 text-gray-300 hover:text-white" : ""}`}>
                     {exportingZip ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Exporting…</> : <><Package className="w-3.5 h-3.5" /> Export All as ZIP</>}
                   </Button>
-                  <Button size="sm" onClick={saveAll} disabled={saving || posts.length === 0} className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5">
-                    {saving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving {savedCount}/{posts.length}…</> : <><Download className="w-3.5 h-3.5" /> Save All to Design Studio</>}
+                  <Button size="sm" onClick={saveAsBundle} disabled={saving || posts.length === 0} className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5">
+                    {saving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</> : <><Download className="w-3.5 h-3.5" /> Save as Bundle</>}
                   </Button>
                 </div>
               </div>
@@ -794,16 +801,24 @@ export function BulkContentDesigner() {
                 <Check className="w-10 h-10 text-emerald-500" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold mb-2">{savedCount} posts saved!</h2>
-                <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>Open any post in Design Studio to edit text, swap backgrounds, change fonts, then export as PNG or PDF.</p>
+                <h2 className="text-2xl font-bold mb-2">Bundle saved!</h2>
+                <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+                  {savedCount} slides saved as one connected bundle. Open the bundle to reorder slides, edit individual posts, or export everything as a ZIP.
+                </p>
               </div>
-              <div className="flex gap-3 justify-center">
-                <Button variant="outline" onClick={() => { setStep(1); setPosts([]); setTopic(""); setSavedCount(0); setSelectedProductIds(new Set()); }} className={isDark ? "border-white/10 text-gray-300 hover:text-white" : ""}>
+              <div className="flex gap-3 justify-center flex-wrap">
+                <Button variant="outline" onClick={() => { setStep(1); setPosts([]); setTopic(""); setSavedCount(0); setBundleId(null); setSelectedProductIds(new Set()); }} className={isDark ? "border-white/10 text-gray-300 hover:text-white" : ""}>
                   <RefreshCw className="w-4 h-4 mr-2" /> New Batch
                 </Button>
-                <Button onClick={() => router.push("/dashboard/design-studio")} className="bg-orange-500 hover:bg-orange-600 text-white">
-                  View in Design Studio <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
+                {bundleId ? (
+                  <Button onClick={() => router.push(`/dashboard/design-studio/bundle/${bundleId}`)} className="bg-orange-500 hover:bg-orange-600 text-white">
+                    Open Bundle <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                ) : (
+                  <Button onClick={() => router.push("/dashboard/design-studio")} className="bg-orange-500 hover:bg-orange-600 text-white">
+                    View in Design Studio <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                )}
               </div>
             </div>
           )}

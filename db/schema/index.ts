@@ -52,3 +52,4 @@ export * from "./design-history-schema";
 export * from "./caption-library-schema";
 export * from "./bio-page-schema";
 export * from "./designs-schema";
+export * from "./bundles-schema";
