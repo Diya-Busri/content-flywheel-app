@@ -463,6 +463,7 @@ export function BulkContentDesigner() {
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [savedCount, setSavedCount] = useState(0);
   const [bundleId, setBundleId] = useState<string | null>(null);
   const [exportingZip, setExportingZip] = useState(false);
@@ -529,7 +530,7 @@ export function BulkContentDesigner() {
 
   async function saveAsBundle() {
     if (posts.length === 0) return;
-    setSaving(true); setSavedCount(0);
+    setSaving(true); setSaveError(null);
     try {
       const bundleTitle = mode === "products"
         ? `Products — ${new Date().toLocaleDateString()}`
@@ -544,14 +545,15 @@ export function BulkContentDesigner() {
       });
       const json = await res.json() as { bundle?: { id: string }; error?: string };
       if (!res.ok || !json.bundle?.id) {
-        setGenError(json.error ?? "Failed to save bundle. Please try again.");
+        setSaveError(json.error ?? "Failed to save bundle. Please try again.");
         return;
       }
       setSavedCount(slides.length);
       setBundleId(json.bundle.id);
       setStep(3);
-    } catch {
-      setGenError("Network error — please try again.");
+    } catch (err) {
+      console.error("[saveAsBundle]", err);
+      setSaveError("Network error — please try again.");
     } finally {
       setSaving(false);
     }
@@ -780,6 +782,9 @@ export function BulkContentDesigner() {
                   </Button>
                 </div>
               </div>
+              {saveError && (
+                <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
+              )}
 
               <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {posts.map((post, i) => (
