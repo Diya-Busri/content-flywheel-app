@@ -1087,9 +1087,14 @@ function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
 function CanvasPanel({ isDark, data, onUpdate, onApplyPalette, elementCount }: { isDark: boolean; data: DesignData; onUpdate: (p: Partial<DesignData>) => void; onApplyPalette: (pal: PaletteDef) => void; elementCount: number }) {
   const [paletteCat, setPaletteCat] = useState("warm");
   function shufflePalette() {
-    const catPalettes = (PALETTE_CATEGORIES.find((c) => c.id === paletteCat) ?? PALETTE_CATEGORIES[0]).palettes;
-    const currentIdx = catPalettes.findIndex((p) => p.colors.join(",") === data.activePalette?.join(","));
+    const activeKey = data.activePalette?.join(",");
+    // Always cycle within the category of the currently applied palette
+    const appliedCat = PALETTE_CATEGORIES.find((c) => c.palettes.some((p) => p.colors.join(",") === activeKey));
+    const targetCat = appliedCat ?? PALETTE_CATEGORIES.find((c) => c.id === paletteCat) ?? PALETTE_CATEGORIES[0];
+    const catPalettes = targetCat.palettes;
+    const currentIdx = catPalettes.findIndex((p) => p.colors.join(",") === activeKey);
     const nextIdx = (currentIdx + 1) % catPalettes.length;
+    setPaletteCat(targetCat.id); // keep tab in sync with applied category
     onApplyPalette(catPalettes[nextIdx]);
   }
   const lbl = `block text-xs mb-1.5 ${isDark ? "text-gray-400" : "text-gray-600"}`;
