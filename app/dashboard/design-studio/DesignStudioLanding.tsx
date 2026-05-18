@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Palette, Trash2, MoreHorizontal, Clock, Copy } from "lucide-react";
+import { Plus, Palette, Trash2, MoreHorizontal, Clock, Copy, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -203,6 +203,25 @@ export function DesignStudioLanding() {
           >
             <Plus className="w-4 h-4" /> New Design
           </Button>
+        </div>
+
+        {/* Bulk Content Designer banner */}
+        <div
+          onClick={() => router.push("/dashboard/design-studio/bulk")}
+          className="mb-8 rounded-2xl border border-orange-200 dark:border-orange-500/30 bg-gradient-to-r from-orange-50 to-purple-50 dark:from-orange-500/10 dark:to-purple-500/10 p-5 flex items-center gap-4 cursor-pointer hover:border-orange-400 dark:hover:border-orange-500/60 transition-colors group"
+        >
+          <div className="w-12 h-12 rounded-xl bg-orange-500 flex items-center justify-center shrink-0 group-hover:bg-orange-600 transition-colors">
+            <Zap className="w-6 h-6 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              Bulk Content Designer <span className="text-xs font-semibold bg-orange-500 text-white px-2 py-0.5 rounded-full">NEW</span>
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              Generate 10–30 branded social posts from one topic · AI content + instant design
+            </p>
+          </div>
+          <div className="shrink-0 text-orange-500 group-hover:translate-x-1 transition-transform">→</div>
         </div>
 
         {/* Grid */}
