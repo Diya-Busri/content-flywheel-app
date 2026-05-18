@@ -1090,11 +1090,20 @@ function CanvasPanel({ isDark, data, onUpdate, onApplyPalette, elementCount }: {
     const activeKey = data.activePalette?.join(",");
     const appliedCat = PALETTE_CATEGORIES.find((c) => c.palettes.some((p) => p.colors.join(",") === activeKey));
     const targetCat = appliedCat ?? PALETTE_CATEGORIES.find((c) => c.id === paletteCat) ?? PALETTE_CATEGORIES[0];
-    const catPalettes = targetCat.palettes;
-    const others = catPalettes.filter((p) => p.colors.join(",") !== activeKey);
-    const pick = others[Math.floor(Math.random() * others.length)];
+    const appliedPal = targetCat.palettes.find((p) => p.colors.join(",") === activeKey) ?? targetCat.palettes[0];
+    // Shuffle the 5 palette colors and reassign roles randomly
+    const shuffled = [...appliedPal.colors].sort(() => Math.random() - 0.5);
+    const remixed: PaletteDef = {
+      ...appliedPal,
+      bg: shuffled[0],
+      bgType: "solid",
+      bgGradient: undefined,
+      headingColor: shuffled[1],
+      bodyColor: shuffled[2],
+      accentColor: shuffled[3],
+    };
     setPaletteCat(targetCat.id);
-    onApplyPalette(pick);
+    onApplyPalette(remixed);
   }
   const lbl = `block text-xs mb-1.5 ${isDark ? "text-gray-400" : "text-gray-600"}`;
   const sec = `text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`;
