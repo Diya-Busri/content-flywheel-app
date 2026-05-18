@@ -60,6 +60,13 @@ const QUICK_COLORS = [
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
+function hexToRgba(hex: string, opacity: number): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16) || 0;
+  const g = parseInt(h.slice(2, 4), 16) || 0;
+  const b = parseInt(h.slice(4, 6), 16) || 0;
+  return `rgba(${r},${g},${b},${opacity})`;
+}
 function buildBg(data: DesignData): string {
   if (data.backgroundType === "gradient" && data.backgroundGradient) {
     const { color1, color2, angle } = data.backgroundGradient;
@@ -68,60 +75,66 @@ function buildBg(data: DesignData): string {
   return data.background;
 }
 
-type PaletteDef = { id: string; name: string; colors: string[] };
+type PaletteDef = {
+  id: string; name: string; colors: string[];
+  bg: string; bgType: "solid" | "gradient";
+  bgGradient?: { color1: string; color2: string; angle: number };
+  headingFont: string; bodyFont: string;
+  headingColor: string; bodyColor: string; accentColor: string;
+};
 const PALETTE_CATEGORIES: { id: string; label: string; palettes: PaletteDef[] }[] = [
   {
     id: "warm", label: "Warm",
     palettes: [
-      { id: "sunset", name: "Sunset", colors: ["#FF6B35", "#F7C59F", "#FFE66D", "#FF9F1C", "#FFBF69"] },
-      { id: "autumn", name: "Autumn", colors: ["#D62828", "#F77F00", "#FCBF49", "#EAE2B7", "#A4303F"] },
-      { id: "terra", name: "Terra Cotta", colors: ["#E07A5F", "#F2CC8F", "#F4F1DE", "#81B29A", "#3D405B"] },
-      { id: "coral", name: "Coral", colors: ["#FF6B6B", "#FFEAA7", "#DDA0DD", "#98FB98", "#FFA07A"] },
+      { id: "sunset", name: "Sunset", colors: ["#FF6B35", "#F7C59F", "#FFE66D", "#FF9F1C", "#FFBF69"], bg: "#FF6B35", bgType: "gradient", bgGradient: { color1: "#FF6B35", color2: "#FFE66D", angle: 135 }, headingFont: "Oswald", bodyFont: "Inter", headingColor: "#ffffff", bodyColor: "rgba(255,255,255,0.85)", accentColor: "#FFE66D" },
+      { id: "autumn", name: "Autumn", colors: ["#D62828", "#F77F00", "#FCBF49", "#EAE2B7", "#A4303F"], bg: "#1a0800", bgType: "gradient", bgGradient: { color1: "#1a0800", color2: "#7c2d12", angle: 160 }, headingFont: "Impact", bodyFont: "Georgia", headingColor: "#FCBF49", bodyColor: "#EAE2B7", accentColor: "#F77F00" },
+      { id: "terra", name: "Terra Cotta", colors: ["#E07A5F", "#F2CC8F", "#F4F1DE", "#81B29A", "#3D405B"], bg: "#fdf8f0", bgType: "solid", headingFont: "Playfair Display", bodyFont: "Georgia", headingColor: "#3D405B", bodyColor: "#6b4c3b", accentColor: "#E07A5F" },
+      { id: "coral", name: "Coral", colors: ["#FF6B6B", "#FFEAA7", "#DDA0DD", "#98FB98", "#FFA07A"], bg: "#fff5f0", bgType: "solid", headingFont: "Pacifico", bodyFont: "Inter", headingColor: "#FF6B6B", bodyColor: "#666666", accentColor: "#FFA07A" },
     ],
   },
   {
     id: "cool", label: "Cool",
     palettes: [
-      { id: "ocean", name: "Ocean", colors: ["#03045E", "#0077B6", "#00B4D8", "#90E0EF", "#CAF0F8"] },
-      { id: "arctic", name: "Arctic", colors: ["#E0FBFC", "#98C1D9", "#3D5A80", "#293241", "#EE6C4D"] },
-      { id: "lavender", name: "Lavender", colors: ["#7400B8", "#6930C3", "#5E60CE", "#5390D9", "#4EA8DE"] },
-      { id: "mint", name: "Mint", colors: ["#264653", "#2A9D8F", "#E9C46A", "#F4A261", "#E76F51"] },
+      { id: "ocean", name: "Ocean", colors: ["#03045E", "#0077B6", "#00B4D8", "#90E0EF", "#CAF0F8"], bg: "#03045E", bgType: "gradient", bgGradient: { color1: "#03045E", color2: "#0077B6", angle: 160 }, headingFont: "Oswald", bodyFont: "Inter", headingColor: "#CAF0F8", bodyColor: "#90E0EF", accentColor: "#00B4D8" },
+      { id: "arctic", name: "Arctic", colors: ["#E0FBFC", "#98C1D9", "#3D5A80", "#293241", "#EE6C4D"], bg: "#E0FBFC", bgType: "solid", headingFont: "Inter", bodyFont: "Inter", headingColor: "#293241", bodyColor: "#3D5A80", accentColor: "#EE6C4D" },
+      { id: "lavender", name: "Lavender", colors: ["#7400B8", "#6930C3", "#5E60CE", "#5390D9", "#4EA8DE"], bg: "#1a0033", bgType: "gradient", bgGradient: { color1: "#1a0033", color2: "#4c1d95", angle: 135 }, headingFont: "Playfair Display", bodyFont: "Inter", headingColor: "#C4B5FD", bodyColor: "#A78BFA", accentColor: "#7C3AED" },
+      { id: "mint", name: "Mint", colors: ["#264653", "#2A9D8F", "#E9C46A", "#F4A261", "#E76F51"], bg: "#F0FDF4", bgType: "solid", headingFont: "Oswald", bodyFont: "Georgia", headingColor: "#264653", bodyColor: "#2A9D8F", accentColor: "#E9C46A" },
     ],
   },
   {
     id: "seasonal", label: "Seasonal",
     palettes: [
-      { id: "spring", name: "Spring", colors: ["#F72585", "#FF9AA2", "#FDFD96", "#B5EAD7", "#C7CEEA"] },
-      { id: "summer", name: "Summer", colors: ["#FFBE0B", "#FB5607", "#FF006E", "#8338EC", "#3A86FF"] },
-      { id: "fall", name: "Fall", colors: ["#6D4C3D", "#AE4E33", "#E8871A", "#F4C244", "#F4E9CD"] },
-      { id: "winter", name: "Winter", colors: ["#22223B", "#4A4E69", "#9A8C98", "#C9ADA7", "#F2E9E4"] },
+      { id: "spring", name: "Spring", colors: ["#F72585", "#FF9AA2", "#FDFD96", "#B5EAD7", "#C7CEEA"], bg: "#fff0f7", bgType: "solid", headingFont: "Pacifico", bodyFont: "Inter", headingColor: "#F72585", bodyColor: "#7C3AED", accentColor: "#FF9AA2" },
+      { id: "summer", name: "Summer", colors: ["#FFBE0B", "#FB5607", "#FF006E", "#8338EC", "#3A86FF"], bg: "#0f0025", bgType: "gradient", bgGradient: { color1: "#0f0025", color2: "#1a0050", angle: 135 }, headingFont: "Impact", bodyFont: "Inter", headingColor: "#FFBE0B", bodyColor: "#FF006E", accentColor: "#3A86FF" },
+      { id: "fall", name: "Fall", colors: ["#6D4C3D", "#AE4E33", "#E8871A", "#F4C244", "#F4E9CD"], bg: "#fdf8f0", bgType: "solid", headingFont: "Georgia", bodyFont: "Georgia", headingColor: "#6D4C3D", bodyColor: "#AE4E33", accentColor: "#E8871A" },
+      { id: "winter", name: "Winter", colors: ["#22223B", "#4A4E69", "#9A8C98", "#C9ADA7", "#F2E9E4"], bg: "#22223B", bgType: "gradient", bgGradient: { color1: "#22223B", color2: "#4A4E69", angle: 160 }, headingFont: "Inter", bodyFont: "Inter", headingColor: "#F2E9E4", bodyColor: "#C9ADA7", accentColor: "#9A8C98" },
     ],
   },
   {
     id: "pastel", label: "Pastel",
     palettes: [
-      { id: "candy", name: "Candy", colors: ["#FFB5E8", "#FF9CEE", "#FFC8A2", "#D4F0F0", "#B5EAD7"] },
-      { id: "dreamy", name: "Dreamy", colors: ["#E8D5F5", "#D0E8F2", "#FAEFD4", "#F5E6E8", "#D5F5E3"] },
-      { id: "cotton", name: "Cotton", colors: ["#FCE4EC", "#F8BBD9", "#E1BEE7", "#D1C4E9", "#C5CAE9"] },
-      { id: "peach", name: "Peach", colors: ["#FFD7BA", "#FEC89A", "#FFB347", "#FFDAB9", "#F4A460"] },
+      { id: "candy", name: "Candy", colors: ["#FFB5E8", "#FF9CEE", "#FFC8A2", "#D4F0F0", "#B5EAD7"], bg: "#fff0fa", bgType: "solid", headingFont: "Pacifico", bodyFont: "Inter", headingColor: "#d63384", bodyColor: "#6f42c1", accentColor: "#FFB5E8" },
+      { id: "dreamy", name: "Dreamy", colors: ["#E8D5F5", "#D0E8F2", "#FAEFD4", "#F5E6E8", "#D5F5E3"], bg: "#f5f0ff", bgType: "solid", headingFont: "Playfair Display", bodyFont: "Inter", headingColor: "#6B21A8", bodyColor: "#7C3AED", accentColor: "#E8D5F5" },
+      { id: "cotton", name: "Cotton", colors: ["#FCE4EC", "#F8BBD9", "#E1BEE7", "#D1C4E9", "#C5CAE9"], bg: "#eff6ff", bgType: "solid", headingFont: "Inter", bodyFont: "Inter", headingColor: "#312E81", bodyColor: "#4338CA", accentColor: "#D1C4E9" },
+      { id: "peach", name: "Peach", colors: ["#FFD7BA", "#FEC89A", "#FFB347", "#FFDAB9", "#F4A460"], bg: "#fff7ed", bgType: "solid", headingFont: "Playfair Display", bodyFont: "Georgia", headingColor: "#92400E", bodyColor: "#B45309", accentColor: "#FEC89A" },
     ],
   },
   {
     id: "bold", label: "Bold",
     palettes: [
-      { id: "neon", name: "Neon", colors: ["#FF0090", "#00F5FF", "#B4FF39", "#FF6A00", "#7B00FF"] },
-      { id: "primary", name: "Primary", colors: ["#FF0000", "#0000FF", "#FFFF00", "#009900", "#FF6600"] },
-      { id: "electric", name: "Electric", colors: ["#FF3CAC", "#784BA0", "#2B86C5", "#00F2FE", "#4FACFE"] },
-      { id: "vivid", name: "Vivid", colors: ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"] },
+      { id: "neon", name: "Neon", colors: ["#FF0090", "#00F5FF", "#B4FF39", "#FF6A00", "#7B00FF"], bg: "#000000", bgType: "solid", headingFont: "Impact", bodyFont: "Roboto Mono", headingColor: "#B4FF39", bodyColor: "#00F5FF", accentColor: "#FF0090" },
+      { id: "primary", name: "Primary", colors: ["#FF0000", "#0000FF", "#FFFF00", "#009900", "#FF6600"], bg: "#1a1a1a", bgType: "solid", headingFont: "Impact", bodyFont: "Inter", headingColor: "#FFFF00", bodyColor: "#ffffff", accentColor: "#FF0000" },
+      { id: "electric", name: "Electric", colors: ["#FF3CAC", "#784BA0", "#2B86C5", "#00F2FE", "#4FACFE"], bg: "#0f0028", bgType: "gradient", bgGradient: { color1: "#0f0028", color2: "#1e005a", angle: 135 }, headingFont: "Impact", bodyFont: "Inter", headingColor: "#FF3CAC", bodyColor: "#4FACFE", accentColor: "#784BA0" },
+      { id: "vivid", name: "Vivid", colors: ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"], bg: "#FF6B6B", bgType: "solid", headingFont: "Impact", bodyFont: "Inter", headingColor: "#ffffff", bodyColor: "#1a1a1a", accentColor: "#4ECDC4" },
     ],
   },
   {
     id: "earthy", label: "Earthy",
     palettes: [
-      { id: "natural", name: "Natural", colors: ["#606C38", "#283618", "#FEFAE0", "#DDA15E", "#BC6C25"] },
-      { id: "desert", name: "Desert", colors: ["#CCD5AE", "#D4A373", "#E9EDC9", "#FEFAE0", "#FAEDCD"] },
-      { id: "forest", name: "Forest", colors: ["#386641", "#6A994E", "#A7C957", "#BC4749", "#F2E8CF"] },
-      { id: "slate", name: "Slate", colors: ["#F8FAFC", "#CBD5E1", "#64748B", "#334155", "#0F172A"] },
+      { id: "natural", name: "Natural", colors: ["#606C38", "#283618", "#FEFAE0", "#DDA15E", "#BC6C25"], bg: "#FEFAE0", bgType: "solid", headingFont: "Playfair Display", bodyFont: "Georgia", headingColor: "#283618", bodyColor: "#606C38", accentColor: "#DDA15E" },
+      { id: "desert", name: "Desert", colors: ["#CCD5AE", "#D4A373", "#E9EDC9", "#FEFAE0", "#FAEDCD"], bg: "#FEFAE0", bgType: "solid", headingFont: "Georgia", bodyFont: "Georgia", headingColor: "#5C3A1E", bodyColor: "#8B5E3C", accentColor: "#D4A373" },
+      { id: "forest", name: "Forest", colors: ["#386641", "#6A994E", "#A7C957", "#BC4749", "#F2E8CF"], bg: "#F0FDF4", bgType: "solid", headingFont: "Oswald", bodyFont: "Inter", headingColor: "#283618", bodyColor: "#386641", accentColor: "#6A994E" },
+      { id: "slate", name: "Slate", colors: ["#F8FAFC", "#CBD5E1", "#64748B", "#334155", "#0F172A"], bg: "#0F172A", bgType: "solid", headingFont: "Inter", bodyFont: "Inter", headingColor: "#F8FAFC", bodyColor: "#94A3B8", accentColor: "#64748B" },
     ],
   },
 ];
@@ -540,6 +553,28 @@ export function DesignEditor({ designId }: { designId: string }) {
     setSelectedId(null);
   }
 
+  function applyPaletteToDesign(pal: PaletteDef) {
+    updateData((prev) => ({
+      ...prev,
+      background: pal.bg,
+      backgroundType: pal.bgType,
+      backgroundGradient: pal.bgGradient,
+      backgroundImage: undefined,
+      activePalette: pal.colors,
+      elements: prev.elements.map((el) => {
+        if (el.type === "text") {
+          const isHeading = (el.fontSize ?? 32) >= 40;
+          return { ...el, color: isHeading ? pal.headingColor : pal.bodyColor, fontFamily: isHeading ? pal.headingFont : pal.bodyFont };
+        }
+        if (el.type === "shape") {
+          return { ...el, fill: pal.accentColor };
+        }
+        return el;
+      }),
+    }));
+    setSelectedId(null);
+  }
+
   function addBgImage() {
     const input = document.createElement("input");
     input.type = "file"; input.accept = "image/*";
@@ -813,9 +848,17 @@ export function DesignEditor({ designId }: { designId: string }) {
           <div style={{ width: data.width * scale, height: data.height * scale, position: "relative", flexShrink: 0 }}>
             <div
               ref={canvasRef}
-              style={{ width: data.width, height: data.height, background: buildBg(data), backgroundImage: data.backgroundImage ? `url(${data.backgroundImage})` : undefined, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left", overflow: "hidden", boxShadow: "0 4px 40px rgba(0,0,0,0.25)" }}
+              style={{ width: data.width, height: data.height, background: buildBg(data), backgroundImage: data.backgroundImage && !(data.backgroundImageBlur ?? 0) ? `url(${data.backgroundImage})` : undefined, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left", overflow: "hidden", boxShadow: "0 4px 40px rgba(0,0,0,0.25)" }}
               onClick={onCanvasClick}
             >
+              {/* Blurred background image layer */}
+              {data.backgroundImage && (data.backgroundImageBlur ?? 0) > 0 && (
+                <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${data.backgroundImage})`, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", filter: `blur(${data.backgroundImageBlur}px)`, transform: "scale(1.06)", transformOrigin: "center", zIndex: -1, pointerEvents: "none" }} />
+              )}
+              {/* Overlay / dim layer */}
+              {(data.backgroundImageOverlayOpacity ?? 0) > 0 && data.backgroundImage && (
+                <div style={{ position: "absolute", inset: 0, background: hexToRgba(data.backgroundImageOverlayColor ?? "#000000", data.backgroundImageOverlayOpacity ?? 0), zIndex: -1, pointerEvents: "none" }} />
+              )}
               {[...data.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map((el) => (
                 <CanvasElement key={el.id} el={el} selected={el.id === selectedId}
                   onMouseDown={onElementMouseDown}
@@ -837,6 +880,7 @@ export function DesignEditor({ designId }: { designId: string }) {
                 palette={data.activePalette} />
             : <CanvasPanel isDark={isDark} data={data}
                 onUpdate={(patch) => updateData((prev) => ({ ...prev, ...patch }))}
+                onApplyPalette={applyPaletteToDesign}
                 elementCount={data.elements.length} />}
         </aside>
       </div>
@@ -966,6 +1010,8 @@ function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onRotateM
   const shadow = el.shadowBlur || el.shadowX || el.shadowY
     ? `drop-shadow(${el.shadowX ?? 0}px ${el.shadowY ?? 4}px ${el.shadowBlur ?? 8}px ${el.shadowColor ?? "rgba(0,0,0,0.4)"})`
     : undefined;
+  const elBlur = (el.blur ?? 0) > 0 ? `blur(${el.blur}px)` : undefined;
+  const filterVal = [shadow, elBlur].filter(Boolean).join(" ") || undefined;
 
   const flipTransform = [
     el.flipX ? "scaleX(-1)" : "",
@@ -977,7 +1023,7 @@ function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onRotateM
     opacity: el.opacity ?? 1, cursor: "move", userSelect: "none",
     transform: `rotate(${el.rotation ?? 0}deg)${flipTransform ? ` ${flipTransform}` : ""}`,
     transformOrigin: "center center",
-    filter: shadow,
+    filter: filterVal,
     outline: selected ? "2px solid #f97316" : "none", outlineOffset: 2, zIndex: el.zIndex ?? 0,
   };
 
@@ -1038,8 +1084,15 @@ function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
 
 // ── Canvas settings panel ──────────────────────────────────────────────────
 
-function CanvasPanel({ isDark, data, onUpdate, elementCount }: { isDark: boolean; data: DesignData; onUpdate: (p: Partial<DesignData>) => void; elementCount: number }) {
+function CanvasPanel({ isDark, data, onUpdate, onApplyPalette, elementCount }: { isDark: boolean; data: DesignData; onUpdate: (p: Partial<DesignData>) => void; onApplyPalette: (pal: PaletteDef) => void; elementCount: number }) {
   const [paletteCat, setPaletteCat] = useState("warm");
+  const allPalettes = PALETTE_CATEGORIES.flatMap((c) => c.palettes);
+
+  function shufflePalette() {
+    const current = allPalettes.find((p) => p.colors.join(",") === data.activePalette?.join(","));
+    const others = allPalettes.filter((p) => p !== current);
+    onApplyPalette(others[Math.floor(Math.random() * others.length)]);
+  }
   const lbl = `block text-xs mb-1.5 ${isDark ? "text-gray-400" : "text-gray-600"}`;
   const sec = `text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`;
   const isGradient = data.backgroundType === "gradient";
@@ -1110,7 +1163,14 @@ function CanvasPanel({ isDark, data, onUpdate, elementCount }: { isDark: boolean
 
       {/* Color Palettes */}
       <div>
-        <p className={sec}>Color Palette</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className={sec} style={{ margin: 0 }}>Themes</p>
+          <button onClick={shufflePalette} title="Apply a random theme"
+            className={`flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md border transition-colors ${isDark ? "border-[#2A2A2A] text-gray-400 hover:text-orange-400 hover:border-orange-500" : "border-gray-200 text-gray-500 hover:text-orange-500 hover:border-orange-400"}`}>
+            ↻ Shuffle
+          </button>
+        </div>
+        <p className={`text-[10px] mb-3 ${isDark ? "text-gray-600" : "text-gray-400"}`}>Applies background, fonts &amp; colours to your whole design</p>
         <div className="flex flex-wrap gap-1 mb-3">
           {PALETTE_CATEGORIES.map((cat) => (
             <button key={cat.id} onClick={() => setPaletteCat(cat.id)}
@@ -1119,36 +1179,30 @@ function CanvasPanel({ isDark, data, onUpdate, elementCount }: { isDark: boolean
             </button>
           ))}
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {(PALETTE_CATEGORIES.find((c) => c.id === paletteCat) ?? PALETTE_CATEGORIES[0]).palettes.map((pal) => {
             const isActive = data.activePalette?.join(",") === pal.colors.join(",");
             return (
-              <button key={pal.id} onClick={() => onUpdate({ activePalette: pal.colors })}
-                className={`w-full rounded-lg border-2 overflow-hidden transition-colors text-left ${isActive ? "border-orange-500" : isDark ? "border-[#2A2A2A] hover:border-gray-500" : "border-gray-200 hover:border-gray-400"}`}>
-                <div className="flex h-9">
+              <div key={pal.id} className={`rounded-xl border-2 overflow-hidden transition-colors ${isActive ? "border-orange-500" : isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
+                {/* Color bar */}
+                <div className="flex h-10">
                   {pal.colors.map((c) => <div key={c} style={{ background: c, flex: 1 }} />)}
                 </div>
-                <div className={`px-2 py-0.5 text-[10px] font-medium ${isActive ? isDark ? "text-orange-400" : "text-orange-600" : isDark ? "text-gray-400" : "text-gray-500"}`}>{pal.name}</div>
-              </button>
+                {/* Info + Apply */}
+                <div className={`flex items-center justify-between px-2 py-1.5 ${isDark ? "bg-[#111]" : "bg-gray-50"}`}>
+                  <div>
+                    <p className={`text-[11px] font-semibold ${isActive ? isDark ? "text-orange-400" : "text-orange-600" : isDark ? "text-gray-300" : "text-gray-700"}`}>{pal.name}</p>
+                    <p className={`text-[9px] ${isDark ? "text-gray-600" : "text-gray-400"}`}>{pal.headingFont} · {pal.bodyFont}</p>
+                  </div>
+                  <button onClick={() => onApplyPalette(pal)}
+                    className={`text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${isActive ? "bg-orange-500 text-white" : isDark ? "bg-white/10 text-gray-300 hover:bg-orange-500 hover:text-white" : "bg-gray-200 text-gray-600 hover:bg-orange-500 hover:text-white"}`}>
+                    {isActive ? "Applied ✓" : "Apply"}
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>
-        {data.activePalette && (
-          <button onClick={() => onUpdate({ activePalette: undefined })} className={`mt-2 text-[10px] transition-colors ${isDark ? "text-gray-600 hover:text-red-400" : "text-gray-400 hover:text-red-500"}`}>
-            Clear palette
-          </button>
-        )}
-        {data.activePalette && (
-          <div className="mt-2 flex gap-1 flex-wrap">
-            {data.activePalette.map((c) => (
-              <button key={c} onClick={() => onUpdate({ background: c, backgroundType: "solid" })}
-                title={`Set background to ${c}`}
-                className={`w-6 h-6 rounded-md border-2 hover:scale-110 transition-transform ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}
-                style={{ background: c }} />
-            ))}
-            <span className={`text-[9px] self-center ${isDark ? "text-gray-600" : "text-gray-400"}`}>tap to apply</span>
-          </div>
-        )}
       </div>
 
       {/* Background image */}
@@ -1164,7 +1218,25 @@ function CanvasPanel({ isDark, data, onUpdate, elementCount }: { isDark: boolean
                 <option value="cover">Cover (fill)</option>
                 <option value="contain">Contain (fit)</option>
               </select>
-              <button onClick={() => onUpdate({ backgroundImage: undefined })} className="px-2 h-8 rounded-md text-xs text-red-500 border hover:bg-red-50" style={{ borderColor: isDark ? "#2A2A2A" : "#e5e7eb" }}>Remove</button>
+              <button onClick={() => onUpdate({ backgroundImage: undefined, backgroundImageBlur: undefined, backgroundImageOverlayOpacity: undefined })} className="px-2 h-8 rounded-md text-xs text-red-500 border hover:bg-red-50" style={{ borderColor: isDark ? "#2A2A2A" : "#e5e7eb" }}>Remove</button>
+            </div>
+            {/* Blur */}
+            <div>
+              <label className={lbl}>Blur: {data.backgroundImageBlur ?? 0}px</label>
+              <input type="range" min={0} max={20} step={0.5} value={data.backgroundImageBlur ?? 0} onChange={(e) => onUpdate({ backgroundImageBlur: Number(e.target.value) || undefined })} className="w-full" />
+            </div>
+            {/* Overlay / Dim */}
+            <div>
+              <label className={lbl}>Overlay: {Math.round((data.backgroundImageOverlayOpacity ?? 0) * 100)}%</label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={data.backgroundImageOverlayColor ?? "#000000"} onChange={(e) => onUpdate({ backgroundImageOverlayColor: e.target.value, backgroundImageOverlayOpacity: data.backgroundImageOverlayOpacity ?? 0.4 })} className="w-8 h-7 rounded cursor-pointer border-0 shrink-0" />
+                <input type="range" min={0} max={0.9} step={0.05} value={data.backgroundImageOverlayOpacity ?? 0} onChange={(e) => onUpdate({ backgroundImageOverlayOpacity: Number(e.target.value) || undefined })} className="flex-1" />
+              </div>
+              <div className="flex gap-1 mt-1">
+                <button onClick={() => onUpdate({ backgroundImageOverlayColor: "#000000", backgroundImageOverlayOpacity: 0.5 })} className={`flex-1 py-0.5 rounded text-[10px] border ${isDark ? "border-[#2A2A2A] text-gray-400" : "border-gray-200 text-gray-500"}`}>Dim</button>
+                <button onClick={() => onUpdate({ backgroundImageOverlayColor: "#ffffff", backgroundImageOverlayOpacity: 0.5 })} className={`flex-1 py-0.5 rounded text-[10px] border ${isDark ? "border-[#2A2A2A] text-gray-400" : "border-gray-200 text-gray-500"}`}>Fade</button>
+                <button onClick={() => onUpdate({ backgroundImageOverlayOpacity: undefined })} className={`flex-1 py-0.5 rounded text-[10px] border text-red-400 ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>Clear</button>
+              </div>
             </div>
           </div>
         ) : (
@@ -1445,6 +1517,10 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign, pa
               <option value="contain">Contain (fit inside)</option>
               <option value="fill">Stretch</option>
             </select>
+          </div>
+          <div>
+            <label className={lbl}>Blur: {el.blur ?? 0}px</label>
+            <input type="range" min={0} max={20} step={0.5} value={el.blur ?? 0} onChange={(e) => onUpdate({ blur: Number(e.target.value) || undefined })} className="w-full" />
           </div>
           <div>
             <Button className="w-full gap-2 bg-purple-600 hover:bg-purple-700 text-white" size="sm" onClick={removeBg} disabled={removingBg || !el.imageUrl}>
