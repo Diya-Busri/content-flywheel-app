@@ -68,6 +68,17 @@ function buildBg(data: DesignData): string {
   return data.background;
 }
 
+const PATTERNS = [
+  { id: "dots", label: "Dots", css: "radial-gradient(#d1d5db 1px, #ffffff 1px) center / 16px 16px" },
+  { id: "grid", label: "Grid", css: "linear-gradient(#d1d5db 1px, transparent 1px) center / 20px 20px, linear-gradient(90deg, #d1d5db 1px, transparent 1px) center / 20px 20px, #ffffff" },
+  { id: "diagonal", label: "Diagonal", css: "repeating-linear-gradient(45deg, #e5e7eb 0, #e5e7eb 1px, #ffffff 0, #ffffff 8px)" },
+  { id: "stripes-h", label: "Stripes H", css: "repeating-linear-gradient(#f3f4f6 0, #f3f4f6 8px, #ffffff 0, #ffffff 24px)" },
+  { id: "stripes-v", label: "Stripes V", css: "repeating-linear-gradient(90deg, #f3f4f6 0, #f3f4f6 8px, #ffffff 0, #ffffff 24px)" },
+  { id: "checker", label: "Checker", css: "conic-gradient(#e5e7eb 25%, #ffffff 0 50%, #e5e7eb 0 75%, #ffffff 0) 0 0 / 24px 24px" },
+  { id: "dots-dark", label: "Dark Dots", css: "radial-gradient(#4b5563 1.5px, #111827 1.5px) center / 16px 16px" },
+  { id: "grid-dark", label: "Dark Grid", css: "linear-gradient(#374151 1px, transparent 1px) center / 20px 20px, linear-gradient(90deg, #374151 1px, transparent 1px) center / 20px 20px, #111827" },
+];
+
 // ── Templates ──────────────────────────────────────────────────────────────
 
 type TemplateDef = { id: string; label: string; bg: string; preview: string; make: (w: number, h: number) => Partial<DesignData> & { elements: DesignElement[] } };
@@ -165,6 +176,98 @@ const TEMPLATES: TemplateDef[] = [
         { id: uid(), type: "shape" as const, shapeType: "circle", x: Math.round(w*0.6), y: Math.round(h*0.6), width: Math.round(w*0.55), height: Math.round(w*0.55), fill: "rgba(255,255,255,0.06)", zIndex: 0 },
         { id: uid(), type: "text" as const, x: Math.round(w*0.07), y: Math.round(h*0.34), width: Math.round(w*0.86), height: Math.round(h*0.2), content: "NEW DROP", fontSize: Math.round(w*0.12), fontFamily: "Impact", color: "#ffffff", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.0, letterSpacing: 5 },
         { id: uid(), type: "text" as const, x: Math.round(w*0.08), y: Math.round(h*0.57), width: Math.round(w*0.84), height: Math.round(h*0.07), content: "Check it out now 🔥", fontSize: Math.round(w*0.032), fontFamily: "Inter", color: "rgba(255,255,255,0.85)", fontWeight: "600", textAlign: "center", zIndex: 2, lineHeight: 1.3 },
+      ]
+    })
+  },
+  {
+    id: "fitness", label: "Fitness", bg: "", preview: "linear-gradient(135deg,#1a1a1a,#ef4444)",
+    make: (w, h) => ({
+      background: "#1a1a1a", backgroundType: "gradient" as const, backgroundGradient: { color1: "#1a1a1a", color2: "#7f1d1d", angle: 135 },
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "parallelogram", x: 0, y: Math.round(h*0.55), width: w, height: Math.round(h*0.12), fill: "#ef4444", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.05), y: Math.round(h*0.2), width: Math.round(w*0.9), height: Math.round(h*0.28), content: "NO\nEXCUSES", fontSize: Math.round(w*0.14), fontFamily: "Impact", color: "#ffffff", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.0, letterSpacing: 4 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.08), y: Math.round(h*0.56), width: Math.round(w*0.84), height: Math.round(h*0.09), content: "TRAIN HARDER · GET STRONGER", fontSize: Math.round(w*0.028), fontFamily: "Inter", color: "#ffffff", fontWeight: "700", textAlign: "center", zIndex: 2, lineHeight: 1.3, letterSpacing: 3 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.1), y: Math.round(h*0.72), width: Math.round(w*0.8), height: Math.round(h*0.06), content: "@yourusername", fontSize: Math.round(w*0.025), fontFamily: "Inter", color: "#ef4444", fontWeight: "600", textAlign: "center", zIndex: 2, lineHeight: 1.3 },
+      ]
+    })
+  },
+  {
+    id: "birthday", label: "Birthday", bg: "", preview: "linear-gradient(135deg,#f59e0b,#ec4899)",
+    make: (w, h) => ({
+      background: "#fef3c7", backgroundType: "solid" as const,
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "star", x: Math.round(w*0.04), y: Math.round(h*0.05), width: Math.round(w*0.14), height: Math.round(w*0.14), fill: "#f59e0b", zIndex: 0 },
+        { id: uid(), type: "shape" as const, shapeType: "star", x: Math.round(w*0.82), y: Math.round(h*0.03), width: Math.round(w*0.12), height: Math.round(w*0.12), fill: "#ec4899", zIndex: 0 },
+        { id: uid(), type: "shape" as const, shapeType: "circle", x: Math.round(w*0.78), y: Math.round(h*0.7), width: Math.round(w*0.16), height: Math.round(w*0.16), fill: "#a78bfa", zIndex: 0 },
+        { id: uid(), type: "shape" as const, shapeType: "circle", x: Math.round(w*0.04), y: Math.round(h*0.72), width: Math.round(w*0.12), height: Math.round(w*0.12), fill: "#34d399", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.06), y: Math.round(h*0.22), width: Math.round(w*0.88), height: Math.round(h*0.12), content: "Happy Birthday!", fontSize: Math.round(w*0.085), fontFamily: "Pacifico", color: "#92400e", fontWeight: "400", textAlign: "center", zIndex: 1, lineHeight: 1.2 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.1), y: Math.round(h*0.38), width: Math.round(w*0.8), height: Math.round(h*0.08), content: "Wishing you all the joy", fontSize: Math.round(w*0.032), fontFamily: "Georgia", color: "#78350f", fontWeight: "400", textAlign: "center", zIndex: 2, lineHeight: 1.4 },
+      ]
+    })
+  },
+  {
+    id: "travel", label: "Travel", bg: "", preview: "linear-gradient(160deg,#0ea5e9,#065f46)",
+    make: (w, h) => ({
+      background: "#0c4a6e", backgroundType: "gradient" as const, backgroundGradient: { color1: "#0c4a6e", color2: "#064e3b", angle: 160 },
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "circle", x: Math.round(w*0.6), y: Math.round(h*-0.1), width: Math.round(w*0.6), height: Math.round(w*0.6), fill: "rgba(14,165,233,0.2)", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.07), y: Math.round(h*0.28), width: Math.round(w*0.86), height: Math.round(h*0.2), content: "WANDER\nMORE", fontSize: Math.round(w*0.1), fontFamily: "Oswald", color: "#ffffff", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.1, letterSpacing: 5 },
+        { id: uid(), type: "shape" as const, shapeType: "line-h", x: Math.round(w*0.2), y: Math.round(h*0.51), width: Math.round(w*0.6), height: 4, fill: "#38bdf8", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.08), y: Math.round(h*0.55), width: Math.round(w*0.84), height: Math.round(h*0.07), content: "Explore · Discover · Dream", fontSize: Math.round(w*0.028), fontFamily: "Inter", color: "#bae6fd", fontWeight: "400", textAlign: "center", zIndex: 2, lineHeight: 1.4, letterSpacing: 3 },
+      ]
+    })
+  },
+  {
+    id: "wedding", label: "Wedding", bg: "#fff5f7", preview: "linear-gradient(135deg,#fce7f3,#fff5f7)",
+    make: (w, h) => ({
+      background: "#fff5f7", backgroundType: "solid" as const,
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "heart", x: Math.round(w*0.38), y: Math.round(h*0.1), width: Math.round(w*0.24), height: Math.round(w*0.22), fill: "#fbcfe8", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.06), y: Math.round(h*0.3), width: Math.round(w*0.88), height: Math.round(h*0.14), content: "Together Forever", fontSize: Math.round(w*0.075), fontFamily: "Playfair Display", color: "#831843", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.2 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.1), y: Math.round(h*0.46), width: Math.round(w*0.8), height: Math.round(h*0.06), content: "Name & Name", fontSize: Math.round(w*0.045), fontFamily: "Dancing Script", color: "#be185d", fontWeight: "400", textAlign: "center", zIndex: 2, lineHeight: 1.4 },
+        { id: uid(), type: "shape" as const, shapeType: "line-h", x: Math.round(w*0.22), y: Math.round(h*0.55), width: Math.round(w*0.56), height: 3, fill: "#f9a8d4", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.1), y: Math.round(h*0.6), width: Math.round(w*0.8), height: Math.round(h*0.06), content: "Date · Venue · City", fontSize: Math.round(w*0.026), fontFamily: "Georgia", color: "#9d174d", fontWeight: "400", textAlign: "center", zIndex: 2, lineHeight: 1.4, letterSpacing: 2 },
+      ]
+    })
+  },
+  {
+    id: "tech-launch", label: "Tech Launch", bg: "", preview: "linear-gradient(135deg,#0f172a,#1e3a5f)",
+    make: (w, h) => ({
+      background: "#0f172a", backgroundType: "gradient" as const, backgroundGradient: { color1: "#0f172a", color2: "#1e3a5f", angle: 135 },
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "hexagon", x: Math.round(w*0.72), y: Math.round(h*0.05), width: Math.round(w*0.32), height: Math.round(w*0.32), fill: "rgba(59,130,246,0.15)", zIndex: 0 },
+        { id: uid(), type: "shape" as const, shapeType: "hexagon", x: Math.round(w*-0.06), y: Math.round(h*0.55), width: Math.round(w*0.25), height: Math.round(w*0.25), fill: "rgba(59,130,246,0.1)", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.06), y: Math.round(h*0.22), width: Math.round(w*0.88), height: Math.round(h*0.09), content: "INTRODUCING", fontSize: Math.round(w*0.028), fontFamily: "Inter", color: "#60a5fa", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.3, letterSpacing: 6 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.05), y: Math.round(h*0.32), width: Math.round(w*0.9), height: Math.round(h*0.2), content: "Product Name", fontSize: Math.round(w*0.1), fontFamily: "Inter", color: "#ffffff", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.1 },
+        { id: uid(), type: "shape" as const, shapeType: "rect", x: Math.round(w*0.3), y: Math.round(h*0.56), width: Math.round(w*0.4), height: Math.round(h*0.06), fill: "#3b82f6", borderRadius: 8, zIndex: 2 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.3), y: Math.round(h*0.565), width: Math.round(w*0.4), height: Math.round(h*0.05), content: "Learn More →", fontSize: Math.round(w*0.024), fontFamily: "Inter", color: "#ffffff", fontWeight: "600", textAlign: "center", zIndex: 3, lineHeight: 1.4 },
+      ]
+    })
+  },
+  {
+    id: "food", label: "Food & Menu", bg: "#1c0a00", preview: "linear-gradient(160deg,#1c0a00,#7c2d12)",
+    make: (w, h) => ({
+      background: "#1c0a00", backgroundType: "gradient" as const, backgroundGradient: { color1: "#1c0a00", color2: "#7c2d12", angle: 160 },
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "circle", x: Math.round(w*0.35), y: Math.round(h*0.08), width: Math.round(w*0.3), height: Math.round(w*0.3), fill: "rgba(234,179,8,0.15)", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.08), y: Math.round(h*0.1), width: Math.round(w*0.84), height: Math.round(h*0.08), content: "EST. 2024", fontSize: Math.round(w*0.024), fontFamily: "Inter", color: "#d97706", fontWeight: "600", textAlign: "center", zIndex: 1, lineHeight: 1.3, letterSpacing: 5 },
+        { id: uid(), type: "shape" as const, shapeType: "line-h", x: Math.round(w*0.2), y: Math.round(h*0.2), width: Math.round(w*0.6), height: 3, fill: "#d97706", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.06), y: Math.round(h*0.24), width: Math.round(w*0.88), height: Math.round(h*0.18), content: "Restaurant Name", fontSize: Math.round(w*0.085), fontFamily: "Playfair Display", color: "#fef3c7", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.2 },
+        { id: uid(), type: "shape" as const, shapeType: "line-h", x: Math.round(w*0.2), y: Math.round(h*0.44), width: Math.round(w*0.6), height: 3, fill: "#d97706", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.1), y: Math.round(h*0.49), width: Math.round(w*0.8), height: Math.round(h*0.06), content: "Fine Dining · Private Events", fontSize: Math.round(w*0.026), fontFamily: "Georgia", color: "#fcd34d", fontWeight: "400", textAlign: "center", zIndex: 2, lineHeight: 1.4, letterSpacing: 2 },
+      ]
+    })
+  },
+  {
+    id: "motivational", label: "Motivational", bg: "", preview: "linear-gradient(135deg,#4f46e5,#7c3aed)",
+    make: (w, h) => ({
+      background: "#312e81", backgroundType: "gradient" as const, backgroundGradient: { color1: "#312e81", color2: "#4c1d95", angle: 135 },
+      elements: [
+        { id: uid(), type: "shape" as const, shapeType: "star4", x: Math.round(w*0.06), y: Math.round(h*0.07), width: Math.round(w*0.1), height: Math.round(w*0.1), fill: "#a78bfa", opacity: 0.6, zIndex: 0 },
+        { id: uid(), type: "shape" as const, shapeType: "star4", x: Math.round(w*0.82), y: Math.round(h*0.12), width: Math.round(w*0.08), height: Math.round(w*0.08), fill: "#c4b5fd", opacity: 0.5, zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.06), y: Math.round(h*0.28), width: Math.round(w*0.88), height: Math.round(h*0.3), content: "BELIEVE\nIN YOUR\nSELF", fontSize: Math.round(w*0.1), fontFamily: "Oswald", color: "#ffffff", fontWeight: "700", textAlign: "center", zIndex: 1, lineHeight: 1.0, letterSpacing: 3 },
+        { id: uid(), type: "shape" as const, shapeType: "line-h", x: Math.round(w*0.25), y: Math.round(h*0.63), width: Math.round(w*0.5), height: 4, fill: "#a78bfa", zIndex: 0 },
+        { id: uid(), type: "text" as const, x: Math.round(w*0.1), y: Math.round(h*0.68), width: Math.round(w*0.8), height: Math.round(h*0.06), content: "The power is within you", fontSize: Math.round(w*0.026), fontFamily: "Inter", color: "#c4b5fd", fontWeight: "400", textAlign: "center", zIndex: 2, lineHeight: 1.4 },
       ]
     })
   },
@@ -880,6 +983,7 @@ function CanvasPanel({ isDark, data, onUpdate, elementCount }: { isDark: boolean
   const lbl = `block text-xs mb-1.5 ${isDark ? "text-gray-400" : "text-gray-600"}`;
   const sec = `text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`;
   const isGradient = data.backgroundType === "gradient";
+  const isPattern = data.backgroundType === "pattern";
   const grad = data.backgroundGradient ?? { color1: "#f97316", color2: "#3b82f6", angle: 135 };
   return (
     <div className="p-4 space-y-5">
@@ -887,18 +991,32 @@ function CanvasPanel({ isDark, data, onUpdate, elementCount }: { isDark: boolean
 
       {/* Background type */}
       <div>
-        <div className="flex gap-2 mb-3">
-          <button onClick={() => onUpdate({ backgroundType: "solid" })}
-            className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!isGradient ? "bg-orange-500 text-white border-orange-500" : isDark ? "border-[#2A2A2A] text-gray-400" : "border-gray-200 text-gray-600"}`}>
+        <div className="flex gap-1.5 mb-3">
+          <button onClick={() => onUpdate({ backgroundType: "solid", background: "#ffffff" })}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!isGradient && !isPattern ? "bg-orange-500 text-white border-orange-500" : isDark ? "border-[#2A2A2A] text-gray-400" : "border-gray-200 text-gray-600"}`}>
             Solid
           </button>
           <button onClick={() => onUpdate({ backgroundType: "gradient", backgroundGradient: grad })}
             className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${isGradient ? "bg-orange-500 text-white border-orange-500" : isDark ? "border-[#2A2A2A] text-gray-400" : "border-gray-200 text-gray-600"}`}>
             Gradient
           </button>
+          <button onClick={() => onUpdate({ backgroundType: "pattern", background: PATTERNS[0].css })}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${isPattern ? "bg-orange-500 text-white border-orange-500" : isDark ? "border-[#2A2A2A] text-gray-400" : "border-gray-200 text-gray-600"}`}>
+            Pattern
+          </button>
         </div>
 
-        {!isGradient ? (
+        {isPattern ? (
+          <div className="grid grid-cols-4 gap-1.5">
+            {PATTERNS.map((p) => (
+              <button key={p.id} onClick={() => onUpdate({ background: p.css })}
+                className={`rounded-lg border-2 overflow-hidden transition-colors ${data.background === p.css ? "border-orange-500" : isDark ? "border-[#2A2A2A] hover:border-gray-500" : "border-gray-200 hover:border-gray-400"}`}>
+                <div className="h-10" style={{ background: p.css }} />
+                <div className={`text-[9px] font-medium px-1 py-0.5 truncate ${isDark ? "text-gray-400" : "text-gray-500"}`}>{p.label}</div>
+              </button>
+            ))}
+          </div>
+        ) : !isGradient ? (
           <>
             <label className={lbl}>Background color</label>
             <div className="flex items-center gap-2 mb-2">
@@ -982,6 +1100,26 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign }: 
   onAlign: (d: "left" | "center-h" | "right" | "top" | "center-v" | "bottom") => void;
   canvasW: number; canvasH: number;
 }) {
+  const [removingBg, setRemovingBg] = useState(false);
+  const [removeBgError, setRemoveBgError] = useState<string | null>(null);
+
+  async function removeBg() {
+    if (!el.imageUrl) return;
+    setRemovingBg(true);
+    setRemoveBgError(null);
+    try {
+      const res = await fetch("/api/designs/remove-bg", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: el.imageUrl }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.url) { setRemoveBgError(json.error ?? "Failed to remove background."); return; }
+      onUpdate({ imageUrl: json.url });
+    } catch {
+      setRemoveBgError("Network error. Please try again.");
+    } finally { setRemovingBg(false); }
+  }
+
   const lbl = `block text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`;
   const sec = `text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`;
   const sel = isDark ? "bg-[#111] border-[#2A2A2A] text-white" : "bg-white border-gray-200 text-gray-900";
@@ -1187,6 +1325,12 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign }: 
               <option value="contain">Contain (fit inside)</option>
               <option value="fill">Stretch</option>
             </select>
+          </div>
+          <div>
+            <Button className="w-full gap-2 bg-purple-600 hover:bg-purple-700 text-white" size="sm" onClick={removeBg} disabled={removingBg || !el.imageUrl}>
+              {removingBg ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Removing BG…</> : <><Sparkles className="w-3.5 h-3.5" /> Remove Background</>}
+            </Button>
+            {removeBgError && <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">{removeBgError}</p>}
           </div>
         </div>
       )}

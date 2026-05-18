@@ -43,7 +43,7 @@ export type DesignData = {
   width: number;
   height: number;
   background: string;
-  backgroundType?: "solid" | "gradient";
+  backgroundType?: "solid" | "gradient" | "pattern";
   backgroundGradient?: { color1: string; color2: string; angle: number };
   backgroundImage?: string;
   backgroundImageFit?: "cover" | "contain";
