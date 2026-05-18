@@ -41,18 +41,16 @@ export async function POST(request: Request) {
     .values({ userId, title, style, slideCount: slides.length })
     .returning();
 
-  // Insert slides in batches of 10
-  for (let i = 0; i < slides.length; i += 10) {
-    await Promise.all(
-      slides.slice(i, i + 10).map((slide, offset) =>
-        db.insert(designsTable).values({
-          userId,
-          title: slide.title,
-          data: slide.data,
-          bundleId: bundle.id,
-          slideIndex: i + offset,
-        })
-      )
+  // Single bulk insert — one query instead of N individual round-trips
+  if (slides.length > 0) {
+    await db.insert(designsTable).values(
+      slides.map((slide, i) => ({
+        userId,
+        title: slide.title,
+        data: slide.data,
+        bundleId: bundle.id,
+        slideIndex: i,
+      }))
     );
   }
 
