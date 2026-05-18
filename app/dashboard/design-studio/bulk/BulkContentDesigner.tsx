@@ -530,25 +530,31 @@ export function BulkContentDesigner() {
   async function saveAsBundle() {
     if (posts.length === 0) return;
     setSaving(true); setSavedCount(0);
-    const bundleTitle = mode === "products"
-      ? `Products — ${new Date().toLocaleDateString()}`
-      : `${topic} — ${new Date().toLocaleDateString()}`;
-    const slides = posts.map((post, idx) => ({
-      title: post.productTitle ? `${post.productTitle} — Slide ${idx + 1}` : `${batchLabel} — Slide ${idx + 1}`,
-      data: buildPostDesign(post, style, layout, `Slide ${idx + 1}`),
-    }));
-    setSavedCount(Math.floor(slides.length / 2));
-    const res = await fetch("/api/design-bundles", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: bundleTitle, style, slides }),
-    });
-    const json = await res.json() as { bundle?: { id: string } };
-    setSaving(false);
-    if (json.bundle?.id) {
+    try {
+      const bundleTitle = mode === "products"
+        ? `Products — ${new Date().toLocaleDateString()}`
+        : `${topic} — ${new Date().toLocaleDateString()}`;
+      const slides = posts.map((post, idx) => ({
+        title: post.productTitle ? `${post.productTitle} — Slide ${idx + 1}` : `${batchLabel} — Slide ${idx + 1}`,
+        data: buildPostDesign(post, style, layout, `Slide ${idx + 1}`),
+      }));
+      const res = await fetch("/api/design-bundles", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: bundleTitle, style, slides }),
+      });
+      const json = await res.json() as { bundle?: { id: string }; error?: string };
+      if (!res.ok || !json.bundle?.id) {
+        setGenError(json.error ?? "Failed to save bundle. Please try again.");
+        return;
+      }
       setSavedCount(slides.length);
       setBundleId(json.bundle.id);
+      setStep(3);
+    } catch {
+      setGenError("Network error — please try again.");
+    } finally {
+      setSaving(false);
     }
-    setStep(3);
   }
 
   async function saveAndEdit(post: ContentRow, index: number) {
