@@ -730,20 +730,30 @@ export function DesignEditor({ designId }: { designId: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, data]);
 
-  async function exportPng() {
+  async function captureCanvas(): Promise<string> {
     const { toPng } = await import("html-to-image");
+    const el = canvasRef.current!;
+    // Remove the zoom transform so html-to-image captures the element at its
+    // native CSS size (data.width × data.height) with no scaling artifacts.
+    const saved = el.style.transform;
+    el.style.transform = "none";
+    try {
+      return await toPng(el, { pixelRatio: 2, width: data.width, height: data.height });
+    } finally {
+      el.style.transform = saved;
+    }
+  }
+
+  async function exportPng() {
     if (!canvasRef.current) return;
-    // pixelRatio: 2/scale → output is always 2× native canvas resolution regardless of zoom
-    const url = await toPng(canvasRef.current, { pixelRatio: 2 / scale });
+    const url = await captureCanvas();
     const a = document.createElement("a"); a.href = url; a.download = `${title}.png`; a.click();
   }
 
   async function exportPdf() {
-    const { toPng } = await import("html-to-image");
     const { jsPDF } = await import("jspdf");
     if (!canvasRef.current) return;
-    // pixelRatio: 1/scale → output exactly matches native canvas resolution regardless of zoom
-    const url = await toPng(canvasRef.current, { pixelRatio: 1 / scale });
+    const url = await captureCanvas();
     const mmW = data.width * 0.2646;
     const mmH = data.height * 0.2646;
     const pdf = new jsPDF({ orientation: mmW > mmH ? "landscape" : "portrait", unit: "mm", format: [mmW, mmH] });
@@ -1088,14 +1098,22 @@ function CanvasPanel({ isDark, data, onUpdate, onApplyPalette, elementCount }: {
   const [paletteCat, setPaletteCat] = useState("warm");
   function shufflePalette() {
     const activeKey = data.activePalette?.join(",");
-    // Always cycle within the category of the currently applied palette
     const appliedCat = PALETTE_CATEGORIES.find((c) => c.palettes.some((p) => p.colors.join(",") === activeKey));
     const targetCat = appliedCat ?? PALETTE_CATEGORIES.find((c) => c.id === paletteCat) ?? PALETTE_CATEGORIES[0];
-    const catPalettes = targetCat.palettes;
-    const currentIdx = catPalettes.findIndex((p) => p.colors.join(",") === activeKey);
-    const nextIdx = (currentIdx + 1) % catPalettes.length;
-    setPaletteCat(targetCat.id); // keep tab in sync with applied category
-    onApplyPalette(catPalettes[nextIdx]);
+    const appliedPal = targetCat.palettes.find((p) => p.colors.join(",") === activeKey) ?? targetCat.palettes[0];
+    // Shuffle the 5 palette colors and reassign roles randomly
+    const shuffled = [...appliedPal.colors].sort(() => Math.random() - 0.5);
+    const remixed: PaletteDef = {
+      ...appliedPal,
+      bg: shuffled[0],
+      bgType: "solid",
+      bgGradient: undefined,
+      headingColor: shuffled[1],
+      bodyColor: shuffled[2],
+      accentColor: shuffled[3],
+    };
+    setPaletteCat(targetCat.id);
+    onApplyPalette(remixed);
   }
   const lbl = `block text-xs mb-1.5 ${isDark ? "text-gray-400" : "text-gray-600"}`;
   const sec = `text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`;
