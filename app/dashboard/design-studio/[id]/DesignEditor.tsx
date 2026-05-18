@@ -1088,14 +1088,13 @@ function CanvasPanel({ isDark, data, onUpdate, onApplyPalette, elementCount }: {
   const [paletteCat, setPaletteCat] = useState("warm");
   function shufflePalette() {
     const activeKey = data.activePalette?.join(",");
-    // Always cycle within the category of the currently applied palette
     const appliedCat = PALETTE_CATEGORIES.find((c) => c.palettes.some((p) => p.colors.join(",") === activeKey));
     const targetCat = appliedCat ?? PALETTE_CATEGORIES.find((c) => c.id === paletteCat) ?? PALETTE_CATEGORIES[0];
     const catPalettes = targetCat.palettes;
-    const currentIdx = catPalettes.findIndex((p) => p.colors.join(",") === activeKey);
-    const nextIdx = (currentIdx + 1) % catPalettes.length;
-    setPaletteCat(targetCat.id); // keep tab in sync with applied category
-    onApplyPalette(catPalettes[nextIdx]);
+    const others = catPalettes.filter((p) => p.colors.join(",") !== activeKey);
+    const pick = others[Math.floor(Math.random() * others.length)];
+    setPaletteCat(targetCat.id);
+    onApplyPalette(pick);
   }
   const lbl = `block text-xs mb-1.5 ${isDark ? "text-gray-400" : "text-gray-600"}`;
   const sec = `text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`;
