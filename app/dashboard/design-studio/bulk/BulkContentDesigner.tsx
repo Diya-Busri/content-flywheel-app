@@ -9,8 +9,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
-import { DesignData, DesignElement } from "@/db/schema/designs-schema";
+import { DesignData } from "@/db/schema/designs-schema";
 import { MarketingAssets } from "@/db/schema/products-schema";
+import { buildSlideDesign, TEMPLATE_CONFIGS, TemplateStyle as EngineTemplateStyle } from "./layoutEngine";
+import { SlidePreview } from "@/app/dashboard/design-studio/SlidePreview";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -23,11 +25,7 @@ export type ContentRow = {
   productTitle?: string;
 };
 
-type TemplateStyle =
-  | "minimal-luxury" | "dark-aesthetic" | "wellness"
-  | "clean-productivity" | "faceless-creator" | "modern-business";
-
-type LayoutId = "centered" | "bold-hero" | "story";
+type TemplateStyle = EngineTemplateStyle;
 type Mode = "topic" | "products";
 
 type UserProduct = {
@@ -39,124 +37,21 @@ type UserProduct = {
   status: string;
 };
 
-// ── Template configs ───────────────────────────────────────────────────────────
+// ── UI-only template metadata (labels, emojis, preview colours) ───────────────
 
-type TemplateCfg = {
+type TemplateMeta = {
   label: string; description: string; emoji: string;
-  bg: string; bgType: "solid" | "gradient";
-  bgGradient?: { color1: string; color2: string; angle: number };
-  headingColor: string; bodyColor: string; accentColor: string;
-  hookFont: string; bodyFont: string;
   previewBg: string; previewText: string; previewAccent: string;
 };
 
-const TEMPLATE_CONFIGS: Record<TemplateStyle, TemplateCfg> = {
-  "minimal-luxury": {
-    label: "Minimal Luxury", description: "Clean, elegant, premium", emoji: "✨",
-    bg: "#FAFAF7", bgType: "solid",
-    headingColor: "#1A1A1A", bodyColor: "#4A4A4A", accentColor: "#C9A84C",
-    hookFont: "Playfair Display", bodyFont: "Georgia",
-    previewBg: "#FAFAF7", previewText: "#1A1A1A", previewAccent: "#C9A84C",
-  },
-  "dark-aesthetic": {
-    label: "Dark Aesthetic", description: "Bold, edgy, raw", emoji: "🖤",
-    bg: "#0D0D0D", bgType: "solid",
-    headingColor: "#FFFFFF", bodyColor: "#CCCCCC", accentColor: "#FF6B35",
-    hookFont: "Oswald", bodyFont: "Inter",
-    previewBg: "#0D0D0D", previewText: "#FFFFFF", previewAccent: "#FF6B35",
-  },
-  "wellness": {
-    label: "Wellness", description: "Calm, nurturing, natural", emoji: "🌿",
-    bg: "#E8F0E8", bgType: "gradient",
-    bgGradient: { color1: "#E8F0E8", color2: "#C5DBC5", angle: 160 },
-    headingColor: "#2D5016", bodyColor: "#3D6B2A", accentColor: "#5C9A3E",
-    hookFont: "Playfair Display", bodyFont: "Georgia",
-    previewBg: "linear-gradient(160deg,#E8F0E8,#C5DBC5)", previewText: "#2D5016", previewAccent: "#5C9A3E",
-  },
-  "clean-productivity": {
-    label: "Clean Productivity", description: "Clear, actionable, focused", emoji: "⚡",
-    bg: "#FFFFFF", bgType: "solid",
-    headingColor: "#1E3A5F", bodyColor: "#374151", accentColor: "#3B82F6",
-    hookFont: "Inter", bodyFont: "Inter",
-    previewBg: "#FFFFFF", previewText: "#1E3A5F", previewAccent: "#3B82F6",
-  },
-  "faceless-creator": {
-    label: "Faceless Creator", description: "Mysterious, viral, relatable", emoji: "🎭",
-    bg: "#1a1a2e", bgType: "gradient",
-    bgGradient: { color1: "#1a1a2e", color2: "#16213e", angle: 135 },
-    headingColor: "#FFFFFF", bodyColor: "#B0B8D0", accentColor: "#E94560",
-    hookFont: "Oswald", bodyFont: "Inter",
-    previewBg: "linear-gradient(135deg,#1a1a2e,#16213e)", previewText: "#FFFFFF", previewAccent: "#E94560",
-  },
-  "modern-business": {
-    label: "Modern Business", description: "Professional, confident, results", emoji: "💼",
-    bg: "#1E3A5F", bgType: "solid",
-    headingColor: "#FFFFFF", bodyColor: "#CBD5E1", accentColor: "#F59E0B",
-    hookFont: "Oswald", bodyFont: "Inter",
-    previewBg: "#1E3A5F", previewText: "#FFFFFF", previewAccent: "#F59E0B",
-  },
+const TEMPLATE_META: Record<TemplateStyle, TemplateMeta> = {
+  "minimal-luxury":    { label: "Minimal Luxury",    description: "Clean, elegant, premium",          emoji: "✨", previewBg: "#FAFAF7",                         previewText: "#1A1A1A", previewAccent: "#C9A84C" },
+  "dark-aesthetic":    { label: "Dark Aesthetic",    description: "Bold, edgy, raw",                  emoji: "🖤", previewBg: "#0D0D0D",                         previewText: "#FFFFFF", previewAccent: "#FF6B35" },
+  "wellness":          { label: "Wellness",           description: "Calm, nurturing, natural",          emoji: "🌿", previewBg: "linear-gradient(160deg,#E8F0E8,#C5DBC5)", previewText: "#2D5016", previewAccent: "#5C9A3E" },
+  "clean-productivity":{ label: "Clean Productivity", description: "Clear, actionable, focused",        emoji: "⚡", previewBg: "#FFFFFF",                         previewText: "#1E3A5F", previewAccent: "#3B82F6" },
+  "faceless-creator":  { label: "Faceless Creator",  description: "Mysterious, viral, relatable",      emoji: "🎭", previewBg: "linear-gradient(135deg,#1a1a2e,#16213e)", previewText: "#FFFFFF", previewAccent: "#E94560" },
+  "modern-business":   { label: "Modern Business",   description: "Professional, confident, results",  emoji: "💼", previewBg: "#1E3A5F",                         previewText: "#FFFFFF", previewAccent: "#F59E0B" },
 };
-
-// ── Layout variants ───────────────────────────────────────────────────────────
-
-const LAYOUTS: Record<LayoutId, { label: string; description: string }> = {
-  "centered": { label: "Centered Stack", description: "Balanced top-to-bottom" },
-  "bold-hero": { label: "Bold Hero", description: "Hook fills the canvas" },
-  "story": { label: "Story Card", description: "CTA in accent box" },
-};
-
-function buildElements(post: ContentRow, cfg: TemplateCfg, layoutId: LayoutId, W: number, H: number): DesignElement[] {
-  if (layoutId === "bold-hero") {
-    return [
-      { id: "hook", type: "text", x: 60, y: 280, width: W - 120, height: 820,
-        content: post.hook, fontSize: 124, fontFamily: cfg.hookFont,
-        color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.0, zIndex: 2 },
-      { id: "main", type: "text", x: 80, y: 1200, width: W - 160, height: 380,
-        content: post.mainText, fontSize: 44, fontFamily: cfg.bodyFont,
-        color: cfg.bodyColor, textAlign: "center", lineHeight: 1.4, zIndex: 2 },
-      { id: "cta", type: "text", x: 80, y: 1720, width: W - 160, height: 100,
-        content: post.cta, fontSize: 40, fontFamily: cfg.bodyFont,
-        color: cfg.accentColor, fontWeight: "bold", textAlign: "center", zIndex: 2 },
-    ];
-  }
-  if (layoutId === "story") {
-    return [
-      { id: "hook", type: "text", x: 80, y: 560, width: W - 160, height: 440,
-        content: post.hook, fontSize: 84, fontFamily: cfg.hookFont,
-        color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.15, zIndex: 2 },
-      { id: "main", type: "text", x: 100, y: 1060, width: W - 200, height: 440,
-        content: post.mainText, fontSize: 46, fontFamily: cfg.bodyFont,
-        color: cfg.bodyColor, textAlign: "center", lineHeight: 1.5, zIndex: 2 },
-      { id: "cta", type: "text", x: 160, y: 1640, width: W - 320, height: 140,
-        content: post.cta, fontSize: 40, fontFamily: cfg.bodyFont,
-        color: cfg.headingColor, fontWeight: "bold", textAlign: "center",
-        textBackground: cfg.accentColor, zIndex: 2 },
-    ];
-  }
-  // centered (default)
-  return [
-    { id: "hook", type: "text", x: 80, y: 500, width: W - 160, height: 480,
-      content: post.hook, fontSize: 88, fontFamily: cfg.hookFont,
-      color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.1, zIndex: 2 },
-    { id: "main", type: "text", x: 100, y: 1020, width: W - 200, height: 560,
-      content: post.mainText, fontSize: 48, fontFamily: cfg.bodyFont,
-      color: cfg.bodyColor, textAlign: "center", lineHeight: 1.5, zIndex: 2 },
-    { id: "cta", type: "text", x: 80, y: 1680, width: W - 160, height: 120,
-      content: post.cta, fontSize: 42, fontFamily: cfg.bodyFont,
-      color: cfg.accentColor, fontWeight: "bold", textAlign: "center", zIndex: 2 },
-  ];
-}
-
-function buildPostDesign(post: ContentRow, style: TemplateStyle, layout: LayoutId, postTitle: string): DesignData {
-  const cfg = TEMPLATE_CONFIGS[style];
-  const W = 1080, H = 1920;
-  return {
-    width: W, height: H,
-    background: cfg.bg, backgroundType: cfg.bgType, backgroundGradient: cfg.bgGradient,
-    elements: buildElements(post, cfg, layout, W, H),
-    presetName: postTitle,
-  };
-}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -178,105 +73,21 @@ const FORMAT_LABELS: Record<string, string> = {
   spreadsheet: "Spreadsheet", notion: "Notion Template",
 };
 
-// ── Layout preview thumbnail ──────────────────────────────────────────────────
-
-function LayoutThumb({ id, cfg, selected, onClick }: {
-  id: LayoutId; cfg: TemplateCfg; selected: boolean; onClick: () => void;
-}) {
-  const W = 54, H = 96; // tiny thumbnail proportional to 1080x1920
-  const bgStyle: React.CSSProperties = cfg.bgType === "gradient" && cfg.bgGradient
-    ? { background: `linear-gradient(${cfg.bgGradient.angle}deg, ${cfg.bgGradient.color1}, ${cfg.bgGradient.color2})` }
-    : { background: cfg.bg };
-
-  const layouts = {
-    "centered": (
-      <>
-        <div style={{ width: "80%", height: 3, background: cfg.accentColor, borderRadius: 2, marginBottom: 6 }} />
-        <div style={{ width: "90%", height: 18, background: cfg.headingColor, opacity: 0.9, borderRadius: 2, marginBottom: 5 }} />
-        <div style={{ width: "80%", height: 9, background: cfg.bodyColor, opacity: 0.6, borderRadius: 2, marginBottom: 4 }} />
-        <div style={{ width: "80%", height: 6, background: cfg.bodyColor, opacity: 0.4, borderRadius: 2, marginBottom: 10 }} />
-        <div style={{ width: "60%", height: 8, background: cfg.accentColor, opacity: 0.8, borderRadius: 2 }} />
-      </>
-    ),
-    "bold-hero": (
-      <>
-        <div style={{ width: "90%", height: 34, background: cfg.headingColor, opacity: 0.95, borderRadius: 2, marginBottom: 8 }} />
-        <div style={{ width: "80%", height: 7, background: cfg.bodyColor, opacity: 0.5, borderRadius: 2, marginBottom: 4 }} />
-        <div style={{ width: "80%", height: 5, background: cfg.bodyColor, opacity: 0.35, borderRadius: 2, marginBottom: 10 }} />
-        <div style={{ width: "50%", height: 6, background: cfg.accentColor, opacity: 0.8, borderRadius: 2 }} />
-      </>
-    ),
-    "story": (
-      <>
-        <div style={{ width: "80%", height: 3, background: cfg.accentColor, borderRadius: 2, marginBottom: 6 }} />
-        <div style={{ width: "90%", height: 20, background: cfg.headingColor, opacity: 0.9, borderRadius: 2, marginBottom: 5 }} />
-        <div style={{ width: "80%", height: 16, background: cfg.bodyColor, opacity: 0.55, borderRadius: 2, marginBottom: 8 }} />
-        <div style={{ width: "70%", height: 12, background: cfg.accentColor, opacity: 0.85, borderRadius: 4 }} />
-      </>
-    ),
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      className={`relative rounded-xl border-2 overflow-hidden transition-all ${
-        selected ? "border-orange-500 ring-2 ring-orange-500/20" : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/30"
-      }`}
-    >
-      <div style={{ width: W, height: H, ...bgStyle, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 6 }}>
-        {layouts[id]}
-      </div>
-      {selected && (
-        <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center">
-          <Check className="w-2.5 h-2.5 text-white" />
-        </div>
-      )}
-    </button>
-  );
-}
-
 // ── Mini preview card ─────────────────────────────────────────────────────────
 
 const PREVIEW_SCALE = 0.175;
 
-function PostPreview({ post, style, layout, index, onDelete, onEdit, onQuickEdit, isDark }: {
-  post: ContentRow; style: TemplateStyle; layout: LayoutId; index: number;
+function PostPreview({ post, design, index, onDelete, onEdit, onQuickEdit, isDark }: {
+  post: ContentRow; design: DesignData; index: number;
   onDelete: () => void; onEdit: () => void; onQuickEdit: () => void; isDark: boolean;
 }) {
-  const cfg = TEMPLATE_CONFIGS[style];
   const previewW = Math.round(1080 * PREVIEW_SCALE);
   const previewH = Math.round(1920 * PREVIEW_SCALE);
-  const bgStyle: React.CSSProperties = cfg.bgType === "gradient" && cfg.bgGradient
-    ? { background: `linear-gradient(${cfg.bgGradient.angle}deg, ${cfg.bgGradient.color1}, ${cfg.bgGradient.color2})` }
-    : { background: cfg.bg };
-
-  const hookSize = layout === "bold-hero" ? 124 : layout === "story" ? 84 : 88;
-  const hookY = layout === "bold-hero" ? 280 : layout === "story" ? 560 : 500;
-  const bodyY = layout === "bold-hero" ? 1200 : layout === "story" ? 1060 : 1020;
-  const ctaY = layout === "bold-hero" ? 1720 : layout === "story" ? 1640 : 1680;
 
   return (
     <div className={`group rounded-xl overflow-hidden border ${isDark ? "border-white/10 bg-[#1A1A1A]" : "border-gray-200 bg-white"} shadow-sm hover:shadow-md transition-shadow`}>
       <div style={{ width: previewW, height: previewH, overflow: "hidden", position: "relative" }}>
-        <div style={{ width: 1080, height: 1920, transform: `scale(${PREVIEW_SCALE})`, transformOrigin: "top left", position: "absolute", top: 0, left: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 80px", ...bgStyle }}>
-          <div style={{ position: "absolute", top: 420, left: "50%", transform: "translateX(-50%)", width: 120, height: 7, background: cfg.accentColor, borderRadius: 4 }} />
-          <div style={{ position: "absolute", top: hookY, left: 80, right: 80, fontFamily: cfg.hookFont, fontSize: hookSize, fontWeight: "bold", color: cfg.headingColor, textAlign: "center", lineHeight: 1.1, wordBreak: "break-word" }}>
-            {post.hook}
-          </div>
-          <div style={{ position: "absolute", top: bodyY, left: 100, right: 100, fontFamily: cfg.bodyFont, fontSize: 46, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.5, wordBreak: "break-word" }}>
-            {post.mainText}
-          </div>
-          <div style={{
-            position: "absolute", top: ctaY, left: 160, right: 160,
-            fontFamily: cfg.bodyFont, fontSize: 40, fontWeight: "bold", textAlign: "center",
-            ...(layout === "story"
-              ? { background: cfg.accentColor, color: cfg.headingColor, padding: "28px 40px", borderRadius: 16 }
-              : { color: cfg.accentColor }),
-            wordBreak: "break-word",
-          }}>
-            {post.cta}
-          </div>
-        </div>
+        <SlidePreview data={design} scale={PREVIEW_SCALE} />
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100">
           <button onClick={onQuickEdit} className="bg-white text-gray-900 rounded-lg px-2 py-1.5 text-[10px] font-semibold flex items-center gap-1 hover:bg-orange-500 hover:text-white transition-colors">
             <Edit3 className="w-2.5 h-2.5" /> Quick Edit
@@ -377,61 +188,38 @@ function ProductCard({ product, selected, onToggle, isDark }: {
 
 async function exportAllAsZip(
   posts: ContentRow[],
-  style: TemplateStyle,
-  layout: LayoutId,
+  designs: DesignData[],
   batchLabel: string,
 ): Promise<void> {
   const { default: JSZip } = await import("jszip");
   const { toPng } = await import("html-to-image");
-  const cfg = TEMPLATE_CONFIGS[style];
+  const { createRoot } = await import("react-dom/client");
   const zip = new JSZip();
 
   for (let i = 0; i < posts.length; i++) {
     const post = posts[i];
+    const design = designs[i];
+    const W = design.width;
+    const H = design.height;
+
     const container = document.createElement("div");
-    container.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:1080px;height:1920px;overflow:hidden;z-index:-9999;`;
-
-    const bgStyle = cfg.bgType === "gradient" && cfg.bgGradient
-      ? `background:linear-gradient(${cfg.bgGradient.angle}deg,${cfg.bgGradient.color1},${cfg.bgGradient.color2});`
-      : `background:${cfg.bg};`;
-    container.style.cssText += bgStyle;
-
-    // Accent bar
-    const bar = document.createElement("div");
-    bar.style.cssText = `position:absolute;top:420px;left:480px;width:120px;height:7px;background:${cfg.accentColor};border-radius:4px;`;
-    container.appendChild(bar);
-
-    const els = buildElements(post, cfg, layout, 1080, 1920);
-    for (const el of els) {
-      const div = document.createElement("div");
-      div.style.cssText = `
-        position:absolute;
-        left:${el.x}px;top:${el.y}px;width:${el.width}px;height:${el.height}px;
-        color:${el.color ?? "#000"};
-        font-family:'${el.fontFamily ?? "Inter"}',sans-serif;
-        font-size:${el.fontSize ?? 32}px;
-        font-weight:${el.fontWeight ?? "normal"};
-        text-align:${el.textAlign ?? "left"};
-        line-height:${el.lineHeight ?? 1.3};
-        z-index:${el.zIndex ?? 1};
-        word-break:break-word;
-        white-space:pre-wrap;
-        overflow:hidden;
-        ${el.textBackground ? `background:${el.textBackground};padding:28px 40px;border-radius:16px;` : ""}
-      `;
-      div.textContent = el.content ?? "";
-      container.appendChild(div);
-    }
-
+    container.style.cssText = `position:fixed;left:-9999px;top:0;width:${W}px;height:${H}px;overflow:hidden;z-index:-1`;
     document.body.appendChild(container);
+
+    const root = createRoot(container);
+    root.render(React.createElement(SlidePreview, { data: design, scale: 1 }));
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await new Promise((r) => setTimeout(r, 200));
+
     try {
-      const dataUrl = await toPng(container, { pixelRatio: 1, width: 1080, height: 1920 });
+      const dataUrl = await toPng(container.firstElementChild as HTMLElement, { pixelRatio: 2, width: W, height: H });
       const base64 = dataUrl.split(",")[1];
       const fileName = post.productTitle
         ? `${post.productTitle.replace(/[^a-z0-9]/gi, "-")}-post-${i + 1}.png`
         : `${batchLabel.replace(/[^a-z0-9]/gi, "-")}-post-${i + 1}.png`;
       zip.file(fileName, base64, { base64: true });
     } finally {
+      root.unmount();
       document.body.removeChild(container);
     }
   }
@@ -457,9 +245,9 @@ export function BulkContentDesigner() {
   const [niche, setNiche] = useState("");
   const [tone, setTone] = useState<Tone>("Inspirational");
   const [style, setStyle] = useState<TemplateStyle>("minimal-luxury");
-  const [layout, setLayout] = useState<LayoutId>("centered");
   const [count, setCount] = useState(10);
   const [posts, setPosts] = useState<ContentRow[]>([]);
+  const [postDesigns, setPostDesigns] = useState<DesignData[]>([]);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -519,10 +307,19 @@ export function BulkContentDesigner() {
       });
       const json = await res.json() as { posts?: ContentRow[]; error?: string };
       if (!res.ok) { setGenError(json.error ?? "Generation failed"); return; }
-      setPosts((json.posts ?? []).map((p, i) => ({
+      const newPosts = (json.posts ?? []).map((p, i) => ({
         ...p, id: `post-${i}-${Date.now()}`,
         hook: p.hook ?? "", mainText: p.mainText ?? "", cta: p.cta ?? "", bgTheme: p.bgTheme ?? "light",
-      })));
+      }));
+      // Compute layout-varied designs immediately — one pass, carousel-aware
+      const usedLayouts: string[] = [];
+      const newDesigns = newPosts.map((post, idx) => {
+        const { data, layoutId } = buildSlideDesign(post, style, idx, newPosts.length, usedLayouts);
+        usedLayouts.push(layoutId);
+        return data;
+      });
+      setPosts(newPosts);
+      setPostDesigns(newDesigns);
       setStep(2);
     } catch { setGenError("Network error — please try again."); }
     finally { setGenerating(false); }
@@ -537,7 +334,7 @@ export function BulkContentDesigner() {
         : `${topic} — ${new Date().toLocaleDateString()}`;
       const slides = posts.map((post, idx) => ({
         title: post.productTitle ? `${post.productTitle} — Slide ${idx + 1}` : `${batchLabel} — Slide ${idx + 1}`,
-        data: buildPostDesign(post, style, layout, `Slide ${idx + 1}`),
+        data: postDesigns[idx] ?? buildSlideDesign(post, style, idx, posts.length, []).data,
       }));
       const res = await fetch("/api/design-bundles", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -561,22 +358,36 @@ export function BulkContentDesigner() {
 
   async function saveAndEdit(post: ContentRow, index: number) {
     const label = post.productTitle ? `${post.productTitle} — Post ${index + 1}` : `${batchLabel} — Post ${index + 1}`;
+    const data = postDesigns[index] ?? buildSlideDesign(post, style, index, posts.length, []).data;
     const res = await fetch("/api/designs", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: label, data: buildPostDesign(post, style, layout, label) }),
+      body: JSON.stringify({ title: label, data }),
     });
     const json = await res.json() as { design?: { id: string } };
     if (json.design?.id) router.push(`/dashboard/design-studio/${json.design.id}`);
   }
 
   function updatePost(updated: ContentRow) {
-    setPosts((prev) => prev.map((p) => p.id === updated.id ? updated : p));
+    setPosts((prev) => {
+      const newPosts = prev.map((p) => p.id === updated.id ? updated : p);
+      // Recompute design for the edited slide preserving same position
+      const idx = newPosts.findIndex((p) => p.id === updated.id);
+      if (idx >= 0) {
+        setPostDesigns((prevDesigns) => {
+          const next = [...prevDesigns];
+          const usedBefore = next.slice(0, idx).map((d) => d.presetName ?? "");
+          next[idx] = buildSlideDesign(updated, style, idx, newPosts.length, usedBefore).data;
+          return next;
+        });
+      }
+      return newPosts;
+    });
     setEditingPost(null);
   }
 
   async function handleExportZip() {
     setExportingZip(true);
-    try { await exportAllAsZip(posts, style, layout, batchLabel); }
+    try { await exportAllAsZip(posts, postDesigns, batchLabel); }
     finally { setExportingZip(false); }
   }
 
@@ -702,43 +513,38 @@ export function BulkContentDesigner() {
               <div className={`rounded-2xl border p-6 space-y-4 ${cardCls}`}>
                 <label className="block text-sm font-semibold">Template style</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {(Object.entries(TEMPLATE_CONFIGS) as [TemplateStyle, TemplateCfg][]).map(([key, cfg]) => (
-                    <button key={key} onClick={() => setStyle(key)} className={`relative rounded-xl border-2 p-3 text-left transition-all ${style === key ? "border-orange-500 ring-2 ring-orange-500/20" : isDark ? "border-white/10 hover:border-white/30" : "border-gray-200 hover:border-gray-300"}`}>
-                      <div className="w-full h-14 rounded-lg mb-2.5 flex items-center justify-center overflow-hidden" style={{ background: cfg.previewBg }}>
-                        <div style={{ textAlign: "center" }}>
-                          <div style={{ color: cfg.previewText, fontSize: 9, fontWeight: "bold", fontFamily: cfg.hookFont, lineHeight: 1.2 }}>HOOK TEXT</div>
-                          <div style={{ color: cfg.previewAccent, fontSize: 7, marginTop: 2, fontFamily: cfg.bodyFont }}>→ CTA here</div>
+                  {(Object.entries(TEMPLATE_META) as [TemplateStyle, TemplateMeta][]).map(([key, meta]) => {
+                    const fonts = TEMPLATE_CONFIGS[key];
+                    return (
+                      <button key={key} onClick={() => setStyle(key)} className={`relative rounded-xl border-2 p-3 text-left transition-all ${style === key ? "border-orange-500 ring-2 ring-orange-500/20" : isDark ? "border-white/10 hover:border-white/30" : "border-gray-200 hover:border-gray-300"}`}>
+                        <div className="w-full h-14 rounded-lg mb-2.5 flex items-center justify-center overflow-hidden" style={{ background: meta.previewBg }}>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ color: meta.previewText, fontSize: 9, fontWeight: "bold", fontFamily: fonts.hookFont, lineHeight: 1.2 }}>HOOK TEXT</div>
+                            <div style={{ color: meta.previewAccent, fontSize: 7, marginTop: 2, fontFamily: fonts.bodyFont }}>→ CTA here</div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base">{cfg.emoji}</span>
-                        <div>
-                          <p className="text-xs font-semibold leading-tight">{cfg.label}</p>
-                          <p className={`text-[10px] ${isDark ? "text-gray-500" : "text-gray-400"}`}>{cfg.description}</p>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-base">{meta.emoji}</span>
+                          <div>
+                            <p className="text-xs font-semibold leading-tight">{meta.label}</p>
+                            <p className={`text-[10px] ${isDark ? "text-gray-500" : "text-gray-400"}`}>{meta.description}</p>
+                          </div>
                         </div>
-                      </div>
-                      {style === key && <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center"><Check className="w-2.5 h-2.5 text-white" /></div>}
-                    </button>
-                  ))}
+                        {style === key && <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center"><Check className="w-2.5 h-2.5 text-white" /></div>}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Layout picker */}
-              <div className={`rounded-2xl border p-6 space-y-4 ${cardCls}`}>
-                <div>
-                  <label className="block text-sm font-semibold">Layout</label>
-                  <p className={`text-xs mt-0.5 ${isDark ? "text-gray-500" : "text-gray-400"}`}>How text is arranged on the canvas</p>
+              {/* Auto layout info */}
+              <div className={`rounded-2xl border p-4 flex items-start gap-3 ${cardCls}`}>
+                <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <Sparkles className="w-4 h-4 text-orange-500" />
                 </div>
-                <div className="flex gap-4 items-start">
-                  {(Object.entries(LAYOUTS) as [LayoutId, { label: string; description: string }][]).map(([id, info]) => (
-                    <div key={id} className="flex flex-col items-center gap-2">
-                      <LayoutThumb id={id} cfg={TEMPLATE_CONFIGS[style]} selected={layout === id} onClick={() => setLayout(id)} />
-                      <div className="text-center">
-                        <p className="text-xs font-semibold">{info.label}</p>
-                        <p className={`text-[10px] ${isDark ? "text-gray-500" : "text-gray-400"}`}>{info.description}</p>
-                      </div>
-                    </div>
-                  ))}
+                <div>
+                  <p className="text-sm font-semibold">Dynamic Layout Engine</p>
+                  <p className={`text-xs mt-0.5 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Each slide gets a unique layout based on its content and position in the carousel — hooks, body slides, and CTAs each get the right treatment automatically.</p>
                 </div>
               </div>
 
@@ -767,7 +573,7 @@ export function BulkContentDesigner() {
                 <div>
                   <h2 className="text-xl font-bold">{posts.length} posts generated</h2>
                   <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-                    {TEMPLATE_CONFIGS[style].label} · {LAYOUTS[layout].label} · {tone}
+                    {TEMPLATE_META[style].label} · Dynamic Layouts · {tone}
                   </p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
@@ -788,8 +594,8 @@ export function BulkContentDesigner() {
 
               <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {posts.map((post, i) => (
-                  <PostPreview key={post.id} post={post} style={style} layout={layout} index={i} isDark={isDark}
-                    onDelete={() => setPosts((prev) => prev.filter((p) => p.id !== post.id))}
+                  <PostPreview key={post.id} post={post} design={postDesigns[i] ?? { width: 1080, height: 1920, background: "#fff", elements: [] }} index={i} isDark={isDark}
+                    onDelete={() => { setPosts((prev) => prev.filter((p) => p.id !== post.id)); setPostDesigns((prev) => prev.filter((_, di) => di !== i)); }}
                     onQuickEdit={() => setEditingPost(post)}
                     onEdit={() => saveAndEdit(post, i)}
                   />
@@ -818,7 +624,7 @@ export function BulkContentDesigner() {
                 </p>
               </div>
               <div className="flex gap-3 justify-center flex-wrap">
-                <Button variant="outline" onClick={() => { setStep(1); setPosts([]); setTopic(""); setSavedCount(0); setBundleId(null); setSelectedProductIds(new Set()); }} className={isDark ? "border-white/10 text-gray-300 hover:text-white" : ""}>
+                <Button variant="outline" onClick={() => { setStep(1); setPosts([]); setPostDesigns([]); setTopic(""); setSavedCount(0); setBundleId(null); setSelectedProductIds(new Set()); }} className={isDark ? "border-white/10 text-gray-300 hover:text-white" : ""}>
                   <RefreshCw className="w-4 h-4 mr-2" /> New Batch
                 </Button>
                 {bundleId ? (
