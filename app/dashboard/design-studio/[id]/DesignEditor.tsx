@@ -730,20 +730,30 @@ export function DesignEditor({ designId }: { designId: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, data]);
 
-  async function exportPng() {
+  async function captureCanvas(): Promise<string> {
     const { toPng } = await import("html-to-image");
+    const el = canvasRef.current!;
+    // Remove the zoom transform so html-to-image captures the element at its
+    // native CSS size (data.width × data.height) with no scaling artifacts.
+    const saved = el.style.transform;
+    el.style.transform = "none";
+    try {
+      return await toPng(el, { pixelRatio: 2, width: data.width, height: data.height });
+    } finally {
+      el.style.transform = saved;
+    }
+  }
+
+  async function exportPng() {
     if (!canvasRef.current) return;
-    // pixelRatio: 2/scale → output is always 2× native canvas resolution regardless of zoom
-    const url = await toPng(canvasRef.current, { pixelRatio: 2 / scale });
+    const url = await captureCanvas();
     const a = document.createElement("a"); a.href = url; a.download = `${title}.png`; a.click();
   }
 
   async function exportPdf() {
-    const { toPng } = await import("html-to-image");
     const { jsPDF } = await import("jspdf");
     if (!canvasRef.current) return;
-    // pixelRatio: 1/scale → output exactly matches native canvas resolution regardless of zoom
-    const url = await toPng(canvasRef.current, { pixelRatio: 1 / scale });
+    const url = await captureCanvas();
     const mmW = data.width * 0.2646;
     const mmH = data.height * 0.2646;
     const pdf = new jsPDF({ orientation: mmW > mmH ? "landscape" : "portrait", unit: "mm", format: [mmW, mmH] });
