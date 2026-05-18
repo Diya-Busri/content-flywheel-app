@@ -906,6 +906,7 @@ export function DesignEditor({ designId }: { designId: string }) {
             : <CanvasPanel isDark={isDark} data={data}
                 onUpdate={(patch) => updateData((prev) => ({ ...prev, ...patch }))}
                 onApplyPalette={applyPaletteToDesign}
+                onApplyTemplate={applyTemplate}
                 elementCount={data.elements.length} />}
         </aside>
       </div>
@@ -1109,7 +1110,7 @@ function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
 
 // ── Canvas settings panel ──────────────────────────────────────────────────
 
-function CanvasPanel({ isDark, data, onUpdate, onApplyPalette, elementCount }: { isDark: boolean; data: DesignData; onUpdate: (p: Partial<DesignData>) => void; onApplyPalette: (pal: PaletteDef) => void; elementCount: number }) {
+function CanvasPanel({ isDark, data, onUpdate, onApplyPalette, onApplyTemplate, elementCount }: { isDark: boolean; data: DesignData; onUpdate: (p: Partial<DesignData>) => void; onApplyPalette: (pal: PaletteDef) => void; onApplyTemplate: (tpl: TemplateDef) => void; elementCount: number }) {
   const [paletteCat, setPaletteCat] = useState("warm");
   function shufflePalette() {
     const activeKey = data.activePalette?.join(",");
@@ -1242,6 +1243,26 @@ function CanvasPanel({ isDark, data, onUpdate, onApplyPalette, elementCount }: {
         </div>
       </div>
 
+      {/* Style Templates */}
+      <div>
+        <p className={sec}>Style Templates</p>
+        <p className={`text-[10px] mb-3 ${isDark ? "text-gray-600" : "text-gray-400"}`}>Instantly replace background &amp; layout with a preset style</p>
+        <div className="grid grid-cols-2 gap-2">
+          {TEMPLATES.map((tpl) => (
+            <button
+              key={tpl.id}
+              onClick={() => onApplyTemplate(tpl)}
+              className={`group relative rounded-xl overflow-hidden border-2 transition-colors ${isDark ? "border-[#2A2A2A] hover:border-orange-500" : "border-gray-200 hover:border-orange-400"}`}
+            >
+              <div className="h-16 w-full" style={{ background: tpl.preview }} />
+              <div className={`px-2 py-1.5 text-left ${isDark ? "bg-[#111]" : "bg-gray-50"}`}>
+                <p className={`text-[10px] font-semibold truncate ${isDark ? "text-gray-300 group-hover:text-orange-400" : "text-gray-700 group-hover:text-orange-600"}`}>{tpl.label}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Background image */}
       <div>
         <p className={sec}>Background Image</p>
@@ -1315,6 +1336,26 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign, pa
 }) {
   const [removingBg, setRemovingBg] = useState(false);
   const [removeBgError, setRemoveBgError] = useState<string | null>(null);
+  const [aiRewriteAction, setAiRewriteAction] = useState<string | null>(null);
+  const [aiRewriteError, setAiRewriteError] = useState<string | null>(null);
+
+  async function runAiRewrite(action: string) {
+    const text = el.content?.trim();
+    if (!text || aiRewriteAction) return;
+    setAiRewriteAction(action);
+    setAiRewriteError(null);
+    try {
+      const res = await fetch("/api/designs/ai-rewrite", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, action }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.result) { setAiRewriteError(json.error ?? "AI rewrite failed."); return; }
+      onUpdate({ content: json.result });
+    } catch {
+      setAiRewriteError("Network error. Please try again.");
+    } finally { setAiRewriteAction(null); }
+  }
 
   async function removeBg() {
     if (!el.imageUrl) return;
@@ -1435,6 +1476,40 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign, pa
           <div>
             <label className={lbl}>Content</label>
             <textarea value={el.content ?? ""} onChange={(e) => onUpdate({ content: e.target.value })} rows={3} className={`w-full text-xs rounded-md border px-2 py-1.5 resize-none ${sel}`} />
+          </div>
+          {/* AI Rewrite actions */}
+          <div>
+            <p className={lbl}><Sparkles className="w-3 h-3 inline mr-1 text-orange-500" />AI Rewrite</p>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { action: "viral",        label: "Make Viral" },
+                { action: "hook",         label: "Rewrite Hook" },
+                { action: "shorten",      label: "Shorten" },
+                { action: "expand",       label: "Expand" },
+                { action: "cta",          label: "Write CTA" },
+                { action: "luxury",       label: "Luxury Tone" },
+                { action: "casual",       label: "Casual" },
+                { action: "professional", label: "Professional" },
+                { action: "motivational", label: "Motivational" },
+                { action: "wellness",     label: "Wellness" },
+              ] as { action: string; label: string }[]).map(({ action, label }) => (
+                <button
+                  key={action}
+                  onClick={() => runAiRewrite(action)}
+                  disabled={!!aiRewriteAction}
+                  className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
+                    aiRewriteAction === action
+                      ? "bg-orange-500 text-white border-orange-500"
+                      : isDark
+                        ? "border-white/10 text-gray-300 hover:border-orange-500/60 hover:text-orange-400 disabled:opacity-40"
+                        : "border-gray-200 text-gray-600 hover:border-orange-400 hover:text-orange-500 disabled:opacity-40"
+                  }`}
+                >
+                  {aiRewriteAction === action ? <Loader2 className="w-2.5 h-2.5 animate-spin inline" /> : label}
+                </button>
+              ))}
+            </div>
+            {aiRewriteError && <p className="text-[10px] text-red-500 mt-1">{aiRewriteError}</p>}
           </div>
           <div>
             <label className={lbl}>Font</label>

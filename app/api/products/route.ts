@@ -19,6 +19,9 @@ export async function GET() {
         id: productsTable.id,
         title: productsTable.title,
         format: productsTable.format,
+        niche: productsTable.niche,
+        marketingAssets: productsTable.marketingAssets,
+        status: productsTable.status,
       })
       .from(productsTable)
       .where(and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt)))
