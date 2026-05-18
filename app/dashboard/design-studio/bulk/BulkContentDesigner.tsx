@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sparkles, ChevronLeft, Loader2, Trash2, Edit3, Download,
-  Check, RefreshCw, ChevronRight, Zap,
+  Check, RefreshCw, ChevronRight, Zap, BookOpen, Lightbulb,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 import { DesignData, DesignElement } from "@/db/schema/designs-schema";
+import { MarketingAssets } from "@/db/schema/products-schema";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ type ContentRow = {
   mainText: string;
   cta: string;
   bgTheme: string;
+  productTitle?: string;
 };
 
 type TemplateStyle =
@@ -27,6 +29,17 @@ type TemplateStyle =
   | "clean-productivity"
   | "faceless-creator"
   | "modern-business";
+
+type Mode = "topic" | "products";
+
+type UserProduct = {
+  id: string;
+  title: string;
+  format: string;
+  niche: string;
+  marketingAssets: MarketingAssets | null;
+  status: string;
+};
 
 // ── Template configs ───────────────────────────────────────────────────────────
 
@@ -157,6 +170,19 @@ const TOPIC_SUGGESTIONS = [
 
 const COUNT_OPTIONS = [10, 20, 30];
 
+const FORMAT_LABELS: Record<string, string> = {
+  ebook: "eBook",
+  workbook: "Workbook",
+  checklist: "Checklist",
+  guide: "Guide",
+  planner: "Planner",
+  journal: "Journal",
+  spreadsheet: "Spreadsheet",
+  notion: "Notion Template",
+  course: "Course",
+  bundle: "Bundle",
+};
+
 // ── Design builder ─────────────────────────────────────────────────────────────
 
 function buildPostDesign(post: ContentRow, style: TemplateStyle, postTitle: string): DesignData {
@@ -225,118 +251,92 @@ function buildPostDesign(post: ContentRow, style: TemplateStyle, postTitle: stri
 
 // ── Mini preview card ─────────────────────────────────────────────────────────
 
-const PREVIEW_SCALE = 0.175; // 1080 × 0.175 ≈ 189px wide, 1920 × 0.175 ≈ 336px tall
+const PREVIEW_SCALE = 0.175;
 
 function PostPreview({
-  post,
-  style,
-  index,
-  onDelete,
-  onEdit,
-  isDark,
+  post, style, index, onDelete, onEdit, isDark,
 }: {
-  post: ContentRow;
-  style: TemplateStyle;
-  index: number;
-  onDelete: () => void;
-  onEdit: () => void;
-  isDark: boolean;
+  post: ContentRow; style: TemplateStyle; index: number;
+  onDelete: () => void; onEdit: () => void; isDark: boolean;
 }) {
   const cfg = TEMPLATE_CONFIGS[style];
   const previewW = Math.round(1080 * PREVIEW_SCALE);
   const previewH = Math.round(1920 * PREVIEW_SCALE);
-
   const bgStyle: React.CSSProperties = cfg.bgType === "gradient" && cfg.bgGradient
     ? { background: `linear-gradient(${cfg.bgGradient.angle}deg, ${cfg.bgGradient.color1}, ${cfg.bgGradient.color2})` }
     : { background: cfg.bg };
 
   return (
     <div className={`group rounded-xl overflow-hidden border ${isDark ? "border-white/10 bg-[#1A1A1A]" : "border-gray-200 bg-white"} shadow-sm hover:shadow-md transition-shadow`}>
-      {/* Canvas preview */}
       <div style={{ width: previewW, height: previewH, overflow: "hidden", position: "relative", flexShrink: 0 }}>
-        <div
-          style={{
-            width: 1080,
-            height: 1920,
-            transform: `scale(${PREVIEW_SCALE})`,
-            transformOrigin: "top left",
-            position: "absolute",
-            top: 0,
-            left: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "120px 80px",
-            gap: 60,
-            ...bgStyle,
-          }}
-        >
-          {/* Decorative accent line */}
+        <div style={{ width: 1080, height: 1920, transform: `scale(${PREVIEW_SCALE})`, transformOrigin: "top left", position: "absolute", top: 0, left: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "120px 80px", gap: 60, ...bgStyle }}>
           <div style={{ width: 80, height: 6, background: cfg.accentColor, borderRadius: 3, flexShrink: 0 }} />
-
-          <div style={{
-            fontFamily: cfg.hookFont,
-            fontSize: 88,
-            fontWeight: "bold",
-            color: cfg.headingColor,
-            textAlign: "center",
-            lineHeight: 1.1,
-            wordBreak: "break-word",
-          }}>
+          <div style={{ fontFamily: cfg.hookFont, fontSize: 88, fontWeight: "bold", color: cfg.headingColor, textAlign: "center", lineHeight: 1.1, wordBreak: "break-word" }}>
             {post.hook}
           </div>
-
-          <div style={{
-            fontFamily: cfg.bodyFont,
-            fontSize: 48,
-            color: cfg.bodyColor,
-            textAlign: "center",
-            lineHeight: 1.5,
-            wordBreak: "break-word",
-          }}>
+          <div style={{ fontFamily: cfg.bodyFont, fontSize: 48, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.5, wordBreak: "break-word" }}>
             {post.mainText}
           </div>
-
-          <div style={{
-            fontFamily: cfg.bodyFont,
-            fontSize: 42,
-            fontWeight: "bold",
-            color: cfg.accentColor,
-            textAlign: "center",
-            padding: "24px 48px",
-            border: `3px solid ${cfg.accentColor}`,
-            borderRadius: 16,
-            wordBreak: "break-word",
-          }}>
+          <div style={{ fontFamily: cfg.bodyFont, fontSize: 42, fontWeight: "bold", color: cfg.accentColor, textAlign: "center", padding: "24px 48px", border: `3px solid ${cfg.accentColor}`, borderRadius: 16, wordBreak: "break-word" }}>
             {post.cta}
           </div>
         </div>
-
-        {/* Hover overlay */}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-          <button
-            onClick={onEdit}
-            className="bg-white text-gray-900 rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1 hover:bg-orange-500 hover:text-white transition-colors"
-          >
+          <button onClick={onEdit} className="bg-white text-gray-900 rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1 hover:bg-orange-500 hover:text-white transition-colors">
             <Edit3 className="w-3 h-3" /> Edit
           </button>
-          <button
-            onClick={onDelete}
-            className="bg-white text-red-500 rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1 hover:bg-red-500 hover:text-white transition-colors"
-          >
+          <button onClick={onDelete} className="bg-white text-red-500 rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1 hover:bg-red-500 hover:text-white transition-colors">
             <Trash2 className="w-3 h-3" /> Remove
           </button>
         </div>
       </div>
-
-      {/* Card footer */}
       <div className={`px-2.5 py-2 border-t ${isDark ? "border-white/10" : "border-gray-100"}`}>
         <p className={`text-[10px] font-semibold truncate ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-          Post {index + 1}
+          {post.productTitle ? `${post.productTitle} · Post ${index + 1}` : `Post ${index + 1}`}
         </p>
       </div>
     </div>
+  );
+}
+
+// ── Product picker card ───────────────────────────────────────────────────────
+
+function ProductCard({
+  product, selected, onToggle, isDark,
+}: {
+  product: UserProduct; selected: boolean; onToggle: () => void; isDark: boolean;
+}) {
+  const thumb = product.marketingAssets?.thumbnailUrl ?? product.marketingAssets?.coverThumbnailUrl;
+  const formatLabel = FORMAT_LABELS[product.format] ?? product.format;
+
+  return (
+    <button
+      onClick={onToggle}
+      className={`relative rounded-xl border-2 p-3 text-left transition-all w-full ${
+        selected
+          ? "border-orange-500 ring-2 ring-orange-500/20"
+          : isDark ? "border-white/10 hover:border-white/30" : "border-gray-200 hover:border-gray-300"
+      }`}
+    >
+      {/* Thumbnail */}
+      <div className={`w-full h-20 rounded-lg mb-2.5 overflow-hidden flex items-center justify-center ${isDark ? "bg-[#0F0F0F]" : "bg-gray-100"}`}>
+        {thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={thumb} alt={product.title} className="w-full h-full object-cover" />
+        ) : (
+          <BookOpen className={`w-8 h-8 ${isDark ? "text-gray-600" : "text-gray-300"}`} />
+        )}
+      </div>
+      <p className="text-xs font-semibold leading-tight line-clamp-2 mb-1">{product.title}</p>
+      <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${isDark ? "bg-white/10 text-gray-400" : "bg-gray-100 text-gray-500"}`}>
+        {formatLabel}
+      </span>
+      {selected && (
+        <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center">
+          <Check className="w-3 h-3 text-white" />
+        </div>
+      )}
+    </button>
   );
 }
 
@@ -348,6 +348,7 @@ export function BulkContentDesigner() {
   const isDark = theme === "dark";
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [mode, setMode] = useState<Mode>("topic");
   const [topic, setTopic] = useState("");
   const [style, setStyle] = useState<TemplateStyle>("minimal-luxury");
   const [count, setCount] = useState(10);
@@ -357,21 +358,66 @@ export function BulkContentDesigner() {
   const [saving, setSaving] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
 
+  // Products mode
+  const [products, setProducts] = useState<UserProduct[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+
   const containerCls = isDark ? "bg-[#0F0F0F] text-white" : "bg-[#F9FAFB] text-gray-900";
   const cardCls = isDark ? "bg-[#1A1A1A] border-white/10" : "bg-white border-gray-200";
 
+  // Fetch products when mode switches to products
+  useEffect(() => {
+    if (mode !== "products" || products.length > 0) return;
+    setProductsLoading(true);
+    fetch("/api/products")
+      .then((r) => r.json())
+      .then((d: { products?: UserProduct[] }) => setProducts(d.products?.filter((p) => p.status !== "failed") ?? []))
+      .finally(() => setProductsLoading(false));
+  }, [mode, products.length]);
+
+  function toggleProduct(id: string) {
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const canGenerate = mode === "topic" ? topic.trim().length > 0 : selectedProductIds.size > 0;
+
+  // Label used in titles / step-2 header
+  const batchLabel = mode === "products"
+    ? `${selectedProductIds.size} product${selectedProductIds.size !== 1 ? "s" : ""}`
+    : topic;
+
   async function generate() {
-    if (!topic.trim()) return;
+    if (!canGenerate) return;
     setGenerating(true);
     setGenError(null);
     try {
+      const body: Record<string, unknown> = { style, count };
+      if (mode === "products") {
+        const selected = products.filter((p) => selectedProductIds.has(p.id));
+        body.products = selected.map((p) => ({
+          title: p.title,
+          format: p.format,
+          niche: p.niche,
+          description: p.marketingAssets?.productDescription ?? "",
+        }));
+      } else {
+        body.topic = topic;
+      }
+
       const res = await fetch("/api/designs/bulk-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, style, count }),
+        body: JSON.stringify(body),
       });
       const json = await res.json() as { posts?: ContentRow[]; error?: string };
       if (!res.ok) { setGenError(json.error ?? "Generation failed"); return; }
+
       const rows = (json.posts ?? []).map((p, i) => ({
         ...p,
         id: `post-${i}-${Date.now()}`,
@@ -379,6 +425,7 @@ export function BulkContentDesigner() {
         mainText: p.mainText ?? "",
         cta: p.cta ?? "",
         bgTheme: p.bgTheme ?? "light",
+        productTitle: p.productTitle,
       }));
       setPosts(rows);
       setStep(2);
@@ -395,18 +442,16 @@ export function BulkContentDesigner() {
     setSavedCount(0);
     let saved = 0;
 
-    // Save in batches of 5
     for (let i = 0; i < posts.length; i += 5) {
       const batch = posts.slice(i, i + 5);
       await Promise.all(batch.map(async (post) => {
-        const designData = buildPostDesign(post, style, `${topic} — Post ${posts.indexOf(post) + 1}`);
+        const idx = posts.indexOf(post) + 1;
+        const label = post.productTitle ? `${post.productTitle} — Post ${idx}` : `${batchLabel} — Post ${idx}`;
+        const designData = buildPostDesign(post, style, label);
         await fetch("/api/designs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: `${topic} — Post ${posts.indexOf(post) + 1}`,
-            data: designData,
-          }),
+          body: JSON.stringify({ title: label, data: designData }),
         });
         saved++;
         setSavedCount(saved);
@@ -418,14 +463,12 @@ export function BulkContentDesigner() {
   }
 
   async function saveAndEdit(post: ContentRow, index: number) {
-    const designData = buildPostDesign(post, style, `${topic} — Post ${index + 1}`);
+    const label = post.productTitle ? `${post.productTitle} — Post ${index + 1}` : `${batchLabel} — Post ${index + 1}`;
+    const designData = buildPostDesign(post, style, label);
     const res = await fetch("/api/designs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: `${topic} — Post ${index + 1}`,
-        data: designData,
-      }),
+      body: JSON.stringify({ title: label, data: designData }),
     });
     const json = await res.json() as { design?: { id: string } };
     if (json.design?.id) router.push(`/dashboard/design-studio/${json.design.id}`);
@@ -462,8 +505,6 @@ export function BulkContentDesigner() {
               </p>
             </div>
           </div>
-
-          {/* Step indicator */}
           <div className="ml-auto flex items-center gap-2">
             {([1, 2, 3] as const).map((s) => (
               <React.Fragment key={s}>
@@ -488,40 +529,118 @@ export function BulkContentDesigner() {
           {step === 1 && (
             <div className="max-w-2xl mx-auto space-y-8">
               <div className="text-center">
-                <h2 className="text-2xl font-bold mb-2">What are you creating content about?</h2>
+                <h2 className="text-2xl font-bold mb-2">What are you creating posts about?</h2>
                 <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-                  AI will generate {count} unique posts ready to publish
+                  AI will generate {count} branded posts ready to publish
                 </p>
               </div>
 
-              {/* Topic input */}
-              <div className={`rounded-2xl border p-6 space-y-4 ${cardCls}`}>
-                <label className="block text-sm font-semibold">Your topic or niche</label>
-                <input
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && topic.trim()) generate(); }}
-                  placeholder="e.g. Wellness tips for busy moms"
-                  className={`w-full rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-orange-500 ${
-                    isDark ? "bg-[#0F0F0F] border-white/10 text-white placeholder-gray-600" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400"
+              {/* Mode toggle */}
+              <div className={`rounded-2xl border p-2 flex gap-2 ${cardCls}`}>
+                <button
+                  onClick={() => setMode("topic")}
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors ${
+                    mode === "topic"
+                      ? "bg-orange-500 text-white"
+                      : isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-900"
                   }`}
-                />
-                <div className="flex flex-wrap gap-2">
-                  {TOPIC_SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setTopic(s)}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                        topic === s
-                          ? "border-orange-500 bg-orange-500/10 text-orange-500"
-                          : isDark ? "border-white/10 text-gray-400 hover:border-orange-500/50" : "border-gray-200 text-gray-500 hover:border-orange-300"
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
+                >
+                  <Lightbulb className="w-4 h-4" /> Topic or Niche
+                </button>
+                <button
+                  onClick={() => setMode("products")}
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors ${
+                    mode === "products"
+                      ? "bg-orange-500 text-white"
+                      : isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-900"
+                  }`}
+                >
+                  <BookOpen className="w-4 h-4" /> My Products
+                </button>
               </div>
+
+              {/* Topic mode */}
+              {mode === "topic" && (
+                <div className={`rounded-2xl border p-6 space-y-4 ${cardCls}`}>
+                  <label className="block text-sm font-semibold">Your topic or niche</label>
+                  <input
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && topic.trim()) generate(); }}
+                    placeholder="e.g. Wellness tips for busy moms"
+                    className={`w-full rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-orange-500 ${
+                      isDark ? "bg-[#0F0F0F] border-white/10 text-white placeholder-gray-600" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400"
+                    }`}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {TOPIC_SUGGESTIONS.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setTopic(s)}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                          topic === s
+                            ? "border-orange-500 bg-orange-500/10 text-orange-500"
+                            : isDark ? "border-white/10 text-gray-400 hover:border-orange-500/50" : "border-gray-200 text-gray-500 hover:border-orange-300"
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Products mode */}
+              {mode === "products" && (
+                <div className={`rounded-2xl border p-6 space-y-4 ${cardCls}`}>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-semibold">Select your products</label>
+                    {selectedProductIds.size > 0 && (
+                      <span className="text-xs text-orange-500 font-semibold">{selectedProductIds.size} selected</span>
+                    )}
+                  </div>
+
+                  {productsLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
+                    </div>
+                  ) : products.length === 0 ? (
+                    <div className="text-center py-8">
+                      <BookOpen className={`w-10 h-10 mx-auto mb-3 ${isDark ? "text-gray-600" : "text-gray-300"}`} />
+                      <p className={`text-sm font-medium mb-1 ${isDark ? "text-gray-400" : "text-gray-500"}`}>No products yet</p>
+                      <p className={`text-xs ${isDark ? "text-gray-600" : "text-gray-400"}`}>
+                        Create digital products in My Library first
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-4"
+                        onClick={() => router.push("/dashboard/library")}
+                      >
+                        Go to My Library
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-80 overflow-y-auto pr-1">
+                      {products.map((p) => (
+                        <ProductCard
+                          key={p.id}
+                          product={p}
+                          selected={selectedProductIds.has(p.id)}
+                          onToggle={() => toggleProduct(p.id)}
+                          isDark={isDark}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedProductIds.size > 0 && (
+                    <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+                      AI will generate ~{Math.ceil(count / selectedProductIds.size)} posts per product
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Style picker */}
               <div className={`rounded-2xl border p-6 space-y-4 ${cardCls}`}>
@@ -537,11 +656,7 @@ export function BulkContentDesigner() {
                           : isDark ? "border-white/10 hover:border-white/30" : "border-gray-200 hover:border-gray-300"
                       }`}
                     >
-                      {/* Mini palette preview */}
-                      <div
-                        className="w-full h-14 rounded-lg mb-2.5 flex items-center justify-center overflow-hidden"
-                        style={{ background: cfg.previewBg }}
-                      >
+                      <div className="w-full h-14 rounded-lg mb-2.5 flex items-center justify-center overflow-hidden" style={{ background: cfg.previewBg }}>
                         <div style={{ textAlign: "center" }}>
                           <div style={{ color: cfg.previewText, fontSize: 9, fontWeight: "bold", fontFamily: cfg.hookFont, lineHeight: 1.2 }}>HOOK TEXT</div>
                           <div style={{ color: cfg.previewAccent, fontSize: 7, marginTop: 2, fontFamily: cfg.bodyFont }}>→ CTA here</div>
@@ -589,7 +704,7 @@ export function BulkContentDesigner() {
               )}
 
               <Button
-                disabled={!topic.trim() || generating}
+                disabled={!canGenerate || generating}
                 onClick={generate}
                 className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white font-semibold gap-2 text-base rounded-xl"
               >
@@ -636,7 +751,6 @@ export function BulkContentDesigner() {
                 </div>
               </div>
 
-              {/* Post grid */}
               <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {posts.map((post, i) => (
                   <PostPreview
@@ -654,9 +768,7 @@ export function BulkContentDesigner() {
               {posts.length === 0 && (
                 <div className="text-center py-16">
                   <p className={`text-sm ${isDark ? "text-gray-500" : "text-gray-400"}`}>All posts removed.</p>
-                  <Button variant="outline" size="sm" onClick={() => setStep(1)} className="mt-4">
-                    Start over
-                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setStep(1)} className="mt-4">Start over</Button>
                 </div>
               )}
             </div>
@@ -669,9 +781,7 @@ export function BulkContentDesigner() {
                 <Check className="w-10 h-10 text-emerald-500" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold mb-2">
-                  {savedCount} posts saved!
-                </h2>
+                <h2 className="text-2xl font-bold mb-2">{savedCount} posts saved!</h2>
                 <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
                   Your branded posts are now in Design Studio. Open any to edit, export as PNG or PDF.
                 </p>
@@ -679,15 +789,12 @@ export function BulkContentDesigner() {
               <div className="flex gap-3 justify-center">
                 <Button
                   variant="outline"
-                  onClick={() => { setStep(1); setPosts([]); setTopic(""); setSavedCount(0); }}
+                  onClick={() => { setStep(1); setPosts([]); setTopic(""); setSavedCount(0); setSelectedProductIds(new Set()); }}
                   className={isDark ? "border-white/10 text-gray-300 hover:text-white" : ""}
                 >
                   <RefreshCw className="w-4 h-4 mr-2" /> Create Another Batch
                 </Button>
-                <Button
-                  onClick={() => router.push("/dashboard/design-studio")}
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
-                >
+                <Button onClick={() => router.push("/dashboard/design-studio")} className="bg-orange-500 hover:bg-orange-600 text-white">
                   View in Design Studio <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </div>
