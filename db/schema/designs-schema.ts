@@ -47,6 +47,7 @@ export type DesignData = {
   backgroundGradient?: { color1: string; color2: string; angle: number };
   backgroundImage?: string;
   backgroundImageFit?: "cover" | "contain";
+  activePalette?: string[];
   elements: DesignElement[];
   presetName?: string;
 };
