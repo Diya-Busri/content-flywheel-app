@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { DesignEditor } from "./DesignEditor";
 
 export const metadata: Metadata = {
@@ -6,5 +7,9 @@ export const metadata: Metadata = {
 };
 
 export default function DesignEditorPage({ params }: { params: { id: string } }) {
-  return <DesignEditor designId={params.id} />;
+  return (
+    <Suspense>
+      <DesignEditor designId={params.id} />
+    </Suspense>
+  );
 }

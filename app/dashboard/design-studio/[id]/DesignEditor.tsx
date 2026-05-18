@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronLeft, Type, ImageIcon, Square, Trash2, Copy, Loader2, Check,
   Download, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Minus, Plus,
@@ -356,6 +356,8 @@ export function DesignEditor({ designId }: { designId: string }) {
   const { theme } = useDashboardTheme();
   const isDark = theme === "dark";
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const bundleId = searchParams.get("bundle");
 
   const [title, setTitle] = useState("Untitled Design");
   const [editingTitle, setEditingTitle] = useState(false);
@@ -783,8 +785,11 @@ export function DesignEditor({ designId }: { designId: string }) {
       {/* Top bar */}
       <header className={`shrink-0 flex items-center justify-between gap-3 px-4 border-b ${isDark ? "bg-[#0F0F0F]/95 border-[#2A2A2A]" : "bg-white/95 border-gray-200"} backdrop-blur-sm shadow-sm z-40`} style={{ height: 52 }}>
         <div className="flex items-center gap-3 min-w-0">
-          <Link href="/dashboard/design-studio" className={`flex items-center gap-1 text-sm shrink-0 ${isDark ? "text-gray-400 hover:text-orange-500" : "text-gray-500 hover:text-orange-500"}`}>
-            <ChevronLeft className="w-4 h-4" /> Back
+          <Link
+            href={bundleId ? `/dashboard/design-studio/bundle/${bundleId}` : "/dashboard/design-studio"}
+            className={`flex items-center gap-1 text-sm shrink-0 ${isDark ? "text-gray-400 hover:text-orange-500" : "text-gray-500 hover:text-orange-500"}`}
+          >
+            <ChevronLeft className="w-4 h-4" /> {bundleId ? "Bundle" : "Back"}
           </Link>
           <div className={`h-5 w-px ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
           {editingTitle

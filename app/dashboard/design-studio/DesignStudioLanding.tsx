@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Palette, Trash2, MoreHorizontal, Clock, Copy, Zap } from "lucide-react";
+import { Plus, Palette, Trash2, MoreHorizontal, Clock, Copy, Zap, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SelectDesign, DesignData } from "@/db/schema/designs-schema";
+import { SelectBundle } from "@/db/schema/bundles-schema";
 
 type Preset = {
   label: string;
@@ -123,19 +124,84 @@ function DesignCard({
   );
 }
 
+const STYLE_LABELS: Record<string, string> = {
+  "minimal-luxury": "Minimal Luxury",
+  "dark-aesthetic": "Dark Aesthetic",
+  "wellness": "Wellness",
+  "clean-productivity": "Clean Productivity",
+  "faceless-creator": "Faceless Creator",
+  "modern-business": "Modern Business",
+};
+
+function BundleCard({ bundle, onDelete }: { bundle: SelectBundle; onDelete: (id: string) => void }) {
+  const router = useRouter();
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      className="group relative rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+      onClick={() => router.push(`/dashboard/design-studio/bundle/${bundle.id}`)}
+    >
+      {/* Cover preview */}
+      <div className="w-full h-36 flex items-center justify-center overflow-hidden bg-gradient-to-br from-orange-500/20 to-purple-500/20 dark:from-orange-500/10 dark:to-purple-500/10">
+        {bundle.coverPreviewUrl
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={bundle.coverPreviewUrl} alt={bundle.title} className="w-full h-full object-cover" />
+          : (
+            <div className="flex flex-col items-center gap-2 text-orange-400">
+              <Layers className="w-8 h-8" />
+              <span className="text-xs font-medium">{bundle.slideCount} slides</span>
+            </div>
+          )}
+      </div>
+
+      {/* Info */}
+      <div className="p-3 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold truncate text-gray-900 dark:text-white">{bundle.title}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {bundle.slideCount} slide{bundle.slideCount !== 1 ? "s" : ""} · {STYLE_LABELS[bundle.style] ?? bundle.style} · {timeAgo(bundle.updatedAt.toString())}
+          </p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 shrink-0">
+              <MoreHorizontal className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              className="text-red-500"
+              onClick={(e) => { e.stopPropagation(); onDelete(bundle.id); }}
+            >
+              <Trash2 className="w-4 h-4 mr-2" /> Delete Bundle
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </motion.div>
+  );
+}
+
 export function DesignStudioLanding() {
   const router = useRouter();
   const [designs, setDesigns] = useState<SelectDesign[]>([]);
+  const [bundles, setBundles] = useState<SelectBundle[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/designs")
-      .then((r) => r.json())
-      .then((d) => setDesigns(d.designs ?? []))
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch("/api/designs").then((r) => r.json()),
+      fetch("/api/design-bundles").then((r) => r.json()),
+    ]).then(([designsData, bundlesData]) => {
+      setDesigns(designsData.designs ?? []);
+      setBundles(bundlesData.bundles ?? []);
+    }).finally(() => setLoading(false));
   }, []);
 
   async function createDesign(preset: Preset) {
@@ -172,6 +238,11 @@ export function DesignStudioLanding() {
   async function deleteDesign(id: string) {
     await fetch(`/api/designs/${id}`, { method: "DELETE" });
     setDesigns((prev) => prev.filter((d) => d.id !== id));
+  }
+
+  async function deleteBundle(id: string) {
+    await fetch(`/api/design-bundles/${id}`, { method: "DELETE" });
+    setBundles((prev) => prev.filter((b) => b.id !== id));
   }
 
   async function duplicateDesign(design: SelectDesign) {
@@ -224,14 +295,49 @@ export function DesignStudioLanding() {
           <div className="shrink-0 text-orange-500 group-hover:translate-x-1 transition-transform">→</div>
         </div>
 
-        {/* Grid */}
+        {/* Bundles section */}
+        {loading ? (
+          <div className="mb-8">
+            <div className="h-5 w-32 rounded bg-gray-200 dark:bg-[#2A2A2A] animate-pulse mb-4" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-xl bg-gray-100 dark:bg-[#1A1A1A] animate-pulse h-48" />
+              ))}
+            </div>
+          </div>
+        ) : bundles.length > 0 ? (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Layers className="w-4 h-4 text-orange-500" />
+              <h2 className="text-base font-bold text-gray-900 dark:text-white">Content Bundles</h2>
+              <span className="text-xs text-gray-400 ml-1">{bundles.length} bundle{bundles.length !== 1 ? "s" : ""}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              <AnimatePresence>
+                {bundles.map((b) => (
+                  <BundleCard key={b.id} bundle={b} onDelete={deleteBundle} />
+                ))}
+              </AnimatePresence>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Single Designs grid */}
+        {!loading && bundles.length > 0 && designs.length > 0 && (
+          <div className="flex items-center gap-2 mb-4">
+            <Palette className="w-4 h-4 text-orange-500" />
+            <h2 className="text-base font-bold text-gray-900 dark:text-white">Single Designs</h2>
+            <span className="text-xs text-gray-400 ml-1">{designs.length} design{designs.length !== 1 ? "s" : ""}</span>
+          </div>
+        )}
+
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="rounded-xl bg-gray-100 dark:bg-[#1A1A1A] animate-pulse h-48" />
             ))}
           </div>
-        ) : designs.length === 0 ? (
+        ) : designs.length === 0 && bundles.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="w-20 h-20 rounded-2xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center mb-4">
               <Palette className="w-10 h-10 text-orange-400" />
@@ -247,7 +353,7 @@ export function DesignStudioLanding() {
               <Plus className="w-4 h-4" /> Create a Design
             </Button>
           </div>
-        ) : (
+        ) : designs.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             <AnimatePresence>
               {designs.map((d) => (
@@ -255,7 +361,7 @@ export function DesignStudioLanding() {
               ))}
             </AnimatePresence>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* New Design Dialog */}
