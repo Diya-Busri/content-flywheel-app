@@ -448,6 +448,58 @@ export const LIVE_DEMOS: LiveDemo[] = [
   },
 ];
 
+// ─── Mobile step overrides ────────────────────────────────────────────────────
+// Applied on top of PAGE_TOURS when isMobile is true.
+// Only steps that reference desktop-only UI (sidebar, collapsed icon rail) need overrides.
+
+type MobileOverride = {
+  pagePattern: string;
+  stepIndex: number;
+  override: TourStep;
+};
+
+const MOBILE_STEP_OVERRIDES: MobileOverride[] = [
+  // Dashboard Home: replace sidebar nav step with bottom nav guidance
+  {
+    pagePattern: "/dashboard",
+    stepIndex: 1,
+    override: {
+      element: "[data-tour='mobile-nav']",
+      side: "top",
+      title: "📱 Bottom Nav — Your Main Navigation",
+      description: "Every tool lives in the bottom bar. Tap Home, AI Coach, Design, or Library to jump there directly. Tap More to open the full menu — digital products, email marketing, goals, and everything else. The active tab is highlighted in orange.",
+    },
+  },
+  // AI Coach: sidebar selector won't match on mobile — replace with plain text step
+  {
+    pagePattern: "/dashboard/ai-coach",
+    stepIndex: 1,
+    override: {
+      title: "💬 Sessions Panel",
+      description: "Your saved sessions (conversations) appear in the panel above the chat. Tap the session name to switch threads, or tap '+' to start a fresh chat. You can rename and pin important sessions so they're easy to find later.",
+    },
+  },
+];
+
+/**
+ * Returns page tours with mobile-specific step copy applied when isMobile is true.
+ * Desktop callers can pass false (or just use PAGE_TOURS directly).
+ */
+export function getPageTours(isMobile: boolean): PageTour[] {
+  if (!isMobile) return PAGE_TOURS;
+  return PAGE_TOURS.map((tour) => {
+    const overrides = MOBILE_STEP_OVERRIDES.filter((o) => o.pagePattern === tour.page);
+    if (overrides.length === 0) return tour;
+    const steps = [...tour.steps];
+    for (const { stepIndex, override } of overrides) {
+      if (steps[stepIndex]) {
+        steps[stepIndex] = { ...steps[stepIndex], ...override };
+      }
+    }
+    return { ...tour, steps };
+  });
+}
+
 export const ALL_FEATURES = [
   {
     emoji: "🤖",
