@@ -11,12 +11,22 @@ import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 export const dynamic = "force-dynamic";
 
 const TONE_GUIDE: Record<string, string> = {
-  "minimal-luxury": "elegant, aspirational, refined — short sentences, premium vocabulary, no slang, subtle urgency",
-  "dark-aesthetic": "edgy, moody, mysterious — cryptic phrasing, bold statements, low-key confidence, dark poetry vibes",
-  "wellness": "warm, nurturing, mindful — gentle encouragement, inclusive language, breathe-and-grow energy",
+  // Original 6
+  "minimal-luxury":     "elegant, aspirational, refined — short sentences, premium vocabulary, no slang, subtle urgency",
+  "dark-aesthetic":     "edgy, moody, mysterious — cryptic phrasing, bold statements, low-key confidence, dark poetry vibes",
+  "wellness":           "warm, nurturing, mindful — gentle encouragement, inclusive language, breathe-and-grow energy",
   "clean-productivity": "clear, direct, action-oriented — crisp bullet logic, efficiency-first, no fluff, measurable outcomes",
-  "faceless-creator": "relatable, system-focused, educational — 'I built a system', 'here's what actually works', income transparency energy",
-  "modern-business": "professional, authoritative, results-driven — data-backed, executive voice, ROI language",
+  "faceless-creator":   "relatable, system-focused, educational — 'I built a system', 'here's what actually works', income transparency energy",
+  "modern-business":    "professional, authoritative, results-driven — data-backed, executive voice, ROI language",
+  // New 8
+  "viral-storytelling": "cinematic, emotional, curiosity-driven — open loops, dramatic reveals, 'nobody talks about this' energy, storytelling arc with emotional payoff",
+  "aggressive-viral":   "fast, loud, high-energy — punchy short sentences, ALL CAPS moments, fire metaphors, no-BS money/gym/grind mindset language",
+  "educational-pro":    "structured, clear, authoritative — numbered lists, 'here's what most people miss', teacherly but not boring, every sentence earns its place",
+  "soft-feminine":      "gentle, encouraging, beautiful — soft affirmations, poetic imagery, 'you deserve this', warm self-care energy, no hustle culture",
+  "tech-minimal":       "precise, futuristic, smart — clean logic, data-forward, slight sci-fi edge, 'this is the future', startup pitch meets social media",
+  "luxury-editorial":   "editorial, sophisticated, understated — magazine-level prose, drop the hype entirely, quality speaks quietly, old money not new money",
+  "chaos-raw":          "unfiltered, relatable, internet-native — conversational, real talk, typo-energy without the typos, 'I said what I said', Gen Z authentic",
+  "quote-focus-style":  "minimal, poetic, impactful — one powerful idea per post, almost no extra words, every syllable intentional, resonance over volume",
 };
 
 function extractSlideText(data: DesignData): string {
