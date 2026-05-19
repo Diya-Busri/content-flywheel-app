@@ -353,7 +353,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white dark:bg-card border-t border-[#E5E7EB] dark:border-white/10 flex items-center justify-around px-2 pb-safe">
+      <div data-tour="mobile-nav" className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white dark:bg-card border-t border-[#E5E7EB] dark:border-white/10 flex items-center justify-around px-2 pb-safe">
         {[
           { href: "/dashboard", icon: <Home size={22} />, label: "Home" },
           { href: "/dashboard/ai-coach", icon: <MessageCircle size={22} />, label: "AI Coach" },

@@ -259,7 +259,7 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
                 What will you use Content Flywheel for?
               </h2>
               <p className="text-slate-600 dark:text-slate-400 text-sm">
-                Pick everything that applies — we&apos;ll customise your sidebar to show only what you need.
+                Pick everything that applies — we&apos;ll customise your navigation to show only what you need.
               </p>
             </div>
 

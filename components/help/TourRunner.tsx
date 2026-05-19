@@ -8,7 +8,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { PAGE_TOURS } from "./tour-steps";
+import { PAGE_TOURS, getPageTours } from "./tour-steps";
 
 const TOUR_KEY = "cf_full_tour";
 
@@ -45,12 +45,13 @@ export function startFullAppTour(router: ReturnType<typeof useRouter>) {
 
 // ─── TourRunner component ─────────────────────────────────────────────────────
 
-function runPageTour(pageIndex: number, pageTour: typeof PAGE_TOURS[number], router: ReturnType<typeof useRouter>) {
+function runPageTour(pageIndex: number, pageTour: typeof PAGE_TOURS[number], router: ReturnType<typeof useRouter>, isMobile: boolean) {
   return new Promise<void>((resolve) => {
+    const tours = getPageTours(isMobile);
     import("driver.js").then(async ({ driver }) => {
       await import("driver.js/dist/driver.css");
 
-      const isLastPage = pageIndex >= PAGE_TOURS.length - 1;
+      const isLastPage = pageIndex >= tours.length - 1;
       let navigatedAway = false; // prevent double-clear when d.destroy() fires onDestroyStarted
 
       const d = driver({
@@ -93,7 +94,7 @@ function runPageTour(pageIndex: number, pageTour: typeof PAGE_TOURS[number], rou
                   } else {
                     const nextIndex = pageIndex + 1;
                     saveTourState({ active: true, pageIndex: nextIndex });
-                    router.push(PAGE_TOURS[nextIndex]!.page);
+                    router.push(tours[nextIndex]!.page);
                   }
                   resolve();
                 },
@@ -130,7 +131,9 @@ export function TourRunner() {
     if (!state?.active) return;
 
     const { pageIndex } = state;
-    const pageTour = PAGE_TOURS[pageIndex];
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+    const tours = getPageTours(isMobile);
+    const pageTour = tours[pageIndex];
     if (!pageTour) { clearTourState(); return; }
 
     // Check if we're on the right page
@@ -151,7 +154,7 @@ export function TourRunner() {
         .then((r) => r.ok ? r.json() : null)
         .then((data) => {
           if (!data?.hasActiveSubscription) { clearTourState(); return; }
-          runPageTour(pageIndex, pageTour, router);
+          runPageTour(pageIndex, pageTour, router, isMobile);
         })
         .catch(() => { clearTourState(); });
     }, 800);
