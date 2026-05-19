@@ -42,7 +42,7 @@ function pickWeighted<T>(items: T[], weights: number[], rng: () => number): T {
   return items[items.length - 1];
 }
 
-// ── Slide role (carousel flow) ─────────────────────────────────────────────────
+// ── Slide role: carousel narrative flow ───────────────────────────────────────
 
 type SlideRole = "hook" | "supporting" | "tip" | "emotional" | "cta";
 
@@ -60,11 +60,12 @@ const POWER_WORDS = new Set([
   "STOP","START","NOW","FREE","SECRET","PROVEN","NEVER","ALWAYS","EVERY",
   "ONLY","MUST","KEY","BOOST","UNLOCK","MASTER","TRANSFORM","SIMPLE","FAST",
   "HACK","TRUTH","REAL","WHY","HOW","WHAT","WRONG","RIGHT","BEST","WORST",
-  "NEW","WAKE","QUIT","DO",
+  "NEW","WAKE","QUIT","DO","THIS","YOU","YOUR",
 ]);
 
 type HookAnalysis = {
   wordCount: number;
+  words: string[];
   isQuestion: boolean;
   intensity: "low" | "medium" | "high";
   lengthClass: "short" | "medium" | "long";
@@ -78,95 +79,41 @@ function analyzeHook(hook: string): HookAnalysis {
   const uppercaseRatio =
     (hook.replace(/[^A-Za-z]/g, "").match(/[A-Z]/g)?.length ?? 0) /
     Math.max(hook.replace(/[^a-zA-Z]/g, "").length, 1);
-  const hasPower = words.slice(0, 4).some((w) =>
+  const hasPower = words.slice(0, 5).some((w) =>
     POWER_WORDS.has(w.replace(/[^A-Z]/g, "").toUpperCase())
   );
 
   let intensity: HookAnalysis["intensity"] = "medium";
-  if (hasExclamation || uppercaseRatio > 0.55 || hasPower) intensity = "high";
+  if (hasExclamation || uppercaseRatio > 0.5 || hasPower) intensity = "high";
   else if (isQuestion || wordCount <= 5) intensity = "medium";
   else intensity = "low";
 
   return {
     wordCount,
+    words,
     isQuestion,
     intensity,
     lengthClass: wordCount <= 5 ? "short" : wordCount <= 10 ? "medium" : "long",
   };
 }
 
-// ── Dynamic font sizing ────────────────────────────────────────────────────────
+// ── Style configs ──────────────────────────────────────────────────────────────
 
-const LAYOUT_FONT_SIZES: Record<string, [number, number, number]> = {
-  // layout id → [short, medium, long] hook font sizes
-  "centered-hook":      [108, 86, 66],
-  "bold-hero":          [140, 108, 82],
-  "story-card":         [90, 72, 58],
-  "left-aligned":       [96, 76, 60],
-  "oversized-headline": [160, 124, 96],
-  "split-layout":       [88, 70, 56],
-  "minimal-cta":        [110, 88, 68],
-  "quote-focused":      [84, 68, 54],
-  "cta-banner":         [96, 76, 60],
-  "stacked-spacious":   [104, 82, 64],
-  "top-anchored":       [100, 80, 62],
-  "bottom-punch":       [108, 86, 66],
-  "asymmetric-left":    [92, 74, 58],
-  "impact-statement":   [150, 116, 90],
-  "editorial":          [78, 62, 50],
+type StyleCfg = {
+  headingColor: string; bodyColor: string; accentColor: string;
+  hookFont: string; bodyFont: string;
 };
 
-function hookFontSize(analysis: HookAnalysis, layoutId: string): number {
-  const [s, m, l] = LAYOUT_FONT_SIZES[layoutId] ?? [100, 80, 62];
-  return analysis.lengthClass === "short" ? s : analysis.lengthClass === "medium" ? m : l;
-}
-
-// ── Layout selection ───────────────────────────────────────────────────────────
-
-type LayoutId =
-  | "centered-hook" | "bold-hero" | "story-card" | "left-aligned"
-  | "oversized-headline" | "split-layout" | "minimal-cta" | "quote-focused"
-  | "cta-banner" | "stacked-spacious" | "top-anchored" | "bottom-punch"
-  | "asymmetric-left" | "impact-statement" | "editorial";
-
-const ROLE_POOLS: Record<SlideRole, [LayoutId, number][]> = {
-  hook: [
-    ["bold-hero", 25], ["oversized-headline", 22], ["impact-statement", 20],
-    ["centered-hook", 18], ["bottom-punch", 10], ["minimal-cta", 5],
-  ],
-  supporting: [
-    ["left-aligned", 22], ["split-layout", 20], ["editorial", 18],
-    ["stacked-spacious", 15], ["story-card", 15], ["top-anchored", 10],
-  ],
-  tip: [
-    ["story-card", 20], ["left-aligned", 18], ["editorial", 18],
-    ["split-layout", 16], ["top-anchored", 14], ["cta-banner", 14],
-  ],
-  emotional: [
-    ["centered-hook", 25], ["quote-focused", 25], ["stacked-spacious", 20],
-    ["asymmetric-left", 15], ["bold-hero", 15],
-  ],
-  cta: [
-    ["cta-banner", 35], ["minimal-cta", 30], ["bottom-punch", 25], ["story-card", 10],
-  ],
+export const TEMPLATE_CONFIGS: Record<TemplateStyle, StyleCfg> = {
+  "minimal-luxury":    { headingColor: "#1A1A1A", bodyColor: "#4A4A4A", accentColor: "#C9A84C", hookFont: "Playfair Display", bodyFont: "Georgia" },
+  "dark-aesthetic":    { headingColor: "#FFFFFF",  bodyColor: "#CCCCCC", accentColor: "#FF6B35", hookFont: "Oswald",           bodyFont: "Inter" },
+  "wellness":          { headingColor: "#2D5016",  bodyColor: "#3D6B2A", accentColor: "#5C9A3E", hookFont: "Playfair Display", bodyFont: "Georgia" },
+  "clean-productivity":{ headingColor: "#1E3A5F",  bodyColor: "#374151", accentColor: "#3B82F6", hookFont: "Inter",            bodyFont: "Inter" },
+  "faceless-creator":  { headingColor: "#FFFFFF",  bodyColor: "#B0B8D0", accentColor: "#E94560", hookFont: "Oswald",           bodyFont: "Inter" },
+  "modern-business":   { headingColor: "#FFFFFF",  bodyColor: "#CBD5E1", accentColor: "#F59E0B", hookFont: "Oswald",           bodyFont: "Inter" },
 };
 
-function selectLayout(
-  role: SlideRole,
-  usedLayouts: LayoutId[],
-  rng: () => number,
-): LayoutId {
-  const pool = ROLE_POOLS[role];
-  // Penalise recently used layouts for visual rhythm
-  const adjusted: [LayoutId, number][] = pool.map(([id, w]) => {
-    const recentIdx = usedLayouts.slice(-3).lastIndexOf(id);
-    const factor = recentIdx >= 0 ? Math.pow(0.25, 3 - recentIdx) : 1;
-    return [id, Math.max(w * factor, 0.5)];
-  });
-  return pickWeighted(adjusted.map(([id]) => id), adjusted.map(([, w]) => w), rng);
-}
-
-// ── Background variation ───────────────────────────────────────────────────────
+// ── Background variants ────────────────────────────────────────────────────────
 
 type BgVariant = Pick<DesignData, "background" | "backgroundType" | "backgroundGradient">;
 
@@ -209,36 +156,7 @@ const STYLE_BACKGROUNDS: Record<TemplateStyle, BgVariant[]> = {
   ],
 };
 
-// ── Spacing variation ──────────────────────────────────────────────────────────
-
-type SpacingVariant = { topPad: number; sidePad: number; gapExtra: number; ctaLift: number };
-
-function getSpacing(rng: () => number): SpacingVariant {
-  return {
-    topPad:  Math.round(rng() * 80),
-    sidePad: Math.round(rng() * 40),
-    gapExtra: Math.round(rng() * 40),
-    ctaLift:  Math.round(rng() * 30),
-  };
-}
-
-// ── Template style configs ─────────────────────────────────────────────────────
-
-type StyleCfg = {
-  headingColor: string; bodyColor: string; accentColor: string;
-  hookFont: string; bodyFont: string;
-};
-
-export const TEMPLATE_CONFIGS: Record<TemplateStyle, StyleCfg> = {
-  "minimal-luxury":    { headingColor: "#1A1A1A", bodyColor: "#4A4A4A", accentColor: "#C9A84C", hookFont: "Playfair Display", bodyFont: "Georgia" },
-  "dark-aesthetic":    { headingColor: "#FFFFFF",  bodyColor: "#CCCCCC", accentColor: "#FF6B35", hookFont: "Oswald",           bodyFont: "Inter" },
-  "wellness":          { headingColor: "#2D5016",  bodyColor: "#3D6B2A", accentColor: "#5C9A3E", hookFont: "Playfair Display", bodyFont: "Georgia" },
-  "clean-productivity":{ headingColor: "#1E3A5F",  bodyColor: "#374151", accentColor: "#3B82F6", hookFont: "Inter",            bodyFont: "Inter" },
-  "faceless-creator":  { headingColor: "#FFFFFF",  bodyColor: "#B0B8D0", accentColor: "#E94560", hookFont: "Oswald",           bodyFont: "Inter" },
-  "modern-business":   { headingColor: "#FFFFFF",  bodyColor: "#CBD5E1", accentColor: "#F59E0B", hookFont: "Oswald",           bodyFont: "Inter" },
-};
-
-// ── Element builders ───────────────────────────────────────────────────────────
+// ── Element helpers ────────────────────────────────────────────────────────────
 
 function txt(
   id: string, content: string,
@@ -257,222 +175,526 @@ function rect(
   return { id, type: "shape", x, y, width: w, height: h, fill, zIndex: 1, shapeType: "rect", ...opts };
 }
 
-function buildElements(
-  post: ContentRow,
-  cfg: StyleCfg,
-  layoutId: LayoutId,
-  analysis: HookAnalysis,
-  sp: SpacingVariant,
-  W: number,
-  H: number,
+// Rough hook height estimate for layout math
+function hookBlockHeight(fs: number, wordCount: number, lineW: number): number {
+  const charsPerLine = Math.floor(lineW / (fs * 0.55));
+  const totalChars = wordCount * 6;
+  const lines = Math.max(Math.ceil(totalChars / charsPerLine), 1);
+  return Math.max(lines * fs * 1.15, fs * 2.2);
+}
+
+// Body font size — smaller when mainText is long
+function bodyFontSize(mainText: string): number {
+  const wc = mainText.trim().split(/\s+/).length;
+  return wc > 45 ? 36 : wc > 30 ? 40 : 44;
+}
+
+// ── 8 Layout Personalities ─────────────────────────────────────────────────────
+
+// 1. HERO STATEMENT ─ Massive hook. Everything else whispers. Emotional impact.
+function buildHeroStatement(
+  post: ContentRow, cfg: StyleCfg, analysis: HookAnalysis,
+  rng: () => number, W: number, H: number,
 ): DesignElement[] {
-  const fs = hookFontSize(analysis, layoutId);
-  const bodyFs = analysis.lengthClass === "long" ? 42 : 46;
-  const ctaFs = 40;
-  const side = 80 + sp.sidePad;
-  const tw = W - side * 2;
+  const fs: number = analysis.lengthClass === "short" ? 175 : analysis.lengthClass === "medium" ? 142 : 112;
+  const bodyFs = bodyFontSize(post.mainText) - 6;
+  const hookW = W - 80;
+  const hookX = 40;
+  const hookY = 220;
+  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const bodyY = hookY + hH + 90;
+  const sub = rng();
 
-  // Estimate how many px a block of hook text needs vertically
-  const hookH = (len: number) => Math.max(fs * (len + 1) * 0.82, fs * 2.5);
+  const elements: DesignElement[] = [
+    // Grace-note line above hook
+    rect("grace-line", W / 2 - 50, hookY - 56, 100, 3, cfg.accentColor, { borderRadius: 2 }),
+    // Giant hook
+    txt("hook", post.hook, hookX, hookY, hookW, hH, {
+      fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor,
+      fontWeight: "bold", textAlign: "center", lineHeight: 0.92,
+      letterSpacing: analysis.lengthClass === "short" ? -3 : -1,
+    }),
+    // Whisper body
+    txt("body", post.mainText, W / 2 - 270, bodyY, 540, 380, {
+      fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
+      textAlign: "center", lineHeight: 1.55, opacity: 0.65,
+    }),
+    // Tiny subtle CTA
+    txt("cta", post.cta, W / 2 - 300, H - 220, 600, 100, {
+      fontSize: 32, fontFamily: cfg.bodyFont, color: cfg.accentColor,
+      fontWeight: "bold", textAlign: "center", letterSpacing: 1,
+    }),
+  ];
 
-  switch (layoutId) {
-    case "centered-hook": {
-      const hY = 380 + sp.topPad;
-      const hH = hookH(analysis.wordCount);
-      const bY = hY + hH + 60 + sp.gapExtra;
-      const cY = H - 260 - sp.ctaLift;
-      return [
-        rect("accent", W / 2 - 60, hY - 60, 120, 6, cfg.accentColor, { borderRadius: 3 }),
-        txt("hook", post.hook, side, hY, tw, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.1 }),
-        txt("body", post.mainText, side + 20, bY, tw - 40, 440, { fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.5 }),
-        txt("cta", post.cta, side, cY, tw, 120, { fontSize: ctaFs, fontFamily: cfg.bodyFont, color: cfg.accentColor, fontWeight: "bold", textAlign: "center" }),
-      ];
-    }
-
-    case "bold-hero": {
-      const hY = 200 + sp.topPad;
-      const hH = Math.max(hookH(analysis.wordCount), 480);
-      const bY = hY + hH + 80 + sp.gapExtra;
-      return [
-        txt("hook", post.hook, 60, hY, W - 120, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.0 }),
-        txt("body", post.mainText, side + 20, bY, tw - 40, 380, { fontSize: bodyFs - 4, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.45 }),
-        txt("cta", post.cta, side, H - 200, tw, 100, { fontSize: ctaFs - 2, fontFamily: cfg.bodyFont, color: cfg.accentColor, fontWeight: "bold", textAlign: "center" }),
-      ];
-    }
-
-    case "story-card": {
-      const hY = 480 + sp.topPad;
-      const hH = hookH(analysis.wordCount);
-      const bY = hY + hH + 60 + sp.gapExtra;
-      const ctaBoxY = H - 300 - sp.ctaLift;
-      return [
-        rect("accent-top", W / 2 - 80, hY - 70, 160, 5, cfg.accentColor, { borderRadius: 3 }),
-        txt("hook", post.hook, side, hY, tw, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.15 }),
-        txt("body", post.mainText, side + 20, bY, tw - 40, 440, { fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.5 }),
-        txt("cta", post.cta, side + 40, ctaBoxY, tw - 80, 140, { fontSize: ctaFs - 2, fontFamily: cfg.bodyFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", textBackground: cfg.accentColor }),
-      ];
-    }
-
-    case "left-aligned": {
-      const hY = 340 + sp.topPad;
-      const hH = hookH(analysis.wordCount);
-      const bY = hY + hH + 70 + sp.gapExtra;
-      const cY = H - 280 - sp.ctaLift;
-      return [
-        rect("accent-bar", 80, hY - 50, 8, Math.min(hH + 60, 480), cfg.accentColor, { borderRadius: 4 }),
-        txt("hook", post.hook, 120, hY, W - 200, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "left", lineHeight: 1.12 }),
-        txt("body", post.mainText, 120, bY, W - 240, 460, { fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "left", lineHeight: 1.5 }),
-        txt("cta", post.cta, 120, cY, W - 240, 120, { fontSize: ctaFs, fontFamily: cfg.bodyFont, color: cfg.accentColor, fontWeight: "bold", textAlign: "left" }),
-      ];
-    }
-
-    case "oversized-headline": {
-      const hY = 160 + sp.topPad;
-      const hH = Math.round(H * 0.54);
-      const bY = hY + hH + 60 + sp.gapExtra;
-      return [
-        txt("hook", post.hook, 60, hY, W - 120, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 0.95 }),
-        rect("divider", side, bY - 30, tw, 3, cfg.accentColor, { borderRadius: 2 }),
-        txt("body", post.mainText, side + 20, bY, tw - 40, 300, { fontSize: bodyFs - 6, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.4, opacity: 0.8 }),
-        txt("cta", post.cta, side, H - 200, tw, 100, { fontSize: ctaFs - 4, fontFamily: cfg.bodyFont, color: cfg.accentColor, fontWeight: "bold", textAlign: "center" }),
-      ];
-    }
-
-    case "split-layout": {
-      const hY = 320 + sp.topPad;
-      const hH = hookH(analysis.wordCount);
-      const divY = hY + hH + 60;
-      const bY = divY + 60 + sp.gapExtra;
-      const cY = H - 240 - sp.ctaLift;
-      return [
-        txt("hook", post.hook, side, hY, tw, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.1 }),
-        rect("divider", side + 40, divY, tw - 80, 4, cfg.accentColor, { borderRadius: 2 }),
-        txt("body", post.mainText, side + 20, bY, tw - 40, 440, { fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.5 }),
-        txt("cta", post.cta, side, cY, tw, 120, { fontSize: ctaFs, fontFamily: cfg.bodyFont, color: cfg.accentColor, fontWeight: "bold", textAlign: "center" }),
-      ];
-    }
-
-    case "minimal-cta": {
-      const hY = 440 + sp.topPad;
-      const hH = hookH(analysis.wordCount);
-      const bY = hY + hH + 60 + sp.gapExtra;
-      const ctaBgY = H - 380 - sp.ctaLift;
-      return [
-        txt("hook", post.hook, side + 20, hY, tw - 40, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.1 }),
-        txt("body", post.mainText, side + 40, bY, tw - 80, 380, { fontSize: bodyFs - 4, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.5, opacity: 0.85 }),
-        rect("cta-bg", side, ctaBgY, tw, 220, cfg.accentColor, { borderRadius: 20 }),
-        txt("cta", post.cta, side + 20, ctaBgY + 40, tw - 40, 140, { fontSize: ctaFs + 4, fontFamily: cfg.bodyFont, color: "#FFFFFF", fontWeight: "bold", textAlign: "center" }),
-      ];
-    }
-
-    case "quote-focused": {
-      const qY = 340 + sp.topPad;
-      const hY = qY + 80;
-      const hH = hookH(analysis.wordCount);
-      const bY = hY + hH + 80 + sp.gapExtra;
-      const cY = H - 240 - sp.ctaLift;
-      return [
-        txt("quote-mark", "“", 80, qY, 160, 160, { fontSize: 200, fontFamily: cfg.hookFont, color: cfg.accentColor, opacity: 0.25, lineHeight: 1, fontWeight: "bold" }),
-        txt("hook", post.hook, side + 20, hY, tw - 40, hH, { fontSize: fs - 4, fontFamily: cfg.hookFont, color: cfg.headingColor, fontStyle: "italic", textAlign: "center", lineHeight: 1.2 }),
-        txt("body", post.mainText, side + 40, bY, tw - 80, 400, { fontSize: bodyFs - 4, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.5, opacity: 0.8 }),
-        txt("cta", post.cta, side, cY, tw, 120, { fontSize: ctaFs - 2, fontFamily: cfg.bodyFont, color: cfg.accentColor, fontWeight: "bold", textAlign: "center" }),
-      ];
-    }
-
-    case "cta-banner": {
-      const hY = 320 + sp.topPad;
-      const hH = hookH(analysis.wordCount);
-      const bY = hY + hH + 70 + sp.gapExtra;
-      const bannerH = 280;
-      const bannerY = H - bannerH;
-      return [
-        rect("accent-dot", W / 2 - 50, hY - 70, 100, 6, cfg.accentColor, { borderRadius: 3 }),
-        txt("hook", post.hook, side, hY, tw, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.1 }),
-        txt("body", post.mainText, side + 20, bY, tw - 40, 520, { fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.5 }),
-        rect("banner", 0, bannerY, W, bannerH, cfg.accentColor),
-        txt("cta", post.cta, 60, bannerY + 80, W - 120, 140, { fontSize: ctaFs + 4, fontFamily: cfg.bodyFont, color: "#FFFFFF", fontWeight: "bold", textAlign: "center" }),
-      ];
-    }
-
-    case "stacked-spacious": {
-      const hY = 520 + sp.topPad;
-      const hH = hookH(analysis.wordCount);
-      const bY = hY + hH + 120 + sp.gapExtra;
-      const cY = H - 320 - sp.ctaLift;
-      return [
-        rect("accent", W / 2 - 40, hY - 80, 80, 4, cfg.accentColor, { borderRadius: 2 }),
-        txt("hook", post.hook, side + 20, hY, tw - 40, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.15 }),
-        txt("body", post.mainText, side + 40, bY, tw - 80, 440, { fontSize: bodyFs - 2, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.6 }),
-        txt("cta", post.cta, side + 20, cY, tw - 40, 120, { fontSize: ctaFs, fontFamily: cfg.bodyFont, color: cfg.accentColor, fontWeight: "bold", textAlign: "center" }),
-      ];
-    }
-
-    case "top-anchored": {
-      const hY = 120 + sp.topPad;
-      const hH = hookH(analysis.wordCount);
-      const bY = hY + hH + 80 + sp.gapExtra;
-      const cY = H - 260 - sp.ctaLift;
-      return [
-        txt("hook", post.hook, side, hY, tw, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.05 }),
-        rect("divider", side + 20, bY - 40, tw - 40, 4, cfg.accentColor, { borderRadius: 2 }),
-        txt("body", post.mainText, side + 20, bY, tw - 40, 520, { fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.55 }),
-        txt("cta", post.cta, side, cY, tw, 120, { fontSize: ctaFs, fontFamily: cfg.bodyFont, color: cfg.accentColor, fontWeight: "bold", textAlign: "center" }),
-      ];
-    }
-
-    case "bottom-punch": {
-      const hY = 240 + sp.topPad;
-      const hH = hookH(analysis.wordCount);
-      const bY = hY + hH + 60 + sp.gapExtra;
-      const ctaY = Math.max(bY + 320 + sp.ctaLift, H - 500);
-      const ctaH = H - ctaY - 80;
-      return [
-        txt("hook", post.hook, side, hY, tw, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.05 }),
-        txt("body", post.mainText, side + 30, bY, tw - 60, 320, { fontSize: bodyFs - 6, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.4, opacity: 0.75 }),
-        rect("cta-area", side, ctaY - 20, tw, ctaH + 40, cfg.accentColor + "22", { borderRadius: 16 }),
-        txt("cta", post.cta, side + 20, ctaY, tw - 40, ctaH, { fontSize: Math.min(ctaFs + 10, 56), fontFamily: cfg.hookFont, color: cfg.accentColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.15 }),
-      ];
-    }
-
-    case "asymmetric-left": {
-      const hY = 380 + sp.topPad;
-      const hH = hookH(analysis.wordCount);
-      const bY = hY + hH + 80 + sp.gapExtra;
-      const cY = H - 260 - sp.ctaLift;
-      return [
-        rect("accent-bar", 80, hY - 40, 6, Math.min(hH + 80, 500), cfg.accentColor, { borderRadius: 3 }),
-        txt("hook", post.hook, 120, hY, W - 240, hH, { fontSize: fs - 4, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "left", lineHeight: 1.1 }),
-        txt("body", post.mainText, 160, bY, W - 300, 460, { fontSize: bodyFs - 4, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "left", lineHeight: 1.5 }),
-        txt("cta", post.cta, side, cY, tw, 120, { fontSize: ctaFs, fontFamily: cfg.bodyFont, color: cfg.accentColor, fontWeight: "bold", textAlign: "center" }),
-      ];
-    }
-
-    case "impact-statement": {
-      const hY = 240 + sp.topPad;
-      const hH = Math.round(H * 0.52);
-      const bY = hY + hH + 60 + sp.gapExtra;
-      return [
-        txt("hook", post.hook, 60, hY, W - 120, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 0.92, letterSpacing: -2 }),
-        txt("body", post.mainText, side + 40, bY, tw - 80, 320, { fontSize: bodyFs - 8, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.4, opacity: 0.7 }),
-        rect("cta-line", side, H - 216, tw, 3, cfg.accentColor, { borderRadius: 2 }),
-        txt("cta", post.cta, side, H - 200, tw, 100, { fontSize: ctaFs - 4, fontFamily: cfg.bodyFont, color: cfg.accentColor, fontWeight: "bold", textAlign: "center" }),
-      ];
-    }
-
-    case "editorial": {
-      const hY = 200 + sp.topPad;
-      const hH = hookH(analysis.wordCount);
-      const bY = hY + hH + 100 + sp.gapExtra;
-      const cY = H - 280 - sp.ctaLift;
-      return [
-        rect("top-line", side, hY - 50, tw, 2, cfg.accentColor, { borderRadius: 1 }),
-        txt("hook", post.hook, side + 20, hY, tw - 40, hH, { fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor, fontWeight: "bold", textAlign: "center", lineHeight: 1.1 }),
-        rect("bot-line", side, hY + hH + 40, tw, 2, cfg.accentColor + "66", { borderRadius: 1 }),
-        txt("body", post.mainText, side + 20, bY, tw - 40, 520, { fontSize: bodyFs + 2, fontFamily: cfg.bodyFont, color: cfg.bodyColor, textAlign: "center", lineHeight: 1.6 }),
-        txt("cta", post.cta, side + 20, cY, tw - 40, 120, { fontSize: ctaFs, fontFamily: cfg.bodyFont, color: cfg.accentColor, fontWeight: "bold", textAlign: "center" }),
-      ];
-    }
+  // Sub-variant: diagonal accent rect in corner
+  if (sub > 0.5) {
+    elements.push(rect("corner-accent", W - 100, 100, 60, 8, cfg.accentColor, {
+      rotation: 45, opacity: 0.6, zIndex: 0, borderRadius: 4,
+    }));
+    elements.push(rect("corner-accent2", W - 80, 130, 60, 8, cfg.accentColor, {
+      rotation: 45, opacity: 0.3, zIndex: 0, borderRadius: 4,
+    }));
   }
+
+  return elements;
+}
+
+// 2. EDITORIAL ─ Left-aligned. Asymmetric. Magazine composition.
+function buildEditorial(
+  post: ContentRow, cfg: StyleCfg, analysis: HookAnalysis,
+  rng: () => number, W: number, H: number,
+): DesignElement[] {
+  const fs: number = analysis.lengthClass === "short" ? 102 : analysis.lengthClass === "medium" ? 84 : 68;
+  const bodyFs = bodyFontSize(post.mainText);
+  const leftX = 120;
+  const hookW = W - 200;
+  const hookY = 260 + Math.round(rng() * 60);
+  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const ruleY = hookY + hH + 50;
+  const bodyY = ruleY + 52;
+  const bodyW = W - 300; // narrower than hook — intentionally asymmetric
+  const sub = rng();
+
+  const elements: DesignElement[] = [
+    // Vertical accent bar runs alongside hook
+    rect("v-bar", leftX - 32, hookY - 30, 5, hH + 60, cfg.accentColor, { borderRadius: 3 }),
+    // Small label above hook
+    txt("label", "—", leftX, hookY - 48, 80, 44, {
+      fontSize: 28, fontFamily: cfg.bodyFont, color: cfg.accentColor, opacity: 0.8,
+    }),
+    // Hook: left-aligned
+    txt("hook", post.hook, leftX, hookY, hookW, hH, {
+      fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor,
+      fontWeight: "bold", textAlign: "left", lineHeight: 1.08,
+    }),
+    // Horizontal rule separates hook from body
+    rect("h-rule", leftX, ruleY, W - 240, 2, cfg.accentColor, { opacity: 0.35 }),
+    // Body: left-aligned, narrower than hook
+    txt("body", post.mainText, leftX, bodyY, bodyW, 560, {
+      fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
+      textAlign: "left", lineHeight: 1.55,
+    }),
+  ];
+
+  // CTA: arrow-style left-aligned OR right-corner variant
+  if (sub < 0.6) {
+    elements.push(txt("cta", "→  " + post.cta, leftX, H - 260, bodyW, 120, {
+      fontSize: 36, fontFamily: cfg.bodyFont, color: cfg.accentColor,
+      fontWeight: "bold", textAlign: "left",
+    }));
+  } else {
+    // Right-aligned CTA for asymmetric contrast
+    elements.push(txt("cta", post.cta + "  →", 200, H - 260, W - 280, 120, {
+      fontSize: 36, fontFamily: cfg.bodyFont, color: cfg.accentColor,
+      fontWeight: "bold", textAlign: "right",
+    }));
+    elements.push(rect("cta-line", W - 260, H - 280, 160, 2, cfg.accentColor, { opacity: 0.4 }));
+  }
+
+  return elements;
+}
+
+// 3. QUOTE FOCUS ─ One dominant statement. Giant decorative mark. Everything whispers.
+function buildQuoteFocus(
+  post: ContentRow, cfg: StyleCfg, analysis: HookAnalysis,
+  rng: () => number, W: number, H: number,
+): DesignElement[] {
+  const fs: number = analysis.lengthClass === "short" ? 108 : analysis.lengthClass === "medium" ? 90 : 74;
+  const bodyFs = bodyFontSize(post.mainText) - 6;
+  const hookW = W - 200;
+  const hookX = (W - hookW) / 2;
+  const hookY = 440 + Math.round(rng() * 60);
+  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const sub = rng();
+
+  const elements: DesignElement[] = [
+    // Massive decorative quote mark — the visual anchor
+    txt("quote-open", "“", 60, 220, 240, 280, {
+      fontSize: 320, fontFamily: cfg.hookFont, color: cfg.accentColor,
+      opacity: 0.13, lineHeight: 1, fontWeight: "bold", zIndex: 0,
+    }),
+    // Hook: italic, slightly narrower, centered — reads as the actual quote
+    txt("hook", post.hook, hookX, hookY, hookW, hH, {
+      fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor,
+      fontStyle: "italic", textAlign: "center", lineHeight: 1.22,
+    }),
+    // Em-dash separator below
+    rect("em-dash", W / 2 - 40, hookY + hH + 50, 80, 2, cfg.accentColor, { opacity: 0.5 }),
+    // Very small body — attribution style
+    txt("body", post.mainText, W / 2 - 260, hookY + hH + 90, 520, 400, {
+      fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
+      textAlign: "center", lineHeight: 1.6, opacity: 0.7,
+    }),
+    // Tiny CTA
+    txt("cta", post.cta, W / 2 - 260, H - 230, 520, 100, {
+      fontSize: 30, fontFamily: cfg.bodyFont, color: cfg.accentColor,
+      fontWeight: "bold", textAlign: "center",
+    }),
+  ];
+
+  // Closing quote mark mirrored at bottom-right
+  if (sub > 0.45) {
+    elements.push(txt("quote-close", "”", W - 200, H - 500, 200, 240, {
+      fontSize: 280, fontFamily: cfg.hookFont, color: cfg.accentColor,
+      opacity: 0.08, lineHeight: 1, fontWeight: "bold", zIndex: 0,
+    }));
+  }
+
+  return elements;
+}
+
+// 4. SPLIT COMPOSITION ─ Two visual zones divided by a prominent bar.
+function buildSplitComposition(
+  post: ContentRow, cfg: StyleCfg, analysis: HookAnalysis,
+  rng: () => number, W: number, H: number,
+): DesignElement[] {
+  const fs: number = analysis.lengthClass === "short" ? 100 : analysis.lengthClass === "medium" ? 82 : 66;
+  const bodyFs = bodyFontSize(post.mainText);
+  const topZoneH = Math.round(H * 0.46);
+  const dividerH = 14;
+  const dividerY = topZoneH;
+  const bottomZoneY = dividerY + dividerH + 40;
+  const hookY = 180 + Math.round(rng() * 60);
+  const hookW = W - 120;
+  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const sub = rng();
+
+  const elements: DesignElement[] = [
+    // TOP ZONE: Hook centered
+    txt("hook", post.hook, 60, hookY, hookW, hH, {
+      fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor,
+      fontWeight: "bold", textAlign: "center", lineHeight: 1.1,
+    }),
+    // DIVIDER BAR — visually dramatic, full-width
+    rect("divider", 0, dividerY, W, dividerH, cfg.accentColor),
+    // Thin accent bar offset below main divider for depth
+    rect("divider-shadow", 0, dividerY + dividerH, W, 4, cfg.accentColor, { opacity: 0.25 }),
+  ];
+
+  if (sub < 0.5) {
+    // Bottom zone: left-aligned body + CTA
+    elements.push(txt("body", post.mainText, 120, bottomZoneY + 20, W - 240, 560, {
+      fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
+      textAlign: "left", lineHeight: 1.55,
+    }));
+    elements.push(rect("cta-chip", 120, H - 320, W - 240, 110, cfg.accentColor + "1A", { borderRadius: 12 }));
+    elements.push(txt("cta", post.cta, 140, H - 300, W - 280, 80, {
+      fontSize: 38, fontFamily: cfg.bodyFont, color: cfg.accentColor,
+      fontWeight: "bold", textAlign: "left",
+    }));
+  } else {
+    // Bottom zone: centered body + CTA
+    elements.push(txt("body", post.mainText, 100, bottomZoneY + 20, W - 200, 560, {
+      fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
+      textAlign: "center", lineHeight: 1.55,
+    }));
+    elements.push(rect("cta-block", 80, H - 310, W - 160, 120, cfg.accentColor, { borderRadius: 16 }));
+    elements.push(txt("cta", post.cta, 100, H - 290, W - 200, 80, {
+      fontSize: 40, fontFamily: cfg.bodyFont, color: "#FFFFFF",
+      fontWeight: "bold", textAlign: "center",
+    }));
+  }
+
+  return elements;
+}
+
+// 5. CTA PUNCH ─ The action is the star. Giant coloured CTA block dominates.
+function buildCtaPunch(
+  post: ContentRow, cfg: StyleCfg, analysis: HookAnalysis,
+  rng: () => number, W: number, H: number,
+): DesignElement[] {
+  const fs: number = analysis.lengthClass === "short" ? 90 : analysis.lengthClass === "medium" ? 74 : 60;
+  const bodyFs = bodyFontSize(post.mainText) - 4;
+  const hookY = 160 + Math.round(rng() * 50);
+  const hookW = W - 140;
+  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const bodyY = hookY + hH + 70;
+  const ctaBlockY = H - 500;
+  const ctaBlockH = 440;
+  const sub = rng();
+
+  const elements: DesignElement[] = [
+    // Small accent line above hook
+    rect("accent", W / 2 - 60, hookY - 50, 120, 4, cfg.accentColor, { borderRadius: 2 }),
+    // Hook: smaller, leading to the CTA
+    txt("hook", post.hook, 70, hookY, hookW, hH, {
+      fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor,
+      fontWeight: "bold", textAlign: "center", lineHeight: 1.1,
+    }),
+    // Body: compact, secondary
+    txt("body", post.mainText, 140, bodyY, W - 280, 480, {
+      fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
+      textAlign: "center", lineHeight: 1.5, opacity: 0.8,
+    }),
+    // Inverted-triangle pointer hint above CTA block
+    rect("arrow-hint", W / 2 - 20, ctaBlockY - 36, 40, 30, cfg.accentColor, { opacity: 0.3 }),
+    // GIANT CTA BLOCK
+    rect("cta-block", 0, ctaBlockY, W, ctaBlockH, cfg.accentColor),
+  ];
+
+  if (sub < 0.55) {
+    // CTA text centered in block, large
+    elements.push(txt("cta", post.cta, 60, ctaBlockY + 130, W - 120, 200, {
+      fontSize: 56, fontFamily: cfg.hookFont, color: "#FFFFFF",
+      fontWeight: "bold", textAlign: "center", lineHeight: 1.1,
+    }));
+  } else {
+    // Two-line treatment: action label small + main CTA large
+    elements.push(txt("cta-label", "↓ Take action now", W / 2 - 240, ctaBlockY + 70, 480, 60, {
+      fontSize: 26, fontFamily: cfg.bodyFont, color: "#FFFFFF", opacity: 0.7, textAlign: "center",
+    }));
+    elements.push(txt("cta", post.cta, 60, ctaBlockY + 150, W - 120, 220, {
+      fontSize: 58, fontFamily: cfg.hookFont, color: "#FFFFFF",
+      fontWeight: "bold", textAlign: "center", lineHeight: 1.05,
+    }));
+  }
+
+  return elements;
+}
+
+// 6. MINIMAL LUXURY ─ Supreme negative space. Small, precise typography. Premium.
+function buildMinimalLuxury(
+  post: ContentRow, cfg: StyleCfg, analysis: HookAnalysis,
+  rng: () => number, W: number, H: number,
+): DesignElement[] {
+  const fs: number = analysis.lengthClass === "short" ? 80 : analysis.lengthClass === "medium" ? 66 : 54;
+  const bodyFs = bodyFontSize(post.mainText) - 8;
+  // Hook sits in the middle third of the canvas — extreme whitespace above
+  const hookW = 680;
+  const hookX = (W - hookW) / 2;
+  const hookY = 680 + Math.round(rng() * 80);
+  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const bodyY = hookY + hH + 100;
+  const sub = rng();
+
+  const elements: DesignElement[] = [
+    // Single very thin top rule — the only decoration
+    rect("top-rule", W / 2 - 55, hookY - 60, 110, 1, cfg.accentColor, { opacity: 0.5 }),
+    // Hook: narrow, precise, elegant
+    txt("hook", post.hook, hookX, hookY, hookW, hH, {
+      fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor,
+      fontWeight: "bold", textAlign: "center", lineHeight: 1.35, letterSpacing: 1,
+    }),
+    // Tiny body — very secondary
+    txt("body", post.mainText, W / 2 - 250, bodyY, 500, 420, {
+      fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
+      textAlign: "center", lineHeight: 1.65, opacity: 0.65,
+    }),
+    // Bottom rule
+    rect("bottom-rule", W / 2 - 35, bodyY + 460, 70, 1, cfg.accentColor, { opacity: 0.3 }),
+  ];
+
+  if (sub < 0.5) {
+    // Right-aligned CTA for editorial asymmetry
+    elements.push(txt("cta", post.cta, 300, H - 220, W - 360, 100, {
+      fontSize: 28, fontFamily: cfg.bodyFont, color: cfg.accentColor,
+      fontWeight: "bold", textAlign: "right", letterSpacing: 2,
+    }));
+  } else {
+    // Centered, spaced-out CTA
+    elements.push(txt("cta", post.cta, W / 2 - 260, H - 220, 520, 100, {
+      fontSize: 28, fontFamily: cfg.bodyFont, color: cfg.accentColor,
+      fontWeight: "bold", textAlign: "center", letterSpacing: 3,
+    }));
+  }
+
+  return elements;
+}
+
+// 7. AGGRESSIVE VIRAL ─ Staggered hook. Maximum energy. Left-anchored power.
+function buildAggressiveViral(
+  post: ContentRow, cfg: StyleCfg, analysis: HookAnalysis,
+  rng: () => number, W: number, H: number,
+): DesignElement[] {
+  // Split hook: first chunk gets massive treatment, rest gets large but offset
+  const words = analysis.words;
+  const splitAt = words.length <= 3 ? words.length : Math.min(Math.ceil(words.length * 0.42), 4);
+  const p1 = words.slice(0, splitAt).join(" ");
+  const p2 = words.slice(splitAt).join(" ");
+
+  const fs1: number = analysis.lengthClass === "short" ? 160 : analysis.lengthClass === "medium" ? 130 : 104;
+  const fs2 = Math.round(fs1 * 0.68);
+  const bodyFs = bodyFontSize(post.mainText);
+
+  const p1W = W - 120;
+  const p1X = 80;
+  const p1Y = 180;
+  const p1H = hookBlockHeight(fs1, splitAt, p1W);
+
+  // p2 is offset to the right — staggered effect
+  const p2X = p2 ? 200 : p1X;
+  const p2Y = p1Y + p1H + 12;
+  const p2W = W - 280;
+  const p2H = p2 ? hookBlockHeight(fs2, words.length - splitAt, p2W) : 0;
+
+  const bodyY = (p2 ? p2Y + p2H : p1Y + p1H) + 80;
+  const sub = rng();
+
+  const elements: DesignElement[] = [
+    // Diagonal corner accent — energy marker
+    rect("diag1", W - 140, 60, 80, 10, cfg.accentColor, { rotation: 45, opacity: 0.8, zIndex: 0 }),
+    rect("diag2", W - 110, 90, 60, 10, cfg.accentColor, { rotation: 45, opacity: 0.4, zIndex: 0 }),
+    // P1: giant, left-aligned
+    txt("hook-p1", p1, p1X, p1Y, p1W, p1H, {
+      fontSize: fs1, fontFamily: cfg.hookFont, color: cfg.headingColor,
+      fontWeight: "bold", textAlign: "left", lineHeight: 0.95,
+    }),
+  ];
+
+  // P2: indented, slightly smaller — staircase effect
+  if (p2) {
+    elements.push(txt("hook-p2", p2, p2X, p2Y, p2W, p2H, {
+      fontSize: fs2, fontFamily: cfg.hookFont, color: cfg.headingColor,
+      fontWeight: "bold", textAlign: "left", lineHeight: 0.98, opacity: 0.9,
+    }));
+  }
+
+  // Body: left-aligned
+  elements.push(txt("body", post.mainText, 100, bodyY, W - 200, 520, {
+    fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
+    textAlign: "left", lineHeight: 1.5,
+  }));
+
+  if (sub < 0.55) {
+    // Partial-width accent CTA chip — left-anchored, NOT full width
+    elements.push(rect("cta-bg", 80, H - 350, W - 240, 140, cfg.accentColor, { borderRadius: 12 }));
+    elements.push(txt("cta", post.cta, 100, H - 330, W - 280, 100, {
+      fontSize: 42, fontFamily: cfg.bodyFont, color: "#FFFFFF",
+      fontWeight: "bold", textAlign: "left",
+    }));
+  } else {
+    // Bold underline-style CTA
+    elements.push(rect("cta-underline", 80, H - 280, 300, 4, cfg.accentColor, { borderRadius: 2 }));
+    elements.push(txt("cta", post.cta, 80, H - 350, W - 200, 120, {
+      fontSize: 44, fontFamily: cfg.hookFont, color: cfg.accentColor,
+      fontWeight: "bold", textAlign: "left",
+    }));
+  }
+
+  return elements;
+}
+
+// 8. EDUCATIONAL ─ Structured. Readable. "Save this" formatting. Clear hierarchy.
+const SAVE_TAGS = ["SAVE THIS", "PRO TIP", "KEY INSIGHT", "TAKE NOTE", "REMEMBER THIS", "MUST READ"];
+
+function buildEducational(
+  post: ContentRow, cfg: StyleCfg, analysis: HookAnalysis,
+  rng: () => number, W: number, H: number,
+): DesignElement[] {
+  const fs: number = analysis.lengthClass === "short" ? 92 : analysis.lengthClass === "medium" ? 78 : 64;
+  const bodyFs = bodyFontSize(post.mainText);
+  const leftX = 120;
+  const hookW = W - 200;
+  const tagLabel = SAVE_TAGS[Math.floor(rng() * SAVE_TAGS.length)];
+  const tagY = 190;
+  const tagH = 54;
+  const hookY = tagY + tagH + 70;
+  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const divY = hookY + hH + 44;
+  const bodyY = divY + 48;
+  const sub = rng();
+
+  const elements: DesignElement[] = [
+    // Tag chip at top-left — "SAVE THIS" style label
+    rect("tag-bg", leftX, tagY, 220, tagH, cfg.accentColor + "20", { borderRadius: 8 }),
+    rect("tag-left-bar", leftX, tagY, 4, tagH, cfg.accentColor, { borderRadius: 2 }),
+    txt("tag-text", tagLabel, leftX + 16, tagY + 12, 196, tagH - 12, {
+      fontSize: 20, fontFamily: cfg.bodyFont, color: cfg.accentColor,
+      fontWeight: "bold", letterSpacing: 2, textAlign: "left",
+    }),
+    // Hook: left-aligned, structured
+    txt("hook", post.hook, leftX, hookY, hookW, hH, {
+      fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor,
+      fontWeight: "bold", textAlign: "left", lineHeight: 1.1,
+    }),
+    // Full-width separator rule — feels like a section break
+    rect("section-rule", leftX, divY, W - 240, 2, cfg.accentColor, { opacity: 0.25 }),
+    // Body: structured, left-aligned, readable
+    txt("body", post.mainText, leftX, bodyY, W - 240, 580, {
+      fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
+      textAlign: "left", lineHeight: 1.6,
+    }),
+  ];
+
+  if (sub < 0.5) {
+    // "Follow for more" left-aligned CTA style
+    elements.push(rect("cta-bar", leftX, H - 280, 4, 100, cfg.accentColor, { borderRadius: 2 }));
+    elements.push(txt("cta", post.cta, leftX + 20, H - 285, W - 240, 110, {
+      fontSize: 36, fontFamily: cfg.bodyFont, color: cfg.accentColor,
+      fontWeight: "bold", textAlign: "left",
+    }));
+  } else {
+    // Numbered or chip-style CTA
+    elements.push(rect("cta-chip", leftX, H - 290, W - 240, 110, cfg.accentColor + "15", { borderRadius: 12 }));
+    elements.push(txt("cta", "→  " + post.cta, leftX + 20, H - 270, W - 280, 80, {
+      fontSize: 36, fontFamily: cfg.bodyFont, color: cfg.accentColor,
+      fontWeight: "bold", textAlign: "left",
+    }));
+  }
+
+  return elements;
+}
+
+// ── Personality selection ──────────────────────────────────────────────────────
+
+type PersonalityId =
+  | "hero-statement" | "editorial" | "quote-focus" | "split-composition"
+  | "cta-punch" | "minimal-luxury" | "aggressive-viral" | "educational";
+
+const ROLE_POOLS: Record<SlideRole, [PersonalityId, number][]> = {
+  hook: [
+    ["hero-statement", 35], ["aggressive-viral", 30],
+    ["quote-focus", 20], ["split-composition", 15],
+  ],
+  supporting: [
+    ["editorial", 30], ["educational", 25],
+    ["split-composition", 25], ["minimal-luxury", 20],
+  ],
+  tip: [
+    ["educational", 40], ["editorial", 30],
+    ["split-composition", 20], ["minimal-luxury", 10],
+  ],
+  emotional: [
+    ["quote-focus", 35], ["hero-statement", 25],
+    ["minimal-luxury", 25], ["editorial", 15],
+  ],
+  cta: [
+    ["cta-punch", 50], ["hero-statement", 20],
+    ["split-composition", 20], ["editorial", 10],
+  ],
+};
+
+const PERSONALITY_BUILDERS: Record<
+  PersonalityId,
+  (post: ContentRow, cfg: StyleCfg, analysis: HookAnalysis, rng: () => number, W: number, H: number) => DesignElement[]
+> = {
+  "hero-statement":    buildHeroStatement,
+  "editorial":         buildEditorial,
+  "quote-focus":       buildQuoteFocus,
+  "split-composition": buildSplitComposition,
+  "cta-punch":         buildCtaPunch,
+  "minimal-luxury":    buildMinimalLuxury,
+  "aggressive-viral":  buildAggressiveViral,
+  "educational":       buildEducational,
+};
+
+function selectPersonality(
+  role: SlideRole,
+  usedPersonalities: PersonalityId[],
+  rng: () => number,
+): PersonalityId {
+  const pool = ROLE_POOLS[role];
+  // Penalise recent repeats for visual rhythm
+  const adjusted: [PersonalityId, number][] = pool.map(([id, w]) => {
+    const recentIdx = usedPersonalities.slice(-3).lastIndexOf(id);
+    const factor = recentIdx >= 0 ? Math.pow(0.2, 3 - recentIdx) : 1;
+    return [id, Math.max(w * factor, 0.5)];
+  });
+  return pickWeighted(
+    adjusted.map(([id]) => id),
+    adjusted.map(([, w]) => w),
+    rng,
+  );
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────
@@ -490,14 +712,13 @@ export function buildSlideDesign(
   const cfg = TEMPLATE_CONFIGS[styleKey];
   const analysis = analyzeHook(post.hook);
   const role = getSlideRole(slideIndex, totalSlides);
-  const layoutId = selectLayout(role, usedLayoutIds as LayoutId[], rng);
+  const personality = selectPersonality(role, usedLayoutIds as PersonalityId[], rng);
 
   const bgList = STYLE_BACKGROUNDS[styleKey];
   const bgVariant = bgList[Math.floor(rng() * bgList.length)];
-  const spacing = getSpacing(rng);
 
   const W = 1080, H = 1920;
-  const elements = buildElements(post, cfg, layoutId, analysis, spacing, W, H);
+  const elements = PERSONALITY_BUILDERS[personality](post, cfg, analysis, rng, W, H);
 
   return {
     data: {
@@ -506,8 +727,8 @@ export function buildSlideDesign(
       backgroundType: bgVariant.backgroundType,
       backgroundGradient: bgVariant.backgroundGradient,
       elements,
-      presetName: layoutId,
+      presetName: personality,
     },
-    layoutId,
+    layoutId: personality,
   };
 }
