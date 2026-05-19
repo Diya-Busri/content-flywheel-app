@@ -420,7 +420,7 @@ export default function ScriptsPage() {
             {/* Script Stats */}
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">
               <p className="text-sm font-medium text-gray-700">Script Stats</p>
-              <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-xs">
                 <div>
                   <span className="text-gray-600">Duration:</span>
                   <span className="font-medium ml-1">{script.duration}</span>

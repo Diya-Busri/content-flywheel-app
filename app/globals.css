@@ -67,17 +67,38 @@
     @apply border-border;
   }
   html {
-    font-size: 87.5%; /* 14px base – prevents "zoomed" look when deployed */
+    /* Prevent iOS Safari from adjusting font sizes on orientation change */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     scroll-behavior: smooth;
+    /* position:relative is required for overflow-x:hidden to clip fixed/absolute children on iOS */
+    position: relative;
+    overflow-x: hidden;
   }
   html,
   body {
     margin: 0;
     padding: 0;
     overflow-x: hidden;
+    /* Prevent horizontal scroll bleed on iOS Safari */
+    max-width: 100%;
   }
   body {
     @apply bg-background text-foreground;
+  }
+  /*
+   * iOS Safari auto-zoom prevention: Safari zooms the viewport when an <input> has
+   * font-size < 16px. With html at 87.5% (14px), text-sm inputs trigger this on every
+   * focus, and the zoom persists after navigation. Clamp all form controls to 16px min
+   * on mobile so Safari never zooms. 1em preserves the rendered size on desktop where
+   * the base is 16px (1em = 16px).
+   */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: max(16px, 1em) !important;
+    }
   }
   /* Offset for sticky navbar when scrolling to section anchors */
   [id="features"],
