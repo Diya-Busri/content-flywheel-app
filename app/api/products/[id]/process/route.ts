@@ -4,6 +4,9 @@ import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { productHistoryTable } from "@/db/schema/product-history-schema";
+import { bundleJobsTable } from "@/db/schema/bundle-jobs-schema";
+import { notificationsTable } from "@/db/schema/notifications-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, and } from "drizzle-orm";
 import {
   generateProductOutline,
@@ -11,6 +14,7 @@ import {
   type GenerateProductContentParams,
 } from "@/lib/generate-product-content";
 import { generateProductImage } from "@/lib/generateProductImages";
+import { Resend } from "resend";
 
 export const maxDuration = 300; // 5 min (Vercel Pro); local dev no limit
 
@@ -34,19 +38,40 @@ const BATCH_SIZE = 10; // Generate up to 10 sections in parallel (e.g. planner h
  * POST: Internal. Generates product content: outline first, then sections in parallel batches.
  * Client sees progress as each batch completes.
  */
+function resolveInternalSecret(): string | null {
+  return (
+    process.env.INTERNAL_API_SECRET?.trim() ||
+    (process.env.DATABASE_URL
+      ? Buffer.from(process.env.DATABASE_URL).toString("base64").slice(0, 40)
+      : null)
+  );
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const apiRl = await checkApiRateLimit(userId);
-  if (apiRl) return apiRl;
-
   const { id: productId } = await params;
   if (!productId) return NextResponse.json({ error: "Product ID required" }, { status: 400 });
 
-  let existing: { id: string; userId: string; status: string; format: string; title: string; niche: string; customizationOptions: unknown } | undefined;
+  // Support two auth paths:
+  //   1. Browser client — Clerk session cookie (standard)
+  //   2. Server-to-server from bundle route — x-internal-secret header + userId in body
+  const rawBody = await request.json().catch(() => ({}));
+  const { userId: clerkUserId } = await auth();
+  const internalSecret = request.headers.get("x-internal-secret");
+  const validSecret = resolveInternalSecret();
+  const isInternalCall = !!(internalSecret && validSecret && internalSecret === validSecret);
+  const userId = clerkUserId ?? (isInternalCall && typeof rawBody.userId === "string" ? rawBody.userId : null);
+
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!isInternalCall) {
+    const apiRl = await checkApiRateLimit(userId);
+    if (apiRl) return apiRl;
+  }
+
+  let existing: { id: string; userId: string; status: string; format: string; title: string; niche: string; bundleId: string | null; customizationOptions: unknown } | undefined;
   try {
-    const body = await request.json().catch(() => ({}));
+    const body = rawBody;
+
     const [existingRow] = await db
       .select({
         id: productsTable.id,
@@ -55,6 +80,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         format: productsTable.format,
         title: productsTable.title,
         niche: productsTable.niche,
+        bundleId: productsTable.bundleId,
         customizationOptions: productsTable.customizationOptions,
       })
       .from(productsTable)
@@ -62,7 +88,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       .limit(1);
     existing = existingRow;
 
-    // Verify ownership — only the product owner may trigger generation
+    // Verify ownership
     if (!existing) return NextResponse.json({ error: "Product not found" }, { status: 404 });
     if (existing.userId !== userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -287,6 +313,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
     }
 
+    // Check if this product is part of a bundle — if so, update bundle job progress
+    const bundleId = existing.bundleId;
+    if (bundleId) {
+      await checkAndFinaliseBundleJob(bundleId, userId).catch((e) =>
+        console.error("[products/process] bundle finalise check failed:", e)
+      );
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -331,6 +365,147 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         { status: 500 }
       );
     }
+    // Still check bundle completion even on fallback (product saved as draft with error)
+    const bundleIdOnError = (existing as { bundleId?: string | null } | undefined)?.bundleId;
+    if (bundleIdOnError && userId) {
+      await checkAndFinaliseBundleJob(bundleIdOnError, userId).catch(() => {});
+    }
     return NextResponse.json({ ok: true });
+  }
+}
+
+// ── Bundle completion helper ────────────────────────────────────────────────
+
+const FORMAT_LABEL_MAP: Record<string, string> = {
+  ebook: "Ebook",
+  workbook: "Workbook",
+  spreadsheet: "Spreadsheet Tutorial",
+  guide: "Guide",
+  notion: "Notion Template",
+  checklist: "Checklist Pack",
+  journal: "Journal",
+  planner: "Planner",
+};
+
+async function checkAndFinaliseBundleJob(bundleId: string, userId: string) {
+  // Fetch current status of all products in this bundle
+  const bundleProducts = await db
+    .select({ id: productsTable.id, status: productsTable.status, format: productsTable.format, title: productsTable.title, niche: productsTable.niche })
+    .from(productsTable)
+    .where(eq(productsTable.bundleId, bundleId));
+
+  if (bundleProducts.length === 0) return;
+
+  // Only finalise when every product has settled (no longer "generating")
+  const allSettled = bundleProducts.every((p) => p.status !== "generating");
+  if (!allSettled) return;
+
+  const completedCount = bundleProducts.filter((p) => p.status === "draft").length;
+  const failedCount = bundleProducts.filter((p) => p.status === "failed").length;
+  const finalStatus =
+    completedCount === 0 ? "failed" : failedCount > 0 ? "partial" : "completed";
+
+  // Mark bundle job done (idempotent — ignore if already finalised)
+  const [job] = await db
+    .update(bundleJobsTable)
+    .set({ status: finalStatus, completedCount, failedCount, completedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(bundleJobsTable.id, bundleId), eq(bundleJobsTable.emailSent, false)))
+    .returning({ id: bundleJobsTable.id, niche: bundleJobsTable.niche, emailSent: bundleJobsTable.emailSent });
+
+  // If update matched nothing (already done + email sent) — skip
+  if (!job) return;
+
+  const niche = job.niche;
+
+  // Create in-app notification
+  try {
+    const notifTitle = finalStatus === "completed"
+      ? "Bundle ready ✨"
+      : finalStatus === "partial"
+        ? "Bundle partially ready"
+        : "Bundle generation failed";
+    const notifMsg = finalStatus === "completed"
+      ? `Your ${niche} bundle (${completedCount} products) is ready in My Library.`
+      : finalStatus === "partial"
+        ? `Your ${niche} bundle is ready with ${completedCount}/${bundleProducts.length} products completed.`
+        : `Generation failed for your ${niche} bundle.`;
+    await db.insert(notificationsTable).values({
+      userId,
+      title: notifTitle,
+      message: notifMsg,
+      type: finalStatus === "failed" ? "error" : "success",
+      linkUrl: "/dashboard/library",
+    });
+  } catch (e) {
+    console.error("[bundle-finalise] notification insert failed:", e);
+  }
+
+  // Send Resend email if we have API key and at least one product completed
+  if (completedCount > 0 && process.env.RESEND_API_KEY) {
+    try {
+      // Look up user email from profiles table
+      const [profile] = await db
+        .select({ email: profilesTable.email })
+        .from(profilesTable)
+        .where(eq(profilesTable.userId, userId))
+        .limit(1);
+      const userEmail = profile?.email;
+
+      if (userEmail) {
+        const completedProducts = bundleProducts.filter((p) => p.status === "draft");
+        const productListHtml = completedProducts
+          .map((p) => {
+            const label = FORMAT_LABEL_MAP[p.format ?? ""] ?? p.format ?? "Product";
+            return `<li style="padding:4px 0;color:#374151;">${label}</li>`;
+          })
+          .join("");
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
+        const subject =
+          finalStatus === "completed"
+            ? `Your Content Flywheel bundle is ready ✨`
+            : `Your Content Flywheel bundle is partially ready`;
+
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        await resend.emails.send({
+          from: "hello@contentflywheel.co.uk",
+          to: userEmail,
+          subject,
+          html: `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:#0B0B0F;padding:16px 32px;text-align:center;">
+          <img src="https://contentflywheel.co.uk/logo.png" alt="Content Flywheel" width="130" style="display:inline-block;height:auto;"/>
+        </td></tr>
+        <tr><td style="padding:36px 40px;color:#1a1a1a;font-size:16px;line-height:1.7;">
+          <h2 style="margin:0 0 8px;font-size:22px;">Your bundle is ready 🎉</h2>
+          <p style="margin:0 0 4px;color:#6b7280;font-size:14px;">Topic: <strong style="color:#1a1a1a;">${niche}</strong></p>
+          <p style="margin:16px 0 8px;font-weight:600;">Generated assets:</p>
+          <ul style="margin:0 0 24px;padding-left:20px;list-style:disc;">
+            ${productListHtml}
+          </ul>
+          ${failedCount > 0 ? `<p style="margin:0 0 20px;font-size:13px;color:#9ca3af;">${failedCount} format(s) could not be generated — you can retry them in the app.</p>` : ""}
+          <a href="${appUrl}/dashboard/library" style="display:inline-block;padding:14px 28px;background:#f97316;color:#fff;border-radius:10px;font-weight:700;text-decoration:none;font-size:15px;">Open My Library →</a>
+        </td></tr>
+        <tr><td style="background:#F5C97A;padding:20px 40px;text-align:center;">
+          <p style="margin:0;font-size:13px;color:#0B0B0F;font-weight:600;">Content Flywheel</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`,
+        });
+
+        // Mark email sent
+        await db
+          .update(bundleJobsTable)
+          .set({ emailSent: true, updatedAt: new Date() })
+          .where(eq(bundleJobsTable.id, bundleId));
+      }
+    } catch (e) {
+      console.error("[bundle-finalise] email send failed:", e);
+    }
   }
 }

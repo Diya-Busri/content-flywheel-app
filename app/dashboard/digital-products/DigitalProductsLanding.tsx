@@ -210,7 +210,6 @@ export default function DigitalProductsLanding() {
     }
     setBundleError(null);
     setBundleGenerating(true);
-    setBundleNiche(topic);
     try {
       const res = await fetch("/api/products/bundle", {
         method: "POST",
@@ -221,33 +220,13 @@ export default function DigitalProductsLanding() {
       if (!res.ok) {
         throw new Error(data.error ?? "Failed to start bundle");
       }
-      const items = (data.items ?? []).map((item: { productId: string; format: string; label: string; subFocus?: string }) => ({
-        ...item,
-        status: "generating" as BundleItemStatus,
-        subFocus: item.subFocus,
-      }));
-      setBundleItems(items);
-      const updateItem = (productId: string, status: BundleItemStatus) => {
-        setBundleItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, status } : i)));
-      };
-      const results = await Promise.all(
-        items.map(async (item: BundleItem) => {
-          const result = await pollWithAutoRetry(
-            item.productId,
-            BUNDLE_POLL_TIMEOUT_MS,
-            { niche: topic, productName: item.label, format: item.format, subFocus: item.subFocus }
-          );
-          updateItem(item.productId, result);
-          return result;
-        })
-      );
-      setBundleComplete(true);
-      const failed = results.filter((r) => r === "failed").length;
-      if (failed > 0) {
-        toast({ title: "Partially complete", description: `${failed} format(s) failed. You can retry them below.` });
-      } else {
-        toast({ title: "Bundle complete", description: "All 8 products are in My Library." });
-      }
+      // Close modal immediately — generation continues in the background.
+      // The BundleProgressBanner in the layout will poll and show live status.
+      closeBundleDialog();
+      toast({
+        title: "Generating in background ✨",
+        description: `Your ${topic} bundle is being created — you'll see live progress in the banner above. We'll email you when it's ready.`,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to generate bundle";
       setBundleError(msg);
@@ -790,72 +769,7 @@ export default function DigitalProductsLanding() {
                 </Button>
               </DialogFooter>
             </div>
-          ) : (
-            <div className="space-y-4 py-2">
-              <ul className="space-y-2 max-h-[280px] overflow-y-auto">
-                {bundleItems.map((item) => (
-                  <li
-                    key={item.productId}
-                    className="flex items-center justify-between gap-3 rounded-md border border-[#E5E7EB] dark:border-[#2A2A2A] px-3 py-2 text-sm"
-                  >
-                    <span className="text-gray-900 dark:text-white font-medium">{item.label}</span>
-                    {item.status === "generating" && (
-                      <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Generating…
-                      </span>
-                    )}
-                    {item.status === "done" && (
-                      <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
-                        <CheckCircle2 className="w-4 h-4" />
-                        Done
-                      </span>
-                    )}
-                    {item.status === "failed" && (
-                      <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
-                        <XCircle className="w-4 h-4 shrink-0" />
-                        Failed
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 shrink-0"
-                          onClick={() => handleRetryBundleItem(item)}
-                        >
-                          <RefreshCw className="w-3.5 h-3.5 mr-1" />
-                          Retry
-                        </Button>
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              {bundleItems.some((i) => i.status === "done") && (
-                <div className="rounded-md border border-[#E5E7EB] dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#1A1A1A]/50 px-4 py-3 text-sm">
-                  <p className="text-gray-700 dark:text-[#E0E0E0] mb-3">
-                    Ready to view? Head to My Library to start editing completed products — the rest will appear there automatically once generated.
-                  </p>
-                  <Button asChild size="sm" className="bg-orange-500 hover:bg-orange-600">
-                    <Link href="/dashboard/library" onClick={closeBundleDialog}>
-                      Open My Library
-                    </Link>
-                  </Button>
-                </div>
-              )}
-              {bundleComplete && (
-                <DialogFooter>
-                  <Button asChild className="bg-orange-500 hover:bg-orange-600">
-                    <Link href="/dashboard/library" onClick={closeBundleDialog}>
-                      View in My Library
-                    </Link>
-                  </Button>
-                  <Button variant="outline" onClick={closeBundleDialog}>
-                    Close
-                  </Button>
-                </DialogFooter>
-              )}
-            </div>
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
 
