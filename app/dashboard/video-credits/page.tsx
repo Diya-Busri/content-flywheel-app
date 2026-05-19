@@ -210,7 +210,7 @@ function VideoCreditsContent() {
       )}
 
       {/* How it works */}
-      <div className="grid grid-cols-3 gap-3 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
         {[
           { icon: "1️⃣", title: "Buy credits", desc: "Pick a pack below — one-time payment, no subscription" },
           { icon: "2️⃣", title: "Generate a video", desc: "Use Template Studio → Brand Story Video, Cooking, or Avatar" },
@@ -226,7 +226,7 @@ function VideoCreditsContent() {
 
       {/* Credit packs */}
       <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Choose a pack</h2>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {VIDEO_CREDIT_PACKS.map((pack) => (
           <div
             key={pack.id}

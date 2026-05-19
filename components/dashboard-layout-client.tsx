@@ -28,8 +28,8 @@ export function DashboardLayoutClient({ profile, userEmail, disabledFeatures = [
   const needsFullHeight = isVideoTimeline || isProductEditor;
   return (
     <DashboardThemeProvider
-      className="flex h-screen min-w-0 relative overflow-x-hidden overflow-y-hidden bg-[#F9FAFB] dark:bg-[#0F0F0F]"
-      style={{ display: "flex", flexDirection: "row", height: "100vh", minHeight: 0 }}
+      className="flex min-w-0 relative overflow-x-hidden overflow-y-hidden bg-[#F9FAFB] dark:bg-[#0F0F0F]"
+      style={{ display: "flex", flexDirection: "row", height: "100dvh", minHeight: 0 }}
     >
       <SidebarProvider>
         <VideoNotificationWatcher />
