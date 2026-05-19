@@ -4,14 +4,15 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft, Plus, Trash2, Copy, Download, Loader2, Check,
-  MoreHorizontal, ChevronUp, ChevronDown, Pencil, Package, Zap,
+  MoreHorizontal, ChevronUp, ChevronDown, Pencil, Package, Zap, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 import { SelectDesign, DesignData } from "@/db/schema/designs-schema";
-import { SelectBundle } from "@/db/schema/bundles-schema";
+import { SelectBundle, ContentAssets } from "@/db/schema/bundles-schema";
 import { SlidePreview } from "@/app/dashboard/design-studio/SlidePreview";
+import { ContentAssetsPanel } from "./ContentAssetsPanel";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -29,6 +30,8 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [activeTab, setActiveTab] = useState<"slides" | "content">("slides");
+  const [assets, setAssets] = useState<ContentAssets | null>(null);
   const centerRef = useRef<HTMLDivElement>(null);
   const [centerDims, setCenterDims] = useState({ w: 800, h: 600 });
 
@@ -56,7 +59,7 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
     fetch(`/api/design-bundles/${bundleId}`)
       .then((r) => r.json())
       .then(({ bundle: b, slides: s }) => {
-        if (b) { setBundle(b); setTitle(b.title); }
+        if (b) { setBundle(b); setTitle(b.title); setAssets(b.assets ?? null); }
         if (s) setSlides(s as Slide[]);
       })
       .finally(() => setLoading(false));
@@ -255,20 +258,59 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
           {saved && <span className="flex items-center gap-1 text-xs text-emerald-600"><Check className="w-3 h-3" /> Saved</span>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className={`text-xs ${dimCls}`}>
-            {slides.length} slide{slides.length !== 1 ? "s" : ""}{bundle?.style ? ` · ${styleLabels[bundle.style] ?? bundle.style}` : ""}
-          </span>
-          <Button size="sm" variant="outline" onClick={addBlankSlide} className={`gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`}>
-            <Plus className="w-3.5 h-3.5" /> Add Slide
-          </Button>
-          <Button size="sm" variant="outline" onClick={exportAllAsZip} disabled={exportingZip || slides.length === 0} className={`gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`}>
-            {exportingZip ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Exporting…</> : <><Package className="w-3.5 h-3.5" /> Export ZIP</>}
-          </Button>
+          {/* Tab switcher */}
+          <div className={`flex rounded-lg p-0.5 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-100"}`}>
+            {(["slides", "content"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${
+                  activeTab === tab
+                    ? "bg-orange-500 text-white shadow-sm"
+                    : isDark
+                    ? "text-gray-400 hover:text-white"
+                    : "text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                {tab === "content" && <Sparkles className="w-3 h-3" />}
+                {tab === "slides" ? "Slides" : "Content Package"}
+                {tab === "content" && assets && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ml-0.5" />
+                )}
+              </button>
+            ))}
+          </div>
+          {activeTab === "slides" && (
+            <>
+              <span className={`text-xs ${dimCls}`}>
+                {slides.length} slide{slides.length !== 1 ? "s" : ""}{bundle?.style ? ` · ${styleLabels[bundle.style] ?? bundle.style}` : ""}
+              </span>
+              <Button size="sm" variant="outline" onClick={addBlankSlide} className={`gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`}>
+                <Plus className="w-3.5 h-3.5" /> Add Slide
+              </Button>
+              <Button size="sm" variant="outline" onClick={exportAllAsZip} disabled={exportingZip || slides.length === 0} className={`gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`}>
+                {exportingZip ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Exporting…</> : <><Package className="w-3.5 h-3.5" /> Export ZIP</>}
+              </Button>
+            </>
+          )}
         </div>
       </header>
 
-      {/* Main area */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* Content Package tab */}
+      {activeTab === "content" && (
+        <div className={`flex-1 min-h-0 overflow-hidden ${isDark ? "bg-[#0F0F0F]" : "bg-[#F9FAFB]"}`}>
+          <ContentAssetsPanel
+            bundleId={bundleId}
+            bundleStyle={bundle?.style ?? "minimal-luxury"}
+            bundleTitle={title}
+            initialAssets={assets}
+            isDark={isDark}
+          />
+        </div>
+      )}
+
+      {/* Slides tab — Main area */}
+      <div className={`flex flex-1 min-h-0 overflow-hidden ${activeTab !== "slides" ? "hidden" : ""}`}>
 
         {/* Slide navigator */}
         <div className={`w-52 shrink-0 border-r flex flex-col overflow-y-auto ${panelCls}`}>
@@ -406,6 +448,24 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
                   <span className="font-semibold">{slides[0]?.data.width ?? 1080}×{slides[0]?.data.height ?? 1920}</span>
                 </div>
               </div>
+            </div>
+
+            <div className={`h-px ${isDark ? "bg-[#2A2A2A]" : "bg-gray-100"}`} />
+
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2 text-gray-400">Content Package</p>
+              <button
+                onClick={() => setActiveTab("content")}
+                className={`w-full text-left rounded-xl border p-3 flex items-start gap-2.5 transition-colors ${isDark ? "border-[#2A2A2A] hover:border-orange-500/50 hover:bg-orange-500/5" : "border-gray-200 hover:border-orange-300 hover:bg-orange-50"}`}
+              >
+                <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center shrink-0 mt-0.5">
+                  <Sparkles className="w-3.5 h-3.5 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold">Captions + Hooks</p>
+                  <p className={`text-[10px] mt-0.5 ${dimCls}`}>{assets ? "View your content package" : "Generate ready-to-post copy"}</p>
+                </div>
+              </button>
             </div>
 
             <div className={`h-px ${isDark ? "bg-[#2A2A2A]" : "bg-gray-100"}`} />

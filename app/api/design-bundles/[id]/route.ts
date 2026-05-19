@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
-import { contentBundlesTable } from "@/db/schema/bundles-schema";
+import { contentBundlesTable, ContentAssets } from "@/db/schema/bundles-schema";
 import { designsTable } from "@/db/schema/designs-schema";
 import { eq, and, isNull, asc } from "drizzle-orm";
 
@@ -35,7 +35,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     title?: string;
     coverPreviewUrl?: string;
     slideCount?: number;
-    // Array of { id, slideIndex } for reordering
+    assets?: ContentAssets;
     slideOrder?: { id: string; slideIndex: number }[];
   };
 
@@ -45,6 +45,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   if (typeof body.title === "string") patch.title = body.title.trim() || "Untitled Bundle";
   if (typeof body.coverPreviewUrl === "string") patch.coverPreviewUrl = body.coverPreviewUrl;
   if (typeof body.slideCount === "number") patch.slideCount = body.slideCount;
+  if (body.assets && typeof body.assets === "object") patch.assets = body.assets;
 
   await db
     .update(contentBundlesTable)

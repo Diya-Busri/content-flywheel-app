@@ -1,4 +1,23 @@
-import { pgTable, text, uuid, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+
+export type ContentAssets = {
+  generatedAt: string;
+  topic: string;
+  mainCaption: { tiktok: string; instagram: string };
+  hooks: string[];
+  ctaSuggestions: string[];
+  hashtagSets: {
+    broad: string[];
+    niche: string[];
+    lowCompetition: string[];
+  };
+  platformVariants: {
+    tiktok: string;
+    instagram: string;
+    threads: string;
+    twitter: string;
+  };
+};
 
 export const contentBundlesTable = pgTable("content_bundles", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -7,6 +26,7 @@ export const contentBundlesTable = pgTable("content_bundles", {
   style: text("style").notNull().default("minimal-luxury"),
   slideCount: integer("slide_count").notNull().default(0),
   coverPreviewUrl: text("cover_preview_url"),
+  assets: jsonb("assets").$type<ContentAssets>(),
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
