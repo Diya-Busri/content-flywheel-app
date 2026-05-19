@@ -149,8 +149,24 @@ Carousel slides:\n${slideSummary}`;
       return NextResponse.json({ error: "Invalid AI response format" }, { status: 502 });
     }
 
+    // Strip markdown bold/italic markers the model sometimes leaks into plain-text fields
+    const stripMd = (s: string) => s.replace(/\*\*/g, "").replace(/\*/g, "").trim();
+    const stripArr = (arr: string[]) => Array.isArray(arr) ? arr.map(stripMd) : arr;
+
     const assets: ContentAssets = {
       ...parsed,
+      mainCaption: {
+        tiktok: stripMd(parsed.mainCaption?.tiktok ?? ""),
+        instagram: stripMd(parsed.mainCaption?.instagram ?? ""),
+      },
+      hooks: stripArr(parsed.hooks),
+      ctaSuggestions: stripArr(parsed.ctaSuggestions),
+      platformVariants: {
+        tiktok: stripMd(parsed.platformVariants?.tiktok ?? ""),
+        instagram: stripMd(parsed.platformVariants?.instagram ?? ""),
+        threads: stripMd(parsed.platformVariants?.threads ?? ""),
+        twitter: stripMd(parsed.platformVariants?.twitter ?? ""),
+      },
       generatedAt: new Date().toISOString(),
       topic: bundle.title,
     };

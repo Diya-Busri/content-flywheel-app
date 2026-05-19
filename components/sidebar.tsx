@@ -5,7 +5,8 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X } from "lucide-react";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NotificationBell } from "@/components/NotificationBell";
 import Link from "next/link";
 import Image from "next/image";
@@ -33,6 +34,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
   const isAdminUser = !!adminEmail && (userEmail ?? "").trim().toLowerCase() === adminEmail;
   const [mounted, setMounted] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const sidebar = useSidebar();
   const isCollapsed = sidebar?.isCollapsed ?? false;
   const toggleCollapsed = sidebar?.toggleCollapsed ?? (() => {});
@@ -156,7 +158,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         <motion.button
           type="button"
           onClick={toggleCollapsed}
-          className="fixed left-0 top-1/2 -translate-y-1/2 z-50 flex items-center justify-center w-8 h-12 rounded-r-md bg-white dark:bg-card border border-l-0 border-[#E5E7EB] dark:border-white/10 shadow-sm text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-700 dark:hover:text-white transition-colors"
+          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-50 items-center justify-center w-8 h-12 rounded-r-md bg-white dark:bg-card border border-l-0 border-[#E5E7EB] dark:border-white/10 shadow-sm text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-700 dark:hover:text-white transition-colors"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           aria-label="Expand sidebar"
@@ -166,8 +168,8 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       )}
 
       <div
-        className={`sidebar no-print h-screen flex-shrink-0 bg-white dark:bg-card backdrop-blur-xl border-r border-[#E5E7EB] dark:border-white/10 flex flex-col justify-between py-5 relative overflow-hidden z-40 transition-[width] duration-200 ease-in-out ${
-          isCollapsed ? "w-0 min-w-0 border-r-0" : "w-[60px] md:w-[220px] min-w-[60px] md:min-w-[220px]"
+        className={`sidebar no-print h-screen flex-shrink-0 bg-white dark:bg-card backdrop-blur-xl border-r border-[#E5E7EB] dark:border-white/10 hidden md:flex flex-col justify-between py-5 relative overflow-hidden z-40 transition-[width] duration-200 ease-in-out ${
+          isCollapsed ? "w-0 min-w-0 border-r-0" : "md:w-[220px] md:min-w-[220px]"
         }`}
         style={mounted && isCollapsed ? { width: 0, minWidth: 0 } : undefined}
       >
@@ -348,6 +350,84 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
             </span>
           </motion.div>
         </div>
+      </div>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <div className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white dark:bg-card border-t border-[#E5E7EB] dark:border-white/10 flex items-center justify-around px-2 pb-safe">
+        {[
+          { href: "/dashboard", icon: <Home size={22} />, label: "Home" },
+          { href: "/dashboard/ai-coach", icon: <MessageCircle size={22} />, label: "AI Coach" },
+          { href: "/dashboard/design-studio", icon: <Palette size={22} />, label: "Design" },
+          { href: "/dashboard/library", icon: <Library size={22} />, label: "Library" },
+        ].map((item) => {
+          const active = item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href);
+          return (
+            <Link key={item.href} href={item.href} className="flex flex-col items-center gap-0.5 py-2 px-3 min-w-[56px] min-h-[56px] justify-center">
+              <span className={active ? "text-orange-500" : "text-gray-500 dark:text-gray-400"}>{item.icon}</span>
+              <span className={`text-[10px] font-medium ${active ? "text-orange-500" : "text-gray-500 dark:text-gray-400"}`}>{item.label}</span>
+            </Link>
+          );
+        })}
+
+        {/* More Sheet */}
+        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <SheetTrigger asChild>
+            <button className="flex flex-col items-center gap-0.5 py-2 px-3 min-w-[56px] min-h-[56px] justify-center" aria-label="More navigation">
+              <MoreHorizontal size={22} className="text-gray-500 dark:text-gray-400" />
+              <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">More</span>
+            </button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-[80vh] rounded-t-2xl bg-white dark:bg-card border-t border-[#E5E7EB] dark:border-white/10 px-0 py-0 flex flex-col">
+            {/* Handle */}
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[#E5E7EB] dark:border-white/10 shrink-0">
+              <span className="text-sm font-semibold text-gray-900 dark:text-white">Navigation</span>
+              <button onClick={() => setMobileNavOpen(false)} className="p-1 rounded-lg text-gray-500 hover:bg-black/5 dark:hover:bg-white/10">
+                <X size={18} />
+              </button>
+            </div>
+            <nav className="flex-1 overflow-y-auto px-4 py-3">
+              <div className="space-y-4">
+                {navGroups.filter((group) => group.items.length > 0).map((group) => (
+                  <div key={group.label}>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-600 px-2 mb-1.5">{group.label}</p>
+                    <div className="space-y-0.5">
+                      {group.items.map((item) => {
+                        const active = isActive(item.href, item.activeWhenStartsWith);
+                        return (
+                          <Link key={item.href} href={item.href} onClick={() => setMobileNavOpen(false)} className="block">
+                            <div className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${active ? "bg-orange-500 text-white" : "text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10"}`}>
+                              {item.icon}
+                              <span className="text-sm font-medium">{item.emoji} {item.label}</span>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Bottom utilities in sheet */}
+              <div className="mt-4 pt-4 border-t border-[#E5E7EB] dark:border-white/10 space-y-1">
+                <Link href="/dashboard/settings" onClick={() => setMobileNavOpen(false)} className="block">
+                  <div className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${pathname === "/dashboard/settings" ? "bg-orange-500 text-white" : "text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10"}`}>
+                    <Settings size={18} />
+                    <span className="text-sm font-medium">⚙️ Settings</span>
+                  </div>
+                </Link>
+                <button onClick={() => { toggleTheme(); setMobileNavOpen(false); }} className="w-full flex items-center gap-3 py-3 px-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                  {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+                  <span className="text-sm font-medium">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+                </button>
+                <Link href="/pricing" onClick={() => setMobileNavOpen(false)} className="block">
+                  <div className="flex items-center gap-3 py-3 px-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                    <CreditCard size={18} />
+                    <span className="text-sm font-medium">💳 Billing</span>
+                  </div>
+                </Link>
+              </div>
+            </nav>
+          </SheetContent>
+        </Sheet>
       </div>
 
       {/* Help Panel — rendered outside sidebar so it overlays the full page */}
