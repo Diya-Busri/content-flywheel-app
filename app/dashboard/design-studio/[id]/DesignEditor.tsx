@@ -10,10 +10,11 @@ import {
   AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter,
   MoveLeft, MoveRight, MoveUp, MoveDown, Undo2, Redo2,
   Underline, Strikethrough, ZoomIn, ZoomOut, FileDown, Highlighter,
-  LayoutTemplate, Images, Layers,
+  LayoutTemplate, Images, Layers, X, Settings2, Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 import { useToast } from "@/components/ui/use-toast";
 import { DesignData, DesignElement } from "@/db/schema/designs-schema";
@@ -377,6 +378,8 @@ export function DesignEditor({ designId }: { designId: string }) {
   const [recentUploads, setRecentUploads] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem("cf_design_uploads") ?? "[]"); } catch { return []; }
   });
+  const [mobileToolSheet, setMobileToolSheet] = useState<"shapes" | "ai" | "templates" | "uploads" | "background" | null>(null);
+  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
 
   function togglePanel(panel: "shapes" | "ai" | "templates" | "uploads", e: React.MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -810,15 +813,15 @@ export function DesignEditor({ designId }: { designId: string }) {
         <div className="flex items-center gap-1.5 shrink-0">
           <Button size="sm" variant="ghost" onClick={undo} className={`h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Undo (⌘Z)"><Undo2 className="w-4 h-4" /></Button>
           <Button size="sm" variant="ghost" onClick={redo} className={`h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Redo (⌘⇧Z)"><Redo2 className="w-4 h-4" /></Button>
-          <div className={`h-5 w-px mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
-          <Button size="sm" variant="ghost" onClick={() => setScale((s) => Math.max(0.2, +(s - 0.1).toFixed(1)))} className={`h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Zoom out"><ZoomOut className="w-4 h-4" /></Button>
-          <span className={`text-xs w-12 text-center tabular-nums ${isDark ? "text-gray-400" : "text-gray-500"}`}>{Math.round(scale * 100)}%</span>
-          <Button size="sm" variant="ghost" onClick={() => setScale((s) => Math.min(2, +(s + 0.1).toFixed(1)))} className={`h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Zoom in"><ZoomIn className="w-4 h-4" /></Button>
-          <div className={`h-5 w-px mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
-          <Button size="sm" variant="outline" className={`gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`} onClick={duplicateDesign} title="Duplicate design">
+          <div className={`hidden md:block h-5 w-px mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+          <Button size="sm" variant="ghost" onClick={() => setScale((s) => Math.max(0.2, +(s - 0.1).toFixed(1)))} className={`hidden md:inline-flex h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Zoom out"><ZoomOut className="w-4 h-4" /></Button>
+          <span className={`hidden md:inline text-xs w-12 text-center tabular-nums ${isDark ? "text-gray-400" : "text-gray-500"}`}>{Math.round(scale * 100)}%</span>
+          <Button size="sm" variant="ghost" onClick={() => setScale((s) => Math.min(2, +(s + 0.1).toFixed(1)))} className={`hidden md:inline-flex h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Zoom in"><ZoomIn className="w-4 h-4" /></Button>
+          <div className={`hidden md:block h-5 w-px mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+          <Button size="sm" variant="outline" className={`hidden md:inline-flex gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`} onClick={duplicateDesign} title="Duplicate design">
             <Copy className="w-4 h-4" /> Duplicate
           </Button>
-          <Button size="sm" variant="outline" className={`gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`} onClick={exportPdf}>
+          <Button size="sm" variant="outline" className={`hidden md:inline-flex gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`} onClick={exportPdf}>
             <FileDown className="w-4 h-4" /> PDF
           </Button>
           <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5" onClick={exportPng}>
@@ -829,8 +832,8 @@ export function DesignEditor({ designId }: { designId: string }) {
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
-        {/* Left tools panel */}
-        <aside className={`w-[76px] shrink-0 border-r flex flex-col gap-0.5 py-3 px-1.5 items-center overflow-y-auto ${panelCls}`}>
+        {/* Left tools panel — desktop only */}
+        <aside className={`hidden md:flex w-[76px] shrink-0 border-r flex-col gap-0.5 py-3 px-1.5 items-center overflow-y-auto ${panelCls}`}>
           <SideLabel label="Add" isDark={isDark} />
           <ToolBtn icon={<Type className="w-5 h-5" />} label="Text" onClick={addText} isDark={isDark} />
 
@@ -880,7 +883,7 @@ export function DesignEditor({ designId }: { designId: string }) {
         {/* Canvas */}
         <div
           ref={containerRef}
-          className={`flex-1 flex items-center justify-center overflow-auto p-8 ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
+          className={`flex-1 flex items-center justify-center overflow-auto p-2 sm:p-8 ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
           style={{ backgroundImage: isDark ? "radial-gradient(circle, #2A2A2A 1px, transparent 1px)" : "radial-gradient(circle, #d1d5db 1px, transparent 1px)", backgroundSize: "24px 24px" }}
           onClick={() => { setSelectedId(null); setActivePanel(null); }}
         >
@@ -909,8 +912,8 @@ export function DesignEditor({ designId }: { designId: string }) {
           </div>
         </div>
 
-        {/* Right panel */}
-        <aside className={`w-64 shrink-0 border-l flex flex-col overflow-y-auto ${panelCls}`}>
+        {/* Right panel — desktop only */}
+        <aside className={`hidden md:flex w-64 shrink-0 border-l flex-col overflow-y-auto ${panelCls}`}>
           {selectedEl
             ? <ElementPanel el={selectedEl} isDark={isDark}
                 onUpdate={(patch) => updateElement(selectedEl.id, patch)}
@@ -924,6 +927,161 @@ export function DesignEditor({ designId }: { designId: string }) {
                 elementCount={data.elements.length} />}
         </aside>
       </div>
+
+      {/* ── Mobile bottom toolbar ── */}
+      <div className={`md:hidden shrink-0 flex items-center justify-around border-t px-1 py-1 ${panelCls}`}>
+        <button onClick={() => { addText(); }} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+          <Type className="w-5 h-5" />
+          <span className="text-[9px] font-medium">Text</span>
+        </button>
+        <button onClick={() => setMobileToolSheet((prev) => prev === "shapes" ? null : "shapes")} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileToolSheet === "shapes" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+          <Square className="w-5 h-5" />
+          <span className="text-[9px] font-medium">Shapes</span>
+        </button>
+        <button onClick={() => setMobileToolSheet((prev) => prev === "uploads" ? null : "uploads")} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileToolSheet === "uploads" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+          <Images className="w-5 h-5" />
+          <span className="text-[9px] font-medium">Uploads</span>
+        </button>
+        <button onClick={() => setMobileToolSheet((prev) => prev === "ai" ? null : "ai")} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileToolSheet === "ai" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+          <Sparkles className="w-5 h-5" />
+          <span className="text-[9px] font-medium">AI</span>
+        </button>
+        <button onClick={() => setMobileToolSheet((prev) => prev === "background" ? null : "background")} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileToolSheet === "background" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+          <Palette className="w-5 h-5" />
+          <span className="text-[9px] font-medium">Canvas</span>
+        </button>
+        <button onClick={() => setMobileSettingsOpen((prev) => !prev)} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileSettingsOpen ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+          <Settings2 className="w-5 h-5" />
+          <span className="text-[9px] font-medium">{selectedId ? "Element" : "Settings"}</span>
+        </button>
+      </div>
+
+      {/* ── Mobile tool Sheet ── */}
+      <Sheet open={mobileToolSheet !== null} onOpenChange={(o) => { if (!o) setMobileToolSheet(null); }}>
+        <SheetContent side="bottom" className={`h-[65vh] rounded-t-2xl p-0 flex flex-col ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white" : "bg-white text-gray-900"}`}>
+          <div className={`flex items-center justify-between px-4 py-3 border-b shrink-0 ${isDark ? "border-[#2A2A2A]" : "border-gray-100"}`}>
+            <p className="text-sm font-semibold capitalize">{mobileToolSheet === "background" ? "Canvas & Background" : mobileToolSheet}</p>
+            <button onClick={() => setMobileToolSheet(null)} className={`p-1.5 rounded-lg ${isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}><X className="w-4 h-4" /></button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+
+            {/* Shapes */}
+            {mobileToolSheet === "shapes" && (
+              <>
+                <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Choose a shape</p>
+                <div className="grid grid-cols-5 gap-2">
+                  {SHAPES.map((s) => (
+                    <button key={s.id} onClick={() => { addShape(s.id); setMobileToolSheet(null); }} title={s.label}
+                      className={`flex flex-col items-center gap-1 p-2 rounded-lg ${isDark ? "hover:bg-white/10" : "hover:bg-gray-100"}`}>
+                      <div className="w-10 h-10">{s.render("#f97316")}</div>
+                      <span className={`text-[9px] leading-tight text-center line-clamp-1 ${isDark ? "text-gray-400" : "text-gray-500"}`}>{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* AI Image */}
+            {mobileToolSheet === "ai" && (
+              <>
+                <p className="text-sm font-semibold mb-1">Generate AI Image</p>
+                <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Uses 1 video credit · Background auto-removed</p>
+                <textarea value={aiPrompt} onChange={(e) => { setAiPrompt(e.target.value); setAiError(null); }}
+                  placeholder="e.g. golden crown on white background, detailed illustration"
+                  rows={3}
+                  className={`w-full text-sm rounded-xl border px-3 py-2.5 resize-none mb-3 ${isDark ? "bg-[#111] border-[#2A2A2A] text-white placeholder-gray-600" : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"}`} />
+                <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Style</p>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {(["bold","minimalist","vintage","abstract","lineart","typography"] as const).map((val) => {
+                    const lbls: Record<string, string> = { bold:"Bold", minimalist:"Minimal", vintage:"Vintage", abstract:"Abstract", lineart:"Line Art", typography:"Typography" };
+                    return (
+                      <button key={val} onClick={() => setAiStyle(val)}
+                        className={`py-2 rounded-xl text-xs font-medium border transition-colors ${aiStyle === val ? "bg-orange-500 text-white border-orange-500" : isDark ? "border-[#2A2A2A] text-gray-400" : "border-gray-200 text-gray-600"}`}>
+                        {lbls[val]}
+                      </button>
+                    );
+                  })}
+                </div>
+                {aiError && <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">{aiError}</p>}
+                <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2 h-11 text-sm" onClick={generateAiImage} disabled={aiLoading || !aiPrompt.trim()}>
+                  {aiLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</> : <><Sparkles className="w-4 h-4" /> Generate Image</>}
+                </Button>
+              </>
+            )}
+
+            {/* Uploads */}
+            {mobileToolSheet === "uploads" && (
+              <>
+                <Button size="sm" variant="outline" className={`w-full mb-3 gap-2 h-11 text-sm ${isDark ? "border-[#2A2A2A] text-gray-300" : ""}`}
+                  onClick={() => { addImage(); setMobileToolSheet(null); }}>
+                  <Images className="w-4 h-4" /> Upload new image
+                </Button>
+                {recentUploads.length === 0
+                  ? <p className={`text-sm text-center py-8 ${isDark ? "text-gray-600" : "text-gray-400"}`}>No uploads yet.</p>
+                  : <div className="grid grid-cols-3 gap-2">
+                      {recentUploads.map((url) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <button key={url} onClick={() => { addImageUrl(url); setMobileToolSheet(null); }}
+                          className={`rounded-xl overflow-hidden border-2 hover:border-orange-500 transition-colors ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
+                          <img src={url} alt="" className="w-full h-20 object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                }
+              </>
+            )}
+
+            {/* Canvas / Background */}
+            {mobileToolSheet === "background" && (
+              <>
+                <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Background color</p>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="relative w-12 h-12 rounded-xl overflow-hidden border-2 cursor-pointer shadow-sm flex-shrink-0" style={{ borderColor: isDark ? "#2A2A2A" : "#e5e7eb" }}>
+                    <div className="absolute inset-0" style={{ background: buildBg(data) }} />
+                    <input type="color" value={data.background} onChange={(e) => updateData((prev) => ({ ...prev, background: e.target.value, backgroundType: "solid" }))} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+                  </div>
+                  <span className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>Tap to pick a color</span>
+                </div>
+                <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Quick colors</p>
+                <div className="grid grid-cols-10 gap-1.5 mb-4">
+                  {QUICK_COLORS.map((c) => (
+                    <button key={c} onClick={() => updateData((prev) => ({ ...prev, background: c, backgroundType: "solid" }))}
+                      className="w-7 h-7 rounded-lg border-2 transition-all hover:scale-110"
+                      style={{ background: c, borderColor: data.background === c ? "#f97316" : isDark ? "#3A3A3A" : "#e5e7eb" }} />
+                  ))}
+                </div>
+                <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Canvas size</p>
+                <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>{data.width} × {data.height} px</p>
+              </>
+            )}
+
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Mobile settings Sheet ── */}
+      <Sheet open={mobileSettingsOpen} onOpenChange={setMobileSettingsOpen}>
+        <SheetContent side="bottom" className={`h-[75vh] rounded-t-2xl p-0 flex flex-col ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white" : "bg-white text-gray-900"}`}>
+          <div className={`flex items-center justify-between px-4 py-3 border-b shrink-0 ${isDark ? "border-[#2A2A2A]" : "border-gray-100"}`}>
+            <p className="text-sm font-semibold">{selectedEl ? "Element Settings" : "Canvas Settings"}</p>
+            <button onClick={() => setMobileSettingsOpen(false)} className={`p-1.5 rounded-lg ${isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}><X className="w-4 h-4" /></button>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {selectedEl
+              ? <ElementPanel el={selectedEl} isDark={isDark}
+                  onUpdate={(patch) => updateElement(selectedEl.id, patch)}
+                  onDelete={() => { deleteSelected(); setMobileSettingsOpen(false); }}
+                  onDuplicate={duplicateSelected}
+                  onAlign={alignEl} canvasW={data.width} canvasH={data.height}
+                  palette={data.activePalette} />
+              : <CanvasPanel isDark={isDark} data={data}
+                  onUpdate={(patch) => updateData((prev) => ({ ...prev, ...patch }))}
+                  onApplyPalette={applyPaletteToDesign}
+                  onApplyTemplate={applyTemplate}
+                  elementCount={data.elements.length} />}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* ── Flyout panels – fixed so they escape overflow clipping ── */}
       {activePanel && (
