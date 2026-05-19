@@ -1,4 +1,5 @@
 export * from "./profiles-schema";
+export * from "./bundle-jobs-schema";
 export * from "./pending-profiles-schema";
 export * from "./products-schema";
 export * from "./library-schema";

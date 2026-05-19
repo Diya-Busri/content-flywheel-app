@@ -10,6 +10,7 @@ import { OnboardingProvider } from "@/components/onboarding/onboarding-provider"
 import { VideoNotificationWatcher } from "@/components/video-notification-watcher";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
+import { BundleProgressBanner } from "@/components/dashboard/BundleProgressBanner";
 import { SelectProfile } from "@/db/schema/profiles-schema";
 
 interface DashboardLayoutClientProps {
@@ -44,6 +45,7 @@ export function DashboardLayoutClient({ profile, userEmail, disabledFeatures = [
           style={{ minWidth: 0, minHeight: 0, flex: "1 1 0%" }}
         >
           <AnnouncementBanner />
+          <BundleProgressBanner />
           {children}
           <FeedbackWidget />
         </main>
