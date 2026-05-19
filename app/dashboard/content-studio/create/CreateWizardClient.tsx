@@ -172,7 +172,7 @@ export default function CreateWizardClient() {
         </div>
 
         {/* Step content card */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-[#E5E7EB] dark:border-[#2A2A2A] p-8 min-h-[400px]">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-[#E5E7EB] dark:border-[#2A2A2A] p-4 sm:p-8 min-h-[400px]">
           {renderStep()}
         </div>
       </div>

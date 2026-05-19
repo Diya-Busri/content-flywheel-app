@@ -101,7 +101,7 @@ export function ProductEditorView() {
       </header>
 
       {showHistory && Array.isArray(history) && (
-        <div className="fixed right-0 top-0 h-screen w-64 bg-[#1A1A1A] border-l border-[#2A2A2A] shadow-xl p-4 overflow-y-auto z-50">
+        <div className="fixed right-0 top-0 h-[100dvh] w-full sm:w-64 bg-[#1A1A1A] border-l border-[#2A2A2A] shadow-xl p-4 overflow-y-auto z-50">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-white">Edit history</h3>
             <button

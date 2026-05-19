@@ -138,7 +138,7 @@ export default function UGCLabWorkspace({ isPremium = false }: UGCLabWorkspacePr
   };
 
   return (
-    <div className="h-[calc(100vh-2rem)] flex flex-col m-4 gap-0 overflow-hidden relative">
+    <div className="h-[calc(100dvh-2rem)] flex flex-col m-4 gap-0 overflow-hidden relative">
       {!isPremium && (
         <>
           <div
@@ -177,7 +177,7 @@ export default function UGCLabWorkspace({ isPremium = false }: UGCLabWorkspacePr
         </p>
       </header>
 
-      <div className="flex-1 grid grid-cols-[280px_1fr_320px] gap-4 min-h-0 pt-4">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[280px_1fr_320px] gap-4 min-h-0 pt-4 overflow-y-auto lg:overflow-hidden">
         {/* Left Panel */}
         <aside className="flex flex-col gap-4 min-w-0 overflow-y-auto">
           <FaceProfiles

@@ -110,6 +110,24 @@
   }
 }
 
+/*
+ * Safe-area inset utilities — iOS notch / Android gesture nav.
+ * Tailwind v3 has no built-in safe-area plugin so we define them here.
+ * pb-safe is used by the mobile bottom nav (sidebar.tsx).
+ * pb-mobile-nav is used by the main content area to avoid content hiding
+ * behind the fixed bottom nav + any device safe area.
+ */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pb-mobile-nav {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+/* Ensure the bottom nav bar itself also respects device safe-area height */
+.bottom-nav-height {
+  height: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+}
+
 @layer utilities {
   /* Video timeline: custom scrollbar that blends with dark UI */
   .timeline-horizontal-scroll {

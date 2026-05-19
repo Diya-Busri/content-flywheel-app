@@ -41,7 +41,7 @@ export function DashboardLayoutClient({ profile, userEmail, disabledFeatures = [
         />
         <Sidebar profile={profile} userEmail={userEmail} disabledFeatures={disabledFeatures} onOpenReview={() => setShowReviewPopup(true)} />
         <main
-          className={`z-0 flex-1 min-w-0 min-h-0 flex flex-col max-w-full relative bg-[#F9FAFB] dark:bg-[#0F0F0F] text-gray-900 dark:text-white pb-16 md:pb-0 ${needsFullHeight ? "overflow-hidden" : "overflow-x-hidden overflow-y-auto"}`}
+          className={`z-0 flex-1 min-w-0 min-h-0 flex flex-col max-w-full relative bg-[#F9FAFB] dark:bg-[#0F0F0F] text-gray-900 dark:text-white pb-mobile-nav md:pb-0 ${needsFullHeight ? "overflow-hidden" : "overflow-x-hidden overflow-y-auto"}`}
           style={{ minWidth: 0, minHeight: 0, flex: "1 1 0%" }}
         >
           <AnnouncementBanner />
