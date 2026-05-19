@@ -4,8 +4,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft, Plus, Trash2, Copy, Download, Loader2, Check,
-  MoreHorizontal, ChevronUp, ChevronDown, Pencil, Package, Zap, Sparkles,
+  MoreHorizontal, ChevronUp, ChevronDown, Pencil, Package, Zap, Sparkles, Layers, X,
 } from "lucide-react";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
@@ -50,6 +51,8 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [exportingZip, setExportingZip] = useState(false);
+  const [mobileSlideOpen, setMobileSlideOpen] = useState(false);
+  const [mobileContentOpen, setMobileContentOpen] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const panelCls = isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white" : "bg-white border-gray-200 text-gray-900";
@@ -266,8 +269,8 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
           {saved && <span className="flex items-center gap-1 text-xs text-emerald-600"><Check className="w-3 h-3" /> Saved</span>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {/* Tab switcher */}
-          <div className={`flex rounded-lg p-0.5 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-100"}`}>
+          {/* Tab switcher — desktop only */}
+          <div className={`hidden md:flex rounded-lg p-0.5 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-100"}`}>
             {(["slides", "content"] as const).map((tab) => (
               <button
                 key={tab}
@@ -288,15 +291,16 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
               </button>
             ))}
           </div>
+          {/* Slide controls — desktop only */}
           {activeTab === "slides" && (
             <>
-              <span className={`text-xs ${dimCls}`}>
+              <span className={`hidden md:inline text-xs ${dimCls}`}>
                 {slides.length} slide{slides.length !== 1 ? "s" : ""}{bundle?.style ? ` · ${styleLabels[bundle.style] ?? bundle.style}` : ""}
               </span>
-              <Button size="sm" variant="outline" onClick={addBlankSlide} className={`gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`}>
+              <Button size="sm" variant="outline" onClick={addBlankSlide} className={`hidden md:inline-flex gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`}>
                 <Plus className="w-3.5 h-3.5" /> Add Slide
               </Button>
-              <Button size="sm" variant="outline" onClick={exportAllAsZip} disabled={exportingZip || slides.length === 0} className={`gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`}>
+              <Button size="sm" variant="outline" onClick={exportAllAsZip} disabled={exportingZip || slides.length === 0} className={`hidden md:inline-flex gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`}>
                 {exportingZip ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Exporting…</> : <><Package className="w-3.5 h-3.5" /> Export ZIP</>}
               </Button>
             </>
@@ -304,8 +308,103 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
         </div>
       </header>
 
-      {/* Content Package tab — always mounted, CSS-hidden when inactive to preserve state */}
-      <div className={`flex-1 min-h-0 overflow-hidden ${activeTab !== "content" ? "hidden" : ""} ${isDark ? "bg-[#0F0F0F]" : "bg-[#F9FAFB]"}`}>
+      {/* ── Mobile toolbar (md:hidden) ─────────────────────────────────── */}
+      <div className={`md:hidden shrink-0 flex items-center gap-2 px-3 py-2 border-b ${isDark ? "border-[#2A2A2A] bg-[#0F0F0F]" : "border-gray-200 bg-white"}`}>
+
+        {/* Slides drawer */}
+        <Sheet open={mobileSlideOpen} onOpenChange={setMobileSlideOpen}>
+          <button
+            onClick={() => setMobileSlideOpen(true)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+              isDark ? "border-[#2A2A2A] text-gray-300 hover:border-orange-500 hover:text-orange-400" : "border-gray-200 text-gray-700 hover:border-orange-400 hover:text-orange-500"
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            Slides
+            <span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>({slides.length})</span>
+          </button>
+          <SheetContent side="left" className={`w-[82vw] max-w-[300px] p-0 flex flex-col ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}>
+            <div className={`flex items-center justify-between px-4 py-3 border-b shrink-0 ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
+              <span className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Slides</span>
+              <button onClick={() => setMobileSlideOpen(false)} className={`p-1 rounded-lg ${isDark ? "text-gray-400 hover:bg-white/10" : "text-gray-500 hover:bg-black/5"}`}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-2">
+              {slides.map((slide, idx) => (
+                <div
+                  key={slide.id}
+                  onClick={() => { setActiveIdx(idx); setMobileSlideOpen(false); }}
+                  className={`group relative rounded-lg overflow-hidden cursor-pointer border-2 transition-colors ${activeIdx === idx ? "border-orange-500" : isDark ? "border-[#2A2A2A] hover:border-gray-600" : "border-gray-200 hover:border-gray-400"}`}
+                >
+                  <div style={{ width: thumbW, height: thumbH, position: "relative", overflow: "hidden", flexShrink: 0, margin: "0 auto" }}>
+                    {slide.previewUrl
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={slide.previewUrl} alt="" className="w-full h-full object-cover" />
+                      : <SlidePreview data={slide.data} scale={thumbScale} />}
+                  </div>
+                  <div className={`px-1.5 py-1 text-[10px] font-medium flex items-center justify-between ${isDark ? "bg-[#111] text-gray-400" : "bg-gray-50 text-gray-500"}`}>
+                    <span>Slide {idx + 1}</span>
+                    {activeIdx === idx && <span className="text-orange-500 text-[10px]">●</span>}
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={() => { addBlankSlide(); setMobileSlideOpen(false); }}
+                className={`w-full rounded-lg border-2 border-dashed flex items-center justify-center py-3 text-xs font-medium transition-colors ${isDark ? "border-[#2A2A2A] text-gray-600 hover:border-orange-500 hover:text-orange-500" : "border-gray-200 text-gray-400 hover:border-orange-400 hover:text-orange-500"}`}
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" /> Add Slide
+              </button>
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Content Package drawer */}
+        <Sheet open={mobileContentOpen} onOpenChange={setMobileContentOpen}>
+          <button
+            onClick={() => setMobileContentOpen(true)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+              isDark ? "border-[#2A2A2A] text-gray-300 hover:border-orange-500 hover:text-orange-400" : "border-gray-200 text-gray-700 hover:border-orange-400 hover:text-orange-500"
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            Content
+            {assets && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
+          </button>
+          <SheetContent side="right" className={`w-full p-0 flex flex-col overflow-hidden ${isDark ? "bg-[#0F0F0F] border-[#2A2A2A]" : "bg-[#F9FAFB] border-gray-200"}`}>
+            <div className={`flex items-center justify-between px-4 py-3 border-b shrink-0 ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
+              <span className={`text-sm font-semibold flex items-center gap-1.5 ${isDark ? "text-white" : "text-gray-900"}`}>
+                <Sparkles className="w-3.5 h-3.5 text-orange-500" /> Content Package
+              </span>
+              <button onClick={() => setMobileContentOpen(false)} className={`p-1 rounded-lg ${isDark ? "text-gray-400 hover:bg-white/10" : "text-gray-500 hover:bg-black/5"}`}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <ContentAssetsPanel
+                bundleId={bundleId}
+                bundleStyle={bundle?.style ?? "minimal-luxury"}
+                bundleTitle={title}
+                initialAssets={assets}
+                isDark={isDark}
+                onAssetsChange={(a) => setAssets(a)}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Add Slide */}
+        <button
+          onClick={addBlankSlide}
+          className={`flex items-center gap-1 py-2.5 px-3 rounded-xl border text-sm font-medium transition-colors shrink-0 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:border-orange-500 hover:text-orange-400" : "border-gray-200 text-gray-700 hover:border-orange-400 hover:text-orange-500"}`}
+        >
+          <Plus className="w-4 h-4" />
+          Add
+        </button>
+      </div>
+
+      {/* Content Package tab — always mounted; always hidden on mobile (uses sheet instead); desktop: shown when activeTab==="content" */}
+      <div className={`hidden ${activeTab === "content" ? "md:flex" : ""} flex-1 min-h-0 overflow-hidden ${isDark ? "bg-[#0F0F0F]" : "bg-[#F9FAFB]"}`}>
         <ContentAssetsPanel
           bundleId={bundleId}
           bundleStyle={bundle?.style ?? "minimal-luxury"}
@@ -316,11 +415,11 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
         />
       </div>
 
-      {/* Slides tab — always mounted, CSS-hidden when inactive */}
-      <div className={`flex flex-1 min-h-0 overflow-hidden ${activeTab !== "slides" ? "hidden" : ""}`}>
+      {/* Slides view — always visible on mobile (no tab switching); desktop: hidden when activeTab!=="slides" */}
+      <div className={`flex flex-1 min-h-0 overflow-hidden ${activeTab !== "slides" ? "md:hidden" : ""}`}>
 
-        {/* Slide navigator */}
-        <div className={`w-52 shrink-0 border-r flex flex-col overflow-y-auto ${panelCls}`}>
+        {/* Slide navigator — desktop only (mobile uses sheet drawer) */}
+        <div className={`hidden md:flex w-52 shrink-0 border-r flex-col overflow-y-auto ${panelCls}`}>
           <div className="p-2 space-y-2">
             {slides.map((slide, idx) => (
               <div
@@ -379,7 +478,7 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
         </div>
 
         {/* Center: active slide preview + actions */}
-        <div ref={centerRef} className={`flex-1 flex flex-col items-center justify-center overflow-auto gap-6 p-8 ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
+        <div ref={centerRef} className={`flex-1 flex flex-col items-center justify-center overflow-auto gap-4 sm:gap-6 p-4 sm:p-8 ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
           style={{ backgroundImage: isDark ? "radial-gradient(circle, #2A2A2A 1px, transparent 1px)" : "radial-gradient(circle, #d1d5db 1px, transparent 1px)", backgroundSize: "24px 24px" }}>
 
           {activeSlide ? (
@@ -411,18 +510,19 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-3 flex-wrap justify-center">
+              <div className="flex items-center gap-2 flex-wrap justify-center px-2">
                 <Button
+                  size="sm"
                   onClick={() => router.push(`/dashboard/design-studio/${activeSlide.id}?bundle=${bundleId}`)}
-                  className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                  className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
                 >
-                  <Pencil className="w-4 h-4" /> Edit This Slide
+                  <Pencil className="w-3.5 h-3.5" /> Edit Slide
                 </Button>
-                <Button variant="outline" onClick={() => duplicateSlide(activeIdx)} className={`gap-2 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`}>
-                  <Copy className="w-4 h-4" /> Duplicate
+                <Button size="sm" variant="outline" onClick={() => duplicateSlide(activeIdx)} className={`gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`}>
+                  <Copy className="w-3.5 h-3.5" /> Duplicate
                 </Button>
-                <Button variant="outline" onClick={() => deleteSlide(activeIdx)} disabled={slides.length <= 1} className={`gap-2 text-red-500 hover:text-red-600 ${isDark ? "border-[#2A2A2A]" : ""}`}>
-                  <Trash2 className="w-4 h-4" /> Delete Slide
+                <Button size="sm" variant="outline" onClick={() => deleteSlide(activeIdx)} disabled={slides.length <= 1} className={`gap-1.5 text-red-500 hover:text-red-600 ${isDark ? "border-[#2A2A2A]" : ""}`}>
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
                 </Button>
               </div>
 
@@ -438,8 +538,8 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
           )}
         </div>
 
-        {/* Right info panel */}
-        <div className={`w-56 shrink-0 border-l overflow-y-auto ${panelCls}`}>
+        {/* Right info panel — desktop only (mobile uses sheet drawer) */}
+        <div className={`hidden md:block w-56 shrink-0 border-l overflow-y-auto ${panelCls}`}>
           <div className="p-4 space-y-4">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-2 text-gray-400">Bundle Info</p>
