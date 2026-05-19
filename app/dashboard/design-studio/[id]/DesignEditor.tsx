@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
+import { useToast } from "@/components/ui/use-toast";
 import { DesignData, DesignElement } from "@/db/schema/designs-schema";
 
 // ── Shape library ──────────────────────────────────────────────────────────
@@ -356,6 +357,7 @@ export function DesignEditor({ designId }: { designId: string }) {
   const { theme } = useDashboardTheme();
   const isDark = theme === "dark";
   const router = useRouter();
+  const { toast } = useToast();
   const searchParams = useSearchParams();
   const bundleId = searchParams.get("bundle");
 
@@ -755,13 +757,20 @@ export function DesignEditor({ designId }: { designId: string }) {
   }
 
   async function duplicateDesign() {
+    const root = title.replace(/ \(Copy\)$/, "").replace(/ v\d+$/, "").replace(/ Remix$/, "");
+    const newTitle = `${root} (Copy)`;
     const res = await fetch("/api/designs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: `Copy of ${title}`, data }),
+      body: JSON.stringify({ title: newTitle, data }),
     });
     const json = await res.json();
-    if (json.design?.id) router.push(`/dashboard/design-studio/${json.design.id}`);
+    if (!json.design?.id) return;
+    toast({
+      title: "Remix created",
+      description: `"${newTitle}" is ready.`,
+    });
+    router.push(`/dashboard/design-studio/${json.design.id}`);
   }
 
   async function exportPdf() {

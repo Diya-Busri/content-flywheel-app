@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Palette, Trash2, MoreHorizontal, Clock, Copy, Zap, Layers } from "lucide-react";
+import { Plus, Palette, Trash2, MoreHorizontal, Clock, Copy, Zap, Layers, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,6 +17,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { SelectDesign, DesignData } from "@/db/schema/designs-schema";
 import { SelectBundle } from "@/db/schema/bundles-schema";
 
@@ -52,10 +54,12 @@ function timeAgo(date: string) {
 
 function DesignCard({
   design,
+  isNew,
   onDelete,
   onDuplicate,
 }: {
   design: SelectDesign;
+  isNew?: boolean;
   onDelete: (id: string) => void;
   onDuplicate: (design: SelectDesign) => void;
 }) {
@@ -70,9 +74,19 @@ function DesignCard({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      className="group relative rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+      className={`group relative rounded-xl border bg-white dark:bg-[#1A1A1A] overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer ${
+        isNew
+          ? "border-orange-400 dark:border-orange-500 ring-2 ring-orange-400/30 dark:ring-orange-500/20"
+          : "border-gray-200 dark:border-white/10"
+      }`}
       onClick={() => router.push(`/dashboard/design-studio/${design.id}`)}
     >
+      {isNew && (
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+          <Sparkles className="w-2.5 h-2.5" /> NEW
+        </div>
+      )}
+
       {/* Preview */}
       <div
         className="w-full flex items-center justify-center overflow-hidden bg-gray-100 dark:bg-[#111]"
@@ -109,7 +123,7 @@ function DesignCard({
             <DropdownMenuItem
               onClick={(e) => { e.stopPropagation(); onDuplicate(design); }}
             >
-              <Copy className="w-4 h-4 mr-2" /> Duplicate
+              <Sparkles className="w-4 h-4 mr-2" /> Remix Design
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-red-500"
@@ -185,14 +199,29 @@ function BundleCard({ bundle, onDelete }: { bundle: SelectBundle; onDelete: (id:
   );
 }
 
+function smartRename(originalTitle: string, existingTitles: string[]): string {
+  // Strip any existing remix suffixes to get the root title
+  const root = originalTitle
+    .replace(/ \(Copy\)$/, "")
+    .replace(/ v\d+$/, "")
+    .replace(/ Remix$/, "");
+
+  if (!existingTitles.includes(`${root} (Copy)`)) return `${root} (Copy)`;
+  let n = 2;
+  while (existingTitles.includes(`${root} v${n}`)) n++;
+  return `${root} v${n}`;
+}
+
 export function DesignStudioLanding() {
   const router = useRouter();
+  const { toast } = useToast();
   const [designs, setDesigns] = useState<SelectDesign[]>([]);
   const [bundles, setBundles] = useState<SelectBundle[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [recentlyDuplicated, setRecentlyDuplicated] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     Promise.all([
@@ -246,13 +275,31 @@ export function DesignStudioLanding() {
   }
 
   async function duplicateDesign(design: SelectDesign) {
+    const existingTitles = designs.map((d) => d.title);
+    const newTitle = smartRename(design.title, existingTitles);
     const res = await fetch("/api/designs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: `Copy of ${design.title}`, data: design.data }),
+      body: JSON.stringify({ title: newTitle, data: design.data }),
     });
     const json = await res.json();
-    if (json.design) setDesigns((prev) => [json.design, ...prev]);
+    if (!json.design) return;
+    const newDesign: SelectDesign = json.design;
+    setDesigns((prev) => [newDesign, ...prev]);
+    setRecentlyDuplicated((prev) => new Set(prev).add(newDesign.id));
+    // Clear the "new" highlight after 8 seconds
+    setTimeout(() => {
+      setRecentlyDuplicated((prev) => { const next = new Set(prev); next.delete(newDesign.id); return next; });
+    }, 8000);
+    toast({
+      title: "Remix created",
+      description: `"${newTitle}" is ready to edit.`,
+      action: (
+        <ToastAction altText="Open" onClick={() => router.push(`/dashboard/design-studio/${newDesign.id}`)}>
+          Open
+        </ToastAction>
+      ),
+    });
   }
 
   return (
@@ -357,7 +404,7 @@ export function DesignStudioLanding() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             <AnimatePresence>
               {designs.map((d) => (
-                <DesignCard key={d.id} design={d} onDelete={deleteDesign} onDuplicate={duplicateDesign} />
+                <DesignCard key={d.id} design={d} isNew={recentlyDuplicated.has(d.id)} onDelete={deleteDesign} onDuplicate={duplicateDesign} />
               ))}
             </AnimatePresence>
           </div>
