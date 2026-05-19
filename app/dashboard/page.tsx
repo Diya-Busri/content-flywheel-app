@@ -292,15 +292,15 @@ function StatCard({
 }) {
   const inner = (
     <div
-      className={`group relative rounded-2xl p-5 border transition-all hover:shadow-md ${
+      className={`group relative rounded-2xl p-4 sm:p-5 border transition-all hover:shadow-md ${
         accent
           ? "bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/10 border-orange-200 dark:border-orange-900/40"
           : "bg-white dark:bg-[#1A1A1A] border-gray-100 dark:border-[#2A2A2A] hover:border-gray-200 dark:hover:border-[#3A3A3A]"
       }`}
     >
-      <div className="flex items-start justify-between mb-4">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconBg}`}>
-          <Icon className={`w-5 h-5 ${iconColor}`} />
+      <div className="flex items-start justify-between mb-3">
+        <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center ${iconBg}`}>
+          <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${iconColor}`} />
         </div>
         {href && (
           <span className="text-xs text-gray-400 dark:text-gray-600 group-hover:text-gray-600 dark:group-hover:text-gray-400 transition-colors font-medium">
@@ -308,13 +308,13 @@ function StatCard({
           </span>
         )}
       </div>
-      <p className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-0.5">
+      <p className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-0.5">
         {value}
       </p>
-      <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{label}</p>
-      {sub && <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">{sub}</p>}
+      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium">{label}</p>
+      {sub && <p className="text-xs text-gray-400 dark:text-gray-600 mt-1 hidden sm:block">{sub}</p>}
       {cta && (
-        <span className="inline-block mt-3 text-xs font-semibold text-orange-500 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+        <span className="inline-block mt-2 sm:mt-3 text-xs font-semibold text-orange-500 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
           {cta} →
         </span>
       )}
@@ -345,14 +345,14 @@ function ActionCard({
 }) {
   return (
     <Link href={href}>
-      <div className="group h-full rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-gray-300 dark:hover:border-[#3A3A3A] hover:shadow-md transition-all p-6 flex flex-col items-center text-center">
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 ${iconBg}`}>
-          <Icon className={`w-6 h-6 ${iconColor}`} />
+      <div className="group h-full rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-gray-300 dark:hover:border-[#3A3A3A] hover:shadow-md transition-all p-4 sm:p-5 flex flex-col items-center text-center">
+        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center mb-3 transition-transform group-hover:scale-110 ${iconBg}`}>
+          <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${iconColor}`} />
         </div>
-        <h3 className="font-bold text-gray-900 dark:text-white text-sm mb-1.5 leading-snug">
+        <h3 className="font-bold text-gray-900 dark:text-white text-sm mb-1 leading-snug">
           {label}
         </h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed hidden sm:block">
           {description}
         </p>
       </div>
@@ -395,7 +395,7 @@ export default async function DashboardPage() {
   const estimatedRevenue = videoStats.digitalProductsCount * 15;
 
   return (
-    <main className="p-6 md:p-10 max-w-[1280px] mx-auto">
+    <main className="p-4 sm:p-6 md:p-10 max-w-[1280px] mx-auto">
       <Suspense fallback={null}><ReferralCapture /></Suspense>
       <Suspense fallback={null}><InviteCapture /></Suspense>
       <SyncOnboardingSteps digitalProductsCount={videoStats.digitalProductsCount} />
@@ -424,11 +424,11 @@ export default async function DashboardPage() {
       )}
 
       {/* Stats grid */}
-      <section className="mb-10" data-tour="quick-stats">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Overview</h2>
+      <section className="mb-8 sm:mb-10" data-tour="quick-stats">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Overview</h2>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <StatCard
             label="Video Credits"
             value={videoCredits}
@@ -489,13 +489,13 @@ export default async function DashboardPage() {
 
       {/* Finish to Sell */}
       {incompleteProducts.length > 0 && (
-        <section className="mb-10">
-          <div className="flex items-center justify-between mb-5">
+        <section className="mb-8 sm:mb-10">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950/30 flex items-center justify-center">
                 <AlertCircle className="w-4 h-4 text-amber-500" />
               </div>
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+              <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
                 Finish to Sell
               </h2>
             </div>
@@ -549,11 +549,11 @@ export default async function DashboardPage() {
       )}
 
       {/* Quick Actions */}
-      <section className="mb-10" data-tour="quick-actions">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-5">
+      <section className="mb-8 sm:mb-10" data-tour="quick-actions">
+        <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">
           Quick Actions
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <ActionCard
             href="/dashboard/digital-products/create"
             icon={Package}
@@ -588,7 +588,7 @@ export default async function DashboardPage() {
           />
         </div>
         {/* Secondary actions row */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mt-3 sm:mt-4">
           <ActionCard
             href="/dashboard/script-checker"
             icon={CheckSquare}
@@ -620,9 +620,9 @@ export default async function DashboardPage() {
       <WhatsWorkingSection />
 
       {/* Recent Videos */}
-      <section className="mt-10" data-tour="recent-videos">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+      <section className="mt-8 sm:mt-10" data-tour="recent-videos">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
             Recent Videos
           </h2>
           {videoStats.recent.length > 0 && (
@@ -644,7 +644,7 @@ export default async function DashboardPage() {
                   <li key={`${item.source}-${item.id}`}>
                     <Link
                       href={item.href}
-                      className="flex items-center gap-3 px-6 py-4 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                      className="flex items-center gap-3 px-4 sm:px-6 py-3 sm:py-4 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
                     >
                       <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/20 flex items-center justify-center shrink-0">
                         <Video className="w-5 h-5 text-orange-500" />
@@ -677,7 +677,7 @@ export default async function DashboardPage() {
           </div>
         ) : (
           <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-dashed border-gray-200 dark:border-[#2A2A2A]">
-            <div className="p-12 flex flex-col items-center justify-center text-center">
+            <div className="p-8 sm:p-12 flex flex-col items-center justify-center text-center">
               <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center mb-4">
                 <Video className="w-8 h-8 text-gray-400" />
               </div>

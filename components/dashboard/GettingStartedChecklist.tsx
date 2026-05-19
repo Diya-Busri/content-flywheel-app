@@ -103,9 +103,9 @@ export function GettingStartedChecklist({ hasBrandVoice, hasProduct, hasThumbnai
   const allDone = doneCount === steps.length;
 
   return (
-    <section className="mb-10 rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50/60 dark:border-orange-900/40 dark:from-orange-950/20 dark:to-amber-950/10 overflow-hidden">
+    <section className="mb-8 sm:mb-10 rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50/60 dark:border-orange-900/40 dark:from-orange-950/20 dark:to-amber-950/10 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4">
+      <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4">
         <button type="button" className="flex items-center gap-3 flex-1 text-left" onClick={toggleCollapse}>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3">
@@ -117,7 +117,7 @@ export function GettingStartedChecklist({ hasBrandVoice, hasProduct, hasThumbnai
               </span>
             </div>
             {/* Progress bar */}
-            <div className="mt-2 h-1.5 bg-orange-100 dark:bg-orange-900/30 rounded-full overflow-hidden w-48">
+            <div className="mt-2 h-1.5 bg-orange-100 dark:bg-orange-900/30 rounded-full overflow-hidden w-full max-w-[12rem]">
               <div
                 className="h-full rounded-full transition-all duration-500"
                 style={{
@@ -152,14 +152,14 @@ export function GettingStartedChecklist({ hasBrandVoice, hasProduct, hasThumbnai
             <li key={step.id}>
               <Link
                 href={step.done ? "#" : step.href}
-                className={`flex items-start gap-3 px-5 py-3 transition-colors ${
+                className={`flex items-center gap-3 px-4 sm:px-5 py-3 transition-colors min-h-[52px] ${
                   step.done
                     ? "cursor-default"
                     : "hover:bg-orange-100/50 dark:hover:bg-orange-900/20"
                 }`}
                 onClick={(e) => step.done && e.preventDefault()}
               >
-                <div className="mt-0.5 shrink-0">
+                <div className="shrink-0">
                   {step.done ? (
                     <CheckCircle2 className="w-5 h-5 text-green-500" />
                   ) : (
@@ -171,11 +171,11 @@ export function GettingStartedChecklist({ hasBrandVoice, hasProduct, hasThumbnai
                     {step.label}
                   </p>
                   {!step.done && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{step.description}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 hidden sm:block">{step.description}</p>
                   )}
                 </div>
                 {!step.done && (
-                  <span className="text-xs font-medium text-orange-500 dark:text-orange-400 shrink-0 mt-0.5">
+                  <span className="text-xs font-medium text-orange-500 dark:text-orange-400 shrink-0">
                     Start →
                   </span>
                 )}
