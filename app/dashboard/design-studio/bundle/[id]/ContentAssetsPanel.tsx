@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Sparkles, Copy, Check, RotateCcw, ChevronDown, Hash,
-  MessageSquare, Zap, Target, Globe, Download,
+  MessageSquare, Zap, Target, Globe, Download, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -134,26 +134,39 @@ function TextBlock({
   );
 }
 
+type SaveStatus = "idle" | "saving" | "saved";
+
 export function ContentAssetsPanel({
   bundleId,
   bundleStyle,
   bundleTitle,
   initialAssets,
   isDark,
+  onAssetsChange,
 }: {
   bundleId: string;
   bundleStyle: string;
   bundleTitle: string;
   initialAssets: ContentAssets | null | undefined;
   isDark: boolean;
+  onAssetsChange?: (assets: ContentAssets) => void;
 }) {
   const [assets, setAssets] = useState<ContentAssets | null>(initialAssets ?? null);
   const [generating, setGenerating] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [captionTab, setCaptionTab] = useState<"tiktok" | "instagram">("instagram");
   const [platformTab, setPlatformTab] = useState<"instagram" | "tiktok" | "threads" | "twitter">("instagram");
   const [hashtagTab, setHashtagTab] = useState<"broad" | "niche" | "lowCompetition">("niche");
   const { copy, isCopied } = useCopy();
+
+  // Sync when the parent's bundle fetch resolves — only fills in if we have no
+  // local content yet (avoids overwriting in-progress edits).
+  useEffect(() => {
+    if (initialAssets && !assets) {
+      setAssets(initialAssets);
+    }
+  }, [initialAssets]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dimCls = isDark ? "text-gray-400" : "text-gray-500";
   const cardCls = isDark
@@ -168,6 +181,7 @@ export function ContentAssetsPanel({
       const json = await res.json();
       if (json.assets) {
         setAssets(json.assets);
+        onAssetsChange?.(json.assets);
       } else {
         setError(json.error ?? "Failed to generate. Please try again.");
       }
@@ -182,12 +196,18 @@ export function ContentAssetsPanel({
     setAssets((prev) => {
       if (!prev) return prev;
       const next = { ...prev, [key]: value };
-      // Persist quietly in the background
+      onAssetsChange?.(next);
+      setSaveStatus("saving");
       fetch(`/api/design-bundles/${bundleId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ assets: next }),
-      }).catch(() => {});
+      })
+        .then(() => {
+          setSaveStatus("saved");
+          setTimeout(() => setSaveStatus("idle"), 2500);
+        })
+        .catch(() => setSaveStatus("idle"));
       return next;
     });
   }
@@ -275,11 +295,17 @@ export function ContentAssetsPanel({
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-bold text-gray-900 dark:text-white">Content Package</h2>
-            <p className={`text-xs mt-0.5 ${dimCls}`}>
-              {assets.generatedAt
-                ? `Generated ${new Date(assets.generatedAt).toLocaleDateString()}`
-                : "Ready to post"}
-            </p>
+            <div className={`flex items-center gap-2 mt-0.5 text-xs ${dimCls}`}>
+              {saveStatus === "saving" && (
+                <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Saving…</span>
+              )}
+              {saveStatus === "saved" && (
+                <span className="flex items-center gap-1 text-emerald-500"><Check className="w-3 h-3" /> Saved</span>
+              )}
+              {saveStatus === "idle" && assets.generatedAt && (
+                <span>Last updated {new Date(assets.generatedAt).toLocaleDateString()}</span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button

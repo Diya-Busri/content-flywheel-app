@@ -304,20 +304,19 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
         </div>
       </header>
 
-      {/* Content Package tab */}
-      {activeTab === "content" && (
-        <div className={`flex-1 min-h-0 overflow-hidden ${isDark ? "bg-[#0F0F0F]" : "bg-[#F9FAFB]"}`}>
-          <ContentAssetsPanel
-            bundleId={bundleId}
-            bundleStyle={bundle?.style ?? "minimal-luxury"}
-            bundleTitle={title}
-            initialAssets={assets}
-            isDark={isDark}
-          />
-        </div>
-      )}
+      {/* Content Package tab — always mounted, CSS-hidden when inactive to preserve state */}
+      <div className={`flex-1 min-h-0 overflow-hidden ${activeTab !== "content" ? "hidden" : ""} ${isDark ? "bg-[#0F0F0F]" : "bg-[#F9FAFB]"}`}>
+        <ContentAssetsPanel
+          bundleId={bundleId}
+          bundleStyle={bundle?.style ?? "minimal-luxury"}
+          bundleTitle={title}
+          initialAssets={assets}
+          isDark={isDark}
+          onAssetsChange={(a) => setAssets(a)}
+        />
+      </div>
 
-      {/* Slides tab — Main area */}
+      {/* Slides tab — always mounted, CSS-hidden when inactive */}
       <div className={`flex flex-1 min-h-0 overflow-hidden ${activeTab !== "slides" ? "hidden" : ""}`}>
 
         {/* Slide navigator */}
