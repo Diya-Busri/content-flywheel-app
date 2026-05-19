@@ -139,12 +139,20 @@ function DesignCard({
 }
 
 const STYLE_LABELS: Record<string, string> = {
-  "minimal-luxury": "Minimal Luxury",
-  "dark-aesthetic": "Dark Aesthetic",
-  "wellness": "Wellness",
+  "minimal-luxury":     "Minimal Luxury",
+  "dark-aesthetic":     "Dark Aesthetic",
+  "wellness":           "Wellness",
   "clean-productivity": "Clean Productivity",
-  "faceless-creator": "Faceless Creator",
-  "modern-business": "Modern Business",
+  "faceless-creator":   "Faceless Creator",
+  "modern-business":    "Modern Business",
+  "viral-storytelling": "Viral Storytelling",
+  "aggressive-viral":   "Aggressive Viral",
+  "educational-pro":    "Educational Pro",
+  "soft-feminine":      "Soft Feminine",
+  "tech-minimal":       "Tech Minimal",
+  "luxury-editorial":   "Luxury Editorial",
+  "chaos-raw":          "Chaos / Raw",
+  "quote-focus-style":  "Quote Focus",
 };
 
 function BundleCard({ bundle, onDelete }: { bundle: SelectBundle; onDelete: (id: string) => void }) {

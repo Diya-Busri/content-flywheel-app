@@ -11,7 +11,10 @@ export type ContentRow = {
 
 export type TemplateStyle =
   | "minimal-luxury" | "dark-aesthetic" | "wellness"
-  | "clean-productivity" | "faceless-creator" | "modern-business";
+  | "clean-productivity" | "faceless-creator" | "modern-business"
+  | "viral-storytelling" | "aggressive-viral" | "educational-pro"
+  | "soft-feminine" | "tech-minimal" | "luxury-editorial"
+  | "chaos-raw" | "quote-focus-style";
 
 // ── Seeded deterministic RNG ───────────────────────────────────────────────────
 
@@ -105,12 +108,30 @@ type StyleCfg = {
 };
 
 export const TEMPLATE_CONFIGS: Record<TemplateStyle, StyleCfg> = {
+  // ── Original 6 ──────────────────────────────────────────────────────────────
   "minimal-luxury":    { headingColor: "#1A1A1A", bodyColor: "#4A4A4A", accentColor: "#C9A84C", hookFont: "Playfair Display", bodyFont: "Georgia" },
   "dark-aesthetic":    { headingColor: "#FFFFFF",  bodyColor: "#CCCCCC", accentColor: "#FF6B35", hookFont: "Oswald",           bodyFont: "Inter" },
   "wellness":          { headingColor: "#2D5016",  bodyColor: "#3D6B2A", accentColor: "#5C9A3E", hookFont: "Playfair Display", bodyFont: "Georgia" },
   "clean-productivity":{ headingColor: "#1E3A5F",  bodyColor: "#374151", accentColor: "#3B82F6", hookFont: "Inter",            bodyFont: "Inter" },
   "faceless-creator":  { headingColor: "#FFFFFF",  bodyColor: "#B0B8D0", accentColor: "#E94560", hookFont: "Oswald",           bodyFont: "Inter" },
   "modern-business":   { headingColor: "#FFFFFF",  bodyColor: "#CBD5E1", accentColor: "#F59E0B", hookFont: "Oswald",           bodyFont: "Inter" },
+  // ── New 8 ───────────────────────────────────────────────────────────────────
+  // Cinematic, emotional, curiosity-driven — warm dark palette
+  "viral-storytelling":{ headingColor: "#F5EFE0",  bodyColor: "#C8B89A", accentColor: "#E8A44A", hookFont: "Playfair Display", bodyFont: "Georgia" },
+  // Fast, bold, high-energy — fire red on pure black
+  "aggressive-viral":  { headingColor: "#FFFFFF",  bodyColor: "#E0E0E0", accentColor: "#FF2D00", hookFont: "Oswald",           bodyFont: "Inter" },
+  // Structured, swipe-worthy, saveable — indigo on white
+  "educational-pro":   { headingColor: "#0F172A",  bodyColor: "#334155", accentColor: "#6366F1", hookFont: "Inter",            bodyFont: "Inter" },
+  // Elegant, aesthetic, calming — mauve and blush
+  "soft-feminine":     { headingColor: "#3D1F3A",  bodyColor: "#7B5B78", accentColor: "#C97BB2", hookFont: "Playfair Display", bodyFont: "Georgia" },
+  // Modern AI/startup — electric cyan on charcoal
+  "tech-minimal":      { headingColor: "#F0F9FF",  bodyColor: "#94A3B8", accentColor: "#22D3EE", hookFont: "Inter",            bodyFont: "Inter" },
+  // Magazine-inspired premium — warm near-black, muted gold
+  "luxury-editorial":  { headingColor: "#1A1008",  bodyColor: "#5C4B3A", accentColor: "#8B7355", hookFont: "Playfair Display", bodyFont: "Georgia" },
+  // Messy, authentic, internet-native — highlighter yellow on white
+  "chaos-raw":         { headingColor: "#0A0A0A",  bodyColor: "#1F1F1F", accentColor: "#FFD60A", hookFont: "Oswald",           bodyFont: "Inter" },
+  // Minimal, emotional, impactful — warm cream, gold accent
+  "quote-focus-style": { headingColor: "#1A1A1A",  bodyColor: "#555555", accentColor: "#C4A86A", hookFont: "Playfair Display", bodyFont: "Georgia" },
 };
 
 // ── Background variants ────────────────────────────────────────────────────────
@@ -118,6 +139,7 @@ export const TEMPLATE_CONFIGS: Record<TemplateStyle, StyleCfg> = {
 type BgVariant = Pick<DesignData, "background" | "backgroundType" | "backgroundGradient">;
 
 const STYLE_BACKGROUNDS: Record<TemplateStyle, BgVariant[]> = {
+  // ── Original 6 ──────────────────────────────────────────────────────────────
   "minimal-luxury": [
     { background: "#FAFAF7", backgroundType: "solid" },
     { background: "#F5F3EE", backgroundType: "gradient", backgroundGradient: { color1: "#F5F3EE", color2: "#EEEBE3", angle: 145 } },
@@ -153,6 +175,63 @@ const STYLE_BACKGROUNDS: Record<TemplateStyle, BgVariant[]> = {
     { background: "#1A3558", backgroundType: "gradient", backgroundGradient: { color1: "#1A3558", color2: "#152d4f", angle: 155 } },
     { background: "#1F3C63", backgroundType: "solid" },
     { background: "#1C3860", backgroundType: "gradient", backgroundGradient: { color1: "#1C3860", color2: "#162f52", angle: 145 } },
+  ],
+  // ── New 8 ───────────────────────────────────────────────────────────────────
+  // Cinematic warm dark — like a movie colour grade
+  "viral-storytelling": [
+    { background: "#1A1208", backgroundType: "gradient", backgroundGradient: { color1: "#1A1208", color2: "#0E0B05", angle: 160 } },
+    { background: "#181006", backgroundType: "gradient", backgroundGradient: { color1: "#181006", color2: "#120D04", angle: 145 } },
+    { background: "#1C140A", backgroundType: "solid" },
+    { background: "#150F05", backgroundType: "gradient", backgroundGradient: { color1: "#150F05", color2: "#1E160A", angle: 135 } },
+  ],
+  // Pure black with a faint red warmth
+  "aggressive-viral": [
+    { background: "#050000", backgroundType: "solid" },
+    { background: "#080000", backgroundType: "gradient", backgroundGradient: { color1: "#080000", color2: "#120202", angle: 155 } },
+    { background: "#000000", backgroundType: "solid" },
+    { background: "#0A0101", backgroundType: "gradient", backgroundGradient: { color1: "#0A0101", color2: "#050000", angle: 140 } },
+  ],
+  // Ultra-clean white / blue-white
+  "educational-pro": [
+    { background: "#FFFFFF", backgroundType: "solid" },
+    { background: "#F8FAFD", backgroundType: "gradient", backgroundGradient: { color1: "#F8FAFD", color2: "#EEF2FF", angle: 150 } },
+    { background: "#FAFBFF", backgroundType: "solid" },
+    { background: "#F5F7FF", backgroundType: "gradient", backgroundGradient: { color1: "#F5F7FF", color2: "#ECEFFE", angle: 145 } },
+  ],
+  // Blush, lavender, and cream
+  "soft-feminine": [
+    { background: "#FAF0F5", backgroundType: "gradient", backgroundGradient: { color1: "#FAF0F5", color2: "#F0E0EB", angle: 155 } },
+    { background: "#F5EDF8", backgroundType: "gradient", backgroundGradient: { color1: "#F5EDF8", color2: "#EAD8F0", angle: 145 } },
+    { background: "#FDF5F8", backgroundType: "gradient", backgroundGradient: { color1: "#FDF5F8", color2: "#F4E4EC", angle: 160 } },
+    { background: "#F8F0FA", backgroundType: "solid" },
+  ],
+  // Dark charcoal with cool blue-black
+  "tech-minimal": [
+    { background: "#0A0E1A", backgroundType: "gradient", backgroundGradient: { color1: "#0A0E1A", color2: "#060910", angle: 145 } },
+    { background: "#080C18", backgroundType: "gradient", backgroundGradient: { color1: "#080C18", color2: "#0D1220", angle: 160 } },
+    { background: "#0C1020", backgroundType: "solid" },
+    { background: "#070B16", backgroundType: "gradient", backgroundGradient: { color1: "#070B16", color2: "#0A0F1C", angle: 135 } },
+  ],
+  // Warm ivory and cream — premium editorial paper
+  "luxury-editorial": [
+    { background: "#FAF7F2", backgroundType: "solid" },
+    { background: "#F7F3EC", backgroundType: "gradient", backgroundGradient: { color1: "#F7F3EC", color2: "#EDE7DA", angle: 150 } },
+    { background: "#FBF8F3", backgroundType: "solid" },
+    { background: "#F4EFE6", backgroundType: "gradient", backgroundGradient: { color1: "#F4EFE6", color2: "#EAE3D4", angle: 155 } },
+  ],
+  // Bright white — contrast makes the loud elements pop
+  "chaos-raw": [
+    { background: "#FFFFFF", backgroundType: "solid" },
+    { background: "#FAFAFA", backgroundType: "solid" },
+    { background: "#F9F9F6", backgroundType: "gradient", backgroundGradient: { color1: "#F9F9F6", color2: "#F2F2EC", angle: 170 } },
+    { background: "#FFFFFE", backgroundType: "solid" },
+  ],
+  // Off-white and warm white — purity lets the quote breathe
+  "quote-focus-style": [
+    { background: "#FDFCF9", backgroundType: "solid" },
+    { background: "#FAF8F4", backgroundType: "gradient", backgroundGradient: { color1: "#FAF8F4", color2: "#F2EFE6", angle: 155 } },
+    { background: "#FEFDFB", backgroundType: "solid" },
+    { background: "#F8F5EF", backgroundType: "gradient", backgroundGradient: { color1: "#F8F5EF", color2: "#EEE9DE", angle: 145 } },
   ],
 };
 
@@ -635,33 +714,192 @@ function buildEducational(
   return elements;
 }
 
+// 9. CINEMATIC FLOW ─ Golden-ratio hook. Hairline frames. Pure emotional cinema.
+function buildCinematicFlow(
+  post: ContentRow, cfg: StyleCfg, analysis: HookAnalysis,
+  rng: () => number, W: number, H: number,
+): DesignElement[] {
+  const fs: number = analysis.lengthClass === "short" ? 128 : analysis.lengthClass === "medium" ? 104 : 84;
+  const bodyFs = 34;
+  // Hook at golden ratio (~38% from top) for cinematic composition
+  const hookY = Math.round(H * 0.30) + Math.round(rng() * 50);
+  const hookW = W - 160;
+  const hookX = (W - hookW) / 2;
+  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const bodyY = hookY + hH + 130;
+  const sub = rng();
+
+  const elements: DesignElement[] = [
+    // Two hairline rules flanking center — like a film frame
+    rect("hl-left",  80, hookY - 70, W / 2 - 120, 1, cfg.accentColor, { opacity: 0.45 }),
+    rect("hl-right", W / 2 + 40, hookY - 70, W / 2 - 120, 1, cfg.accentColor, { opacity: 0.45 }),
+    // Giant hook — the only thing that matters
+    txt("hook", post.hook, hookX, hookY, hookW, hH, {
+      fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor,
+      fontWeight: "bold", textAlign: "center", lineHeight: 1.07,
+      letterSpacing: analysis.lengthClass === "short" ? -2 : -1,
+    }),
+    // Body: subtitle-small, fades into the dark
+    txt("body", post.mainText, W / 2 - 250, bodyY, 500, 580, {
+      fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
+      textAlign: "center", lineHeight: 1.75, opacity: 0.5,
+    }),
+  ];
+
+  if (sub < 0.5) {
+    // Whisper CTA — barely there
+    elements.push(txt("cta", post.cta, W / 2 - 220, H - 210, 440, 80, {
+      fontSize: 28, fontFamily: cfg.bodyFont, color: cfg.accentColor,
+      textAlign: "center", letterSpacing: 3, opacity: 0.8,
+    }));
+  } else {
+    // Hairline + CTA
+    elements.push(rect("cta-line", W / 2 - 60, H - 248, 120, 1, cfg.accentColor, { opacity: 0.5 }));
+    elements.push(txt("cta", post.cta, W / 2 - 220, H - 218, 440, 80, {
+      fontSize: 28, fontFamily: cfg.bodyFont, color: cfg.accentColor,
+      textAlign: "center", letterSpacing: 3,
+    }));
+  }
+
+  return elements;
+}
+
+// 10. RAW HIGHLIGHT ─ Highlighter-pen hook. Note-card body. Annotation-style CTA.
+function buildRawHighlight(
+  post: ContentRow, cfg: StyleCfg, analysis: HookAnalysis,
+  rng: () => number, W: number, H: number,
+): DesignElement[] {
+  const fs: number = analysis.lengthClass === "short" ? 100 : analysis.lengthClass === "medium" ? 82 : 68;
+  const bodyFs = bodyFontSize(post.mainText) - 2;
+  const leftX = 90;
+  const hookW = W - 180;
+  const hookY = 210 + Math.round(rng() * 60);
+  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const bodyY = hookY + hH + 90;
+  const sub = rng();
+
+  // Hook highlight block — manually drawn so we control the padding
+  const highlightPad = 20;
+  const elements: DesignElement[] = [
+    // Rough diagonal scratch marks in top corner — "chaotic" energy marker
+    rect("scratch1",  58,  72, 130, 7, cfg.accentColor, { rotation: -20, opacity: 0.75, zIndex: 0, borderRadius: 3 }),
+    rect("scratch2",  88, 102, 90,  7, cfg.accentColor, { rotation: -20, opacity: 0.35, zIndex: 0, borderRadius: 3 }),
+    // Highlighter block behind hook text
+    rect("hl-bg", leftX - highlightPad, hookY - highlightPad, hookW + highlightPad * 2, hH + highlightPad * 2,
+      cfg.accentColor + "38", { borderRadius: 10, zIndex: 1 }),
+    // Hook: sharp left-aligned, bold
+    txt("hook", post.hook, leftX, hookY, hookW, hH, {
+      fontSize: fs, fontFamily: cfg.hookFont, color: cfg.headingColor,
+      fontWeight: "bold", textAlign: "left", lineHeight: 1.1, zIndex: 2,
+    }),
+    // Note-card body — subtle fill for the "sticky note" feel
+    rect("body-bg", leftX - 16, bodyY - 16, W - 148, 520, cfg.accentColor + "12", {
+      borderRadius: 10, zIndex: 1,
+    }),
+    txt("body", post.mainText, leftX + 4, bodyY + 4, W - 184, 490, {
+      fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
+      textAlign: "left", lineHeight: 1.55, zIndex: 2,
+    }),
+  ];
+
+  if (sub < 0.55) {
+    // Arrow-annotation CTA — hand-drawn feel
+    elements.push(rect("cta-ul", leftX, H - 274, 200, 5, cfg.accentColor, { rotation: -1.5, borderRadius: 2, zIndex: 2 }));
+    elements.push(txt("cta", "→  " + post.cta, leftX, H - 340, W - 200, 130, {
+      fontSize: 42, fontFamily: cfg.hookFont, color: cfg.accentColor,
+      fontWeight: "bold", textAlign: "left", zIndex: 2,
+    }));
+  } else {
+    // Second highlight chip for CTA
+    const ctaText = post.cta;
+    const ctaW = Math.min(ctaText.length * 28 + 80, W - 200);
+    elements.push(rect("cta-bg", leftX - 10, H - 330, ctaW, 110, cfg.accentColor + "25", { borderRadius: 10, zIndex: 1 }));
+    elements.push(txt("cta", ctaText, leftX + 4, H - 318, ctaW - 20, 90, {
+      fontSize: 40, fontFamily: cfg.hookFont, color: cfg.headingColor,
+      fontWeight: "bold", textAlign: "left", zIndex: 2,
+    }));
+  }
+
+  return elements;
+}
+
 // ── Personality selection ──────────────────────────────────────────────────────
 
 type PersonalityId =
   | "hero-statement" | "editorial" | "quote-focus" | "split-composition"
-  | "cta-punch" | "minimal-luxury" | "aggressive-viral" | "educational";
+  | "cta-punch" | "minimal-luxury" | "aggressive-viral" | "educational"
+  | "cinematic-flow" | "raw-highlight";
 
-const ROLE_POOLS: Record<SlideRole, [PersonalityId, number][]> = {
-  hook: [
-    ["hero-statement", 35], ["aggressive-viral", 30],
-    ["quote-focus", 20], ["split-composition", 15],
-  ],
-  supporting: [
-    ["editorial", 30], ["educational", 25],
-    ["split-composition", 25], ["minimal-luxury", 20],
-  ],
-  tip: [
-    ["educational", 40], ["editorial", 30],
-    ["split-composition", 20], ["minimal-luxury", 10],
-  ],
-  emotional: [
-    ["quote-focus", 35], ["hero-statement", 25],
-    ["minimal-luxury", 25], ["editorial", 15],
-  ],
-  cta: [
-    ["cta-punch", 50], ["hero-statement", 20],
-    ["split-composition", 20], ["editorial", 10],
-  ],
+type RolePool = [PersonalityId, number][];
+type StyleRolePools = Record<SlideRole, RolePool>;
+
+// Default pools — used by the original 6 styles
+const DEFAULT_ROLE_POOLS: StyleRolePools = {
+  hook:      [["hero-statement", 35], ["aggressive-viral", 30], ["quote-focus", 20], ["split-composition", 15]],
+  supporting:[["editorial", 30], ["educational", 25], ["split-composition", 25], ["minimal-luxury", 20]],
+  tip:       [["educational", 40], ["editorial", 30], ["split-composition", 20], ["minimal-luxury", 10]],
+  emotional: [["quote-focus", 35], ["hero-statement", 25], ["minimal-luxury", 25], ["editorial", 15]],
+  cta:       [["cta-punch", 50], ["hero-statement", 20], ["split-composition", 20], ["editorial", 10]],
+};
+
+// Per-style overrides — each new personality gets pools that amplify its identity
+const STYLE_ROLE_POOLS: Partial<Record<TemplateStyle, StyleRolePools>> = {
+  "viral-storytelling": {
+    hook:      [["cinematic-flow", 50], ["hero-statement", 30], ["quote-focus", 20]],
+    supporting:[["cinematic-flow", 40], ["hero-statement", 30], ["editorial", 30]],
+    tip:       [["cinematic-flow", 35], ["editorial", 35], ["minimal-luxury", 30]],
+    emotional: [["cinematic-flow", 50], ["quote-focus", 35], ["hero-statement", 15]],
+    cta:       [["hero-statement", 40], ["cta-punch", 35], ["cinematic-flow", 25]],
+  },
+  "aggressive-viral": {
+    hook:      [["aggressive-viral", 60], ["cta-punch", 25], ["split-composition", 15]],
+    supporting:[["aggressive-viral", 45], ["split-composition", 35], ["editorial", 20]],
+    tip:       [["aggressive-viral", 35], ["educational", 30], ["split-composition", 35]],
+    emotional: [["aggressive-viral", 50], ["hero-statement", 30], ["cta-punch", 20]],
+    cta:       [["cta-punch", 55], ["aggressive-viral", 35], ["split-composition", 10]],
+  },
+  "educational-pro": {
+    hook:      [["educational", 45], ["editorial", 35], ["split-composition", 20]],
+    supporting:[["educational", 55], ["editorial", 25], ["split-composition", 20]],
+    tip:       [["educational", 65], ["editorial", 20], ["minimal-luxury", 15]],
+    emotional: [["editorial", 40], ["hero-statement", 35], ["educational", 25]],
+    cta:       [["educational", 40], ["cta-punch", 35], ["split-composition", 25]],
+  },
+  "soft-feminine": {
+    hook:      [["minimal-luxury", 40], ["quote-focus", 35], ["hero-statement", 25]],
+    supporting:[["minimal-luxury", 45], ["editorial", 30], ["quote-focus", 25]],
+    tip:       [["minimal-luxury", 40], ["editorial", 35], ["quote-focus", 25]],
+    emotional: [["quote-focus", 55], ["minimal-luxury", 30], ["hero-statement", 15]],
+    cta:       [["minimal-luxury", 40], ["hero-statement", 35], ["cta-punch", 25]],
+  },
+  "tech-minimal": {
+    hook:      [["editorial", 40], ["split-composition", 35], ["hero-statement", 25]],
+    supporting:[["editorial", 45], ["split-composition", 30], ["educational", 25]],
+    tip:       [["educational", 40], ["editorial", 35], ["split-composition", 25]],
+    emotional: [["hero-statement", 40], ["minimal-luxury", 35], ["editorial", 25]],
+    cta:       [["cta-punch", 50], ["split-composition", 30], ["editorial", 20]],
+  },
+  "luxury-editorial": {
+    hook:      [["editorial", 45], ["minimal-luxury", 35], ["quote-focus", 20]],
+    supporting:[["editorial", 40], ["minimal-luxury", 40], ["quote-focus", 20]],
+    tip:       [["editorial", 50], ["minimal-luxury", 30], ["split-composition", 20]],
+    emotional: [["quote-focus", 45], ["minimal-luxury", 35], ["editorial", 20]],
+    cta:       [["editorial", 40], ["minimal-luxury", 35], ["cta-punch", 25]],
+  },
+  "chaos-raw": {
+    hook:      [["raw-highlight", 55], ["aggressive-viral", 25], ["split-composition", 20]],
+    supporting:[["raw-highlight", 45], ["educational", 30], ["aggressive-viral", 25]],
+    tip:       [["educational", 35], ["raw-highlight", 40], ["split-composition", 25]],
+    emotional: [["raw-highlight", 45], ["hero-statement", 30], ["quote-focus", 25]],
+    cta:       [["cta-punch", 40], ["raw-highlight", 35], ["aggressive-viral", 25]],
+  },
+  "quote-focus-style": {
+    hook:      [["quote-focus", 60], ["hero-statement", 25], ["minimal-luxury", 15]],
+    supporting:[["quote-focus", 45], ["minimal-luxury", 35], ["hero-statement", 20]],
+    tip:       [["quote-focus", 35], ["minimal-luxury", 35], ["editorial", 30]],
+    emotional: [["quote-focus", 65], ["hero-statement", 20], ["minimal-luxury", 15]],
+    cta:       [["hero-statement", 40], ["cta-punch", 35], ["quote-focus", 25]],
+  },
 };
 
 const PERSONALITY_BUILDERS: Record<
@@ -676,14 +914,18 @@ const PERSONALITY_BUILDERS: Record<
   "minimal-luxury":    buildMinimalLuxury,
   "aggressive-viral":  buildAggressiveViral,
   "educational":       buildEducational,
+  "cinematic-flow":    buildCinematicFlow,
+  "raw-highlight":     buildRawHighlight,
 };
 
 function selectPersonality(
   role: SlideRole,
+  style: TemplateStyle,
   usedPersonalities: PersonalityId[],
   rng: () => number,
 ): PersonalityId {
-  const pool = ROLE_POOLS[role];
+  const pools = STYLE_ROLE_POOLS[style] ?? DEFAULT_ROLE_POOLS;
+  const pool = pools[role];
   // Penalise recent repeats for visual rhythm
   const adjusted: [PersonalityId, number][] = pool.map(([id, w]) => {
     const recentIdx = usedPersonalities.slice(-3).lastIndexOf(id);
@@ -712,7 +954,7 @@ export function buildSlideDesign(
   const cfg = TEMPLATE_CONFIGS[styleKey];
   const analysis = analyzeHook(post.hook);
   const role = getSlideRole(slideIndex, totalSlides);
-  const personality = selectPersonality(role, usedLayoutIds as PersonalityId[], rng);
+  const personality = selectPersonality(role, styleKey, usedLayoutIds as PersonalityId[], rng);
 
   const bgList = STYLE_BACKGROUNDS[styleKey];
   const bgVariant = bgList[Math.floor(rng() * bgList.length)];

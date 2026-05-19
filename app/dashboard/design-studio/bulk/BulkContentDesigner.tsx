@@ -45,12 +45,22 @@ type TemplateMeta = {
 };
 
 const TEMPLATE_META: Record<TemplateStyle, TemplateMeta> = {
-  "minimal-luxury":    { label: "Minimal Luxury",    description: "Clean, elegant, premium",          emoji: "✨", previewBg: "#FAFAF7",                         previewText: "#1A1A1A", previewAccent: "#C9A84C" },
-  "dark-aesthetic":    { label: "Dark Aesthetic",    description: "Bold, edgy, raw",                  emoji: "🖤", previewBg: "#0D0D0D",                         previewText: "#FFFFFF", previewAccent: "#FF6B35" },
-  "wellness":          { label: "Wellness",           description: "Calm, nurturing, natural",          emoji: "🌿", previewBg: "linear-gradient(160deg,#E8F0E8,#C5DBC5)", previewText: "#2D5016", previewAccent: "#5C9A3E" },
-  "clean-productivity":{ label: "Clean Productivity", description: "Clear, actionable, focused",        emoji: "⚡", previewBg: "#FFFFFF",                         previewText: "#1E3A5F", previewAccent: "#3B82F6" },
-  "faceless-creator":  { label: "Faceless Creator",  description: "Mysterious, viral, relatable",      emoji: "🎭", previewBg: "linear-gradient(135deg,#1a1a2e,#16213e)", previewText: "#FFFFFF", previewAccent: "#E94560" },
-  "modern-business":   { label: "Modern Business",   description: "Professional, confident, results",  emoji: "💼", previewBg: "#1E3A5F",                         previewText: "#FFFFFF", previewAccent: "#F59E0B" },
+  // ── Original 6 ──────────────────────────────────────────────────────────────
+  "minimal-luxury":    { label: "Minimal Luxury",      description: "Clean, elegant, premium",            emoji: "✨", previewBg: "#FAFAF7",                              previewText: "#1A1A1A", previewAccent: "#C9A84C" },
+  "dark-aesthetic":    { label: "Dark Aesthetic",      description: "Bold, edgy, raw",                    emoji: "🖤", previewBg: "#0D0D0D",                              previewText: "#FFFFFF", previewAccent: "#FF6B35" },
+  "wellness":          { label: "Wellness",             description: "Calm, nurturing, natural",            emoji: "🌿", previewBg: "linear-gradient(160deg,#E8F0E8,#C5DBC5)", previewText: "#2D5016", previewAccent: "#5C9A3E" },
+  "clean-productivity":{ label: "Clean Productivity",  description: "Clear, actionable, focused",          emoji: "⚡", previewBg: "#FFFFFF",                              previewText: "#1E3A5F", previewAccent: "#3B82F6" },
+  "faceless-creator":  { label: "Faceless Creator",    description: "Mysterious, viral, relatable",        emoji: "🎭", previewBg: "linear-gradient(135deg,#1a1a2e,#16213e)", previewText: "#FFFFFF", previewAccent: "#E94560" },
+  "modern-business":   { label: "Modern Business",     description: "Professional, confident, results",    emoji: "💼", previewBg: "#1E3A5F",                              previewText: "#FFFFFF", previewAccent: "#F59E0B" },
+  // ── New 8 ───────────────────────────────────────────────────────────────────
+  "viral-storytelling":{ label: "Viral Storytelling",  description: "Cinematic, emotional, curiosity-driven", emoji: "🎬", previewBg: "linear-gradient(160deg,#1A1208,#0E0B05)", previewText: "#F5EFE0", previewAccent: "#E8A44A" },
+  "aggressive-viral":  { label: "Aggressive Viral",    description: "Fast, bold, high-energy",            emoji: "🔥", previewBg: "#050000",                              previewText: "#FFFFFF", previewAccent: "#FF2D00" },
+  "educational-pro":   { label: "Educational Pro",     description: "Structured, swipe-worthy, saveable", emoji: "📚", previewBg: "#FFFFFF",                              previewText: "#0F172A", previewAccent: "#6366F1" },
+  "soft-feminine":     { label: "Soft Feminine",       description: "Elegant, aesthetic, calming",         emoji: "🌸", previewBg: "linear-gradient(155deg,#FAF0F5,#F0E0EB)", previewText: "#3D1F3A", previewAccent: "#C97BB2" },
+  "tech-minimal":      { label: "Tech Minimal",        description: "Modern AI/startup aesthetic",         emoji: "🤖", previewBg: "linear-gradient(145deg,#0A0E1A,#060910)", previewText: "#F0F9FF", previewAccent: "#22D3EE" },
+  "luxury-editorial":  { label: "Luxury Editorial",    description: "Magazine-inspired premium design",    emoji: "🗞️", previewBg: "#FAF7F2",                              previewText: "#1A1008", previewAccent: "#8B7355" },
+  "chaos-raw":         { label: "Chaos / Raw",         description: "Messy, authentic, internet-native",  emoji: "✏️", previewBg: "#FFFFFF",                              previewText: "#0A0A0A", previewAccent: "#FFD60A" },
+  "quote-focus-style": { label: "Quote Focus",         description: "Minimal, emotional, impactful",      emoji: "💬", previewBg: "#FDFCF9",                              previewText: "#1A1A1A", previewAccent: "#C4A86A" },
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
