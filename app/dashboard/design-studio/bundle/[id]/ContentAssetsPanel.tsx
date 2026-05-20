@@ -218,11 +218,11 @@ export function ContentAssetsPanel({
       `=== ${bundleTitle} — Social Media Package ===\n`,
       `--- INSTAGRAM CAPTION ---\n${assets.mainCaption.instagram}`,
       `--- TIKTOK CAPTION ---\n${assets.mainCaption.tiktok}`,
-      `--- HOOKS ---\n${assets.hooks.map((h, i) => `${i + 1}. ${h}`).join("\n")}`,
-      `--- CTAs ---\n${assets.ctaSuggestions.join("\n")}`,
-      `--- HASHTAGS (NICHE) ---\n${assets.hashtagSets.niche.join(" ")}`,
-      `--- HASHTAGS (BROAD) ---\n${assets.hashtagSets.broad.join(" ")}`,
-      `--- HASHTAGS (LOW COMPETITION) ---\n${assets.hashtagSets.lowCompetition.join(" ")}`,
+      `--- HOOKS ---\n${(assets.hooks ?? []).map((h, i) => `${i + 1}. ${h}`).join("\n")}`,
+      `--- CTAs ---\n${(assets.ctaSuggestions ?? []).join("\n")}`,
+      `--- HASHTAGS (NICHE) ---\n${(assets.hashtagSets?.niche ?? []).join(" ")}`,
+      `--- HASHTAGS (BROAD) ---\n${(assets.hashtagSets?.broad ?? []).join(" ")}`,
+      `--- HASHTAGS (LOW COMPETITION) ---\n${(assets.hashtagSets?.lowCompetition ?? []).join(" ")}`,
       `--- PLATFORM VARIANTS ---`,
       `Instagram: ${assets.platformVariants.instagram}`,
       `TikTok: ${assets.platformVariants.tiktok}`,
@@ -378,7 +378,7 @@ export function ContentAssetsPanel({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => copy(assets.hooks.join("\n"), "hooks-all")}
+                onClick={() => copy((assets.hooks ?? []).join("\n"), "hooks-all")}
                 className={`gap-1.5 text-xs h-7 ${dimCls}`}
               >
                 {isCopied("hooks-all") ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -387,7 +387,7 @@ export function ContentAssetsPanel({
             }
           />
           <div className="space-y-2">
-            {assets.hooks.map((hook, i) => (
+            {(assets.hooks ?? []).map((hook, i) => (
               <div
                 key={i}
                 className={`flex items-center gap-2 rounded-lg px-3 py-2.5 border ${
@@ -398,7 +398,7 @@ export function ContentAssetsPanel({
                 <input
                   value={hook}
                   onChange={(e) => {
-                    const next = assets.hooks.map((h, j) => (j === i ? e.target.value : h));
+                    const next = (assets.hooks ?? []).map((h, j) => (j === i ? e.target.value : h));
                     patch("hooks", next);
                   }}
                   className="flex-1 text-sm bg-transparent focus:outline-none text-gray-800 dark:text-gray-100 min-w-0"
@@ -410,7 +410,7 @@ export function ContentAssetsPanel({
                     text={hook}
                     context={`Posting hook for ${bundleStyle.replace(/-/g, " ")} style carousel`}
                     onRewrite={(t) => {
-                      const next = assets.hooks.map((h, j) => (j === i ? t : h));
+                      const next = (assets.hooks ?? []).map((h, j) => (j === i ? t : h));
                       patch("hooks", next);
                     }}
                   />
@@ -429,7 +429,7 @@ export function ContentAssetsPanel({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => copy(assets.ctaSuggestions.join("\n"), "ctas-all")}
+                onClick={() => copy((assets.ctaSuggestions ?? []).join("\n"), "ctas-all")}
                 className={`gap-1.5 text-xs h-7 ${dimCls}`}
               >
                 {isCopied("ctas-all") ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -438,7 +438,7 @@ export function ContentAssetsPanel({
             }
           />
           <div className="flex flex-wrap gap-2">
-            {assets.ctaSuggestions.map((cta, i) => (
+            {(assets.ctaSuggestions ?? []).map((cta, i) => (
               <div
                 key={i}
                 className={`group flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
@@ -448,7 +448,7 @@ export function ContentAssetsPanel({
                 <input
                   value={cta}
                   onChange={(e) => {
-                    const next = assets.ctaSuggestions.map((c, j) => (j === i ? e.target.value : c));
+                    const next = (assets.ctaSuggestions ?? []).map((c, j) => (j === i ? e.target.value : c));
                     patch("ctaSuggestions", next);
                   }}
                   className="bg-transparent focus:outline-none text-sm text-gray-800 dark:text-gray-100 min-w-0 w-auto"
@@ -479,7 +479,7 @@ export function ContentAssetsPanel({
             }
           />
           <div className="flex flex-wrap gap-1.5 mb-3">
-            {assets.hashtagSets[hashtagTab].map((tag, i) => (
+            {(assets.hashtagSets?.[hashtagTab] ?? []).map((tag, i) => (
               <button
                 key={i}
                 onClick={() => copy(tag, `tag-${hashtagTab}-${i}`)}
@@ -498,7 +498,7 @@ export function ContentAssetsPanel({
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => copy(assets.hashtagSets[hashtagTab].join(" "), `hashtags-${hashtagTab}`)}
+            onClick={() => copy((assets.hashtagSets?.[hashtagTab] ?? []).join(" "), `hashtags-${hashtagTab}`)}
             className={`gap-1.5 text-xs h-7 ${dimCls}`}
           >
             {isCopied(`hashtags-${hashtagTab}`) ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}

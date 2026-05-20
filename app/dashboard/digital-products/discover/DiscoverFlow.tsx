@@ -2337,7 +2337,7 @@ export default function DiscoverFlow() {
                   <AccordionContent>
                     <p className="text-xs text-muted-foreground mb-3">Why each hook works is listed below.</p>
                     <div className="space-y-3">
-                      {salesGuide.hooks.map((h, i) => (
+                      {(salesGuide.hooks ?? []).map((h, i) => (
                         <div key={i} className="rounded-xl border-l-4 border-orange-500 bg-background p-4">
                           <p className="text-sm text-foreground mb-1">&ldquo;{h.text}&rdquo;</p>
                           <p className="text-xs text-[#888]">Why it works: {h.whyItWorks}</p>
