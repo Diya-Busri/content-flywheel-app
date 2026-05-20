@@ -55,15 +55,10 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       label: "Create",
       items: [
         { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", emoji: "🤖", featureKey: "ai_coach" },
-        { href: "/dashboard/content-studio", icon: <Clapperboard size={18} />, label: "Content Studio", emoji: "🎬", activeWhenStartsWith: true },
-        { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true, featureKey: "template_studio" },
         { href: "/dashboard/design-studio", icon: <Palette size={18} />, label: "Design Studio", emoji: "✏️", activeWhenStartsWith: true, featureKey: "design_studio" },
-        { href: "/dashboard/brand-kit", icon: <Brush size={18} />, label: "Brand Kit", emoji: "🖌️", activeWhenStartsWith: true },
-        { href: "/dashboard/ugc-lab", icon: <FlaskConical size={18} />, label: "UGC Lab", emoji: "🧪", activeWhenStartsWith: true, featureKey: "ugc_lab" },
-        { href: "/dashboard/video-timeline", icon: <Film size={18} />, label: "Video Timeline", emoji: "🎞️", featureKey: "video_timeline" },
-        { href: "/dashboard/my-videos", icon: <Video size={18} />, label: "My Videos", emoji: "🎥", activeWhenStartsWith: true },
-        { href: "/dashboard/video-credits", icon: <CreditCard size={18} />, label: "Video Credits", emoji: "💳", featureKey: "video_credits" },
-        { href: "/dashboard/content-studio/youtube-upload", icon: <Youtube size={18} />, label: "Upload to YouTube", emoji: "▶️", activeWhenStartsWith: true, featureKey: "youtube_upload" },
+        { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️", activeWhenStartsWith: true, featureKey: "tiktok_shop" },
+        { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦", activeWhenStartsWith: true, featureKey: "digital_products" },
+        { href: "/dashboard/video-credits", icon: <Film size={18} />, label: "Video Credits", emoji: "🎥", featureKey: "video_credits" },
       ],
     },
     {
@@ -72,30 +67,13 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚", featureKey: "my_library" },
         { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅", featureKey: "content_calendar" },
         { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅", featureKey: "script_checker" },
-        { href: "/dashboard/caption-library", icon: <BookMarked size={18} />, label: "Caption Library", emoji: "🔖", activeWhenStartsWith: true, featureKey: "caption_library" },
         { href: "/dashboard/todo", icon: <ListTodo size={18} />, label: "To-Do List", emoji: "📋", activeWhenStartsWith: true },
       ],
     },
     {
       label: "Sell",
       items: [
-        { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦", activeWhenStartsWith: true, featureKey: "digital_products" },
-        { href: "/dashboard/store", icon: <Store size={18} />, label: "My Store", emoji: "🏪", activeWhenStartsWith: true },
-        { href: "/dashboard/orders", icon: <Receipt size={18} />, label: "Orders", emoji: "🧾", activeWhenStartsWith: true },
-        { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️", activeWhenStartsWith: true, featureKey: "tiktok_shop" },
         { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", emoji: "👕", activeWhenStartsWith: true, featureKey: "print_on_demand" },
-      ],
-    },
-    {
-      label: "Grow",
-      items: [
-        { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧", activeWhenStartsWith: true, featureKey: "email_marketing" },
-        { href: "/dashboard/goals", icon: <Target size={18} />, label: "Track Goals", emoji: "🎯", activeWhenStartsWith: true, featureKey: "goal_tracker" },
-        { href: "/dashboard/campaign-mode", icon: <Megaphone size={18} />, label: "Campaign Mode", emoji: "📣", activeWhenStartsWith: true },
-        { href: "/dashboard/referral", icon: <Gift size={18} />, label: "Referral", emoji: "🎁", activeWhenStartsWith: true },
-        { href: "/dashboard/bio-page", icon: <Link2 size={18} />, label: "Link in Bio", emoji: "🔗", activeWhenStartsWith: true },
-        { href: "/dashboard/drop-campaign", icon: <Zap size={18} />, label: "Drop Campaign", emoji: "🚀", activeWhenStartsWith: true, featureKey: "drop_campaign" },
-        { href: "/dashboard/grow", icon: <TrendingUp size={18} />, label: "Grow Hub", emoji: "📈", activeWhenStartsWith: true, featureKey: "grow_hub" },
       ],
     },
   ].map((group) => ({ ...group, items: group.items.filter((item) => !item.featureKey || !disabled.has(item.featureKey)) }));
@@ -418,40 +396,26 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
                   </div>
                 ))}
               </div>
-              {/* Bottom utilities in sheet */}
-              <div className="mt-4 pt-4 border-t border-[#E5E7EB] dark:border-white/10 space-y-1">
-                <Link href="/dashboard/settings" onClick={() => setMobileNavOpen(false)} className="block">
-                  <div className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${pathname === "/dashboard/settings" ? "bg-orange-500 text-white" : "text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10"}`}>
-                    <Settings size={18} />
-                    <span className="text-sm font-medium">⚙️ Settings</span>
-                  </div>
-                </Link>
-                <button onClick={() => { setMobileNavOpen(false); setHelpOpen(true); }} className="w-full flex items-center gap-3 py-3 px-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
-                  <HelpCircle size={18} />
-                  <span className="text-sm font-medium">❓ Help</span>
-                </button>
-                {onOpenReview && (
-                  <button onClick={() => { setMobileNavOpen(false); onOpenReview(); }} className="w-full flex items-center gap-3 py-3 px-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
-                    <Star size={18} />
-                    <span className="text-sm font-medium">⭐ Leave a review</span>
+              {/* Settings group */}
+              <div className="mt-4 pt-4 border-t border-[#E5E7EB] dark:border-white/10">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-600 px-2 mb-1.5">Settings</p>
+                <div className="space-y-0.5">
+                  <Link href="/dashboard/settings" onClick={() => setMobileNavOpen(false)} className="block">
+                    <div className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${pathname === "/dashboard/settings" ? "bg-orange-500 text-white" : "text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10"}`}>
+                      <Settings size={18} />
+                      <span className="text-sm font-medium">⚙️ Settings</span>
+                    </div>
+                  </Link>
+                  <Link href="/pricing" onClick={() => setMobileNavOpen(false)} className="block">
+                    <div className="flex items-center gap-3 py-3 px-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                      <CreditCard size={18} />
+                      <span className="text-sm font-medium">💳 Billing</span>
+                    </div>
+                  </Link>
+                  <button onClick={() => { toggleTheme(); setMobileNavOpen(false); }} className="w-full flex items-center gap-3 py-3 px-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                    {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+                    <span className="text-sm font-medium">{theme === "dark" ? "☀️ Light mode" : "🌙 Dark mode"}</span>
                   </button>
-                )}
-                <button onClick={() => { toggleTheme(); setMobileNavOpen(false); }} className="w-full flex items-center gap-3 py-3 px-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
-                  {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-                  <span className="text-sm font-medium">{theme === "dark" ? "☀️ Light mode" : "🌙 Dark mode"}</span>
-                </button>
-                <Link href="/pricing" onClick={() => setMobileNavOpen(false)} className="block">
-                  <div className="flex items-center gap-3 py-3 px-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
-                    <CreditCard size={18} />
-                    <span className="text-sm font-medium">💳 Billing</span>
-                  </div>
-                </Link>
-                {/* Account */}
-                <div className="flex items-center gap-3 py-3 px-3 rounded-xl text-gray-700 dark:text-gray-300">
-                  <div className="w-5 h-5 rounded-full overflow-hidden border border-[#E5E7EB] dark:border-white/20 flex items-center justify-center bg-black/5 dark:bg-white/10">
-                    {mounted && <UserButton afterSignOutUrl="/" appearance={{ elements: { userButtonAvatarBox: "w-5 h-5", userButtonTrigger: "w-5 h-5 rounded-full" } }} />}
-                  </div>
-                  <span className="text-sm font-medium truncate">{userEmail || "Account"}</span>
                 </div>
               </div>
             </nav>
