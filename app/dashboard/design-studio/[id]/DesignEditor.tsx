@@ -11,6 +11,7 @@ import {
   MoveLeft, MoveRight, MoveUp, MoveDown, Undo2, Redo2,
   Underline, Strikethrough, ZoomIn, ZoomOut, FileDown, Highlighter,
   LayoutTemplate, Images, Layers, X, Settings2, Palette,
+  Grid3x3, Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +64,41 @@ const QUICK_COLORS = [
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
+
+// ── Alignment snapping ─────────────────────────────────────────────────────
+type SnapGuide = { axis: "h" | "v"; pos: number };
+
+const SNAP_THRESHOLD = 8; // canvas-space pixels
+
+function snapElement(
+  x: number, y: number, w: number, h: number,
+  canvasW: number, canvasH: number,
+  others: { x: number; y: number; width: number; height: number }[],
+): { x: number; y: number; guides: SnapGuide[] } {
+  const vTargets = [0, canvasW / 2, canvasW, ...others.flatMap((e) => [e.x, e.x + e.width / 2, e.x + e.width])];
+  const hTargets = [0, canvasH / 2, canvasH, ...others.flatMap((e) => [e.y, e.y + e.height / 2, e.y + e.height])];
+  const elXPts = [{ pt: x, off: 0 }, { pt: x + w / 2, off: w / 2 }, { pt: x + w, off: w }];
+  const elYPts = [{ pt: y, off: 0 }, { pt: y + h / 2, off: h / 2 }, { pt: y + h, off: h }];
+  let snappedX = x, snappedY = y;
+  const guides: SnapGuide[] = [];
+  let bestX = SNAP_THRESHOLD + 1, snapXT: number | null = null, snapXOff = 0;
+  for (const { pt, off } of elXPts) {
+    for (const t of vTargets) {
+      const d = Math.abs(pt - t);
+      if (d < bestX) { bestX = d; snapXT = t; snapXOff = off; }
+    }
+  }
+  if (snapXT !== null && bestX <= SNAP_THRESHOLD) { snappedX = snapXT - snapXOff; guides.push({ axis: "v", pos: snapXT }); }
+  let bestY = SNAP_THRESHOLD + 1, snapYT: number | null = null, snapYOff = 0;
+  for (const { pt, off } of elYPts) {
+    for (const t of hTargets) {
+      const d = Math.abs(pt - t);
+      if (d < bestY) { bestY = d; snapYT = t; snapYOff = off; }
+    }
+  }
+  if (snapYT !== null && bestY <= SNAP_THRESHOLD) { snappedY = snapYT - snapYOff; guides.push({ axis: "h", pos: snapYT }); }
+  return { x: snappedX, y: snappedY, guides };
+}
 function hexToRgba(hex: string, opacity: number): string {
   const h = hex.replace("#", "");
   const r = parseInt(h.slice(0, 2), 16) || 0;
@@ -380,6 +416,9 @@ export function DesignEditor({ designId }: { designId: string }) {
   });
   const [mobileToolSheet, setMobileToolSheet] = useState<"shapes" | "ai" | "templates" | "uploads" | "background" | null>(null);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
+  const [activeGuides, setActiveGuides] = useState<SnapGuide[]>([]);
+  const [showGrid, setShowGrid] = useState(false);
+  const [showSafeArea, setShowSafeArea] = useState(false);
 
   function togglePanel(panel: "shapes" | "ai" | "templates" | "uploads", e: React.MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -667,15 +706,18 @@ export function DesignEditor({ designId }: { designId: string }) {
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: el.x, origY: el.y };
     // Pointer capture keeps events flowing even if finger slides off the element
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const others = data.elements.filter((x) => x.id !== id);
     const onMove = (ev: PointerEvent) => {
       if (!dragRef.current) return;
-      updateElement(id, {
-        x: clamp(dragRef.current.origX + (ev.clientX - dragRef.current.startX) / scale, -el.width + 20, data.width - 20),
-        y: clamp(dragRef.current.origY + (ev.clientY - dragRef.current.startY) / scale, -el.height + 20, data.height - 20),
-      }, false);
+      const rawX = clamp(dragRef.current.origX + (ev.clientX - dragRef.current.startX) / scale, -el.width + 20, data.width - 20);
+      const rawY = clamp(dragRef.current.origY + (ev.clientY - dragRef.current.startY) / scale, -el.height + 20, data.height - 20);
+      const { x, y, guides } = snapElement(rawX, rawY, el.width, el.height, data.width, data.height, others);
+      setActiveGuides(guides);
+      updateElement(id, { x, y }, false);
     };
     const onUp = () => {
       dragRef.current = null;
+      setActiveGuides([]);
       pushHistory(historyRef.current[historyIdx.current]);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
@@ -837,6 +879,9 @@ export function DesignEditor({ designId }: { designId: string }) {
           <span className={`hidden md:inline text-xs w-12 text-center tabular-nums ${isDark ? "text-gray-400" : "text-gray-500"}`}>{Math.round(scale * 100)}%</span>
           <Button size="sm" variant="ghost" onClick={() => setScale((s) => Math.min(2, +(s + 0.1).toFixed(1)))} className={`hidden md:inline-flex h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Zoom in"><ZoomIn className="w-4 h-4" /></Button>
           <div className={`hidden md:block h-5 w-px mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+          <Button size="sm" variant="ghost" onClick={() => setShowGrid((v) => !v)} className={`hidden md:inline-flex h-8 w-8 p-0 ${showGrid ? "text-orange-500" : isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Toggle grid overlay"><Grid3x3 className="w-4 h-4" /></Button>
+          <Button size="sm" variant="ghost" onClick={() => setShowSafeArea((v) => !v)} className={`hidden md:inline-flex h-8 w-8 p-0 ${showSafeArea ? "text-orange-500" : isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Toggle safe area (TikTok/Reels)"><Smartphone className="w-4 h-4" /></Button>
+          <div className={`hidden md:block h-5 w-px mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
           <Button size="sm" variant="outline" className={`hidden md:inline-flex gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`} onClick={duplicateDesign} title="Duplicate design">
             <Copy className="w-4 h-4" /> Duplicate
           </Button>
@@ -920,6 +965,17 @@ export function DesignEditor({ designId }: { designId: string }) {
               {(data.backgroundImageOverlayOpacity ?? 0) > 0 && data.backgroundImage && (
                 <div style={{ position: "absolute", inset: 0, background: hexToRgba(data.backgroundImageOverlayColor ?? "#000000", data.backgroundImageOverlayOpacity ?? 0), zIndex: -1, pointerEvents: "none" }} />
               )}
+              {/* Grid overlay */}
+              {showGrid && (
+                <div style={{ position: "absolute", inset: 0, zIndex: 1000, pointerEvents: "none", backgroundImage: "linear-gradient(rgba(99,102,241,0.25) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.25) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+              )}
+              {/* Safe area overlay (TikTok/Reels 9:16 safe zone ~10% inset) */}
+              {showSafeArea && (
+                <div style={{ position: "absolute", inset: 0, zIndex: 1001, pointerEvents: "none" }}>
+                  <div style={{ position: "absolute", top: "10%", left: "10%", right: "10%", bottom: "10%", border: "2px dashed rgba(251,146,60,0.7)", borderRadius: 4 }} />
+                  <span style={{ position: "absolute", top: "calc(10% + 4px)", left: "calc(10% + 6px)", fontSize: 11, color: "rgba(251,146,60,0.9)", fontFamily: "Inter, sans-serif", fontWeight: 600, letterSpacing: 0.3, userSelect: "none" }}>SAFE AREA</span>
+                </div>
+              )}
               {[...data.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map((el) => (
                 <CanvasElement key={el.id} el={el} selected={el.id === selectedId}
                   onPointerDown={onElementPointerDown}
@@ -928,6 +984,14 @@ export function DesignEditor({ designId }: { designId: string }) {
                   onUpdate={(patch) => updateElement(el.id, patch)} />
               ))}
             </div>
+            {/* Snap guide overlays — rendered in scaled wrapper space */}
+            {activeGuides.map((g, i) =>
+              g.axis === "v" ? (
+                <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: g.pos * scale, width: 1, background: "#f97316", pointerEvents: "none", zIndex: 9999 }} />
+              ) : (
+                <div key={i} style={{ position: "absolute", left: 0, right: 0, top: g.pos * scale, height: 1, background: "#f97316", pointerEvents: "none", zIndex: 9999 }} />
+              )
+            )}
           </div>
         </div>
 
@@ -968,6 +1032,10 @@ export function DesignEditor({ designId }: { designId: string }) {
         <button onClick={() => setMobileToolSheet((prev) => prev === "background" ? null : "background")} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileToolSheet === "background" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Palette className="w-5 h-5" />
           <span className="text-[9px] font-medium">Canvas</span>
+        </button>
+        <button onClick={() => setShowGrid((v) => !v)} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${showGrid ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+          <Grid3x3 className="w-5 h-5" />
+          <span className="text-[9px] font-medium">Grid</span>
         </button>
         <button onClick={() => setMobileSettingsOpen((prev) => !prev)} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileSettingsOpen ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Settings2 className="w-5 h-5" />
