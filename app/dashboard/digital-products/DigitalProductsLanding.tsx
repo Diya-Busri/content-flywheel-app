@@ -14,9 +14,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Package, Sparkles, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, Package2, Pencil, ExternalLink, Repeat2, Upload, PenLine } from "lucide-react";
+import { Package, Sparkles, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, Package2, ExternalLink, Upload, PenLine } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { RepurposeDialog } from "@/components/RepurposeDialog";
 
 const SELLING_GUIDE_BANNER_KEY = "digital-products-selling-guide-banner-dismissed";
 
@@ -86,33 +85,10 @@ async function pollWithAutoRetry(
   return result;
 }
 
-type MyProduct = {
-  id: string;
-  title: string;
-  format?: string;
-};
-
-const FORMAT_LABELS: Record<string, string> = {
-  ebook: "Ebook",
-  guide: "Guide",
-  workbook: "Workbook",
-  planner: "Planner",
-  journal: "Journal",
-  checklist: "Checklist Pack",
-  course: "Course Outline",
-  notion: "Notion Template",
-  template: "Template",
-  spreadsheet: "Spreadsheet Guide",
-};
-
-const PRODUCTS_PAGE_SIZE = 6;
 
 export default function DigitalProductsLanding() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [myProducts, setMyProducts] = useState<MyProduct[]>([]);
-  const [myProductsLoading, setMyProductsLoading] = useState(true);
-  const [visibleCount, setVisibleCount] = useState(PRODUCTS_PAGE_SIZE);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [bundleOpen, setBundleOpen] = useState(false);
   const [topicInput, setTopicInput] = useState("");
@@ -121,7 +97,6 @@ export default function DigitalProductsLanding() {
   const [bundleGenerating, setBundleGenerating] = useState(false);
   const [bundleComplete, setBundleComplete] = useState(false);
   const [bundleError, setBundleError] = useState<string | null>(null);
-  const [repurposeProduct, setRepurposeProduct] = useState<{ id: string; title: string } | null>(null);
   const { toast } = useToast();
 
   // Background generation banner — polls the product until done, then shows a "ready" banner.
@@ -184,14 +159,6 @@ export default function DigitalProductsLanding() {
     try {
       if (localStorage.getItem(SELLING_GUIDE_BANNER_KEY) === "1") setBannerDismissed(true);
     } catch {}
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/products")
-      .then((r) => r.json())
-      .then((data) => setMyProducts(Array.isArray(data.products) ? data.products : []))
-      .catch(() => setMyProducts([]))
-      .finally(() => setMyProductsLoading(false));
   }, []);
 
   const dismissBanner = () => {
@@ -291,9 +258,6 @@ export default function DigitalProductsLanding() {
     setBundleError(null);
   };
 
-  const visibleProducts = myProducts.slice(0, visibleCount);
-  const hasMore = myProducts.length > visibleCount;
-
   return (
     <main className="min-h-screen p-5 md:p-10">
       <div className="max-w-4xl mx-auto">
@@ -391,80 +355,27 @@ export default function DigitalProductsLanding() {
         </nav>
 
         <div className="mb-10">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">
-            Digital Products
-          </h1>
-          <p className="text-gray-500 dark:text-[#A0A0A0] text-sm">
-            Create, manage and sell your digital products
-          </p>
-        </div>
-
-        {/* ── My Products ── */}
-        {!myProductsLoading && myProducts.length > 0 && (
-          <div className="mb-12">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-white">My Products</h2>
-              <Link
-                href="/dashboard/library?tab=products"
-                className="inline-flex items-center gap-1 text-xs text-orange-500 hover:text-orange-400 font-medium transition-colors"
-              >
-                <ExternalLink className="w-3 h-3" />
-                View all
-              </Link>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">
+                Digital Products
+              </h1>
+              <p className="text-gray-500 dark:text-[#A0A0A0] text-sm">
+                Choose how you&apos;d like to get started
+              </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {visibleProducts.map((product) => (
-                <div
-                  key={product.id}
-                  className="group flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] dark:border-[#232323] bg-white dark:bg-[#161616] p-5 hover:border-orange-400/50 dark:hover:border-orange-500/30 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 transition-all duration-200"
-                >
-                  <Link href={`/dashboard/digital-products/${product.id}/edit`} className="flex items-start gap-4 flex-1 min-w-0">
-                    <div className="w-11 h-11 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0">
-                      <Package className="w-5 h-5 text-orange-500" />
-                    </div>
-                    <div className="min-w-0 flex-1 pt-0.5">
-                      {product.format && (
-                        <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mb-1 uppercase tracking-wide">
-                          {FORMAT_LABELS[product.format] ?? product.format}
-                        </p>
-                      )}
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 leading-snug">
-                        {product.title}
-                      </p>
-                    </div>
-                    <Pencil className="w-3.5 h-3.5 text-gray-300 group-hover:text-orange-500 transition-colors shrink-0 mt-1" />
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => setRepurposeProduct({ id: product.id, title: product.title })}
-                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-orange-500 transition-colors self-start"
-                  >
-                    <Repeat2 className="w-3.5 h-3.5" />
-                    Repurpose
-                  </button>
-                </div>
-              ))}
-            </div>
-            {hasMore && (
-              <div className="mt-5 text-center">
-                <button
-                  type="button"
-                  onClick={() => setVisibleCount((c) => c + PRODUCTS_PAGE_SIZE)}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-orange-500 dark:hover:text-orange-400 transition-colors py-2 px-4 rounded-xl hover:bg-orange-500/5"
-                >
-                  Load more
-                  <span className="text-xs text-gray-400">({myProducts.length - visibleCount} remaining)</span>
-                </button>
-              </div>
-            )}
+            <Link
+              href="/dashboard/library?tab=products"
+              className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-orange-500 dark:hover:text-orange-400 font-medium transition-colors shrink-0 mt-1"
+            >
+              <ExternalLink className="w-3 h-3" />
+              My Products
+            </Link>
           </div>
-        )}
+        </div>
 
         {/* ── Start creating ── */}
         <div className="mb-8">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-5">
-            {myProducts.length > 0 ? "Create another" : "Get started"}
-          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* I Know What I Want */}
             <Link
@@ -703,14 +614,6 @@ export default function DigitalProductsLanding() {
         </DialogContent>
       </Dialog>
 
-      {repurposeProduct && (
-        <RepurposeDialog
-          open={!!repurposeProduct}
-          onClose={() => setRepurposeProduct(null)}
-          productId={repurposeProduct.id}
-          productTitle={repurposeProduct.title}
-        />
-      )}
     </main>
   );
 }
