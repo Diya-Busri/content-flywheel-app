@@ -656,15 +656,18 @@ export function DesignEditor({ designId }: { designId: string }) {
     updateElement(selectedEl.id, { x, y });
   }
 
-  // ── Drag/resize/rotate ──
+  // ── Drag/resize/rotate — pointer events work for both mouse and touch ──
 
-  function onElementMouseDown(e: React.MouseEvent, id: string) {
+  function onElementPointerDown(e: React.PointerEvent, id: string) {
     if ((e.target as HTMLElement).dataset.resize || (e.target as HTMLElement).dataset.rotate) return;
     e.stopPropagation();
+    e.preventDefault(); // prevent page scroll while dragging on touch
     setSelectedId(id);
     const el = data.elements.find((x) => x.id === id)!;
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: el.x, origY: el.y };
-    const onMove = (ev: MouseEvent) => {
+    // Pointer capture keeps events flowing even if finger slides off the element
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const onMove = (ev: PointerEvent) => {
       if (!dragRef.current) return;
       updateElement(id, {
         x: clamp(dragRef.current.origX + (ev.clientX - dragRef.current.startX) / scale, -el.width + 20, data.width - 20),
@@ -673,28 +676,37 @@ export function DesignEditor({ designId }: { designId: string }) {
     };
     const onUp = () => {
       dragRef.current = null;
-      pushHistory(historyRef.current[historyIdx.current]); // commit move
-      window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp);
+      pushHistory(historyRef.current[historyIdx.current]);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
     };
-    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
-  function onResizeMouseDown(e: React.MouseEvent, id: string) {
+  function onResizePointerDown(e: React.PointerEvent, id: string) {
     e.stopPropagation(); e.preventDefault();
     const el = data.elements.find((x) => x.id === id)!;
     resizeRef.current = { startX: e.clientX, startY: e.clientY, origW: el.width, origH: el.height };
-    const onMove = (ev: MouseEvent) => {
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const onMove = (ev: PointerEvent) => {
       if (!resizeRef.current) return;
       updateElement(id, {
         width: Math.max(20, resizeRef.current.origW + (ev.clientX - resizeRef.current.startX) / scale),
         height: Math.max(20, resizeRef.current.origH + (ev.clientY - resizeRef.current.startY) / scale),
       }, false);
     };
-    const onUp = () => { resizeRef.current = null; pushHistory(historyRef.current[historyIdx.current]); window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
+    const onUp = () => {
+      resizeRef.current = null;
+      pushHistory(historyRef.current[historyIdx.current]);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
-  function onRotateMouseDown(e: React.MouseEvent, id: string) {
+  function onRotatePointerDown(e: React.PointerEvent, id: string) {
     e.stopPropagation(); e.preventDefault();
     const el = data.elements.find((x) => x.id === id)!;
     const cx = el.x + el.width / 2;
@@ -705,7 +717,8 @@ export function DesignEditor({ designId }: { designId: string }) {
     const my = (e.clientY - canvasRect.top) / scale;
     const startAngle = Math.atan2(my - cy, mx - cx) * 180 / Math.PI;
     rotateRef.current = { startAngle, origRotation: el.rotation ?? 0, cx, cy };
-    const onMove = (ev: MouseEvent) => {
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const onMove = (ev: PointerEvent) => {
       if (!rotateRef.current || !canvasRect) return;
       const mx2 = (ev.clientX - canvasRect.left) / scale;
       const my2 = (ev.clientY - canvasRect.top) / scale;
@@ -713,8 +726,14 @@ export function DesignEditor({ designId }: { designId: string }) {
       const delta = angle - rotateRef.current.startAngle;
       updateElement(id, { rotation: Math.round(rotateRef.current.origRotation + delta) }, false);
     };
-    const onUp = () => { rotateRef.current = null; pushHistory(historyRef.current[historyIdx.current]); window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
+    const onUp = () => {
+      rotateRef.current = null;
+      pushHistory(historyRef.current[historyIdx.current]);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
   function onCanvasClick(e: React.MouseEvent) {
@@ -903,9 +922,9 @@ export function DesignEditor({ designId }: { designId: string }) {
               )}
               {[...data.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map((el) => (
                 <CanvasElement key={el.id} el={el} selected={el.id === selectedId}
-                  onMouseDown={onElementMouseDown}
-                  onResizeMouseDown={onResizeMouseDown}
-                  onRotateMouseDown={onRotateMouseDown}
+                  onPointerDown={onElementPointerDown}
+                  onResizePointerDown={onResizePointerDown}
+                  onRotatePointerDown={onRotatePointerDown}
                   onUpdate={(patch) => updateElement(el.id, patch)} />
               ))}
             </div>
@@ -1196,11 +1215,11 @@ function ToolBtn({ icon, label, onClick, isDark, danger }: { icon: React.ReactNo
 
 // ── Canvas element ─────────────────────────────────────────────────────────
 
-function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onRotateMouseDown, onUpdate }: {
+function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRotatePointerDown, onUpdate }: {
   el: DesignElement; selected: boolean;
-  onMouseDown: (e: React.MouseEvent, id: string) => void;
-  onResizeMouseDown: (e: React.MouseEvent, id: string) => void;
-  onRotateMouseDown: (e: React.MouseEvent, id: string) => void;
+  onPointerDown: (e: React.PointerEvent, id: string) => void;
+  onResizePointerDown: (e: React.PointerEvent, id: string) => void;
+  onRotatePointerDown: (e: React.PointerEvent, id: string) => void;
   onUpdate: (patch: Partial<DesignElement>) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -1219,6 +1238,8 @@ function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onRotateM
   const base: React.CSSProperties = {
     position: "absolute", left: el.x, top: el.y, width: el.width, height: el.height,
     opacity: el.opacity ?? 1, cursor: "move", userSelect: "none",
+    // touchAction none prevents the browser from intercepting the pointer for scrolling
+    touchAction: "none",
     transform: `rotate(${el.rotation ?? 0}deg)${flipTransform ? ` ${flipTransform}` : ""}`,
     transformOrigin: "center center",
     filter: filterVal,
@@ -1228,56 +1249,69 @@ function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onRotateM
   const rotateHandle = selected ? (
     <div
       data-rotate="true"
-      onMouseDown={(e) => onRotateMouseDown(e, el.id)}
+      onPointerDown={(e) => onRotatePointerDown(e, el.id)}
       style={{
-        position: "absolute", top: -28, left: "50%", transform: "translateX(-50%)",
-        width: 20, height: 20, background: "#f97316", border: "2px solid white",
-        borderRadius: "50%", cursor: "grab", zIndex: 1000,
+        position: "absolute", top: -36, left: "50%", transform: "translateX(-50%)",
+        // Larger handle for finger touch (min 44px recommended by Apple HIG)
+        width: 28, height: 28, background: "#f97316", border: "2px solid white",
+        borderRadius: "50%", cursor: "grab", zIndex: 1000, touchAction: "none",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}
     >
-      <RotateCw style={{ width: 11, height: 11, color: "white", pointerEvents: "none" }} />
+      <RotateCw style={{ width: 13, height: 13, color: "white", pointerEvents: "none" }} />
     </div>
   ) : null;
 
   if (el.type === "text") return (
-    <div style={base} onMouseDown={(e) => onMouseDown(e, el.id)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => setEditing(true)}>
+    <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => setEditing(true)}>
       {rotateHandle}
       {editing ? (
         <textarea autoFocus value={el.content ?? ""} onChange={(e) => onUpdate({ content: e.target.value })} onBlur={() => setEditing(false)}
-          style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", border: "none", outline: "none", resize: "none", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, cursor: "text" }} />
+          style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", border: "none", outline: "none", resize: "none", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, cursor: "text", touchAction: "auto" }} />
       ) : (
         <div style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, wordBreak: "break-word", whiteSpace: "pre-wrap", overflow: "hidden" }}>
           {el.content}
         </div>
       )}
-      {selected && <ResizeHandle onMouseDown={(e) => onResizeMouseDown(e, el.id)} />}
+      {selected && <ResizeHandle onPointerDown={(e) => onResizePointerDown(e, el.id)} />}
     </div>
   );
 
   if (el.type === "image") return (
-    <div style={base} onMouseDown={(e) => onMouseDown(e, el.id)} onClick={(e) => e.stopPropagation()}>
+    <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()}>
       {rotateHandle}
       {el.imageUrl
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={el.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: (el.objectFit as "cover" | "contain" | "fill") ?? "cover", display: "block", pointerEvents: "none" }} draggable={false} />
         : <div style={{ width: "100%", height: "100%", background: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 14 }}>No image</div>}
-      {selected && <ResizeHandle onMouseDown={(e) => onResizeMouseDown(e, el.id)} />}
+      {selected && <ResizeHandle onPointerDown={(e) => onResizePointerDown(e, el.id)} />}
     </div>
   );
 
   const shapeDef = SHAPES.find((s) => s.id === (el.shapeType ?? "rect")) ?? SHAPES[0];
   return (
-    <div style={{ ...base, overflow: "visible" }} onMouseDown={(e) => onMouseDown(e, el.id)} onClick={(e) => e.stopPropagation()}>
+    <div style={{ ...base, overflow: "visible" }} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()}>
       {rotateHandle}
       {shapeDef.render(el.fill ?? "#f97316", el.stroke, (el.strokeWidth ?? 0) > 0 ? el.strokeWidth : undefined)}
-      {selected && <ResizeHandle onMouseDown={(e) => onResizeMouseDown(e, el.id)} />}
+      {selected && <ResizeHandle onPointerDown={(e) => onResizePointerDown(e, el.id)} />}
     </div>
   );
 }
 
-function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
-  return <div data-resize="true" onMouseDown={onMouseDown} style={{ position: "absolute", bottom: -5, right: -5, width: 12, height: 12, background: "#f97316", border: "2px solid white", borderRadius: 3, cursor: "se-resize", zIndex: 999 }} />;
+function ResizeHandle({ onPointerDown }: { onPointerDown: (e: React.PointerEvent) => void }) {
+  return (
+    <div
+      data-resize="true"
+      onPointerDown={onPointerDown}
+      style={{
+        position: "absolute", bottom: -8, right: -8,
+        // 24px visible handle inside a 44px touch target
+        width: 24, height: 24,
+        background: "#f97316", border: "2px solid white", borderRadius: 4,
+        cursor: "se-resize", zIndex: 999, touchAction: "none",
+      }}
+    />
+  );
 }
 
 // ── Canvas settings panel ──────────────────────────────────────────────────
