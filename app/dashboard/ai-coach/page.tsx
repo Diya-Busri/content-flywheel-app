@@ -376,6 +376,12 @@ export default function AICoachPage() {
   const [promptToSend, setPromptToSend] = useState<string | null>(null);
   const [promptsLibraryOpen, setPromptsLibraryOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Collapse sidebar by default on mobile so the chat area has full width
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSidebarCollapsed(true);
+    }
+  }, []);
 
   const [coachMode, setCoachMode] = useState<string>("business");
   const [coachSettings, setCoachSettings] = useState<{

@@ -67,6 +67,12 @@
     @apply border-border;
   }
   html {
+    /*
+     * 87.5% base = 14px. The entire app (spacing, text, icons) was designed at this
+     * scale. Removing it makes every rem-value 14.3% larger, which looks zoomed-in on
+     * mobile. Keep it here; iOS Safari input-zoom is prevented separately below.
+     */
+    font-size: 87.5%;
     /* Prevent iOS Safari from adjusting font sizes on orientation change */
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -108,6 +114,24 @@
   [id="faq"] {
     scroll-margin-top: 4.5rem;
   }
+}
+
+/*
+ * Safe-area inset utilities — iOS notch / Android gesture nav.
+ * Tailwind v3 has no built-in safe-area plugin so we define them here.
+ * pb-safe is used by the mobile bottom nav (sidebar.tsx).
+ * pb-mobile-nav is used by the main content area to avoid content hiding
+ * behind the fixed bottom nav + any device safe area.
+ */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pb-mobile-nav {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+/* Ensure the bottom nav bar itself also respects device safe-area height */
+.bottom-nav-height {
+  height: calc(3.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 @layer utilities {

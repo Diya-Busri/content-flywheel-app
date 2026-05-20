@@ -222,7 +222,7 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
             <p className="text-slate-600 dark:text-slate-400 text-lg">
               Turn your knowledge into digital products and promo videos — in minutes. Let&apos;s get you set up in 3 quick steps.
             </p>
-            <div className="grid grid-cols-3 gap-4 text-sm text-left mt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-left mt-6">
               {[
                 { icon: <Sparkles className="w-4 h-4" />, label: "Brand voice", desc: "AI that sounds like you" },
                 { icon: <BookOpen className="w-4 h-4" />, label: "First product", desc: "eBook, planner, or guide" },

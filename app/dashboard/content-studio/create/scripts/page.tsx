@@ -340,7 +340,7 @@ export default function ScriptsPage() {
         <select
           value={videoDuration}
           onChange={(e) => setVideoDuration(e.target.value)}
-          className="w-full md:w-auto min-w-[280px] px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:outline-none"
+          className="w-full md:w-auto md:min-w-[280px] px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:outline-none"
         >
           {DURATION_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
