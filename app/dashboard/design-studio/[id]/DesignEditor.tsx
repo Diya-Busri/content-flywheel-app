@@ -11,6 +11,7 @@ import {
   MoveLeft, MoveRight, MoveUp, MoveDown, Undo2, Redo2,
   Underline, Strikethrough, ZoomIn, ZoomOut, FileDown, Highlighter,
   LayoutTemplate, Images, Layers, X, Settings2, Palette,
+  Grid3x3, Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +64,41 @@ const QUICK_COLORS = [
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
+
+// ── Alignment snapping ─────────────────────────────────────────────────────
+type SnapGuide = { axis: "h" | "v"; pos: number };
+
+const SNAP_THRESHOLD = 8; // canvas-space pixels
+
+function snapElement(
+  x: number, y: number, w: number, h: number,
+  canvasW: number, canvasH: number,
+  others: { x: number; y: number; width: number; height: number }[],
+): { x: number; y: number; guides: SnapGuide[] } {
+  const vTargets = [0, canvasW / 2, canvasW, ...others.flatMap((e) => [e.x, e.x + e.width / 2, e.x + e.width])];
+  const hTargets = [0, canvasH / 2, canvasH, ...others.flatMap((e) => [e.y, e.y + e.height / 2, e.y + e.height])];
+  const elXPts = [{ pt: x, off: 0 }, { pt: x + w / 2, off: w / 2 }, { pt: x + w, off: w }];
+  const elYPts = [{ pt: y, off: 0 }, { pt: y + h / 2, off: h / 2 }, { pt: y + h, off: h }];
+  let snappedX = x, snappedY = y;
+  const guides: SnapGuide[] = [];
+  let bestX = SNAP_THRESHOLD + 1, snapXT: number | null = null, snapXOff = 0;
+  for (const { pt, off } of elXPts) {
+    for (const t of vTargets) {
+      const d = Math.abs(pt - t);
+      if (d < bestX) { bestX = d; snapXT = t; snapXOff = off; }
+    }
+  }
+  if (snapXT !== null && bestX <= SNAP_THRESHOLD) { snappedX = snapXT - snapXOff; guides.push({ axis: "v", pos: snapXT }); }
+  let bestY = SNAP_THRESHOLD + 1, snapYT: number | null = null, snapYOff = 0;
+  for (const { pt, off } of elYPts) {
+    for (const t of hTargets) {
+      const d = Math.abs(pt - t);
+      if (d < bestY) { bestY = d; snapYT = t; snapYOff = off; }
+    }
+  }
+  if (snapYT !== null && bestY <= SNAP_THRESHOLD) { snappedY = snapYT - snapYOff; guides.push({ axis: "h", pos: snapYT }); }
+  return { x: snappedX, y: snappedY, guides };
+}
 function hexToRgba(hex: string, opacity: number): string {
   const h = hex.replace("#", "");
   const r = parseInt(h.slice(0, 2), 16) || 0;
@@ -380,6 +416,9 @@ export function DesignEditor({ designId }: { designId: string }) {
   });
   const [mobileToolSheet, setMobileToolSheet] = useState<"shapes" | "ai" | "templates" | "uploads" | "background" | null>(null);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
+  const [activeGuides, setActiveGuides] = useState<SnapGuide[]>([]);
+  const [showGrid, setShowGrid] = useState(false);
+  const [showSafeArea, setShowSafeArea] = useState(false);
 
   function togglePanel(panel: "shapes" | "ai" | "templates" | "uploads", e: React.MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -656,45 +695,60 @@ export function DesignEditor({ designId }: { designId: string }) {
     updateElement(selectedEl.id, { x, y });
   }
 
-  // ── Drag/resize/rotate ──
+  // ── Drag/resize/rotate — pointer events work for both mouse and touch ──
 
-  function onElementMouseDown(e: React.MouseEvent, id: string) {
+  function onElementPointerDown(e: React.PointerEvent, id: string) {
     if ((e.target as HTMLElement).dataset.resize || (e.target as HTMLElement).dataset.rotate) return;
     e.stopPropagation();
+    e.preventDefault(); // prevent page scroll while dragging on touch
     setSelectedId(id);
     const el = data.elements.find((x) => x.id === id)!;
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: el.x, origY: el.y };
-    const onMove = (ev: MouseEvent) => {
+    // Pointer capture keeps events flowing even if finger slides off the element
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const others = data.elements.filter((x) => x.id !== id);
+    const onMove = (ev: PointerEvent) => {
       if (!dragRef.current) return;
-      updateElement(id, {
-        x: clamp(dragRef.current.origX + (ev.clientX - dragRef.current.startX) / scale, -el.width + 20, data.width - 20),
-        y: clamp(dragRef.current.origY + (ev.clientY - dragRef.current.startY) / scale, -el.height + 20, data.height - 20),
-      }, false);
+      const rawX = clamp(dragRef.current.origX + (ev.clientX - dragRef.current.startX) / scale, -el.width + 20, data.width - 20);
+      const rawY = clamp(dragRef.current.origY + (ev.clientY - dragRef.current.startY) / scale, -el.height + 20, data.height - 20);
+      const { x, y, guides } = snapElement(rawX, rawY, el.width, el.height, data.width, data.height, others);
+      setActiveGuides(guides);
+      updateElement(id, { x, y }, false);
     };
     const onUp = () => {
       dragRef.current = null;
-      pushHistory(historyRef.current[historyIdx.current]); // commit move
-      window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp);
+      setActiveGuides([]);
+      pushHistory(historyRef.current[historyIdx.current]);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
     };
-    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
-  function onResizeMouseDown(e: React.MouseEvent, id: string) {
+  function onResizePointerDown(e: React.PointerEvent, id: string) {
     e.stopPropagation(); e.preventDefault();
     const el = data.elements.find((x) => x.id === id)!;
     resizeRef.current = { startX: e.clientX, startY: e.clientY, origW: el.width, origH: el.height };
-    const onMove = (ev: MouseEvent) => {
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const onMove = (ev: PointerEvent) => {
       if (!resizeRef.current) return;
       updateElement(id, {
         width: Math.max(20, resizeRef.current.origW + (ev.clientX - resizeRef.current.startX) / scale),
         height: Math.max(20, resizeRef.current.origH + (ev.clientY - resizeRef.current.startY) / scale),
       }, false);
     };
-    const onUp = () => { resizeRef.current = null; pushHistory(historyRef.current[historyIdx.current]); window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
+    const onUp = () => {
+      resizeRef.current = null;
+      pushHistory(historyRef.current[historyIdx.current]);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
-  function onRotateMouseDown(e: React.MouseEvent, id: string) {
+  function onRotatePointerDown(e: React.PointerEvent, id: string) {
     e.stopPropagation(); e.preventDefault();
     const el = data.elements.find((x) => x.id === id)!;
     const cx = el.x + el.width / 2;
@@ -705,7 +759,8 @@ export function DesignEditor({ designId }: { designId: string }) {
     const my = (e.clientY - canvasRect.top) / scale;
     const startAngle = Math.atan2(my - cy, mx - cx) * 180 / Math.PI;
     rotateRef.current = { startAngle, origRotation: el.rotation ?? 0, cx, cy };
-    const onMove = (ev: MouseEvent) => {
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const onMove = (ev: PointerEvent) => {
       if (!rotateRef.current || !canvasRect) return;
       const mx2 = (ev.clientX - canvasRect.left) / scale;
       const my2 = (ev.clientY - canvasRect.top) / scale;
@@ -713,8 +768,14 @@ export function DesignEditor({ designId }: { designId: string }) {
       const delta = angle - rotateRef.current.startAngle;
       updateElement(id, { rotation: Math.round(rotateRef.current.origRotation + delta) }, false);
     };
-    const onUp = () => { rotateRef.current = null; pushHistory(historyRef.current[historyIdx.current]); window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
+    const onUp = () => {
+      rotateRef.current = null;
+      pushHistory(historyRef.current[historyIdx.current]);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
   function onCanvasClick(e: React.MouseEvent) {
@@ -818,6 +879,9 @@ export function DesignEditor({ designId }: { designId: string }) {
           <span className={`hidden md:inline text-xs w-12 text-center tabular-nums ${isDark ? "text-gray-400" : "text-gray-500"}`}>{Math.round(scale * 100)}%</span>
           <Button size="sm" variant="ghost" onClick={() => setScale((s) => Math.min(2, +(s + 0.1).toFixed(1)))} className={`hidden md:inline-flex h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Zoom in"><ZoomIn className="w-4 h-4" /></Button>
           <div className={`hidden md:block h-5 w-px mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+          <Button size="sm" variant="ghost" onClick={() => setShowGrid((v) => !v)} className={`hidden md:inline-flex h-8 w-8 p-0 ${showGrid ? "text-orange-500" : isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Toggle grid overlay"><Grid3x3 className="w-4 h-4" /></Button>
+          <Button size="sm" variant="ghost" onClick={() => setShowSafeArea((v) => !v)} className={`hidden md:inline-flex h-8 w-8 p-0 ${showSafeArea ? "text-orange-500" : isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Toggle safe area (TikTok/Reels)"><Smartphone className="w-4 h-4" /></Button>
+          <div className={`hidden md:block h-5 w-px mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
           <Button size="sm" variant="outline" className={`hidden md:inline-flex gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`} onClick={duplicateDesign} title="Duplicate design">
             <Copy className="w-4 h-4" /> Duplicate
           </Button>
@@ -901,14 +965,33 @@ export function DesignEditor({ designId }: { designId: string }) {
               {(data.backgroundImageOverlayOpacity ?? 0) > 0 && data.backgroundImage && (
                 <div style={{ position: "absolute", inset: 0, background: hexToRgba(data.backgroundImageOverlayColor ?? "#000000", data.backgroundImageOverlayOpacity ?? 0), zIndex: -1, pointerEvents: "none" }} />
               )}
+              {/* Grid overlay */}
+              {showGrid && (
+                <div style={{ position: "absolute", inset: 0, zIndex: 1000, pointerEvents: "none", backgroundImage: "linear-gradient(rgba(99,102,241,0.25) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.25) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+              )}
+              {/* Safe area overlay (TikTok/Reels 9:16 safe zone ~10% inset) */}
+              {showSafeArea && (
+                <div style={{ position: "absolute", inset: 0, zIndex: 1001, pointerEvents: "none" }}>
+                  <div style={{ position: "absolute", top: "10%", left: "10%", right: "10%", bottom: "10%", border: "2px dashed rgba(251,146,60,0.7)", borderRadius: 4 }} />
+                  <span style={{ position: "absolute", top: "calc(10% + 4px)", left: "calc(10% + 6px)", fontSize: 11, color: "rgba(251,146,60,0.9)", fontFamily: "Inter, sans-serif", fontWeight: 600, letterSpacing: 0.3, userSelect: "none" }}>SAFE AREA</span>
+                </div>
+              )}
               {[...data.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map((el) => (
                 <CanvasElement key={el.id} el={el} selected={el.id === selectedId}
-                  onMouseDown={onElementMouseDown}
-                  onResizeMouseDown={onResizeMouseDown}
-                  onRotateMouseDown={onRotateMouseDown}
+                  onPointerDown={onElementPointerDown}
+                  onResizePointerDown={onResizePointerDown}
+                  onRotatePointerDown={onRotatePointerDown}
                   onUpdate={(patch) => updateElement(el.id, patch)} />
               ))}
             </div>
+            {/* Snap guide overlays — rendered in scaled wrapper space */}
+            {activeGuides.map((g, i) =>
+              g.axis === "v" ? (
+                <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: g.pos * scale, width: 1, background: "#f97316", pointerEvents: "none", zIndex: 9999 }} />
+              ) : (
+                <div key={i} style={{ position: "absolute", left: 0, right: 0, top: g.pos * scale, height: 1, background: "#f97316", pointerEvents: "none", zIndex: 9999 }} />
+              )
+            )}
           </div>
         </div>
 
@@ -949,6 +1032,10 @@ export function DesignEditor({ designId }: { designId: string }) {
         <button onClick={() => setMobileToolSheet((prev) => prev === "background" ? null : "background")} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileToolSheet === "background" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Palette className="w-5 h-5" />
           <span className="text-[9px] font-medium">Canvas</span>
+        </button>
+        <button onClick={() => setShowGrid((v) => !v)} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${showGrid ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+          <Grid3x3 className="w-5 h-5" />
+          <span className="text-[9px] font-medium">Grid</span>
         </button>
         <button onClick={() => setMobileSettingsOpen((prev) => !prev)} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileSettingsOpen ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Settings2 className="w-5 h-5" />
@@ -1196,11 +1283,11 @@ function ToolBtn({ icon, label, onClick, isDark, danger }: { icon: React.ReactNo
 
 // ── Canvas element ─────────────────────────────────────────────────────────
 
-function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onRotateMouseDown, onUpdate }: {
+function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRotatePointerDown, onUpdate }: {
   el: DesignElement; selected: boolean;
-  onMouseDown: (e: React.MouseEvent, id: string) => void;
-  onResizeMouseDown: (e: React.MouseEvent, id: string) => void;
-  onRotateMouseDown: (e: React.MouseEvent, id: string) => void;
+  onPointerDown: (e: React.PointerEvent, id: string) => void;
+  onResizePointerDown: (e: React.PointerEvent, id: string) => void;
+  onRotatePointerDown: (e: React.PointerEvent, id: string) => void;
   onUpdate: (patch: Partial<DesignElement>) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -1219,6 +1306,8 @@ function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onRotateM
   const base: React.CSSProperties = {
     position: "absolute", left: el.x, top: el.y, width: el.width, height: el.height,
     opacity: el.opacity ?? 1, cursor: "move", userSelect: "none",
+    // touchAction none prevents the browser from intercepting the pointer for scrolling
+    touchAction: "none",
     transform: `rotate(${el.rotation ?? 0}deg)${flipTransform ? ` ${flipTransform}` : ""}`,
     transformOrigin: "center center",
     filter: filterVal,
@@ -1228,56 +1317,69 @@ function CanvasElement({ el, selected, onMouseDown, onResizeMouseDown, onRotateM
   const rotateHandle = selected ? (
     <div
       data-rotate="true"
-      onMouseDown={(e) => onRotateMouseDown(e, el.id)}
+      onPointerDown={(e) => onRotatePointerDown(e, el.id)}
       style={{
-        position: "absolute", top: -28, left: "50%", transform: "translateX(-50%)",
-        width: 20, height: 20, background: "#f97316", border: "2px solid white",
-        borderRadius: "50%", cursor: "grab", zIndex: 1000,
+        position: "absolute", top: -36, left: "50%", transform: "translateX(-50%)",
+        // Larger handle for finger touch (min 44px recommended by Apple HIG)
+        width: 28, height: 28, background: "#f97316", border: "2px solid white",
+        borderRadius: "50%", cursor: "grab", zIndex: 1000, touchAction: "none",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}
     >
-      <RotateCw style={{ width: 11, height: 11, color: "white", pointerEvents: "none" }} />
+      <RotateCw style={{ width: 13, height: 13, color: "white", pointerEvents: "none" }} />
     </div>
   ) : null;
 
   if (el.type === "text") return (
-    <div style={base} onMouseDown={(e) => onMouseDown(e, el.id)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => setEditing(true)}>
+    <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => setEditing(true)}>
       {rotateHandle}
       {editing ? (
         <textarea autoFocus value={el.content ?? ""} onChange={(e) => onUpdate({ content: e.target.value })} onBlur={() => setEditing(false)}
-          style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", border: "none", outline: "none", resize: "none", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, cursor: "text" }} />
+          style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", border: "none", outline: "none", resize: "none", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, cursor: "text", touchAction: "auto" }} />
       ) : (
         <div style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, wordBreak: "break-word", whiteSpace: "pre-wrap", overflow: "hidden" }}>
           {el.content}
         </div>
       )}
-      {selected && <ResizeHandle onMouseDown={(e) => onResizeMouseDown(e, el.id)} />}
+      {selected && <ResizeHandle onPointerDown={(e) => onResizePointerDown(e, el.id)} />}
     </div>
   );
 
   if (el.type === "image") return (
-    <div style={base} onMouseDown={(e) => onMouseDown(e, el.id)} onClick={(e) => e.stopPropagation()}>
+    <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()}>
       {rotateHandle}
       {el.imageUrl
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={el.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: (el.objectFit as "cover" | "contain" | "fill") ?? "cover", display: "block", pointerEvents: "none" }} draggable={false} />
         : <div style={{ width: "100%", height: "100%", background: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 14 }}>No image</div>}
-      {selected && <ResizeHandle onMouseDown={(e) => onResizeMouseDown(e, el.id)} />}
+      {selected && <ResizeHandle onPointerDown={(e) => onResizePointerDown(e, el.id)} />}
     </div>
   );
 
   const shapeDef = SHAPES.find((s) => s.id === (el.shapeType ?? "rect")) ?? SHAPES[0];
   return (
-    <div style={{ ...base, overflow: "visible" }} onMouseDown={(e) => onMouseDown(e, el.id)} onClick={(e) => e.stopPropagation()}>
+    <div style={{ ...base, overflow: "visible" }} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()}>
       {rotateHandle}
       {shapeDef.render(el.fill ?? "#f97316", el.stroke, (el.strokeWidth ?? 0) > 0 ? el.strokeWidth : undefined)}
-      {selected && <ResizeHandle onMouseDown={(e) => onResizeMouseDown(e, el.id)} />}
+      {selected && <ResizeHandle onPointerDown={(e) => onResizePointerDown(e, el.id)} />}
     </div>
   );
 }
 
-function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
-  return <div data-resize="true" onMouseDown={onMouseDown} style={{ position: "absolute", bottom: -5, right: -5, width: 12, height: 12, background: "#f97316", border: "2px solid white", borderRadius: 3, cursor: "se-resize", zIndex: 999 }} />;
+function ResizeHandle({ onPointerDown }: { onPointerDown: (e: React.PointerEvent) => void }) {
+  return (
+    <div
+      data-resize="true"
+      onPointerDown={onPointerDown}
+      style={{
+        position: "absolute", bottom: -8, right: -8,
+        // 24px visible handle inside a 44px touch target
+        width: 24, height: 24,
+        background: "#f97316", border: "2px solid white", borderRadius: 4,
+        cursor: "se-resize", zIndex: 999, touchAction: "none",
+      }}
+    />
+  );
 }
 
 // ── Canvas settings panel ──────────────────────────────────────────────────
