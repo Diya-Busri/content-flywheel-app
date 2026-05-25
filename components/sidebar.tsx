@@ -56,6 +56,10 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       items: [
         { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", emoji: "🤖", featureKey: "ai_coach" },
         { href: "/dashboard/design-studio", icon: <Palette size={18} />, label: "Design Studio", emoji: "✏️", activeWhenStartsWith: true, featureKey: "design_studio" },
+        { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true, featureKey: "template_studio" },
+        { href: "/dashboard/video-timeline", icon: <Video size={18} />, label: "Video Timeline", emoji: "🎞️", featureKey: "video_timeline" },
+        { href: "/dashboard/ugc-lab", icon: <Clapperboard size={18} />, label: "UGC Lab", emoji: "🎬", activeWhenStartsWith: true, featureKey: "ugc_lab" },
+        { href: "/dashboard/brand-builder", icon: <Brush size={18} />, label: "Brand Builder", emoji: "✨", activeWhenStartsWith: true, featureKey: "brand_builder" },
         { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️", activeWhenStartsWith: true, featureKey: "tiktok_shop" },
         { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦", activeWhenStartsWith: true, featureKey: "digital_products" },
         { href: "/dashboard/video-credits", icon: <Film size={18} />, label: "Video Credits", emoji: "🎥", featureKey: "video_credits" },
@@ -65,6 +69,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       label: "Content",
       items: [
         { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚", featureKey: "my_library" },
+        { href: "/dashboard/caption-library", icon: <BookMarked size={18} />, label: "Caption Library", emoji: "💬", activeWhenStartsWith: true, featureKey: "caption_library" },
         { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅", featureKey: "content_calendar" },
         { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅", featureKey: "script_checker" },
         { href: "/dashboard/todo", icon: <ListTodo size={18} />, label: "To-Do List", emoji: "📋", activeWhenStartsWith: true },
@@ -74,6 +79,15 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       label: "Sell",
       items: [
         { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", emoji: "👕", activeWhenStartsWith: true, featureKey: "print_on_demand" },
+        { href: "/dashboard/drop-campaign", icon: <Gift size={18} />, label: "Drop Campaign", emoji: "🎁", activeWhenStartsWith: true, featureKey: "drop_campaign" },
+      ],
+    },
+    {
+      label: "Grow",
+      items: [
+        { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯", activeWhenStartsWith: true, featureKey: "goal_tracker" },
+        { href: "/dashboard/campaign-mode", icon: <Zap size={18} />, label: "Campaign Mode", emoji: "⚡", activeWhenStartsWith: true, featureKey: "campaign_mode" },
+        { href: "/dashboard/grow", icon: <TrendingUp size={18} />, label: "Grow Hub", emoji: "📈", featureKey: "grow_hub" },
       ],
     },
   ].map((group) => ({ ...group, items: group.items.filter((item) => !item.featureKey || !disabled.has(item.featureKey)) }));

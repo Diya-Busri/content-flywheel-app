@@ -25,6 +25,10 @@ export const FEATURE_KEYS = {
   CAPTION_LIBRARY: "caption_library",
   YOUTUBE_UPLOAD: "youtube_upload",
   INVITE_CREATORS: "invite_creators",
+  // Beta / internal tools
+  UGC_LAB: "ugc_lab",
+  BRAND_BUILDER: "brand_builder",
+  CAMPAIGN_MODE: "campaign_mode",
 } as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[keyof typeof FEATURE_KEYS];
