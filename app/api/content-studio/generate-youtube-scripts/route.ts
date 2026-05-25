@@ -12,10 +12,10 @@ const openai = new OpenAI({
 });
 
 const ANGLES = [
-  { id: "story", name: "Story Angle", description: "Personal narrative/transformation journey" },
-  { id: "problem-solution", name: "Problem/Solution Angle", description: "Identify pain → provide solution" },
-  { id: "educational", name: "Educational Deep-Dive", description: "Step-by-step teaching" },
-  { id: "results", name: "Results/Case Study", description: "Show real examples/outcomes" },
+  { id: "story", name: "Build in Public", description: "Show the real process — decisions made, mistakes made, what you'd do differently. Honest, specific, no polished narrative arc." },
+  { id: "problem-solution", name: "Psychology / Problem", description: "Identify the real mental pattern holding people back — not the surface problem but the root cause — then show how to break it." },
+  { id: "educational", name: "Workflow / System", description: "Step-by-step breakdown of how to actually do the thing. Tool-based, specific, beginner-friendly. No theory — just the real workflow." },
+  { id: "results", name: "Case Study / Results", description: "Show real numbers, real outcomes, real timelines. What happened, what worked, what didn't. No hype — just honest reporting." },
 ] as const;
 
 function getAnglesToGenerate(angleIds?: unknown): (typeof ANGLES)[number][] {
@@ -218,18 +218,28 @@ async function generateHookIntro(params: {
 **Content Style:** ${contentStyle}
 ${styleBlock}
 
-**Requirements:**
-- HOOK: 80-120 words. Grab attention, state problem or promise, create curiosity.
-- INTRO: Remaining words to total ${hookIntroWords} words. Brief context, why this matters, what they'll learn, credibility.
-- Write only spoken words. Do NOT include "Visual Prompt:", "[Visual prompt: ...]", "vidual prompt", or any production/direction notes in the script. No bracketed annotations like [Visual prompt: ...].
+**VIDEO STRUCTURE TO FOLLOW:**
+Hook → Relatable problem → Founder observation → Why it happens → The system/solution → Soft CTA (comes at the end, not here)
 
-Write every word the speaker will say. No summaries.
+**HOOK requirements (80–120 words):**
+- Open with a direct, uncomfortable truth or a bold observation — NOT a question, NOT a statistic, NOT "In this video I'll show you..."
+- Make the viewer feel like you're talking about something they've privately thought but never heard said out loud
+- Do NOT use: "unlock", "supercharge", "boost", "transform", "be consistent", "valuable content", "game-changing"
+- Aim for this energy: "Most people don't fail at [topic] because they're lazy. They fail because nobody gave them a system." or "The real reason you haven't started isn't motivation. It's that you don't know exactly what to do next."
+
+**INTRO requirements (remaining words to total ${hookIntroWords} words):**
+- Move from the hook into the relatable problem: zoom in on *why* this happens, not just *that* it happens
+- Brief founder observation: one line that shows you've seen this pattern, not just read about it
+- What they'll get from this video — stated directly, no hype
+- Write only spoken words. No production notes, no bracketed annotations, no "Visual Prompt:" labels.
+
+Write every word the speaker will say. No summaries or placeholders.
 
 Return ONLY valid JSON:
 { "hook": "full hook text...", "intro": "full intro text..." }`;
 
   const system =
-    "You are a professional YouTube scriptwriter. Write COMPLETE script text at the requested length. Never abbreviate. Never include 'Visual Prompt:', '[Visual prompt: ...]' bracketed notes, or any production notes—only spoken script.";
+    "You are a YouTube scriptwriter with a direct, founder-led voice. You write scripts that feel honest and specific — not like a marketing agency wrote them. Your hooks open with uncomfortable truths or bold observations, never questions or statistics. You never use phrases like 'valuable content', 'be consistent', 'unlock', 'supercharge', or 'boost'. Write COMPLETE script text at the requested length. Never abbreviate. Never include production notes or bracketed annotations — only the spoken words.";
   const raw = await callOpenAI(system, prompt);
   const data = parseSectionJson<{ hook?: string; intro?: string }>(raw, "Hook+Intro");
   return {
@@ -286,7 +296,7 @@ Return ONLY valid JSON:
 { "content": "full script text for these two sections..." }`;
 
   const system =
-    "You are a professional YouTube scriptwriter. Write COMPLETE script text at the EXACT word count requested. Never abbreviate.";
+    "You are a YouTube scriptwriter with a direct, founder-led voice. You write scripts that feel honest and specific — not like content-marketing copy. Never use phrases like 'valuable content', 'unlock', 'supercharge', 'boost', 'be consistent', or 'game-changing'. Write COMPLETE script text at the EXACT word count requested. Never abbreviate. Never include production notes — only spoken words.";
   const raw = await callOpenAI(system, prompt, { maxTokens: 8192 });
   const data = parseSectionJson<{ content?: string }>(raw, `MainChunk ${params.chunkIndex + 1}`);
   return typeof data.content === "string" ? data.content.trim() : "";
@@ -329,42 +339,85 @@ ${styleBlock}
 ${mainSummary}
 
 **Requirements:**
-- RECAP: ${recapWords} words. Summarize 3-5 key takeaways, reinforce benefit, callback to hook.
-- CTA: ${ctaWords} words. Write a complete call-to-action for YouTube following the structure below.
+- RECAP: ${recapWords} words. Pull out 3–5 key things they just learned. Callback to the hook — close the loop on what you opened with. Make them feel like they got something real.
+- CTA: ${ctaWords} words. Natural, soft, specific. Follow the structure below.
 
 **YOUTUBE CTA STRUCTURE:**
-1. Summarize the key takeaway (1 sentence)
-2. Ask viewers to subscribe with a SPECIFIC reason why (e.g. "If you want more [specific benefit], hit that subscribe button") — NOT generic "subscribe for more content"
-3. Encourage engagement: "Drop a comment below telling me [specific question]" or "What's your biggest takeaway from this?"
-4. Tease the next video: "In my next video, I'm covering [specific topic]" or "Next up: [intriguing preview]"
-5. Thank viewers genuinely: "Thanks for watching, I'll see you in the next one"
+1. One-sentence callback to the core insight from the video
+2. Subscribe ask — specific reason: "If you want more videos about [the actual thing this channel covers], hit subscribe" — never "for more content"
+3. Engagement: ask a specific question related to the video. "Drop a comment — [specific question]." Not "what's your biggest takeaway" every time.
+4. Tease next video with a curiosity gap: "Next video I'm looking at [specific topic that connects to this one]"
+5. Sign-off that sounds human — not corporate. "Thanks for watching, I'll see you in the next one." is fine.
 
-**CRITICAL YOUTUBE CTA RULES:**
-- NEVER say "link in bio" (that's Instagram/TikTok)
-- NEVER say "check my profile" (YouTube doesn't work like that)
-- ALWAYS say "subscribe" instead of "follow"
-- ALWAYS mention the "like button" or "notification bell"
-- ALWAYS tease the next video topic
-- ALWAYS ask for comments (engagement signals)
+**CTA TONE:**
+- Sound like a person who made the video because they wanted to, not because they're optimising for the algorithm
+- NEVER say: "smash that like button", "if you found this valuable", "don't forget to", "hit that notification bell" (use it once max, not as a routine)
+- NEVER say: "link in bio", "check my profile", "follow me" (those are Instagram/TikTok)
+- ALWAYS say "subscribe" not "follow"
+- Keep it warm and real — not performed
 
-**Example YouTube CTA:** "So that's how you can use AI responsibly without falling for the myths. If you found this valuable and want to stay ahead in the AI world, make sure you're subscribed and hit that notification bell so you don't miss my next video where I'll be breaking down the top 5 AI tools that actually save you time. Drop a comment below and let me know: which AI myth surprised you the most? I read every single comment. Thanks for watching, and I'll see you in the next one!"
+**Example CTA tone (adapt, don't copy):** "So that's the actual reason most people never finish their first digital product — and it's not laziness, it's that nobody showed them what done looks like. If this clicked for you, subscribe — I'm making more videos on the specific parts people get stuck on. Drop a comment: what's the one thing that's been stopping you? I read all of them. Next video I'm going deep on [specific topic]. See you there."
 
 - Total recap + CTA: ~${recapCtaWords} words.
-- Write only spoken words. Do NOT include "Visual Prompt:", "[Visual prompt: ...]", "vidual prompt", or any production notes.
+- Write only spoken words. No production notes, no bracketed annotations.
 
-Write every word. No placeholders. Write a complete ${ctaWords}-word YouTube CTA following the structure above.
+Write every word. No placeholders.
 
 Return ONLY valid JSON:
 { "recap": "full recap text...", "cta": "full cta text..." }`;
 
   const system =
-    "You are a professional YouTube scriptwriter with 10+ years experience creating viral long-form content. You understand YouTube-specific CTAs: subscribe (not follow), like button, comment section, next video tease, notification bell. You NEVER use Instagram/TikTok language like 'link in bio', 'follow me', 'swipe up', 'check my profile'. Every CTA you write is optimized for YouTube algorithm signals: watch time, engagement, subscriptions. Write COMPLETE script text at the requested length. Never abbreviate.";
+    "You are a YouTube scriptwriter with a direct, founder-led voice. You write CTAs that feel natural — not like an algorithm optimiser said them. Your CTAs are soft, specific, and human: you don't say 'smash that like button', you say 'if this helped, the like button matters more than you think'. You understand YouTube-specific platform conventions: subscribe (not follow), like button, comment section, next video tease. You NEVER use Instagram/TikTok language: 'link in bio', 'follow me', 'swipe up', 'check my profile'. Write COMPLETE script text at the requested length. Never abbreviate.";
   const raw = await callOpenAI(system, prompt);
   const data = parseSectionJson<{ recap?: string; cta?: string }>(raw, "Recap+CTA");
   return {
     recap: typeof data.recap === "string" ? data.recap.trim() : "",
     cta: typeof data.cta === "string" ? data.cta.trim() : "",
   };
+}
+
+/** Derive 3-5 short-form clip ideas from the long-form script. */
+function deriveClipIdeas(params: {
+  topic: string;
+  angle: string;
+  hook: string;
+  body: string;
+}): Array<{ title: string; platform: string; why: string }> {
+  const { topic, angle, hook } = params;
+  // Generate clip ideas based on angle and topic — static logic for now, can be AI-powered later
+  const clips: Array<{ title: string; platform: string; why: string }> = [
+    {
+      title: `The hook moment — first 60 seconds of the video`,
+      platform: "TikTok / Reels / Shorts",
+      why: "The hook stands alone as a complete thought. Strong opener, no context needed.",
+    },
+    {
+      title: `The core insight from this ${angle} video on ${topic}`,
+      platform: "YouTube Shorts",
+      why: "Mid-video moment where you state the main observation — works as a standalone insight clip.",
+    },
+    {
+      title: `The 'why it happens' explanation — 45–90 seconds`,
+      platform: "TikTok / Reels",
+      why: "The root-cause explanation tends to be the most shareable part — it makes people feel understood.",
+    },
+    {
+      title: `One specific tip or step from the workflow section`,
+      platform: "YouTube Shorts / Reels",
+      why: "Actionable, self-contained, easy to watch without context. Great for save-worthy content.",
+    },
+    {
+      title: `The CTA moment — reframed as a standalone video`,
+      platform: "TikTok",
+      why: "The call-to-action section often contains a strong summary statement that works as a separate hook.",
+    },
+  ];
+
+  // Trim hook to use as first clip hook reference
+  const hookPreview = hook.split(/[.!?]/)[0]?.trim() ?? topic;
+  clips[0].title = `"${hookPreview.slice(0, 60)}${hookPreview.length > 60 ? "..." : ""}" — the opening hook as a standalone clip`;
+
+  return clips;
 }
 
 /** Generate one full script in section-based API calls, then combine. */
@@ -465,6 +518,9 @@ async function generateSingleScriptInSections(params: {
 
   console.log(`  ${angle.name} done: ${totalWords} words total`);
 
+  // Derive 3-5 clip ideas from the hook and body
+  const clipIdeas = deriveClipIdeas({ topic, angle: angle.name, hook, body });
+
   return {
     angle: angle.name,
     duration: `${minutes}min`,
@@ -474,6 +530,7 @@ async function generateSingleScriptInSections(params: {
     hook,
     body,
     cta,
+    clip_ideas: clipIdeas,
     hook_strength: 5,
     engagement: "High",
     compliance: {

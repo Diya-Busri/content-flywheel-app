@@ -34,38 +34,38 @@ export async function POST(request: NextRequest) {
 
     const openai = new OpenAI({ apiKey });
 
-    const systemPrompt = `You are an elite YouTube SEO strategist who writes titles that get millions of clicks. You know exactly which words kill CTR and which formulas print views. Always return valid JSON.`;
+    const systemPrompt = `You are a YouTube strategist who writes titles and descriptions for founder-led, honest, educational channels. You know what earns clicks vs. what begs for them. You write with a direct, problem-first voice — not like a marketing agency. Always return valid JSON.`;
 
     const userPrompt = `Generate complete YouTube SEO metadata for a video about: "${subject}"${niche ? ` (niche: ${niche})` : ""}${description ? `\n\nVideo context: ${description.slice(0, 500)}` : ""}
 
 TITLE RULES — follow exactly:
-Use ONE of these proven high-CTR formulas:
-• "The [Shocking Truth / Real Reason / Hidden Secret] About [Topic] Nobody Tells You"
-• "Why [Common Belief About Topic] Is [Wrong / A Lie / Keeping You Broke]"
-• "How [Specific Person or Group] [Achieved Outcome] Doing This One Thing"
-• "[Number] [Things / Signs / Reasons] [Topic] [Strong Outcome] (Most People Don't Know This)"
-• "What Happens When [Scenario] — The Truth About [Topic]"
+Use ONE of these formulas, adapted to the specific topic:
+• "The real reason [common struggle people have with this topic]"
+• "Why [common belief about this topic] is [wrong / keeping you stuck]"
+• "Most [people/beginners/creators] [fail at X] — here's what's actually happening"
+• "I [did the thing] so you don't have to — what I learned"
+• "[Number] things nobody tells you about [topic]"
 
 Title requirements:
-- Creates a CURIOSITY GAP — teases the answer without giving it away
-- Feels PERSONAL — uses "You" or makes the viewer the subject
-- Is SPECIFIC — uses numbers, years, or real names where possible
+- Opens a CURIOSITY GAP — makes the viewer feel like they're missing something true
+- Feels like a real person said it, not a content formula
+- Specific — references the actual topic, not a vague category
 - Under 70 characters. No ALL CAPS words.
-- BANNED WORDS (instant CTR killer — do NOT use any of these): Unlock, Unlocking, Unveiling, Exploring, Discover, Deep Dive, Introduction to, Understanding, Journey, Comprehensive, Ultimate Guide, Everything You Need
+- BANNED WORDS (kill the title instantly — never use): Unlock, Unlocking, Unveiling, Exploring, Discover, Deep Dive, Introduction to, Understanding, Journey, Comprehensive, Ultimate Guide, Everything You Need, Complete Guide, Supercharge, Transform, Boost, Game-changing
 
 DESCRIPTION RULES:
-- First 2 lines (shown in search before "show more") MUST tease the biggest revelation — make people click
-- Then 3-5 bullet points of specific things they'll learn (not generic — tie to the actual topic)
-- End with a call to action: subscribe + what's coming next
-- No filler phrases like "In this video we explore..." or "Join us as we..."
-- 600-900 characters total
+- First 2 lines (shown before "show more") must name the real problem the video addresses — make the viewer feel seen, not sold to
+- Then 3–5 specific bullet points of what they'll actually learn (tied to the exact video topic)
+- End with: subscribe reason (why this channel, specifically) + what's coming next
+- No filler: never use "In this video we explore...", "Join us as we...", "Today we'll be discussing..."
+- 600–900 characters total
 
 Return ONLY a valid JSON object:
 {
-  "title": "High-CTR title using one of the proven formulas — specific, curiosity-gap, personal, under 70 chars",
-  "description": "SEO description following the rules above",
+  "title": "Direct, honest title using one of the formulas — specific, curiosity-gap, under 70 chars",
+  "description": "SEO description following the rules above — problem-first, no filler",
   "keywords": ["10-15 specific keyword phrases directly related to the topic — no generic filler"],
-  "thumbnailPrompt": "DALL-E prompt for a YouTube thumbnail: bold, high contrast, eye-catching. Describe the visual scene, lighting, and composition."
+  "thumbnailPrompt": "DALL-E prompt for a YouTube thumbnail: bold, high contrast, minimal text overlay. Describe the scene, lighting, composition — make it feel honest and direct, not clickbait-y."
 }`;
 
     const completion = await openai.chat.completions.create({

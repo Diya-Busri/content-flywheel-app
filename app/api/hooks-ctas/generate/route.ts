@@ -50,24 +50,28 @@ export async function POST(request: NextRequest) {
       .filter(Boolean)
       .join("\n");
 
-    const prompt = `Generate video HOOKS and CTAs tailored to this exact digital product. Do NOT use generic phrases.
+    const prompt = `Generate video HOOKS and CTAs for this specific digital product. Write them like a real founder talking to someone who actually needs this — not like a marketing agency.
 
 PRODUCT CONTEXT:
 ${context}
 
 RULES FOR HOOKS (generate 5-6):
-- Reference the SPECIFIC product name or format (e.g. "90-day challenge", "savings challenge", "this tracker").
-- Mention duration if relevant (7-day, 30-day, 90-day).
-- Mention the key benefit or outcome (saving money, getting organized, completing the challenge).
-- Mention specific deliverables if they help (daily check-ins, Day 1, checklist).
-- First 3 seconds style: curiosity, outcome, or social proof.
-- Do NOT use generic hooks like "Link in bio" or "Comment BUDGET".
+- Start with the problem, frustration, or uncomfortable truth — not the product.
+- Be specific to what this product actually solves. Reference the format, outcome, or exact pain point.
+- Write in first or second person. Direct. Slightly blunt. Honest.
+- Do NOT start with: "Are you tired of...", "Have you ever...", "Introducing...", "The #1...", "This changed everything".
+- Do NOT use generic openers. Every hook should feel like it was written for THIS product only.
+- Aim for this energy: "Most people who buy budgeting templates don't fail because they're lazy. They fail because the template doesn't match how they actually think about money."
 
 RULES FOR CTAs (generate 5-6):
-- Reference the product action: "Start the challenge", "Download Day 1", "Get your checklist", "Join the 90-day journey".
-- Be product-specific: e.g. "Start your 90-day savings challenge today" not "Download now".
-- Include one soft CTA if relevant (e.g. "Save this for when you're ready").
-- Do NOT use generic CTAs like "Link in bio for the free template" or "Comment BUDGET and I'll send it".
+- Write like a soft, confident invitation — not a command.
+- Be specific to the product action: what will they do when they click/buy? Reference that directly.
+- Include at least one very soft CTA (e.g. "Save this for when you're ready to actually start").
+- Never use: "Link in bio", "Comment [word] and I'll send it", "Download now", "Get yours today", "Don't miss out".
+- Aim for this energy: "If you want the actual system, it's linked in bio." / "This is what I wish I had when I started — link in bio."
+
+BANNED words/phrases (never use in hooks or CTAs):
+"unlock", "supercharge", "boost", "transform", "skyrocket", "game-changing", "never-ending", "valuable", "amazing", "incredible", "revolutionary"
 
 Return ONLY valid JSON (no markdown):
 {
@@ -87,7 +91,7 @@ Return ONLY valid JSON (no markdown):
         messages: [
           {
             role: "system",
-            content: "You are an expert at writing viral video hooks and CTAs for digital products. Return only valid JSON with keys 'hooks' and 'ctas', each an array of strings.",
+            content: "You write video hooks and CTAs for digital products. Your style is direct, honest, and founder-led — never salesy or generic. You write like a real person who built something because they needed it, talking to someone who needs it too. Return only valid JSON with keys 'hooks' and 'ctas', each an array of strings.",
           },
           { role: "user", content: prompt },
         ],
