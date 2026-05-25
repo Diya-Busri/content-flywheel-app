@@ -427,7 +427,7 @@ export default function TikTokShopFlow() {
     const { hook, body, cta } = scenesToHookBodyCta(script.scenes);
     const title = (script as ScriptResult & { title?: string }).title ?? "TikTok Shop Script";
     const scriptForVideo = {
-      id: script.id ?? "tiktok-1",
+      id: (script as ScriptResult & { id?: string }).id ?? "tiktok-1",
       title,
       length: targetDurationSec ?? 30,
       hook,

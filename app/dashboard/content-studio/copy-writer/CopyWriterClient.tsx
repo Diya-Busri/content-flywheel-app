@@ -437,7 +437,7 @@ export default function CopyWriterClient() {
               className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600"
               onClick={() => {
                 setVideoPrefill({
-                  title: titles[0]?.title ?? topic.trim() || undefined,
+                  title: (titles[0]?.title ?? topic.trim()) || undefined,
                   description: description?.fullDescription,
                   source: "copy-writer",
                 });

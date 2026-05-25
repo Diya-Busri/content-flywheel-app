@@ -178,7 +178,7 @@ export function ProofModal({
       if (!validationSkipped) {
         const result = await validateProof({
           taskDescription,
-          proofType: base.proofType,
+          proofType: base.proofType as "screenshot" | "text" | "link",
           proofImage: base.proofType === "screenshot" ? base.proofUrl : null,
           proofDescription: base.proofText ?? "",
           proofUrl: base.proofType === "link" ? base.proofUrl : null,

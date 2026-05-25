@@ -62,5 +62,5 @@ export function validateSearchParams<T>(
 }
 
 /** Reusable Zod refinements: no control characters, safe for display */
-export const safeString = (max = LIMITS.stringShort) =>
+export const safeString = (max: number = LIMITS.stringShort) =>
   z.string().max(max).refine((s) => !/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(s), "Invalid characters");

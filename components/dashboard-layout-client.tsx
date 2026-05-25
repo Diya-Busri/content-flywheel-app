@@ -37,7 +37,7 @@ export function DashboardLayoutClient({ profile, userEmail, disabledFeatures = [
         <VideoNotificationWatcher />
         <OnboardingProvider markDashboardSeen hasActiveSubscription={isAdmin || !!(profile?.stripeSubscriptionId || profile?.whopMembershipId)}>
           <DashboardReviewPopup
-          profile={profile}
+          profile={profile!}
           open={showReviewPopup}
           onOpenChange={setShowReviewPopup}
         />

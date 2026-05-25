@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { videosTable } from "@/db/schema/library-schema";
-import { connectedAccountsTable } from "@/db/schema/connected-accounts-schema";
+import { connectedAccountsTable, ConnectedPlatform } from "@/db/schema/connected-accounts-schema";
 import { eq, and, inArray } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json().catch(() => ({}));
-    const videoIds = Array.isArray(body.videoIds) ? body.videoIds.filter((id): id is string => typeof id === "string") : [];
+    const videoIds = Array.isArray(body.videoIds) ? body.videoIds.filter((id: any): id is string => typeof id === "string") : [];
     const platforms = Array.isArray(body.platforms)
       ? body.platforms.filter((p: string) => PLATFORMS.includes(p as (typeof PLATFORMS)[number]))
       : [];
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       .from(videosTable)
       .where(and(eq(videosTable.userId, userId), inArray(videosTable.id, videoIds)));
     const ownedIds = new Set(rows.map((r) => r.id));
-    const missing = videoIds.filter((id) => !ownedIds.has(id));
+    const missing = videoIds.filter((id: string) => !ownedIds.has(id));
     if (missing.length > 0) {
       return NextResponse.json({ error: "Some videos not found or access denied", missing }, { status: 403 });
     }
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       .from(connectedAccountsTable)
       .where(eq(connectedAccountsTable.userId, userId));
     const connectedSet = new Set(connected.map((c) => c.platform));
-    const unconnected = platforms.filter((p) => !connectedSet.has(p));
+    const unconnected = platforms.filter((p: string) => !connectedSet.has(p as ConnectedPlatform));
     if (unconnected.length > 0) {
       return NextResponse.json({
         message: `Publish prepared for ${videoIds.length} video(s) to ${platforms.join(", ")}. Connect ${unconnected.join(", ")} in Settings for real publishing.`,

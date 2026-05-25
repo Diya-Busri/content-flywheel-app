@@ -191,7 +191,7 @@ function buildFallbackScenes(topic: string, sceneCount: number): StickmanScene[]
       segment: seg,
     };
   });
-  return rows;
+  return rows as StickmanScene[];
 }
 
 const VALID_POSES: StickmanPose[] = [
@@ -485,7 +485,7 @@ Return ONLY valid JSON, no markdown, no explanation.`;
         ? (parsed as { scenes: unknown[] }).scenes
         : [];
 
-    function normalizeBullets(raw: unknown): string[] | undefined {
+    const normalizeBullets = (raw: unknown): string[] | undefined => {
       if (!Array.isArray(raw)) return undefined;
       const out = raw
         .filter((x): x is string => typeof x === "string")
@@ -494,7 +494,7 @@ Return ONLY valid JSON, no markdown, no explanation.`;
         .slice(0, 3);
       if (out.length < 2) return undefined;
       return out;
-    }
+    };
 
     const scenes: StickmanScene[] = scenesRaw
       .filter((s): s is { sceneIndex: number; caption: string; pose: string; layout?: string; keyObject?: string; camera?: string; shotTemplate?: string; sceneTitle?: unknown; bullets?: unknown } =>

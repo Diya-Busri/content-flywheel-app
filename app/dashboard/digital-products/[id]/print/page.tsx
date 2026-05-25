@@ -46,7 +46,7 @@ type PlacedElement = {
   position: { x: number; y: number };
   size: { width: number; height: number };
   zIndex: number;
-  imageSettings?: { opacity?: number };
+  imageSettings?: { opacity?: number; blur?: number; brightness?: number; contrast?: number; saturation?: number };
   textSettings?: { fontSize?: number; fontFamily?: string; color?: string; textAlign?: "left" | "center" | "right" };
 };
 
@@ -89,7 +89,7 @@ function parsePlacedElements(arr: unknown[]): PlacedElement[] {
       const ts = (o.textSettings ?? {}) as Partial<typeof DEFAULT_TEXT_BOX>;
       return { ...base, textSettings: { ...DEFAULT_TEXT_BOX, ...ts } };
     }
-    return { ...base, imageSettings: (o.imageSettings as { opacity?: number }) ?? undefined };
+    return { ...base, imageSettings: (o.imageSettings as { opacity?: number; blur?: number; brightness?: number; contrast?: number; saturation?: number }) ?? undefined };
   });
 }
 
@@ -163,12 +163,12 @@ function productToPayload(product: Record<string, unknown>): ProductPrintPayload
     pageBackgrounds: pageBackgrounds.length > 0 ? pageBackgrounds : undefined,
     placedElementsByPage: placedElementsByPage.some((arr) => arr.length > 0) ? placedElementsByPage : undefined,
     layoutSettings: {
-      margins: layout.margins,
-      paragraphSpacing: layout.paragraphSpacing,
-      sectionSpacing: layout.sectionSpacing,
-      lineHeight: layout.lineHeight,
-      alignment: layout.alignment,
-      maxWidth: layout.maxWidth,
+      margins: layout.margins as number | undefined,
+      paragraphSpacing: layout.paragraphSpacing as number | undefined,
+      sectionSpacing: layout.sectionSpacing as number | undefined,
+      lineHeight: layout.lineHeight as number | undefined,
+      alignment: layout.alignment as string | undefined,
+      maxWidth: layout.maxWidth as string | undefined,
     },
     template,
     graphicsAccentColor,

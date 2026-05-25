@@ -77,7 +77,7 @@ export async function GET(req: Request) {
         const colour = variantColourMap[vid];
         if (colour) colours.add(colour);
       }
-      for (const colour of colours) {
+      for (const colour of Array.from(colours)) {
         if (!imagesByColour[colour]) imagesByColour[colour] = [];
         if (!imagesByColour[colour]!.includes(img.src)) {
           imagesByColour[colour]!.push(img.src);

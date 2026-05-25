@@ -220,6 +220,7 @@ function CampaignSheet({
     subject: "",
     previewText: "",
     bodyHtml: "",
+    scheduledFor: "",
   });
   const [saving, setSaving] = useState(false);
   const [testSending, setTestSending] = useState(false);

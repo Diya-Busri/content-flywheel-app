@@ -29,6 +29,7 @@ export type FacelessPost = {
 
 export type FacelessPlan = {
   brandName: string;
+  niche?: string;
   week: number;
   posts: FacelessPost[];
 };

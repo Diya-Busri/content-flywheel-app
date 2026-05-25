@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
           // @ts-ignore — Node 18 fetch supports ReadStream with duplex: "half"
           body: fileStream,
           duplex: "half",
-        } as RequestInit
+        } as unknown as RequestInit
       );
 
       if (!uploadRes.ok) {

@@ -103,7 +103,7 @@ export async function POST(req: Request) {
           size,
           quality: "low",
         });
-        b64 = response.data[0]?.b64_json;
+        b64 = response.data![0]?.b64_json;
         if (b64) break;
       } catch (e) {
         lastErr = e;

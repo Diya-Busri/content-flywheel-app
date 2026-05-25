@@ -101,13 +101,12 @@ export async function GET(
 
     const { launchPuppeteerBrowser } = require("@/lib/puppeteer-launch");
     browser = await launchPuppeteerBrowser();
-    const page = await browser.newPage();
+    const page = await browser!.newPage();
     await page.setViewport({ width: THUMB_WIDTH, height: THUMB_HEIGHT, deviceScaleFactor: 1 });
     await page.setContent(fullHtml, {
       waitUntil: "networkidle0",
       timeout: 15000,
-      baseURL: baseUrl,
-    });
+    } as any);
     await page.evaluate(() => document.fonts?.ready);
     await new Promise((r) => setTimeout(r, 800));
 
@@ -115,7 +114,7 @@ export async function GET(
       type: "png",
       fullPage: false,
     });
-    await browser.close();
+    await browser!.close();
     browser = null;
 
     return new NextResponse(png as Buffer, {

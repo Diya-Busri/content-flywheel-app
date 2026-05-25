@@ -176,7 +176,7 @@ Return ONLY a JSON array (no markdown, no explanation):
       );
     }
 
-    async function callOpenAI(): Promise<Response> {
+    const callOpenAI = async (): Promise<Response> => {
       return fetchOpenAIWithRetry(
         "https://api.openai.com/v1/chat/completions",
         {
@@ -205,9 +205,9 @@ Return ONLY a JSON array (no markdown, no explanation):
             console.log(`🔄 Niche API 429/5xx, retry ${attempt} in ${delayMs / 1000}s`),
         }
       );
-    }
+    };
 
-    async function generateTrendingNiches(): Promise<NicheOption[]> {
+    const generateTrendingNiches = async (): Promise<NicheOption[]> => {
       const response = await callOpenAI();
       if (!response.ok) {
         const errorText = await response.text();
@@ -224,7 +224,7 @@ Return ONLY a JSON array (no markdown, no explanation):
       const jsonMatch = jsonText.match(/\[[\s\S]*\]/);
       const rawNiches: OpenAINiche[] = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
       return rawNiches.slice(0, 6).map(mapToNicheOption);
-    }
+    };
 
     let niches: NicheOption[];
 

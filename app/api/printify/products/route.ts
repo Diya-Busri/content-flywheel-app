@@ -137,19 +137,19 @@ export async function PATCH(req: Request) {
     ) as Array<{ id: number; price: number; enabled: boolean }>;
 
     /** Fetch all valid variant IDs for this blueprint+print_provider from the Printify catalog */
-    async function fetchCatalogVariantList(): Promise<Array<{ id: number; price: number; enabled: boolean }> | null> {
+    const fetchCatalogVariantList = async (): Promise<Array<{ id: number; price: number; enabled: boolean }> | null> => {
       if (!localProduct.blueprintId || !localProduct.printProviderId) return null;
       try {
         const catalogVariants = await printifyFetch(
           `/catalog/blueprints/${localProduct.blueprintId}/print_providers/${localProduct.printProviderId}/variants.json`,
-          settings.printifyApiKey
+          settings.printifyApiKey!
         ) as { variants?: Array<{ id: number; title?: string }> };
         if (catalogVariants.variants && catalogVariants.variants.length > 0) {
           return catalogVariants.variants.map((v) => ({ id: v.id, price: 2500, enabled: true }));
         }
       } catch { /* non-fatal */ }
       return null;
-    }
+    };
 
     // Auto-fetch variants from Printify catalog if none are saved yet
     if (variantList.length === 0) {
@@ -211,7 +211,7 @@ export async function PATCH(req: Request) {
     let printifyProductId = localProduct.printifyProductId;
 
     /** Remap sleeve position names if Printify rejects them (some blueprints use sleeve_left/sleeve_right, others use left_sleeve/right_sleeve) */
-    function remapSleevePositions(payload: Record<string, unknown>): Record<string, unknown> {
+    const remapSleevePositions = (payload: Record<string, unknown>): Record<string, unknown> => {
       const printAreas = payload.print_areas as Array<{ variant_ids: number[]; placeholders: Array<{ position: string; images: unknown[] }> }>;
       return {
         ...payload,
@@ -228,10 +228,10 @@ export async function PATCH(req: Request) {
           })),
         })),
       };
-    }
+    };
 
     /** Rebuild payload with fresh catalog variants — fixes stale IDs that cause error 8251 */
-    async function payloadWithFreshVariants(payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    const payloadWithFreshVariants = async (payload: Record<string, unknown>): Promise<Record<string, unknown> | null> => {
       const fresh = await fetchCatalogVariantList();
       if (!fresh || fresh.length === 0) return null;
       // Preserve user-set prices where IDs overlap
@@ -247,37 +247,37 @@ export async function PATCH(req: Request) {
         variants: merged.map((v) => ({ id: v.id, price: v.price, is_enabled: true })),
         print_areas: printAreas.map((pa) => ({ ...pa, variant_ids: freshIds })),
       };
-    }
+    };
 
-    async function printifySync(payload: Record<string, unknown>): Promise<string> {
+    const printifySync = async (payload: Record<string, unknown>): Promise<string> => {
       const isPlaceholderError = (err: unknown) =>
         err instanceof Error && err.message.includes("422") && err.message.toLowerCase().includes("placeholder");
       const is8251Error = (err: unknown) =>
         err instanceof Error && err.message.includes("8251");
 
-      async function attempt(p: Record<string, unknown>, method: "POST" | "PUT", url: string): Promise<{ id?: string }> {
+      const attempt = async (p: Record<string, unknown>, method: "POST" | "PUT", url: string): Promise<{ id?: string }> => {
         try {
-          return await printifyFetch(url, settings.printifyApiKey, { method, body: JSON.stringify(p) }) as { id?: string };
+          return await printifyFetch(url, settings.printifyApiKey!, { method, body: JSON.stringify(p) }) as { id?: string };
         } catch (err) {
           if (isPlaceholderError(err)) {
-            return await printifyFetch(url, settings.printifyApiKey, { method, body: JSON.stringify(remapSleevePositions(p)) }) as { id?: string };
+            return await printifyFetch(url, settings.printifyApiKey!, { method, body: JSON.stringify(remapSleevePositions(p)) }) as { id?: string };
           }
           if (is8251Error(err)) {
             // Stale variant IDs — re-fetch from catalog and retry once
             const freshPayload = await payloadWithFreshVariants(p);
             if (!freshPayload) throw err;
             try {
-              return await printifyFetch(url, settings.printifyApiKey, { method, body: JSON.stringify(freshPayload) }) as { id?: string };
+              return await printifyFetch(url, settings.printifyApiKey!, { method, body: JSON.stringify(freshPayload) }) as { id?: string };
             } catch (err2) {
               if (isPlaceholderError(err2)) {
-                return await printifyFetch(url, settings.printifyApiKey, { method, body: JSON.stringify(remapSleevePositions(freshPayload)) }) as { id?: string };
+                return await printifyFetch(url, settings.printifyApiKey!, { method, body: JSON.stringify(remapSleevePositions(freshPayload)) }) as { id?: string };
               }
               throw err2;
             }
           }
           throw err;
         }
-      }
+      };
 
       if (printifyProductId) {
         await attempt(payload, "PUT", `/shops/${resolvedShopId}/products/${printifyProductId}.json`);
@@ -286,7 +286,7 @@ export async function PATCH(req: Request) {
         const created = await attempt(payload, "POST", `/shops/${resolvedShopId}/products.json`);
         return created.id!;
       }
-    }
+    };
 
     printifyProductId = await printifySync(printifyPayload);
 

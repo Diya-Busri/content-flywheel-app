@@ -17,9 +17,9 @@ export const connectedAccountsTable = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (t) => [
-    uniqueIndex("connected_accounts_user_platform_user").on(t.userId, t.platform, t.platformUserId),
-  ]
+  (t) => ({
+    uniqUserPlatformUser: uniqueIndex("connected_accounts_user_platform_user").on(t.userId, t.platform, t.platformUserId),
+  })
 );
 
 export type InsertConnectedAccount = typeof connectedAccountsTable.$inferInsert;

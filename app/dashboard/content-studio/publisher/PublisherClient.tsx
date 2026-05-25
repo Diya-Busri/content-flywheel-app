@@ -173,7 +173,7 @@ export default function PublisherClient() {
       toast({ title: "Select a video first", variant: "destructive" });
       return;
     }
-    const platforms = [...selectedPlatforms];
+    const platforms = Array.from(selectedPlatforms);
     if (platforms.length === 0) {
       toast({ title: "Select at least one platform", variant: "destructive" });
       return;
@@ -503,7 +503,7 @@ export default function PublisherClient() {
                     ))}
                   </div>
                   <Button
-                    onClick={() => handlePublish([...bulkVideoIds], [...selectedPlatforms])}
+                    onClick={() => handlePublish(Array.from(bulkVideoIds), Array.from(selectedPlatforms))}
                     disabled={publishing || bulkVideoIds.size === 0 || selectedPlatforms.size === 0}
                     className="bg-orange-500 hover:bg-orange-600"
                   >

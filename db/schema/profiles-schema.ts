@@ -11,6 +11,7 @@ export const profilesTable = pgTable("profiles", {
   paymentProvider: paymentProviderEnum("payment_provider").default("whop"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  stripePriceId: text("stripe_price_id"),
   whopUserId: text("whop_user_id"),
   whopMembershipId: text("whop_membership_id"),
   planDuration: text("plan_duration"), // "monthly" or "yearly"

@@ -541,7 +541,7 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
           }
         } else {
           setAllProductSuggestions(MOCK_PRODUCTS);
-          if (data?.error) setProductSuggestionsError(data.error);
+          if ((data as any)?.error) setProductSuggestionsError((data as any).error);
         }
       })
       .catch(() => {

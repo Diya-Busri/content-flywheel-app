@@ -38,8 +38,7 @@ export function SlideDeck({
           <SlidePreview
             key={index}
             ref={(el) => {
-              if (!slideRefs.current) slideRefs.current = [];
-              slideRefs.current[index] = el;
+              if (slideRefs.current) slideRefs.current[index] = el;
             }}
             slide={slide}
             brandPrimary={brandPrimary}

@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
     await browser.close();
 
     // Upload everything to Supabase in parallel
-    const supabase = getSupabaseAdmin();
+    const supabase = getSupabaseAdmin()!;
     const prefix = `${userId}/viral-renders/${randomUUID().slice(0, 8)}`;
 
     const uploadResults = await Promise.all([

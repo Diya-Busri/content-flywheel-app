@@ -946,7 +946,7 @@ function snapTime(t: number, otherBlocks: SceneBlock[], excludeBlockId: string, 
       candidates.push(b.startTime, b.endTime);
     }
   });
-  const sorted = [...new Set(candidates)].sort((a, b) => a - b);
+  const sorted = Array.from(new Set(candidates)).sort((a, b) => a - b);
   let best = sorted[0];
   let bestDist = Math.abs(t - best);
   sorted.forEach((c) => {
@@ -1244,8 +1244,6 @@ function SortableSceneBlock({
       ref={setNodeRef}
       style={style}
       data-sortable-scene
-      role="button"
-      tabIndex={0}
       onClick={(e) => {
         e.stopPropagation();
         onSelect();
@@ -1921,7 +1919,7 @@ export default function VideoTimelinePage() {
                     setScenes(scenesToSet);
                     if (Array.isArray(draft.captions)) {
                       setCaptions(
-                        draft.captions.map((c: { id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }, i: number) => ({
+                        (draft.captions as Array<{ id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }>).map((c, i: number) => ({
                           id: typeof c.id === "string" ? c.id : `cap-${i}`,
                           text: typeof c.text === "string" ? c.text : "",
                           startTime: typeof c.startTime === "number" ? c.startTime : 0,
@@ -1944,7 +1942,7 @@ export default function VideoTimelinePage() {
                     if (draft.captionAnimation === "none" || draft.captionAnimation === "fadeIn" || draft.captionAnimation === "slideUp" || draft.captionAnimation === "pop") setCaptionAnimation(draft.captionAnimation);
                     if (draft.captionBackground === "none" || draft.captionBackground === "pill" || draft.captionBackground === "bar") setCaptionBackground(draft.captionBackground);
                     if (draft.captionDisplayMode === "full" || draft.captionDisplayMode === "wordByWord" || draft.captionDisplayMode === "singleWord") setCaptionDisplayMode(draft.captionDisplayMode);
-                    if (["fade","slideLeft","slideRight","wipe","zoom","pushUp","pushDown","blur","spin","flip"].includes(draft.sceneTransition)) setSceneTransitionType(draft.sceneTransition as SceneTransitionType);
+                    if (draft.sceneTransition && ["fade","slideLeft","slideRight","wipe","zoom","pushUp","pushDown","blur","spin","flip"].includes(draft.sceneTransition)) setSceneTransitionType(draft.sceneTransition as SceneTransitionType);
                     if (typeof draft.aspectRatio === "string") setAspectRatio(draft.aspectRatio);
                     if (typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0) setVoiceoverDuration(draft.voiceoverDuration);
                     if (typeof draft.scriptName === "string" && draft.scriptName.trim()) setScriptName(draft.scriptName.trim());
@@ -2038,7 +2036,7 @@ export default function VideoTimelinePage() {
                     setScenes(scenesToSet);
                     if (Array.isArray(draft.captions)) {
                       setCaptions(
-                        draft.captions.map((c: { id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }, i: number) => ({
+                        (draft.captions as Array<{ id?: string; text?: string; startTime?: number; endTime?: number; wordTimings?: WordTiming[] }>).map((c, i: number) => ({
                           id: typeof c.id === "string" ? c.id : `cap-${i}`,
                           text: typeof c.text === "string" ? c.text : "",
                           startTime: typeof c.startTime === "number" ? c.startTime : 0,
@@ -2061,7 +2059,7 @@ export default function VideoTimelinePage() {
                     if (draft.captionAnimation === "none" || draft.captionAnimation === "fadeIn" || draft.captionAnimation === "slideUp" || draft.captionAnimation === "pop") setCaptionAnimation(draft.captionAnimation);
                     if (draft.captionBackground === "none" || draft.captionBackground === "pill" || draft.captionBackground === "bar") setCaptionBackground(draft.captionBackground);
                     if (draft.captionDisplayMode === "full" || draft.captionDisplayMode === "wordByWord" || draft.captionDisplayMode === "singleWord") setCaptionDisplayMode(draft.captionDisplayMode);
-                    if (["fade","slideLeft","slideRight","wipe","zoom","pushUp","pushDown","blur","spin","flip"].includes(draft.sceneTransition)) setSceneTransitionType(draft.sceneTransition as SceneTransitionType);
+                    if (draft.sceneTransition && ["fade","slideLeft","slideRight","wipe","zoom","pushUp","pushDown","blur","spin","flip"].includes(draft.sceneTransition)) setSceneTransitionType(draft.sceneTransition as SceneTransitionType);
                     if (typeof draft.aspectRatio === "string") setAspectRatio(draft.aspectRatio);
                     if (typeof draft.voiceoverDuration === "number" && draft.voiceoverDuration > 0) setVoiceoverDuration(draft.voiceoverDuration);
                     if (typeof draft.scriptName === "string" && draft.scriptName.trim()) setScriptName(draft.scriptName.trim());
@@ -2407,7 +2405,7 @@ export default function VideoTimelinePage() {
       if (style.background === "none" || style.background === "pill" || style.background === "bar") setCaptionBackground(style.background);
       if (style.displayMode === "full" || style.displayMode === "wordByWord" || style.displayMode === "singleWord") setCaptionDisplayMode(style.displayMode);
       const transition = meta.sceneTransition;
-      if (["fade","slideLeft","slideRight","wipe","zoom","pushUp","pushDown","blur","spin","flip"].includes(transition)) setSceneTransitionType(transition as SceneTransitionType);
+      if (typeof transition === "string" && ["fade","slideLeft","slideRight","wipe","zoom","pushUp","pushDown","blur","spin","flip"].includes(transition)) setSceneTransitionType(transition as SceneTransitionType);
       if (typeof meta.aspectRatio === "string" && sourceType !== "stickman-whiteboard") setAspectRatio(meta.aspectRatio);
       const t = meta.template;
       if (t != null && typeof t === "object" && "id" in t) {
@@ -2605,7 +2603,7 @@ export default function VideoTimelinePage() {
     if (hasPerClipAudio) return; // gapless engine handles this
 
     const el = audioRef.current;
-    const voiceEnd = Number(el?.duration) ? el.duration : (voiceoverDuration > 0 ? voiceoverDuration : 0);
+    const voiceEnd = Number(el?.duration) ? el!.duration : (voiceoverDuration > 0 ? voiceoverDuration : 0);
     const timelineEnd = Math.max(duration, voiceEnd);
 
     // Pause voice and music; scene video may keep playing if we run the tail
@@ -2964,10 +2962,10 @@ export default function VideoTimelinePage() {
           return {
             ...scene,
             elements: scene.elements.map((el, ei) =>
-              ei === elementIndex ? { ...el, ...updates } : el
+              (ei === elementIndex ? { ...el, ...updates } : el) as SceneElement
             ),
           };
-        })
+        }) as Scene[]
       );
     },
     []
@@ -3054,11 +3052,11 @@ export default function VideoTimelinePage() {
             ? {
                 ...scene,
                 elements: scene.elements.map((el, i) =>
-                  i === elementIndex ? { ...el, ...updates } : el
+                  (i === elementIndex ? { ...el, ...updates } : el) as SceneElement
                 ),
               }
             : scene
-        )
+        ) as Scene[]
       );
     },
     [selectedScene]
@@ -4311,7 +4309,7 @@ export default function VideoTimelinePage() {
         <button
           type="button"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[#c0c0c0] hover:text-white bg-[#1e1e1e] border border-[#2a2a2a] hover:bg-[#2a2a2a] transition-colors"
-          onClick={handleSaveToLibrary}
+          onClick={() => handleSaveToLibrary()}
           title="Save to library"
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2a1 1 0 0 1 1-1h8.586a1 1 0 0 1 .707.293l2.414 2.414A1 1 0 0 1 15 4.414V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2zm4 12h4v-4H6v4zM3 2v12h2v-4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4h2V4.828L11.172 3H10V6H5V3H3z"/></svg>

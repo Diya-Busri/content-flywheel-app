@@ -287,7 +287,7 @@ export function YouTubeScriptActionPanel({ scriptText }: Props) {
         try {
           const vr = await fetch(`/api/videos/search?q=${encodeURIComponent(pexelsQuery)}&per_page=8`);
           const vData = (await vr.json().catch(() => ({}))) as { videos?: VideoHit[] };
-          if (vr.ok && Array.isArray(vData.videos)) setVideoSearchResults((prev) => ({ ...prev, [scene_number]: vData.videos }));
+          if (vr.ok && Array.isArray(vData.videos)) setVideoSearchResults((prev) => ({ ...prev, [scene_number]: vData.videos! }));
         } catch {
           // Pexels optional; skip
         }

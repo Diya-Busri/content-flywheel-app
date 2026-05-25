@@ -118,6 +118,8 @@ export interface ScriptCardProps {
   estimatedWatchTime?: string;
   seoScore?: string;
   onRegenerateSection?: (section: SectionType) => void;
+  subscriberCount?: number | null;
+  niche?: string | null;
 }
 
 export function ScriptCard({

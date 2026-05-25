@@ -827,7 +827,7 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
       // Manual letter spacing (draw char by char)
       if (studioSpacing > 0) {
         const spacing = studioSpacing * fontPx;
-        const chars = [...text];
+        const chars = Array.from(text);
         const totalWidth = chars.reduce((w, c) => w + ctx.measureText(c).width, 0) + spacing * (chars.length - 1);
         let x = SIZE / 2 - totalWidth / 2;
         for (const char of chars) {
@@ -2494,9 +2494,9 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                     "coral": "#fb7185", "teal": "#0d9488", "mint": "#a7f3d0", "dark navy": "#0f172a",
                     "sport grey": "#d1d5db", "military green": "#4d7c0f", "carolina blue": "#7dd3fc",
                   };
-                  const uniqueColors = [...new Set(
+                  const uniqueColors = Array.from(new Set(
                     variants.map((v) => (v.title ?? "").toLowerCase().split("/")[0].trim()).filter(Boolean)
-                  )];
+                  ));
                   return (
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
@@ -2599,9 +2599,9 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                   "coral": "#fb7185", "teal": "#0d9488", "mint": "#a7f3d0", "dark navy": "#0f172a",
                   "sport grey": "#d1d5db", "military green": "#4d7c0f", "carolina blue": "#7dd3fc",
                 };
-                const uniqueColors = [...new Set(
+                const uniqueColors = Array.from(new Set(
                   variants.map((v) => (v.title ?? "").toLowerCase().split("/")[0].trim()).filter(Boolean)
-                )];
+                ));
                 if (uniqueColors.length === 0) return null;
                 return (
                   <div className="mb-4 flex items-center gap-2 flex-wrap">
@@ -2843,13 +2843,13 @@ export function PrintOnDemandClient({ isPrintifyConnected, initialProducts }: Pr
                   "coral": "#fb7185", "teal": "#0d9488", "mint": "#a7f3d0", "dark navy": "#0f172a",
                   "sport grey": "#d1d5db", "military green": "#4d7c0f", "carolina blue": "#7dd3fc",
                 };
-                const uniqueColors = [...new Set(
+                const uniqueColors = Array.from(new Set(
                   variants.map((v) => {
                     const title = (v.title ?? "").toLowerCase();
                     // Variant titles are usually "Color / Size" — take the part before "/"
                     return title.split("/")[0].trim();
                   }).filter(Boolean)
-                )];
+                ));
                 if (uniqueColors.length === 0) return null;
                 return (
                   <div className="mt-4">

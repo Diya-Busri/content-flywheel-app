@@ -260,7 +260,7 @@ export default function GoalDetailFlow({ goalId, initialGoal = null, initialTask
     if (now < twoAM) return;
     graceCheckDoneRef.current = true;
     fetch(`/api/goals/${goalId}/advance-past-grace`, { method: "POST" })
-      .then((r) => r.ok && fetchGoal())
+      .then((r) => { if (r.ok) fetchGoal(); })
       .catch(() => {});
   }, [goal?.id, goal?.startDate, goal?.currentDay, goal?.status, goalId, fetchGoal]);
 
@@ -1085,7 +1085,7 @@ export default function GoalDetailFlow({ goalId, initialGoal = null, initialTask
                           {catTasks.map((task) => {
                             const { where, what } = task.howToComplete
                               ? parseWhereAndWhat(task.howToComplete)
-                              : {};
+                              : { where: undefined, what: undefined };
                             const isAppTask = task.taskType === "app_action" && task.appLink;
                             const taskCatConfig = task.category ? CATEGORY_CONFIG[task.category as keyof typeof CATEGORY_CONFIG] : null;
                             return (
@@ -1259,7 +1259,7 @@ export default function GoalDetailFlow({ goalId, initialGoal = null, initialTask
                   {todayTasks.map((task) => {
                     const { where, what } = task.howToComplete
                       ? parseWhereAndWhat(task.howToComplete)
-                      : {};
+                      : { where: undefined, what: undefined };
                     const isAppTask = task.taskType === "app_action" && task.appLink;
                     const taskCatConfig = task.category ? CATEGORY_CONFIG[task.category as keyof typeof CATEGORY_CONFIG] : null;
                     return (

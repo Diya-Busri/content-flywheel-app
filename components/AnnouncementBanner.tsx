@@ -52,7 +52,7 @@ export function AnnouncementBanner() {
     setDismissed(prev => {
       const next = new Set(prev);
       next.add(id);
-      localStorage.setItem(DISMISSED_KEY, JSON.stringify([...next]));
+      localStorage.setItem(DISMISSED_KEY, JSON.stringify(Array.from(next)));
       return next;
     });
   }

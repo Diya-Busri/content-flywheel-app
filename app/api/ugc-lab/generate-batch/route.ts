@@ -182,7 +182,7 @@ export async function POST(request: Request) {
           scriptId: crypto.randomUUID(),
           fullScript: v.fullScript,
           hookPreview: v.hookPreview,
-          status: "pending",
+          status: "pending" as const,
           progress: "0",
         }))
       )

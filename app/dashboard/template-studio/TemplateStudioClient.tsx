@@ -1766,7 +1766,7 @@ export default function TemplateStudioClient() {
           return next;
         });
       } else {
-        setSlides(newSlides.map((s) => ({ ...s, bg_color: brandPrimary })));
+        setSlides(newSlides.map((s: any) => ({ ...s, bg_color: brandPrimary })));
       }
       return newSlides;
     },
@@ -5828,7 +5828,6 @@ export default function TemplateStudioClient() {
                   scenes={animeStoryScenes}
                   imageUrls={animeStoryImages}
                   currentScene={animeStoryCurrentScene}
-                  onSceneChange={setAnimeStoryCurrentScene}
                   phase={animeStoryPhase}
                 />
                 {/* Editable scene list + Generate button (shown when script ready, no video yet) */}
@@ -5892,7 +5891,7 @@ export default function TemplateStudioClient() {
                           // Auto-generate social kit
                           setAnimeStorySocialKit(null);
                           setAnimeStorySocialKitLoading(true);
-                          fetch("/api/templates/social-kit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: animeStoryPremise, narration: scenes.slice(0, 3).map((s: { narration?: string }) => s.narration ?? "").join(" ") }) })
+                          fetch("/api/templates/social-kit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: animeStoryPremise, narration: scenes.slice(0, 3).map((s: any) => (s.narration ?? "")).join(" ") }) })
                             .then(r => r.json()).then((d: { kit?: typeof animeStorySocialKit }) => { if (d.kit) setAnimeStorySocialKit(d.kit); }).catch(() => {}).finally(() => setAnimeStorySocialKitLoading(false));
                         } catch (e) {
                           setAnimeStoryPhase(null);
@@ -5986,7 +5985,6 @@ export default function TemplateStudioClient() {
                   scenes={stickmanStoryScenes}
                   imageUrls={stickmanStoryImages}
                   currentScene={stickmanStoryCurrentScene}
-                  onSceneChange={setStickmanStoryCurrentScene}
                   phase={stickmanStoryPhase}
                 />
                 {/* Editable scene list + Generate button (shown when script ready, no video yet) */}
@@ -6050,7 +6048,7 @@ export default function TemplateStudioClient() {
                           // Auto-generate social kit
                           setStickmanStorySocialKit(null);
                           setStickmanStorySocialKitLoading(true);
-                          fetch("/api/templates/social-kit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: stickmanStoryPremise, narration: scenes.slice(0, 3).map((s: { narration?: string }) => s.narration ?? "").join(" ") }) })
+                          fetch("/api/templates/social-kit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: stickmanStoryPremise, narration: scenes.slice(0, 3).map((s: any) => (s.narration ?? "")).join(" ") }) })
                             .then(r => r.json()).then((d: { kit?: typeof stickmanStorySocialKit }) => { if (d.kit) setStickmanStorySocialKit(d.kit); }).catch(() => {}).finally(() => setStickmanStorySocialKitLoading(false));
                         } catch (e) {
                           setStickmanStoryPhase(null);
@@ -6081,7 +6079,7 @@ export default function TemplateStudioClient() {
             {(
               characterNames.trim()
                 ? characterNames.split(",").map((c) => c.trim()).filter(Boolean)
-                : [...new Set(aiStoryScenes.map((s) => s.dialogue.match(/^([^:]+):/)).filter(Boolean).map((m) => (m as RegExpMatchArray)[1].trim()))]
+                : Array.from(new Set(aiStoryScenes.map((s) => s.dialogue.match(/^([^:]+):/)).filter(Boolean).map((m) => (m as RegExpMatchArray)[1].trim())))
             ).map((charName) => (
               <div key={charName} className="space-y-2">
                 <Label>{charName}</Label>

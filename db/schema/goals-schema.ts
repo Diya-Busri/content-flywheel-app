@@ -90,7 +90,7 @@ export const goalWeeklyReviewsTable = pgTable("goal_weekly_reviews", {
     .references(() => goalsTable.id, { onDelete: "cascade" }),
   weekStartDate: text("week_start_date").notNull(),
   checkedAt: timestamp("checked_at").defaultNow().notNull(),
-}, (t) => [primaryKey({ columns: [t.goalId, t.weekStartDate] })]);
+}, (t) => ({ pk: primaryKey({ columns: [t.goalId, t.weekStartDate] }) }));
 
 /** Per-user goal reminder email settings (Clerk user_id). */
 export const goalReminderSettingsTable = pgTable("goal_reminder_settings", {

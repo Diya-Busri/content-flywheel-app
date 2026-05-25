@@ -53,7 +53,7 @@ async function generateBrandStorySceneImage(
     style: "natural",
     response_format: "b64_json",
   });
-  const b64 = (imgRes.data[0] as { b64_json?: string })?.b64_json;
+  const b64 = (imgRes.data![0] as { b64_json?: string })?.b64_json;
   if (!b64) throw new Error(`DALL-E returned no image for scene ${sceneIndex + 1}.`);
   const buffer = Buffer.from(b64, "base64");
   return uploadPngToTimeline(userId, buffer);

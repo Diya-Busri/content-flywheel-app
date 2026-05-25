@@ -133,7 +133,7 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
     }
     if (!response) throw lastErr;
 
-    const first = response.data[0];
+    const first = response.data![0];
     if (!first) {
       return NextResponse.json(
         { error: "Image generation did not return data. Please try again." },

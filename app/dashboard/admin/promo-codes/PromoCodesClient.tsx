@@ -77,7 +77,7 @@ export default function PromoCodesClient({ initialCodes }: Props) {
       maxUses: maxUses ? parseInt(maxUses, 10) || null : null,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       plan,
-    });
+    } as any);
     setLoading(false);
 
     if (res.isSuccess && res.data) {

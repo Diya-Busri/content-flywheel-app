@@ -326,7 +326,7 @@ export default function ConnectedAccountsClient() {
         return acc;
       },
       {} as Record<ConnectedPlatform, ConnectedAccount[]>
-    ) ?? {};
+    ) ?? ({} as Record<ConnectedPlatform, ConnectedAccount[]>);
   const platforms = data?.platforms ?? (["tiktok", "youtube", "instagram", "facebook"] as ConnectedPlatform[]);
 
   if (loading) {
@@ -376,7 +376,7 @@ export default function ConnectedAccountsClient() {
 
                     {isConnected && (
                       <div className="mt-2 space-y-1">
-                        {accounts.map((account, idx) => {
+                        {accounts.map((account: ConnectedAccount, idx: number) => {
                           const handle = account.platformUsername
                             ? account.platformUsername.startsWith("@")
                               ? account.platformUsername
@@ -457,7 +457,7 @@ export default function ConnectedAccountsClient() {
 
                 {isConnected && (
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {accounts.map((account, idx) => {
+                    {accounts.map((account: ConnectedAccount, idx: number) => {
                       const handle = account.platformUsername
                         ? account.platformUsername.startsWith("@")
                           ? account.platformUsername

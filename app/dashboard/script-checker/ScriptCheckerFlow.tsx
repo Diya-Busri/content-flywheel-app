@@ -155,7 +155,7 @@ function ViolationCard({ violation }: { violation: ScriptViolation }) {
   const config = severityConfig[violation.severity] ?? severityConfig.warning;
   const Icon = config.icon;
 
-  const categories = violation.categories ?? (violation.category ? [violation.category] : ["Compliance issue"]);
+  const categories = violation.categories ?? ["Compliance issue"];
   const hasMultiple = categories.length > 1;
 
   return (

@@ -12,7 +12,7 @@ const store = new Map<
 
 function cleanup() {
   const now = Date.now();
-  for (const [token, entry] of store.entries()) {
+  for (const [token, entry] of Array.from(store.entries())) {
     if (now - entry.createdAt > TTL_MS) store.delete(token);
   }
 }

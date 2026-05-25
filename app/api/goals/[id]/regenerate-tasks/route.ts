@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
-import { goalsTable, dailyTasksTable } from "@/db/schema/goals-schema";
+import { goalsTable, dailyTasksTable, TaskCategory } from "@/db/schema/goals-schema";
 import { eq, and, gte } from "drizzle-orm";
 import { generateTasks } from "@/lib/goals/generate-tasks";
 
@@ -94,7 +94,7 @@ export async function POST(
       taskType: (t.taskType ?? "external") as "external" | "app_action",
       appLink: (t.appLink ?? null) as string | null,
       appLabel: (t.appLabel ?? null) as string | null,
-      category: (t.category ?? null) as string | null,
+      category: (t.category ?? null) as TaskCategory | null,
       proofRequired: true,
       proofDescription: "",
     }));

@@ -135,7 +135,7 @@ Every title MUST be at most ${maxChars} characters for ${platform}. Count carefu
     const titles: TitleOption[] = rawTitles
       .slice(0, 3)
       .map((t) => {
-        const style = ["curiosity", "direct", "clickbait"].includes(t.style)
+        const style = t.style && ["curiosity", "direct", "clickbait"].includes(t.style)
           ? (t.style as TitleStyle)
           : "direct";
         const title = typeof t.title === "string" ? t.title.trim() : "";

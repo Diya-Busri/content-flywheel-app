@@ -255,7 +255,7 @@ Return ONLY valid JSON:
 
     const expandSystemPrompt = `You are expanding scene outlines into full ${tone} ${niche} documentary narration and cinematic image prompts. Stay strictly on the topic and niche provided — never drift into unrelated subject matter. Be substantive and engaging.`;
 
-    async function expandBatch(batchScenes: OutlineScene[]): Promise<FinanceDocScene[]> {
+    const expandBatch = async (batchScenes: OutlineScene[]): Promise<FinanceDocScene[]> => {
       const scenesText = batchScenes.map((s) => `Scene ${s.sceneNumber}: ${s.title} — ${s.brief}`).join("\n");
 
       const expandPrompt = `TOPIC: "${topic}" | NICHE: "${niche}" | CHANNEL: "${channelName || defaultChannelName}" | YEAR: ${currentYear}
@@ -319,7 +319,7 @@ Return ONLY valid JSON:
           motionPrompt: "slow zoom in",
         }));
       }
-    }
+    };
 
     // Fire all batch expansions in parallel
     const batchResults = await Promise.all(batches.map((batch) => expandBatch(batch)));

@@ -7,7 +7,8 @@ import { spawn } from "child_process";
 import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { prepareFfmpegBinaryForSpawn, runFfmpeg } from "@/lib/videos/compile";
+import { getFfmpegPath, runFfmpeg } from "@/lib/videos/compile";
+const prepareFfmpegBinaryForSpawn = async () => getFfmpegPath();
 
 const EPS = 0.02;
 

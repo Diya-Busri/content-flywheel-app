@@ -54,7 +54,7 @@ export async function POST(
     const niche = (product.niche ?? "").trim() || "general";
     const format = (product.format ?? "").trim() || "PDF";
     const marketingAssets = product.marketingAssets as { productDescription?: string } | null;
-    const description = marketingAssets?.productDescription ?? (product.description ?? "").trim().slice(0, 500);
+    const description = marketingAssets?.productDescription ?? ((product as any).description ?? "").trim().slice(0, 500);
     const sections = (product.content as { sections?: Section[] })?.sections ?? [];
     const sectionList = sections.map((s) => s.title).filter(Boolean).join(", ") || "Multiple sections";
 

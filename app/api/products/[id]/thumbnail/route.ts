@@ -82,13 +82,12 @@ export async function GET(
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
     const { launchPuppeteerBrowser } = require("@/lib/puppeteer-launch");
     browser = await launchPuppeteerBrowser();
-    const page = await browser.newPage();
+    const page = await browser!.newPage();
     await page.setViewport({ width: THUMB_WIDTH, height: THUMB_HEIGHT });
     await page.setContent(html, {
       waitUntil: "networkidle0",
       timeout: 15000,
-      baseURL: baseUrl.replace(/\/$/, ""),
-    });
+    } as any);
     await page.evaluate(() => document.fonts?.ready);
     await new Promise((r) => setTimeout(r, 500));
 
@@ -96,7 +95,7 @@ export async function GET(
       type: "png",
       clip: { x: 0, y: 0, width: THUMB_WIDTH, height: THUMB_HEIGHT },
     });
-    await browser.close();
+    await browser!.close();
     browser = null;
 
     return new NextResponse(Buffer.from(buffer as ArrayBuffer), {

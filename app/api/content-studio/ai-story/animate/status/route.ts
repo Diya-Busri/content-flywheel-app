@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       logs: false,
     });
 
-    const statusObj = statusResult as {
+    const statusObj = (statusResult as unknown) as {
       status?: string;
       error?: string;
       [key: string]: unknown;

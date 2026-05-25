@@ -81,7 +81,7 @@ export async function PATCH(
 
     let content: Record<string, unknown> = {};
     try {
-      content = typeof row.content === "string" ? JSON.parse(row.content) : { ...row.content };
+      content = typeof row.content === "string" ? JSON.parse(row.content) : { ...(row.content as Record<string, unknown>) };
     } catch {
       return NextResponse.json({ error: "Invalid script content" }, { status: 400 });
     }

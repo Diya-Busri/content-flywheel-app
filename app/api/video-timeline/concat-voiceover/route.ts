@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const outPath = await concatVoiceoverUrls(workDir, urls);
-      const buffer = await readFile(outPath);
+      const buffer = await readFile((outPath as any).path ?? outPath);
 
       const path = `${userId}/voiceover-concat/${randomUUID()}.mp3`;
       const { data, error } = await supabase.storage

@@ -356,12 +356,6 @@ type Props = {
     frameworkRationale?: string;
     engagementTriggers?: string[];
   }) => void;
-  /** When true, show Content Studio / YouTube context (breadcrumb, back link, title). */
-  isYouTubeMode?: boolean;
-  /** Override back link URL (e.g. Content Studio scripts or Digital Products scripts). */
-  backUrl?: string;
-  /** Channel name for YouTube mode subtitle. */
-  channelName?: string;
 };
 
 export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceId, scripts: scriptsProp, productId, libraryScriptId, isYouTubeMode, backUrl, channelName, onProductNameChange, onScriptRegenerated, onScriptEdited, onSceneVoiceoverUrlsSaved, onScenesRegenerated }: Props) {
@@ -929,7 +923,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       engagementTriggers?: string[];
     }) => {
       if (payload.scenes && payload.scenePrompts && onScenesRegenerated) {
-        onScenesRegenerated(payload);
+        onScenesRegenerated(payload as Parameters<typeof onScenesRegenerated>[0]);
         toast({ title: "Scenes regenerated", description: "Visual and text overlay prompts have been updated." });
       }
     },

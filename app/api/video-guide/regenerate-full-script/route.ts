@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       const match = candidates.find((r) => {
         let c: Record<string, unknown> = {};
         try {
-          c = typeof r.content === "string" ? JSON.parse(r.content) : { ...r.content };
+          c = typeof r.content === "string" ? JSON.parse(r.content) : { ...(r.content as Record<string, unknown>) };
         } catch {
           return false;
         }
@@ -295,7 +295,7 @@ ${productBlock}`;
               : {};
         return { ...scene, textOverlay: { ...existingObj, exactText: chunk } };
       });
-      updatedContent.scenes = updatedScenes;
+      (updatedContent as Record<string, unknown>).scenes = updatedScenes;
     }
 
     await db

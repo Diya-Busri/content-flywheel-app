@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const filterInstruction = FILTER_PROMPTS[filter];
+    const filterInstruction = FILTER_PROMPTS[filter as VideoIdeaFilter];
     const prompt = `Generate ${count} video ideas for the niche: "${niche}"
 
 Requirements:

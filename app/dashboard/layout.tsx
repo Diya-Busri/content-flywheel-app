@@ -102,10 +102,10 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const userExplicitKeys = selectedUseCases && selectedUseCases.length > 0
     ? new Set(USE_CASES.filter(uc => selectedUseCases.includes(uc.id)).flatMap(uc => uc.featureKeys))
     : new Set<string>();
-  const effectiveUserHidden = new Set([...userHidden].filter(k => !userExplicitKeys.has(k)));
+  const effectiveUserHidden = new Set(Array.from(userHidden).filter(k => !userExplicitKeys.has(k)));
 
   // Admin always sees everything — feature flags only apply to regular users
-  const allDisabled = isAdmin ? [] : [...new Set([...effectiveUserHidden, ...disabledFeatures])];
+  const allDisabled = isAdmin ? [] : Array.from(new Set([...Array.from(effectiveUserHidden), ...Array.from(disabledFeatures)]));
 
   return (
     <DashboardLayoutClient profile={profile} userEmail={userEmail} disabledFeatures={allDisabled} isAdmin={!!isAdmin}>

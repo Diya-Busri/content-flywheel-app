@@ -31,7 +31,7 @@ type ThumbnailMockupProps = {
   style?: React.CSSProperties;
   /** When true, render in a small preview container. When false, render at full size for capture. */
   preview?: boolean;
-  innerRef?: React.RefObject<HTMLDivElement | null>;
+  innerRef?: React.RefObject<HTMLDivElement>;
 };
 
 export function ThumbnailMockup({

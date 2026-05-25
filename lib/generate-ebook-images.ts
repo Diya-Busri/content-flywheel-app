@@ -38,7 +38,7 @@ export async function generateAndUploadEbookImage(
     response_format: "url",
   });
 
-  const url = response.data[0]?.url;
+  const url = response.data![0]?.url;
   if (!url || typeof url !== "string") {
     throw new Error("DALL-E did not return an image URL.");
   }

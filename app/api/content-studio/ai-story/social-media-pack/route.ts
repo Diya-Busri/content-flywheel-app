@@ -37,8 +37,8 @@ export async function POST(request: NextRequest) {
     const scenes = Array.isArray(body.scenes) ? body.scenes : [];
 
     const normalizedDialogues = scenes
-      .map((s) => (typeof s?.dialogue === "string" ? s.dialogue.trim() : ""))
-      .filter((s) => s.length > 0)
+      .map((s: any) => (typeof s?.dialogue === "string" ? s.dialogue.trim() : ""))
+      .filter((s: any) => s.length > 0)
       .slice(0, 8);
 
     if (!theme && normalizedDialogues.length === 0) {
@@ -71,7 +71,7 @@ Characters: ${characters || "(unspecified)"}
 Character names: ${characterNames || "(unspecified)"}
 
 Scene dialogues:
-${normalizedDialogues.map((d, i) => `${i + 1}. ${d}`).join("\n") || "(none provided)"}
+${normalizedDialogues.map((d: any, i: any) => `${i + 1}. ${d}`).join("\n") || "(none provided)"}
 `;
 
     const response = await fetchOpenAIWithRetry("https://api.openai.com/v1/chat/completions", {

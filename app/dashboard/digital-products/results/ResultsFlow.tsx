@@ -26,8 +26,8 @@ const SCRIPT_ANGLES = [
 /** Strip [PAIN]...[/PAIN] and [BENEFIT]...[/BENEFIT] tags for clipboard/download. */
 function stripScriptTags(text: string): string {
   return text
-    .replace(/\[PAIN\](.*?)\[\/PAIN\]/gs, "$1")
-    .replace(/\[BENEFIT\](.*?)\[\/BENEFIT\]/gs, "$1");
+    .replace(/\[PAIN\]([\s\S]*?)\[\/PAIN\]/g, "$1")
+    .replace(/\[BENEFIT\]([\s\S]*?)\[\/BENEFIT\]/g, "$1");
 }
 
 /** Pain/benefit keywords for fallback when script has no [PAIN]/[BENEFIT] tags. */
@@ -38,7 +38,7 @@ type Segment = { type: "normal" | "pain" | "benefit"; text: string };
 
 function parseSegments(text: string): Segment[] {
   const segments: Segment[] = [];
-  const re = /\[PAIN\](.*?)\[\/PAIN\]|\[BENEFIT\](.*?)\[\/BENEFIT\]/gs;
+  const re = /\[PAIN\]([\s\S]*?)\[\/PAIN\]|\[BENEFIT\]([\s\S]*?)\[\/BENEFIT\]/g;
   let lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {

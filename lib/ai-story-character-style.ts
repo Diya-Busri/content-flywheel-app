@@ -57,7 +57,7 @@ export function typesInDialogue(
     const t = resolveSpeakerToType(m[1], types, nameToType);
     if (t) found.add(t);
   }
-  return [...found];
+  return Array.from(found);
 }
 
 const CHARACTER_LOCK_HEADER =

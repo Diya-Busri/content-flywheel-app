@@ -378,7 +378,7 @@ export async function POST(req: Request) {
         role: "system",
         content: systemParts.join("\n\n"),
       },
-      ...messages.map((m) => ({ role: m.role, content: toOpenAIContent(m) })),
+      ...messages.map((m) => ({ role: m.role, content: toOpenAIContent(m) } as OpenAI.Chat.ChatCompletionMessageParam)),
     ];
 
     const stream = await openai.chat.completions.create({

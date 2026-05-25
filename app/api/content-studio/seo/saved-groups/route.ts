@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     const topic = typeof body.topic === "string" ? body.topic.trim() || null : null;
     let tags: string[] = [];
     if (Array.isArray(body.tags)) {
-      tags = body.tags.filter((t): t is string => typeof t === "string" && t.trim().length > 0);
+      tags = body.tags.filter((t: any): t is string => typeof t === "string" && t.trim().length > 0);
     }
 
     if (!name) {

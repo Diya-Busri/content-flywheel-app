@@ -727,7 +727,7 @@ export default function ScriptsFlow() {
                 onUpdate={(updates) => updateScript(script.id, updates)}
                 onToggleSelect={() => toggleSelect(script.id)}
                 onOpenEdit={openEdit}
-                charLimits={CHAR_LIMITS[scriptVideoLengthSec]}
+                charLimits={CHAR_LIMITS[scriptVideoLengthSec as keyof typeof CHAR_LIMITS]}
                 globalLengthSec={scriptVideoLengthSec}
                 isRegenerating={regeneratingScripts}
               />

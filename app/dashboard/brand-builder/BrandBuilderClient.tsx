@@ -1063,9 +1063,9 @@ export default function BrandBuilderClient() {
               {roadmap.first_drop_pricing && (roadmap.first_drop_pricing.suggested_products?.length || roadmap.first_drop_pricing.pricing_notes) && (
                 <div className="rounded-lg border border-white/10 bg-white/5 p-4">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">First drop pricing</p>
-                  {roadmap.first_drop_pricing.suggested_products?.length > 0 && (
+                  {(roadmap.first_drop_pricing.suggested_products?.length ?? 0) > 0 && (
                     <ul className="list-disc list-inside text-sm text-foreground mb-2">
-                      {roadmap.first_drop_pricing.suggested_products.map((p, i) => (
+                      {roadmap.first_drop_pricing.suggested_products!.map((p, i) => (
                         <li key={i}>{p}</li>
                       ))}
                     </ul>

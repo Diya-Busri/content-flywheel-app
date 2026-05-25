@@ -682,7 +682,7 @@ export async function POST(request: NextRequest) {
         let jsonStr = content.replace(/^```json?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
         try {
           const parsed = JSON.parse(jsonStr) as { scenes?: unknown[] };
-          if (parsed?.scenes && Array.isArray(parsed.scenes) && parsed.scenes.length > 0) creativeBrief = parsed as typeof creativeBrief;
+          if (parsed?.scenes && Array.isArray(parsed.scenes) && parsed.scenes.length > 0) creativeBrief = parsed as unknown as typeof creativeBrief;
         } catch (parseErr) {
           console.error("[video-guide] Creative brief JSON parse failed. Length:", jsonStr.length, "Preview:", jsonStr.slice(0, 200));
           if (regenerateScenesOnly) {
@@ -707,21 +707,22 @@ export async function POST(request: NextRequest) {
 
     // When only regenerating scenes, return new scenes/scenePrompts and skip platform content + library save
     if (regenerateScenesOnly) {
-      if (!creativeBrief?.scenes?.length) {
+      const creativeBriefAny = creativeBrief as any;
+      if (!creativeBriefAny?.scenes?.length) {
         return NextResponse.json(
           { error: "Failed to generate scenes. Please try again." },
           { status: 422 }
         );
       }
       const scenePromptsOut: { scene: string; timing: string; prompt: string }[] = [];
-      for (const s of creativeBrief.scenes) {
+      for (const s of creativeBriefAny.scenes) {
         const prompt =
           s.visualDirection?.aiPrompt ||
           `Generate a marketing scene, ${videoFormat.aspectPhrase}, for ${productNameRes}`;
         scenePromptsOut.push({ scene: s.scene, timing: s.timing, prompt });
       }
-      const scenesWithFormat = creativeBrief.scenes.map((s, i) => {
-        const isLastScene = i === creativeBrief.scenes.length - 1;
+      const scenesWithFormat = creativeBriefAny.scenes.map((s: any, i: any) => {
+        const isLastScene = i === creativeBriefAny.scenes.length - 1;
         const ctaOverlay =
           isLastScene && videoFormat.isYouTube
             ? { ...s.textOverlay, exactText: s.textOverlay?.exactText?.toLowerCase().includes("link in bio") ? "👇 SUBSCRIBE for More" : (s.textOverlay?.exactText ?? "👇 SUBSCRIBE for More") }
@@ -741,9 +742,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         scenes: scenesWithFormat,
         scenePrompts: scenePromptsOut,
-        storytellingFramework: creativeBrief.storytellingFramework ?? undefined,
-        frameworkRationale: creativeBrief.frameworkRationale ?? undefined,
-        engagementTriggers: creativeBrief.engagementTriggers ?? undefined,
+        storytellingFramework: creativeBriefAny.storytellingFramework ?? undefined,
+        frameworkRationale: creativeBriefAny.frameworkRationale ?? undefined,
+        engagementTriggers: creativeBriefAny.engagementTriggers ?? undefined,
         videoFormat: {
           aspectRatio: videoFormat.aspectRatio,
           orientation: videoFormat.orientation,
@@ -766,7 +767,7 @@ export async function POST(request: NextRequest) {
         bodyText || "",
         cta || "",
         selectedPlatforms,
-        creativeBrief?.storytellingFramework ?? "Pain Point Angle"
+        (creativeBrief as any)?.storytellingFramework ?? "Pain Point Angle"
       );
       const res2 = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -836,8 +837,8 @@ export async function POST(request: NextRequest) {
     // Build scenePrompts from creative brief or fallback
     const scenePrompts: { scene: string; timing: string; prompt: string }[] = [];
     const aspectPhrase = videoFormat.aspectPhrase;
-    if (creativeBrief?.scenes?.length) {
-      for (const s of creativeBrief.scenes) {
+    if ((creativeBrief as any)?.scenes?.length) {
+      for (const s of (creativeBrief as any).scenes as any[]) {
         const prompt =
           s.visualDirection?.aiPrompt ||
           `Generate a marketing scene, ${aspectPhrase}, for ${productNameRes}`;
@@ -899,7 +900,7 @@ export async function POST(request: NextRequest) {
 
     const musicRecs = {
       mood:
-        creativeBrief?.scenes?.[0]?.audio?.mood === "tense"
+        (creativeBrief as any)?.scenes?.[0]?.audio?.mood === "tense"
           ? "Start tense/anxious, build to uplifting at solution scene"
           : "Trending motivational or uplifting (for digital products)",
       sources: ["CapCut library (free)", "Epidemic Sound", "YouTube Audio Library"],
@@ -922,8 +923,8 @@ export async function POST(request: NextRequest) {
         };
 
     const scenesWithFormat =
-      creativeBrief?.scenes?.map((s, i) => {
-        const isLastScene = i === (creativeBrief?.scenes?.length ?? 0) - 1;
+      ((creativeBrief as any)?.scenes as any[] | undefined)?.map((s: any, i: any) => {
+        const isLastScene = i === ((creativeBrief as any)?.scenes?.length ?? 0) - 1;
         const ctaOverlay =
           isLastScene && videoFormat.isYouTube
             ? { ...s.textOverlay, exactText: s.textOverlay?.exactText?.toLowerCase().includes("link in bio") ? "👇 SUBSCRIBE for More" : (s.textOverlay?.exactText ?? "👇 SUBSCRIBE for More") }
@@ -946,7 +947,7 @@ export async function POST(request: NextRequest) {
       try {
         const { generateDiagramForScene } = await import("@/lib/video-guide/generate-diagram");
         const results = await Promise.allSettled(
-          scenesWithFormat.map((scene) => {
+          scenesWithFormat.map((scene: any) => {
             const vd = scene.visualDirection as {
               slideType?: string;
               slideTitle?: string;
@@ -966,7 +967,7 @@ export async function POST(request: NextRequest) {
             }).catch(() => null);
           })
         );
-        results.forEach((result, idx) => {
+        results.forEach((result: any, idx: any) => {
           const url = result.status === "fulfilled" ? result.value : null;
           if (url) {
             const vd = scenesWithFormat[idx].visualDirection as Record<string, unknown> | undefined;
@@ -989,15 +990,15 @@ export async function POST(request: NextRequest) {
       productName: productNameRes,
       niche: productNicheRes,
       productDescription: productDesc,
-      storytellingFramework: creativeBrief?.storytellingFramework ?? "Pain Point Angle",
-      frameworkRationale: creativeBrief?.frameworkRationale ?? "Problem-solution structure converts well for digital products.",
+      storytellingFramework: (creativeBrief as any)?.storytellingFramework ?? "Pain Point Angle",
+      frameworkRationale: (creativeBrief as any)?.frameworkRationale ?? "Problem-solution structure converts well for digital products.",
       scenes: scenesWithFormat,
       videoFormat: {
         aspectRatio: videoFormat.aspectRatio,
         orientation: videoFormat.orientation,
         resolution: videoFormat.resolution,
       },
-      engagementTriggers: creativeBrief?.engagementTriggers ?? [
+      engagementTriggers: (creativeBrief as any)?.engagementTriggers ?? [
         "First frame must work as thumbnail — most important frame",
         "Text readable in 0.5 seconds",
         "Never put important text in top 15% or bottom 20% (UI overlaps)",

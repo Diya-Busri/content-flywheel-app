@@ -1482,8 +1482,8 @@ function ChatPanel({
         }
       }
     };
-    el.addEventListener("paste", onPaste);
-    return () => el.removeEventListener("paste", onPaste);
+    el.addEventListener("paste", onPaste as EventListener);
+    return () => el.removeEventListener("paste", onPaste as EventListener);
   }, []);
 
   const readFileAsText = (file: File): Promise<string> =>
@@ -1898,7 +1898,7 @@ ${videoLines}`;
   return (
     <div ref={containerRef} className="flex flex-col h-full min-h-0">
       <audio
-        ref={audioRef}
+        ref={audioRef as React.RefObject<HTMLAudioElement>}
         className="hidden"
         playsInline
         aria-hidden

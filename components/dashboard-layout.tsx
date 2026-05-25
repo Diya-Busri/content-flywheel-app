@@ -17,18 +17,11 @@ interface DashboardLayoutProps {
 }
 
 export default function DashboardLayout({ profile, children, title }: DashboardLayoutProps) {
-  // Get the Whop plan IDs - this is a client component, so we can't use server-side env vars directly
-  // We'll use empty strings and let the sidebar component handle the fallback
-  const whopMonthlyPlanId = '';
-  const whopYearlyPlanId = '';
-
   return (
     <div className="flex h-screen bg-gray-50 relative">
       {/* Sidebar - now handles showing the upgrade popup */}
-      <Sidebar 
-        profile={profile} 
-        whopMonthlyPlanId={whopMonthlyPlanId}
-        whopYearlyPlanId={whopYearlyPlanId}
+      <Sidebar
+        profile={profile}
       />
       
       {/* Main Content */}

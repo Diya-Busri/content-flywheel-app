@@ -1259,7 +1259,7 @@ export default function DiscoverCreateFlow() {
                         <div className="space-y-2 mt-2">
                           {(["narrow", "normal", "wide"] as const).map((m) => (
                             <label key={m} className="flex items-center gap-2 cursor-pointer text-sm text-[#E0E0E0]">
-                              <input type="radio" name="margin" checked={marginPreset === m && marginPreset !== "custom"} onChange={() => setMarginPreset(m)} className="rounded-full" />
+                              <input type="radio" name="margin" checked={marginPreset === m} onChange={() => setMarginPreset(m)} className="rounded-full" />
                               {m === "narrow" ? "Narrow (0.5 in)" : m === "normal" ? "Normal (1 in)" : "Wide (1.5 in)"}
                             </label>
                           ))}

@@ -87,7 +87,7 @@ export function Step3PickNiche({ wizardData, onNext, onBack }: Props) {
       const settings = await fetchUserContentSettings();
       if (cancelled) return;
       if (settings?.selected_niche && !settings.has_1m_subs) {
-        onNext({ selectedNiche: settings.selected_niche });
+        onNext({ selected_niche: settings.selected_niche });
         router.push("/dashboard/content-studio/create?step=4");
         return;
       }

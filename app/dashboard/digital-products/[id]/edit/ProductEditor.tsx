@@ -610,7 +610,7 @@ const SHAPES: { name: string; svg: string }[] = [
 
 function parsePlacedElements(raw: unknown[] | null | undefined): PlacedElement[] {
   if (!Array.isArray(raw)) return [];
-  return raw
+  return (raw
     .filter(
       (item): item is PlacedElement =>
         item != null &&
@@ -650,7 +650,7 @@ function parsePlacedElements(raw: unknown[] | null | undefined): PlacedElement[]
         return { ...base, imageSettings: { ...DEFAULT_IMAGE_SETTINGS, ...imgSettings } };
       }
       return base;
-    });
+    }) as PlacedElement[]);
 }
 
 /**
@@ -854,7 +854,7 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
     textDecoration: (isWebsiteLink ? "underline" : (ts?.textDecoration ?? DEFAULT_TEXT_BOX.textDecoration)) as React.CSSProperties["textDecoration"],
     wordBreak: "break-word" as const,
     textShadow: (ts?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? `${ts?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX}px ${ts?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY}px ${ts?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur}px ${ts?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor}` : "none",
-    WebKitTextStroke: (ts?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${ts?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${ts?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none",
+    WebkitTextStroke: (ts?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${ts?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${ts?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none",
   } : undefined;
   const textStyleNoBackground = textStyle ? (() => { const { backgroundColor: _b, ...rest } = textStyle as React.CSSProperties & { backgroundColor?: string }; return rest; })() : undefined;
 
@@ -912,7 +912,7 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
         ) : element.type === "text" ? (
           isEditing ? (
             <textarea
-              ref={editingTextAreaRef}
+              ref={editingTextAreaRef as React.RefObject<HTMLTextAreaElement>}
               className="w-full h-full overflow-auto p-1 resize-none bg-transparent border border-orange-400 rounded outline-none"
               style={{ ...textStyleNoBackground, backgroundColor: "transparent" }}
               value={element.content}
@@ -1600,7 +1600,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         }
         return pageArr;
       });
-      return next;
+      return next as PlacedElement[][];
     });
   }, [product?.id, product?.title, product?.niche, placedElementsByPage.length, totalPages]);
 
@@ -2944,7 +2944,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
           };
         })
       );
-      setPlacedElementsByPage(nextPlaced);
+      setPlacedElementsByPage(nextPlaced as PlacedElement[][]);
 
       setGraphicsAccentColor(accent);
       setCustomColor(accent);
@@ -3005,7 +3005,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       const backIdx = nextPlaced.length - 1;
       if (backIdx >= 0) {
         const links = (backCoverSocials ?? {}) as Record<string, string>;
-        nextPlaced[backIdx] = ensureBackPageSocialElements(nextPlaced[backIdx] ?? [], links);
+        nextPlaced[backIdx] = ensureBackPageSocialElements((nextPlaced[backIdx] ?? []) as PlacedElement[], links) as PlacedElement[];
       }
 
       setProduct((p) =>
@@ -3388,7 +3388,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
             },
           },
         } as Product;
-        queueMicrotask(() => saveToServer({ designSettings: next.designSettings }));
+        queueMicrotask(() => saveToServer({ designSettings: next.designSettings as Record<string, unknown> | undefined }));
         return next;
       });
     },
@@ -3466,7 +3466,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         setProduct((p) => (p ? { ...p, title: newContent } : null));
         selectedTextRef.current.textContent = newContent;
         setSelectedTextMeta((prev) => (prev ? { ...prev, content: newContent } : null));
-        saveToServer({ title: newContent });
+        saveToServer({ title: newContent } as any);
         return;
       }
       if (type === "title") {
@@ -4219,7 +4219,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const currentPageTextColor = pageBackgrounds[currentPageIndex]?.pageTextColor ?? null;
 
   const templatePreset = TEMPLATE_PRESETS[(template as TemplateId) || "modern"] ?? TEMPLATE_PRESETS.modern;
-  const previewLayoutStyle: React.CSSProperties = {
+  const previewLayoutStyle = {
     ["--paragraph-spacing" as const]: `${layoutSettings.paragraphSpacing}rem`,
     ["--line-height" as const]: String(layoutSettings.lineHeight),
     ["--text-align" as const]: layoutSettings.alignment,
@@ -5054,7 +5054,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                                   const text = e.currentTarget.textContent ?? "";
                                   setProduct((p) => (p ? { ...p, title: text } : null));
                                   setSelectedTextMeta((prev) => (prev && prev.sectionId === "__product_title" ? { ...prev, content: text } : prev));
-                                  saveToServer({ title: text });
+                                  saveToServer({ title: text } as any);
                                 }}
                               >
                                 {product.title}
@@ -7068,7 +7068,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           baseImageUrl={marketingAssets.thumbnailUrl ?? undefined}
                           orientation={effectiveOrientation}
                           preview={false}
-                          innerRef={thumbnailCaptureRef}
+                          innerRef={thumbnailCaptureRef as React.RefObject<HTMLDivElement>}
                         />
                       </div>
                     </div>
@@ -7607,7 +7607,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             (element.id === "back-url" && /^https?:\/\//i.test((element.content || "").trim()) ? (
                               <div className="w-full h-full overflow-auto p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: "#2563eb", textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word", textDecoration: "underline" }} data-website-link={(element.content || "").trim()}>{element.content || ""}</div>
                             ) : (
-                              <div className="w-full h-full overflow-auto p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color, textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word", textShadow: (element.textSettings?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? `${element.textSettings?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX}px ${element.textSettings?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY}px ${element.textSettings?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur}px ${element.textSettings?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor}` : "none", WebKitTextStroke: (element.textSettings?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${element.textSettings?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${element.textSettings?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none" }}>{element.content || ""}</div>
+                              <div className="w-full h-full overflow-auto p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color, textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word", textShadow: (element.textSettings?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? `${element.textSettings?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX}px ${element.textSettings?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY}px ${element.textSettings?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur}px ${element.textSettings?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor}` : "none", WebkitTextStroke: (element.textSettings?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${element.textSettings?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${element.textSettings?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none" }}>{element.content || ""}</div>
                             ))
                           ) : <span className="text-[#999] text-xs">?</span>}
                         </div>

@@ -341,7 +341,7 @@ function groupTimelineVideosBySeries(items: LibraryItem[]): { seriesTitle: strin
     }
   }
   const out: { seriesTitle: string | null; items: LibraryItem[] }[] = [];
-  const keys = [...bySeries.keys()].sort((a, b) => a.localeCompare(b));
+  const keys = Array.from(bySeries.keys()).sort((a, b) => a.localeCompare(b));
   for (const k of keys) {
     const list = bySeries.get(k)!;
     list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

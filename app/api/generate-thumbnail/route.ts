@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       response_format: "url",
     });
 
-    const imageUrl = response.data[0]?.url;
+    const imageUrl = response.data![0]?.url;
     if (!imageUrl || typeof imageUrl !== "string") {
       return NextResponse.json(
         { error: "Image generation did not return a URL. Please try again." },

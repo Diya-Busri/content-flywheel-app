@@ -39,7 +39,7 @@ export async function withRetry429<T>(
       const msg = err instanceof Error ? err.message : String(err);
       const status = (err as { status?: number })?.status;
       const is429 =
-        status === 429 || msg.includes("429") || msg.includes("rate limit") || (status >= 500 && status < 600);
+        status === 429 || msg.includes("429") || msg.includes("rate limit") || ((status ?? 0) >= 500 && (status ?? 0) < 600);
       if (attempt < MAX_RETRIES && is429) {
         const delayMs = RETRY_DELAYS_MS[attempt] ?? 20000;
         options?.onRetry?.(attempt + 1, delayMs);

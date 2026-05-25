@@ -60,7 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       signUpUrl="/sign-up"
       afterSignInUrl="/dashboard"
       afterSignUpUrl="/dashboard"
-      fallbackRedirectUrl="/dashboard"
+      signInFallbackRedirectUrl="/dashboard"
     >
       <html lang="en" suppressHydrationWarning>
         <head>

@@ -192,9 +192,9 @@ export async function captureCanvasPagesToPdf(
       onclone: (clonedDoc) => {
         const covers = clonedDoc.querySelectorAll('[class*="cover"]')
         covers.forEach(el => {
-          el.style.transform = 'none'
-          el.style.opacity = '1'
-          el.style.visibility = 'visible'
+          (el as HTMLElement).style.transform = 'none';
+          (el as HTMLElement).style.opacity = '1';
+          (el as HTMLElement).style.visibility = 'visible';
         })
       }
     });

@@ -161,7 +161,7 @@ async function runExport(jobId: string, userId: string, params: {
 
     // Upload to Supabase
     const buffer = await readFile(finalPath);
-    const supabase = getSupabaseAdmin();
+    const supabase = getSupabaseAdmin()!;
     const storagePath = `${userId}/viral-exports/viral-${Date.now()}.mp4`;
     const { data, error: uploadError } = await supabase.storage
       .from(BUCKET)
