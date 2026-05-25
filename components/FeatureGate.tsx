@@ -1,4 +1,5 @@
 import { getDisabledFeatures } from "@/lib/feature-flags";
+import { isAdmin } from "@/lib/is-admin";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 
@@ -11,17 +12,24 @@ interface FeatureGateProps {
 /**
  * Server component — wraps a page and shows a "feature disabled" screen
  * if the flag is turned off for the current user in the admin panel.
- * User's explicit feature selections (Settings → Features) override global admin flags.
+ *
+ * Admin bypass: if the current user is the app admin, the gate is always
+ * open regardless of the flag state. This lets admins test disabled or
+ * beta features in production without exposing them to regular users.
  */
 export async function FeatureGate({ featureKey, children, label }: FeatureGateProps) {
   const { userId } = await auth();
   if (!userId) return <>{children}</>;
 
+  // Admins always bypass feature gates — they can access anything, even if
+  // the flag is globally OFF. This is the single source of admin bypass for
+  // page-level access. Sidebar bypass lives in app/dashboard/layout.tsx.
+  const adminUser = await isAdmin();
+  if (adminUser) return <>{children}</>;
+
   const disabled = await getDisabledFeatures(userId);
-  // Feature is not disabled at all — show it
   if (!disabled.has(featureKey)) return <>{children}</>;
 
-  // Admin flag is OFF — always block, regardless of user use-case settings.
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
       <div className="text-5xl mb-4">🔒</div>
