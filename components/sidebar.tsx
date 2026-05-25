@@ -25,13 +25,13 @@ interface SidebarProps {
   userEmail?: string;
   disabledFeatures?: string[];
   onOpenReview?: () => void;
+  isAdmin?: boolean;
 }
 
-export default function Sidebar({ profile, userEmail, disabledFeatures = [], onOpenReview }: SidebarProps) {
+export default function Sidebar({ profile, userEmail, disabledFeatures = [], onOpenReview, isAdmin = false }: SidebarProps) {
   const disabled = new Set(disabledFeatures);
   const pathname = usePathname();
-  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase() ?? "";
-  const isAdminUser = !!adminEmail && (userEmail ?? "").trim().toLowerCase() === adminEmail;
+  const isAdminUser = isAdmin;
   const [mounted, setMounted] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
