@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
@@ -73,8 +73,14 @@ export async function PATCH(req: Request) {
       reset?: boolean; // dev: wipe all state back to zero
     };
 
-    // Hard reset — used for testing only
+    // Hard reset — admin only
     if (reset === true) {
+      const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
+      const user = await currentUser();
+      const userEmail = user?.emailAddresses?.[0]?.emailAddress?.trim().toLowerCase() ?? "";
+      if (!adminEmail || userEmail !== adminEmail) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
       const supabase = getSupabaseAdmin();
       if (!supabase) return NextResponse.json({ error: "Server not configured" }, { status: 503 });
       await supabase.from("profiles").update({ onboarding_steps: {}, onboarding_completed: false }).eq("user_id", userId);
