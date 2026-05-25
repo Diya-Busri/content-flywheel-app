@@ -1,185 +1,240 @@
-import {AbsoluteFill, spring, useVideoConfig, interpolate} from 'remotion';
+import {AbsoluteFill, interpolate, spring, useVideoConfig} from 'remotion';
+import type {PromoFeatureCard, PromoVariantWithSubtitles} from '../promo-content';
 
 interface FeaturesSectionProps {
 	progress: number;
 	fadeOut: number;
+	variant: PromoVariantWithSubtitles;
 }
 
 interface FeatureCardProps {
-	icon: string;
-	title: string;
-	description: string;
-	features: string[];
-	color: string;
+	accent: string;
 	delay: number;
+	description: string;
+	index: number;
+	kicker: string;
+	points: string[];
 	progress: number;
+	title: string;
 }
 
 const FeatureCard: React.FC<FeatureCardProps> = ({
-	icon,
-	title,
-	description,
-	features,
-	color,
+	accent,
 	delay,
+	description,
+	index,
+	kicker,
+	points,
 	progress,
+	title,
 }) => {
 	const {fps} = useVideoConfig();
-
-	const scale = spring({
-		frame: progress * 30 - delay,
+	const entrance = spring({
+		frame: progress * 40 - delay,
 		fps,
 		config: {
-			damping: 100,
-			stiffness: 100,
+			damping: 18,
+			stiffness: 120,
 		},
 	});
 
 	return (
 		<div
 			style={{
-				backgroundColor: 'white',
-				borderRadius: '16px',
-				padding: '40px',
-				boxShadow: '0 10px 30px rgba(0, 0, 0, 0.1)',
-				transform: `scale(${scale})`,
-				opacity: scale,
 				flex: 1,
+				borderRadius: 32,
+				padding: '34px 32px',
+				background: 'rgba(255,255,255,0.08)',
+				border: '1px solid rgba(255,255,255,0.14)',
+				boxShadow: '0 24px 80px rgba(0,0,0,0.18)',
+				backdropFilter: 'blur(18px)',
 				display: 'flex',
 				flexDirection: 'column',
+				gap: 20,
+				transform: `translateY(${interpolate(entrance, [0, 1], [70, 0])}px) scale(${interpolate(
+					entrance,
+					[0, 1],
+					[0.92, 1]
+				)})`,
+				opacity: entrance,
 			}}
 		>
 			<div
 				style={{
-					width: '60px',
-					height: '60px',
-					backgroundColor: `${color}20`,
-					borderRadius: '12px',
 					display: 'flex',
 					alignItems: 'center',
-					justifyContent: 'center',
-					marginBottom: '24px',
-					fontSize: '28px',
+					justifyContent: 'space-between',
 				}}
 			>
-				{icon}
+				<div
+					style={{
+						padding: '10px 14px',
+						borderRadius: 999,
+						backgroundColor: `${accent}22`,
+						border: `1px solid ${accent}55`,
+						color: accent,
+						fontWeight: 700,
+						fontSize: 18,
+						letterSpacing: 1,
+						textTransform: 'uppercase',
+					}}
+				>
+					{kicker}
+				</div>
+				<div
+					style={{
+						fontSize: 68,
+						fontWeight: 800,
+						lineHeight: 1,
+						color: 'rgba(255,255,255,0.08)',
+					}}
+				>
+					0{index + 1}
+				</div>
 			</div>
-			<h3
-				style={{
-					fontSize: '24px',
-					fontWeight: 'bold',
-					color: '#1a1a1a',
-					marginBottom: '12px',
-					fontFamily: 'system-ui, -apple-system, sans-serif',
-				}}
-			>
-				{title}
-			</h3>
-			<p
-				style={{
-					fontSize: '16px',
-					color: '#6b7280',
-					marginBottom: '24px',
-					fontFamily: 'system-ui, -apple-system, sans-serif',
-				}}
-			>
-				{description}
-			</p>
-			<ul style={{listStyle: 'none', padding: 0}}>
-				{features.map((feature, index) => (
-					<li
-						key={index}
+
+			<div style={{display: 'flex', flexDirection: 'column', gap: 12}}>
+				<h3
+					style={{
+						margin: 0,
+						fontSize: 42,
+						lineHeight: 1.06,
+						fontWeight: 800,
+						color: 'white',
+					}}
+				>
+					{title}
+				</h3>
+				<p
+					style={{
+						margin: 0,
+						fontSize: 23,
+						lineHeight: 1.4,
+						color: 'rgba(255,255,255,0.72)',
+					}}
+				>
+					{description}
+				</p>
+			</div>
+
+			<div style={{display: 'flex', flexDirection: 'column', gap: 12}}>
+				{points.map((point) => (
+					<div
+						key={point}
 						style={{
 							display: 'flex',
 							alignItems: 'center',
-							gap: '12px',
-							marginBottom: '12px',
-							fontSize: '16px',
-							color: '#4b5563',
-							fontFamily: 'system-ui, -apple-system, sans-serif',
+							gap: 14,
+							fontSize: 22,
+							color: 'white',
 						}}
 					>
-						<span style={{color, fontSize: '20px'}}>✓</span>
-						{feature}
-					</li>
+						<div
+							style={{
+								width: 10,
+								height: 10,
+								borderRadius: '50%',
+								backgroundColor: accent,
+								boxShadow: `0 0 24px ${accent}`,
+							}}
+						/>
+						<span>{point}</span>
+					</div>
 				))}
-			</ul>
+			</div>
 		</div>
 	);
 };
 
-export const FeaturesSection: React.FC<FeaturesSectionProps> = ({progress, fadeOut}) => {
-	const titleOpacity = interpolate(progress, [0, 0.3], [0, 1], {
+export const FeaturesSection: React.FC<FeaturesSectionProps> = ({
+	progress,
+	fadeOut,
+	variant,
+}) => {
+	const headerOpacity = interpolate(progress, [0, 0.22], [0, 1], {
 		extrapolateLeft: 'clamp',
 		extrapolateRight: 'clamp',
 	});
+	const {features} = variant;
 
 	return (
 		<AbsoluteFill
 			style={{
-				backgroundColor: '#f3f4f6',
 				opacity: fadeOut,
-				padding: '60px',
-				display: 'flex',
-				flexDirection: 'column',
-				justifyContent: 'center',
+				background:
+					'radial-gradient(circle at 50% 0%, rgba(251, 146, 60, 0.18), transparent 40%), linear-gradient(180deg, #111111 0%, #050505 100%)',
+				padding: '90px 68px',
+				color: 'white',
+				fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
 			}}
 		>
-			<div style={{maxWidth: '1400px', margin: '0 auto', width: '100%'}}>
-				<h2
-					style={{
-						fontSize: '56px',
-						fontWeight: 'bold',
-						color: '#1a1a1a',
-						textAlign: 'center',
-						marginBottom: '20px',
-						opacity: titleOpacity,
-						fontFamily: 'system-ui, -apple-system, sans-serif',
-					}}
-				>
-					Powerful Features
-				</h2>
-				<p
-					style={{
-						fontSize: '24px',
-						color: '#6b7280',
-						textAlign: 'center',
-						marginBottom: '60px',
-						opacity: titleOpacity,
-						fontFamily: 'system-ui, -apple-system, sans-serif',
-					}}
-				>
-					Everything you need to build and scale your projects
-				</p>
+			<div
+				style={{
+					position: 'absolute',
+					inset: 0,
+					backgroundImage:
+						'linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)',
+					backgroundSize: '72px 72px',
+					opacity: 0.5,
+				}}
+			/>
 
-				<div style={{display: 'flex', gap: '40px'}}>
-					<FeatureCard
-						icon="⚡"
-						title="Modern Stack"
-						description="Built with Next.js, Tailwind CSS, and ShadCN UI"
-						features={['Server components', 'Type safety', 'Fast rendering']}
-						color="#3b82f6"
-						delay={10}
-						progress={progress}
-					/>
-					<FeatureCard
-						icon="🔒"
-						title="Secure Authentication"
-						description="Clerk authentication with flexible options"
-						features={['Social logins', 'Role-based access', 'OAuth integration']}
-						color="#10b981"
-						delay={15}
-						progress={progress}
-					/>
-					<FeatureCard
-						icon="💾"
-						title="Robust Backend"
-						description="Supabase and Drizzle integration for seamless data"
-						features={['SQL queries', 'Data validation', 'Real-time updates']}
-						color="#8b5cf6"
-						delay={20}
-						progress={progress}
-					/>
+			<div
+				style={{
+					position: 'relative',
+					display: 'flex',
+					flexDirection: 'column',
+					height: '100%',
+					justifyContent: 'center',
+					gap: 46,
+				}}
+			>
+				<div
+					style={{
+						display: 'flex',
+						flexDirection: 'column',
+						gap: 12,
+						maxWidth: 1080,
+						opacity: headerOpacity,
+						transform: `translateY(${interpolate(headerOpacity, [0, 1], [30, 0])}px)`,
+					}}
+				>
+					<span
+						style={{
+							fontSize: 22,
+							fontWeight: 700,
+							letterSpacing: 2,
+						textTransform: 'uppercase',
+						color: '#fdba74',
+					}}
+				>
+						{features.eyebrow}
+					</span>
+					<h2
+						style={{
+							margin: 0,
+							fontSize: 88,
+							lineHeight: 0.96,
+							fontWeight: 800,
+							letterSpacing: -3,
+						}}
+					>
+						{features.title}
+						<br />
+						{features.titleAccent ?? ''}
+					</h2>
+				</div>
+
+				<div style={{display: 'flex', gap: 26}}>
+					{features.cards.map((card: PromoFeatureCard, index) => (
+						<FeatureCard
+							key={card.title}
+							index={index}
+							progress={progress}
+							delay={index * 6}
+							{...card}
+						/>
+					))}
 				</div>
 			</div>
 		</AbsoluteFill>

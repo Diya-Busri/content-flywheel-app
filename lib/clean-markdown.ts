@@ -5,6 +5,7 @@
  */
 export function cleanMarkdownToHtml(text: string): string {
   if (!text || typeof text !== "string") return "";
+  // Strip literal \n escape sequences the AI occasionally outputs as text
   text = text.replace(/\\n/g, " ");
   return text
     .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>") // ***bold italic***

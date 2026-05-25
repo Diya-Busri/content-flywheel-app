@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 import { DiscoverLoadFailed } from "./DiscoverLoadingWithTimeout";
 
 const DiscoverFlow = dynamic(
@@ -19,5 +20,7 @@ const DiscoverFlow = dynamic(
 );
 
 export default function DiscoverPageClient() {
-  return <DiscoverFlow />;
+  const searchParams = useSearchParams();
+  const initialTopic = searchParams.get("topic") ?? undefined;
+  return <DiscoverFlow initialTopic={initialTopic} />;
 }

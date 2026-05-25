@@ -1,6 +1,7 @@
 /**
  * Digital Products - Guided discovery wizard (Path B: Help Me Discover)
  */
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import DiscoverPageClient from "./DiscoverPageClient";
 
@@ -10,5 +11,13 @@ export const metadata: Metadata = {
 };
 
 export default function DigitalProductsDiscoverPage() {
-  return <DiscoverPageClient />;
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-[60vh] items-center justify-center p-8">
+        <div className="text-center text-[#A0A0A0]">Loading discover...</div>
+      </div>
+    }>
+      <DiscoverPageClient />
+    </Suspense>
+  );
 }

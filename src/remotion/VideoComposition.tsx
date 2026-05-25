@@ -1,88 +1,72 @@
-import {AbsoluteFill, interpolate, useCurrentFrame} from 'remotion';
-import {HeroSection} from './scenes/HeroSection';
-import {FeaturesSection} from './scenes/FeaturesSection';
-import {ReviewsSection} from './scenes/ReviewsSection';
+import {AbsoluteFill, Easing, interpolate, useCurrentFrame} from 'remotion';
+import {CaptionsOverlay} from './CaptionsOverlay';
+import type {PromoVariantWithSubtitles} from './promo-content';
 import {CTASection} from './scenes/CTASection';
+import {FeaturesSection} from './scenes/FeaturesSection';
+import {HeroSection} from './scenes/HeroSection';
+import {ReviewsSection} from './scenes/ReviewsSection';
 
-export const VideoComposition = () => {
+const fadeWindow = 18;
+
+const getSectionProgress = (frame: number, start: number, end: number) =>
+	interpolate(frame, [start, start + 20, end], [0, 1, 1], {
+		extrapolateLeft: 'clamp',
+		extrapolateRight: 'clamp',
+		easing: Easing.out(Easing.cubic),
+	});
+
+const getFadeOut = (frame: number, end: number) =>
+	interpolate(frame, [end - fadeWindow, end], [1, 0], {
+		extrapolateLeft: 'clamp',
+		extrapolateRight: 'clamp',
+	});
+
+type VideoCompositionProps = {
+	variant: PromoVariantWithSubtitles;
+};
+
+export const VideoComposition: React.FC<VideoCompositionProps> = ({variant}) => {
 	const frame = useCurrentFrame();
 
-	// Define scene timings (in frames)
-	const heroStart = 0;
-	const heroEnd = 90; // 3 seconds
-
-	const featuresStart = 90;
-	const featuresEnd = 180; // 3 seconds
-
-	const reviewsStart = 180;
-	const reviewsEnd = 270; // 3 seconds
-
-	const ctaStart = 270;
-	const ctaEnd = 360; // 3 seconds
+	const hero = {start: 0, end: 120};
+	const features = {start: 120, end: 240};
+	const growth = {start: 240, end: 360};
+	const cta = {start: 360, end: 450};
 
 	return (
-		<AbsoluteFill style={{backgroundColor: '#ffffff'}}>
-			{/* Hero Section */}
-			{frame >= heroStart && frame < heroEnd && (
+		<AbsoluteFill style={{backgroundColor: '#050505'}}>
+			{frame < hero.end && (
 				<HeroSection
-					progress={interpolate(
-						frame,
-						[heroStart, heroEnd - 20, heroEnd],
-						[0, 1, 1]
-					)}
-					fadeOut={interpolate(
-						frame,
-						[heroEnd - 20, heroEnd],
-						[1, 0],
-						{extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}
-					)}
+					progress={getSectionProgress(frame, hero.start, hero.end)}
+					fadeOut={getFadeOut(frame, hero.end)}
+					variant={variant}
 				/>
 			)}
 
-			{/* Features Section */}
-			{frame >= featuresStart && frame < featuresEnd && (
+			{frame >= features.start && frame < features.end && (
 				<FeaturesSection
-					progress={interpolate(
-						frame,
-						[featuresStart, featuresStart + 20, featuresEnd - 20, featuresEnd],
-						[0, 1, 1, 1]
-					)}
-					fadeOut={interpolate(
-						frame,
-						[featuresEnd - 20, featuresEnd],
-						[1, 0],
-						{extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}
-					)}
+					progress={getSectionProgress(frame, features.start, features.end)}
+					fadeOut={getFadeOut(frame, features.end)}
+					variant={variant}
 				/>
 			)}
 
-			{/* Reviews Section */}
-			{frame >= reviewsStart && frame < reviewsEnd && (
+			{frame >= growth.start && frame < growth.end && (
 				<ReviewsSection
-					progress={interpolate(
-						frame,
-						[reviewsStart, reviewsStart + 20, reviewsEnd - 20, reviewsEnd],
-						[0, 1, 1, 1]
-					)}
-					fadeOut={interpolate(
-						frame,
-						[reviewsEnd - 20, reviewsEnd],
-						[1, 0],
-						{extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}
-					)}
+					progress={getSectionProgress(frame, growth.start, growth.end)}
+					fadeOut={getFadeOut(frame, growth.end)}
+					variant={variant}
 				/>
 			)}
 
-			{/* CTA Section */}
-			{frame >= ctaStart && frame <= ctaEnd && (
+			{frame >= cta.start && frame <= cta.end && (
 				<CTASection
-					progress={interpolate(
-						frame,
-						[ctaStart, ctaStart + 20, ctaEnd],
-						[0, 1, 1]
-					)}
+					progress={getSectionProgress(frame, cta.start, cta.end)}
+					variant={variant}
 				/>
 			)}
+
+			<CaptionsOverlay cues={variant.subtitles} />
 		</AbsoluteFill>
 	);
 };

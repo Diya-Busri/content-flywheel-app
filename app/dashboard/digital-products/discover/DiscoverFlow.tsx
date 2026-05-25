@@ -241,14 +241,14 @@ type ProductSalesGuide = {
   launchStrategy: string[];
 };
 
-export default function DiscoverFlow() {
+export default function DiscoverFlow({ initialTopic }: { initialTopic?: string } = {}) {
   const router = useRouter();
   const { toast } = useToast();
   const NICHES_PER_PAGE = 6;
 
   // Initialize state FROM localStorage so first render already has correct step/data (fixes "Continue" always showing Step 1)
   const [step, setStep] = useState(1);
-  const [interests, setInterests] = useState("");
+  const [interests, setInterests] = useState(initialTopic ?? "");
   const [goal, setGoal] = useState("");
   const [nicheLoading, setNicheLoading] = useState(false);
   const [allNiches, setAllNiches] = useState<NicheOption[]>([]);
@@ -792,6 +792,15 @@ export default function DiscoverFlow() {
   // Load from localStorage ONCE on mount. Only restore state when saved progress is beyond step 1; set step LAST so modal and content show correct step.
   useEffect(() => {
     if (typeof window === "undefined" || hasLoadedFromStorage) return;
+
+    // If arriving from the onboarding wizard with a fresh topic, wipe saved state and start fresh
+    if (initialTopic) {
+      DISCOVERY_KEYS.forEach((key) => localStorage.removeItem(key));
+      setInterests(initialTopic);
+      setHasLoadedFromStorage(true);
+      return;
+    }
+
     try {
       const savedStep = localStorage.getItem("discovery-step");
       const stepNum = savedStep ? parseInt(savedStep, 10) : 0;

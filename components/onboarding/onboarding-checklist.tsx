@@ -15,9 +15,9 @@ type ChecklistItem = {
 const ITEMS: ChecklistItem[] = [
   { key: "createAccount", label: "Create your account", href: "/dashboard" },
   { key: "brandProfile", label: "Set up brand profile", href: "/dashboard/settings#brand-profile" },
-  { key: "firstProduct", label: "Create first digital product", href: "/dashboard/digital-products" },
-  { key: "exploreDashboard", label: "Explore the dashboard", href: "/dashboard" },
-  { key: "watchDemo", label: "Watch the demo video", href: "https://www.skool.com/content-flywheel-7716/classroom", external: true },
+  { key: "firstProduct", label: "Create first digital product", href: "/dashboard/digital-products/create" },
+  { key: "exploreDashboard", label: "Set up your bio page", href: "/dashboard/bio-page" },
+  { key: "watchDemo", label: "Connect Stripe payments", href: "/dashboard/settings" },
 ];
 
 type OnboardingChecklistProps = {

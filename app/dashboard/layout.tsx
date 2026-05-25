@@ -108,7 +108,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const allDisabled = isAdmin ? [] : [...new Set([...effectiveUserHidden, ...disabledFeatures])];
 
   return (
-    <DashboardLayoutClient profile={profile} userEmail={userEmail} disabledFeatures={allDisabled}>
+    <DashboardLayoutClient profile={profile} userEmail={userEmail} disabledFeatures={allDisabled} isAdmin={!!isAdmin}>
       {children}
     </DashboardLayoutClient>
   );

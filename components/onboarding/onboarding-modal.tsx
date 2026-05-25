@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { X, ArrowRight, Loader2, BookOpen, Video, Sparkles, Shirt, Mail, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,7 @@ const STEP_CONTENT: Record<string, StepContent> = {
     description: "Generate an eBook, planner, or workbook in minutes. AI writes the content using your brand voice — you just pick the topic.",
     bullets: ["AI-written chapters based on your niche", "Professional cover design", "Ready-to-sell on Gumroad, Etsy, or Stan Store"],
     cta: "Create my first product",
-    href: "/dashboard/digital-products/create",
+    href: "/dashboard/digital-products/discover",
   },
   email_marketing: {
     icon: <Mail className="w-7 h-7 text-amber-500" />,
@@ -86,6 +87,7 @@ const TONE_OPTIONS = [
 ];
 
 export function OnboardingModal({ show, onComplete, onStepComplete }: OnboardingModalProps) {
+  const router = useRouter();
   const [step, setStep] = useState(1);
   const [mounted, setMounted] = useState(false);
 
@@ -97,6 +99,9 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
   const [niche, setNiche] = useState("");
   const [tone, setTone] = useState("friendly");
   const [savingBrand, setSavingBrand] = useState(false);
+
+  // Step 4: Product topic capture
+  const [productTopic, setProductTopic] = useState("");
 
   const toggleUseCase = (id: string) => {
     setSelectedUseCases((prev) =>
@@ -178,6 +183,15 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
       setSavingBrand(false);
       handleNext();
     }
+  };
+
+  // Navigate to create page with topic pre-filled via URL param
+  const handleCtaWithTopic = (href: string) => {
+    onComplete();
+    const url = productTopic.trim()
+      ? `${href}?topic=${encodeURIComponent(productTopic.trim())}`
+      : href;
+    router.push(url);
   };
 
   return (
@@ -397,25 +411,59 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
         {/* Step 4: Primary action based on use case */}
         {step === 4 && (() => {
           const content = getStepContent(selectedUseCases, 0);
+          const isDigitalProducts = content.href.includes("digital-products");
           return (
-            <div className="max-w-lg text-center space-y-6">
-              <div className="flex justify-center">
-                <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center">
-                  {content.icon}
+            <div className="max-w-lg w-full space-y-6">
+              <div className="text-center space-y-4">
+                <div className="flex justify-center">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center">
+                    {content.icon}
+                  </div>
                 </div>
+                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
+                  {content.title}
+                </h2>
+                <p className="text-slate-600 dark:text-slate-400">{content.description}</p>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
-                {content.title}
-              </h2>
-              <p className="text-slate-600 dark:text-slate-400">{content.description}</p>
-              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 text-left text-sm text-slate-600 dark:text-slate-400 space-y-2">
-                <p className="font-medium text-slate-900 dark:text-white">What you&apos;ll get:</p>
-                {content.bullets.map((b) => <p key={b}>✅ {b}</p>)}
-              </div>
-              <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
-                <Button asChild className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold">
-                  <Link href={content.href} onClick={handleComplete}>{content.cta}</Link>
-                </Button>
+
+              {/* Topic capture — only for digital products flow */}
+              {isDigitalProducts && (
+                <div className="space-y-2">
+                  <Label htmlFor="ob-product-topic" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    What do you want to teach or sell?
+                  </Label>
+                  <Input
+                    id="ob-product-topic"
+                    placeholder="e.g. meal planning for busy moms"
+                    value={productTopic}
+                    onChange={(e) => setProductTopic(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleCtaWithTopic(content.href)}
+                    autoFocus
+                  />
+                  <p className="text-xs text-slate-400">We&apos;ll pre-fill this so you can start generating immediately.</p>
+                </div>
+              )}
+
+              {!isDigitalProducts && (
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 text-left text-sm text-slate-600 dark:text-slate-400 space-y-2">
+                  <p className="font-medium text-slate-900 dark:text-white">What you&apos;ll get:</p>
+                  {content.bullets.map((b) => <p key={b}>✅ {b}</p>)}
+                </div>
+              )}
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
+                {isDigitalProducts ? (
+                  <Button
+                    onClick={() => handleCtaWithTopic(content.href)}
+                    className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold"
+                  >
+                    {productTopic.trim() ? "Create my first draft" : content.cta} <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button asChild className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold">
+                    <Link href={content.href} onClick={handleComplete}>{content.cta}</Link>
+                  </Button>
+                )}
                 <Button variant="ghost" onClick={handleNext}>I&apos;ll do this later</Button>
               </div>
             </div>

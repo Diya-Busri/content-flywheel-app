@@ -31,6 +31,7 @@ import { AnalyticsWidget } from "@/components/dashboard/AnalyticsWidget";
 import { WhatsWorkingSection } from "@/components/dashboard/WhatsWorkingSection";
 import { FirstVideoNudge } from "@/components/dashboard/FirstVideoNudge";
 import { DashboardHero } from "@/components/dashboard/DashboardHero";
+import { FirstTaskBanner } from "@/components/dashboard/FirstTaskBanner";
 
 export const metadata: Metadata = {
   title: "Dashboard | Content Flywheel",
@@ -407,6 +408,9 @@ export default async function DashboardPage() {
         videosThisWeek={videosThisWeek}
         emailSubscribers={emailSubscribers}
       />
+
+      {/* First task banner — shown to new users with no products yet */}
+      <FirstTaskBanner hasProduct={videoStats.digitalProductsCount > 0} />
 
       {/* First Video Nudge */}
       <FirstVideoNudge totalVideos={videoStats.totalLibraryVideos} />

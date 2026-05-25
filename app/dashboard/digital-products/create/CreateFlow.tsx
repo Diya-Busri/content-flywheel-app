@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,6 +39,7 @@ type ProductType = "digital" | "physical" | "service" | "course";
 
 export default function CreateFlow() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [productName, setProductName] = useState("");
   const [productDescription, setProductDescription] = useState("");
   const [mode, setMode] = useState<"file" | "link">("file");
@@ -48,6 +49,13 @@ export default function CreateFlow() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    // Pre-fill from onboarding wizard URL param (takes priority)
+    const topicParam = searchParams.get("topic");
+    if (topicParam) {
+      setProductName(topicParam);
+      return;
+    }
+    // Fallback: legacy sessionStorage prefill
     try {
       const raw = sessionStorage.getItem("discoveryPrefill");
       if (!raw) return;
@@ -58,7 +66,7 @@ export default function CreateFlow() {
     } catch {
       // ignore
     }
-  }, []);
+  }, [searchParams]);
 
   const validate = useCallback(() => {
     const errors: Record<string, string> = {};

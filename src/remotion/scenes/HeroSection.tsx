@@ -1,128 +1,212 @@
-import {AbsoluteFill, spring, useVideoConfig, interpolate} from 'remotion';
+import {
+	AbsoluteFill,
+	Img,
+	interpolate,
+	spring,
+	staticFile,
+	useVideoConfig,
+} from 'remotion';
+import type {PromoVariantWithSubtitles} from '../promo-content';
 
 interface HeroSectionProps {
 	progress: number;
 	fadeOut: number;
+	variant: PromoVariantWithSubtitles;
 }
 
-export const HeroSection: React.FC<HeroSectionProps> = ({progress, fadeOut}) => {
+export const HeroSection: React.FC<HeroSectionProps> = ({
+	progress,
+	fadeOut,
+	variant,
+}) => {
 	const {fps} = useVideoConfig();
+	const {hero} = variant;
 
-	const titleY = spring({
-		frame: progress * 30,
+	const intro = spring({
+		frame: progress * 40,
 		fps,
 		config: {
-			damping: 100,
-			stiffness: 100,
+			damping: 18,
+			stiffness: 110,
 		},
 	});
 
-	const subtitleOpacity = interpolate(progress, [0.2, 0.5], [0, 1], {
-		extrapolateLeft: 'clamp',
-		extrapolateRight: 'clamp',
-	});
-
-	const buttonScale = spring({
-		frame: progress * 30 - 15,
+	const cardRise = spring({
+		frame: progress * 40 - 8,
 		fps,
 		config: {
-			damping: 100,
-			stiffness: 100,
+			damping: 16,
+			stiffness: 120,
 		},
 	});
 
 	return (
 		<AbsoluteFill
 			style={{
-				backgroundColor: '#f8f9fa',
 				opacity: fadeOut,
-				display: 'flex',
-				justifyContent: 'center',
-				alignItems: 'center',
-				flexDirection: 'column',
-				padding: '60px',
+				background:
+					'radial-gradient(circle at 20% 20%, rgba(251, 146, 60, 0.28), transparent 32%), radial-gradient(circle at 80% 15%, rgba(245, 158, 11, 0.2), transparent 26%), linear-gradient(180deg, #050505 0%, #111111 100%)',
+				color: 'white',
+				padding: '96px 72px',
+				fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
 			}}
 		>
-			{/* Background gradient */}
 			<div
 				style={{
 					position: 'absolute',
-					width: '100%',
-					height: '100%',
-					background: 'radial-gradient(circle at center, rgba(59, 130, 246, 0.05) 0%, transparent 70%)',
-					pointerEvents: 'none',
+					inset: 0,
+					backgroundImage:
+						'linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)',
+					backgroundSize: '72px 72px',
+					maskImage:
+						'linear-gradient(180deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.45) 58%, transparent 100%)',
 				}}
 			/>
 
-			{/* Title */}
-			<h1
-				style={{
-					fontSize: '80px',
-					fontWeight: 'bold',
-					color: '#1a1a1a',
-					transform: `translateY(${interpolate(titleY, [0, 1], [50, 0])}px)`,
-					opacity: interpolate(titleY, [0, 0.8], [0, 1]),
-					textAlign: 'center',
-					marginBottom: '20px',
-					fontFamily: 'system-ui, -apple-system, sans-serif',
-				}}
-			>
-				Your Ultimate <span style={{color: '#3b82f6'}}>Template App</span>
-			</h1>
-
-			{/* Subtitle */}
-			<p
-				style={{
-					fontSize: '32px',
-					color: '#6b7280',
-					opacity: subtitleOpacity,
-					textAlign: 'center',
-					marginBottom: '40px',
-					fontFamily: 'system-ui, -apple-system, sans-serif',
-				}}
-			>
-				Build faster, scale smarter, and focus on what matters most
-			</p>
-
-			{/* Button */}
 			<div
 				style={{
-					transform: `scale(${buttonScale})`,
-					opacity: interpolate(progress, [0.5, 0.8], [0, 1], {
-						extrapolateLeft: 'clamp',
-						extrapolateRight: 'clamp',
-					}),
+					position: 'relative',
+					display: 'flex',
+					flexDirection: 'column',
+					height: '100%',
+					justifyContent: 'space-between',
 				}}
 			>
 				<div
 					style={{
-						backgroundColor: '#3b82f6',
-						color: 'white',
-						padding: '20px 40px',
-						borderRadius: '12px',
-						fontSize: '24px',
-						fontWeight: '600',
-						boxShadow: '0 10px 25px rgba(59, 130, 246, 0.3)',
-						display: 'flex',
+						display: 'inline-flex',
 						alignItems: 'center',
-						gap: '12px',
-						fontFamily: 'system-ui, -apple-system, sans-serif',
+						gap: 20,
+						padding: '18px 24px',
+						borderRadius: 999,
+						backgroundColor: 'rgba(255,255,255,0.08)',
+						border: '1px solid rgba(255,255,255,0.12)',
+						width: 'fit-content',
+						backdropFilter: 'blur(18px)',
+						transform: `translateY(${interpolate(intro, [0, 1], [32, 0])}px)`,
+						opacity: intro,
 					}}
 				>
-					Get Started
-					<svg
-						width="24"
-						height="24"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
+					<Img
+						src={staticFile('logo.png')}
+						style={{width: 74, height: 74, objectFit: 'contain'}}
+					/>
+					<div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+						<span
+							style={{
+								fontSize: 24,
+								textTransform: 'uppercase',
+								letterSpacing: 3,
+								color: 'rgba(255,255,255,0.68)',
+							}}
+						>
+							Content Flywheel
+						</span>
+						<span
+							style={{
+								fontSize: 42,
+								fontWeight: 700,
+								color: '#fbbf24',
+							}}
+						>
+							{hero.subtitle}
+						</span>
+					</div>
+				</div>
+
+				<div
+					style={{
+						display: 'flex',
+						flexDirection: 'column',
+						gap: 28,
+						maxWidth: 860,
+					}}
+				>
+					<div
+						style={{
+							display: 'inline-flex',
+							alignItems: 'center',
+							gap: 14,
+							padding: '14px 18px',
+							width: 'fit-content',
+							borderRadius: 999,
+							background: 'rgba(251, 146, 60, 0.15)',
+							border: '1px solid rgba(251, 146, 60, 0.35)',
+							color: '#fdba74',
+							fontSize: 24,
+							fontWeight: 600,
+							letterSpacing: 1,
+							transform: `translateY(${interpolate(intro, [0, 1], [20, 0])}px)`,
+							opacity: interpolate(progress, [0.08, 0.25], [0, 1], {
+								extrapolateLeft: 'clamp',
+								extrapolateRight: 'clamp',
+							}),
+						}}
 					>
-						<line x1="5" y1="12" x2="19" y2="12"></line>
-						<polyline points="12 5 19 12 12 19"></polyline>
-					</svg>
+						{hero.badge}
+					</div>
+
+					<h1
+						style={{
+							fontSize: 114,
+							lineHeight: 0.94,
+							fontWeight: 800,
+							letterSpacing: -4,
+							margin: 0,
+							transform: `translateY(${interpolate(intro, [0, 1], [60, 0])}px)`,
+							opacity: intro,
+						}}
+					>
+						{hero.title}
+						<br />
+						<span style={{color: '#fbbf24'}}>{hero.titleAccent}</span>
+					</h1>
+
+					<p
+						style={{
+							margin: 0,
+							fontSize: 34,
+							lineHeight: 1.35,
+							color: 'rgba(255,255,255,0.72)',
+							maxWidth: 880,
+							transform: `translateY(${interpolate(cardRise, [0, 1], [40, 0])}px)`,
+							opacity: cardRise,
+						}}
+					>
+						{hero.description}
+					</p>
+				</div>
+
+				<div
+					style={{
+						display: 'flex',
+						gap: 18,
+						flexWrap: 'wrap',
+						transform: `translateY(${interpolate(cardRise, [0, 1], [40, 0])}px)`,
+						opacity: cardRise,
+					}}
+				>
+					{hero.pills.map((pill, index) => (
+						<div
+							key={pill}
+							style={{
+								padding: '18px 26px',
+								borderRadius: 999,
+								backgroundColor: index === 1 ? '#f59e0b' : 'rgba(255,255,255,0.08)',
+								color: index === 1 ? '#111111' : 'white',
+								fontSize: 28,
+								fontWeight: 700,
+								border:
+									index === 1
+										? '1px solid rgba(245,158,11,0.5)'
+										: '1px solid rgba(255,255,255,0.12)',
+								boxShadow:
+									index === 1 ? '0 18px 48px rgba(245, 158, 11, 0.2)' : 'none',
+							}}
+						>
+							{pill}
+						</div>
+					))}
 				</div>
 			</div>
 		</AbsoluteFill>

@@ -67,10 +67,19 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const body = await req.json().catch(() => ({}));
-    const { steps: stepsUpdate, complete } = body as {
+    const { steps: stepsUpdate, complete, reset } = body as {
       steps?: Partial<OnboardingSteps>;
       complete?: boolean;
+      reset?: boolean; // dev: wipe all state back to zero
     };
+
+    // Hard reset — used for testing only
+    if (reset === true) {
+      const supabase = getSupabaseAdmin();
+      if (!supabase) return NextResponse.json({ error: "Server not configured" }, { status: 503 });
+      await supabase.from("profiles").update({ onboarding_steps: {}, onboarding_completed: false }).eq("user_id", userId);
+      return NextResponse.json({ ok: true, reset: true });
+    }
     const supabase = getSupabaseAdmin();
     if (!supabase) {
       return NextResponse.json({ error: "Server not configured" }, { status: 503 });

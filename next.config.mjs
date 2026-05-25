@@ -26,6 +26,12 @@ const nextConfig = {
       "ffmpeg-static",
       "ffprobe-static",
       "fluent-ffmpeg",
+      // Remotion server-side rendering (uses esbuild + native binaries)
+      "@remotion/bundler",
+      "@remotion/renderer",
+      "@remotion/compositor-darwin-arm64",
+      "@remotion/compositor-linux-arm64-gnu",
+      "@remotion/compositor-linux-x64-gnu",
     ],
     // Ensure chromium-min binary files (fonts.tar.br etc.) are included in the
     // Puppeteer routes — Vercel's file tracer misses binary assets in bin/
@@ -116,6 +122,12 @@ const nextConfig = {
         "ffmpeg-static",
         "ffprobe-static",
         "fluent-ffmpeg",
+        // Remotion — contains native binaries and esbuild; must not be bundled by webpack
+        "@remotion/bundler",
+        "@remotion/renderer",
+        "@remotion/compositor-darwin-arm64",
+        "@remotion/compositor-linux-arm64-gnu",
+        "@remotion/compositor-linux-x64-gnu",
       ];
     }
     return config;
