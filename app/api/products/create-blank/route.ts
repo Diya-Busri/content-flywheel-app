@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
+import { markOnboardingStep } from "@/lib/onboarding-auto-complete";
 
 /**
  * POST: Create a blank product in "draft" state with empty sections.
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to create product" }, { status: 500 });
     }
 
+    markOnboardingStep(userId, "firstProduct").catch(() => {});
     return NextResponse.json({ productId: inserted.id, success: true });
   } catch (err) {
     console.error("[products/create-blank]", err);

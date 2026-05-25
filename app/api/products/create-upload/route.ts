@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
+import { markOnboardingStep } from "@/lib/onboarding-auto-complete";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
       })
       .returning({ id: productsTable.id, title: productsTable.title });
 
+    markOnboardingStep(userId, "firstProduct").catch(() => {});
     return NextResponse.json({ id: product.id, title: product.title }, { status: 201 });
   } catch (err) {
     console.error("[create-upload] POST error:", err);
