@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * DEV ONLY — floating button to reset onboarding state for testing.
- * Only renders in development mode (NODE_ENV=development).
+ * Admin-only floating button to reset onboarding state for testing.
+ * Only renders for the admin account (isAdmin=true).
  */
-export function DevOnboardingReset() {
-  if (process.env.NODE_ENV !== "development") return null;
+export function DevOnboardingReset({ isAdmin }: { isAdmin?: boolean }) {
+  if (!isAdmin) return null;
 
   const reset = async () => {
     await fetch("/api/onboarding", {

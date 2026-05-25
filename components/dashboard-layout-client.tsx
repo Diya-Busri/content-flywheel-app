@@ -50,7 +50,7 @@ export function DashboardLayoutClient({ profile, userEmail, disabledFeatures = [
           <BundleProgressBanner />
           {children}
           <FeedbackWidget />
-          <DevOnboardingReset />
+          <DevOnboardingReset isAdmin={isAdmin} />
         </main>
         </OnboardingProvider>
       </SidebarProvider>
