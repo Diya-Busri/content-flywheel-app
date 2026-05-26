@@ -147,11 +147,14 @@ export async function pollHiggsfieldStatus(
 
   const status = (data.status as string)?.toLowerCase() ?? "";
 
-  // Completed — extract video URL from various possible response shapes
+  // Completed — extract video URL from various possible response shapes.
+  // Higgsfield actual format: { status: "completed", video: { url: "..." } }
   if (status === "completed" || status === "succeeded" || status === "success") {
+    const video = data.video as Record<string, unknown> | undefined;
     const output = data.output as Record<string, unknown> | undefined;
     const result = data.result as Record<string, unknown> | undefined;
     const videoUrl =
+      (video?.url as string) ||                                              // ✓ actual format
       (output?.video_url as string) ||
       (output?.url as string) ||
       (result?.url as string) ||
@@ -160,12 +163,16 @@ export async function pollHiggsfieldStatus(
       (Array.isArray(data.output) ? (data.output as string[])[0] : null) ||
       null;
 
+    console.log("[higgsfield] Completed response keys:", Object.keys(data));
+    console.log("[higgsfield] video field:", JSON.stringify(video));
+    console.log("[higgsfield] Resolved videoUrl:", videoUrl);
+
     if (!videoUrl) {
       return {
         status: "failed",
         progress: 100,
         videoUrl: null,
-        error: `Job completed but no video URL found. Response: ${JSON.stringify(data)}`,
+        error: `Job completed but no video URL found. Response: ${JSON.stringify(data).slice(0, 500)}`,
       };
     }
     return { status: "completed", progress: 100, videoUrl };
