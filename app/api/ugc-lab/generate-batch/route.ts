@@ -52,24 +52,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      !process.env.FACESWAP_API_KEY?.trim() &&
-      !process.env.REMAKER_API_KEY?.trim()
-    ) {
+    if (!process.env.HIGGSFIELD_API_KEY?.trim()) {
       return NextResponse.json(
-        {
-          error:
-            "FACESWAP_API_KEY or REMAKER_API_KEY is not set. Add it to .env.local for FaceSwap.",
-        },
-        { status: 503 }
-      );
-    }
-    if (!process.env.FACESWAP_TEMPLATE_VIDEO_URL?.trim()) {
-      return NextResponse.json(
-        {
-          error:
-            "FACESWAP_TEMPLATE_VIDEO_URL is not set. Add template video URL in .env.local for FaceSwap.",
-        },
+        { error: "HIGGSFIELD_API_KEY is not set. Add it to .env.local." },
         { status: 503 }
       );
     }
@@ -177,7 +162,7 @@ export async function POST(request: Request) {
           templateId,
           formatId: isRankingMode ? (formatIdOverride ?? rankingTemplate?.formatId ?? null) : null,
           faceProfileId,
-          provider: "faceswap",
+          provider: "higgsfield",
           angleType: v.angle?.angle_type ?? null,
           scriptId: crypto.randomUUID(),
           fullScript: v.fullScript,
