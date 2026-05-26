@@ -79,9 +79,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!process.env.HIGGSFIELD_API_KEY?.trim()) {
+    if (!process.env.HIGGSFIELD_API_KEY?.trim() || !process.env.HIGGSFIELD_API_SECRET?.trim()) {
       return NextResponse.json(
-        { error: "HIGGSFIELD_API_KEY is not set. Add it to .env.local." },
+        { error: "Higgsfield is not configured. Set HIGGSFIELD_API_KEY and HIGGSFIELD_API_SECRET in environment variables." },
         { status: 503 }
       );
     }

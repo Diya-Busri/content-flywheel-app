@@ -16,7 +16,8 @@ const POLL_INTERVAL_MS = 10_000;
 const MAX_POLL_ATTEMPTS = 36; // 6 minutes max
 
 // Best model for portrait/UGC animation
-const DEFAULT_MODEL = "higgsfield-ai/dop/preview";
+// Docs: https://docs.higgsfield.ai/docs/guides/video
+const DEFAULT_MODEL = "higgsfield-ai/dop/standard";
 
 // Per-template prompts — each maps to a distinct UGC style
 const TEMPLATE_PROMPTS: Record<string, string> = {
@@ -35,10 +36,17 @@ const TEMPLATE_PROMPTS: Record<string, string> = {
 const DEFAULT_PROMPT =
   "Person speaking naturally to camera, expressive and engaging, UGC creator style";
 
-function getApiKey(): string {
+/**
+ * Higgsfield uses  "Key {api_key}:{api_secret}"  — not Bearer.
+ * Store HIGGSFIELD_API_KEY  and  HIGGSFIELD_API_SECRET  in env.
+ * Both are shown on cloud.higgsfield.ai/api-keys
+ */
+function getAuthHeader(): string {
   const key = process.env.HIGGSFIELD_API_KEY?.trim();
+  const secret = process.env.HIGGSFIELD_API_SECRET?.trim();
   if (!key) throw new Error("HIGGSFIELD_API_KEY is not set");
-  return key;
+  if (!secret) throw new Error("HIGGSFIELD_API_SECRET is not set");
+  return `Key ${key}:${secret}`;
 }
 
 export function getTemplatePrompt(templateId: string, script?: string): string {
@@ -63,15 +71,16 @@ export async function createHiggsfieldJob(
   options: HiggsfieldCreateOptions
 ): Promise<string> {
   const { imageUrl, templateId, script, model = DEFAULT_MODEL } = options;
-  const apiKey = getApiKey();
+  const auth = getAuthHeader();
 
   const prompt = getTemplatePrompt(templateId, script);
 
   const res = await fetch(`${HIGGSFIELD_BASE}/${model}`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: auth,
       "Content-Type": "application/json",
+      "Accept": "application/json",
     },
     body: JSON.stringify({
       image_url: imageUrl,
@@ -116,12 +125,12 @@ export type HiggsfieldPollResult = {
 export async function pollHiggsfieldStatus(
   requestId: string
 ): Promise<HiggsfieldPollResult> {
-  const apiKey = getApiKey();
+  const auth = getAuthHeader();
 
   const res = await fetch(
     `${HIGGSFIELD_BASE}/requests/${requestId}/status`,
     {
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers: { Authorization: auth, "Accept": "application/json" },
     }
   );
 
