@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
+import { checkSpendLimit } from "@/lib/spend-guard";
 
 const FAL_API_KEY = () => {
   const key = process.env.FAL_API_KEY?.trim();
@@ -140,6 +141,9 @@ async function removeBackground(imageUrl: string): Promise<string> {
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const sg = await checkSpendLimit("fal");
+  if (sg) return sg;
 
   // Credit check
   const { hasCredits, balance } = await checkVideoCredits("aiDesign");

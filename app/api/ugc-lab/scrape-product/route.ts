@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit, getClientIp } from "@/lib/rate-limit-api";
+import { checkSpendLimit } from "@/lib/spend-guard";
 import OpenAI from "openai";
 
 export const maxDuration = 30;
@@ -244,6 +245,8 @@ export async function POST(request: Request) {
 
   const rl = await checkApiRateLimit(getClientIp(request));
   if (rl) return rl;
+  const sg = await checkSpendLimit("openai");
+  if (sg) return sg;
 
   const body = await request.json().catch(() => ({}));
   const rawUrl = (body.url as string)?.trim();

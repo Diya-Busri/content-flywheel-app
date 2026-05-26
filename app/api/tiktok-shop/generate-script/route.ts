@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkSpendLimit } from "@/lib/spend-guard";
 import { cleanProductTitle } from "@/lib/product-title";
 import type { VideoStyle, HookStyle, ScriptTone } from "@/lib/tiktok-shop/types";
 import { extractProductDetails } from "@/lib/tiktok-shop/extract-product";
@@ -22,6 +23,8 @@ export async function POST(request: Request) {
     const rl = await checkApiRateLimit(userId);
 
     if (rl) return rl;
+  const sg = await checkSpendLimit("openai");
+  if (sg) return sg;
 
     const body = await request.json().catch(() => ({}));
     const {

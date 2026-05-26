@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkSpendLimit } from "@/lib/spend-guard";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { fal } from "@fal-ai/client";
 import { put } from "@vercel/blob";
+import { checkSpendLimit } from "@/lib/spend-guard";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { parseCharacterTypes } from "@/lib/ai-story-character-style";

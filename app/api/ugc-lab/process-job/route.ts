@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkApiRateLimit, getClientIp } from "@/lib/rate-limit-api";
+import { checkSpendLimit } from "@/lib/spend-guard";
 import { db } from "@/db/db";
 import { videoJobsTable } from "@/db/schema/video-jobs-schema";
 import { faceProfilesTable } from "@/db/schema/face-profiles-schema";
@@ -20,6 +21,8 @@ export const maxDuration = 300;
 export async function POST(request: Request) {
   const rl = await checkApiRateLimit(getClientIp(request));
   if (rl) return rl;
+  const sg = await checkSpendLimit("higgsfield");
+  if (sg) return sg;
   const body = await request.json().catch(() => ({}));
   const jobId = body.jobId as string | undefined;
   const userId = body.userId as string | undefined;

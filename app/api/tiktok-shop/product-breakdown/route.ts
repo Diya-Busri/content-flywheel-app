@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
+import { checkSpendLimit } from "@/lib/spend-guard";
 import { cleanProductTitle } from "@/lib/product-title";
 import { extractProductDetails } from "@/lib/tiktok-shop/extract-product";
 import { generateProductBreakdown } from "@/lib/tiktok-shop/product-breakdown";
@@ -14,6 +15,9 @@ export async function POST(request: Request) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const sg = await checkSpendLimit("openai");
+    if (sg) return sg;
 
     const body = await request.json().catch(() => ({}));
     const {

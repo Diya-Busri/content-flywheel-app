@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
+import { checkSpendLimit } from "@/lib/spend-guard";
 
 const FAL_API_KEY = () => {
   const key = process.env.FAL_API_KEY?.trim();
@@ -11,6 +12,9 @@ const FAL_API_KEY = () => {
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const sg = await checkSpendLimit("fal");
+  if (sg) return sg;
 
   let imageUrl: string;
   try {
