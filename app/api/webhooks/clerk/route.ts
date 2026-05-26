@@ -137,15 +137,24 @@ export async function POST(req: Request) {
           <tr>
             <td style="padding:36px 40px;">
               <p style="margin:0 0 16px;color:#374151;font-size:16px;line-height:1.6;">Hi ${firstName},</p>
-              <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.6;">Welcome to Content Flywheel &mdash; you&rsquo;ve got <strong style="color:#f97316;">100 free credits</strong> waiting in your account.</p>
-              <p style="margin:0 0 28px;color:#6b7280;font-size:15px;line-height:1.7;">Use them to generate AI videos, create digital products, and start selling &mdash; all from one dashboard. No 7-tool stack needed.</p>
-              <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">Join our free community to see it in action:</p>
-              <p style="margin:0 0 28px;">
-                <a href="https://www.skool.com/content-flywheel-7716" style="display:inline-block;padding:12px 28px;background-color:#f97316;color:#ffffff;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;">Join the Community &rarr;</a>
+              <p style="margin:0 0 8px;color:#374151;font-size:16px;line-height:1.6;">Welcome to Content Flywheel!</p>
+              <div style="margin:0 0 24px;background:linear-gradient(135deg,#fff7ed 0%,#ffedd5 100%);border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;text-align:center;">
+                <p style="margin:0 0 4px;color:#9a3412;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Your free credits</p>
+                <p style="margin:0;color:#f97316;font-size:36px;font-weight:800;line-height:1;">100</p>
+                <p style="margin:4px 0 0;color:#9a3412;font-size:13px;">ready to use &mdash; no card required</p>
+              </div>
+              <p style="margin:0 0 20px;color:#6b7280;font-size:15px;line-height:1.7;">Use your credits to generate AI videos, design products, and start selling &mdash; all from one dashboard.</p>
+              <p style="margin:0 0 6px;color:#374151;font-size:14px;font-weight:600;">What 100 credits gets you:</p>
+              <ul style="margin:0 0 24px;padding-left:20px;color:#6b7280;font-size:14px;line-height:1.9;">
+                <li>10 AI video generations (Brand Story, TikTok Shop, Cooking)</li>
+                <li>10 AI design generations (Print on Demand)</li>
+                <li>5 UGC avatar videos</li>
+              </ul>
+              <p style="margin:0 0 12px;">
+                <a href="${appUrl}/dashboard" style="display:inline-block;width:100%;max-width:100%;padding:14px 28px;background:linear-gradient(135deg,#f97316 0%,#fb923c 100%);color:#ffffff;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px;text-align:center;box-sizing:border-box;">Use my free credits &rarr;</a>
               </p>
-              <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">Then start your 7-day free trial:</p>
-              <p style="margin:0 0 32px;">
-                <a href="${appUrl}/dashboard" style="display:inline-block;padding:12px 28px;background-color:#0f172a;color:#ffffff;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;">Start my free trial &rarr;</a>
+              <p style="margin:0 0 28px;text-align:center;">
+                <a href="https://www.skool.com/content-flywheel-7716" style="color:#f97316;font-size:14px;text-decoration:none;font-weight:500;">Join the free community &rarr;</a>
               </p>
               <hr style="border:none;border-top:1px solid #f3f4f6;margin:0 0 24px;" />
               <p style="margin:0;color:#6b7280;font-size:14px;line-height:1.6;">&mdash; The Content Flywheel Team</p>
