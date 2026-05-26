@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const rl = await checkApiRateLimit(userId);
 
     if (rl) return rl;
-  const sg = await checkSpendLimit("openai");
+  const sg = await checkSpendLimit("openai", userId);
   if (sg) return sg;
 
     const body = await request.json().catch(() => ({}));

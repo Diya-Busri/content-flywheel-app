@@ -1,19 +1,23 @@
 /**
  * Monthly API spend guard — prevents runaway costs from uncapped provider calls.
  *
- * Tracks call counts per provider per calendar month in Supabase.
+ * Tracks call counts per USER per provider per calendar month in Supabase.
  * Configurable hard limits via env vars (SPEND_LIMIT_*).
- * Returns a NextResponse 429 when a provider limit is hit.
+ * Returns a NextResponse 429 when a user's limit is hit.
  *
  * Providers tracked:
- *   openai       → SPEND_LIMIT_OPENAI      (default 300 calls/month)
- *   fal          → SPEND_LIMIT_FAL         (default 150 calls/month)
- *   higgsfield   → SPEND_LIMIT_HIGGSFIELD  (default 60 calls/month)
- *   elevenlabs   → SPEND_LIMIT_ELEVENLABS  (default 200 calls/month)
+ *   openai       → SPEND_LIMIT_OPENAI      (default 50 calls/user/month)
+ *   fal          → SPEND_LIMIT_FAL         (default 20 calls/user/month)
+ *   higgsfield   → SPEND_LIMIT_HIGGSFIELD  (default 5 calls/user/month)
+ *   elevenlabs   → SPEND_LIMIT_ELEVENLABS  (default 30 calls/user/month)
  *
  * Usage:
- *   const guard = await checkSpendLimit("openai");
+ *   const guard = await checkSpendLimit("openai", userId);
  *   if (guard) return guard; // returns 429 NextResponse
+ *
+ * Internal/server-to-server routes without a userId can omit it:
+ *   const guard = await checkSpendLimit("higgsfield");
+ *   Counts against a shared "__system__" bucket (not per-user).
  */
 
 import { NextResponse } from "next/server";
@@ -21,12 +25,12 @@ import { createClient } from "@supabase/supabase-js";
 
 export type SpendProvider = "openai" | "fal" | "higgsfield" | "elevenlabs";
 
-// Hard monthly limits — override with env vars
+// Hard monthly limits per user — override with env vars
 const DEFAULT_LIMITS: Record<SpendProvider, number> = {
-  openai: 300,
-  fal: 150,
-  higgsfield: 60,
-  elevenlabs: 200,
+  openai: 50,
+  fal: 20,
+  higgsfield: 5,
+  elevenlabs: 30,
 };
 
 function getLimit(provider: SpendProvider): number {
@@ -52,41 +56,46 @@ function getSupabase() {
 }
 
 /**
- * Check if provider is under its monthly limit, then increment the counter.
+ * Check if a user is under their monthly limit, then increment the counter.
  * Returns null (allowed) or a NextResponse 429 (blocked).
+ *
+ * @param provider  Which API provider to check
+ * @param userId    Clerk userId — omit only for internal server-to-server routes
  */
-export async function checkSpendLimit(provider: SpendProvider): Promise<NextResponse | null> {
+export async function checkSpendLimit(
+  provider: SpendProvider,
+  userId?: string
+): Promise<NextResponse | null> {
   const limit = getLimit(provider);
   const month = currentMonth();
+  const effectiveUserId = userId ?? "__system__";
 
   const supabase = getSupabase();
   if (!supabase) {
-    // No Supabase → can't track, allow through but log a warning
     console.warn(`[spend-guard] Supabase not configured — ${provider} call unchecked`);
     return null;
   }
 
   try {
-    // Upsert: increment call_count, return new value
     const { data, error } = await supabase.rpc("increment_api_usage", {
+      p_user_id: effectiveUserId,
       p_provider: provider,
       p_month: month,
     });
 
     if (error) {
-      // If the RPC doesn't exist yet, fail open (don't block legitimate calls)
-      console.error(`[spend-guard] RPC error for ${provider}:`, error.message);
-      return null;
+      console.error(`[spend-guard] RPC error for ${provider}/${effectiveUserId}:`, error.message);
+      return null; // fail open
     }
 
     const newCount = typeof data === "number" ? data : 0;
-    console.log(`[spend-guard] ${provider} ${month}: ${newCount}/${limit}`);
+    console.log(`[spend-guard] ${provider} ${effectiveUserId} ${month}: ${newCount}/${limit}`);
 
     if (newCount > limit) {
-      console.warn(`[spend-guard] BLOCKED ${provider} — ${newCount} calls exceeds limit ${limit}`);
+      console.warn(`[spend-guard] BLOCKED ${provider}/${effectiveUserId} — ${newCount} exceeds ${limit}`);
       return new NextResponse(
         JSON.stringify({
-          error: `Monthly API limit reached for ${provider} (${limit} calls). Resets next month.`,
+          error: `Monthly usage limit reached for this feature (${limit} uses). Resets on the 1st of next month.`,
           code: "SPEND_LIMIT_EXCEEDED",
           provider,
           limit,
@@ -107,7 +116,7 @@ export async function checkSpendLimit(provider: SpendProvider): Promise<NextResp
  * Get current usage for all providers this month (for admin dashboard).
  */
 export async function getMonthlyUsage(): Promise<
-  { provider: string; month: string; call_count: number; limit: number }[]
+  { userId: string; provider: string; month: string; call_count: number; limit: number }[]
 > {
   const supabase = getSupabase();
   if (!supabase) return [];
@@ -115,12 +124,14 @@ export async function getMonthlyUsage(): Promise<
   const month = currentMonth();
   const { data, error } = await supabase
     .from("api_monthly_usage")
-    .select("provider, month, call_count")
-    .eq("month", month);
+    .select("user_id, provider, month, call_count")
+    .eq("month", month)
+    .order("call_count", { ascending: false });
 
   if (error || !data) return [];
 
   return data.map((row) => ({
+    userId: row.user_id as string,
     provider: row.provider as string,
     month: row.month as string,
     call_count: row.call_count as number,

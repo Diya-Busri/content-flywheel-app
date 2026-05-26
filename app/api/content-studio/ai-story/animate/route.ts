@@ -27,6 +27,8 @@ export async function POST(request: NextRequest) {
     if (apiRl) return apiRl;
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
+    const sg = await checkSpendLimit("fal", userId);
+    if (sg) return sg;
 
     // Gate behind video credits — 1 credit per animation (Kling AI costs ~£0.35/clip)
     const { hasCredits, balance } = await checkVideoCredits("brandStoryVideo");

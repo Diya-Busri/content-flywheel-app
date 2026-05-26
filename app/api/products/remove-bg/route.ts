@@ -13,6 +13,8 @@ export async function POST(request: Request) {
 
     const rl = await checkApiRateLimit(userId);
     if (rl) return rl;
+    const sg = await checkSpendLimit("fal", userId);
+    if (sg) return sg;
 
     const body = await request.json().catch(() => ({}));
     const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : "";

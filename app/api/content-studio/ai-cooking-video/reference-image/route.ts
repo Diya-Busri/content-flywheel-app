@@ -54,6 +54,8 @@ export async function POST(request: NextRequest) {
 
     const rl = checkAiRateLimit(userId);
     if (rl) return rl;
+    const sg = await checkSpendLimit("fal", userId);
+    if (sg) return sg;
 
     const body = await request.json().catch(() => ({}));
     const chefType = typeof body.chefType === "string" ? body.chefType.trim() : "";

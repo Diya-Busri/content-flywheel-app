@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const sg = await checkSpendLimit("fal");
+  const sg = await checkSpendLimit("fal", userId);
   if (sg) return sg;
 
   let imageUrl: string;
