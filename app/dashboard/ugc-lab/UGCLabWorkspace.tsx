@@ -307,28 +307,26 @@ export default function UGCLabWorkspace({ isPremium = false }: UGCLabWorkspacePr
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-0 space-y-3">
+                {/* Validation hints — show exactly what's missing */}
+                {!isPremium && (
+                  <p className="text-xs text-red-500">⚠ Premium membership required</p>
+                )}
+                {isPremium && !hasFaceProfile && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">⚠ Select a face profile on the left</p>
+                )}
+                {isPremium && hasFaceProfile && !hasProductContext && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">⚠ Add product context above</p>
+                )}
+                {isPremium && hasFaceProfile && hasProductContext && !hasTemplate && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">⚠ Select a template on the left</p>
+                )}
                 {isRankingMode && !rankingConfirmed && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
-                    Confirm ranking in left panel to enable Generate.
-                  </p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400">⚠ Confirm ranking in left panel</p>
                 )}
                 <Button
                   className="w-full gap-2"
                   onClick={handleGenerate}
                   disabled={generateLoading || !canGenerate}
-                  title={
-                    !isPremium
-                      ? "Premium membership required"
-                      : !hasFaceProfile
-                        ? "Select a face profile"
-                        : !hasProductContext
-                          ? "Add product context"
-                          : !hasTemplate
-                            ? "Select a template"
-                            : isRankingMode && !rankingConfirmed
-                              ? "Confirm ranking in left panel"
-                              : undefined
-                  }
                 >
                   {generateLoading ? (
                     <Loader2 className="w-4 h-4 animate-spin" />

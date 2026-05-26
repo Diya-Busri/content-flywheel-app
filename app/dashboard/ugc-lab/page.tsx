@@ -4,7 +4,7 @@
  * Locked behind premium membership (user.membership === 'pro').
  */
 import type { Metadata } from "next";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { getProfileByUserId } from "@/db/queries/profiles-queries";
 import UGCLabWorkspace from "./UGCLabWorkspace";
 
@@ -18,5 +18,11 @@ export default async function UGCLabPage() {
   const profile = userId ? await getProfileByUserId(userId) : null;
   const isPremium = profile?.membership === "pro";
 
-  return <UGCLabWorkspace isPremium={isPremium ?? false} />;
+  // Admins bypass the premium gate (their membership is 'free' but they have full access)
+  const user = await currentUser();
+  const userEmail = user?.emailAddresses?.[0]?.emailAddress ?? "";
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
+  const isAdmin = Boolean(adminEmail && userEmail.toLowerCase() === adminEmail);
+
+  return <UGCLabWorkspace isPremium={isPremium || isAdmin} />;
 }
