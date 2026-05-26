@@ -15,6 +15,12 @@
 
 export const FREE_SIGNUP_CREDITS = 100;
 
+/** Video credits added to a subscriber's balance each billing cycle */
+export const SUBSCRIPTION_VIDEO_CREDITS: Record<"month" | "year", number> = {
+  month: 200,  // Monthly plan — 20 video generations included
+  year: 300,   // Annual plan — 30 per month, bonus for loyalty
+};
+
 export type VideoCreditPack = {
   id: string;
   credits: number;

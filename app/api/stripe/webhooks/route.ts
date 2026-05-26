@@ -3,11 +3,49 @@ import { stripe } from "@/lib/stripe";
 import { headers } from "next/headers";
 import Stripe from "stripe";
 import { updateProfile, updateProfileByStripeCustomerId, getProfileByUserId } from "@/db/queries/profiles-queries";
-import { VIDEO_CREDITS_METADATA_KEY } from "@/lib/video-credits";
+import { VIDEO_CREDITS_METADATA_KEY, SUBSCRIPTION_VIDEO_CREDITS } from "@/lib/video-credits";
 import { db } from "@/db/db";
 import { videoCreditTransactionsTable } from "@/db/schema/video-credit-transactions-schema";
 import { promoCodesTable, promoCodeUsesTable } from "@/db/schema/promo-codes-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, sql } from "drizzle-orm";
+
+/**
+ * Add video credits to a subscriber's balance by Stripe customer ID.
+ * Fetches current balance first so we ADD rather than overwrite.
+ */
+async function addSubscriptionVideoCredits(
+  stripeCustomerId: string,
+  interval: "month" | "year",
+  label: string
+): Promise<void> {
+  const creditsToAdd = SUBSCRIPTION_VIDEO_CREDITS[interval];
+
+  // Find profile by Stripe customer ID
+  const [profile] = await db
+    .select()
+    .from(profilesTable)
+    .where(eq(profilesTable.stripeCustomerId, stripeCustomerId));
+
+  if (!profile) {
+    console.warn(`[sub-credits] No profile found for Stripe customer ${stripeCustomerId}`);
+    return;
+  }
+
+  const currentCredits = profile.videoCredits ?? 0;
+  const newBalance = currentCredits + creditsToAdd;
+
+  await updateProfile(profile.userId, { videoCredits: newBalance });
+
+  await db.insert(videoCreditTransactionsTable).values({
+    userId: profile.userId,
+    type: "purchase",
+    amount: creditsToAdd,
+    description: `📅 ${label} — ${creditsToAdd} credits included`,
+  }).catch((e) => console.error("[sub-credits] Failed to log transaction:", e));
+
+  console.log(`[sub-credits] Added ${creditsToAdd} credits to ${profile.userId} (${label}). Balance: ${currentCredits} → ${newBalance}`);
+}
 
 export const dynamic = "force-dynamic";
 const relevantEvents = new Set([
@@ -146,7 +184,7 @@ async function handleCheckoutSession(event: Stripe.Event) {
       try {
         const billingCycleStart = new Date(subscription.current_period_start * 1000);
         const billingCycleEnd = new Date(subscription.current_period_end * 1000);
-        
+
         await updateProfile(checkoutSession.client_reference_id, {
           usageCredits: DEFAULT_USAGE_CREDITS,
           usedCredits: 0,
@@ -154,28 +192,37 @@ async function handleCheckoutSession(event: Stripe.Event) {
           billingCycleStart,
           billingCycleEnd
         });
-        
+
         console.log(`Reset usage credits to ${DEFAULT_USAGE_CREDITS} for user ${checkoutSession.client_reference_id}`);
       } catch (error) {
         console.error(`Error updating usage credits: ${error}`);
       }
     }
+
+    // Add monthly video credits on new subscription
+    const interval = (subscription.items.data[0]?.price?.recurring?.interval ?? "month") as "month" | "year";
+    const planLabel = interval === "year" ? "Annual plan monthly credits" : "Monthly plan credits";
+    await addSubscriptionVideoCredits(
+      checkoutSession.customer as string,
+      interval,
+      planLabel
+    ).catch((e) => console.error("[sub-credits] Failed to add signup credits:", e));
   }
 }
 
 async function handlePaymentSuccess(event: Stripe.Event) {
   const invoice = event.data.object as Stripe.Invoice;
   const customerId = invoice.customer as string;
-  
+
   if (invoice.subscription) {
     try {
-      // Get the subscription to determine billing cycle dates
+      // Get the subscription to determine billing cycle dates and interval
       const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
-      
+
       const billingCycleStart = new Date(subscription.current_period_start * 1000);
       const billingCycleEnd = new Date(subscription.current_period_end * 1000);
-      
-      // Update profile directly by Stripe customer ID
+
+      // Reset usage credits (legacy system)
       await updateProfileByStripeCustomerId(customerId, {
         usageCredits: DEFAULT_USAGE_CREDITS,
         usedCredits: 0,
@@ -183,8 +230,18 @@ async function handlePaymentSuccess(event: Stripe.Event) {
         billingCycleStart,
         billingCycleEnd
       });
-      
+
       console.log(`Reset usage credits to ${DEFAULT_USAGE_CREDITS} for Stripe customer ${customerId}`);
+
+      // Skip the first invoice — checkout.session.completed already handled it
+      // billing_reason "subscription_create" = first payment, "subscription_cycle" = renewal
+      const isRenewal = invoice.billing_reason === "subscription_cycle";
+      if (isRenewal) {
+        const interval = (subscription.items.data[0]?.price?.recurring?.interval ?? "month") as "month" | "year";
+        const planLabel = interval === "year" ? "Annual plan — monthly top-up" : "Monthly plan renewal credits";
+        await addSubscriptionVideoCredits(customerId, interval, planLabel)
+          .catch((e) => console.error("[sub-credits] Failed to add renewal credits:", e));
+      }
     } catch (error) {
       console.error(`Error processing payment success: ${error}`);
     }
