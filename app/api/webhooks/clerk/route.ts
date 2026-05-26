@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { Resend } from "resend";
 import { createProfile, getProfileByUserId } from "@/db/queries/profiles-queries";
+import { db } from "@/db/db";
+import { videoCreditTransactionsTable } from "@/db/schema/video-credit-transactions-schema";
+import { FREE_SIGNUP_CREDITS } from "@/lib/video-credits";
 
 export const runtime = "nodejs";
 
@@ -77,13 +80,25 @@ export async function POST(req: Request) {
     const email = getEmail(data);
     const userId = data.id;
 
-    // Create profile row for new user
+    // Create profile row for new user with free starter credits
     if (userId) {
       try {
         const existing = await getProfileByUserId(userId);
         if (!existing) {
-          await createProfile({ userId, email: email ?? undefined, membership: "free" });
-          console.log(`[Clerk webhook] Created profile for new user ${userId}`);
+          await createProfile({
+            userId,
+            email: email ?? undefined,
+            membership: "free",
+            videoCredits: FREE_SIGNUP_CREDITS,
+          });
+          // Log the welcome credit grant as a transaction
+          await db.insert(videoCreditTransactionsTable).values({
+            userId,
+            type: "purchase",
+            amount: FREE_SIGNUP_CREDITS,
+            description: "🎁 Welcome credits — free on signup",
+          }).catch((e) => console.error("[Clerk webhook] Failed to log welcome credits transaction:", e));
+          console.log(`[Clerk webhook] Created profile + granted ${FREE_SIGNUP_CREDITS} free credits for ${userId}`);
         }
       } catch (err) {
         console.error("[Clerk webhook] Failed to create profile:", err);
@@ -122,8 +137,8 @@ export async function POST(req: Request) {
           <tr>
             <td style="padding:36px 40px;">
               <p style="margin:0 0 16px;color:#374151;font-size:16px;line-height:1.6;">Hi ${firstName},</p>
-              <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.6;">You&rsquo;re one step away from your content flywheel.</p>
-              <p style="margin:0 0 28px;color:#6b7280;font-size:15px;line-height:1.7;">Content Flywheel lets you generate AI videos, create digital products, and sell &mdash; all from one dashboard. No 7-tool stack needed.</p>
+              <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.6;">Welcome to Content Flywheel &mdash; you&rsquo;ve got <strong style="color:#f97316;">100 free credits</strong> waiting in your account.</p>
+              <p style="margin:0 0 28px;color:#6b7280;font-size:15px;line-height:1.7;">Use them to generate AI videos, create digital products, and start selling &mdash; all from one dashboard. No 7-tool stack needed.</p>
               <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">Join our free community to see it in action:</p>
               <p style="margin:0 0 28px;">
                 <a href="https://www.skool.com/content-flywheel-7716" style="display:inline-block;padding:12px 28px;background-color:#f97316;color:#ffffff;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;">Join the Community &rarr;</a>

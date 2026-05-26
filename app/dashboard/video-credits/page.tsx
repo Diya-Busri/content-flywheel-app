@@ -41,8 +41,8 @@ function VideoCreditsContent() {
   useEffect(() => {
     if (justPurchased && creditsAdded) {
       toast({
-        title: `🎉 ${creditsAdded} video credits added!`,
-        description: "Your credits are ready to use. Start generating videos.",
+        title: `🎉 ${creditsAdded} credits added!`,
+        description: "Your credits are ready to use. Start generating.",
       });
     }
   }, [justPurchased, creditsAdded, toast]);
@@ -143,7 +143,7 @@ function VideoCreditsContent() {
                 <span className="text-xs font-semibold uppercase tracking-wide">Used</span>
               </div>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">{history!.totalUsed}</p>
-              <p className="text-xs text-gray-400 mt-0.5">videos generated</p>
+              <p className="text-xs text-gray-400 mt-0.5">credits used</p>
             </div>
             <div className="p-4 text-center">
               <div className="flex items-center justify-center gap-1.5 text-green-500 mb-1.5">
@@ -212,9 +212,9 @@ function VideoCreditsContent() {
       {/* How it works */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
         {[
-          { icon: "1️⃣", title: "Buy credits", desc: "Pick a pack below — one-time payment, no subscription" },
-          { icon: "2️⃣", title: "Generate a video", desc: "Use Template Studio → Brand Story Video, Cooking, or Avatar" },
-          { icon: "3️⃣", title: "1 credit per video", desc: "Each full video costs 1 credit. Credits never expire." },
+          { icon: "🎁", title: "100 free on signup", desc: "Every new account starts with 100 free credits — no card needed" },
+          { icon: "🎬", title: "Generate anything", desc: "Brand Story, Cooking, TikTok Shop videos, AI Design, UGC avatars" },
+          { icon: "⚡", title: "10 credits per use", desc: "Most features cost 10 credits. UGC avatar videos cost 20. Credits never expire." },
         ].map((step) => (
           <div key={step.title} className="p-4 rounded-xl border border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] text-center">
             <p className="text-2xl mb-2">{step.icon}</p>
@@ -254,10 +254,10 @@ function VideoCreditsContent() {
               </div>
               <p className="text-3xl font-bold text-gray-900 dark:text-white">
                 {pack.credits}
-                <span className="text-base font-normal text-gray-500 dark:text-gray-400 ml-1">videos</span>
+                <span className="text-base font-normal text-gray-500 dark:text-gray-400 ml-1">credits</span>
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                £{(pack.priceGbp / pack.credits).toFixed(2)} per video
+                {pack.credits / 10} videos · £{(pack.priceGbp / (pack.credits / 10)).toFixed(2)} per video
               </p>
             </div>
             <div className="flex items-end justify-between gap-2 mt-auto">
