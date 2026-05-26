@@ -156,26 +156,59 @@ export type ScriptGenerationOptions = {
   durationSeconds?: number;
 };
 
+export type EnrichedProductData = {
+  title?: string;
+  description?: string;
+  keyBenefits?: string[];
+  useCases?: string[];
+  emotionalOutcomes?: string[];
+  targetAudience?: string;
+};
+
+/**
+ * Build a "specificity suffix" appended to generic templates when we have scraped product data.
+ * Picks the most concrete detail from each available category.
+ */
+function buildProductSuffix(enriched: EnrichedProductData): string {
+  const lines: string[] = [];
+  if (enriched.keyBenefits?.length) {
+    lines.push(enriched.keyBenefits[0]);
+  }
+  if (enriched.emotionalOutcomes?.length) {
+    lines.push(enriched.emotionalOutcomes[0]);
+  }
+  if (enriched.useCases?.length) {
+    lines.push(`Perfect for ${enriched.useCases[0].toLowerCase()}.`);
+  }
+  return lines.join(" ");
+}
+
 /**
  * Generate script variations. Scripts reference product names and respect duration limit.
  * @param productContext Fallback product name when no campaign products (single-product mode)
+ * @param count Number of variations to generate
  * @param productCount 1 = single product, 2+ = multi-product (enables comparison angles)
  * @param hookOptions Optional. hookStyle = preferred angle_type; tone for future AI prompts.
  * @param scriptOptions Optional. products = campaign products; durationSeconds = max script length.
+ * @param enriched Optional. Scraped product data used to make scripts more specific.
  */
 export function generateScriptVariations(
   productContext?: string,
   count: number = 4,
   productCount: number = 1,
   hookOptions?: HookOptions,
-  scriptOptions?: ScriptGenerationOptions
+  scriptOptions?: ScriptGenerationOptions,
+  enriched?: EnrichedProductData
 ): ScriptVariation[] {
   const preferredAngle = hookOptions?.hookStyle?.trim() || undefined;
   const angles = selectDistinctAngles(count, productCount, preferredAngle);
   const products = scriptOptions?.products?.length
     ? scriptOptions.products
-    : [{ productName: productContext?.trim() || "this product", role: "primary" as const }];
+    : [{ productName: productContext?.trim() || enriched?.title?.trim() || "this product", role: "primary" as const }];
   const durationSeconds = scriptOptions?.durationSeconds ?? 30;
+
+  // Precompute specificity suffix from scraped data (appended when space allows)
+  const productSuffix = enriched ? buildProductSuffix(enriched) : "";
 
   return angles.map((angle) => {
     const template = SCRIPT_BY_ANGLE[angle.angle_type] ?? {
@@ -184,6 +217,15 @@ export function generateScriptVariations(
     };
     let fullScript = injectProductNames(template.fullScript, products);
     let hookPreview = injectProductNames(template.hookPreview, products);
+
+    // Append enriched specifics when we have scraped data and space permits
+    if (productSuffix) {
+      const withSuffix = `${fullScript} ${productSuffix}`;
+      const wordCount = withSuffix.trim().split(/\s+/).length;
+      const maxWords = Math.floor(durationSeconds * 2.6);
+      if (wordCount <= maxWords) fullScript = withSuffix;
+    }
+
     fullScript = truncateToDuration(fullScript, durationSeconds);
     return { fullScript, hookPreview, angle };
   });

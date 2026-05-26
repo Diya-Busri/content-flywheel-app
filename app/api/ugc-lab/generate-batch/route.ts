@@ -18,6 +18,31 @@ import {
 const MIN_PRODUCTS = 1;
 const MAX_PRODUCTS = 5;
 
+/** Merge manual product context with AI-enriched scraped data into a single rich string. */
+function buildEnrichedContext(
+  manualContext?: string,
+  scraped?: {
+    title?: string;
+    description?: string;
+    keyBenefits?: string[];
+    useCases?: string[];
+    emotionalOutcomes?: string[];
+    targetAudience?: string;
+  } | null
+): string | undefined {
+  if (!scraped) return manualContext;
+  const parts: string[] = [];
+  if (scraped.title) parts.push(scraped.title);
+  if (scraped.description) parts.push(scraped.description);
+  if (scraped.keyBenefits?.length) parts.push(`Benefits: ${scraped.keyBenefits.join(", ")}`);
+  if (scraped.useCases?.length) parts.push(`Use cases: ${scraped.useCases.join(", ")}`);
+  if (scraped.emotionalOutcomes?.length) parts.push(`Outcomes: ${scraped.emotionalOutcomes.join(", ")}`);
+  if (scraped.targetAudience) parts.push(`Audience: ${scraped.targetAudience}`);
+  // Append any manual additions the user typed
+  if (manualContext?.trim()) parts.push(manualContext.trim());
+  return parts.join("\n") || manualContext;
+}
+
 /** Minimal pipeline: single job only, fixed template, requires face profile. */
 const UGC_SINGLE_TEMPLATE_ID = "selfie-talk";
 
@@ -44,6 +69,8 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const faceProfileId = (body.faceProfileId as string)?.trim() || undefined;
     const productContext = (body.productContext as string) ?? undefined;
+    // Optional scraped product data (from ProductURLInput component)
+    const scrapedProduct = body.scrapedProduct ?? null;
 
     if (!faceProfileId) {
       return NextResponse.json(
@@ -125,6 +152,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // Build enriched context from scraped product data
+    const enrichedProductContext = buildEnrichedContext(productContext, scrapedProduct);
+
     let variations: { fullScript: string; hookPreview: string; angle?: { angle_type: string } }[];
 
     if (isRankingMode) {
@@ -142,13 +172,31 @@ export async function POST(request: Request) {
           ? { products: campaignProducts, durationSeconds }
           : { durationSeconds };
       variations = generateScriptVariations(
-        productContext,
+        enrichedProductContext,
         variationCount,
         productCount,
         hookOptions,
-        scriptOptions
+        scriptOptions,
+        scrapedProduct ?? undefined
       );
     }
+
+    // Serialise scraped product for storage (omit rawText to keep size down)
+    const productDataJson = scrapedProduct
+      ? JSON.stringify({
+          platform: scrapedProduct.platform,
+          url: scrapedProduct.url,
+          title: scrapedProduct.title,
+          description: scrapedProduct.description,
+          keyBenefits: scrapedProduct.keyBenefits,
+          useCases: scrapedProduct.useCases,
+          emotionalOutcomes: scrapedProduct.emotionalOutcomes,
+          targetAudience: scrapedProduct.targetAudience,
+        })
+      : null;
+    const productImagesJson = scrapedProduct?.images?.length
+      ? JSON.stringify(scrapedProduct.images)
+      : null;
 
     const batchId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -169,6 +217,8 @@ export async function POST(request: Request) {
           hookPreview: v.hookPreview,
           status: "pending" as const,
           progress: "0",
+          productImages: productImagesJson,
+          productData: productDataJson,
         }))
       )
       .returning({ id: videoJobsTable.id });

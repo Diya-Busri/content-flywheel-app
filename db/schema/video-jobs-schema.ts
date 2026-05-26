@@ -22,6 +22,8 @@ export const videoJobsTable = pgTable("video_jobs", {
   videoUrl: text("video_url"),
   error: text("error"),
   progress: text("progress"),
+  productImages: text("product_images"), // JSON array of scraped image URLs
+  productData: text("product_data"),     // JSON-serialised ScrapedProduct (minus rawText)
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -23,6 +23,8 @@ import { isRankingTemplate } from "@/lib/ugc/ranking-templates";
 import { HookOptionsCard, type HookStyle, type HookTone } from "@/components/ugc-lab/HookOptionsCard";
 import { VideoJobsGrid, type VideoJob } from "@/components/ugc-lab/VideoJobsGrid";
 import { PreviewPlayer } from "@/components/ugc-lab/PreviewPlayer";
+import { ProductURLInput } from "@/components/ugc-lab/ProductURLInput";
+import type { ScrapedProduct } from "@/app/api/ugc-lab/scrape-product/route";
 import { useToast } from "@/components/ui/use-toast";
 
 type UGCLabWorkspaceProps = {
@@ -46,6 +48,7 @@ export default function UGCLabWorkspace({ isPremium = false }: UGCLabWorkspacePr
   const [batchId, setBatchId] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<VideoJob | null>(null);
   const [productContext, setProductContext] = useState("");
+  const [scrapedProduct, setScrapedProduct] = useState<ScrapedProduct | null>(null);
   const provider = "faceswap" as const;
   const [generateLoading, setGenerateLoading] = useState(false);
   const { toast } = useToast();
@@ -117,6 +120,7 @@ export default function UGCLabWorkspace({ isPremium = false }: UGCLabWorkspacePr
           hookStyle: hookStyle || undefined,
           tone: hookTone || undefined,
           provider,
+          scrapedProduct: scrapedProduct ?? undefined,
         }),
       });
       const data = await res.json();
@@ -271,6 +275,24 @@ export default function UGCLabWorkspace({ isPremium = false }: UGCLabWorkspacePr
 
         {/* Middle Panel */}
         <main className="flex flex-col gap-4 min-w-0 overflow-y-auto">
+          <ProductURLInput
+            scrapedProduct={scrapedProduct}
+            onProductScraped={(product) => {
+              setScrapedProduct(product);
+              // Auto-fill product context with title + description when scraped
+              if (product && !productContext.trim()) {
+                const ctx = [
+                  product.title,
+                  product.description,
+                  product.keyBenefits.length > 0 ? `Benefits: ${product.keyBenefits.slice(0, 3).join(", ")}` : "",
+                ]
+                  .filter(Boolean)
+                  .join("\n");
+                setProductContext(ctx);
+              }
+            }}
+          />
+
           <Card className="flex-1 min-h-0 flex flex-col">
             <CardHeader className="py-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -278,7 +300,9 @@ export default function UGCLabWorkspace({ isPremium = false }: UGCLabWorkspacePr
                 Script Builder
               </CardTitle>
               <CardDescription className="text-xs">
-                Write and edit your script
+                {scrapedProduct
+                  ? "Product auto-filled — edit or add extra context below"
+                  : "Write and edit your script"}
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-0 flex-1 min-h-0">
