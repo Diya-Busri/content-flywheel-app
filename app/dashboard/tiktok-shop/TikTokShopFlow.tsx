@@ -24,6 +24,9 @@ import {
   FileText,
   Info,
   Clapperboard,
+  Link2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import {
   Tooltip,
@@ -116,6 +119,12 @@ export default function TikTokShopFlow() {
   const [affiliateVideoUrl, setAffiliateVideoUrl] = useState<string | null>(null);
   const [affiliateVideoError, setAffiliateVideoError] = useState<string | null>(null);
   const [expandedScriptIndex, setExpandedScriptIndex] = useState<number | null>(null);
+
+  // ── Link fetch state ──────────────────────────────────────────────────────
+  const [linkFetchLoading, setLinkFetchLoading] = useState(false);
+  const [linkFetchError, setLinkFetchError] = useState<string | null>(null);
+  const [linkFetchSuccess, setLinkFetchSuccess] = useState(false);
+  const [scrapedImages, setScrapedImages] = useState<string[]>([]);
 
   useEffect(() => {
     try {
@@ -229,6 +238,75 @@ export default function TikTokShopFlow() {
 
   const canShowAffiliateLateSteps =
     scriptResults.length >= 4 && affiliateProductContext != null;
+
+  /** Fetch & parse a TikTok Shop product link, then auto-fill name + description. */
+  const handleFetchLink = async () => {
+    const trimmed = productLink.trim();
+    if (!trimmed) return;
+
+    setLinkFetchLoading(true);
+    setLinkFetchError(null);
+    setLinkFetchSuccess(false);
+    setScrapedImages([]);
+
+    try {
+      const res = await fetch("/api/tiktok-shop/scrape-product-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmed }),
+      });
+      const data = await res.json().catch(() => ({})) as {
+        success?: boolean;
+        error?: string;
+        product?: {
+          title: string;
+          description: string;
+          price: string | null;
+          images: string[];
+          features: string[];
+        };
+      };
+
+      if (!res.ok || !data.success) {
+        setLinkFetchError(
+          data.error ?? "We couldn't read this link. Please paste the product name/description or upload an image."
+        );
+        return;
+      }
+
+      const p = data.product!;
+
+      // Auto-fill name if empty
+      if (p.title && !productName.trim()) setProductName(p.title);
+
+      // Auto-fill description from what we extracted
+      if (!productDescription.trim()) {
+        const parts: string[] = [];
+        if (p.description) parts.push(p.description);
+        if (p.features.length > 0) parts.push(`Key features: ${p.features.join(", ")}`);
+        if (p.price) parts.push(`Price: ${p.price}`);
+        if (parts.length > 0) setProductDescription(parts.join("\n"));
+      }
+
+      // Store scraped images for potential use
+      if (p.images.length > 0) {
+        setScrapedImages(p.images);
+        // If no image uploaded yet, set the first scraped image as the affiliate URL
+        if (!productImage && p.images[0]) {
+          setAffiliateProductImageUrl(p.images[0]);
+        }
+      }
+
+      setLinkFetchSuccess(true);
+    } catch (err) {
+      setLinkFetchError(
+        "We couldn't read this link. Please paste the product name/description or upload an image."
+      );
+      console.error("[TikTokShopFlow] handleFetchLink error:", err);
+    } finally {
+      setLinkFetchLoading(false);
+    }
+  };
 
   const runProductBreakdown = async () => {
     if (!canProceedStep1) return;
@@ -512,11 +590,82 @@ export default function TikTokShopFlow() {
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label>TikTok Shop or product link</Label>
-              <Input
-                placeholder="https://..."
-                value={productLink}
-                onChange={(e) => setProductLink(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <Input
+                  placeholder="https://shop.tiktok.com/... or tiktok.com/t/..."
+                  value={productLink}
+                  onChange={(e) => {
+                    setProductLink(e.target.value);
+                    // Reset fetch state when URL changes
+                    if (linkFetchSuccess || linkFetchError) {
+                      setLinkFetchSuccess(false);
+                      setLinkFetchError(null);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && productLink.trim() && !linkFetchLoading) {
+                      e.preventDefault();
+                      handleFetchLink();
+                    }
+                  }}
+                  disabled={linkFetchLoading}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5 px-3"
+                  onClick={handleFetchLink}
+                  disabled={!productLink.trim() || linkFetchLoading}
+                >
+                  {linkFetchLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Link2 className="w-3.5 h-3.5" />
+                  )}
+                  {linkFetchLoading ? "Fetching…" : "Fetch"}
+                </Button>
+              </div>
+
+              {/* Inline fetch status */}
+              {linkFetchSuccess && (
+                <div className="flex items-start gap-2 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-3 py-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+                  <div className="text-xs text-green-700 dark:text-green-300">
+                    <span className="font-medium">Product found.</span>
+                    {scrapedImages.length > 0 && (
+                      <span className="ml-1 text-green-600 dark:text-green-400">
+                        {scrapedImages.length} image{scrapedImages.length !== 1 ? "s" : ""} extracted.
+                      </span>
+                    )}
+                    {" "}Name and description filled below — edit as needed before continuing.
+                  </div>
+                </div>
+              )}
+              {linkFetchError && (
+                <div className="flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    {linkFetchError}
+                  </p>
+                </div>
+              )}
+
+              {/* Scraped image strip */}
+              {linkFetchSuccess && scrapedImages.length > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                  {scrapedImages.slice(0, 4).map((src, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={i}
+                      src={src}
+                      alt={`Product image ${i + 1}`}
+                      className="w-16 h-16 rounded object-cover border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Product name (if no link)</Label>
