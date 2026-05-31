@@ -1089,6 +1089,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [copiedSectionImage, setCopiedSectionImage] = useState<{ imageUrl?: string; imageUrlNoBg?: string; imageHeightPx?: number; imageWidthPx?: number; imageBgRemoved?: boolean } | null>(null);
   const [showBrandSetupDialog, setShowBrandSetupDialog] = useState(false);
   const [showAutoDesignChoiceDialog, setShowAutoDesignChoiceDialog] = useState(false);
+  const [mobileEditorPanelOpen, setMobileEditorPanelOpen] = useState(false);
   const [brandProfile, setBrandProfile] = useState<{
     tiktokUrl?: string;
     instagramUrl?: string;
@@ -4184,14 +4185,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center bg-gray-100 dark:bg-[#0F0F0F]">
         <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
-      </main>
+      </div>
     );
   }
   if (error || !product) {
     return (
-      <main className="min-h-screen bg-gray-100 text-gray-900 p-6">
+      <div className="flex-1 bg-gray-100 text-gray-900 p-6 overflow-y-auto">
         <p className="text-red-600">{error ?? "Product not found"}</p>
         <p className="text-sm text-gray-600 mt-2">If the product was moved or deleted, use Back. Otherwise try again or sign in again.</p>
         <div className="mt-4 flex flex-wrap gap-3">
@@ -4202,7 +4203,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
             ← Back to Digital Products
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -4840,7 +4841,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Center content area - scrollable */}
         <div className={`flex-1 min-w-0 overflow-y-auto ${isDark ? "bg-[#0F0F0F]" : "bg-gray-100"}`}>
-          <div className="flex flex-col items-center px-4 py-8">
+          <div className="flex flex-col items-center px-2 md:px-4 py-3 md:py-8">
               {/* Toolbar above canvas */}
               <div className="flex items-center justify-between w-full max-w-[816px] mb-4">
                 <div className="flex items-center gap-2">
@@ -4920,7 +4921,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
               {/* Outer card (max 928px) — always document-like (white/light) regardless of app theme */}
               <div
                 ref={canvasContainerRef}
-                className="relative w-full max-w-[928px] mx-auto my-8 rounded-lg shadow-lg overflow-hidden bg-white border border-gray-200"
+                className="relative w-full max-w-[928px] mx-auto my-2 md:my-8 rounded-lg shadow-lg overflow-hidden bg-white border border-gray-200"
                 style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)" }}
               >
                 {showCoverBackHint ? (
@@ -5365,7 +5366,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
           </div>
         </div>
 
-        <EditorRightPanel isDark={isDark}>
+        <EditorRightPanel isDark={isDark} mobileOpen={mobileEditorPanelOpen} onMobileClose={() => setMobileEditorPanelOpen(false)}>
             {isOnBackPage && (
               <BackCoverEditor
                 backCoverSocialLinks={backCoverSocialLinks}
@@ -7351,6 +7352,20 @@ export default function ProductEditor({ productId }: { productId: string }) {
             </Tabs>
         </EditorRightPanel>
       </div>
+
+      {/* Mobile floating "Edit" button — opens right panel as sheet */}
+      <button
+        type="button"
+        onClick={() => setMobileEditorPanelOpen(true)}
+        className={`md:hidden fixed bottom-20 right-4 z-30 flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg text-sm font-semibold transition-colors ${
+          isDark
+            ? "bg-orange-500 hover:bg-orange-600 text-white"
+            : "bg-orange-500 hover:bg-orange-600 text-white"
+        }`}
+        aria-label="Open edit panel"
+      >
+        ✎ Edit
+      </button>
 
       {/* Delete Section Confirmation */}
       <Dialog open={!!sectionToDeleteId} onOpenChange={(open) => !open && setSectionToDeleteId(null)}>

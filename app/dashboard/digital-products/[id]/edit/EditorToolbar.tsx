@@ -59,8 +59,8 @@ export function EditorToolbar({
           isDark ? "border-[#2A2A2A] bg-[#0F0F0F]/95" : "border-gray-200 bg-white/95"
         }`}
       >
-        <div className="max-w-[1800px] mx-auto flex items-center justify-between gap-6 px-4 md:px-6 h-14">
-          <div className="flex items-center gap-6 min-w-0">
+        <div className="max-w-[1800px] mx-auto flex items-center justify-between gap-2 md:gap-6 px-3 md:px-6 h-14 overflow-x-hidden">
+          <div className="flex items-center gap-2 md:gap-6 min-w-0 shrink-0">
             <Link
               href="/dashboard/digital-products"
               className={`text-sm shrink-0 flex items-center gap-1 ${
@@ -73,7 +73,7 @@ export function EditorToolbar({
               className={`h-5 w-px hidden sm:block ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`}
             />
             <h1
-              className={`text-base font-semibold truncate ${
+              className={`text-base font-semibold truncate max-w-[120px] md:max-w-[280px] ${
                 isDark ? "text-white" : "text-gray-900"
               }`}
             >
@@ -81,7 +81,7 @@ export function EditorToolbar({
             </h1>
             {saving ? (
               <span
-                className={`flex items-center gap-1.5 text-xs shrink-0 ${
+                className={`hidden sm:flex items-center gap-1.5 text-xs shrink-0 ${
                   isDark ? "text-gray-400" : "text-gray-500"
                 }`}
               >
@@ -89,25 +89,27 @@ export function EditorToolbar({
               </span>
             ) : lastSaved ? (
               <span
-                className="flex items-center gap-1.5 text-xs text-emerald-600 shrink-0"
+                className="hidden sm:flex items-center gap-1.5 text-xs text-emerald-600 shrink-0"
                 title={lastSaved.toLocaleString()}
               >
                 <Check className="w-3.5 h-3.5" /> Saved ✓ · {formatLastSaved(lastSaved)}
               </span>
             ) : null}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+            {/* AI action buttons — hidden on mobile, accessible via the Edit panel slide-out */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     size="sm"
                     variant="outline"
-                    className={
+                    className={[
+                      "hidden md:inline-flex",
                       isDark
                         ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white"
-                        : "border-gray-200 text-gray-700 hover:bg-gray-100"
-                    }
+                        : "border-gray-200 text-gray-700 hover:bg-gray-100",
+                    ].join(" ")}
                     onClick={onAutoDesignClick}
                     disabled={autoDesignLoading || regenerateDesignLoading}
                   >
@@ -128,11 +130,12 @@ export function EditorToolbar({
                   <Button
                     size="sm"
                     variant="outline"
-                    className={
+                    className={[
+                      "hidden md:inline-flex",
                       isDark
                         ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white"
-                        : "border-gray-200 text-gray-700 hover:bg-gray-100"
-                    }
+                        : "border-gray-200 text-gray-700 hover:bg-gray-100",
+                    ].join(" ")}
                     onClick={onRegenerateDesign}
                     disabled={regenerateDesignLoading}
                   >
@@ -153,11 +156,12 @@ export function EditorToolbar({
                   <Button
                     size="sm"
                     variant="outline"
-                    className={
+                    className={[
+                      "hidden md:inline-flex",
                       isDark
                         ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white"
-                        : "border-gray-200 text-gray-700 hover:bg-gray-100"
-                    }
+                        : "border-gray-200 text-gray-700 hover:bg-gray-100",
+                    ].join(" ")}
                     onClick={onGenerateImages}
                     disabled={generateImagesLoading || autoDesignLoading || regenerateDesignLoading}
                   >
@@ -185,11 +189,12 @@ export function EditorToolbar({
                   <Button
                     size="sm"
                     variant="outline"
-                    className={
+                    className={[
+                      "hidden md:inline-flex",
                       isDark
                         ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white"
-                        : "border-gray-200 text-gray-700 hover:bg-gray-100"
-                    }
+                        : "border-gray-200 text-gray-700 hover:bg-gray-100",
+                    ].join(" ")}
                     onClick={onGenerateTypography}
                     disabled={generateImagesLoading || autoDesignLoading || regenerateDesignLoading}
                   >
@@ -208,7 +213,7 @@ export function EditorToolbar({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="text-gray-400 hover:text-white hover:bg-[#2A2A2A]"
+                    className="hidden md:inline-flex text-gray-400 hover:text-white hover:bg-[#2A2A2A]"
                     onClick={onPreview}
                   >
                     <Eye className="w-4 h-4" />
@@ -219,10 +224,10 @@ export function EditorToolbar({
             </TooltipProvider>
             <Button
               size="sm"
-              className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+              className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
               onClick={onPreview}
             >
-              <Eye className="w-4 h-4" /> Export {exportLabel}
+              <Eye className="w-4 h-4" /> <span className="hidden sm:inline">Export </span>{exportLabel}
             </Button>
           </div>
         </div>

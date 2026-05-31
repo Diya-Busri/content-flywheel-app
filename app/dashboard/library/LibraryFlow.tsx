@@ -692,7 +692,7 @@ export default function LibraryFlow() {
   const showDeleteAll = !isTrashView && tab !== "template-packs" && tab !== "templates" && tab !== "history" && tab !== "youtube" && items.length > 0;
 
   return (
-    <main className="p-6 md:p-10 max-w-5xl mx-auto">
+    <main className="p-3 md:p-10 max-w-5xl mx-auto overflow-x-hidden">
       <Link
         href="/dashboard"
         className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-orange-500 mb-6"
@@ -715,8 +715,9 @@ export default function LibraryFlow() {
       </p>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <TabsList data-tour="library-tabs" className="bg-gray-200 dark:bg-[#1A1A1A] border border-[#E5E7EB] dark:border-[#2A2A2A]">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 mb-6">
+          <div className="overflow-x-auto -mx-3 px-3 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
+          <TabsList data-tour="library-tabs" className="bg-gray-200 dark:bg-[#1A1A1A] border border-[#E5E7EB] dark:border-[#2A2A2A] flex-nowrap whitespace-nowrap w-max">
             <TabsTrigger value="all" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">All items</TabsTrigger>
             <TabsTrigger value="products" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Digital Products</TabsTrigger>
             <TabsTrigger value="bundles" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Bundles</TabsTrigger>
@@ -731,6 +732,7 @@ export default function LibraryFlow() {
             <TabsTrigger value="templates" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Templates</TabsTrigger>
             <TabsTrigger value="trash" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Trash</TabsTrigger>
           </TabsList>
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
             {/* Delete All: only when there are items and not viewing Trash; opens confirmation modal */}
             {showDeleteAll && (
@@ -744,7 +746,7 @@ export default function LibraryFlow() {
                 Delete All
               </Button>
             )}
-            <div data-tour="library-search" className="relative w-48 sm:w-64 shrink-0">
+            <div data-tour="library-search" className="relative w-full sm:w-64 shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <Input
               placeholder="Search..."
@@ -1115,7 +1117,7 @@ export default function LibraryFlow() {
                       const downloadUrl = getVideoDownloadUrl(video);
                       return (
                         <Card key={video.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                          <div className="relative aspect-video bg-gray-200 dark:bg-[#2A2A2A] rounded-t-lg flex items-center justify-center overflow-hidden">
+                          <div className="relative aspect-[16/7] sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] rounded-t-lg flex items-center justify-center overflow-hidden">
                             {downloadUrl ? (
                               <video src={downloadUrl} className="w-full h-full object-cover" muted playsInline />
                             ) : (
@@ -1197,7 +1199,7 @@ export default function LibraryFlow() {
                             : [];
                         return (
                           <Card key={project.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                            <div className="relative aspect-video bg-gray-200 dark:bg-[#2A2A2A] rounded-t-lg flex items-center justify-center overflow-hidden">
+                            <div className="relative aspect-[16/7] sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] rounded-t-lg flex items-center justify-center overflow-hidden">
                               {backgroundMediaUrl ? (
                                 <img src={backgroundMediaUrl} alt="" className="w-full h-full object-cover" />
                               ) : (
@@ -1294,10 +1296,10 @@ export default function LibraryFlow() {
               {groupByBundle(filtered).map(({ bundleId, bundleName, items: bundleItems }) => (
                 <section key={bundleId}>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{bundleName}</h2>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid gap-3 md:gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {bundleItems.map((item) => (
                       <Card key={item.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                        <div className="aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
+                        <div className="aspect-[16/7] sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
                           {showThumbnail(item) ? (
                             <img
                               src={item.thumbnail}
@@ -1396,14 +1398,21 @@ export default function LibraryFlow() {
                         </CardHeader>
                         <CardContent className="pt-0 flex gap-2">
                           {item.type === "product" && item.status === "generating" ? (
-                            <Button
-                              size="sm"
-                              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
-                              disabled={retryingIds.has(item.id)}
-                              onClick={() => handleRetryGeneration(item)}
-                            >
-                              {retryingIds.has(item.id) ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Regenerating…</> : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Retry Generation</>}
-                            </Button>
+                            <div className="flex-1 flex flex-col gap-2 min-w-0">
+                              <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5 min-w-0">
+                                <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                                <span className="truncate">Generating your workbook… 1–2 min</span>
+                              </p>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full text-orange-600 border-orange-300 dark:border-orange-500/50 hover:bg-orange-50 dark:hover:bg-orange-500/10"
+                                disabled={retryingIds.has(item.id)}
+                                onClick={() => handleRetryGeneration(item)}
+                              >
+                                {retryingIds.has(item.id) ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Regenerating…</> : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Retry</>}
+                              </Button>
+                            </div>
                           ) : (
                             <>
                               <Button variant="outline" size="sm" className="flex-1" asChild>
@@ -1433,10 +1442,10 @@ export default function LibraryFlow() {
               ))}
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((item) => (
                 <Card key={`${item.type}-${item.id}`} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                  <div className="aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
+                  <div className="aspect-[16/7] sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
                     {showThumbnail(item) ? (
                       <img
                         src={item.thumbnail}
@@ -1584,14 +1593,21 @@ export default function LibraryFlow() {
                         </Button>
                       </>
                     ) : item.type === "product" && item.status === "generating" ? (
-                      <Button
-                        size="sm"
-                        className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
-                        disabled={retryingIds.has(item.id)}
-                        onClick={() => handleRetryGeneration(item)}
-                      >
-                        {retryingIds.has(item.id) ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Regenerating…</> : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Retry Generation</>}
-                      </Button>
+                      <div className="flex-1 flex flex-col gap-2 min-w-0">
+                        <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5 min-w-0">
+                          <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                          <span className="truncate">Generating your workbook… 1–2 min</span>
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full text-orange-600 border-orange-300 dark:border-orange-500/50 hover:bg-orange-50 dark:hover:bg-orange-500/10"
+                          disabled={retryingIds.has(item.id)}
+                          onClick={() => handleRetryGeneration(item)}
+                        >
+                          {retryingIds.has(item.id) ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Regenerating…</> : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Retry</>}
+                        </Button>
+                      </div>
                     ) : (
                       <>
                         <Button variant="outline" size="sm" className="flex-1" asChild>

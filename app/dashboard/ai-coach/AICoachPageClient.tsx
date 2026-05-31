@@ -1904,9 +1904,9 @@ ${videoLines}`;
         aria-hidden
         onEnded={() => setPlayingIndex(null)}
       />
-      <div className="shrink-0 border-b border-border bg-card px-6 py-4 flex items-center justify-between gap-4">
+      <div className="shrink-0 border-b border-border bg-card px-3 md:px-6 py-3 md:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-semibold text-foreground truncate max-w-[240px]">
+          <h1 className="text-base md:text-xl font-semibold text-foreground truncate max-w-[200px] md:max-w-[240px]">
             {sessionTitle === "New Chat" ? "New Conversation" : sessionTitle}
           </h1>
           {playingIndex !== null && (
@@ -1919,7 +1919,7 @@ ${videoLines}`;
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap overflow-x-auto max-w-full">
           {!isVoiceCall ? (
             <>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -1937,7 +1937,7 @@ ${videoLines}`;
               </div>
               <Select value={coachMode} onValueChange={onCoachModeChange}>
                 <SelectTrigger
-                  className="shrink-0 w-[200px] gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20 h-9"
+                  className="shrink-0 w-[140px] sm:w-[200px] gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20 h-9"
                   aria-label="Coach mode"
                 >
                   <SelectValue placeholder="Coach Mode">
@@ -1965,7 +1965,7 @@ ${videoLines}`;
                 aria-label="Open prompts library"
               >
                 <BookOpen className="h-4 w-4" />
-                Prompts Library
+                <span className="hidden sm:inline">Prompts Library</span>
               </Button>
               {productId && productName ? (
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-orange-500/15 text-orange-700 dark:text-orange-300 px-2.5 py-1.5 text-sm">
@@ -1992,7 +1992,7 @@ ${videoLines}`;
                     title="Attach a product to this conversation"
                   >
                     <Package className="h-4 w-4" />
-                    Add Product Context
+                    <span className="hidden sm:inline">Add Product Context</span>
                     <ChevronDown className="h-3.5 w-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -2027,7 +2027,7 @@ ${videoLines}`;
                 title="Start voice call"
               >
                 <Phone className="h-4 w-4" />
-                Start Voice Call
+                <span className="hidden sm:inline">Start Voice Call</span>
               </Button>
               <Button
                 type="button"
@@ -2427,7 +2427,7 @@ ${videoLines}`;
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-border bg-card px-4 py-4">
+      <div className="shrink-0 border-t border-border bg-card px-4 py-4 pb-safe-or-4">
         {(pendingImageUrls.length > 0 || pendingFiles.length > 0 || pendingVideos.length > 0) && (
           <div className="mx-auto max-w-[52rem] flex flex-wrap gap-2 mb-2">
             {pendingImageUrls.map((url, i) => (

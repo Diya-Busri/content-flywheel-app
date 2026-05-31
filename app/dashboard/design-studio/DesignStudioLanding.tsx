@@ -90,7 +90,7 @@ function DesignCard({
       {/* Preview */}
       <div
         className="w-full flex items-center justify-center overflow-hidden bg-gray-100 dark:bg-[#111]"
-        style={{ height: Math.min(previewH, 200) }}
+        style={{ height: Math.min(Math.max(previewH, 80), 160) }}
       >
         {design.previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -311,15 +311,15 @@ export function DesignStudioLanding() {
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="max-w-6xl mx-auto px-4 md:px-8 py-8">
+    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+      <div className="max-w-6xl mx-auto px-3 md:px-8 py-6 md:py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Palette className="w-6 h-6 text-orange-500" /> Design Studio
+        <div className="flex items-center justify-between mb-6 md:mb-8 gap-2">
+          <div className="min-w-0">
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Palette className="w-5 h-5 md:w-6 md:h-6 text-orange-500 shrink-0" /> Design Studio
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-1 hidden sm:block">
               Create posters, invitations, social posts, and more
             </p>
           </div>
@@ -354,7 +354,7 @@ export function DesignStudioLanding() {
         {loading ? (
           <div className="mb-8">
             <div className="h-5 w-32 rounded bg-gray-200 dark:bg-[#2A2A2A] animate-pulse mb-4" />
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="rounded-xl bg-gray-100 dark:bg-[#1A1A1A] animate-pulse h-48" />
               ))}
@@ -367,7 +367,7 @@ export function DesignStudioLanding() {
               <h2 className="text-base font-bold text-gray-900 dark:text-white">Content Bundles</h2>
               <span className="text-xs text-gray-400 ml-1">{bundles.length} bundle{bundles.length !== 1 ? "s" : ""}</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
               <AnimatePresence>
                 {bundles.map((b) => (
                   <BundleCard key={b.id} bundle={b} onDelete={deleteBundle} />
@@ -387,7 +387,7 @@ export function DesignStudioLanding() {
         )}
 
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="rounded-xl bg-gray-100 dark:bg-[#1A1A1A] animate-pulse h-48" />
             ))}
@@ -409,7 +409,7 @@ export function DesignStudioLanding() {
             </Button>
           </div>
         ) : designs.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
             <AnimatePresence>
               {designs.map((d) => (
                 <DesignCard key={d.id} design={d} isNew={recentlyDuplicated.has(d.id)} onDelete={deleteDesign} onDuplicate={duplicateDesign} />
@@ -421,7 +421,7 @@ export function DesignStudioLanding() {
 
       {/* New Design Dialog */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] sm:w-auto overflow-y-auto max-h-[90dvh]">
           <DialogHeader>
             <DialogTitle>Choose a canvas size</DialogTitle>
           </DialogHeader>

@@ -129,6 +129,10 @@
 .pb-mobile-nav {
   padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
 }
+/* Chat input box: combine py-4 with safe-area bottom on mobile */
+.pb-safe-or-4 {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
 /* Ensure the bottom nav bar itself also respects device safe-area height */
 .bottom-nav-height {
   height: calc(3.5rem + env(safe-area-inset-bottom, 0px));
