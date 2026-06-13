@@ -2,18 +2,11 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
-import { ArrowRight, Check, Star } from "lucide-react";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { ReviewsCarousel } from "@/components/marketing/reviews-carousel";
 import { LandingNavbar } from "@/components/marketing/landing-navbar";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { LandingAnimations } from "@/components/marketing/LandingAnimations";
 import HeroSection from "@/components/marketing/HeroSection";
+import { LandingAICoach } from "@/components/marketing/LandingAICoach";
 
 export const metadata: Metadata = {
   title: "Content Flywheel — Create & Sell Digital Products with AI",
@@ -50,6 +43,7 @@ export default async function HomePage() {
       <LandingNavbar />
       <HeroSection />
       <LandingAnimations reviews={reviews} />
+      <LandingAICoach />
 
       {/* Static footer — server rendered */}
       <footer className="border-t border-white/10 bg-black">
