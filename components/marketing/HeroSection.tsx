@@ -31,29 +31,30 @@ export default function HeroSection() {
         <div className="mx-auto max-w-2xl text-center">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-1.5 text-sm font-medium text-orange-700">
             <Sparkles className="h-4 w-4" />
-            AI factory for faceless creators
+            AI-Powered Digital Product Platform
           </div>
           <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-6xl">
-            Spin a faceless business.{" "}
-            <span className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">
-              Straight into TikTok Shop.
-            </span>
+            Create, sell &amp; market{" "}
+            <Link href="/dashboard/digital-products" className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent underline decoration-orange-400 underline-offset-4">
+              digital products
+            </Link>
+            {" "}in minutes.
           </h1>
           <p className="mt-6 text-lg leading-8 text-slate-600 sm:text-xl">
-            Content Flywheel turns a niche into a brand: AI-generated videos, digital products, and print-on-demand merch — sold from one tab, no 7-tool stack required.
+            Build ebooks, planners &amp; templates with AI. Sell from your own branded store. Grow with email marketing, affiliates, and discount codes.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link href="/signup" className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:shadow-xl hover:shadow-orange-500/40">
-              Start free trial
+              Start for free
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
             </Link>
             <Link href="#demo" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-8 py-4 text-base font-semibold text-slate-900 transition hover:border-slate-300 hover:bg-slate-50">
-              See it spin
+              See how it works
               <span className="text-slate-400">→</span>
             </Link>
           </div>
           <p className="mt-8 text-sm text-slate-500">
-            7-day free trial · Cancel anytime · TikTok Shop + Stripe ready
+            No credit card required · Free trial included · Cancel anytime
           </p>
         </div>
         <div className="mt-20">
