@@ -191,7 +191,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
             >
               <div className="hidden md:block">
                 <span className="text-xl font-bold tracking-tight">
-                  <span className="text-white">Content</span><span className="text-orange-500">Flywheel</span>
+                  <span className="text-gray-900 dark:text-white">Content</span><span className="text-orange-500">Flywheel</span>
                 </span>
               </div>
               <div className="block md:hidden text-center">
