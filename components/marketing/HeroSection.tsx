@@ -23,40 +23,84 @@ const FLYWHEEL_STEPS = [
 
 export default function HeroSection() {
   return (
-    <section className="relative isolate overflow-hidden bg-gradient-to-b from-orange-50 via-white to-white">
-      <div className="pointer-events-none absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80" aria-hidden="true">
-        <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-orange-200 to-amber-300 opacity-40 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" style={{ clipPath: "polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)" }} />
+    <section className="relative isolate overflow-hidden bg-[#0a0a0a]">
+      {/* Subtle glow */}
+      <div className="pointer-events-none absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl" aria-hidden="true">
+        <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-orange-600/20 to-amber-500/10 opacity-60 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" style={{ clipPath: "polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)" }} />
       </div>
+
       <div className="mx-auto max-w-7xl px-6 pb-24 pt-20 sm:pt-32 lg:px-8 lg:pt-40">
-        <div className="mx-auto max-w-2xl text-center">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-1.5 text-sm font-medium text-orange-700">
-            <Sparkles className="h-4 w-4" />
-            AI-Powered Digital Product Platform
-          </div>
-          <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-6xl">
-            Create, sell &amp; market{" "}
-            <Link href="/dashboard/digital-products" className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent underline decoration-orange-400 underline-offset-4">
+        <div className="mx-auto max-w-3xl text-center">
+          {/* Beta badge */}
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mb-6 inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-4 py-1.5 text-sm font-medium text-orange-400"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+            </span>
+            Now in Beta — Built for creators, coaches &amp; digital sellers
+          </motion.div>
+
+          {/* Headline */}
+          <motion.h1
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="text-balance text-4xl font-extrabold tracking-tight text-white sm:text-6xl lg:text-7xl"
+          >
+            Describe your idea.{" "}
+            <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
+              We build the business.
+            </span>
+          </motion.h1>
+
+          {/* Sub */}
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="mt-6 text-lg leading-8 text-white/50 sm:text-xl max-w-2xl mx-auto"
+          >
+            Content Flywheel is an AI-powered operating system for creators. It writes your{" "}
+            <Link href="/dashboard/digital-products" className="text-orange-400 hover:text-orange-300 underline underline-offset-4 transition-colors">
               digital products
             </Link>
-            {" "}in minutes.
-          </h1>
-          <p className="mt-6 text-lg leading-8 text-slate-600 sm:text-xl">
-            Build ebooks, planners &amp; templates with AI. Sell from your own branded store. Grow with email marketing, affiliates, and discount codes.
-          </p>
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Link href="/signup" className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:shadow-xl hover:shadow-orange-500/40">
+            , builds your store, and runs your marketing — all from one tab.
+          </motion.p>
+
+          {/* CTAs */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row"
+          >
+            <Link href="/signup" className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-8 py-4 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition hover:shadow-xl hover:shadow-orange-500/40">
               Start for free
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
             </Link>
-            <Link href="#demo" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-8 py-4 text-base font-semibold text-slate-900 transition hover:border-slate-300 hover:bg-slate-50">
+            <Link href="#how-it-works" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-8 py-4 text-base font-semibold text-white transition hover:bg-white/10">
               See how it works
-              <span className="text-slate-400">→</span>
+              <span className="text-white/40">→</span>
             </Link>
-          </div>
-          <p className="mt-8 text-sm text-slate-500">
+          </motion.div>
+
+          {/* Trust */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="mt-6 text-sm text-white/25"
+          >
             No credit card required · Free trial included · Cancel anytime
-          </p>
+          </motion.p>
         </div>
+
+        {/* Flywheel steps */}
         <div className="mt-20">
           <FlywheelLoop />
         </div>
@@ -68,8 +112,8 @@ export default function HeroSection() {
 function FlywheelLoop() {
   return (
     <div className="mx-auto max-w-5xl">
-      <p className="mb-8 text-center text-sm font-medium uppercase tracking-wide text-slate-500">
-        Five steps. One tab. No stack.
+      <p className="mb-8 text-center text-xs font-semibold uppercase tracking-widest text-white/25">
+        One platform · One workflow · One subscription
       </p>
       <div className="flex flex-wrap items-center justify-center gap-3">
         {FLYWHEEL_STEPS.map((step, i) => {
@@ -81,22 +125,22 @@ function FlywheelLoop() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.15, duration: 0.4 }}
                 whileHover={{ scale: 1.05 }}
-                className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+                className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 shadow-sm"
               >
                 <motion.div
-                  animate={{ backgroundColor: ["#fff7ed", "#fed7aa", "#fff7ed"] }}
+                  animate={{ backgroundColor: ["rgba(249,115,22,0.08)", "rgba(249,115,22,0.18)", "rgba(249,115,22,0.08)"] }}
                   transition={{ duration: 3, repeat: Infinity, delay: i * 0.4 }}
                   className="flex h-9 w-9 items-center justify-center rounded-xl"
                 >
-                  <Icon className="h-5 w-5 text-orange-600" />
+                  <Icon className="h-5 w-5 text-orange-500" />
                 </motion.div>
-                <span className="text-sm font-semibold text-slate-900">{step.label}</span>
+                <span className="text-sm font-semibold text-white/80">{step.label}</span>
               </motion.div>
               {i < FLYWHEEL_STEPS.length - 1 && (
                 <motion.div
                   animate={{ x: [0, 4, 0] }}
                   transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
-                  className="mx-1 text-slate-300"
+                  className="mx-1 text-white/20"
                 >
                   <ArrowRight className="h-4 w-4" />
                 </motion.div>
@@ -105,12 +149,12 @@ function FlywheelLoop() {
           )
         })}
       </div>
-      <div className="mx-auto mt-16 max-w-3xl rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-slate-700">
+
+      {/* Comparison callout */}
+      <div className="mx-auto mt-12 max-w-3xl rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6 text-center text-white/50">
         <p className="text-sm sm:text-base">
-          <span className="font-semibold">Stan</span> stores what you made.{" "}
-          <span className="font-semibold">Kajabi</span> hosts what you wrote.{" "}
-          <span className="font-semibold">Canva</span> designs what you draw.{" "}
-          <span className="font-semibold text-orange-600">Content Flywheel builds it for you.</span>
+          ChatGPT writes it. Canva designs it. Stan stores it. Mailchimp sends it. Affiliate software tracks it.{" "}
+          <span className="font-semibold text-orange-400">Content Flywheel does all of it.</span>
         </p>
       </div>
     </div>
