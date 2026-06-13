@@ -81,31 +81,33 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const user = await currentUser();
   const userEmail = user?.emailAddresses?.[0]?.emailAddress || "";
 
+  // Admin check: require a non-empty ADMIN_EMAIL env var and an exact case-insensitive match.
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
-  const isAdmin = adminEmail && userEmail.trim().toLowerCase() === adminEmail;
+  const isAdmin = adminEmail.length > 0 && userEmail.trim().toLowerCase() === adminEmail;
 
   if (!isAdmin && !hasActiveSubscription(profile)) {
     return <DashboardUpgradeWall userEmail={userEmail} />;
   }
 
-  const disabledFeatures = await getDisabledFeatures(userId);
+  // Admins always see every feature — skip DB + use-case flag resolution entirely.
+  let allDisabled: string[] = [];
 
-  // Apply user's use-case preferences on top of admin feature flags
-  const selectedUseCases: string[] | null = profile.enabledFeatures
-    ? JSON.parse(profile.enabledFeatures)
-    : null;
-  const userHidden = getHiddenFeaturesByUseCases(selectedUseCases);
+  if (!isAdmin) {
+    const disabledFeatures = await getDisabledFeatures(userId);
 
-  // Admin flags always win — user use-case selections cannot override a global OFF flag.
-  // userHidden are features hidden because the user hasn't selected a relevant use case.
-  // User explicit keys only override userHidden (use-case hiding), not admin flags.
-  const userExplicitKeys = selectedUseCases && selectedUseCases.length > 0
-    ? new Set(USE_CASES.filter(uc => selectedUseCases.includes(uc.id)).flatMap(uc => uc.featureKeys))
-    : new Set<string>();
-  const effectiveUserHidden = new Set(Array.from(userHidden).filter(k => !userExplicitKeys.has(k)));
+    // Apply user's use-case preferences on top of global feature flags.
+    // use-case hiding cannot override an admin-set global OFF flag.
+    const selectedUseCases: string[] | null = profile.enabledFeatures
+      ? JSON.parse(profile.enabledFeatures)
+      : null;
+    const userHidden = getHiddenFeaturesByUseCases(selectedUseCases);
+    const userExplicitKeys = selectedUseCases && selectedUseCases.length > 0
+      ? new Set(USE_CASES.filter(uc => selectedUseCases.includes(uc.id)).flatMap(uc => uc.featureKeys))
+      : new Set<string>();
+    const effectiveUserHidden = new Set(Array.from(userHidden).filter(k => !userExplicitKeys.has(k)));
 
-  // Admin always sees everything — feature flags only apply to regular users
-  const allDisabled = isAdmin ? [] : Array.from(new Set([...Array.from(effectiveUserHidden), ...Array.from(disabledFeatures)]));
+    allDisabled = Array.from(new Set([...Array.from(effectiveUserHidden), ...Array.from(disabledFeatures)]));
+  }
 
   return (
     <DashboardLayoutClient profile={profile} userEmail={userEmail} disabledFeatures={allDisabled} isAdmin={!!isAdmin}>

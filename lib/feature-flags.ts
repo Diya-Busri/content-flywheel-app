@@ -15,6 +15,7 @@ import { eq, or, isNull } from "drizzle-orm";
 export const FEATURE_KEYS = {
   // ── Stable features (default ON) ─────────────────────────────────────────
   AI_COACH: "ai_coach",
+  DESIGN_STUDIO: "design_studio",
   VIDEO_CREDITS: "video_credits",
   MY_LIBRARY: "my_library",
   CONTENT_CALENDAR: "content_calendar",
@@ -105,8 +106,10 @@ export async function getDisabledFeatures(userId: string): Promise<Set<string>> 
     }
 
     return disabled;
-  } catch {
-    // Never block the page if the flag check fails — fail open
+  } catch (err) {
+    // Log so DB errors are visible rather than silently showing all features.
+    // Fail open (return empty disabled set) so the page still loads.
+    console.error("[feature-flags] getDisabledFeatures failed:", err);
     return new Set();
   }
 }
