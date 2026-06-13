@@ -16,18 +16,17 @@ interface Message {
 
 /* ── quick actions ── */
 const QUICK_ACTIONS = [
-  { label: "Create My First Product", prompt: "Help me create my first digital product. What should I make?" },
-  { label: "Create a Promo Video", prompt: "How do I create a promo video for my digital product?" },
-  { label: "Plan My Content", prompt: "Help me plan my content for the next 30 days to promote my product." },
-  { label: "Launch My Product", prompt: "How do I launch and sell my digital product?" },
-  { label: "Learn How It Works", prompt: "Can you walk me through how Content Flywheel works?" },
+  { label: "Create My First Product", prompt: "Help me create my first digital product. What should I make and how do I start?" },
+  { label: "Plan My Content", prompt: "Help me plan my content to promote my digital product over the next 30 days." },
+  { label: "Get Launch Help", prompt: "How do I launch and sell my digital product? Walk me through the steps." },
+  { label: "Learn How It Works", prompt: "Can you walk me through how Content Flywheel works from start to finish?" },
 ];
 
 const OPENING_MESSAGE: Message = {
   id: "open",
   role: "assistant",
   content:
-    "👋 Welcome to Content Flywheel. I can help you create a product, make promo content, plan your posts, or launch your first offer.\n\nWhat would you like to do?",
+    "👋 Welcome to Content Flywheel. I can help you create a digital product, plan your content, or launch your first offer.\n\nWhat would you like to do?",
 };
 
 /* ── helpers ── */
