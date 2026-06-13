@@ -4,9 +4,8 @@ import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import Link from "next/link";
 import {
-  ArrowRight, Check, Package, Mail, Tag, Link2, ShoppingBag,
-  Bot, Sparkles, BarChart3, Zap, BookOpen, Megaphone, Workflow,
-  X,
+  ArrowRight, Check, Package, Video, Calendar, Rocket, X,
+  Sparkles, BarChart3,
 } from "lucide-react";
 import {
   Accordion,
@@ -15,7 +14,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
-/* ─────────────── helpers ─────────────── */
+/* ─── helpers ─── */
 function FadeUp({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
@@ -32,69 +31,55 @@ function FadeUp({ children, delay = 0, className = "" }: { children: React.React
   );
 }
 
-/* ─────────────── engine items ─────────────── */
-const ENGINE_ITEMS = [
+/* ─── 4 core outcome cards ─── */
+const OUTCOMES = [
   {
-    icon: Sparkles,
-    title: "Niche Discovery",
-    what: "Automatic",
-    desc: "Describe a broad topic. The AI analyses demand, competition, and buyer intent to surface a profitable niche for you to own.",
+    icon: Package,
+    step: "01",
+    title: "Create Your Product",
+    desc: "Describe your idea. AI writes a complete ebook, planner, guide, or template — formatted, designed, and ready to sell in minutes.",
+    detail: "No writing skills needed. Pick a topic and the platform does the rest.",
+    color: "from-blue-500/10 to-blue-600/5",
+    border: "hover:border-blue-500/30",
+    iconBg: "bg-blue-500/10 border-blue-500/20",
+    iconColor: "text-blue-400",
   },
   {
-    icon: Bot,
-    title: "AI Coach",
-    what: "Always on",
-    desc: "A strategy layer that sits above everything else. Ask it what to build next, how to price it, or how to grow — it knows your store.",
+    icon: Video,
+    step: "02",
+    title: "Create Promo Videos",
+    desc: "Turn your product into short-form promo videos, hooks, captions, and content ideas — ready for TikTok, Instagram, and YouTube.",
+    detail: "Content that sells while you sleep.",
+    color: "from-orange-500/10 to-orange-600/5",
+    border: "hover:border-orange-500/30",
+    iconBg: "bg-orange-500/10 border-orange-500/20",
+    iconColor: "text-orange-400",
   },
   {
-    icon: BookOpen,
-    title: "Product Generation",
-    what: "Minutes, not days",
-    desc: "Type a title. The AI writes, formats, and packages a complete ebook, planner, workbook, or template — cover included.",
+    icon: Calendar,
+    step: "03",
+    title: "Plan Your Content",
+    desc: "Use the content calendar to schedule posts, track your publishing consistency, and never run out of ideas.",
+    detail: "Stay consistent without the mental load.",
+    color: "from-violet-500/10 to-violet-600/5",
+    border: "hover:border-violet-500/30",
+    iconBg: "bg-violet-500/10 border-violet-500/20",
+    iconColor: "text-violet-400",
   },
   {
-    icon: Megaphone,
-    title: "Marketing Copy",
-    what: "Auto-generated",
-    desc: "Every product gets a sales page, social captions, and a launch email sequence written and ready to publish the moment you go live.",
-  },
-  {
-    icon: Mail,
-    title: "Email Campaigns",
-    what: "Built in",
-    desc: "No Mailchimp. No ConvertKit. Build your list, send broadcasts, and run automated drip sequences from inside the same dashboard.",
-  },
-  {
-    icon: Workflow,
-    title: "Automation Workflows",
-    what: "Set and forget",
-    desc: "Welcome sequences, abandoned-cart nudges, post-purchase upsells — configured once, running forever without you touching them.",
-  },
-  {
-    icon: Zap,
-    title: "Content Systems",
-    what: "On demand",
-    desc: "Script TikTok videos, write hooks, generate thumbnails, and publish across platforms — all tied to the product you just built.",
-  },
-  {
-    icon: BarChart3,
-    title: "Analytics",
-    what: "Real-time",
-    desc: "See which products sell, which emails convert, and where buyers drop off. One dashboard, every metric that matters.",
+    icon: Rocket,
+    step: "04",
+    title: "Launch &amp; Sell",
+    desc: "Your store is built in. Set a price, go live, and collect payments through Stripe — with automatic download delivery to every buyer.",
+    detail: "From product to first sale in one afternoon.",
+    color: "from-emerald-500/10 to-emerald-600/5",
+    border: "hover:border-emerald-500/30",
+    iconBg: "bg-emerald-500/10 border-emerald-500/20",
+    iconColor: "text-emerald-400",
   },
 ];
 
-/* ─────────────── feature cards ─────────────── */
-const FEATURES = [
-  { icon: Package,     emoji: "📦", title: "AI Product Creator",  desc: "Describe your idea — our AI writes, formats, and designs the full product in minutes.", badge: "Core feature" },
-  { icon: ShoppingBag, emoji: "🏪", title: "Branded Store",       desc: "Your own store with Stripe checkout, download delivery, and buyer email built in." },
-  { icon: Mail,        emoji: "📧", title: "Email Marketing",     desc: "Build your list, send broadcasts, and automate drip sequences. No third-party tools." },
-  { icon: Tag,         emoji: "🎟️", title: "Discount Codes",     desc: "Promo codes with expiry dates and usage limits. Perfect for launches and collabs." },
-  { icon: Link2,       emoji: "🔗", title: "Affiliates",          desc: "Give partners referral links, set commission rates, and track clicks and earnings." },
-  { icon: BarChart3,   emoji: "📊", title: "Analytics",           desc: "Track product views, sales, email open rates, and revenue from one dashboard." },
-];
-
-/* ─────────────── traditional stack ─────────────── */
+/* ─── traditional stack ─── */
 const OLD_STACK = [
   { tool: "ChatGPT", cost: "~£20/mo", purpose: "Write your product" },
   { tool: "Canva Pro", cost: "~£13/mo", purpose: "Design covers & pages" },
@@ -103,7 +88,7 @@ const OLD_STACK = [
   { tool: "Affiliate software", cost: "~£30/mo", purpose: "Track referrals" },
 ];
 
-/* ─────────────── main export ─────────────── */
+/* ─── main export ─── */
 export function LandingAnimations({ reviews }: { reviews: { text: string; name: string; rating?: number }[] }) {
   return (
     <main>
@@ -129,43 +114,45 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
         </div>
       </section>
 
-      {/* ─── THE ENGINE ─── */}
+      {/* ─── 4 OUTCOMES ─── */}
       <section id="features" className="py-28 lg:py-36">
         <div className="max-w-7xl mx-auto px-6">
-          <FadeUp className="text-center mb-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-4">The Platform</p>
+          <FadeUp className="text-center mb-16">
+            <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-4">How it works</p>
             <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
-              The engine behind{" "}
+              One platform.{" "}
               <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
-                Content Flywheel
+                Four steps.
               </span>
             </h2>
-            <p className="mt-4 text-lg text-white/40 max-w-2xl mx-auto">
-              This is not a store builder. It is an AI operating system. Describe your idea — the platform does the work.
+            <p className="mt-4 text-lg text-white/40 max-w-xl mx-auto">
+              Content Flywheel guides you through the full journey — from idea to income.
             </p>
           </FadeUp>
 
-          <div className="mt-16 grid md:grid-cols-2 lg:grid-cols-4 gap-5">
-            {ENGINE_ITEMS.map((item, i) => {
-              const Icon = item.icon;
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {OUTCOMES.map((o, i) => {
+              const Icon = o.icon;
               return (
-                <FadeUp key={item.title} delay={i * 0.06}>
+                <FadeUp key={o.title} delay={i * 0.08}>
                   <motion.div
                     whileHover={{ y: -6 }}
                     transition={{ type: "spring", stiffness: 300 }}
-                    className="group relative h-full p-6 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-orange-500/30 rounded-2xl transition-colors cursor-default"
+                    className={`group relative h-full p-6 bg-gradient-to-br ${o.color} border border-white/[0.06] ${o.border} rounded-2xl transition-colors cursor-default`}
                   >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl bg-gradient-to-br from-orange-500/5 to-transparent pointer-events-none" />
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 border border-orange-500/20">
-                        <Icon className="h-5 w-5 text-orange-400" />
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${o.iconBg}`}>
+                        <Icon className={`h-5 w-5 ${o.iconColor}`} />
                       </div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-orange-500/70 border border-orange-500/20 rounded-full px-2 py-0.5">
-                        {item.what}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-white/30">
+                        Step {o.step}
                       </span>
                     </div>
-                    <h3 className="text-base font-bold text-white mb-2">{item.title}</h3>
-                    <p className="text-white/35 text-sm leading-relaxed">{item.desc}</p>
+                    <h3 className="text-base font-bold text-white mb-2"
+                      dangerouslySetInnerHTML={{ __html: o.title }}
+                    />
+                    <p className="text-white/40 text-sm leading-relaxed mb-3">{o.desc}</p>
+                    <p className="text-xs text-white/25 italic">{o.detail}</p>
                   </motion.div>
                 </FadeUp>
               );
@@ -178,16 +165,33 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
       <section id="how-it-works" className="py-28 bg-white/[0.02] border-y border-white/5">
         <div className="max-w-5xl mx-auto px-6">
           <FadeUp className="text-center mb-16">
-            <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-4">How it works</p>
-            <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">From idea to selling in 3 steps</h2>
+            <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-4">The journey</p>
+            <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
+              Idea → Product → Content → Sales
+            </h2>
             <p className="mt-4 text-white/40 text-lg">No design skills. No technical setup. No third-party tools.</p>
           </FadeUp>
 
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { step: "01", emoji: "✍️", title: "Describe your product", desc: "Tell the AI your topic or niche. It writes, designs, and packages your digital product automatically." },
-              { step: "02", emoji: "🚀", title: "Publish to your store", desc: "Set your price, go live. Your Stripe checkout and download delivery are pre-connected — no setup required." },
-              { step: "03", emoji: "📈", title: "Market & grow", desc: "Use the built-in email sequences, affiliate links, and promo codes. Track sales and revenue in your dashboard." },
+              {
+                step: "01",
+                emoji: "📦",
+                title: "Create Product",
+                desc: "Generate ebooks, guides, planners, templates, and digital products in minutes. Describe your idea — AI does the writing, formatting, and design.",
+              },
+              {
+                step: "02",
+                emoji: "🎬",
+                title: "Create Content",
+                desc: "Turn your product into promo videos, captions, hooks, and content ideas. Build a content library that promotes your product around the clock.",
+              },
+              {
+                step: "03",
+                emoji: "🚀",
+                title: "Launch & Sell",
+                desc: "Use the content calendar and launch tools to promote your product consistently. Your store is built in — Stripe checkout, auto-delivery, zero fees.",
+              },
             ].map((s, i) => (
               <FadeUp key={s.step} delay={i * 0.12}>
                 <motion.div
@@ -233,7 +237,6 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
           </FadeUp>
 
           <div className="grid md:grid-cols-2 gap-6 items-start">
-            {/* Traditional stack */}
             <FadeUp delay={0}>
               <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 h-full">
                 <div className="flex items-center gap-3 mb-6">
@@ -260,7 +263,6 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
               </div>
             </FadeUp>
 
-            {/* Content Flywheel */}
             <FadeUp delay={0.1}>
               <motion.div
                 whileHover={{ scale: 1.01 }}
@@ -275,13 +277,13 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                 </div>
                 <ul className="space-y-3 text-sm">
                   {[
-                    "AI writes & designs your product",
-                    "Built-in store — zero platform fees",
-                    "Email marketing & automation included",
-                    "Affiliate programme with tracking",
-                    "Orders dashboard & auto-delivery",
-                    "Analytics, hooks & content tools",
-                    "AI Coach guides your whole strategy",
+                    "AI creates your digital product in minutes",
+                    "Built-in store with Stripe — zero platform fees",
+                    "Promo video creator included",
+                    "Content calendar to plan and stay consistent",
+                    "Email marketing built in — no Mailchimp needed",
+                    "Affiliate programme and discount codes included",
+                    "Orders dashboard with automatic download delivery",
                   ].map((t) => (
                     <li key={t} className="flex items-start gap-2.5 text-white/70">
                       <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />{t}
@@ -305,9 +307,9 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-10">
               <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-6">Why we built this</p>
               <blockquote className="text-lg sm:text-xl text-white/70 leading-relaxed">
-                &ldquo;I was spending more time managing tools than actually creating. ChatGPT for writing, Canva for design, Stan for selling, Mailchimp for email, a separate affiliate app for tracking — and none of them talked to each other.
+                &ldquo;I was spending more time managing tools than actually creating. ChatGPT for writing, Canva for design, Stan for selling, Mailchimp for email — and none of them talked to each other.
                 <br /><br />
-                I built Content Flywheel because creators shouldn&apos;t need a six-tool stack and a VA to run a digital product business. One platform should do it all.&rdquo;
+                I built Content Flywheel because creators shouldn&apos;t need a six-tool stack to run a digital product business. One platform should do it all.&rdquo;
               </blockquote>
               <div className="mt-8 flex items-center gap-4">
                 <div className="h-10 w-10 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 font-bold text-sm">CF</div>
@@ -319,7 +321,6 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
             </div>
           </FadeUp>
 
-          {/* Beta CTA */}
           <FadeUp delay={0.1} className="mt-8 text-center">
             <p className="text-white/40 text-sm mb-4">
               We are in early access. Join now and help shape what gets built next.
@@ -334,44 +335,8 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
         </div>
       </section>
 
-      {/* ─── WHAT'S INCLUDED (features) ─── */}
-      <section className="py-28 lg:py-36">
-        <div className="max-w-7xl mx-auto px-6">
-          <FadeUp className="text-center mb-16">
-            <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-4">What&apos;s included</p>
-            <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
-              Everything you need to sell{" "}
-              <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">digital products</span>
-            </h2>
-            <p className="mt-4 text-lg text-white/40 max-w-xl mx-auto">From idea to first sale in one afternoon. No tech skills needed.</p>
-          </FadeUp>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {FEATURES.map((f, i) => (
-              <FadeUp key={f.title} delay={i * 0.07}>
-                <motion.div
-                  whileHover={{ y: -6, scale: 1.01 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                  className="relative group h-full p-7 bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] hover:border-orange-500/30 rounded-2xl transition-colors cursor-default"
-                >
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl bg-gradient-to-br from-orange-500/5 to-transparent pointer-events-none" />
-                  {f.badge && (
-                    <span className="absolute -top-3 left-6 px-3 py-1 rounded-full bg-orange-500 text-white text-xs font-bold shadow-lg shadow-orange-500/30">
-                      {f.badge}
-                    </span>
-                  )}
-                  <div className="text-4xl mb-4">{f.emoji}</div>
-                  <h3 className="text-lg font-bold text-white mb-2">{f.title}</h3>
-                  <p className="text-white/40 text-sm leading-relaxed">{f.desc}</p>
-                </motion.div>
-              </FadeUp>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ─── PRICING ─── */}
-      <section id="pricing-preview" className="py-28 lg:py-36 bg-white/[0.02] border-y border-white/5">
+      <section id="pricing-preview" className="py-28 lg:py-36">
         <div className="max-w-3xl mx-auto px-6">
           <FadeUp>
             <motion.div
@@ -407,7 +372,7 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
       </section>
 
       {/* ─── FAQ ─── */}
-      <section id="faq" className="py-28">
+      <section id="faq" className="py-28 bg-white/[0.02] border-y border-white/5">
         <div className="max-w-3xl mx-auto px-6">
           <FadeUp className="text-center mb-16">
             <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">FAQs</h2>
@@ -415,10 +380,10 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
           <FadeUp delay={0.1}>
             <Accordion type="single" collapsible className="w-full space-y-3">
               {[
-                { value: "what", q: "What kind of digital products can I create?", a: "Ebooks, planners, workbooks, guides, templates, checklists — anything text and design based. You describe the topic and our AI generates the full product including a cover." },
-                { value: "who", q: "Who is Content Flywheel for?", a: "Creators, coaches, consultants, and anyone who wants to sell digital products without stitching together five different tools. If you have knowledge worth packaging, this platform builds it for you." },
-                { value: "sell", q: "How do I sell products and get paid?", a: "Your store connects to Stripe. Buyers pay by card, Stripe sends the money to your account, and we automatically email the buyer their download link." },
-                { value: "fees", q: "Are there any per-sale fees?", a: "No. We charge a flat monthly subscription. You keep everything Stripe sends you (minus Stripe's standard processing fee)." },
+                { value: "what", q: "What kind of digital products can I create?", a: "Ebooks, planners, workbooks, guides, templates, checklists — anything text and design based. You describe the topic and AI generates the full product including a cover." },
+                { value: "who", q: "Who is Content Flywheel for?", a: "Creators, coaches, consultants, and anyone who wants to sell digital products. If you have knowledge worth packaging, this platform builds it for you — no tech skills needed." },
+                { value: "sell", q: "How do I sell products and get paid?", a: "Your store connects to Stripe. Buyers pay by card, Stripe sends the money to your account, and Content Flywheel automatically emails the buyer their download link." },
+                { value: "fees", q: "Are there any per-sale fees?", a: "No. We charge a flat monthly subscription. You keep everything Stripe sends you (minus Stripe's standard processing fee of ~1.4% + 20p)." },
                 { value: "email", q: "Is email marketing included?", a: "Yes. Collect subscribers, send broadcasts, and build automated drip sequences. All built in — no Mailchimp or ConvertKit required." },
                 { value: "cancel", q: "Can I cancel anytime?", a: "Yes. Cancel from your dashboard settings at any time. Your subscription stays active until the end of the billing period." },
               ].map((item) => (
@@ -466,7 +431,7 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                     </span>
                   </h2>
                   <p className="mt-5 text-lg text-white/40 max-w-lg mx-auto">
-                    Describe your idea. Content Flywheel writes it, designs it, lists it, and markets it.
+                    Content Flywheel helps you create, market, and sell digital products using AI.
                   </p>
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }} className="mt-8 inline-block">
                     <Link href="/signup" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-10 py-4 text-base font-bold text-white shadow-2xl shadow-orange-500/30 transition-colors">

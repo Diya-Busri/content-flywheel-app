@@ -19,8 +19,8 @@ import { brandProfilesTable } from "@/db/schema/brand-profiles-schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Package, ShoppingBag, CheckSquare, Video, Play, ExternalLink, AlertCircle,
-  ArrowRight, Package2, TrendingUp, Mail, Target, Send, BarChart2, Film,
+  Package, Video, Play, ExternalLink, AlertCircle,
+  ArrowRight, TrendingUp, Mail, Target, Film, Calendar, Rocket,
 } from "lucide-react";
 import { SyncOnboardingSteps } from "@/components/onboarding/sync-onboarding-steps";
 import { ReferralCapture } from "@/components/ReferralCapture";
@@ -328,36 +328,119 @@ function StatCard({
   return inner;
 }
 
-// ─── Quick action card helper ─────────────────────────────────────────────────
-function ActionCard({
+// ─── Journey action card ──────────────────────────────────────────────────────
+function JourneyCard({
   href,
   icon: Icon,
-  iconBg,
-  iconColor,
+  step,
   label,
   description,
+  cta,
+  highlight,
+  accent,
 }: {
   href: string;
   icon: React.ElementType;
-  iconBg: string;
-  iconColor: string;
+  step: string;
   label: string;
   description: string;
+  cta: string;
+  highlight?: boolean;
+  accent?: string;
 }) {
   return (
-    <Link href={href}>
-      <div className="group h-full rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-gray-300 dark:hover:border-[#3A3A3A] hover:shadow-md transition-all p-4 sm:p-5 flex flex-col items-center text-center">
-        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center mb-3 transition-transform group-hover:scale-110 ${iconBg}`}>
-          <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${iconColor}`} />
+    <Link href={href} className="block h-full">
+      <div className={`group h-full rounded-2xl border transition-all hover:shadow-lg p-5 sm:p-6 flex flex-col ${
+        highlight
+          ? "bg-gradient-to-br from-orange-500 to-amber-500 border-orange-400 text-white shadow-md shadow-orange-500/20"
+          : "bg-white dark:bg-[#1A1A1A] border-gray-100 dark:border-[#2A2A2A] hover:border-orange-300/60 dark:hover:border-orange-500/30"
+      }`}>
+        <div className="flex items-start justify-between mb-4">
+          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${
+            highlight ? "bg-white/20" : (accent ?? "bg-orange-50 dark:bg-orange-950/30")
+          }`}>
+            <Icon className={`w-5 h-5 ${highlight ? "text-white" : "text-orange-500"}`} />
+          </div>
+          <span className={`text-[10px] font-bold uppercase tracking-widest ${
+            highlight ? "text-white/60" : "text-gray-400 dark:text-gray-600"
+          }`}>{step}</span>
         </div>
-        <h3 className="font-bold text-gray-900 dark:text-white text-sm mb-1 leading-snug">
+        <h3 className={`font-bold text-base mb-1.5 ${highlight ? "text-white" : "text-gray-900 dark:text-white"}`}>
           {label}
         </h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed hidden sm:block">
+        <p className={`text-sm leading-relaxed flex-1 ${highlight ? "text-white/80" : "text-gray-500 dark:text-gray-400"}`}>
           {description}
         </p>
+        <div className={`mt-4 flex items-center gap-1 text-sm font-semibold ${
+          highlight ? "text-white" : "text-orange-500 group-hover:text-orange-600"
+        }`}>
+          {cta} <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+        </div>
       </div>
     </Link>
+  );
+}
+
+// ─── Smart next-action banner ─────────────────────────────────────────────────
+function NextActionBanner({
+  productsCount,
+  videosCount,
+  totalOrders,
+}: {
+  productsCount: number;
+  videosCount: number;
+  totalOrders: number;
+}) {
+  let icon = Package;
+  let href = "/dashboard/digital-products/create";
+  let title = "Create your first digital product";
+  let desc = "Describe your idea and AI writes a complete ebook, planner, or guide in minutes — ready to sell.";
+  let cta = "Create Product";
+  let step = "Step 1 of 4";
+
+  if (productsCount > 0 && videosCount === 0) {
+    icon = Video;
+    href = "/dashboard/digital-products";
+    title = "Create a promo video for your product";
+    desc = "You have products — now turn them into short videos that drive traffic and sales on social media.";
+    cta = "Create Video";
+    step = "Step 2 of 4";
+  } else if (productsCount > 0 && videosCount > 0 && totalOrders === 0) {
+    icon = Calendar;
+    href = "/dashboard/content-calendar";
+    title = "Plan your content to drive sales";
+    desc = "You have products and videos — now schedule your posts consistently to build momentum and get your first sale.";
+    cta = "Plan Content";
+    step = "Step 3 of 4";
+  } else if (productsCount > 0 && videosCount > 0 && totalOrders > 0) {
+    icon = Rocket;
+    href = "/dashboard/digital-products";
+    title = "Keep the flywheel spinning";
+    desc = "Great work — you have products, videos, and sales. Create your next product to grow your catalogue.";
+    cta = "Launch Next Product";
+    step = "Step 4 of 4";
+  }
+
+  const Icon = icon;
+  return (
+    <div className="mb-6 sm:mb-8 rounded-2xl border border-orange-200 dark:border-orange-500/20 bg-orange-50 dark:bg-orange-950/10 p-5 flex items-start gap-4">
+      <div className="w-10 h-10 shrink-0 rounded-xl bg-orange-100 dark:bg-orange-500/20 flex items-center justify-center">
+        <Icon className="w-5 h-5 text-orange-500" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-orange-400">{step} — Next Action</span>
+        </div>
+        <p className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">{title}</p>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">{desc}</p>
+      </div>
+      <Link
+        href={href}
+        className="shrink-0 inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-400 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap"
+      >
+        {cta} <ArrowRight className="w-3.5 h-3.5" />
+      </Link>
+    </div>
   );
 }
 
@@ -401,12 +484,19 @@ export default async function DashboardPage() {
       <Suspense fallback={null}><InviteCapture /></Suspense>
       <SyncOnboardingSteps digitalProductsCount={videoStats.digitalProductsCount} />
 
-      {/* Hero — replaces MotivationBanner + NextActionStrip + ConsistencyStreak + h1 */}
+      {/* Hero */}
       <DashboardHero
         productsCount={videoStats.digitalProductsCount}
         videosCount={videoStats.totalLibraryVideos}
         videosThisWeek={videosThisWeek}
         emailSubscribers={emailSubscribers}
+      />
+
+      {/* Smart Next Action */}
+      <NextActionBanner
+        productsCount={videoStats.digitalProductsCount}
+        videosCount={videoStats.totalLibraryVideos}
+        totalOrders={totalOrders}
       />
 
       {/* First task banner — shown to new users with no products yet */}
@@ -552,70 +642,52 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      {/* Quick Actions */}
+      {/* Journey Cards */}
       <section className="mb-8 sm:mb-10" data-tour="quick-actions">
-        <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">
-          Quick Actions
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <ActionCard
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Your Journey</h2>
+          <span className="text-xs text-gray-400 dark:text-gray-600 font-medium">Idea → Product → Content → Sales</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <JourneyCard
             href="/dashboard/digital-products/create"
             icon={Package}
-            iconBg="bg-blue-50 dark:bg-blue-950/30"
-            iconColor="text-blue-500"
-            label="Create Digital Product"
-            description="Turn your knowledge into a sellable product"
+            step="Step 1"
+            label="Create Product"
+            description="Generate ebooks, guides, planners, and templates in minutes. Describe your idea — AI does the rest."
+            cta="Create now"
+            highlight={videoStats.digitalProductsCount === 0}
+            accent="bg-blue-50 dark:bg-blue-950/30"
           />
-          <ActionCard
-            href="/dashboard/tiktok-shop"
-            icon={ShoppingBag}
-            iconBg="bg-pink-50 dark:bg-pink-950/30"
-            iconColor="text-pink-500"
-            label="TikTok Shop Video"
-            description="Generate videos optimised for TikTok Shop"
+          <JourneyCard
+            href="/dashboard/digital-products"
+            icon={Video}
+            step="Step 2"
+            label="Create Video"
+            description="Turn your product into promo videos and captions for TikTok, Instagram, and YouTube."
+            cta="Create video"
+            highlight={videoStats.digitalProductsCount > 0 && videoStats.totalLibraryVideos === 0}
+            accent="bg-orange-50 dark:bg-orange-950/30"
           />
-          <ActionCard
-            href="/dashboard/email-marketing"
-            icon={Send}
-            iconBg="bg-violet-50 dark:bg-violet-950/30"
-            iconColor="text-violet-500"
-            label="Email Campaign"
-            description="Draft and send to your subscriber list"
+          <JourneyCard
+            href="/dashboard/content-calendar"
+            icon={Calendar}
+            step="Step 3"
+            label="Plan Content"
+            description="Schedule your posts, stay consistent, and build the momentum that drives consistent sales."
+            cta="Plan posts"
+            highlight={videoStats.digitalProductsCount > 0 && videoStats.totalLibraryVideos > 0 && totalOrders === 0}
+            accent="bg-violet-50 dark:bg-violet-950/30"
           />
-          <ActionCard
-            href="/dashboard/digital-products/bundle"
-            icon={Package2}
-            iconBg="bg-amber-50 dark:bg-amber-950/30"
-            iconColor="text-amber-500"
-            label="Create Bundle"
-            description="Package products with AI pricing & copy"
-          />
-        </div>
-        {/* Secondary actions row */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mt-3 sm:mt-4">
-          <ActionCard
-            href="/dashboard/script-checker"
-            icon={CheckSquare}
-            iconBg="bg-emerald-50 dark:bg-emerald-950/30"
-            iconColor="text-emerald-500"
-            label="Script Checker"
-            description="Check scripts for platform compliance"
-          />
-          <ActionCard
-            href="/dashboard/goals"
-            icon={Target}
-            iconBg="bg-orange-50 dark:bg-orange-950/30"
-            iconColor="text-orange-500"
-            label="Set a Goal"
-            description="Track your revenue and content milestones"
-          />
-          <ActionCard
-            href="/dashboard/library"
-            icon={BarChart2}
-            iconBg="bg-cyan-50 dark:bg-cyan-950/30"
-            iconColor="text-cyan-500"
-            label="Video Library"
-            description="Browse and manage all your generated videos"
+          <JourneyCard
+            href="/dashboard/store"
+            icon={Rocket}
+            step="Step 4"
+            label="Launch & Sell"
+            description="Your store is built in. Set a price, go live, and start collecting payments through Stripe."
+            cta="View store"
+            highlight={videoStats.digitalProductsCount > 0 && videoStats.totalLibraryVideos > 0 && totalOrders > 0}
+            accent="bg-emerald-50 dark:bg-emerald-950/30"
           />
         </div>
       </section>
