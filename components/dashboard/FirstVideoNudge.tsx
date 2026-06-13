@@ -70,19 +70,13 @@ export function FirstVideoNudge({ totalVideos }: Props) {
             href="/dashboard/digital-products/create"
             className="inline-flex items-center rounded-lg bg-white text-orange-600 font-semibold text-sm px-4 py-2.5 hover:bg-orange-50 transition-colors shadow-sm"
           >
-            Digital Product Video
-          </Link>
-          <Link
-            href="/dashboard/tiktok-shop"
-            className="inline-flex items-center rounded-lg bg-white text-orange-600 font-semibold text-sm px-4 py-2.5 hover:bg-orange-50 transition-colors shadow-sm"
-          >
-            TikTok Shop Video
+            Create a Digital Product
           </Link>
           <Link
             href="/dashboard/library"
             className="inline-flex items-center rounded-lg bg-orange-700/40 text-white font-semibold text-sm px-4 py-2.5 hover:bg-orange-700/60 transition-colors border border-white/30"
           >
-            Template (fastest)
+            Browse Templates
           </Link>
         </div>
       </div>

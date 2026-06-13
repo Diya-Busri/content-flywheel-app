@@ -122,9 +122,15 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
       async start(controller) {
+        // Buffer across chunks to catch ** that straddles chunk boundaries
+        let carry = "";
         try {
           for await (const chunk of stream) {
-            const delta = chunk.choices?.[0]?.delta?.content;
+            const raw = chunk.choices?.[0]?.delta?.content;
+            if (!raw) continue;
+            // Strip markdown bold/italic markers: **, *, ##, ###
+            const delta = (carry + raw).replace(/\*{1,2}|#{2,3}\s?/g, "");
+            carry = "";
             if (delta) {
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ content: delta })}\n\n`)
