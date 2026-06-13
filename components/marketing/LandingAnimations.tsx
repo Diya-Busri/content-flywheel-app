@@ -228,7 +228,7 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
               {" "}to do one job
             </h2>
             <p className="mt-4 text-white/40 text-lg max-w-xl mx-auto">
-              Most creators stitch together a stack that costs £100+/mo and still doesn't talk to itself.
+              Most creators stitch together a stack that costs £100+/mo and still doesn&apos;t talk to itself.
             </p>
           </FadeUp>
 
@@ -305,9 +305,9 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-10">
               <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-6">Why we built this</p>
               <blockquote className="text-lg sm:text-xl text-white/70 leading-relaxed">
-                "I was spending more time managing tools than actually creating. ChatGPT for writing, Canva for design, Stan for selling, Mailchimp for email, a separate affiliate app for tracking — and none of them talked to each other.
+                &ldquo;I was spending more time managing tools than actually creating. ChatGPT for writing, Canva for design, Stan for selling, Mailchimp for email, a separate affiliate app for tracking — and none of them talked to each other.
                 <br /><br />
-                I built Content Flywheel because creators shouldn't need a six-tool stack and a VA to run a digital product business. One platform should do it all."
+                I built Content Flywheel because creators shouldn&apos;t need a six-tool stack and a VA to run a digital product business. One platform should do it all.&rdquo;
               </blockquote>
               <div className="mt-8 flex items-center gap-4">
                 <div className="h-10 w-10 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 font-bold text-sm">CF</div>
@@ -338,7 +338,7 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
       <section className="py-28 lg:py-36">
         <div className="max-w-7xl mx-auto px-6">
           <FadeUp className="text-center mb-16">
-            <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-4">What's included</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-4">What&apos;s included</p>
             <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
               Everything you need to sell{" "}
               <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">digital products</span>
