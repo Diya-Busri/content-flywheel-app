@@ -224,7 +224,7 @@ export default function ResultsFlow() {
 
   if (scripts.length === 0) {
     return (
-      <main className="min-h-screen bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white p-6 md:p-10">
+      <main className="min-h-dvh bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white p-6 md:p-10 pb-mobile-nav">
         <div className="max-w-2xl mx-auto text-center">
           <Link
             href="/dashboard/digital-products/videos"
@@ -249,7 +249,7 @@ export default function ResultsFlow() {
   }
 
   return (
-    <main className="min-h-screen bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white p-6 md:p-10">
+    <main className="min-h-dvh bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white p-6 md:p-10 pb-mobile-nav">
       <div className="max-w-3xl mx-auto">
         <Link
           href="/dashboard/digital-products/videos"

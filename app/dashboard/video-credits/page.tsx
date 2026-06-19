@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Film, Sparkles, CheckCircle2, Zap, ShoppingBag, TrendingDown, History } from "lucide-react";
+import { Loader2, Film, Sparkles, CheckCircle2, Zap, ShoppingBag, TrendingDown, History, RefreshCw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { VIDEO_CREDIT_PACKS } from "@/lib/video-credits";
 
@@ -37,6 +37,25 @@ function VideoCreditsContent() {
 
   const justPurchased = searchParams.get("success") === "1";
   const creditsAdded = searchParams.get("credits");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchData = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setRefreshing(true);
+    try {
+      await Promise.all([
+        fetch("/api/video-credits/balance", { cache: "no-store" })
+          .then((r) => r.ok ? r.json() : null)
+          .then((data: { balance?: number } | null) => setBalance(data?.balance ?? 0))
+          .catch(() => setBalance(0)),
+        fetch("/api/video-credits/history", { cache: "no-store" })
+          .then((r) => r.ok ? r.json() : null)
+          .then((data) => setHistory(data))
+          .catch(() => {}),
+      ]);
+    } finally {
+      if (showSpinner) setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (justPurchased && creditsAdded) {
@@ -47,17 +66,17 @@ function VideoCreditsContent() {
     }
   }, [justPurchased, creditsAdded, toast]);
 
-  useEffect(() => {
-    fetch("/api/video-credits/balance")
-      .then((r) => r.ok ? r.json() : null)
-      .then((data: { balance?: number } | null) => setBalance(data?.balance ?? 0))
-      .catch(() => setBalance(0));
+  // Initial fetch
+  useEffect(() => { void fetchData(); }, [fetchData]);
 
-    fetch("/api/video-credits/history")
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => setHistory(data))
-      .catch(() => {});
-  }, []);
+  // Re-fetch when the tab becomes visible again (user generated content in another tab/page)
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void fetchData();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [fetchData]);
 
   const handleBuy = async (packId: string) => {
     setLoadingPackId(packId);
@@ -99,7 +118,7 @@ function VideoCreditsContent() {
       </div>
 
       {/* Current balance */}
-      <div className="flex items-center gap-4 p-5 rounded-xl border border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] mb-6">
+      <div className="flex items-center gap-4 p-5 rounded-xl border border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] mb-6 relative">
         <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0">
           <Sparkles className="w-6 h-6 text-orange-500" />
         </div>
@@ -113,15 +132,27 @@ function VideoCreditsContent() {
             </p>
           )}
         </div>
-        {balance !== null && balance > 0 && (
-          <div className="text-right shrink-0">
-            <p className="text-xs text-gray-400 dark:text-gray-500">Ready to use</p>
-            <div className="flex items-center gap-1 text-green-500 text-sm font-semibold mt-0.5">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Active
+        <div className="text-right shrink-0 flex flex-col items-end gap-2">
+          {balance !== null && balance > 0 && (
+            <div>
+              <p className="text-xs text-gray-400 dark:text-gray-500">Ready to use</p>
+              <div className="flex items-center gap-1 text-green-500 text-sm font-semibold mt-0.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Active
+              </div>
             </div>
-          </div>
-        )}
+          )}
+          <button
+            type="button"
+            onClick={() => void fetchData(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            title="Refresh balance"
+          >
+            <RefreshCw className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Credit tracker — only shown after first purchase */}

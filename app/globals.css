@@ -137,8 +137,25 @@
 .bottom-nav-height {
   height: calc(3.5rem + env(safe-area-inset-bottom, 0px));
 }
+/*
+ * pb-editor-toolbar: used by the product editor canvas on mobile.
+ * Pads below canvas content to clear the fixed editor toolbar (≈3.25rem)
+ * stacked above the fixed app nav (3.5rem) + safe-area.
+ */
+.pb-editor-toolbar {
+  padding-bottom: calc(6.75rem + env(safe-area-inset-bottom, 0px));
+}
 
 @layer utilities {
+  /* Hide scrollbar visually (for horizontal-scroll chip rows, etc.) */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Video timeline: custom scrollbar that blends with dark UI */
   .timeline-horizontal-scroll {
     scrollbar-width: thin;

@@ -39,7 +39,7 @@ export function DashboardHero({
     <>
       <div className="relative overflow-hidden rounded-2xl mb-6 sm:mb-8 shadow-xl">
         {/* Gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-orange-500 to-amber-400" />
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800" />
         {/* Decorative circles */}
         <div className="absolute -right-16 -top-16 w-72 h-72 rounded-full bg-white/10" />
         <div className="absolute right-8 top-24 w-40 h-40 rounded-full bg-white/[0.07]" />

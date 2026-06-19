@@ -36,7 +36,7 @@ export function DevOnboardingReset({ isAdmin }: { isAdmin?: boolean }) {
   };
 
   return (
-    <div className="fixed top-20 right-6 z-[200] flex flex-col gap-2">
+    <div className="fixed top-20 right-6 z-[200] hidden md:flex flex-col gap-2">
       <button
         type="button"
         onClick={reset}

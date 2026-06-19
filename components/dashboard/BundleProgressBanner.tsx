@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Loader2, CheckCircle2, XCircle, ChevronDown, ChevronUp, X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,8 @@ function setDismissed(id: string) {
 }
 
 export function BundleProgressBanner() {
+  const pathname = usePathname();
+  const isFullscreenEditor = /\/digital-products\/[^/]+\/edit|\/design-studio\/[^/]+/.test(pathname ?? "");
   const [jobs, setJobs] = useState<BundleJob[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [dismissed, setDismissedState] = useState<Set<string>>(new Set());
@@ -111,7 +114,7 @@ export function BundleProgressBanner() {
   }, [hasGenerating, fetchJobs]);
 
   const visible = jobs.filter((j) => !dismissed.has(j.id));
-  if (visible.length === 0) return null;
+  if (isFullscreenEditor || visible.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-2 px-4 pt-3 pb-0">

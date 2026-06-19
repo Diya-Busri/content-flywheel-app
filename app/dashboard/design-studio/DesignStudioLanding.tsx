@@ -115,7 +115,7 @@ function DesignCard({
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 shrink-0">
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 shrink-0">
               <MoreHorizontal className="w-4 h-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -189,7 +189,7 @@ function BundleCard({ bundle, onDelete }: { bundle: SelectBundle; onDelete: (id:
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 shrink-0">
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 shrink-0">
               <MoreHorizontal className="w-4 h-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -397,15 +397,16 @@ export function DesignStudioLanding() {
             <div className="w-20 h-20 rounded-2xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center mb-4">
               <Palette className="w-10 h-10 text-orange-400" />
             </div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">No designs yet</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              Create your first poster, invitation, or social post
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Create your first design</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2 max-w-xs">
+              Make a social post, poster, story, or thumbnail — pick a size and start designing.
             </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-6">No experience needed · Free to use</p>
             <Button
-              className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+              className="bg-orange-500 hover:bg-orange-600 text-white gap-2 h-11 px-6"
               onClick={() => setShowNew(true)}
             >
-              <Plus className="w-4 h-4" /> Create a Design
+              <Plus className="w-4 h-4" /> Start a New Design →
             </Button>
           </div>
         ) : designs.length > 0 ? (

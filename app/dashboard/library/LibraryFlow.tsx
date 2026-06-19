@@ -290,7 +290,7 @@ function ThumbnailPlaceholder({
 
   return (
     <div
-      className={`flex flex-col items-center justify-center gap-2 w-full h-full min-h-[140px] bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/30 text-orange-800 dark:text-orange-200 ${className}`}
+      className={`flex flex-col items-center justify-center gap-2 w-full h-full min-h-[112px] bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/30 text-orange-800 dark:text-orange-200 ${className}`}
       aria-hidden
     >
       {icon}
@@ -1066,13 +1066,18 @@ export default function LibraryFlow() {
                 ) : tab === "timeline" ? (
                   <>
                     <Video className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
-                    <p className="text-gray-600 dark:text-gray-400 mb-2">No videos yet</p>
+                    <p className="text-gray-600 dark:text-gray-400 font-medium mb-1">No finished videos yet</p>
                     <p className="text-sm text-gray-500 mb-4">
-                      Create a video in the Timeline editor and export to save it here.
+                      Create a promo video from a digital product, then export it — it'll appear here.
                     </p>
-                    <Button asChild className="bg-orange-500 hover:bg-orange-600">
-                      <Link href="/dashboard/video-timeline">Open Timeline</Link>
-                    </Button>
+                    <div className="flex flex-wrap gap-3 justify-center">
+                      <Button asChild className="bg-orange-500 hover:bg-orange-600">
+                        <Link href="/dashboard/digital-products">Create a Product Video →</Link>
+                      </Button>
+                      <Button asChild variant="outline" className="border-[#E5E7EB] dark:border-[#2A2A2A]">
+                        <Link href="/dashboard/video-timeline">Open Video Timeline</Link>
+                      </Button>
+                    </div>
                   </>
                 ) : tab === "bundles" ? (
                   <>
@@ -1088,9 +1093,9 @@ export default function LibraryFlow() {
                 ) : (
                   <>
                     <Package className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
-                    <p className="text-gray-600 dark:text-gray-400 mb-2">No items yet</p>
+                    <p className="text-gray-600 dark:text-gray-400 font-medium mb-1">Your library is empty</p>
                     <p className="text-sm text-gray-500 mb-4">
-                      Save products from Digital Products, scripts from Script Checker, and videos from TikTok Shop. Video guides are saved here automatically when you create them.
+                      Everything you create — products, video guides, scripts, designs — is saved here automatically. Start by creating your first digital product.
                     </p>
                     <div className="flex flex-wrap gap-3 justify-center">
                       <Button asChild className="bg-orange-500 hover:bg-orange-600">
@@ -1117,7 +1122,7 @@ export default function LibraryFlow() {
                       const downloadUrl = getVideoDownloadUrl(video);
                       return (
                         <Card key={video.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                          <div className="relative aspect-[16/7] sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] rounded-t-lg flex items-center justify-center overflow-hidden">
+                          <div className="relative h-28 sm:h-auto sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] rounded-t-lg flex items-center justify-center overflow-hidden">
                             {downloadUrl ? (
                               <video src={downloadUrl} className="w-full h-full object-cover" muted playsInline />
                             ) : (
@@ -1199,7 +1204,7 @@ export default function LibraryFlow() {
                             : [];
                         return (
                           <Card key={project.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                            <div className="relative aspect-[16/7] sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] rounded-t-lg flex items-center justify-center overflow-hidden">
+                            <div className="relative h-28 sm:h-auto sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] rounded-t-lg flex items-center justify-center overflow-hidden">
                               {backgroundMediaUrl ? (
                                 <img src={backgroundMediaUrl} alt="" className="w-full h-full object-cover" />
                               ) : (
@@ -1299,7 +1304,7 @@ export default function LibraryFlow() {
                   <div className="grid gap-3 md:gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {bundleItems.map((item) => (
                       <Card key={item.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                        <div className="aspect-[16/7] sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
+                        <div className="h-28 sm:h-auto sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
                           {showThumbnail(item) ? (
                             <img
                               src={item.thumbnail}
@@ -1445,7 +1450,7 @@ export default function LibraryFlow() {
             <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((item) => (
                 <Card key={`${item.type}-${item.id}`} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                  <div className="aspect-[16/7] sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
+                  <div className="h-28 sm:h-auto sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
                     {showThumbnail(item) ? (
                       <img
                         src={item.thumbnail}

@@ -252,7 +252,7 @@ export default function DigitalProductFlow() {
   const selectedScript = scripts.find((s) => s.id === selectedScriptId);
 
   return (
-    <main className="p-6 md:p-10 max-w-4xl mx-auto">
+    <main className="px-4 py-6 md:px-10 md:py-10 max-w-4xl mx-auto pb-mobile-nav">
       <Link
         href="/dashboard/digital-products"
         className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-orange-500 mb-6"

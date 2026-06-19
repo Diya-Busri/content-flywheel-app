@@ -36,7 +36,7 @@ export function ProductEditorView() {
   const handleRedo = ctx.handleRedo as () => void;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-dvh bg-gray-950 text-white">
       <style dangerouslySetInnerHTML={{ __html: PRODUCT_EDITOR_PREVIEW_CSS }} />
       <header className="sticky top-0 z-40 border-b border-border bg-background px-6 py-3">
         <div className="flex items-center justify-between">

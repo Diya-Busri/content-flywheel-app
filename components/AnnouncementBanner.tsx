@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { X, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -34,6 +35,8 @@ function typeEmoji(type: string) {
 const DISMISSED_KEY = "dismissed_announcements";
 
 export function AnnouncementBanner() {
+  const pathname = usePathname();
+  const isFullscreenEditor = /\/digital-products\/[^/]+\/edit|\/design-studio\/[^/]+/.test(pathname ?? "");
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
@@ -58,6 +61,8 @@ export function AnnouncementBanner() {
   }
 
   const visible = announcements.filter(a => !dismissed.has(a.id));
+
+  if (isFullscreenEditor) return null;
 
   return (
     <AnimatePresence>

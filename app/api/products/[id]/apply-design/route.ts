@@ -202,8 +202,11 @@ export async function POST(
     });
 
     const pageSeed = typeof body.pageSeed === "number" ? body.pageSeed : Date.now();
+    // Use niche-specific keyword from AI design suggestion unless user prefers random.
     const pexelsQuery =
-      coverBackgroundPreference === "random" ? getRandomCoverKeyword() : undefined;
+      coverBackgroundPreference === "random"
+        ? getRandomCoverKeyword()
+        : design.pexelsKeyword || undefined;
     const pexelsUrl = await fetchOnePexelsPhoto(niche, productFormat, {
       excludeUrls: usedCoverImageUrls,
       pageSeed,

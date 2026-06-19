@@ -2,59 +2,129 @@
  * Server-side auto-design suggestion (OpenAI). Used by /api/auto-design and /api/products/[id]/apply-design.
  */
 
-/** Banned Pexels keywords — never use for cover. Only abstract, bokeh, gradient, or nature landscape. */
+/**
+ * Truly off-topic content that should never appear on any product cover regardless of niche.
+ * Kept intentionally narrow — don't over-ban or we lose niche relevance.
+ */
 export const BANNED_PEXELS_KEYWORDS = [
   "bird",
   "animal",
   "cat",
   "dog",
   "wildlife",
-  "architecture",
-  "building",
-  "door",
+  "food",
+  "meal",
+  "macaron",
+  "dessert",
+  "cake",
+  "bakery",
   "corridor",
   "hallway",
-  "room",
-  "interior",
-  "wall",
   "entrance",
 ] as const;
 
 /**
- * Safe cover keywords — single words or short phrases with thousands of Pexels results.
- * Strictly abstract/nature/texture — no people, animals, buildings, interiors.
+ * Niche-category to Pexels search term mapping.
+ * Used as fallback when AI suggestion fails validation.
+ * Each entry is an array so we can rotate to avoid repetition.
  */
-const SAFE_COVER_KEYWORDS_ALL = [
-  "abstract",
-  "gradient",
-  "bokeh",
-  "texture",
-  "forest",
-  "ocean",
-  "mountains",
-  "clouds",
-  "flowers",
-  "sunset",
-] as const;
+const NICHE_KEYWORD_MAP: Record<string, string[]> = {
+  // Home & Interior
+  "home decor": ["modern interior", "living room design", "home styling"],
+  "interior design": ["modern interior", "home decor", "room design"],
+  "augmented reality": ["smart home technology", "futuristic interface", "digital overlay"],
+  "ar home": ["modern interior", "smart home", "home technology"],
+  "real estate": ["modern home exterior", "luxury property", "house architecture"],
+  "renovation": ["modern interior renovation", "home improvement", "construction design"],
+
+  // Fitness & Health
+  "fitness": ["gym workout", "active lifestyle", "exercise training"],
+  "weight loss": ["fitness training", "healthy lifestyle", "gym equipment"],
+  "yoga": ["yoga practice", "mindfulness meditation", "wellness"],
+  "nutrition": ["healthy food", "wellness lifestyle", "clean eating"],
+  "health": ["wellness lifestyle", "healthy living", "medical professional"],
+  "mental health": ["mindfulness calm", "meditation wellness", "peaceful nature"],
+
+  // Finance & Business
+  "finance": ["business growth charts", "financial success", "professional office"],
+  "investing": ["stock market charts", "wealth building", "financial growth"],
+  "money": ["business success", "financial planning", "professional finance"],
+  "business": ["professional office", "business meeting", "corporate success"],
+  "entrepreneur": ["business startup", "entrepreneurship", "professional success"],
+  "marketing": ["digital marketing", "social media strategy", "business growth"],
+  "sales": ["business success", "sales professional", "corporate growth"],
+  "ecommerce": ["online shopping", "digital commerce", "business technology"],
+
+  // Technology
+  "technology": ["futuristic technology", "digital innovation", "tech interface"],
+  "ai": ["artificial intelligence", "digital technology", "data visualization"],
+  "software": ["software development", "code technology", "digital innovation"],
+  "coding": ["programming code", "software development", "tech workspace"],
+  "data": ["data visualization", "analytics dashboard", "technology abstract"],
+  "cybersecurity": ["digital security", "cyber technology", "data protection"],
+
+  // Creative & Design
+  "design": ["creative design workspace", "graphic design", "artistic workspace"],
+  "photography": ["professional photography", "camera photography", "creative studio"],
+  "art": ["creative art studio", "painting art", "artistic workspace"],
+  "writing": ["writing workspace", "author desk", "creative writing"],
+  "music": ["music studio", "musical instruments", "audio recording"],
+
+  // Education & Self-improvement
+  "education": ["learning classroom", "study books", "academic success"],
+  "productivity": ["organized workspace", "productivity planning", "focused work"],
+  "mindset": ["motivation success", "personal growth", "inspiration"],
+  "leadership": ["business leadership", "professional success", "team management"],
+  "career": ["professional career", "job success", "workplace professional"],
+
+  // Lifestyle
+  "travel": ["travel destination", "adventure travel", "landscape travel"],
+  "fashion": ["fashion style", "clothing design", "modern style"],
+  "beauty": ["beauty cosmetics", "skincare routine", "makeup professional"],
+  "parenting": ["family parenting", "children family", "parent child"],
+  "relationship": ["couple relationship", "romance love", "relationship happiness"],
+  "lifestyle": ["modern lifestyle", "wellness lifestyle", "contemporary living"],
+
+  // Social Media & Content
+  "social media": ["social media digital", "content creation", "influencer lifestyle"],
+  "youtube": ["video content creation", "youtube studio", "content creator"],
+  "instagram": ["social media content", "lifestyle photography", "visual content"],
+  "content creation": ["content creator workspace", "digital media", "creative content"],
+};
+
+/** Safe generic fallbacks tried in order when niche map and AI both fail. */
+const GENERIC_SAFE_KEYWORDS = ["abstract", "gradient", "bokeh", "texture"] as const;
 
 /** Guaranteed fallback keywords tried in order when the primary query returns nothing. */
-export const PEXELS_FALLBACK_KEYWORDS = ["abstract", "gradient", "bokeh", "texture"] as const;
+export const PEXELS_FALLBACK_KEYWORDS = [...GENERIC_SAFE_KEYWORDS] as readonly string[];
 
-const DEFAULT_SAFE_KEYWORD = SAFE_COVER_KEYWORDS_ALL[0];
+const DEFAULT_SAFE_KEYWORD = GENERIC_SAFE_KEYWORDS[0];
 
 /**
  * Return a random safe Pexels keyword for cover backgrounds (used when preference is "random").
  */
 export function getRandomCoverKeyword(): string {
-  return SAFE_COVER_KEYWORDS_ALL[Math.floor(Math.random() * SAFE_COVER_KEYWORDS_ALL.length)];
+  return GENERIC_SAFE_KEYWORDS[Math.floor(Math.random() * GENERIC_SAFE_KEYWORDS.length)];
 }
 
 /**
- * Return one of the only allowed Pexels keywords for cover backgrounds.
- * All products use the same safe set to avoid architecture/building/interior photos.
+ * Look up the best Pexels keyword for a given niche using the category map.
+ * Falls back to generic safe keywords if no match found.
  */
-export function getSafeCoverKeyword(_niche: string, _format?: string): string {
-  return SAFE_COVER_KEYWORDS_ALL[Math.floor(Math.random() * SAFE_COVER_KEYWORDS_ALL.length)];
+export function getSafeCoverKeyword(niche: string, _format?: string): string {
+  if (!niche?.trim()) return DEFAULT_SAFE_KEYWORD;
+
+  const n = niche.toLowerCase().trim();
+
+  // Try exact and partial match against our niche map
+  for (const [key, keywords] of Object.entries(NICHE_KEYWORD_MAP)) {
+    if (n.includes(key) || key.includes(n)) {
+      return keywords[Math.floor(Math.random() * keywords.length)];
+    }
+  }
+
+  // No map match — return generic abstract fallback
+  return GENERIC_SAFE_KEYWORDS[Math.floor(Math.random() * GENERIC_SAFE_KEYWORDS.length)];
 }
 
 /** If query contains any banned keyword, return default safe query; otherwise return query as-is. */
@@ -146,7 +216,8 @@ Return ONLY a valid JSON object (no markdown, no code fence) with exactly these 
 - "bodyFont": string, one CSS-safe font (e.g. Inter, Open Sans, Lato). Vary by format.
 - "overlayColor": string, SOLID hex only (#000000 or #1a1a2e for dark; #ffffff or #f8fafc for light). No patterns.
 - "overlayOpacity": number, 0.35 to 0.6. Prefer 0.45-0.55.
-- "contentPageBackgroundColor": string, hex for content pages (#ffffff, #f8fafc, etc.).`;
+- "contentPageBackgroundColor": string, hex for content pages (#ffffff, #f8fafc, etc.).
+- "pexelsKeyword": string, a specific 1-3 word Pexels search term that visually represents the product niche. RULES: (1) Must directly relate to the niche — if the topic is removed from the cover, the image alone must tell the viewer what the product is about. (2) Use concrete visual subjects, not abstract concepts (e.g. "modern interior design" not "interior"; "gym workout" not "fitness"). (3) Never suggest: food, animals, birds, wildlife, macarons, desserts, or anything unrelated to the niche. (4) Examples by niche: AR/home decor → "modern interior design"; fitness → "gym workout training"; finance → "business growth charts"; technology → "futuristic digital interface"; yoga → "yoga meditation practice"; marketing → "digital marketing strategy".`;
 
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -166,7 +237,7 @@ Return ONLY a valid JSON object (no markdown, no code fence) with exactly these 
         { role: "user", content: prompt },
       ],
       temperature: regenerate ? 0.9 : 0.6,
-      max_tokens: 400,
+      max_tokens: 500,
     }),
   });
 
@@ -203,8 +274,11 @@ Return ONLY a valid JSON object (no markdown, no code fence) with exactly these 
       : 0.5;
   const overlayOpacity = Math.min(0.6, overlayOpacityUnclamped);
 
-  // Cover background uses ONLY safe niche-based keywords — never AI-suggested (avoids architecture/buildings).
-  const pexelsKeyword = getSafeCoverKeyword(niche, productFormat);
+  // Validate AI-suggested keyword: reject if it contains banned terms, then fall back to niche map, then generic.
+  const aiPexelsRaw = typeof parsed.pexelsKeyword === "string" ? parsed.pexelsKeyword.trim() : "";
+  const pexelsKeyword = aiPexelsRaw && !BANNED_PEXELS_KEYWORDS.some((b) => aiPexelsRaw.toLowerCase().includes(b))
+    ? aiPexelsRaw
+    : getSafeCoverKeyword(niche, productFormat);
 
   return {
     primary: useBrandColors

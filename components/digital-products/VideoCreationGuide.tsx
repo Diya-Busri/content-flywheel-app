@@ -21,6 +21,7 @@ import { mapScriptToSceneOverlays } from "@/lib/video-guide-scene-overlays";
 import { animateAiStorySceneFromImage } from "@/lib/ai-story-animate-client";
 import {
   ArrowLeft,
+  BookOpen,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -2282,8 +2283,85 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const backHref = backUrl ?? "/dashboard/digital-products/results";
   const backLabel = isYouTubeMode ? "Back to Scripts" : "Back to Results";
 
+  // Timeline URL for final CTA
+  const timelineHref = libraryScriptId
+    ? `/dashboard/video-timeline?importVoiceover=1&libraryScriptId=${encodeURIComponent(libraryScriptId)}`
+    : "/dashboard/video-timeline?importVoiceover=1";
+
+  // pb-44 on mobile = 176px clearance — enough for sticky bar (~72px) above app nav (~90px)
   return (
-    <main className="min-h-screen bg-white dark:bg-background text-foreground p-6 md:p-10">
+    <main className="min-h-dvh bg-white dark:bg-background text-foreground p-6 md:p-10 pb-44 md:pb-10">
+      {/*
+        ── Persistent completion bar — mobile only ──────────────────────────
+        Fixed directly above the app nav. Always visible regardless of which
+        tab is active or how far the user has scrolled.
+        Shows:
+          • "✓ Saved" badge when the guide has been saved to My Library
+          • Primary CTA: "Open in Library →"  (if saved)  or  "Create Video →"
+          • Secondary: back icon button
+        Desktop (md+) hides this bar — the bottom card handles it there.
+      ─────────────────────────────────────────────────────────────────────── */}
+      <div
+        className="md:hidden fixed left-0 right-0 z-40 border-t border-gray-200 dark:border-border bg-white/95 dark:bg-background/95 backdrop-blur"
+        style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))" }}
+      >
+        {/* Saved badge — only when guide is confirmed saved to library */}
+        {libraryScriptId && (
+          <div className="flex items-center gap-1.5 px-4 pt-2 pb-0">
+            <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
+            <span className="text-[11px] font-semibold text-green-600 dark:text-green-400">
+              Guide saved to Library
+            </span>
+          </div>
+        )}
+        <div className="flex items-center gap-2 px-4 py-2">
+          {/* Back — icon only on mobile to save space */}
+          <Link
+            href={backHref}
+            aria-label="Back"
+            className="shrink-0 inline-flex items-center justify-center rounded-md border border-gray-200 dark:border-border h-9 w-9 text-gray-600 dark:text-muted-foreground hover:bg-gray-50 dark:hover:bg-muted transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Link>
+
+          {/* Primary CTA */}
+          {libraryScriptId ? (
+            <Button
+              asChild
+              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold gap-2 h-9"
+            >
+              <Link href="/dashboard/library">
+                <BookOpen className="w-4 h-4" />
+                Open in Library →
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              asChild
+              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold gap-2 h-9"
+            >
+              <Link href={timelineHref}>
+                <Video className="w-4 h-4" />
+                Create Video →
+              </Link>
+            </Button>
+          )}
+
+          {/* Secondary — timeline if we showed library above */}
+          {libraryScriptId && (
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="shrink-0 border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] h-9 px-3 gap-1.5 text-xs"
+            >
+              <Link href={timelineHref}>
+                <Video className="w-4 h-4" />
+              </Link>
+            </Button>
+          )}
+        </div>
+      </div>
       <div className="max-w-3xl mx-auto">
         {isYouTubeMode ? (
           <Breadcrumb className="mb-4 text-sm text-gray-600 dark:text-muted-foreground">
@@ -3200,10 +3278,54 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           </CardContent>
         </Card>
 
+        {/* ── Progress checklist ──────────────────────────────────────────────
+            Quick at-a-glance view so beginners know exactly where they are.
+            Each step links to the relevant tab. Uses only existing state.
+        ─────────────────────────────────────────────────────────────────── */}
+        {(() => {
+          const hasImages = Object.keys(guideSceneImageUrls).length > 0;
+          const hasVoiceover = !!(fullVoiceoverUrl || perSceneUrls.some(Boolean));
+          const hasVideoFile = autoGeneratePhase === null && autoGeneratingAll === false && hasImages && hasVoiceover;
+          const steps = [
+            { done: true,        label: "Script ready",        tab: "scenes" as const },
+            { done: hasImages,   label: "Images generated",    tab: "scenes" as const },
+            { done: hasVoiceover,label: "Voiceover recorded",  tab: "voiceover" as const },
+            { done: hasVideoFile,label: "Video file created",   tab: "export" as const },
+          ] as const;
+          const nextStep = steps.find((s) => !s.done);
+          return (
+            <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-gray-200 dark:border-border bg-gray-50 dark:bg-card px-4 py-3">
+              <span className="text-xs font-semibold text-gray-500 dark:text-muted-foreground uppercase tracking-wide shrink-0">Progress</span>
+              {steps.map((s) => (
+                <button
+                  key={s.label}
+                  type="button"
+                  onClick={() => setActiveTab(s.tab)}
+                  className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 hover:text-orange-500 transition-colors"
+                >
+                  {s.done
+                    ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                    : <span className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 dark:border-gray-600 shrink-0 inline-block" />}
+                  <span className={s.done ? "line-through text-gray-400 dark:text-gray-500" : "font-medium"}>{s.label}</span>
+                </button>
+              ))}
+              {nextStep && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(nextStep.tab)}
+                  className="ml-auto text-xs font-semibold text-orange-500 hover:text-orange-600 whitespace-nowrap"
+                >
+                  Next: {nextStep.label} →
+                </button>
+              )}
+            </div>
+          );
+        })()}
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="bg-gray-100 dark:bg-card border border-gray-200 dark:border-border flex flex-wrap gap-1 p-1">
             <TabsTrigger value="scenes" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
-              Scene Breakdown
+              Your Video Plan
               {guide.videoFormat?.aspectRatio && (
                 <span className="ml-1.5 opacity-80" title={guide.videoFormat.orientation === "horizontal" ? "YouTube horizontal format" : "Vertical short-form format"}>
                   {guide.videoFormat.aspectRatio === "16:9" ? " (16:9)" : " (9:16)"}
@@ -3211,19 +3333,19 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               )}
             </TabsTrigger>
             <TabsTrigger value="editing" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
-              Editing Guide
+              How to Edit
             </TabsTrigger>
             <TabsTrigger value="subtitles" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
-              Subtitles & Text
+              Captions
             </TabsTrigger>
             <TabsTrigger value="music" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
-              Music & Audio
+              Music
             </TabsTrigger>
             <TabsTrigger value="export" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
-              Export & Post
+              Download & Post
             </TabsTrigger>
             <TabsTrigger value="social-kit" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
-              Social Media Kit
+              Captions & Hashtags
             </TabsTrigger>
             <TabsTrigger value="voiceover" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
               Voiceover
@@ -3236,7 +3358,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
                   <ImagePlus className="w-4 h-4 text-orange-500" />
-                  Character Setup
+                  Video Setup
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -3856,7 +3978,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                       // ── Default: AI image prompt + generate button ──
                       return (
                         <div>
-                          <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Visual / AI image prompt</p>
+                          <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1">Image to generate</p>
                           <p className="text-foreground whitespace-pre-wrap mb-3">{stripMarkdown(fullPrompt ?? "")}</p>
 
                           {/* Image generation + animation — gated on video credits */}
@@ -3966,10 +4088,10 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   <div>
                     <p className="font-semibold text-foreground flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-orange-500" />
-                      Generate Everything
+                      Build My Video — One Tap
                     </p>
                     <p className="text-sm text-gray-600 dark:text-muted-foreground mt-1">
-                      Auto-generate images + voiceovers + compile MP4 in one go.
+                      Automatically creates images, voiceover, and your final video file in one go.
                     </p>
                     {autoGeneratePhase && (
                       <p className="text-xs text-orange-600 dark:text-orange-400 mt-1.5 animate-pulse">{autoGeneratePhase}</p>
@@ -3983,9 +4105,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                     disabled={autoGeneratingAll || scenes.length === 0}
                   >
                     {autoGeneratingAll ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" />Generating…</>
+                      <><Loader2 className="w-4 h-4 animate-spin" />Building video…</>
                     ) : (
-                      <><Sparkles className="w-4 h-4" />Generate Everything</>
+                      <><Sparkles className="w-4 h-4" />Build My Video</>
                     )}
                   </Button>
                 </div>
@@ -4056,7 +4178,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                             ) : (
                               <>
                                 <Download className="w-4 h-4" />
-                                Compile &amp; Export MP4
+                                Create Video File
                               </>
                             )}
                           </Button>
@@ -4288,7 +4410,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             <CardHeader>
                 <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
                   <Film className="w-4 h-4 text-orange-500" />
-                  Recommended tools & steps
+                  Step-by-step editing guide
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -4814,38 +4936,49 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           </TabsContent>
         </Tabs>
 
-        {/* Ready to create your video? */}
-        <Card className="mt-8 border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
-          <CardHeader>
-            <CardTitle className="text-lg font-medium text-foreground">
-              Ready to create your video?
+        {/* ── Flow completion card ── */}
+        <Card className="mt-8 border-orange-500/25 dark:border-orange-500/20 bg-orange-500/5 dark:bg-orange-500/8">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2 mb-1">
+              {libraryScriptId ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                  <span className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide">
+                    Guide saved to My Library
+                  </span>
+                </>
+              ) : (
+                <span className="text-xs font-semibold text-orange-500 uppercase tracking-wide">
+                  Guide ready
+                </span>
+              )}
+            </div>
+            <CardTitle className="text-lg font-semibold text-foreground">
+              What would you like to do next?
             </CardTitle>
             <CardDescription className="text-gray-600 dark:text-muted-foreground">
-              Build your timeline here or copy titles, hashtags, and captions to use in another editor.
+              Your guide is ready. Open it in My Library, start building in the Video Timeline, or grab your social captions.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
             {libraryScriptId && (
-              <Button asChild variant="outline" className="border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-muted gap-2">
-                <Link href={`/dashboard/video-timeline?libraryScriptId=${encodeURIComponent(libraryScriptId)}`}>
-                  <Film className="w-4 h-4" />
-                  Open in Timeline
+              <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
+                <Link href="/dashboard/library">
+                  <BookOpen className="w-4 h-4" />
+                  Open in Library →
                 </Link>
               </Button>
             )}
             <Button
               asChild
-              className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+              variant={libraryScriptId ? "outline" : "default"}
+              className={libraryScriptId
+                ? "border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-muted gap-2"
+                : "bg-orange-500 hover:bg-orange-600 text-white gap-2"}
             >
-              <Link
-                href={
-                  libraryScriptId
-                    ? `/dashboard/video-timeline?importVoiceover=1&libraryScriptId=${encodeURIComponent(libraryScriptId)}`
-                    : "/dashboard/video-timeline?importVoiceover=1"
-                }
-              >
+              <Link href={timelineHref}>
                 <Video className="w-4 h-4" />
-                Create here
+                Create Video in Timeline
               </Link>
             </Button>
             <Button

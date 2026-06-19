@@ -1136,6 +1136,18 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const previewContentRef = useRef<HTMLDivElement | null>(null);
   const lastPreviewHtmlRef = useRef<{ sectionId: string; html: string } | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const [canvasPageScale, setCanvasPageScale] = useState(1);
+  // Keep canvas scale in sync with container width so Rnd elements are fully visible on narrow screens
+  useEffect(() => {
+    if (loading) return;
+    const container = canvasContainerRef.current;
+    if (!container) return;
+    const update = () => setCanvasPageScale(Math.min(1, container.clientWidth / CANVAS_WIDTH));
+    update();
+    const obs = new ResizeObserver(update);
+    obs.observe(container);
+    return () => obs.disconnect();
+  }, [loading]);
   const [coverThumbnailCaptureTrigger, setCoverThumbnailCaptureTrigger] = useState(0);
   const savedPageIndexRef = useRef<number | null>(null);
   const coverImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -4185,8 +4197,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-100 dark:bg-[#0F0F0F]">
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-gray-100 dark:bg-[#0F0F0F]">
         <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+        <p className="text-sm text-gray-500 dark:text-gray-400">Loading your product…</p>
       </div>
     );
   }
@@ -4246,7 +4259,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const isDark = uiTheme === "dark";
   return (
     <div
-      className={`flex flex-col h-full min-h-0 overflow-hidden font-sans ${isDark ? "bg-[#0F0F0F] text-gray-100 editor-dark" : "bg-gray-100 text-gray-900"}`}
+      className={`flex flex-col flex-1 min-h-0 overflow-hidden font-sans ${isDark ? "bg-[#0F0F0F] text-gray-100 editor-dark" : "bg-gray-100 text-gray-900"}`}
       data-theme={uiTheme}
       role="main"
     >
@@ -4840,13 +4853,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Center content area - scrollable */}
-        <div className={`flex-1 min-w-0 overflow-y-auto ${isDark ? "bg-[#0F0F0F]" : "bg-gray-100"}`}>
-          <div className="flex flex-col items-center px-2 md:px-4 py-3 md:py-8">
+        <div className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden ${isDark ? "bg-[#0F0F0F]" : "bg-gray-100"}`}>
+          <div className="flex flex-col items-center px-2 md:px-4 py-3 pb-editor-toolbar md:py-8 md:pb-8">
               {/* Toolbar above canvas */}
               <div className="flex items-center justify-between w-full max-w-[816px] mb-4">
                 <div className="flex items-center gap-2">
                   {(isOnCoverPage || isOnBackPage) && (
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${isDark ? "bg-orange-500/20 text-orange-300 border border-orange-500/40" : "bg-orange-100 text-orange-800 border border-orange-200"}`}>
+                    <span className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${isDark ? "bg-orange-500/20 text-orange-300 border border-orange-500/40" : "bg-orange-100 text-orange-800 border border-orange-200"}`}>
                       {isOnCoverPage ? <Crown className="w-3.5 h-3.5" /> : <Star className="w-3.5 h-3.5" />}
                       Cover Mode
                     </span>
@@ -4895,7 +4908,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
-                    <span className={`text-sm font-medium min-w-[100px] text-center flex items-center justify-center gap-1.5 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                    <span className={`text-sm font-medium min-w-[80px] text-center flex items-center justify-center gap-1.5 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
                       {currentPageIndex === 0 ? (
                         <><Crown className="w-3.5 h-3.5 shrink-0" /> Cover</>
                       ) : currentPageIndex === totalPages - 1 ? (
@@ -4977,18 +4990,25 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </>
                 ) : null}
                 {/* Page container — overflow-visible so selection outline is not clipped */}
+                {/* On mobile, scale cover/back pages (Rnd elements) to fit. Content pages flow at 100% width. */}
+                {(() => {
+                  const needsScale = canvasPageScale < 1 && (isOnCoverPage || isOnBackPage);
+                  return (
                 <div
                   className="relative text-[#1A1A1A] overflow-visible"
                   style={{
                     position: "relative",
                     zIndex: 10,
-                    width: "100%",
+                    width: needsScale ? CANVAS_WIDTH : "100%",
                     minHeight: effectiveCanvasHeight,
                     padding: 0,
                     margin: 0,
+                    marginBottom: needsScale ? `${effectiveCanvasHeight * (canvasPageScale - 1)}px` : 0,
                     boxSizing: "border-box",
                     fontFamily: "var(--font-sans), sans-serif",
                     backgroundColor: canvasBgUrl ? "transparent" : (currentPageBackgroundColor ?? "#ffffff"),
+                    transform: needsScale ? `scale(${canvasPageScale})` : undefined,
+                    transformOrigin: needsScale ? "top left" : undefined,
                   }}
                   onClick={() => {
                     setSelectedElement(null);
@@ -5362,6 +5382,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </svg>
                   )}
                 </div>
+                  );
+                })()}
             </div>
           </div>
         </div>
@@ -5385,7 +5407,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
               />
             )}
             {selectedTextMeta && (
-              <div className="p-4 border-b border-gray-200 bg-gray-50 space-y-4 max-h-[50vh] overflow-y-auto">
+              <div className="p-4 border-b border-gray-200 bg-gray-50 space-y-4 max-h-[50dvh] overflow-y-auto">
                 <div className="flex justify-between items-center">
                   <h4 className="text-sm font-semibold text-gray-900">Edit text</h4>
                   <button
@@ -5620,29 +5642,29 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </div>
             )}
             <Tabs value={activeEditorTab} onValueChange={setActiveEditorTab} className="w-full flex flex-col flex-1 min-h-0">
-              <TabsList className="bg-gray-50 border-b border-gray-200 w-full grid grid-cols-8 rounded-none h-11 px-0">
-                <TabsTrigger value="content" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
+              <TabsList className="bg-gray-50 border-b border-gray-200 w-full flex overflow-x-auto rounded-none h-11 px-0 shrink-0">
+                <TabsTrigger value="content" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
                   <BookOpen className="w-3.5 h-3.5" /> Content
                 </TabsTrigger>
-                <TabsTrigger value="design" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
+                <TabsTrigger value="design" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
                   <Palette className="w-3.5 h-3.5" /> Design
                 </TabsTrigger>
-                <TabsTrigger value="graphics" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
+                <TabsTrigger value="graphics" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
                   <ImageIcon className="w-3.5 h-3.5" /> Graphics
                 </TabsTrigger>
-                <TabsTrigger value="layout" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
+                <TabsTrigger value="layout" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
                   <LayoutGrid className="w-3.5 h-3.5" /> Layout
                 </TabsTrigger>
-                <TabsTrigger value="videos" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
+                <TabsTrigger value="videos" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
                   <Video className="w-3.5 h-3.5" /> Videos
                 </TabsTrigger>
-                <TabsTrigger value="export" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
+                <TabsTrigger value="export" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
                   <FileOutput className="w-3.5 h-3.5" /> Export
                 </TabsTrigger>
-                <TabsTrigger value="marketing" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
+                <TabsTrigger value="marketing" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
                   <Megaphone className="w-3.5 h-3.5" /> Mktg
                 </TabsTrigger>
-                <TabsTrigger value="ai" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1.5 text-gray-600 border-b-2 border-transparent">
+                <TabsTrigger value="ai" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
                   <Sparkles className="w-3.5 h-3.5" /> AI
                 </TabsTrigger>
               </TabsList>
@@ -6596,7 +6618,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
                 {/* Add Image modal: Stock (Pexels) or AI-generated */}
                 <Dialog open={addImageModalOpen} onOpenChange={setAddImageModalOpen}>
-                  <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+                  <DialogContent className="max-w-2xl max-h-[85dvh] overflow-hidden flex flex-col">
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
                         <ImageIcon className="w-5 h-5 text-orange-500" />
@@ -6746,7 +6768,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           <img
                             src={previewPhoto.fullUrl ?? previewPhoto.url ?? previewPhoto.thumb}
                             alt=""
-                            className="w-full max-h-[70vh] object-contain bg-gray-100"
+                            className="w-full max-h-[70dvh] object-contain bg-gray-100"
                           />
                           <DialogHeader className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/60 to-transparent">
                             <DialogTitle className="text-white text-lg">Preview</DialogTitle>
@@ -7353,19 +7375,58 @@ export default function ProductEditor({ productId }: { productId: string }) {
         </EditorRightPanel>
       </div>
 
-      {/* Mobile floating "Edit" button — opens right panel as sheet */}
-      <button
-        type="button"
-        onClick={() => setMobileEditorPanelOpen(true)}
-        className={`md:hidden fixed bottom-20 right-4 z-30 flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg text-sm font-semibold transition-colors ${
-          isDark
-            ? "bg-orange-500 hover:bg-orange-600 text-white"
-            : "bg-orange-500 hover:bg-orange-600 text-white"
-        }`}
-        aria-label="Open edit panel"
+      {/* ── Mobile / tablet bottom toolbar ──
+          Fixed directly above the app's bottom navigation (no gap).
+          bottom = nav height (3.5rem) + safe-area-inset-bottom
+          z-[48]: above canvas, below mobile nav (z-50) and below the edit sheet (z-[60])
+      */}
+      <div
+        className={`md:hidden flex items-center justify-around border-t px-1 py-1 z-[48] ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A]" : "bg-white border-gray-200"}`}
+        style={{
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))",
+        }}
       >
-        ✎ Edit
-      </button>
+        {(
+          [
+            { tab: "content",   Icon: BookOpen,    label: "Content"  },
+            { tab: "design",    Icon: Palette,     label: "Design"   },
+            { tab: "graphics",  Icon: ImageIcon,   label: "Graphics" },
+            { tab: "layout",    Icon: LayoutGrid,  label: "Layout"   },
+            { tab: "videos",    Icon: Video,       label: "Videos"   },
+            { tab: "export",    Icon: FileOutput,  label: "Export"   },
+            { tab: "ai",        Icon: Sparkles,    label: "AI"       },
+          ] as const
+        ).map(({ tab, Icon, label }) => {
+          const active = activeEditorTab === tab && mobileEditorPanelOpen;
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => {
+                if (active) {
+                  setMobileEditorPanelOpen(false);
+                } else {
+                  setActiveEditorTab(tab);
+                  setMobileEditorPanelOpen(true);
+                }
+              }}
+              className={`flex flex-col items-center gap-0.5 py-2 px-2 rounded-xl transition-colors ${
+                active
+                  ? "bg-orange-500 text-white"
+                  : isDark
+                  ? "text-gray-400 hover:bg-white/10 hover:text-white"
+                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+              }`}
+            >
+              <Icon className="w-5 h-5" />
+              <span className="text-[9px] font-medium leading-none">{label}</span>
+            </button>
+          );
+        })}
+      </div>
 
       {/* Delete Section Confirmation */}
       <Dialog open={!!sectionToDeleteId} onOpenChange={(open) => !open && setSectionToDeleteId(null)}>
@@ -7387,7 +7448,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
       {/* Edit Section Modal */}
       <Dialog open={!!editingSectionId} onOpenChange={(open) => !open && setEditingSectionId(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white border-gray-200 text-gray-900">
+        <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto bg-white border-gray-200 text-gray-900">
           <DialogHeader>
             <DialogTitle>Edit Section: {sections.find((s) => s.id === editingSectionId)?.title ?? ""}</DialogTitle>
           </DialogHeader>
@@ -7569,7 +7630,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
               `,
             }}
           />
-          <div className="bg-gray-100 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-200 shadow-2xl">
+          <div className="bg-gray-100 rounded-xl w-full max-w-4xl max-h-[90dvh] overflow-hidden flex flex-col border border-gray-200 shadow-2xl">
             <div className="modal-header sticky top-0 z-10 border-b border-gray-200 bg-white p-4 no-print space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Full Product Preview</h2>

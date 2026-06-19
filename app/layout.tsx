@@ -18,18 +18,18 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Content Flywheel — Create & Sell Digital Products with AI",
+  title: "Content Flywheel — Create & Market Digital Products with AI",
   description:
-    "Build ebooks, planners and templates with AI. Sell from your own store. Market with email sequences, affiliates and discount codes. All in one platform.",
+    "Build ebooks, planners and templates with AI. Create promotional videos and plan your content strategy — all from one platform.",
   metadataBase: new URL("https://contentflywheel.co.uk"),
   icons: { icon: "/icon.svg" },
   alternates: {
     canonical: "https://contentflywheel.co.uk",
   },
   openGraph: {
-    title: "Content Flywheel — Create & Sell Digital Products with AI",
+    title: "Content Flywheel — Create & Market Digital Products with AI",
     description:
-      "Build ebooks, planners and templates with AI. Sell from your own store. Market with email sequences, affiliates and discount codes. All in one platform.",
+      "Build ebooks, planners and templates with AI. Create promotional videos and plan your content strategy — all from one platform.",
     url: "https://contentflywheel.co.uk",
     siteName: "Content Flywheel",
     locale: "en_GB",
@@ -37,9 +37,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Content Flywheel — Create & Sell Digital Products with AI",
+    title: "Content Flywheel — Create & Market Digital Products with AI",
     description:
-      "Build ebooks, planners and templates with AI. Sell from your own store. Market with email sequences, affiliates and discount codes.",
+      "Build ebooks, planners and templates with AI. Create promotional videos and plan your content strategy.",
   },
   robots: {
     index: true,

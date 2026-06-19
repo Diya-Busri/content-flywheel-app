@@ -133,8 +133,8 @@ export default function CreateFlow() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0F0F0F] text-white pb-24">
-      <div className="max-w-2xl mx-auto p-6 md:p-10">
+    <main className="min-h-dvh bg-[#0F0F0F] text-white pb-44">
+      <div className="max-w-2xl mx-auto px-4 py-6 md:px-10 md:py-10">
         <Link
           href="/dashboard/digital-products"
           className="inline-flex items-center gap-2 text-sm text-[#A0A0A0] hover:text-orange-500 mb-6 transition-colors"
@@ -255,17 +255,17 @@ export default function CreateFlow() {
         </div>
       </div>
 
-      {/* Sticky bottom bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#2A2A2A] bg-[#0F0F0F]/95 backdrop-blur py-4 px-4 md:px-6">
-        <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-          <Button variant="ghost" asChild className="text-[#A0A0A0] hover:text-white hover:bg-[#1A1A1A]">
-            <Link href="/dashboard/digital-products">← Back to Selection</Link>
+      {/* Sticky bottom bar — sits above mobile nav */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#2A2A2A] bg-[#0F0F0F]/95 backdrop-blur px-4 md:px-6 pt-3 pb-mobile-nav">
+        <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
+          <Button variant="ghost" asChild size="sm" className="text-[#A0A0A0] hover:text-white hover:bg-[#1A1A1A] shrink-0">
+            <Link href="/dashboard/digital-products">← Back</Link>
           </Button>
           <Button
-            className="bg-orange-500 hover:bg-orange-600 text-white font-semibold h-12 px-8"
+            className="bg-orange-500 hover:bg-orange-600 text-white font-semibold h-11 px-6 flex-1 sm:flex-none sm:min-w-[180px]"
             onClick={handleGoToScripts}
           >
-            Generate Scripts →
+            Continue →
           </Button>
         </div>
       </div>

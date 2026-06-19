@@ -380,7 +380,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
               <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">More</span>
             </button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="h-[80vh] rounded-t-2xl bg-white dark:bg-card border-t border-[#E5E7EB] dark:border-white/10 px-0 py-0 flex flex-col">
+          <SheetContent side="bottom" className="h-[80dvh] rounded-t-2xl bg-white dark:bg-card border-t border-[#E5E7EB] dark:border-white/10 px-0 py-0 flex flex-col">
             {/* Handle */}
             <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[#E5E7EB] dark:border-white/10 shrink-0">
               <span className="text-sm font-semibold text-gray-900 dark:text-white">Navigation</span>

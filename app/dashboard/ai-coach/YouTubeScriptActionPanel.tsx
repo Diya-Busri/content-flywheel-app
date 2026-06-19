@@ -65,9 +65,10 @@ type VideoHit = { id: number; url: string; duration: number; thumbnail: string }
 
 type Props = {
   scriptText: string;
+  isAdmin?: boolean;
 };
 
-export function YouTubeScriptActionPanel({ scriptText }: Props) {
+export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props) {
   const { toast } = useToast();
   const [voiceoverUrl, setVoiceoverUrl] = useState<string | null>(null);
   /** Per-section voiceover blob URLs (scene number 1..N). When set, timeline uses these instead of single voiceoverUrl. */
@@ -785,7 +786,7 @@ export function YouTubeScriptActionPanel({ scriptText }: Props) {
       </div>
 
       {/* STEP 3: OPEN IN VIDEO TIMELINE */}
-      <div>
+      {isAdmin && <div>
         <p className="text-sm font-medium text-foreground mb-2">── STEP 3: OPEN IN VIDEO TIMELINE ──</p>
         <Button
           type="button"
@@ -799,11 +800,11 @@ export function YouTubeScriptActionPanel({ scriptText }: Props) {
           Open in Video Timeline
         </Button>
         <p className="text-xs text-muted-foreground mt-1.5">Creates scene blocks (one per section) with your images/videos and voiceover. Edit or reorder scenes, then export the final video.</p>
-      </div>
+      </div>}
 
       {/* STEP 4: SEO PACKAGE */}
       <div>
-        <p className="text-sm font-medium text-foreground mb-2">── STEP 4: SEO PACKAGE ──</p>
+        <p className="text-sm font-medium text-foreground mb-2">── STEP {isAdmin ? "4" : "3"}: SEO PACKAGE ──</p>
         <div className="flex flex-wrap gap-2 mb-2">
           <Button
             type="button"
@@ -840,7 +841,7 @@ export function YouTubeScriptActionPanel({ scriptText }: Props) {
 
       {/* STEP 5: THUMBNAIL PROMPTS */}
       <div>
-        <p className="text-sm font-medium text-foreground mb-2">── STEP 5: THUMBNAIL PROMPTS ──</p>
+        <p className="text-sm font-medium text-foreground mb-2">── STEP {isAdmin ? "5" : "4"}: THUMBNAIL PROMPTS ──</p>
         <Button
           type="button"
           variant="outline"

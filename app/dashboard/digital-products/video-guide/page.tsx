@@ -266,7 +266,7 @@ export default function VideoGuidePage() {
 
   if (error) {
     return (
-      <main className="min-h-screen p-6 md:p-10 flex flex-col items-center justify-center">
+      <main className="min-h-dvh p-6 md:p-10 flex flex-col items-center justify-center">
         <div className="max-w-md text-center">
           <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-6">
             <FileText className="w-8 h-8 text-amber-500" />
@@ -291,7 +291,7 @@ export default function VideoGuidePage() {
 
   if (!guide) {
     return (
-      <main className="min-h-screen p-6 md:p-10 flex flex-col items-center justify-center">
+      <main className="min-h-dvh p-6 md:p-10 flex flex-col items-center justify-center">
         <Loader2 className="w-10 h-10 animate-spin text-orange-500 mb-4" />
         <p className="text-gray-600 dark:text-[#A0A0A0]">Loading guide...</p>
       </main>

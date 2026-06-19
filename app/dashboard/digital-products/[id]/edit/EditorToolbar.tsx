@@ -60,7 +60,7 @@ export function EditorToolbar({
         }`}
       >
         <div className="max-w-[1800px] mx-auto flex items-center justify-between gap-2 md:gap-6 px-3 md:px-6 h-14 overflow-x-hidden">
-          <div className="flex items-center gap-2 md:gap-6 min-w-0 shrink-0">
+          <div className="flex items-center gap-2 md:gap-6 min-w-0 shrink">
             <Link
               href="/dashboard/digital-products"
               className={`text-sm shrink-0 flex items-center gap-1 ${
@@ -235,37 +235,37 @@ export function EditorToolbar({
 
       {showCreatedBanner && (
         <div
-          className={`flex items-center justify-between gap-4 px-4 py-3 border-b ${
+          className={`flex items-center gap-2 px-3 py-2 border-b overflow-x-hidden ${
             isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-50 border-orange-200"
           }`}
         >
           <p
-            className={`text-sm font-medium ${
+            className={`text-xs font-medium min-w-0 truncate ${
               isDark ? "text-orange-200" : "text-orange-900"
             }`}
           >
-            🎬 {productTitle} is ready! Now get a Video Creation Guide to promote it
+            🎬 <span className="hidden sm:inline">{productTitle} is ready!</span> Get a Video Guide
           </p>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
             <Button
               size="sm"
-              className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+              className="bg-orange-500 hover:bg-orange-600 text-white gap-1 text-xs h-7 px-2"
               onClick={onGenerateVideos}
             >
-              <Video className="w-3.5 h-3.5" /> Create Video Guide →
+              <Video className="w-3 h-3" /> <span className="hidden sm:inline">Create</span> Video Guide
             </Button>
             <Button
               size="sm"
               variant="ghost"
-              className={
+              className={`h-7 w-7 p-0 ${
                 isDark
                   ? "text-orange-200 hover:bg-orange-500/20"
                   : "text-orange-800 hover:bg-orange-100"
-              }
+              }`}
               onClick={onDismissCreatedBanner}
               aria-label="Dismiss"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </Button>
           </div>
         </div>

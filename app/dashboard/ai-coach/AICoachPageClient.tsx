@@ -163,19 +163,19 @@ async function createSessionViaApi(title: string = "New Chat"): Promise<Session>
 }
 
 const STARTER_CHIPS = [
-  "Help me generate a product idea",
-  "What should I create next?",
-  "How do I market my ebook?",
+  "I'm new — what should I do first?",
+  "Help me come up with a product idea",
+  "What should I focus on today?",
 ];
 
 /** Empty state: 6 suggested prompts in 2x3 grid; click pre-fills and auto-sends */
 const EMPTY_STATE_PROMPTS: { title: string; icon: React.ReactNode }[] = [
-  { title: "Generate a digital product idea for my niche", icon: <Package className="h-5 w-5" /> },
-  { title: "Write a TikTok script for my product", icon: <FileText className="h-5 w-5" /> },
-  { title: "Help me price my digital product", icon: <Package className="h-5 w-5" /> },
-  { title: "Create a marketing plan for this week", icon: <FileText className="h-5 w-5" /> },
-  { title: "Review my product description", icon: <FileText className="h-5 w-5" /> },
-  { title: "What should I focus on today?", icon: <Sparkles className="h-5 w-5" /> },
+  { title: "I'm new here — what should I do first?", icon: <Sparkles className="h-5 w-5" /> },
+  { title: "Give me a digital product idea for my audience", icon: <Package className="h-5 w-5" /> },
+  { title: "Write a short TikTok script I can use today", icon: <FileText className="h-5 w-5" /> },
+  { title: "What price should I sell my product at?", icon: <Package className="h-5 w-5" /> },
+  { title: "Create a simple marketing plan for this week", icon: <FileText className="h-5 w-5" /> },
+  { title: "What should I focus on to grow my sales?", icon: <Sparkles className="h-5 w-5" /> },
 ];
 
 /** 20 prompts for Prompts Library slide-out, by category */
@@ -374,13 +374,7 @@ export default function AICoachPageClient({ isAdmin = false }: { isAdmin?: boole
   const [messageAudioUrls, setMessageAudioUrls] = useState<Record<number, string>>({});
   const [promptToSend, setPromptToSend] = useState<string | null>(null);
   const [promptsLibraryOpen, setPromptsLibraryOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  // Collapse sidebar by default on mobile so the chat area has full width
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setSidebarCollapsed(true);
-    }
-  }, []);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
   const [coachMode, setCoachMode] = useState<string>("business");
   const [coachSettings, setCoachSettings] = useState<{
@@ -419,6 +413,11 @@ export default function AICoachPageClient({ isAdmin = false }: { isAdmin?: boole
   }, []);
 
   useEffect(() => {
+    // On mobile always start collapsed regardless of stored preference
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSidebarCollapsed(true);
+      return;
+    }
     try {
       const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
       setSidebarCollapsed(stored === "true");
@@ -852,11 +851,19 @@ export default function AICoachPageClient({ isAdmin = false }: { isAdmin?: boole
 
   return (
     <div className="flex h-full min-h-0 bg-background">
+      {/* Mobile backdrop when sidebar is open */}
+      {!sidebarCollapsed && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          onClick={toggleSidebarCollapsed}
+          aria-hidden
+        />
+      )}
       {/* Left panel: collapsible sidebar (theme-aware) */}
       <aside
         className={cn(
-          "shrink-0 flex flex-col bg-card border-r border-border transition-[width] duration-200 ease-out",
-          sidebarCollapsed ? "w-14" : "w-[260px]"
+          "shrink-0 flex flex-col bg-card border-r border-border transition-[width] duration-200 ease-out overflow-hidden",
+          sidebarCollapsed ? "w-0 md:w-14" : "fixed md:relative inset-y-0 left-0 z-40 w-[260px] shadow-xl md:shadow-none"
         )}
       >
         {/* Top row: New Chat + collapse toggle (expanded) or toggle + New Chat icon only (collapsed) */}
@@ -1022,6 +1029,7 @@ export default function AICoachPageClient({ isAdmin = false }: { isAdmin?: boole
             onMemorySettingsOpen={() => setMemorySetupModalOpen(true)}
             onMemoryToggle={handleMemoryToggle}
             isAdminUser={isAdminUser}
+            onToggleSidebar={toggleSidebarCollapsed}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 bg-background">
@@ -1087,6 +1095,7 @@ type ChatPanelProps = {
   onMemorySettingsOpen: () => void;
   onMemoryToggle: (checked: boolean) => void;
   isAdminUser: boolean;
+  onToggleSidebar: () => void;
 };
 
 type SpeechRecognitionInstance = {
@@ -1162,6 +1171,7 @@ function ChatPanel({
   onMemorySettingsOpen,
   onMemoryToggle,
   isAdminUser,
+  onToggleSidebar,
 }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1904,9 +1914,18 @@ ${videoLines}`;
         aria-hidden
         onEnded={() => setPlayingIndex(null)}
       />
-      <div className="shrink-0 border-b border-border bg-card px-3 md:px-6 py-3 md:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="shrink-0 border-b border-border bg-card px-3 md:px-6 py-2 md:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 overflow-x-hidden">
         <div className="flex items-center gap-2">
-          <h1 className="text-base md:text-xl font-semibold text-foreground truncate max-w-[200px] md:max-w-[240px]">
+          {/* Mobile: show button to open chat history sidebar */}
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="md:hidden flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+            aria-label="Toggle chat history"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          <h1 className="text-base md:text-xl font-semibold text-foreground truncate max-w-[180px] sm:max-w-[220px] md:max-w-[280px]">
             {sessionTitle === "New Chat" ? "New Conversation" : sessionTitle}
           </h1>
           {playingIndex !== null && (
@@ -1919,10 +1938,10 @@ ${videoLines}`;
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5 flex-wrap overflow-x-auto max-w-full">
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap sm:flex-wrap overflow-x-hidden min-w-0">
           {!isVoiceCall ? (
             <>
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="hidden sm:flex items-center gap-1.5 shrink-0">
                 <span className="text-sm font-medium text-foreground hidden sm:inline">Memory</span>
                 <Switch checked={memoryEnabled} onCheckedChange={onMemoryToggle} aria-label="Memory on or off" />
                 <button
@@ -1937,7 +1956,7 @@ ${videoLines}`;
               </div>
               <Select value={coachMode} onValueChange={onCoachModeChange}>
                 <SelectTrigger
-                  className="shrink-0 w-[140px] sm:w-[200px] gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20 h-9"
+                  className="shrink-0 w-[120px] sm:w-[200px] gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20 h-8 sm:h-9 text-xs sm:text-sm"
                   aria-label="Coach mode"
                 >
                   <SelectValue placeholder="Coach Mode">
@@ -1961,23 +1980,23 @@ ${videoLines}`;
                 variant="outline"
                 size="sm"
                 onClick={() => onPromptsLibraryOpenChange(true)}
-                className="shrink-0 gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20"
+                className="hidden sm:flex shrink-0 gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20"
                 aria-label="Open prompts library"
               >
                 <BookOpen className="h-4 w-4" />
                 <span className="hidden sm:inline">Prompts Library</span>
               </Button>
               {productId && productName ? (
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-orange-500/15 text-orange-700 dark:text-orange-300 px-2.5 py-1.5 text-sm">
-                  <Package className="h-4 w-4 shrink-0" />
-                  <span className="max-w-[160px] truncate">Talking about: {productName}</span>
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-orange-500/15 text-orange-700 dark:text-orange-300 px-2 py-1 text-xs sm:text-sm sm:px-2.5 sm:py-1.5">
+                  <Package className="h-3.5 w-3.5 shrink-0" />
+                  <span className="max-w-[80px] sm:max-w-[160px] truncate">{productName}</span>
                   <button
                     type="button"
                     onClick={() => onProductContextChange(null)}
                     className="rounded p-0.5 hover:bg-orange-500/20"
                     aria-label="Remove product context"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="h-3 w-3" />
                   </button>
                 </span>
               ) : null}
@@ -1987,7 +2006,7 @@ ${videoLines}`;
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="shrink-0 gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20"
+                    className="hidden sm:flex shrink-0 gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20"
                     aria-label="Add product context"
                     title="Attach a product to this conversation"
                   >
@@ -2022,7 +2041,7 @@ ${videoLines}`;
                 variant="outline"
                 size="sm"
                 onClick={handleStartVoiceCall}
-                className="shrink-0 gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20"
+                className="hidden sm:flex shrink-0 gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20"
                 aria-label="Start voice call"
                 title="Start voice call"
               >
@@ -2035,7 +2054,7 @@ ${videoLines}`;
                 size="sm"
                 onClick={() => onMutedChange(!muted)}
                 className={cn(
-                  "shrink-0",
+                  "shrink-0 hidden sm:flex",
                   muted ? "text-slate-500 dark:text-slate-400" : "text-orange-500 dark:text-orange-400"
                 )}
                 aria-label={muted ? "Unmute speech" : "Mute speech"}
@@ -2052,7 +2071,7 @@ ${videoLines}`;
                 variant="ghost"
                 size="sm"
                 onClick={handleClearChat}
-                className="text-slate-600 dark:text-slate-400"
+                className="text-slate-600 dark:text-slate-400 hidden sm:flex"
               >
                 Clear Chat
               </Button>
@@ -2094,8 +2113,8 @@ ${videoLines}`;
         </div>
       ) : (
       <>
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="mx-auto w-full max-w-[52rem] px-4 py-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+        <div className="mx-auto w-full max-w-[52rem] px-3 sm:px-4 py-6">
           {memoryEnabled && (
             <div className="flex justify-center pb-2">
               <span className="inline-flex items-center gap-1 rounded-full bg-muted/80 text-muted-foreground text-xs px-2.5 py-1">
@@ -2104,7 +2123,9 @@ ${videoLines}`;
             </div>
           )}
           {messages.length === 0 && (
-            <div className="flex flex-wrap gap-2 justify-center pt-6 pb-4">
+            /* Mobile: single-row horizontal scroll so long chip text never overflows.
+               sm+: wrap into multiple rows, centered. */
+            <div className="flex gap-2 pt-6 pb-2 overflow-x-auto px-4 sm:flex-wrap sm:overflow-visible sm:justify-center sm:pb-4 no-scrollbar">
               {(products.length > 0
                 ? [
                     `Help me improve "${products[0]?.title ?? "my product"}"`,
@@ -2119,7 +2140,7 @@ ${videoLines}`;
                   onClick={() => sendMessage(label)}
                   disabled={isLoading}
                   className={cn(
-                    "rounded-full px-4 py-2 text-sm font-medium transition-colors",
+                    "shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap",
                     "bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20",
                     "dark:bg-orange-500/20 dark:hover:bg-orange-500/30",
                     "disabled:opacity-50 disabled:pointer-events-none"
@@ -2390,7 +2411,7 @@ ${videoLines}`;
                       i === messages.length - 1 &&
                       (msg.content?.trim()?.length ?? 0) > 100 && (
                         <div className="mt-3 w-full">
-                          <YouTubeScriptActionPanel scriptText={stripMarkdown(msg.content ?? "")} />
+                          <YouTubeScriptActionPanel scriptText={stripMarkdown(msg.content ?? "")} isAdmin={isAdminUser} />
                           <div className="mt-3">
                             <Button
                               type="button"
@@ -2427,7 +2448,7 @@ ${videoLines}`;
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-border bg-card px-4 py-4 pb-safe-or-4">
+      <div className="shrink-0 border-t border-border bg-card px-3 sm:px-4 pt-3 pb-mobile-nav md:pb-4">
         {(pendingImageUrls.length > 0 || pendingFiles.length > 0 || pendingVideos.length > 0) && (
           <div className="mx-auto max-w-[52rem] flex flex-wrap gap-2 mb-2">
             {pendingImageUrls.map((url, i) => (
@@ -2539,7 +2560,7 @@ ${videoLines}`;
             size="icon"
             onClick={handleGenerateImage}
             disabled={isLoading || isRecording}
-            className="shrink-0 h-10 w-10 border-border"
+            className="shrink-0 h-10 w-10 border-border hidden sm:flex"
             title="Generate AI image from your description"
             aria-label="Generate AI image"
           >
@@ -2551,7 +2572,7 @@ ${videoLines}`;
             size="icon"
             onClick={openVoiceOverDialog}
             disabled={isLoading || isRecording}
-            className="shrink-0 h-10 w-10 border-border"
+            className="shrink-0 h-10 w-10 border-border hidden sm:flex"
             title="Generate voice-over"
             aria-label="Generate voice-over from script"
           >

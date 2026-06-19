@@ -693,7 +693,7 @@ export default function DiscoverCreateFlow() {
   // ─── STEP 6: Product Format Selection & Details ─────────────────────────
   if (step === 6) {
     return (
-      <main className="min-h-screen bg-[#0F0F0F] text-white pb-32">
+      <main className="min-h-dvh bg-[#0F0F0F] text-white pb-44">
         <div className="max-w-4xl mx-auto p-6 md:p-10">
           <Link
             href="/dashboard/digital-products/discover"
@@ -827,7 +827,7 @@ export default function DiscoverCreateFlow() {
   // ─── STEP 7: Product Generation Loading ──────────────────────────────────
   if (step === 7) {
     return (
-      <main className="min-h-screen bg-[#0F0F0F] text-white flex flex-col items-center justify-center p-6">
+      <main className="min-h-dvh bg-[#0F0F0F] text-white flex flex-col items-center justify-center p-6">
         {generateError ? (
           <>
             <p className="text-red-400 mb-4">{generateError}</p>
@@ -866,7 +866,7 @@ export default function DiscoverCreateFlow() {
 
   // ─── STEP 8: Product Review & Edit ───────────────────────────────────────
   return (
-    <main className="min-h-screen bg-[#0F0F0F] text-white pb-24">
+    <main className="min-h-dvh bg-[#0F0F0F] text-white pb-44">
       <div className="max-w-6xl mx-auto p-6 md:p-10">
         <div className="flex items-center gap-2 mb-2">
           <Check className="w-6 h-6 text-green-500" />

@@ -10,6 +10,7 @@ export type DesignElement = {
   rotation?: number;
   opacity?: number;
   zIndex?: number;
+  locked?: boolean;
   flipX?: boolean;
   flipY?: boolean;
   shadowColor?: string;

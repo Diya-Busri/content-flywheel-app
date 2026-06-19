@@ -259,7 +259,7 @@ export default function DigitalProductsLanding() {
   };
 
   return (
-    <main className="min-h-screen p-5 md:p-10">
+    <main className="min-h-dvh p-5 md:p-10 pb-mobile-nav">
       <div className="max-w-4xl mx-auto">
         {/* Background generation banner */}
         {(bgGeneratingId || bgGeneratingDone || bgGeneratingFailed) && (
@@ -389,9 +389,12 @@ export default function DigitalProductsLanding() {
                 <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
               </div>
               <div>
-                <p className="font-semibold text-gray-900 dark:text-white mb-1">I Know What I Want</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="font-semibold text-gray-900 dark:text-white">I Know What I Want</p>
+                  <span className="text-[10px] font-bold uppercase tracking-wide bg-orange-500 text-white px-1.5 py-0.5 rounded-full shrink-0">Recommended</span>
+                </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                  You have an idea and audience in mind. AI generates your product in minutes.
+                  You have a topic in mind. Type it and AI builds your product in minutes — no design skills needed.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">

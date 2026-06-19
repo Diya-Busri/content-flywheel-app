@@ -281,7 +281,7 @@ export default function VideosFlow() {
   const cardClass = "border-border bg-card";
 
   return (
-    <main className="min-h-screen bg-background text-foreground mb-[100px]">
+    <main className="min-h-dvh bg-background text-foreground pb-44">
       <div className="max-w-4xl mx-auto p-6 md:p-10">
         {/* ── Flow header (matches Step 2 style) ── */}
         <div className="mb-8">
@@ -404,7 +404,7 @@ export default function VideosFlow() {
             {/* VOICE SETTINGS */}
             <Card className={cardClass}>
               <CardHeader>
-                <CardTitle className="text-lg text-foreground">Voice settings</CardTitle>
+                <CardTitle className="text-lg text-foreground">Choose your voiceover</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
@@ -474,7 +474,7 @@ export default function VideosFlow() {
             {/* VISUAL CUSTOMIZATION */}
             <Card className={cardClass}>
               <CardHeader>
-                <CardTitle className="text-lg text-foreground">Visual customization</CardTitle>
+                <CardTitle className="text-lg text-foreground">Look & feel</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 {videoStyle === "dark_infographic" ? (
@@ -614,7 +614,7 @@ export default function VideosFlow() {
             {/* PLATFORM OPTIMIZATION */}
             <Card className={cardClass}>
               <CardHeader>
-                <CardTitle className="text-lg text-foreground">Target platforms</CardTitle>
+                <CardTitle className="text-lg text-foreground">Where will you post?</CardTitle>
                 <p className="text-sm text-muted-foreground">Select all platforms you want to post on. The guide will include platform-specific strategies for each.</p>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -639,60 +639,87 @@ export default function VideosFlow() {
                 <p className="text-xs text-muted-foreground mt-2">Platform selection happens before generation so the AI creates tailored content for each platform.</p>
               </CardContent>
             </Card>
+
+            {/* ── Inline completion CTA ──────────────────────────────────────────
+                This is the visual END of the settings flow. It anchors the scroll
+                and makes the final action obvious even before users spot the
+                fixed bottom bar. The fixed bar still provides persistence while
+                scrolling through earlier sections.
+            ─────────────────────────────────────────────────────────────────── */}
+            <div className="rounded-2xl border border-orange-500/25 bg-orange-500/5 dark:bg-orange-500/8 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 mb-1">All done — ready to generate</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Your personalised Video Creation Guide includes scene-by-scene prompts, editing steps, and platform strategies.
+                </p>
+                <p className="text-xs text-gray-500 dark:text-muted-foreground mt-1">Takes 30–60 seconds · Saved to My Library automatically</p>
+              </div>
+              <Button
+                className="bg-orange-500 hover:bg-orange-600 text-white font-semibold gap-2 shrink-0 h-11 px-6"
+                onClick={handleGenerateGuide}
+                disabled={generateLoading || videoReady}
+              >
+                {generateLoading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>
+                ) : videoReady ? (
+                  <><Check className="w-4 h-4" /> Guide Ready</>
+                ) : (
+                  <><FileText className="w-4 h-4" /> Generate Video Guide</>
+                )}
+              </Button>
+            </div>
           </div>
         )}
 
         {/* Bottom bar */}
         {count > 0 && (
-          <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur py-4 px-4 md:px-6">
-            <div className="max-w-4xl mx-auto flex flex-col gap-3">
+          <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 backdrop-blur pt-3 pb-mobile-nav px-4 md:px-6">
+            <div className="max-w-4xl mx-auto flex flex-col gap-2">
               {generateProgress && (
-                <div className="flex items-center gap-3 rounded-lg bg-orange-500/10 border border-orange-500/30 px-4 py-2">
-                  <Loader2 className="w-5 h-5 animate-spin text-orange-500 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="font-medium text-orange-200">{generateProgress}</p>
-                    <p className="text-xs text-orange-200/80">This may take 2–5 minutes. Don&apos;t close this page.</p>
+                <div className="flex items-center gap-2 rounded-lg bg-orange-500/10 border border-orange-500/30 px-3 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-orange-500 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-orange-200 truncate">{generateProgress}</p>
+                    <p className="text-xs text-orange-200/80 hidden sm:block">This may take 2–5 minutes. Don&apos;t close this page.</p>
                   </div>
-                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full w-1/3 animate-pulse rounded-full bg-orange-500" style={{ animationDuration: "1.5s" }} />
+                  <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden shrink-0">
+                    <div className="h-full w-1/2 animate-pulse rounded-full bg-orange-500" style={{ animationDuration: "1.5s" }} />
                   </div>
                 </div>
               )}
-              <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-                <div className="flex flex-col sm:items-end gap-2 sm:ml-auto">
-                  {videoReady ? (
-                    <div className="flex flex-col sm:items-end gap-1.5">
-                      <Button
-                        onClick={goToGuide}
-                        size="lg"
-                        className="bg-green-600 hover:bg-green-700 text-white font-semibold gap-2"
-                      >
-                        <Check className="w-4 h-4" />
-                        View Video Guide →
-                      </Button>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">(Opening automatically…)</p>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-sm text-muted-foreground">
-                        Get a personalised step-by-step guide to create your video using free tools
-                      </p>
-                      <Button
-                        className="bg-orange-500 hover:bg-orange-600 gap-2"
-                        size="lg"
-                        onClick={handleGenerateGuide}
-                        disabled={generateLoading}
-                      >
-                        {generateLoading ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <FileText className="w-4 h-4" />
-                        )}
-                        {generateLoading ? "Generating…" : "Create Video Guide →"}
-                      </Button>
-                    </>
-                  )}
-                </div>
+              <div className="flex items-center gap-2">
+                {videoReady ? (
+                  <div className="flex flex-col gap-1 w-full">
+                    <Button
+                      onClick={goToGuide}
+                      size="default"
+                      className="bg-green-600 hover:bg-green-700 text-white font-semibold gap-2 w-full sm:w-auto sm:ml-auto"
+                    >
+                      <Check className="w-4 h-4" />
+                      View Video Guide →
+                    </Button>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center sm:text-right">(Opening automatically…)</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground hidden sm:block flex-1">
+                      Personalised guide using free tools
+                    </p>
+                    <Button
+                      className="bg-orange-500 hover:bg-orange-600 gap-2 flex-1 sm:flex-none font-semibold"
+                      size="default"
+                      onClick={handleGenerateGuide}
+                      disabled={generateLoading}
+                    >
+                      {generateLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <FileText className="w-4 h-4" />
+                      )}
+                      {generateLoading ? "Generating…" : "Create Video Guide →"}
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </div>

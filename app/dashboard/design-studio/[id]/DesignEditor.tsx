@@ -11,7 +11,7 @@ import {
   MoveLeft, MoveRight, MoveUp, MoveDown, Undo2, Redo2,
   Underline, Strikethrough, ZoomIn, ZoomOut, FileDown, Highlighter,
   LayoutTemplate, Images, Layers, X, Settings2, Palette,
-  Grid3x3, Smartphone,
+  Grid3x3, Smartphone, Lock, Unlock, ArrowUp, ArrowDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -695,14 +695,33 @@ export function DesignEditor({ designId }: { designId: string }) {
     updateElement(selectedEl.id, { x, y });
   }
 
+  // ── Lock / unlock ──────────────────────────────────────────────────────────
+  function lockSelected() {
+    if (selectedEl) updateElement(selectedEl.id, { locked: true });
+  }
+  function unlockSelected() {
+    if (selectedEl) updateElement(selectedEl.id, { locked: false });
+  }
+
+  // ── Bring / send layers ────────────────────────────────────────────────────
+  function bringForward() {
+    if (!selectedEl) return;
+    updateElement(selectedEl.id, { zIndex: (selectedEl.zIndex ?? 0) + 1 });
+  }
+  function sendBackward() {
+    if (!selectedEl) return;
+    updateElement(selectedEl.id, { zIndex: Math.max(0, (selectedEl.zIndex ?? 0) - 1) });
+  }
+
   // ── Drag/resize/rotate — pointer events work for both mouse and touch ──
 
   function onElementPointerDown(e: React.PointerEvent, id: string) {
     if ((e.target as HTMLElement).dataset.resize || (e.target as HTMLElement).dataset.rotate) return;
     e.stopPropagation();
     e.preventDefault(); // prevent page scroll while dragging on touch
-    setSelectedId(id);
+    // Skip interaction if element is locked
     const el = data.elements.find((x) => x.id === id)!;
+    if (el?.locked) { setSelectedId(id); return; } // allow select but no drag
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: el.x, origY: el.y };
     // Pointer capture keeps events flowing even if finger slides off the element
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
@@ -727,16 +746,54 @@ export function DesignEditor({ designId }: { designId: string }) {
   }
 
   function onResizePointerDown(e: React.PointerEvent, id: string) {
+    onResizeCornerPointerDown(e, id, "se");
+  }
+
+  /**
+   * Corner-aware resize handler. Supports all 4 corners.
+   * On touch (pointerType === "touch") aspect ratio is locked by default for images.
+   */
+  function onResizeCornerPointerDown(
+    e: React.PointerEvent,
+    id: string,
+    corner: "nw" | "ne" | "sw" | "se"
+  ) {
     e.stopPropagation(); e.preventDefault();
     const el = data.elements.find((x) => x.id === id)!;
-    resizeRef.current = { startX: e.clientX, startY: e.clientY, origW: el.width, origH: el.height };
+    const ar = el.height / el.width; // aspect ratio
+    const lockAR = e.pointerType === "touch" && (el.type === "image" || e.shiftKey);
+    resizeRef.current = {
+      startX: e.clientX, startY: e.clientY,
+      origW: el.width, origH: el.height,
+    };
+    // Also stash original x/y for NW corner dragging
+    const origX = el.x, origY = el.y;
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
     const onMove = (ev: PointerEvent) => {
       if (!resizeRef.current) return;
-      updateElement(id, {
-        width: Math.max(20, resizeRef.current.origW + (ev.clientX - resizeRef.current.startX) / scale),
-        height: Math.max(20, resizeRef.current.origH + (ev.clientY - resizeRef.current.startY) / scale),
-      }, false);
+      const dx = (ev.clientX - resizeRef.current.startX) / scale;
+      const dy = (ev.clientY - resizeRef.current.startY) / scale;
+      let { origW, origH } = resizeRef.current;
+      let newW = origW, newH = origH, newX = origX, newY = origY;
+
+      if (corner === "se") {
+        newW = Math.max(20, origW + dx);
+        newH = lockAR ? newW * ar : Math.max(20, origH + dy);
+      } else if (corner === "sw") {
+        newW = Math.max(20, origW - dx);
+        newH = lockAR ? newW * ar : Math.max(20, origH + dy);
+        newX = origX + (origW - newW);
+      } else if (corner === "ne") {
+        newW = Math.max(20, origW + dx);
+        newH = lockAR ? newW * ar : Math.max(20, origH - dy);
+        newY = origY + (origH - newH);
+      } else { // nw
+        newW = Math.max(20, origW - dx);
+        newH = lockAR ? newW * ar : Math.max(20, origH - dy);
+        newX = origX + (origW - newW);
+        newY = origY + (origH - newH);
+      }
+      updateElement(id, { width: newW, height: newH, x: newX, y: newY }, false);
     };
     const onUp = () => {
       resizeRef.current = null;
@@ -850,28 +907,28 @@ export function DesignEditor({ designId }: { designId: string }) {
 
   const panelCls = isDark ? "border-[#2A2A2A] bg-[#1A1A1A]" : "border-gray-200 bg-white";
 
-  if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-full min-h-[50dvh]"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div>;
 
   return (
-    <div className={`flex flex-col h-full overflow-hidden ${isDark ? "bg-[#0F0F0F] text-white" : "bg-[#F9FAFB] text-gray-900"}`}>
+    <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-[#0F0F0F] text-white" : "bg-[#F9FAFB] text-gray-900"}`}>
 
       {/* Top bar */}
-      <header className={`shrink-0 flex items-center justify-between gap-3 px-4 border-b ${isDark ? "bg-[#0F0F0F]/95 border-[#2A2A2A]" : "bg-white/95 border-gray-200"} backdrop-blur-sm shadow-sm z-40`} style={{ height: 52 }}>
-        <div className="flex items-center gap-3 min-w-0">
+      <header className={`shrink-0 flex items-center justify-between gap-2 px-3 md:px-4 border-b overflow-x-hidden ${isDark ? "bg-[#0F0F0F]/95 border-[#2A2A2A]" : "bg-white/95 border-gray-200"} backdrop-blur-sm shadow-sm z-40`} style={{ height: 52 }}>
+        <div className="flex items-center gap-2 md:gap-3 min-w-0 shrink">
           <Link
             href={bundleId ? `/dashboard/design-studio/bundle/${bundleId}` : "/dashboard/design-studio"}
             className={`flex items-center gap-1 text-sm shrink-0 ${isDark ? "text-gray-400 hover:text-orange-500" : "text-gray-500 hover:text-orange-500"}`}
           >
             <ChevronLeft className="w-4 h-4" /> {bundleId ? "Bundle" : "Back"}
           </Link>
-          <div className={`h-5 w-px ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+          <div className={`h-5 w-px hidden sm:block ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
           {editingTitle
-            ? <Input autoFocus value={title} onChange={(e) => updateTitle(e.target.value)} onBlur={() => setEditingTitle(false)} onKeyDown={(e) => { if (e.key === "Enter") setEditingTitle(false); }} className="h-7 text-sm font-semibold w-44 px-2" />
-            : <button onClick={() => setEditingTitle(true)} className={`text-sm font-semibold truncate max-w-[180px] hover:text-orange-500 ${isDark ? "text-white" : "text-gray-900"}`}>{title}</button>}
-          {saving ? <span className="flex items-center gap-1 text-xs text-gray-400"><Loader2 className="w-3 h-3 animate-spin" /> Saving…</span>
-            : lastSaved ? <span className="flex items-center gap-1 text-xs text-emerald-600"><Check className="w-3 h-3" /> Saved</span> : null}
+            ? <Input autoFocus value={title} onChange={(e) => updateTitle(e.target.value)} onBlur={() => setEditingTitle(false)} onKeyDown={(e) => { if (e.key === "Enter") setEditingTitle(false); }} className="h-7 text-sm font-semibold w-32 sm:w-44 px-2" />
+            : <button onClick={() => setEditingTitle(true)} className={`text-sm font-semibold truncate max-w-[100px] sm:max-w-[180px] hover:text-orange-500 ${isDark ? "text-white" : "text-gray-900"}`}>{title}</button>}
+          {saving ? <span className="hidden sm:flex items-center gap-1 text-xs text-gray-400"><Loader2 className="w-3 h-3 animate-spin" /> Saving…</span>
+            : lastSaved ? <span className="hidden sm:flex items-center gap-1 text-xs text-emerald-600"><Check className="w-3 h-3" /> Saved</span> : null}
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 md:gap-1.5 shrink-0">
           <Button size="sm" variant="ghost" onClick={undo} className={`h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Undo (⌘Z)"><Undo2 className="w-4 h-4" /></Button>
           <Button size="sm" variant="ghost" onClick={redo} className={`h-8 w-8 p-0 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500"}`} title="Redo (⌘⇧Z)"><Redo2 className="w-4 h-4" /></Button>
           <div className={`hidden md:block h-5 w-px mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
@@ -947,7 +1004,7 @@ export function DesignEditor({ designId }: { designId: string }) {
         {/* Canvas */}
         <div
           ref={containerRef}
-          className={`flex-1 flex items-center justify-center overflow-auto p-2 sm:p-8 ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
+          className={`flex-1 flex items-center justify-center overflow-auto p-2 sm:p-8 pb-editor-toolbar md:pb-8 ${selectedEl ? "pt-14 md:pt-2" : ""} ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
           style={{ backgroundImage: isDark ? "radial-gradient(circle, #2A2A2A 1px, transparent 1px)" : "radial-gradient(circle, #d1d5db 1px, transparent 1px)", backgroundSize: "24px 24px" }}
           onClick={() => { setSelectedId(null); setActivePanel(null); }}
         >
@@ -980,6 +1037,7 @@ export function DesignEditor({ designId }: { designId: string }) {
                 <CanvasElement key={el.id} el={el} selected={el.id === selectedId}
                   onPointerDown={onElementPointerDown}
                   onResizePointerDown={onResizePointerDown}
+                  onResizeCornerPointerDown={onResizeCornerPointerDown}
                   onRotatePointerDown={onRotatePointerDown}
                   onUpdate={(patch) => updateElement(el.id, patch)} />
               ))}
@@ -1009,35 +1067,129 @@ export function DesignEditor({ designId }: { designId: string }) {
                 onApplyTemplate={applyTemplate}
                 elementCount={data.elements.length} />}
         </aside>
+
+        {/* ── Mobile element editing toolbar ────────────────────────────────
+            Appears when an element is selected on phones/tablets.
+            Fixed to the top of the screen (below the 52px header) so it never
+            occludes canvas content. md:hidden — desktop uses the right panel.
+        */}
+        {selectedEl && (
+          <div
+            className={`md:hidden fixed left-0 right-0 z-[49] flex items-center justify-center gap-1 px-3 py-2 border-b shadow-sm ${panelCls}`}
+            style={{ top: 52 }}
+          >
+            {/* Lock / Unlock */}
+            <button
+              type="button"
+              onClick={selectedEl.locked ? unlockSelected : lockSelected}
+              className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${selectedEl.locked ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+              title={selectedEl.locked ? "Unlock" : "Lock"}
+            >
+              {selectedEl.locked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+              <span className="text-[9px] font-medium leading-none">{selectedEl.locked ? "Locked" : "Lock"}</span>
+            </button>
+
+            <div className={`w-px h-6 mx-1 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+            {/* Bring Forward */}
+            <button
+              type="button"
+              onClick={bringForward}
+              disabled={!!selectedEl.locked}
+              className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors disabled:opacity-40 ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+              title="Bring forward"
+            >
+              <ArrowUp className="w-4 h-4" />
+              <span className="text-[9px] font-medium leading-none">Forward</span>
+            </button>
+
+            {/* Send Backward */}
+            <button
+              type="button"
+              onClick={sendBackward}
+              disabled={!!selectedEl.locked}
+              className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors disabled:opacity-40 ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+              title="Send backward"
+            >
+              <ArrowDown className="w-4 h-4" />
+              <span className="text-[9px] font-medium leading-none">Back</span>
+            </button>
+
+            <div className={`w-px h-6 mx-1 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+            {/* Duplicate */}
+            <button
+              type="button"
+              onClick={duplicateSelected}
+              disabled={!!selectedEl.locked}
+              className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors disabled:opacity-40 ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+              title="Duplicate"
+            >
+              <Copy className="w-4 h-4" />
+              <span className="text-[9px] font-medium leading-none">Copy</span>
+            </button>
+
+            {/* Delete */}
+            <button
+              type="button"
+              onClick={deleteSelected}
+              className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${isDark ? "text-red-400 hover:bg-red-500/20" : "text-red-500 hover:bg-red-50"}`}
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="text-[9px] font-medium leading-none">Delete</span>
+            </button>
+
+            {/* Dismiss / deselect */}
+            <div className={`w-px h-6 mx-1 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${isDark ? "text-gray-400 hover:bg-white/10" : "text-gray-500 hover:bg-gray-100"}`}
+              title="Deselect"
+            >
+              <X className="w-4 h-4" />
+              <span className="text-[9px] font-medium leading-none">Done</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* ── Mobile bottom toolbar ── */}
-      <div className={`md:hidden shrink-0 flex items-center justify-around border-t px-1 py-1 ${panelCls}`}>
-        <button onClick={() => { addText(); }} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+      {/* ── Mobile bottom toolbar ── fixed directly above app nav, no gap */}
+      <div
+        className={`md:hidden flex items-center justify-around border-t px-1 py-1 z-[48] ${panelCls}`}
+        style={{
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))",
+        }}
+      >
+        <button onClick={() => { addText(); }} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Type className="w-5 h-5" />
           <span className="text-[9px] font-medium">Text</span>
         </button>
-        <button onClick={() => setMobileToolSheet((prev) => prev === "shapes" ? null : "shapes")} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileToolSheet === "shapes" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+        <button onClick={() => setMobileToolSheet((prev) => prev === "shapes" ? null : "shapes")} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${mobileToolSheet === "shapes" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Square className="w-5 h-5" />
           <span className="text-[9px] font-medium">Shapes</span>
         </button>
-        <button onClick={() => setMobileToolSheet((prev) => prev === "uploads" ? null : "uploads")} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileToolSheet === "uploads" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+        <button onClick={() => setMobileToolSheet((prev) => prev === "uploads" ? null : "uploads")} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${mobileToolSheet === "uploads" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Images className="w-5 h-5" />
           <span className="text-[9px] font-medium">Uploads</span>
         </button>
-        <button onClick={() => setMobileToolSheet((prev) => prev === "ai" ? null : "ai")} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileToolSheet === "ai" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+        <button onClick={() => setMobileToolSheet((prev) => prev === "ai" ? null : "ai")} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${mobileToolSheet === "ai" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Sparkles className="w-5 h-5" />
           <span className="text-[9px] font-medium">AI</span>
         </button>
-        <button onClick={() => setMobileToolSheet((prev) => prev === "background" ? null : "background")} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileToolSheet === "background" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+        <button onClick={() => setMobileToolSheet((prev) => prev === "background" ? null : "background")} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${mobileToolSheet === "background" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Palette className="w-5 h-5" />
           <span className="text-[9px] font-medium">Canvas</span>
         </button>
-        <button onClick={() => setShowGrid((v) => !v)} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${showGrid ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+        <button onClick={() => setShowGrid((v) => !v)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${showGrid ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Grid3x3 className="w-5 h-5" />
           <span className="text-[9px] font-medium">Grid</span>
         </button>
-        <button onClick={() => setMobileSettingsOpen((prev) => !prev)} className={`flex flex-col items-center gap-0.5 py-2 px-3 min-w-[52px] rounded-xl ${mobileSettingsOpen ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+        <button onClick={() => setMobileSettingsOpen((prev) => !prev)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${mobileSettingsOpen ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Settings2 className="w-5 h-5" />
           <span className="text-[9px] font-medium">{selectedId ? "Element" : "Settings"}</span>
         </button>
@@ -1045,7 +1197,7 @@ export function DesignEditor({ designId }: { designId: string }) {
 
       {/* ── Mobile tool Sheet ── */}
       <Sheet open={mobileToolSheet !== null} onOpenChange={(o) => { if (!o) setMobileToolSheet(null); }}>
-        <SheetContent side="bottom" className={`h-[65vh] rounded-t-2xl p-0 flex flex-col ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white" : "bg-white text-gray-900"}`}>
+        <SheetContent side="bottom" className={`h-[65dvh] rounded-t-2xl p-0 flex flex-col ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white" : "bg-white text-gray-900"}`}>
           <div className={`flex items-center justify-between px-4 py-3 border-b shrink-0 ${isDark ? "border-[#2A2A2A]" : "border-gray-100"}`}>
             <p className="text-sm font-semibold capitalize">{mobileToolSheet === "background" ? "Canvas & Background" : mobileToolSheet}</p>
             <button onClick={() => setMobileToolSheet(null)} className={`p-1.5 rounded-lg ${isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}><X className="w-4 h-4" /></button>
@@ -1148,7 +1300,7 @@ export function DesignEditor({ designId }: { designId: string }) {
 
       {/* ── Mobile settings Sheet ── */}
       <Sheet open={mobileSettingsOpen} onOpenChange={setMobileSettingsOpen}>
-        <SheetContent side="bottom" className={`h-[75vh] rounded-t-2xl p-0 flex flex-col ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white" : "bg-white text-gray-900"}`}>
+        <SheetContent side="bottom" className={`h-[75dvh] rounded-t-2xl p-0 flex flex-col ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white" : "bg-white text-gray-900"}`}>
           <div className={`flex items-center justify-between px-4 py-3 border-b shrink-0 ${isDark ? "border-[#2A2A2A]" : "border-gray-100"}`}>
             <p className="text-sm font-semibold">{selectedEl ? "Element Settings" : "Canvas Settings"}</p>
             <button onClick={() => setMobileSettingsOpen(false)} className={`p-1.5 rounded-lg ${isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}><X className="w-4 h-4" /></button>
@@ -1172,7 +1324,7 @@ export function DesignEditor({ designId }: { designId: string }) {
 
       {/* ── Flyout panels – fixed so they escape overflow clipping ── */}
       {activePanel && (
-        <div style={{ position: "fixed", left: flyoutPos.x, top: flyoutPos.y, zIndex: 300, maxHeight: "calc(100vh - 16px)", overflowY: "auto" }}
+        <div style={{ position: "fixed", left: flyoutPos.x, top: flyoutPos.y, zIndex: 300, maxHeight: "calc(100dvh - 16px)", overflowY: "auto" }}
           className={`rounded-xl border shadow-2xl ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white" : "bg-white border-gray-200 text-gray-900"}`}>
 
           {/* Shapes */}
@@ -1283,14 +1435,17 @@ function ToolBtn({ icon, label, onClick, isDark, danger }: { icon: React.ReactNo
 
 // ── Canvas element ─────────────────────────────────────────────────────────
 
-function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRotatePointerDown, onUpdate }: {
+function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onResizeCornerPointerDown, onRotatePointerDown, onUpdate }: {
   el: DesignElement; selected: boolean;
   onPointerDown: (e: React.PointerEvent, id: string) => void;
   onResizePointerDown: (e: React.PointerEvent, id: string) => void;
+  onResizeCornerPointerDown: (e: React.PointerEvent, id: string, corner: "nw" | "ne" | "sw" | "se") => void;
   onRotatePointerDown: (e: React.PointerEvent, id: string) => void;
   onUpdate: (patch: Partial<DesignElement>) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  // Pinch-to-resize state — tracks the initial pinch distance + element size
+  const pinchRef = useRef<{ startDist: number; origW: number; origH: number } | null>(null);
 
   const shadow = el.shadowBlur || el.shadowX || el.shadowY
     ? `drop-shadow(${el.shadowX ?? 0}px ${el.shadowY ?? 4}px ${el.shadowBlur ?? 8}px ${el.shadowColor ?? "rgba(0,0,0,0.4)"})`
@@ -1305,33 +1460,75 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRot
 
   const base: React.CSSProperties = {
     position: "absolute", left: el.x, top: el.y, width: el.width, height: el.height,
-    opacity: el.opacity ?? 1, cursor: "move", userSelect: "none",
-    // touchAction none prevents the browser from intercepting the pointer for scrolling
+    opacity: el.opacity ?? 1,
+    cursor: el.locked ? "not-allowed" : "move",
+    userSelect: "none",
     touchAction: "none",
     transform: `rotate(${el.rotation ?? 0}deg)${flipTransform ? ` ${flipTransform}` : ""}`,
     transformOrigin: "center center",
     filter: filterVal,
-    outline: selected ? "2px solid #f97316" : "none", outlineOffset: 2, zIndex: el.zIndex ?? 0,
+    // Thicker, more visible selection ring — especially important on mobile
+    outline: selected ? "2.5px solid #f97316" : "none",
+    outlineOffset: 3,
+    // Subtle glow on selected elements to aid discoverability
+    boxShadow: selected ? "0 0 0 4px rgba(249,115,22,0.18)" : undefined,
+    zIndex: el.zIndex ?? 0,
   };
 
-  const rotateHandle = selected ? (
+  // Pinch handlers — two touches on the element resize it proportionally
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && !el.locked) {
+      e.preventDefault();
+      const t1 = e.touches[0], t2 = e.touches[1];
+      pinchRef.current = {
+        startDist: Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY),
+        origW: el.width, origH: el.height,
+      };
+    }
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchRef.current && !el.locked) {
+      e.preventDefault();
+      const t1 = e.touches[0], t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const ratio = dist / pinchRef.current.startDist;
+      onUpdate({
+        width: Math.max(20, pinchRef.current.origW * ratio),
+        height: Math.max(20, pinchRef.current.origH * ratio),
+      });
+    }
+  };
+  const onTouchEnd = () => { pinchRef.current = null; };
+
+  const rotateHandle = selected && !el.locked ? (
     <div
       data-rotate="true"
       onPointerDown={(e) => onRotatePointerDown(e, el.id)}
       style={{
-        position: "absolute", top: -36, left: "50%", transform: "translateX(-50%)",
-        // Larger handle for finger touch (min 44px recommended by Apple HIG)
-        width: 28, height: 28, background: "#f97316", border: "2px solid white",
+        position: "absolute", top: -40, left: "50%", transform: "translateX(-50%)",
+        width: 32, height: 32, background: "#f97316", border: "2px solid white",
         borderRadius: "50%", cursor: "grab", zIndex: 1000, touchAction: "none",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}
     >
-      <RotateCw style={{ width: 13, height: 13, color: "white", pointerEvents: "none" }} />
+      <RotateCw style={{ width: 14, height: 14, color: "white", pointerEvents: "none" }} />
     </div>
   ) : null;
 
+  // 4-corner resize handles, shown when selected and not locked
+  const cornerHandles = selected && !el.locked ? (
+    <>
+      <CornerHandle corner="nw" onPointerDown={(e) => onResizeCornerPointerDown(e, el.id, "nw")} />
+      <CornerHandle corner="ne" onPointerDown={(e) => onResizeCornerPointerDown(e, el.id, "ne")} />
+      <CornerHandle corner="sw" onPointerDown={(e) => onResizeCornerPointerDown(e, el.id, "sw")} />
+      <CornerHandle corner="se" onPointerDown={(e) => onResizeCornerPointerDown(e, el.id, "se")} />
+    </>
+  ) : null;
+
+  const sharedTouchProps = { onTouchStart, onTouchMove, onTouchEnd };
+
   if (el.type === "text") return (
-    <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => setEditing(true)}>
+    <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => !el.locked && setEditing(true)} {...sharedTouchProps}>
       {rotateHandle}
       {editing ? (
         <textarea autoFocus value={el.content ?? ""} onChange={(e) => onUpdate({ content: e.target.value })} onBlur={() => setEditing(false)}
@@ -1341,42 +1538,54 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRot
           {el.content}
         </div>
       )}
-      {selected && <ResizeHandle onPointerDown={(e) => onResizePointerDown(e, el.id)} />}
+      {cornerHandles}
     </div>
   );
 
   if (el.type === "image") return (
-    <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()}>
+    <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} {...sharedTouchProps}>
       {rotateHandle}
       {el.imageUrl
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={el.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: (el.objectFit as "cover" | "contain" | "fill") ?? "cover", display: "block", pointerEvents: "none" }} draggable={false} />
         : <div style={{ width: "100%", height: "100%", background: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 14 }}>No image</div>}
-      {selected && <ResizeHandle onPointerDown={(e) => onResizePointerDown(e, el.id)} />}
+      {cornerHandles}
     </div>
   );
 
   const shapeDef = SHAPES.find((s) => s.id === (el.shapeType ?? "rect")) ?? SHAPES[0];
   return (
-    <div style={{ ...base, overflow: "visible" }} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()}>
+    <div style={{ ...base, overflow: "visible" }} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} {...sharedTouchProps}>
       {rotateHandle}
       {shapeDef.render(el.fill ?? "#f97316", el.stroke, (el.strokeWidth ?? 0) > 0 ? el.strokeWidth : undefined)}
-      {selected && <ResizeHandle onPointerDown={(e) => onResizePointerDown(e, el.id)} />}
+      {cornerHandles}
     </div>
   );
 }
 
-function ResizeHandle({ onPointerDown }: { onPointerDown: (e: React.PointerEvent) => void }) {
+/** 4-corner resize handle — 28px visible, 44×44 touch target via negative margin */
+function CornerHandle({ corner, onPointerDown }: {
+  corner: "nw" | "ne" | "sw" | "se";
+  onPointerDown: (e: React.PointerEvent) => void;
+}) {
+  const cursors: Record<string, string> = { nw: "nw-resize", ne: "ne-resize", sw: "sw-resize", se: "se-resize" };
+  const pos: React.CSSProperties =
+    corner === "nw" ? { top: -10, left: -10 } :
+    corner === "ne" ? { top: -10, right: -10 } :
+    corner === "sw" ? { bottom: -10, left: -10 } :
+                      { bottom: -10, right: -10 };
   return (
     <div
       data-resize="true"
       onPointerDown={onPointerDown}
       style={{
-        position: "absolute", bottom: -8, right: -8,
-        // 24px visible handle inside a 44px touch target
-        width: 24, height: 24,
-        background: "#f97316", border: "2px solid white", borderRadius: 4,
-        cursor: "se-resize", zIndex: 999, touchAction: "none",
+        position: "absolute", ...pos,
+        // 28px visible handle, large enough for finger touch
+        width: 28, height: 28,
+        background: "#f97316", border: "2.5px solid white", borderRadius: 5,
+        cursor: cursors[corner], zIndex: 999, touchAction: "none",
+        // Transparent padding to expand the touch target without increasing visible size
+        boxSizing: "content-box",
       }}
     />
   );

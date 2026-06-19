@@ -527,7 +527,7 @@ export default function ScriptsFlow() {
   const editLimit = editModal?.section === "hook" ? limits.hook : editModal?.section === "body" ? limits.body : limits.cta;
 
   return (
-    <main className="min-h-screen bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white p-6 md:p-10 max-w-6xl mx-auto pb-28">
+    <main className="min-h-dvh bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white px-4 py-6 md:px-10 md:py-10 max-w-6xl mx-auto pb-44">
 
       {/* ── Flow header ── */}
       <div className="mb-8">
@@ -868,29 +868,31 @@ export default function ScriptsFlow() {
         </DialogContent>
       </Dialog>
 
-      {/* Sticky bottom bar */}
+      {/* Sticky bottom bar — sits above mobile nav */}
       {!loading && scripts.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 dark:border-[#2A2A2A] bg-white/95 dark:bg-[#0F0F0F]/95 backdrop-blur py-4 px-4 md:px-6">
-          <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                {selectedCount} script{selectedCount !== 1 ? "s" : ""} selected • Each video costs 1 credit
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 dark:border-[#2A2A2A] bg-white/95 dark:bg-[#0F0F0F]/95 backdrop-blur pt-3 pb-mobile-nav px-4 md:px-6">
+          <div className="max-w-6xl mx-auto flex flex-col gap-2">
+            {/* Top row: selection info + select/deselect */}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-xs font-medium text-gray-900 dark:text-white truncate">
+                {selectedCount} script{selectedCount !== 1 ? "s" : ""} selected
               </span>
-              <Button variant="ghost" size="sm" className="text-gray-700 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white" onClick={selectAll}>Select All</Button>
-              <Button variant="ghost" size="sm" className="text-gray-700 dark:text-[#A0A0A0] hover:text-gray-900 dark:hover:text-white" onClick={deselectAll}>Deselect All</Button>
+              <Button variant="ghost" size="sm" className="text-gray-600 dark:text-[#A0A0A0] h-7 px-2 text-xs shrink-0" onClick={selectAll}>All</Button>
+              <Button variant="ghost" size="sm" className="text-gray-600 dark:text-[#A0A0A0] h-7 px-2 text-xs shrink-0" onClick={deselectAll}>None</Button>
+              <span className="text-xs text-gray-400 dark:text-[#666] hidden sm:inline">• 1 credit per video</span>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" className="border-gray-200 dark:border-[#2A2A2A] text-gray-700 dark:text-[#A0A0A0]" asChild>
-                <Link href="/dashboard/digital-products/create">← Back to Product</Link>
+            {/* Bottom row: back + CTA */}
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-[#A0A0A0] shrink-0" asChild>
+                <Link href="/dashboard/digital-products/create">← Back</Link>
               </Button>
               <Button
-                className="bg-orange-500 hover:bg-orange-600"
-                size="lg"
+                className="bg-orange-500 hover:bg-orange-600 flex-1 font-semibold"
+                size="default"
                 disabled={selectedCount === 0}
-                title={selectedCount > 0 ? undefined : "Select at least one script"}
                 onClick={goToVideos}
               >
-                Create Video Guide →
+                Continue →
               </Button>
             </div>
           </div>
