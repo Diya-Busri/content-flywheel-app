@@ -255,11 +255,13 @@ function rect(
 }
 
 // Rough hook height estimate for layout math
+// Uses 0.68 char width (wider than mixed-case) to account for ALL CAPS bold text
 function hookBlockHeight(fs: number, wordCount: number, lineW: number): number {
-  const charsPerLine = Math.floor(lineW / (fs * 0.55));
-  const totalChars = wordCount * 6;
+  const charsPerLine = Math.floor(lineW / (fs * 0.68));
+  const totalChars = wordCount * 7; // avg 7 chars per word including space
   const lines = Math.max(Math.ceil(totalChars / charsPerLine), 1);
-  return Math.max(lines * fs * 1.15, fs * 2.2);
+  // 1.3 line height + 30% safety buffer so text never clips
+  return Math.max(lines * fs * 1.3 * 1.3, fs * 3);
 }
 
 // Body font size — smaller when mainText is long
