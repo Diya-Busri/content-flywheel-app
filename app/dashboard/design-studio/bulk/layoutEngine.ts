@@ -334,8 +334,8 @@ function buildEditorial(
   const hookW = W - 200;
   const hookY = 260 + Math.round(rng() * 60);
   const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
-  const ruleY = hookY + hH + 50;
-  const bodyY = ruleY + 52;
+  const ruleY = hookY + hH + 30;
+  const bodyY = ruleY + 36;
   const bodyW = W - 300; // narrower than hook — intentionally asymmetric
   const sub = rng();
 

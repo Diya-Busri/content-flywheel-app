@@ -60,16 +60,17 @@ Each post must be a promotional social media post designed to drive sales/intere
 
 Return a JSON object with a "posts" array. Each element must have EXACTLY these fields:
 - hook: A scroll-stopping opening line (5–12 words, ALL CAPS, product-benefit focused, no hashtags)
-- mainText: Sell the product — highlight the transformation, outcome, or key benefit (30–60 words, 2–3 sentences, no bullet points, no hashtags)
+- mainText: Sell the product — highlight the transformation, outcome, or key benefit (30–60 words, 2–3 sentences, no bullet points, no hashtags). Write naturally like a real person, NOT like an AI. NEVER mention the product name or put it in quotes inside the body text — let the hook and CTA do that work.
 - cta: Sales call to action (5–10 words, starts with verb — e.g. "Grab your copy today", "Get instant access now")
 - bgTheme: One of exactly: "dark", "light", "cream", "sage", "navy", "gradient-warm", "gradient-cool"
 - productTitle: The exact product title this post is for (from the list above)
 
 Rules:
-- Each post must mention or clearly reference its product
 - Focus on outcomes and transformations, not features
+- NEVER write the product name inside mainText (e.g. never write "Our 'X' guide" or "The 'X' ebook")
+- Write mainText as if a real creator is speaking to their audience — conversational, specific, human
 - Vary the angle for each post (problem-agitate-solve, social proof, curiosity, aspiration, urgency)
-- No filler phrases
+- No filler phrases like "Imagine a life where" or "Say goodbye to"
 - Hooks must be scroll-stopping and specific`;
 }
 
