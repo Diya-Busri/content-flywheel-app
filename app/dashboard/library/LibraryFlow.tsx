@@ -1068,7 +1068,7 @@ export default function LibraryFlow() {
                     <Video className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
                     <p className="text-gray-600 dark:text-gray-400 font-medium mb-1">No finished videos yet</p>
                     <p className="text-sm text-gray-500 mb-4">
-                      Create a promo video from a digital product, then export it — it'll appear here.
+                      Create a promo video from a digital product, then export it — it&apos;ll appear here.
                     </p>
                     <div className="flex flex-wrap gap-3 justify-center">
                       <Button asChild className="bg-orange-500 hover:bg-orange-600">

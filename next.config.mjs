@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: { ignoreBuildErrors: true },
+  // Transpile react-three packages so Next.js uses its own bundler rather than
+  // their pre-built ESM dist, which references React.unstable_act (removed in React 18.3+)
+  transpilePackages: ["@react-three/fiber", "@react-three/drei", "three"],
   images: {
     remotePatterns: [
       // Vercel Blob — used for all uploaded/generated assets
