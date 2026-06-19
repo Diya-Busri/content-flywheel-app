@@ -260,8 +260,8 @@ function hookBlockHeight(fs: number, wordCount: number, lineW: number): number {
   const charsPerLine = Math.floor(lineW / (fs * 0.68));
   const totalChars = wordCount * 7; // avg 7 chars per word including space
   const lines = Math.max(Math.ceil(totalChars / charsPerLine), 1);
-  // 1.3 line height + 30% safety buffer so text never clips
-  return Math.max(lines * fs * 1.3 * 1.3, fs * 3);
+  // 1.3 line height + 15% safety buffer — enough to prevent clipping without creating gaps
+  return Math.max(lines * fs * 1.3 * 1.15, fs * 2.6);
 }
 
 // Body font size — smaller when mainText is long
@@ -284,6 +284,9 @@ function buildHeroStatement(
   const hookY = 220;
   const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
   const bodyY = hookY + hH + 90;
+  // Cap body height so it never overlaps the CTA at H - 220
+  const ctaY = H - 220;
+  const bodyH = Math.max(Math.min(380, ctaY - bodyY - 60), 80);
   const sub = rng();
 
   const elements: DesignElement[] = [
@@ -296,12 +299,12 @@ function buildHeroStatement(
       letterSpacing: analysis.lengthClass === "short" ? -3 : -1,
     }),
     // Whisper body
-    txt("body", post.mainText, W / 2 - 270, bodyY, 540, 380, {
+    txt("body", post.mainText, W / 2 - 270, bodyY, 540, bodyH, {
       fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
       textAlign: "center", lineHeight: 1.55, opacity: 0.65,
     }),
     // Tiny subtle CTA
-    txt("cta", post.cta, W / 2 - 300, H - 220, 600, 100, {
+    txt("cta", post.cta, W / 2 - 300, ctaY, 600, 100, {
       fontSize: 32, fontFamily: cfg.bodyFont, color: cfg.accentColor,
       fontWeight: "bold", textAlign: "center", letterSpacing: 1,
     }),
