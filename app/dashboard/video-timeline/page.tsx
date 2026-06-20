@@ -1896,7 +1896,8 @@ export default function VideoTimelinePage() {
               return block;
             });
             setCaptions(caps);
-            setSelectedSceneIndex(null);
+            // Auto-select first scene so preview isn't blank on load
+            if (sceneList.length > 0) setSelectedSceneIndex(0);
             const sceneCountFromScript = sceneList.length;
             if (scriptId && typeof window !== "undefined" && sceneCountFromScript > 0) {
               try {
@@ -6496,12 +6497,41 @@ export default function VideoTimelinePage() {
                       </div>
                     </>
                   ) : hasPerClipAudio ? (
-                    <span
-                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 text-xs text-[#a0a0a0] max-w-[min(280px,85%)] truncate"
-                      title="Each scene clip has its own audio from Video Guide / Template Studio"
-                    >
-                      Per-scene audio on clips (no single master file)
-                    </span>
+                    <>
+                      {/* Visual audio clips for per-scene voiceovers */}
+                      {sceneBlocks.map((block, index) => {
+                        const scene = scenes[index];
+                        const hasAudio = scene?.audioUrl?.trim();
+                        if (!hasAudio) return null;
+                        const left = timeToX(block.startTime);
+                        const width = Math.max(2, timeToX(block.endTime) - timeToX(block.startTime));
+                        const sceneColor = SCENE_COLOR_HEX[index % SCENE_COLOR_HEX.length] ?? "#f97316";
+                        return (
+                          <div
+                            key={`voice-clip-${block.id}`}
+                            className="absolute top-1 bottom-1 rounded flex items-center px-2 gap-1 overflow-hidden"
+                            style={{ left, width, backgroundColor: sceneColor + "33", border: `1px solid ${sceneColor}66` }}
+                            title={`Scene ${index + 1} voiceover`}
+                          >
+                            <Mic className="h-3 w-3 shrink-0" style={{ color: sceneColor }} />
+                            {/* Simple waveform bars */}
+                            <div className="flex items-center gap-px h-full py-1">
+                              {Array.from({ length: Math.max(3, Math.floor(width / 8)) }).map((_, i) => (
+                                <div
+                                  key={i}
+                                  className="w-0.5 rounded-full"
+                                  style={{
+                                    backgroundColor: sceneColor,
+                                    opacity: 0.6,
+                                    height: `${30 + Math.sin(i * 1.5) * 40}%`,
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
                   ) : (
                     <button
                       type="button"
