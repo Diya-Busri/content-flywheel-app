@@ -1409,6 +1409,7 @@ export default function VideoTimelinePage() {
   const [compileLoading, setCompileLoading] = useState(false);
   const [compileDownloadUrl, setCompileDownloadUrl] = useState<string | null>(null);
   const [compileError, setCompileError] = useState<string | null>(null);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   /** Maps scene_id → pre-rendered segment URL (Supabase MP4). Populated from script or on-demand. */
   const [prerenderedSegments, setPrerenderedSegments] = useState<Record<string, string>>({});
   /** Progress message during parallel pre-rendering phase */
@@ -1447,6 +1448,7 @@ export default function VideoTimelinePage() {
   const [stockPhotos, setStockPhotos] = useState<Array<{ id: string; url: string; thumb: string }>>([]);
   const [stockLoading, setStockLoading] = useState(false);
   const [autoFillLoading, setAutoFillLoading] = useState(false);
+  const [autoFillAiLoading, setAutoFillAiLoading] = useState(false);
   // AI image generation
   const [aiImagePrompt, setAiImagePrompt] = useState("");
   const [aiImageLoading, setAiImageLoading] = useState(false);
@@ -2970,6 +2972,51 @@ export default function VideoTimelinePage() {
     }
   }, [scenes, scriptName, captions]);
 
+  const autoFillWithAI = useCallback(async () => {
+    if (scenes.length === 0) return;
+    setAutoFillAiLoading(true);
+    const productContext = scriptName
+      .replace(/^(video guide|script|guide)\s*[:\-–]\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 40);
+    try {
+      const sceneBlocks = buildSceneBlocksFromScenes(scenes);
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i];
+        if (getSceneBackgroundMedia(scene) !== null) continue;
+        const sceneBlock = sceneBlocks[i];
+        const sceneCaptions = sceneBlock
+          ? captions.filter((c) => c.startTime >= sceneBlock.startTime && c.startTime < sceneBlock.endTime)
+          : [];
+        const captionText = sceneCaptions.map((c) => c.text).join(" ").trim().slice(0, 80);
+        const cleanTitle = (scene.title ?? "").replace(/^scene\s*\d+\s*[-–:]\s*/i, "").trim();
+        const prompt = productContext
+          ? `${productContext} — ${captionText || cleanTitle}`.trim()
+          : captionText || cleanTitle || "cinematic lifestyle scene";
+        const res = await fetch("/api/chat/coach/generate-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, aspectRatio: "16:9" }),
+        });
+        const data = await res.json().catch(() => ({})) as { url?: string };
+        if (!data.url) continue;
+        const imgUrl = data.url;
+        setScenes((prev) => prev.map((s, si) => {
+          if (si !== i) return s;
+          const first = s.elements[0];
+          if (!first || !isBackgroundEl(first)) return s;
+          return { ...s, elements: [{ ...first, media: { url: imgUrl, type: "image" as const } }, ...s.elements.slice(1)] };
+        }));
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    } catch {
+      toast({ title: "AI fill failed", description: "Some scenes may not have been filled", variant: "destructive" });
+    } finally {
+      setAutoFillAiLoading(false);
+    }
+  }, [scenes, scriptName, captions, toast]);
+
   const selectedSceneDuration =
     selectedSceneIndex !== null && scenes[selectedSceneIndex]
       ? scenes[selectedSceneIndex].duration
@@ -3466,6 +3513,7 @@ export default function VideoTimelinePage() {
     const hasVoice = perSceneVoiceUrls.length > 0 || hasSingleVoice;
 
     if (allSegmentsReady && hasVoice) {
+      setExportModalOpen(true);
       setCompileLoading(true);
       setCompileError(null);
       setCompileDownloadUrl(null);
@@ -3521,6 +3569,7 @@ export default function VideoTimelinePage() {
     // Scenes have media but some segments are missing → pre-render them in parallel, then fast compile
     const scenesNeedingPrerender = scenesWithMedia.filter((s) => !prerenderedSegments[s.id]);
     if (scenesWithMedia.length > 0 && hasVoice && scenesNeedingPrerender.length > 0 && scenesNeedingPrerender.length <= scenesWithMedia.length) {
+      setExportModalOpen(true);
       setCompileLoading(true);
       setCompileError(null);
       setCompileDownloadUrl(null);
@@ -4419,7 +4468,7 @@ export default function VideoTimelinePage() {
           type="button"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold text-white bg-[#f97316] hover:bg-orange-600 disabled:opacity-40 disabled:pointer-events-none transition-colors shadow-[0_0_12px_rgba(249,115,22,0.25)]"
           disabled={compileLoading || scenes.length === 0}
-          onClick={handleExportVideoServer}
+          onClick={() => { setExportModalOpen(true); void handleExportVideoServer(); }}
           title="Export video as MP4 (server-side)"
         >
           {compileLoading
@@ -4597,20 +4646,35 @@ export default function VideoTimelinePage() {
             <div className="flex-1 overflow-y-auto p-2">
               {leftPanelTab === "media" ? (
                 <>
-                  {/* Auto-fill button */}
-                  <button
-                    type="button"
-                    onClick={autoFillScenes}
-                    disabled={autoFillLoading || scenes.length === 0}
-                    className="w-full mb-2 py-1.5 rounded-md bg-[#f97316] hover:bg-[#ea6b10] disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                    title="Auto-fill all scenes with relevant stock photos from Pexels"
-                  >
-                    {autoFillLoading ? (
-                      <><span className="animate-spin">⟳</span> Filling scenes…</>
-                    ) : (
-                      <><span>✦</span> Auto-fill with stock photos</>
-                    )}
-                  </button>
+                  {/* Auto-fill buttons */}
+                  <div className="flex gap-1.5 mb-2">
+                    <button
+                      type="button"
+                      onClick={autoFillScenes}
+                      disabled={autoFillLoading || autoFillAiLoading || scenes.length === 0}
+                      className="flex-1 py-1.5 rounded-md bg-[#1e1e1e] border border-[#2a2a2a] hover:bg-[#2a2a2a] disabled:opacity-50 disabled:cursor-not-allowed text-[#c0c0c0] text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                      title="Auto-fill all scenes with relevant stock photos from Pexels"
+                    >
+                      {autoFillLoading ? (
+                        <><span className="animate-spin">⟳</span> Filling…</>
+                      ) : (
+                        <>📷 Stock photos</>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={autoFillWithAI}
+                      disabled={autoFillLoading || autoFillAiLoading || scenes.length === 0}
+                      className="flex-1 py-1.5 rounded-md bg-[#f97316] hover:bg-[#ea6b10] disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                      title="Generate a unique AI image for each scene"
+                    >
+                      {autoFillAiLoading ? (
+                        <><span className="animate-spin">⟳</span> Generating…</>
+                      ) : (
+                        <>✦ AI images</>
+                      )}
+                    </button>
+                  </div>
 
                   {/* AI Image Generation */}
                   <div className="mb-3 border border-[#2a2a2a] rounded-md p-2">
@@ -7024,6 +7088,86 @@ export default function VideoTimelinePage() {
       </div>
 
       {/* ── YouTube Post Modal ── */}
+      {exportModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => { if (!compileLoading) setExportModalOpen(false); }}
+          />
+          <div className="relative w-full max-w-sm bg-[#111] border border-[#2a2a2a] rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-2">
+              <svg className="h-5 w-5 text-[#f97316]" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
+              <h2 className="text-base font-semibold text-white">Export Video</h2>
+              {!compileLoading && (
+                <button
+                  type="button"
+                  onClick={() => setExportModalOpen(false)}
+                  className="ml-auto text-[#505050] hover:text-white text-xl leading-none"
+                >×</button>
+              )}
+            </div>
+
+            {compileLoading && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm text-[#a0a0a0]">
+                  <Loader2 className="h-4 w-4 animate-spin text-[#f97316] shrink-0" />
+                  <span>{prerenderProgress ?? "Compiling your video…"}</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-[#2a2a2a] overflow-hidden">
+                  <div className="h-full bg-[#f97316] rounded-full animate-pulse" style={{ width: prerenderProgress ? "60%" : "30%" }} />
+                </div>
+                <p className="text-[10px] text-[#606060]">This usually takes 30–60 seconds. You can leave this tab open.</p>
+              </div>
+            )}
+
+            {compileError && !compileLoading && (
+              <div className="space-y-3">
+                <div className="flex items-start gap-2">
+                  <span className="text-red-400 text-lg shrink-0">✕</span>
+                  <p className="text-sm text-red-400">{compileError}</p>
+                </div>
+                {compileError.toLowerCase().includes("credit") && (
+                  <p className="text-xs text-[#a0a0a0]">You&apos;ve run out of export credits. Upgrade your plan to continue exporting.</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { void handleExportVideoServer(); }}
+                  className="w-full py-2 rounded-lg bg-[#f97316] hover:bg-orange-600 text-white text-sm font-semibold transition-colors"
+                >
+                  ↺ Try Again
+                </button>
+              </div>
+            )}
+
+            {compileDownloadUrl && !compileLoading && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-400 text-lg">✓</span>
+                  <p className="text-sm text-emerald-400 font-medium">Your video is ready!</p>
+                </div>
+                <a
+                  href={compileDownloadUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="flex items-center justify-center gap-2 w-full py-2 rounded-lg bg-[#f97316] hover:bg-orange-600 text-white text-sm font-semibold transition-colors"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
+                  Download MP4
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setExportModalOpen(false)}
+                  className="w-full py-1.5 rounded-lg border border-[#2a2a2a] text-[#a0a0a0] hover:text-white text-sm transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {ytModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !ytPosting && setYtModalOpen(false)} />
