@@ -8,6 +8,17 @@ import { setVideoPrefill, getTimelineUrl } from "@/lib/video-prefill";
 
 const DEFAULT_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // Adam
 
+const VOICE_OPTIONS = [
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", description: "Deep, confident male" },
+  { id: "ErXwobaYiN019PkySvjV", name: "Antoni", description: "Warm, professional male" },
+  { id: "VR6AewLTigWG4xSOukaG", name: "Arnold", description: "Crisp, authoritative male" },
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella", description: "Soft, warm female" },
+  { id: "ThT5KcBeYPX3keUQqHPh", name: "Dorothy", description: "Clear, friendly female" },
+  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", description: "Bold, energetic female" },
+  { id: "onwK4e9ZLuTAKqWW03F9", name: "Daniel", description: "Dark, calm male (UK)" },
+  { id: "N2lVS1w4EtoT3dr4eOWO", name: "Callum", description: "Mysterious, deep male" },
+];
+
 /** Stop patterns: start of non-narrative content (next steps, instructions, button labels, etc.) */
 const NARRATIVE_STOP_PATTERNS = [
   /^\s*---\s*$/m,
@@ -74,6 +85,7 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
   /** Per-section voiceover blob URLs (scene number 1..N). When set, timeline uses these instead of single voiceoverUrl. */
   const [sceneVoiceoverUrls, setSceneVoiceoverUrls] = useState<Record<number, string>>({});
   const [voiceoverLoading, setVoiceoverLoading] = useState(false);
+  const [selectedVoiceId, setSelectedVoiceId] = useState(DEFAULT_VOICE_ID);
   const [prompts, setPrompts] = useState<ScenePrompt[]>([]);
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [sceneImages, setSceneImages] = useState<Record<number, string>>({});
@@ -112,7 +124,7 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
         const res = await fetch("/api/generate-voiceover", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: chunks[i].trim(), voiceId: DEFAULT_VOICE_ID }),
+          body: JSON.stringify({ text: chunks[i].trim(), voiceId: selectedVoiceId }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -549,6 +561,20 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
       {/* STEP 1: VOICEOVER */}
       <div>
         <p className="text-sm font-medium text-foreground mb-2">── STEP 1: VOICEOVER ──</p>
+        {/* Voice selector */}
+        <div className="mb-2">
+          <select
+            value={selectedVoiceId}
+            onChange={(e) => setSelectedVoiceId(e.target.value)}
+            className="text-xs rounded-md border border-input bg-background px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-orange-500 w-full max-w-[260px]"
+          >
+            {VOICE_OPTIONS.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name} — {v.description}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
