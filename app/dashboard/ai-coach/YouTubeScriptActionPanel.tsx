@@ -9,14 +9,38 @@ import { setVideoPrefill, getTimelineUrl } from "@/lib/video-prefill";
 const DEFAULT_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // Adam
 
 const VOICE_OPTIONS = [
+  // Male voices
   { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", description: "Deep, confident male" },
   { id: "ErXwobaYiN019PkySvjV", name: "Antoni", description: "Warm, professional male" },
   { id: "VR6AewLTigWG4xSOukaG", name: "Arnold", description: "Crisp, authoritative male" },
-  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella", description: "Soft, warm female" },
-  { id: "ThT5KcBeYPX3keUQqHPh", name: "Dorothy", description: "Clear, friendly female" },
-  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", description: "Bold, energetic female" },
   { id: "onwK4e9ZLuTAKqWW03F9", name: "Daniel", description: "Dark, calm male (UK)" },
   { id: "N2lVS1w4EtoT3dr4eOWO", name: "Callum", description: "Mysterious, deep male" },
+  { id: "ODq5zmih8GrVes37Dizd", name: "Patrick", description: "Trustworthy, mid-range male" },
+  { id: "g5CIjZEefAph4nQFvHAz", name: "Ethan", description: "Soft, ASMR-style male" },
+  { id: "TxGEqnHWrfWFTfGW9XjX", name: "Josh", description: "Young, deep, casual male" },
+  { id: "yoZ06aMxZJJ28mfd3POQ", name: "Sam", description: "Raspy, intense male" },
+  { id: "2EiwWnXFnvU5JabPnv8n", name: "Clyde", description: "War veteran, gruff male" },
+  { id: "ZQe5CZNOzWyzPSCn5a3c", name: "James", description: "Calm, Australian male" },
+  { id: "IKne3meq5aSn9XLyUdCD", name: "Charlie", description: "Natural, conversational (AU)" },
+  { id: "XB0fDUnXU5powFXDhCwa", name: "Charlotte", description: "Swedish, seductive female" },
+  // Female voices
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella", description: "Soft, warm female" },
+  { id: "ThT5KcBeYPX3keUQqHPh", name: "Dorothy", description: "Clear, friendly female (UK)" },
+  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", description: "Bold, energetic female" },
+  { id: "MF3mGyEYCl7XYWbV9V6O", name: "Elli", description: "Emotional, young female" },
+  { id: "LcfcDJNUP1GQjkzn1xUU", name: "Emily", description: "Calm, composed female" },
+  { id: "jsCqWAovK2LkecY7zXl4", name: "Freya", description: "Overly positive female" },
+  { id: "z9fAnlkpzviPz146aGWa", name: "Glinda", description: "Witch-like, unique female" },
+  { id: "oWAxZDx7w5VEj9dCyTzz", name: "Grace", description: "Southern American female" },
+  { id: "jBpfuIE2acCO8z3wKNLl", name: "Gigi", description: "Childlike, animated female" },
+  { id: "t0jbNlBVZ17f02VDIeMI", name: "Jessie", description: "Raspy, expressive female" },
+  { id: "pMsXgVXv3BLzUgSXRplE", name: "Serena", description: "Pleasant, soft female" },
+  { id: "D38z5RcWu1voky8WS1ja", name: "Wayne", description: "Cowboy, gruff character" },
+  // Narration / documentary
+  { id: "29vD33N1CtxCmqQRPOHJ", name: "Drew", description: "Well-rounded narrator" },
+  { id: "CYw3kZ02Hs0563khs1Fj", name: "Dave", description: "Conversational, Essex UK" },
+  { id: "flq6f7yk4E4fJM5XTYuZ", name: "Michael", description: "Authoritative narrator" },
+  { id: "GBv7mTt0atIp3Br8iCZE", name: "Thomas", description: "Calm, meditative male" },
 ];
 
 /** Stop patterns: start of non-narrative content (next steps, instructions, button labels, etc.) */
