@@ -28,7 +28,7 @@ Style/Aesthetic: ${styleDesc}
 Tone: ${tone ?? "Inspirational"}${niche ? `\nTarget audience: ${niche}` : ""}
 
 Return a JSON object with a "posts" array. Each element must have EXACTLY these fields:
-- hook: A scroll-stopping opening line (5–12 words, written in ALL CAPS, punchy, no hashtags)
+- hook: A scroll-stopping opening line (5–12 words, ALL CAPS, no hashtags). MUST use a specific number, relatable situation or surprising truth. NEVER generic phrases like "TAKE CONTROL" or "UNLOCK YOUR POTENTIAL"
 - mainText: The core value — a tip, insight, or truth (30–60 words, 2–3 short sentences, no bullet points)
 - cta: Call to action (5–10 words, starts with an action verb, no hashtags)
 - bgTheme: One of exactly: "dark", "light", "cream", "sage", "navy", "gradient-warm", "gradient-cool"
@@ -59,7 +59,7 @@ Spread the posts evenly across all products (roughly ${perProduct} posts per pro
 Each post must be a promotional social media post designed to drive sales/interest in the specific product.
 
 Return a JSON object with a "posts" array. Each element must have EXACTLY these fields:
-- hook: A scroll-stopping opening line (5–12 words, ALL CAPS, product-benefit focused, no hashtags)
+- hook: A scroll-stopping opening line (5–12 words, ALL CAPS, no hashtags). MUST use a specific number, relatable situation or surprising truth. E.g. "I WAS £200 OVERDRAWN EVERY MONTH UNTIL THIS" or "NOBODY TAUGHT US THIS AND IT'S COSTING YOU THOUSANDS". NEVER generic phrases like "TAKE CONTROL OF YOUR FINANCES" or "UNLOCK YOUR POTENTIAL"
 - mainText: Sell the product — highlight the transformation, outcome, or key benefit (30–60 words, 2–3 sentences, no bullet points, no hashtags). Write naturally like a real person, NOT like an AI. NEVER mention the product name or put it in quotes inside the body text — let the hook and CTA do that work.
 - cta: Sales call to action (5–10 words, starts with verb — e.g. "Grab your copy today", "Get instant access now")
 - bgTheme: One of exactly: "dark", "light", "cream", "sage", "navy", "gradient-warm", "gradient-cool"

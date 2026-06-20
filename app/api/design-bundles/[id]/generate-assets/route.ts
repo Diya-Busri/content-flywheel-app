@@ -93,11 +93,11 @@ Return ONLY valid JSON matching this exact shape — no extra keys, no markdown:
     "instagram": "<Instagram caption, 120-200 words, hook + value + CTA, line-break friendly>"
   },
   "hooks": [
-    "<hook 1 — 6-12 words, scroll-stopping, specific not generic>",
-    "<hook 2>",
-    "<hook 3>",
-    "<hook 4>",
-    "<hook 5>"
+    "<hook 1 — MUST include a specific number, situation or relatable pain point. E.g. 'I was £200 overdrawn every month until I did this' or 'Nobody taught us this in school and it costs thousands'. NEVER generic motivation like 'Take control of your finances'>",
+    "<hook 2 — different angle, still specific and scroll-stopping>",
+    "<hook 3 — curiosity or story-driven, makes them want to know more>",
+    "<hook 4 — problem/pain point they recognise immediately>",
+    "<hook 5 — contrarian or surprising take on personal finance>"
   ],
   "ctaSuggestions": [
     "<CTA 1 — action-oriented, 3-6 words>",
