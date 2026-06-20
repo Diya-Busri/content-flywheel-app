@@ -19,7 +19,7 @@ import {
   VIRAL_CAPTION_BOTTOM_PAD,
   VIRAL_CAPTION_FONT_SIZES,
 } from "@/lib/video-caption-ffmpeg";
-import { Loader2, Menu, PanelLeftClose, ZoomIn, ZoomOut, Maximize2, PanelRightOpen, Undo2, Redo2, SkipBack, SkipForward, Play, Pause, Film, Mic, Type, Music2 } from "lucide-react";
+import { Loader2, Menu, PanelLeftClose, ZoomIn, ZoomOut, Maximize2, PanelRightOpen, Undo2, Redo2, SkipBack, SkipForward, Play, Pause, Film, Mic, Type, Music2, Image as ImageIcon } from "lucide-react";
 import { useSidebar } from "@/components/sidebar-context";
 import type { FFmpeg } from "@ffmpeg/ffmpeg";
 import {
@@ -1447,6 +1447,12 @@ export default function VideoTimelinePage() {
   const [stockPhotos, setStockPhotos] = useState<Array<{ id: string; url: string; thumb: string }>>([]);
   const [stockLoading, setStockLoading] = useState(false);
   const [autoFillLoading, setAutoFillLoading] = useState(false);
+  // AI image generation
+  const [aiImagePrompt, setAiImagePrompt] = useState("");
+  const [aiImageLoading, setAiImageLoading] = useState(false);
+  const [aiGeneratedImages, setAiGeneratedImages] = useState<string[]>([]);
+  // Animate scene
+  const [animatingSceneIndex, setAnimatingSceneIndex] = useState<number | null>(null);
   /** Index of scene whose trailing transition badge popover is open (i.e. transition between scene[i] and scene[i+1]) */
   const [transitionBadgeOpen, setTransitionBadgeOpen] = useState<number | null>(null);
   const [transitionBadgePos, setTransitionBadgePos] = useState<{ x: number; y: number } | null>(null);
@@ -1884,16 +1890,35 @@ export default function VideoTimelinePage() {
             setVoiceoverDuration(totalDur);
             setScenes(sceneList);
             let start = 0;
-            const caps: CaptionBlock[] = scenesJson.map((s, i) => {
+            // Split script_text into short subtitle chunks (~8 words each) spread across scene duration
+            const caps: CaptionBlock[] = scenesJson.flatMap((s, i) => {
               const dur = typeof s.duration === "number" && s.duration > 0 ? s.duration : 5;
-              /** Prefer script_text (full dialogue); legacy caption rows were sometimes truncated. */
-              const text =
+              const rawText =
                 (typeof s.script_text === "string" && s.script_text.trim() && s.script_text) ||
                 (typeof s.caption === "string" ? s.caption : "") ||
                 "";
-              const block: CaptionBlock = { id: `cap-${i}`, text: text.trim(), startTime: start, endTime: start + dur };
+              // Strip section labels like "Introduction (0:00-0:30) - " from the start
+              const cleanText = rawText.replace(/^[^:]+\(\d+:\d+-\d+:\d+\)\s*[-–]\s*/i, "").trim();
+              const words = cleanText.split(/\s+/).filter(Boolean);
+              const WORDS_PER_CHUNK = 8;
+              const chunks: string[] = [];
+              for (let w = 0; w < words.length; w += WORDS_PER_CHUNK) {
+                chunks.push(words.slice(w, w + WORDS_PER_CHUNK).join(" "));
+              }
+              if (chunks.length === 0) {
+                const block: CaptionBlock = { id: `cap-${i}-0`, text: "", startTime: start, endTime: start + dur };
+                start += dur;
+                return [block];
+              }
+              const chunkDur = dur / chunks.length;
+              const blocks = chunks.map((chunk, ci) => ({
+                id: `cap-${i}-${ci}`,
+                text: chunk,
+                startTime: start + ci * chunkDur,
+                endTime: start + (ci + 1) * chunkDur,
+              }));
               start += dur;
-              return block;
+              return blocks;
             });
             setCaptions(caps);
             // Auto-select first scene so preview isn't blank on load
@@ -2812,6 +2837,78 @@ export default function VideoTimelinePage() {
     },
     []
   );
+
+  const generateAiImage = useCallback(async () => {
+    if (!aiImagePrompt.trim()) return;
+    setAiImageLoading(true);
+    try {
+      const res = await fetch("/api/chat/coach/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiImagePrompt.trim(), aspectRatio: "16:9" }),
+      });
+      const data = await res.json().catch(() => ({})) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        toast({ title: "Image generation failed", description: data.error || "Try again", variant: "destructive" });
+        return;
+      }
+      setAiGeneratedImages((prev) => [data.url!, ...prev].slice(0, 8));
+      // Auto-apply to selected scene
+      if (selectedSceneIndex !== null) {
+        setScenes((prev) => prev.map((s, si) => si !== selectedSceneIndex ? s : {
+          ...s,
+          elements: s.elements.map((el, ei) => ei === 0 ? { ...el, media: { url: data.url!, type: "image" as const } } : el),
+        }));
+        toast({ title: "Image applied to scene" });
+      } else {
+        toast({ title: "Image generated", description: "Click a scene then drag the image onto it" });
+      }
+    } catch (err) {
+      toast({ title: "Image generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setAiImageLoading(false);
+    }
+  }, [aiImagePrompt, selectedSceneIndex, toast]);
+
+  const animateSceneImage = useCallback(async (sceneIndex: number) => {
+    const scene = scenes[sceneIndex];
+    const media = scene ? getSceneBackgroundMedia(scene) : null;
+    if (!media?.url) {
+      toast({ title: "No image to animate", description: "Add an image to this scene first", variant: "destructive" });
+      return;
+    }
+    setAnimatingSceneIndex(sceneIndex);
+    try {
+      const res = await fetch("/api/chat/coach/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: `Subtle cinematic motion animation of: ${scene.title || "this scene"}. Keep composition identical, add gentle camera movement only.`,
+          aspectRatio: "16:9",
+          sourceImageUrl: media.url,
+        }),
+      });
+      const data = await res.json().catch(() => ({})) as { url?: string; videoUrl?: string; error?: string };
+      if (!res.ok) {
+        toast({ title: "Animation failed", description: data.error || "Try again", variant: "destructive" });
+        return;
+      }
+      const animUrl = data.videoUrl ?? data.url;
+      if (animUrl) {
+        setScenes((prev) => prev.map((s, si) => si !== sceneIndex ? s : {
+          ...s,
+          elements: s.elements.map((el, ei) => ei === 0 ? { ...el, media: { url: animUrl, type: "video" as const } } : el),
+        }));
+        toast({ title: "Scene animated ✨" });
+      } else {
+        toast({ title: "No animation returned", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Animation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setAnimatingSceneIndex(null);
+    }
+  }, [scenes, toast]);
 
   const searchStockPhotos = useCallback(async (query: string) => {
     if (!query.trim()) return;
@@ -4514,6 +4611,70 @@ export default function VideoTimelinePage() {
                       <><span>✦</span> Auto-fill with stock photos</>
                     )}
                   </button>
+
+                  {/* AI Image Generation */}
+                  <div className="mb-3 border border-[#2a2a2a] rounded-md p-2">
+                    <p className="text-[10px] font-semibold text-[#f97316] mb-1.5 uppercase tracking-wide">✦ Generate with AI</p>
+                    <textarea
+                      rows={2}
+                      value={aiImagePrompt}
+                      onChange={(e) => setAiImagePrompt(e.target.value)}
+                      placeholder="Describe the image you want…"
+                      className="w-full px-2 py-1 rounded bg-[#0f0f0f] border border-[#2a2a2a] text-white text-[10px] placeholder-[#606060] focus:outline-none focus:border-[#f97316] resize-none mb-1.5"
+                    />
+                    <button
+                      type="button"
+                      onClick={generateAiImage}
+                      disabled={aiImageLoading || !aiImagePrompt.trim()}
+                      className="w-full py-1 rounded bg-[#f97316] hover:bg-[#ea6b10] disabled:opacity-50 text-white text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                    >
+                      {aiImageLoading ? <><span className="animate-spin">⟳</span> Generating…</> : <><ImageIcon className="h-3 w-3" /> Generate Image</>}
+                    </button>
+                    {/* Generated image results */}
+                    {aiGeneratedImages.length > 0 && (
+                      <div className="grid grid-cols-2 gap-1 mt-1.5">
+                        {aiGeneratedImages.map((url, idx) => (
+                          <div
+                            key={idx}
+                            className="relative aspect-video rounded overflow-hidden bg-[#0f0f0f] cursor-grab border border-[#2a2a2a] hover:border-[#f97316]/50 group"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("application/x-media-url", url);
+                              e.dataTransfer.setData("application/x-media-type", "image");
+                            }}
+                          >
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                            {selectedSceneIndex !== null && (
+                              <button
+                                type="button"
+                                className="absolute bottom-0 left-0 right-0 bg-[#f97316] text-white text-[9px] py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => {
+                                  setScenes((prev) => prev.map((s, si) => si !== selectedSceneIndex ? s : {
+                                    ...s,
+                                    elements: s.elements.map((el, ei) => ei === 0 ? { ...el, media: { url, type: "image" as const } } : el),
+                                  }));
+                                  toast({ title: "Applied to scene" });
+                                }}
+                              >
+                                Apply
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Animate selected scene button */}
+                    {selectedSceneIndex !== null && (
+                      <button
+                        type="button"
+                        onClick={() => animateSceneImage(selectedSceneIndex)}
+                        disabled={animatingSceneIndex !== null}
+                        className="w-full mt-1.5 py-1 rounded border border-[#f97316]/40 bg-[#f97316]/10 hover:bg-[#f97316]/20 disabled:opacity-50 text-white text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                      >
+                        {animatingSceneIndex === selectedSceneIndex ? <><span className="animate-spin">⟳</span> Animating…</> : <><Film className="h-3 w-3" /> Animate Scene {selectedSceneIndex + 1}</>}
+                      </button>
+                    )}
+                  </div>
 
                   {/* Stock photo search */}
                   <div className="flex gap-1 mb-2">
