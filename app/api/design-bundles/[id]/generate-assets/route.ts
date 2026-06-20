@@ -79,6 +79,13 @@ Visual style: ${style.replace(/-/g, " ")}
 
 You will receive a summary of carousel slides and must generate a complete social media content package.
 
+Critical writing rules:
+- NEVER mention the product name in quotes (e.g. never write "Our 'X Ebook'" or "The 'X Guide'")
+- Write like a real human creator talking to their audience — conversational, specific, authentic
+- NEVER use filler phrases like "Imagine a life where", "Say goodbye to", "Transform your relationship with"
+- Hooks must reference specific numbers, outcomes or relatable situations — not generic motivation
+- Captions should feel like they were written by the creator themselves, not an AI
+
 Return ONLY valid JSON matching this exact shape — no extra keys, no markdown:
 {
   "mainCaption": {
@@ -86,7 +93,7 @@ Return ONLY valid JSON matching this exact shape — no extra keys, no markdown:
     "instagram": "<Instagram caption, 120-200 words, hook + value + CTA, line-break friendly>"
   },
   "hooks": [
-    "<hook 1 — 6-12 words, scroll-stopping>",
+    "<hook 1 — 6-12 words, scroll-stopping, specific not generic>",
     "<hook 2>",
     "<hook 3>",
     "<hook 4>",
