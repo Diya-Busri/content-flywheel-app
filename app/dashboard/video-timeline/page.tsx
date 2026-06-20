@@ -4847,6 +4847,58 @@ export default function VideoTimelinePage() {
                       First drop = voiceover<br/>Second drop = music
                     </p>
                   )}
+
+                  {/* Music Library */}
+                  <div className="mt-3">
+                    <p className="text-[10px] font-semibold text-[#f97316] uppercase tracking-wide mb-2">♪ Music Library</p>
+                    <p className="text-[9px] text-[#505050] mb-2">Royalty-free tracks — click to preview, then apply as music</p>
+                    {[
+                      { name: "Calm Focus", mood: "Lo-fi • Study", url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3" },
+                      { name: "Inspiring Rise", mood: "Cinematic • Motivational", url: "https://cdn.pixabay.com/audio/2022/11/22/audio_febc508520.mp3" },
+                      { name: "Dark Ambient", mood: "Atmospheric • Mystery", url: "https://cdn.pixabay.com/audio/2022/10/31/audio_946d5c7a1c.mp3" },
+                      { name: "Upbeat Positive", mood: "Corporate • Energetic", url: "https://cdn.pixabay.com/audio/2022/08/02/audio_884fe92c21.mp3" },
+                      { name: "Chill Beats", mood: "Hip-hop • Relaxed", url: "https://cdn.pixabay.com/audio/2023/01/19/audio_8d5e2d0e2b.mp3" },
+                      { name: "Epic Build", mood: "Cinematic • Powerful", url: "https://cdn.pixabay.com/audio/2022/09/13/audio_d1718ab41b.mp3" },
+                      { name: "Soft Piano", mood: "Emotional • Gentle", url: "https://cdn.pixabay.com/audio/2022/01/18/audio_d0c6ff1bab.mp3" },
+                      { name: "Future Bass", mood: "Electronic • Modern", url: "https://cdn.pixabay.com/audio/2022/10/16/audio_12b6b5334c.mp3" },
+                    ].map((track) => (
+                      <div key={track.name} className="flex items-center gap-2 p-1.5 rounded bg-[#0f0f0f] border border-[#1e1e1e] hover:border-[#2a2a2a] mb-1 group">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] text-white truncate">{track.name}</p>
+                          <p className="text-[9px] text-[#505050] truncate">{track.mood}</p>
+                        </div>
+                        <button
+                          type="button"
+                          title="Preview"
+                          className="shrink-0 w-6 h-6 rounded bg-[#1e1e1e] hover:bg-[#2a2a2a] flex items-center justify-center text-[#a0a0a0] hover:text-white transition-colors"
+                          onClick={() => {
+                            const existing = document.getElementById("cf-music-preview") as HTMLAudioElement | null;
+                            if (existing) { existing.pause(); existing.remove(); }
+                            const a = document.createElement("audio");
+                            a.id = "cf-music-preview";
+                            a.src = track.url;
+                            a.play();
+                            document.body.appendChild(a);
+                          }}
+                        >
+                          ▶
+                        </button>
+                        <button
+                          type="button"
+                          title="Use as music"
+                          className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-[#f97316]/20 hover:bg-[#f97316]/40 text-[#f97316] transition-colors"
+                          onClick={() => {
+                            const existing = document.getElementById("cf-music-preview") as HTMLAudioElement | null;
+                            if (existing) { existing.pause(); existing.remove(); }
+                            setMusicUrl(track.url);
+                            toast({ title: `Music set: ${track.name}` });
+                          }}
+                        >
+                          Use
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </>
               )}
             </div>
