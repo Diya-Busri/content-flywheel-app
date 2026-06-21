@@ -38,18 +38,18 @@ export function EditorRightPanel({ children, isDark, mobileOpen = false, onMobil
       */}
       <aside
         className={[
-          // ── Mobile: fixed bottom sheet ──
+          // ── Mobile: bottom sheet (auto height, max 80dvh) ──
           "fixed bottom-0 left-0 right-0 z-[60]",
-          "flex flex-col overflow-hidden",
+          "flex flex-col",
           "rounded-t-2xl",
-          // Height when open/closed
+          // Show/hide
           mobileOpen
-            ? "translate-y-0 h-[75dvh]"
-            : "translate-y-full h-[75dvh]",
+            ? "translate-y-0 max-h-[80dvh]"
+            : "translate-y-full max-h-[80dvh]",
           "transition-transform duration-300 ease-out",
           // ── Desktop: right sidebar in normal flow ──
           "md:relative md:inset-auto md:rounded-none",
-          "md:translate-y-0 md:h-auto",
+          "md:translate-y-0 md:max-h-none md:h-full",
           "md:flex md:w-[340px] md:shrink-0 md:border-l",
           darkBg,
           darkBorder,
@@ -79,8 +79,8 @@ export function EditorRightPanel({ children, isDark, mobileOpen = false, onMobil
           </div>
         </div>
 
-        {/* Panel content — scrollable, rendered exactly once */}
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        {/* Panel content */}
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col md:overflow-hidden">
           {children}
         </div>
       </aside>

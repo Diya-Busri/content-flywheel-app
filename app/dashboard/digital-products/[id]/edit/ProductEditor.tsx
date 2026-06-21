@@ -6930,18 +6930,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 </div>
               </TabsContent>
               <TabsContent value="videos" className="mt-0 p-4 space-y-4">
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">Video Creation Guide</h3>
-                <p className="text-xs text-gray-600 mb-3">
-                  Get a step-by-step guide to create TikTok-style videos for this product. Scripts are pre-filled from your product title and sales copy.
-                </p>
-                <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 gap-2" onClick={handleGenerateVideos}>
-                  <Video className="w-4 h-4" /> Create Video Guide
-                </Button>
-                <div className="pt-2 border-t border-gray-200">
-                  <p className="text-xs font-medium text-gray-700 mb-2">Video guide for this product</p>
-                  <p className="text-xs text-gray-500">Create a Video Creation Guide from the button above. The guide includes AI prompts, editing tips, and scene breakdowns.</p>
-                </div>
-                <div className="pt-2 border-t border-gray-200">
+                <div>
                   <AvatarVideoPanel
                     productId={productId}
                     productTitle={product?.title ?? "Digital Product"}
