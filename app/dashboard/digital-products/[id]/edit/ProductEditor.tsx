@@ -5655,9 +5655,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 <TabsTrigger value="layout" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
                   <LayoutGrid className="w-3.5 h-3.5" /> Layout
                 </TabsTrigger>
-                <TabsTrigger value="videos" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
-                  <Video className="w-3.5 h-3.5" /> Videos
-                </TabsTrigger>
                 <TabsTrigger value="export" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
                   <FileOutput className="w-3.5 h-3.5" /> Export
                 </TabsTrigger>
@@ -5694,7 +5691,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   isDark={isDark}
                 />
               </TabsContent>
-              <TabsContent value="design" className="mt-0 p-4">
+              <TabsContent value="design" className="mt-0 p-4 overflow-y-auto">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Template</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {TEMPLATES.map((t) => (
@@ -6927,20 +6924,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   >
                     Reset to Defaults
                   </Button>
-                </div>
-              </TabsContent>
-              <TabsContent value="videos" className="mt-0 p-4 space-y-4">
-                <div>
-                  <AvatarVideoPanel
-                    productId={productId}
-                    productTitle={product?.title ?? "Digital Product"}
-                    existingVideoUrl={marketingAssets.promoVideoUrl}
-                    existingVideoStatus={marketingAssets.promoVideoStatus}
-                    existingVideoId={marketingAssets.promoVideoId}
-                    onVideoReady={(url) => {
-                      setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, promoVideoUrl: url, promoVideoStatus: "completed" } } : null);
-                    }}
-                  />
                 </div>
               </TabsContent>
               <TabsContent value="export" className="mt-0 p-4 space-y-3">
