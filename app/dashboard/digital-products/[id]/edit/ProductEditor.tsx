@@ -1023,7 +1023,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [marketingGenerating, setMarketingGenerating] = useState(false);
   const [marketingRegenerating, setMarketingRegenerating] = useState(false);
   const [activeEditorTab, setActiveEditorTab] = useState("content");
-  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const [pricingRecommendationLoading, setPricingRecommendationLoading] = useState(false);
   const [platformCopyPlatform, setPlatformCopyPlatform] = useState<string>("beacons");
@@ -4851,6 +4851,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
         onGenerateTypography={() => setShowTypographyDialog(true)}
         generateImagesLoading={generateImagesLoading}
         generateImagesProgress={generateImagesProgress}
+        activePanel={activeEditorTab}
+        panelOpen={desktopSidebarOpen}
+        onPanelTabClick={(tab) => {
+          if (tab === activeEditorTab && desktopSidebarOpen) {
+            setDesktopSidebarOpen(false);
+          } else {
+            setActiveEditorTab(tab);
+            setDesktopSidebarOpen(true);
+          }
+        }}
       />
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
@@ -5394,10 +5404,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
           isDark={isDark}
           mobileOpen={mobileEditorPanelOpen}
           onMobileClose={() => setMobileEditorPanelOpen(false)}
-          activeTab={activeEditorTab}
-          onTabChange={setActiveEditorTab}
           desktopOpen={desktopSidebarOpen}
-          onDesktopToggle={() => setDesktopSidebarOpen(o => !o)}
           sidebarWidth={sidebarWidth}
           onSidebarResize={setSidebarWidth}
         >
@@ -5654,29 +5661,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </div>
             )}
             <Tabs value={activeEditorTab} onValueChange={setActiveEditorTab} className="w-full flex flex-col flex-1 min-h-0">
-              <TabsList className="bg-gray-50 border-b border-gray-200 w-full flex overflow-x-auto rounded-none h-11 px-0 shrink-0">
-                <TabsTrigger value="content" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
-                  <BookOpen className="w-3.5 h-3.5" /> Content
-                </TabsTrigger>
-                <TabsTrigger value="design" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
-                  <Palette className="w-3.5 h-3.5" /> Design
-                </TabsTrigger>
-                <TabsTrigger value="graphics" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
-                  <ImageIcon className="w-3.5 h-3.5" /> Graphics
-                </TabsTrigger>
-                <TabsTrigger value="layout" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
-                  <LayoutGrid className="w-3.5 h-3.5" /> Layout
-                </TabsTrigger>
-                <TabsTrigger value="export" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
-                  <FileOutput className="w-3.5 h-3.5" /> Export
-                </TabsTrigger>
-                <TabsTrigger value="marketing" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
-                  <Megaphone className="w-3.5 h-3.5" /> Mktg
-                </TabsTrigger>
-                <TabsTrigger value="ai" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
-                  <Sparkles className="w-3.5 h-3.5" /> AI
-                </TabsTrigger>
-              </TabsList>
               <div className="flex-1 min-h-0 overflow-y-auto">
               <TabsContent value="content" className="mt-0 p-4 space-y-3">
                 <BrandVoiceIndicator />

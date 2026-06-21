@@ -9,7 +9,17 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
-import { ChevronLeft, Check, Loader2, Sparkles, RefreshCw, Eye, Video, X, ImageIcon, Type } from "lucide-react";
+import { ChevronLeft, Check, Loader2, Sparkles, RefreshCw, Eye, Video, X, ImageIcon, Type, BookOpen, Palette, LayoutGrid, FileOutput, Megaphone } from "lucide-react";
+
+const PANEL_TABS = [
+  { tab: "content",   Icon: BookOpen,   label: "Content"  },
+  { tab: "design",    Icon: Palette,    label: "Design"   },
+  { tab: "graphics",  Icon: ImageIcon,  label: "Graphics" },
+  { tab: "layout",    Icon: LayoutGrid, label: "Layout"   },
+  { tab: "export",    Icon: FileOutput, label: "Export"   },
+  { tab: "marketing", Icon: Megaphone,  label: "Mktg"     },
+  { tab: "ai",        Icon: Sparkles,   label: "AI"       },
+] as const;
 
 export type EditorToolbarProps = {
   productTitle: string;
@@ -30,6 +40,10 @@ export type EditorToolbarProps = {
   onGenerateTypography: () => void;
   generateImagesLoading: boolean;
   generateImagesProgress?: { done: number; total: number } | null;
+  /** Panel tab controls */
+  activePanel?: string;
+  panelOpen?: boolean;
+  onPanelTabClick?: (tab: string) => void;
 };
 
 export function EditorToolbar({
@@ -51,6 +65,9 @@ export function EditorToolbar({
   onGenerateTypography,
   generateImagesLoading,
   generateImagesProgress,
+  activePanel,
+  panelOpen,
+  onPanelTabClick,
 }: EditorToolbarProps) {
   return (
     <>
@@ -207,6 +224,43 @@ export function EditorToolbar({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+
+            {/* Panel tab icons — desktop only */}
+            {onPanelTabClick && (
+              <>
+                <div className={`hidden md:block w-px h-6 mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+                <div className="hidden md:flex items-center gap-0.5">
+                  {PANEL_TABS.map(({ tab, Icon, label }) => {
+                    const active = activePanel === tab && panelOpen;
+                    return (
+                      <TooltipProvider key={tab}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => onPanelTabClick(tab)}
+                              className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors ${
+                                active
+                                  ? "bg-orange-500 text-white"
+                                  : isDark
+                                  ? "text-gray-400 hover:bg-[#2A2A2A] hover:text-white"
+                                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                              }`}
+                            >
+                              <Icon className="w-4 h-4" />
+                              <span className="text-[9px] font-medium leading-none">{label}</span>
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>{label}</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    );
+                  })}
+                </div>
+                <div className={`hidden md:block w-px h-6 mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+              </>
+            )}
+
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
