@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { YouTubePublishSheet } from "@/components/youtube/YouTubePublishSheet";
@@ -374,6 +374,10 @@ export default function LibraryFlow() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
+  /** Live section progress for generating products: { [productId]: { total, done } } */
+  const [generatingProgress, setGeneratingProgress] = useState<Record<string, { total: number; done: number }>>({});
+  /** Tracks which product IDs are already being polled so we don't start duplicates. */
+  const pollingRef = useRef<Record<string, boolean>>({});
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   /** Item ids whose thumbnail failed to load (404, CORS, etc.) — show placeholder instead. */
@@ -524,6 +528,57 @@ export default function LibraryFlow() {
     if (tab === "template-packs") fetchTemplatePacks();
     else fetchItems();
   }, [tab]);
+
+  // Poll generating products every 2s and update progress in real time
+  useEffect(() => {
+    const generatingItems = items.filter(i => i.type === "product" && i.status === "generating");
+    if (generatingItems.length === 0) return;
+
+    generatingItems.forEach((item) => {
+      if (pollingRef.current[item.id]) return; // already polling
+      pollingRef.current[item.id] = true;
+
+      const pollOne = async () => {
+        while (pollingRef.current[item.id]) {
+          await new Promise(r => setTimeout(r, 2000));
+          try {
+            const res = await fetch(`/api/products/${item.id}`);
+            if (!res.ok) continue;
+            const data = await res.json().catch(() => ({}));
+            const status = data?.status;
+            const sections: Array<{ content?: string; contentHtml?: string }> = data?.content?.sections ?? [];
+            const total = sections.length;
+            const done = sections.filter(s => ((s?.content ?? s?.contentHtml ?? "").trim().length > 0)).length;
+
+            if (total > 0) {
+              setGeneratingProgress(prev => ({ ...prev, [item.id]: { total, done } }));
+            }
+
+            if (status === "draft" && total > 0 && done === total) {
+              pollingRef.current[item.id] = false;
+              setItems(prev => prev.map(p => p.id === item.id ? { ...p, status: "draft" } : p));
+              setGeneratingProgress(prev => { const n = { ...prev }; delete n[item.id]; return n; });
+              return;
+            }
+            if (status === "failed") {
+              pollingRef.current[item.id] = false;
+              setItems(prev => prev.map(p => p.id === item.id ? { ...p, status: "failed" } : p));
+              setGeneratingProgress(prev => { const n = { ...prev }; delete n[item.id]; return n; });
+              return;
+            }
+          } catch { /* transient error — keep polling */ }
+        }
+      };
+
+      pollOne();
+    });
+
+    return () => {
+      // Stop all polls on unmount
+      Object.keys(pollingRef.current).forEach(id => { pollingRef.current[id] = false; });
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.filter(i => i.status === "generating").map(i => i.id).join(",")]);
 
   const searchQuery = search.trim().toLowerCase();
   const filtered = items.filter((item) => itemMatchesLibrarySearch(item, searchQuery));
@@ -1404,10 +1459,25 @@ export default function LibraryFlow() {
                         <CardContent className="pt-0 flex gap-2">
                           {item.type === "product" && item.status === "generating" ? (
                             <div className="flex-1 flex flex-col gap-2 min-w-0">
-                              <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5 min-w-0">
-                                <Loader2 className="w-3 h-3 animate-spin shrink-0" />
-                                <span className="truncate">Generating your workbook… 1–2 min</span>
-                              </p>
+                              {generatingProgress[item.id] ? (
+                                <>
+                                  <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
+                                    <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                                    <span>{generatingProgress[item.id].done} of {generatingProgress[item.id].total} sections done</span>
+                                  </p>
+                                  <div className="w-full bg-orange-100 dark:bg-orange-900/30 rounded-full h-1.5">
+                                    <div
+                                      className="bg-orange-500 h-1.5 rounded-full transition-all duration-500"
+                                      style={{ width: `${Math.round((generatingProgress[item.id].done / generatingProgress[item.id].total) * 100)}%` }}
+                                    />
+                                  </div>
+                                </>
+                              ) : (
+                                <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5 min-w-0">
+                                  <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                                  <span className="truncate">Starting generation…</span>
+                                </p>
+                              )}
                               <Button
                                 size="sm"
                                 variant="outline"
