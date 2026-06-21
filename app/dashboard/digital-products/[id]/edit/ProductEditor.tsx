@@ -5641,7 +5641,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 </div>
               </div>
             )}
-            <Tabs value={activeEditorTab} onValueChange={setActiveEditorTab} className="w-full flex flex-col md:flex-1 md:min-h-0">
+            <Tabs value={activeEditorTab} onValueChange={setActiveEditorTab} className="w-full flex flex-col flex-1 min-h-0">
               <TabsList className="bg-gray-50 border-b border-gray-200 w-full flex overflow-x-auto rounded-none h-11 px-0 shrink-0">
                 <TabsTrigger value="content" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
                   <BookOpen className="w-3.5 h-3.5" /> Content
@@ -5665,8 +5665,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   <Sparkles className="w-3.5 h-3.5" /> AI
                 </TabsTrigger>
               </TabsList>
-              <div className="md:flex-1 md:min-h-0 md:overflow-y-auto">
-              <TabsContent value="content" className="mt-0 p-4 space-y-3 overflow-y-auto md:flex-1 md:min-h-0">
+              <div className="flex-1 min-h-0 overflow-y-auto">
+              <TabsContent value="content" className="mt-0 p-4 space-y-3">
                 <BrandVoiceIndicator />
                 <ReadyToSellChecklist
                   hasThumbnail={!!(marketingAssets.thumbnailUrl || marketingAssets.coverThumbnailUrl)}
@@ -5691,7 +5691,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   isDark={isDark}
                 />
               </TabsContent>
-              <TabsContent value="design" className="mt-0 p-4 overflow-y-auto md:flex-1 md:min-h-0">
+              <TabsContent value="design" className="mt-0 p-4 space-y-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Template</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {TEMPLATES.map((t) => (
@@ -5699,16 +5699,15 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       key={t.id}
                       type="button"
                       onClick={() => handleTemplateSelect(t.id)}
-                      className={`rounded-xl border-2 p-4 text-left transition-all ${
+                      className={`rounded-lg border-2 px-3 py-2.5 text-left transition-all ${
                         template === t.id ? "border-orange-500 bg-orange-50" : "border-gray-200 hover:border-gray-300 bg-white"
                       }`}
                     >
-                      <p className="text-sm font-medium text-gray-900">{t.label}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{t.desc}</p>
+                      <p className="text-xs font-semibold text-gray-900">{t.label}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{t.desc}</p>
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-gray-500 mt-3">Preview updates as you edit.</p>
 
                 {sections.length > 0 && (
                   <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
@@ -5785,7 +5784,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   />
                 )}
               </TabsContent>
-              <TabsContent value="graphics" className="mt-0 p-4 space-y-6 overflow-y-auto md:flex-1 md:min-h-0">
+              <TabsContent value="graphics" className="mt-0 p-4 space-y-4">
                 {/* Social links for back cover are shown at top of right panel when on back page (BackCoverEditor) */}
                 <p className="text-xs text-gray-500 mb-3">Click to add to canvas. Drag to move and resize. Icons and graphics are on the current page only.</p>
                 <Button
@@ -6809,7 +6808,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </DialogContent>
                 </Dialog>
               </TabsContent>
-              <TabsContent value="layout" className="mt-0 p-4 overflow-y-auto md:flex-1 md:min-h-0">
+              <TabsContent value="layout" className="mt-0 p-4 space-y-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Text Layout</h3>
                 <div className="space-y-6">
                   <div>
@@ -6926,7 +6925,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </Button>
                 </div>
               </TabsContent>
-              <TabsContent value="export" className="mt-0 p-4 space-y-3 overflow-y-auto md:flex-1 md:min-h-0">
+              <TabsContent value="export" className="mt-0 p-4 space-y-3">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Export</h3>
                 <div className="space-y-3">
                   <div className="flex items-center space-x-2">
@@ -6961,7 +6960,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   onAction={() => setActiveEditorTab("videos")}
                 />
               </TabsContent>
-              <TabsContent value="marketing" className="mt-0 p-4 space-y-6 overflow-y-auto md:flex-1 md:min-h-0">
+              <TabsContent value="marketing" className="mt-0 p-4 space-y-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Marketplace listing assets</h3>
                 {!marketingAssets.productTitle && !marketingAssets.productDescription ? (
                   <div className="space-y-3">
@@ -7328,8 +7327,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   />
                 )}
               </TabsContent>
-              </div>
-              <TabsContent value="ai" className="mt-0 flex-1 flex flex-col min-h-0 overflow-hidden">
+              <TabsContent value="ai" className="mt-0 p-4 space-y-4">
                 <EditorAIPanel
                   productId={product.id}
                   sections={sections}
@@ -7343,6 +7341,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   }}
                 />
               </TabsContent>
+              </div>
             </Tabs>
         </EditorRightPanel>
       </div>
