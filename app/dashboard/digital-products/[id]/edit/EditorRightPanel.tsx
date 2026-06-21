@@ -80,7 +80,7 @@ export function EditorRightPanel({ children, isDark, mobileOpen = false, onMobil
         </div>
 
         {/* Panel content */}
-        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col md:overflow-hidden">
           {children}
         </div>
       </aside>
