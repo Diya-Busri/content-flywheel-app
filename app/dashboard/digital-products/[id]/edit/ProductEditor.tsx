@@ -205,8 +205,8 @@ export type OverlaySettings = {
 };
 
 const DEFAULT_OVERLAY: OverlaySettings = {
-  color: "rgb(255, 255, 255)",
-  opacity: 0.9,
+  color: "rgb(0, 0, 0)",
+  opacity: 0,
 };
 
 const OVERLAY_PRESETS: Record<string, OverlaySettings> = {
