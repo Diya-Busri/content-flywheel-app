@@ -121,13 +121,11 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
           n: 1,
           size: imageSize,
           quality: "standard",
-          response_format: "b64_json",
         });
         break; // success
       } catch (err) {
         lastErr = err;
         console.warn(`[generate-image] Attempt ${attempt + 1} failed:`, err instanceof Error ? err.message : err);
-        // Always retry — content filter, server error, rate limit
       }
     }
     if (!response) throw lastErr;
@@ -140,19 +138,20 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
       );
     }
 
-    const b64 = (first as { b64_json?: string }).b64_json;
-    if (!b64 || typeof b64 !== "string") {
+    const tempUrl = (first as { url?: string }).url;
+    if (!tempUrl) {
       return NextResponse.json(
-        { error: "Image generation did not return image data. Please try again." },
+        { error: "Image generation did not return a URL. Please try again." },
         { status: 500 }
       );
     }
 
-    const buffer = Buffer.from(b64, "base64");
-    const dataUrl = `data:image/png;base64,${b64}`;
-
+    // Fetch the image from OpenAI's temporary URL and upload to R2 for persistence
     if (useBlob) {
       try {
+        const imgRes = await fetch(tempUrl);
+        if (!imgRes.ok) throw new Error(`Failed to fetch generated image: ${imgRes.status}`);
+        const buffer = Buffer.from(await imgRes.arrayBuffer());
         const pathname = `editor-images/${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
         const blob = await upload(pathname, buffer, {
           access: "public",
@@ -162,14 +161,14 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
         await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[generate-image] credit deduction failed:", e));
         return NextResponse.json({ url: blob.url });
       } catch (blobErr) {
-        console.error("[generate-image] Blob upload failed, returning data URL:", blobErr);
+        console.error("[generate-image] R2 upload failed, returning temp URL:", blobErr);
         await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[generate-image] credit deduction failed:", e));
-        return NextResponse.json({ url: dataUrl });
+        return NextResponse.json({ url: tempUrl });
       }
     }
 
     await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[generate-image] credit deduction failed:", e));
-    return NextResponse.json({ url: dataUrl });
+    return NextResponse.json({ url: tempUrl });
   } catch (err) {
     console.error("[generate-image]", err);
     const message = err instanceof Error ? err.message : "Image generation failed";
