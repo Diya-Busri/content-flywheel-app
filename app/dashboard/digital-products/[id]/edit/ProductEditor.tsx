@@ -1023,6 +1023,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [marketingGenerating, setMarketingGenerating] = useState(false);
   const [marketingRegenerating, setMarketingRegenerating] = useState(false);
   const [activeEditorTab, setActiveEditorTab] = useState("content");
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(340);
   const [pricingRecommendationLoading, setPricingRecommendationLoading] = useState(false);
   const [platformCopyPlatform, setPlatformCopyPlatform] = useState<string>("beacons");
   const [platformCopyLoading, setPlatformCopyLoading] = useState(false);
@@ -5388,7 +5390,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
           </div>
         </div>
 
-        <EditorRightPanel isDark={isDark} mobileOpen={mobileEditorPanelOpen} onMobileClose={() => setMobileEditorPanelOpen(false)}>
+        <EditorRightPanel
+          isDark={isDark}
+          mobileOpen={mobileEditorPanelOpen}
+          onMobileClose={() => setMobileEditorPanelOpen(false)}
+          activeTab={activeEditorTab}
+          onTabChange={setActiveEditorTab}
+          desktopOpen={desktopSidebarOpen}
+          onDesktopToggle={() => setDesktopSidebarOpen(o => !o)}
+          sidebarWidth={sidebarWidth}
+          onSidebarResize={setSidebarWidth}
+        >
             {isOnBackPage && (
               <BackCoverEditor
                 backCoverSocialLinks={backCoverSocialLinks}
