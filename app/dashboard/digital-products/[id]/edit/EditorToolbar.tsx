@@ -225,42 +225,6 @@ export function EditorToolbar({
               </Tooltip>
             </TooltipProvider>
 
-            {/* Panel tab icons — desktop only */}
-            {onPanelTabClick && (
-              <>
-                <div className={`hidden md:block w-px h-6 mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
-                <div className="hidden md:flex items-center gap-0.5">
-                  {PANEL_TABS.map(({ tab, Icon, label }) => {
-                    const active = activePanel === tab && panelOpen;
-                    return (
-                      <TooltipProvider key={tab}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() => onPanelTabClick(tab)}
-                              className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors ${
-                                active
-                                  ? "bg-orange-500 text-white"
-                                  : isDark
-                                  ? "text-gray-400 hover:bg-[#2A2A2A] hover:text-white"
-                                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                              }`}
-                            >
-                              <Icon className="w-4 h-4" />
-                              <span className="text-[9px] font-medium leading-none">{label}</span>
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>{label}</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    );
-                  })}
-                </div>
-                <div className={`hidden md:block w-px h-6 mx-1 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
-              </>
-            )}
-
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -286,6 +250,30 @@ export function EditorToolbar({
           </div>
         </div>
       </header>
+
+      {/* Panel tab bar — desktop only, sits below the main toolbar */}
+      {onPanelTabClick && (
+        <div className={`hidden md:flex items-center border-b px-4 gap-1 shrink-0 ${isDark ? "border-[#2A2A2A] bg-[#0F0F0F]/95" : "border-gray-200 bg-white/95"}`}>
+          {PANEL_TABS.map(({ tab, Icon, label }) => {
+            const active = activePanel === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => onPanelTabClick(tab)}
+                className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+                  active
+                    ? "border-orange-500 text-orange-600"
+                    : `border-transparent ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-900"}`
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {showCreatedBanner && (
         <div

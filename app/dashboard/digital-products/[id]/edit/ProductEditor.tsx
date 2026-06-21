@@ -1023,7 +1023,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [marketingGenerating, setMarketingGenerating] = useState(false);
   const [marketingRegenerating, setMarketingRegenerating] = useState(false);
   const [activeEditorTab, setActiveEditorTab] = useState("content");
-  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(false);
+  const [desktopSidebarOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const [pricingRecommendationLoading, setPricingRecommendationLoading] = useState(false);
   const [platformCopyPlatform, setPlatformCopyPlatform] = useState<string>("beacons");
@@ -4853,14 +4853,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         generateImagesProgress={generateImagesProgress}
         activePanel={activeEditorTab}
         panelOpen={desktopSidebarOpen}
-        onPanelTabClick={(tab) => {
-          if (tab === activeEditorTab && desktopSidebarOpen) {
-            setDesktopSidebarOpen(false);
-          } else {
-            setActiveEditorTab(tab);
-            setDesktopSidebarOpen(true);
-          }
-        }}
+        onPanelTabClick={(tab) => setActiveEditorTab(tab)}
       />
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
