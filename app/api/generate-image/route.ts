@@ -121,7 +121,6 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
           n: 1,
           size: imageSize,
           quality: "standard",
-          style: "natural",
           response_format: "b64_json",
         });
         break; // success
