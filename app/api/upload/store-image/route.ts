@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { put } from "@vercel/blob";
+import { upload } from "@/lib/storage";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   const ext = file.name.split(".").pop() ?? "jpg";
   const filename = `store/${userId}/${type}-${Date.now()}.${ext}`;
 
-  const blob = await put(filename, file, {
+  const blob = await upload(filename, file, {
     access: "public",
     contentType: file.type,
   });

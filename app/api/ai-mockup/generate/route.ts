@@ -3,7 +3,7 @@ import { db } from "@/db/db";
 import { podProductsTable } from "@/db/schema/pod-products-schema";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { upload } from "@/lib/storage";
 
 const FAL_API_KEY = () => {
   const key = process.env.FAL_API_KEY?.trim();
@@ -196,7 +196,7 @@ async function getGeneratedModelBlobUrl(style: string, blueprintTitle: string | 
   const imgRes = await fetch(modelUrl);
   const buf = Buffer.from(await imgRes.arrayBuffer());
   const slug = cacheKey.replace(/[^a-z0-9-]/gi, "").toLowerCase().slice(0, 60);
-  const blob = await put(`pod-mockups/tryon-models/${slug}.jpg`, buf, {
+  const blob = await upload(`pod-mockups/tryon-models/${slug}.jpg`, buf, {
     access: "public",
     contentType: "image/jpeg",
     addRandomSuffix: false,
@@ -403,7 +403,7 @@ export async function POST(req: Request) {
     // ── Persist to Vercel Blob ────────────────────────────────────────────────
     const imageRes = await fetch(imageUrl);
     const buffer = Buffer.from(await imageRes.arrayBuffer());
-    const blob = await put(
+    const blob = await upload(
       `pod-mockups/${userId}/${productId}/${Date.now()}.jpg`,
       buffer,
       { access: "public", contentType: "image/jpeg" }

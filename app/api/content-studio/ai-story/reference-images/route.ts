@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { fal } from "@fal-ai/client";
-import { put } from "@vercel/blob";
+import { upload } from "@/lib/storage";
 import { checkSpendLimit } from "@/lib/spend-guard";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
           if (!imgRes.ok) throw new Error("fetch ref image failed");
           const buf = Buffer.from(await imgRes.arrayBuffer());
           const pathname = `ai-story-refs/${userId}/${Date.now()}-${t.replace(/\s+/g, "-")}.png`;
-          const blob = await put(pathname, buf, {
+          const blob = await upload(pathname, buf, {
             access: "public",
             contentType: "image/png",
             addRandomSuffix: false,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { fal } from "@fal-ai/client";
-import { put } from "@vercel/blob";
+import { upload } from "@/lib/storage";
 import { checkSpendLimit } from "@/lib/spend-guard";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
@@ -86,7 +86,7 @@ async function fluxDevToUrl(prompt: string, folder: string): Promise<string> {
     if (!imgRes.ok) throw new Error("fetch generated image failed");
     const buffer = Buffer.from(await imgRes.arrayBuffer());
     const pathname = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
-    const blob = await put(pathname, buffer, {
+    const blob = await upload(pathname, buffer, {
       access: "public",
       contentType: "image/png",
       addRandomSuffix: false,

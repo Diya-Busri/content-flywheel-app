@@ -1537,19 +1537,22 @@ function ChatPanel({
         } else if (videoTypes.includes(file.type) || /\.(mp4|mov|avi|webm|mkv|mpeg|mpg)$/i.test(lowerName)) {
           const blobUrl = URL.createObjectURL(file);
           setPendingVideos((prev) => [...prev, { name: file.name, blobUrl, transcribing: true }]);
-          // Upload to Vercel Blob first (bypasses Vercel function body limit), then transcribe
+          // Upload to R2 first (bypasses Vercel function body limit), then transcribe
           (async () => {
             try {
-              const { upload } = await import("@vercel/blob/client");
-              const uploaded = await upload(
-                `coach-videos/${Date.now()}-${file.name}`,
-                file,
-                { access: "public", handleUploadUrl: "/api/upload-video-blob" }
-              );
+              const presignRes = await fetch("/api/upload-video-blob", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+              });
+              if (!presignRes.ok) throw new Error(`Presign failed: ${presignRes.status}`);
+              const { uploadUrl, publicUrl } = await presignRes.json() as { uploadUrl: string; publicUrl: string };
+              const putRes = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+              if (!putRes.ok) throw new Error(`Upload failed: ${putRes.status}`);
               const res = await fetch("/api/transcribe-video", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url: uploaded.url, filename: file.name }),
+                body: JSON.stringify({ url: publicUrl, filename: file.name }),
               });
               const data = await res.json().catch(() => ({})) as { transcript?: string; error?: string };
               if (!res.ok) {

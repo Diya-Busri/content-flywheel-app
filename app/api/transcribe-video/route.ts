@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import OpenAI from "openai";
-import { del } from "@vercel/blob";
+import { del } from "@/lib/storage";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 
 export const runtime = "nodejs";

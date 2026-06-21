@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { put } from "@vercel/blob";
+import { upload } from "@/lib/storage";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
 
   const filename = `products/${userId}/files/${Date.now()}-${safeName}`;
 
-  const blob = await put(filename, file, {
+  const blob = await upload(filename, file, {
     access: "public",
     contentType: file.type,
   });

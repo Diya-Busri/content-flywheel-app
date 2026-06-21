@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { put } from "@vercel/blob";
+import { upload } from "@/lib/storage";
 import { NextResponse } from "next/server";
 import { checkSpendLimit } from "@/lib/spend-guard";
 
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   const imgRes = await fetch(cleanUrl);
   if (!imgRes.ok) return NextResponse.json({ error: "Failed to fetch cleaned image" }, { status: 500 });
   const buffer = Buffer.from(await imgRes.arrayBuffer());
-  const blob = await put(`pod-designs/${userId}/nobg-${Date.now()}.png`, buffer, { access: "public", contentType: "image/png" });
+  const blob = await upload(`pod-designs/${userId}/nobg-${Date.now()}.png`, buffer, { access: "public", contentType: "image/png" });
 
   return NextResponse.json({ url: blob.url });
 }

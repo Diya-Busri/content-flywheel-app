@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ImageResponse } from "next/og";
 import { auth } from "@clerk/nextjs/server";
-import { put } from "@vercel/blob";
+import { upload } from "@/lib/storage";
 import { randomBytes } from "crypto";
 import { makeThumbnailHook } from "@/lib/thumbnail-text-overlay";
 
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
 
     const pngBuffer = Buffer.from(await imageResponse.arrayBuffer());
     const filename = `thumbnails/${userId}/${randomBytes(8).toString("hex")}_brand.png`;
-    const blob = await put(filename, pngBuffer, {
+    const blob = await upload(filename, pngBuffer, {
       access: "public",
       contentType: "image/png",
     });

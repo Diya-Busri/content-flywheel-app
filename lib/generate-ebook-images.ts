@@ -4,7 +4,7 @@
  */
 
 import OpenAI from "openai";
-import { put } from "@vercel/blob";
+import { upload } from "@/lib/storage";
 
 function getClient(): OpenAI {
   const key = process.env.OPENAI_API_KEY?.trim();
@@ -57,7 +57,7 @@ export async function generateAndUploadEbookImage(
 
   const ext = "png";
   const pathname = `ebook-images/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const blob = await put(pathname, buffer, {
+  const blob = await upload(pathname, buffer, {
     access: "public",
     contentType: "image/png",
     addRandomSuffix: false,

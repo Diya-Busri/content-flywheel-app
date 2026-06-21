@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { put } from "@vercel/blob";
+import { upload } from "@/lib/storage";
 import { NextResponse } from "next/server";
 import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
 import { checkSpendLimit } from "@/lib/spend-guard";
@@ -218,7 +218,7 @@ export async function POST(request: Request) {
   }
 
   const buffer = Buffer.from(await imgRes.arrayBuffer());
-  const blob = await put(
+  const blob = await upload(
     `pod-designs/${userId}/ai-${Date.now()}.png`,
     buffer,
     { access: "public", contentType: "image/png" }

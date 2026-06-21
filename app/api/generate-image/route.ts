@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import OpenAI from "openai";
-import { put } from "@vercel/blob";
+import { upload } from "@/lib/storage";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { checkVideoCredits, deductVideoCredit } from "@/actions/video-credits-actions";
@@ -155,7 +155,7 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
     if (useBlob) {
       try {
         const pathname = `editor-images/${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
-        const blob = await put(pathname, buffer, {
+        const blob = await upload(pathname, buffer, {
           access: "public",
           contentType: "image/png",
           addRandomSuffix: false,

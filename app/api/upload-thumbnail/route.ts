@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { put } from "@vercel/blob";
+import { upload } from "@/lib/storage";
 import { randomBytes } from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(base64, "base64");
 
     const filename = `thumbnails/${userId}/${randomBytes(8).toString("hex")}.png`;
-    const blob = await put(filename, buffer, { access: "public", contentType: "image/png" });
+    const blob = await upload(filename, buffer, { access: "public", contentType: "image/png" });
 
     return NextResponse.json({ url: blob.url });
   } catch (err) {

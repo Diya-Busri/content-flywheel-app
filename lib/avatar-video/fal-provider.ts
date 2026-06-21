@@ -10,7 +10,7 @@
  */
 
 import OpenAI from "openai";
-import { put } from "@vercel/blob";
+import { upload } from "@/lib/storage";
 import type { StartVideoResult, VideoStatusResult, ProviderOptions } from "./types";
 
 const FAL_BASE = "https://queue.fal.run";
@@ -82,7 +82,7 @@ async function generateAudioUrl(script: string, voice: string = "nova"): Promise
 
   // Must persist to a public URL — fal.ai can't receive base64 audio
   if (process.env.BLOB_READ_WRITE_TOKEN) {
-    const blob = await put(
+    const blob = await upload(
       `avatar-audio/${Date.now()}-${Math.random().toString(36).slice(2)}.mp3`,
       buffer,
       { access: "public", contentType: "audio/mpeg", addRandomSuffix: false }
