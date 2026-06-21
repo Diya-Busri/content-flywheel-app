@@ -5666,7 +5666,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 </TabsTrigger>
               </TabsList>
               <div className="flex-1 min-h-0 overflow-y-auto">
-              <TabsContent value="content" className="mt-0 p-4 space-y-3">
+              <TabsContent value="content" className="mt-0 p-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
                 <BrandVoiceIndicator />
                 <ReadyToSellChecklist
                   hasThumbnail={!!(marketingAssets.thumbnailUrl || marketingAssets.coverThumbnailUrl)}
@@ -5691,7 +5691,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   isDark={isDark}
                 />
               </TabsContent>
-              <TabsContent value="design" className="mt-0 p-4 overflow-y-auto">
+              <TabsContent value="design" className="mt-0 p-4 flex-1 min-h-0 overflow-y-auto">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Template</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {TEMPLATES.map((t) => (
@@ -5785,7 +5785,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   />
                 )}
               </TabsContent>
-              <TabsContent value="graphics" className="mt-0 p-4 space-y-6 overflow-y-auto">
+              <TabsContent value="graphics" className="mt-0 p-4 space-y-6 flex-1 min-h-0 overflow-y-auto">
                 {/* Social links for back cover are shown at top of right panel when on back page (BackCoverEditor) */}
                 <p className="text-xs text-gray-500 mb-3">Click to add to canvas. Drag to move and resize. Icons and graphics are on the current page only.</p>
                 <Button
@@ -6809,7 +6809,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </DialogContent>
                 </Dialog>
               </TabsContent>
-              <TabsContent value="layout" className="mt-0 p-4">
+              <TabsContent value="layout" className="mt-0 p-4 flex-1 min-h-0 overflow-y-auto">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Text Layout</h3>
                 <div className="space-y-6">
                   <div>
@@ -6926,7 +6926,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   </Button>
                 </div>
               </TabsContent>
-              <TabsContent value="export" className="mt-0 p-4 space-y-3">
+              <TabsContent value="export" className="mt-0 p-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Export</h3>
                 <div className="space-y-3">
                   <div className="flex items-center space-x-2">
@@ -6961,7 +6961,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   onAction={() => setActiveEditorTab("videos")}
                 />
               </TabsContent>
-              <TabsContent value="marketing" className="mt-0 p-4 space-y-6 overflow-y-auto">
+              <TabsContent value="marketing" className="mt-0 p-4 space-y-6 flex-1 min-h-0 overflow-y-auto">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Marketplace listing assets</h3>
                 {!marketingAssets.productTitle && !marketingAssets.productDescription ? (
                   <div className="space-y-3">
