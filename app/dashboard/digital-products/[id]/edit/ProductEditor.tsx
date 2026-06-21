@@ -5641,7 +5641,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 </div>
               </div>
             )}
-            <Tabs value={activeEditorTab} onValueChange={setActiveEditorTab} className="w-full flex flex-col md:flex-1 md:min-h-0">
+            <Tabs value={activeEditorTab} onValueChange={setActiveEditorTab} className="w-full flex flex-col flex-1 min-h-0">
               <TabsList className="bg-gray-50 border-b border-gray-200 w-full flex overflow-x-auto rounded-none h-11 px-0 shrink-0">
                 <TabsTrigger value="content" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none text-xs gap-1 text-gray-600 border-b-2 border-transparent shrink-0 px-2.5">
                   <BookOpen className="w-3.5 h-3.5" /> Content
