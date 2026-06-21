@@ -42,6 +42,7 @@ export default function CreateFlow() {
   const searchParams = useSearchParams();
   const [productName, setProductName] = useState("");
   const [productDescription, setProductDescription] = useState("");
+  const [creatorExpertise, setCreatorExpertise] = useState("");
   const [mode, setMode] = useState<"file" | "link">("file");
   const [productFile, setProductFile] = useState<File | null>(null);
   const [productSalesPageLink, setProductSalesPageLink] = useState("");
@@ -117,6 +118,7 @@ export default function CreateFlow() {
     const productData = {
       productName: productName.trim(),
       productDescription: productDescription.trim(),
+      creatorExpertise: creatorExpertise.trim(),
       productType,
       productFileOrLinkMode: mode,
       productSalesPageLink: productSalesPageLink.trim(),
@@ -175,6 +177,22 @@ export default function CreateFlow() {
               className="bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-[#666] resize-none"
             />
             <p className="text-xs text-[#A0A0A0]">The more detail you provide, the better your video scripts will be. Character count: {productDescription.length}</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="creatorExpertise" className="text-white">
+              Your expertise or unique angle{" "}
+              <span className="text-[#A0A0A0] font-normal">(optional)</span>
+            </Label>
+            <Textarea
+              id="creatorExpertise"
+              placeholder="e.g. I've paid off £12k of debt using this method. I'm a finance grad who discovered most budgeting advice is overcomplicated..."
+              value={creatorExpertise}
+              onChange={(e) => setCreatorExpertise(e.target.value)}
+              rows={3}
+              className="bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-[#666] resize-none"
+            />
+            <p className="text-xs text-[#A0A0A0]">Your personal experience or angle — this makes the AI output sound like <span className="text-orange-400">you</span>, not a generic template.</p>
           </div>
 
           <div className="space-y-3">

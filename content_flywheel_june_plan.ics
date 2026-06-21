@@ -1,0 +1,489 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Content Flywheel//10 Users Plan//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:CF - 10 Users Plan
+X-WR-CALDESC:Content Flywheel daily schedule — June 2026
+
+BEGIN:VEVENT
+UID:cf-0621-1@contentflywheel
+DTSTART;TZID=Europe/London:20260621T090000
+DTEND;TZID=Europe/London:20260621T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:Apply for 2 jobs minimum. Do this before anything else.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0621-2@contentflywheel
+DTSTART;TZID=Europe/London:20260621T100000
+DTEND;TZID=Europe/London:20260621T110000
+SUMMARY:🎬 Record screen + create a real product at the same time
+DESCRIPTION:Open a screen recorder (Loom, QuickTime, or any free tool). Hit record. Go through the Discover flow live — pick a niche, fill in the expertise box, generate the product. This recording IS your demo. You don't need to script it — just narrate what you're clicking as you go. Aim for 2-3 minutes raw, you'll trim it down next.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0621-2b@contentflywheel
+DTSTART;TZID=Europe/London:20260621T110000
+DTEND;TZID=Europe/London:20260621T120000
+SUMMARY:✂️ Trim recording to 60 seconds
+DESCRIPTION:Watch the recording back. Find the 60-second clip that shows the most impressive part — ideally the moment the product generates and the output appears. Trim it there. No fancy editing needed. Save it ready to attach to the Reddit post.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0621-3@contentflywheel
+DTSTART;TZID=Europe/London:20260621T120000
+DTEND;TZID=Europe/London:20260621T130000
+SUMMARY:🍽️ Break
+DESCRIPTION:Actually take a break. Step away from the screen.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0621-4@contentflywheel
+DTSTART;TZID=Europe/London:20260621T130000
+DTEND;TZID=Europe/London:20260621T140000
+SUMMARY:✍️ Write Reddit post copy for r/passive_income
+DESCRIPTION:Write the post — headline + body + link to demo. Hook: "I built an AI tool that creates full digital products in minutes — here's a 60-second demo." Keep it honest and show real output.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0621-5@contentflywheel
+DTSTART;TZID=Europe/London:20260621T140000
+DTEND;TZID=Europe/London:20260621T143000
+SUMMARY:🚀 Post to r/passive_income + r/sidehustle
+DESCRIPTION:Post the Reddit post. Adapt the hook slightly for r/sidehustle. Submit both.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0621-6@contentflywheel
+DTSTART;TZID=Europe/London:20260621T150000
+DTEND;TZID=Europe/London:20260621T153000
+SUMMARY:💬 Reply to every Reddit comment
+DESCRIPTION:Check both posts. Reply to every single comment — fast replies push posts up. Answer questions, thank people, share the sign-up link when asked.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0622-1@contentflywheel
+DTSTART;TZID=Europe/London:20260622T090000
+DTEND;TZID=Europe/London:20260622T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:Apply for 2 jobs minimum. Do this before anything else.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0622-2@contentflywheel
+DTSTART;TZID=Europe/London:20260622T100000
+DTEND;TZID=Europe/London:20260622T120000
+SUMMARY:🔨 Full user journey test — sign up fresh + note every friction point
+DESCRIPTION:Open an incognito window. Sign up as a new user. Create a product from scratch using the Discover flow. Go all the way to the marketing assets. Write down every moment where you felt confused, stuck, or underwhelmed. This list becomes your fix backlog.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0622-3@contentflywheel
+DTSTART;TZID=Europe/London:20260622T120000
+DTEND;TZID=Europe/London:20260622T130000
+SUMMARY:🍽️ Break
+DESCRIPTION:Actually take a break.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0622-4@contentflywheel
+DTSTART;TZID=Europe/London:20260622T130000
+DTEND;TZID=Europe/London:20260622T140000
+SUMMARY:🚀 Post to r/digitalnomad
+DESCRIPTION:Adapt the Reddit post for r/digitalnomad. Angle: "build income from anywhere with AI." Submit and reply to comments.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0622-5@contentflywheel
+DTSTART;TZID=Europe/London:20260622T140000
+DTEND;TZID=Europe/London:20260622T150000
+SUMMARY:💬 Reply to all Reddit comments from yesterday
+DESCRIPTION:Go back to yesterday's posts. Reply to anyone new. Keep the threads alive — active threads get more visibility.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0622-6@contentflywheel
+DTSTART;TZID=Europe/London:20260622T150000
+DTEND;TZID=Europe/London:20260622T153000
+SUMMARY:✅ Check payment → email → Skool link flow works
+DESCRIPTION:Make a test purchase or trace the flow manually. Does the confirmation email actually send? Does the Skool community link work? Fix anything broken before real users hit it.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0623-1@contentflywheel
+DTSTART;TZID=Europe/London:20260623T090000
+DTEND;TZID=Europe/London:20260623T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:Apply for 2 jobs minimum.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0623-2@contentflywheel
+DTSTART;TZID=Europe/London:20260623T100000
+DTEND;TZID=Europe/London:20260623T120000
+SUMMARY:🔨 Fix top 3 friction points from user journey test
+DESCRIPTION:Take the list of friction points you wrote yesterday. Pick the 3 that would most likely cause a new user to give up or feel confused. Fix those today. Don't try to fix everything.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0623-3@contentflywheel
+DTSTART;TZID=Europe/London:20260623T120000
+DTEND;TZID=Europe/London:20260623T130000
+SUMMARY:🍽️ Break
+DESCRIPTION:Take a break.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0623-4@contentflywheel
+DTSTART;TZID=Europe/London:20260623T130000
+DTEND;TZID=Europe/London:20260623T140000
+SUMMARY:🏫 Join 3 Skool communities
+DESCRIPTION:Join: Your First $5k Club + 2 other digital product / creator communities. Introduce yourself briefly. Do NOT mention Content Flywheel yet.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0623-5@contentflywheel
+DTSTART;TZID=Europe/London:20260623T140000
+DTEND;TZID=Europe/London:20260623T150000
+SUMMARY:🏫 Comment on 5 Skool posts — no promo
+DESCRIPTION:Find 5 posts where people are asking questions about digital products, niches, or content creation. Give a genuine helpful answer. No mention of Content Flywheel.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0623-6@contentflywheel
+DTSTART;TZID=Europe/London:20260623T150000
+DTEND;TZID=Europe/London:20260623T153000
+SUMMARY:💬 Reply to all open Reddit threads + plan tomorrow
+DESCRIPTION:Check Reddit. Reply to any new comments. Write down tomorrow's 3 most important tasks before you close the laptop.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0624-1@contentflywheel
+DTSTART;TZID=Europe/London:20260624T090000
+DTEND;TZID=Europe/London:20260624T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:Apply for 2 jobs minimum.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0624-2@contentflywheel
+DTSTART;TZID=Europe/London:20260624T100000
+DTEND;TZID=Europe/London:20260624T120000
+SUMMARY:🔨 Build auto-trigger: generate hook pack after product creation
+DESCRIPTION:When a product finishes generating, automatically kick off a hook pack or script generation so users land on a dashboard with something already happening. This fixes the 0-videos activation gap. Start with the simplest version — even just a prompt to "generate your first hook" is enough.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0624-3@contentflywheel
+DTSTART;TZID=Europe/London:20260624T120000
+DTEND;TZID=Europe/London:20260624T130000
+SUMMARY:🍽️ Break
+DESCRIPTION:Take a break.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0624-4@contentflywheel
+DTSTART;TZID=Europe/London:20260624T130000
+DTEND;TZID=Europe/London:20260624T140000
+SUMMARY:🏫 Skool engagement day 2 — 5 more comments
+DESCRIPTION:Go back to the Skool communities. Comment on 5 more posts. You can now start naturally mentioning that you built a tool if it genuinely fits the conversation.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0624-5@contentflywheel
+DTSTART;TZID=Europe/London:20260624T140000
+DTEND;TZID=Europe/London:20260624T150000
+SUMMARY:📩 DM 10 people on Reddit asking about digital products
+DESCRIPTION:Search Reddit for "how do I create a digital product" or "digital product ideas." Find 10 people who asked recently. DM: "I built something for exactly this — happy to give you free access if you want to test it."
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0624-6@contentflywheel
+DTSTART;TZID=Europe/London:20260624T150000
+DTEND;TZID=Europe/London:20260624T153000
+SUMMARY:💬 Reply to everything + plan tomorrow
+DESCRIPTION:Clear inbox across Reddit, Skool, email. Write tomorrow's 3 tasks.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0625-1@contentflywheel
+DTSTART;TZID=Europe/London:20260625T090000
+DTEND;TZID=Europe/London:20260625T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:Apply for 2 jobs minimum.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0625-2@contentflywheel
+DTSTART;TZID=Europe/London:20260625T100000
+DTEND;TZID=Europe/London:20260625T120000
+SUMMARY:🔨 Continue auto-trigger build + test it end-to-end
+DESCRIPTION:Finish the auto-trigger for the first marketing asset. Test it: create a product and confirm something is automatically generated or prompted after. Fix any bugs.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0625-3@contentflywheel
+DTSTART;TZID=Europe/London:20260625T120000
+DTEND;TZID=Europe/London:20260625T130000
+SUMMARY:🍽️ Break
+DESCRIPTION:Take a break.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0625-4@contentflywheel
+DTSTART;TZID=Europe/London:20260625T130000
+DTEND;TZID=Europe/London:20260625T140000
+SUMMARY:🏫 Post in Skool communities — offer free access
+DESCRIPTION:Post: "I built a tool specifically for beginners creating their first digital product — happy to give free access to anyone who wants to test it and give feedback." Post in all 3 communities.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0625-5@contentflywheel
+DTSTART;TZID=Europe/London:20260625T140000
+DTEND;TZID=Europe/London:20260625T150000
+SUMMARY:📩 DM 10 creators on TikTok or Instagram
+DESCRIPTION:Find faceless creators or beginners talking about digital products. DM them: short, genuine, no hard sell. "I built something that might be useful for you — happy to give you free access."
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0625-6@contentflywheel
+DTSTART;TZID=Europe/London:20260625T150000
+DTEND;TZID=Europe/London:20260625T153000
+SUMMARY:💬 Reply to everything + plan tomorrow
+DESCRIPTION:Clear all inboxes. Write tomorrow's 3 tasks.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0626-1@contentflywheel
+DTSTART;TZID=Europe/London:20260626T090000
+DTEND;TZID=Europe/London:20260626T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:Apply for 2 jobs minimum.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0626-2@contentflywheel
+DTSTART;TZID=Europe/London:20260626T100000
+DTEND;TZID=Europe/London:20260626T120000
+SUMMARY:🔨 Improve generation prompts based on expertise field test
+DESCRIPTION:Go back to the output you generated on Day 1 with the expertise field. Read it critically. If it still sounds generic, open generate-product-content.ts and strengthen the CREATOR EXPERTISE instruction in the CONTEXT_BLOCK — make it more forceful, more specific about what the AI should do with that info.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0626-3@contentflywheel
+DTSTART;TZID=Europe/London:20260626T120000
+DTEND;TZID=Europe/London:20260626T130000
+SUMMARY:🍽️ Break
+DESCRIPTION:Take a break.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0626-4@contentflywheel
+DTSTART;TZID=Europe/London:20260626T130000
+DTEND;TZID=Europe/London:20260626T140000
+SUMMARY:🐦 Post Twitter/X thread with screen recording demo
+DESCRIPTION:Thread: "I'm building Content Flywheel — AI that creates digital products for faceless creators. Here's what it does in 60 seconds." Attach the demo. Tag 2-3 build-in-public accounts.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0626-5@contentflywheel
+DTSTART;TZID=Europe/London:20260626T140000
+DTEND;TZID=Europe/London:20260626T150000
+SUMMARY:🐦 Engage with build-in-public Twitter community
+DESCRIPTION:Reply to 10 build-in-public posts. Add value — comment on their progress, share a relevant insight. Get on people's radar before asking for anything.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0626-6@contentflywheel
+DTSTART;TZID=Europe/London:20260626T150000
+DTEND;TZID=Europe/London:20260626T153000
+SUMMARY:💬 Reply to everything + plan tomorrow
+DESCRIPTION:Clear all inboxes. Write tomorrow's 3 tasks.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0627-1@contentflywheel
+DTSTART;TZID=Europe/London:20260627T090000
+DTEND;TZID=Europe/London:20260627T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:Apply for 2 jobs minimum.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0627-2@contentflywheel
+DTSTART;TZID=Europe/London:20260627T100000
+DTEND;TZID=Europe/London:20260627T120000
+SUMMARY:🔨 Add UTM tracking links — know where signups come from
+DESCRIPTION:Create unique links for each channel: Reddit, Skool, Twitter, DMs. Use UTM parameters or a simple link shortener. You need to know which channel is actually converting so you can double down on it.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0627-3@contentflywheel
+DTSTART;TZID=Europe/London:20260627T120000
+DTEND;TZID=Europe/London:20260627T130000
+SUMMARY:🍽️ Break
+DESCRIPTION:Take a break.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0627-4@contentflywheel
+DTSTART;TZID=Europe/London:20260627T130000
+DTEND;TZID=Europe/London:20260627T150000
+SUMMARY:📩 DM outreach round 2 — 20 people across all platforms
+DESCRIPTION:Second wave. Reddit, TikTok, Twitter, Skool. Find people asking about digital products or passive income. DM them. Aim for 20 messages today.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0627-5@contentflywheel
+DTSTART;TZID=Europe/London:20260627T150000
+DTEND;TZID=Europe/London:20260627T153000
+SUMMARY:💬 Follow up on all threads + plan tomorrow
+DESCRIPTION:Go back to every Reddit post, DM thread, and Skool comment. Reply to anything you missed. Write tomorrow's 3 tasks.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0628-1@contentflywheel
+DTSTART;TZID=Europe/London:20260628T090000
+DTEND;TZID=Europe/London:20260628T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:Apply for 2 jobs minimum.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0628-2@contentflywheel
+DTSTART;TZID=Europe/London:20260628T100000
+DTEND;TZID=Europe/London:20260628T120000
+SUMMARY:🔨 Fix whatever real users are struggling with
+DESCRIPTION:By now you may have testers using the app. Check your email, Skool community, and DMs for any confusion or bugs they've reported. Fix the most common issue first.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0628-3@contentflywheel
+DTSTART;TZID=Europe/London:20260628T120000
+DTEND;TZID=Europe/London:20260628T130000
+SUMMARY:🍽️ Break
+DESCRIPTION:Take a break.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0628-4@contentflywheel
+DTSTART;TZID=Europe/London:20260628T130000
+DTEND;TZID=Europe/London:20260628T140000
+SUMMARY:🚀 Second Reddit post — social proof angle
+DESCRIPTION:Post: "I gave people free access to my AI tool — here's what they built." Show real product output screenshots. Social proof converts better than a feature list.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0628-5@contentflywheel
+DTSTART;TZID=Europe/London:20260628T140000
+DTEND;TZID=Europe/London:20260628T150000
+SUMMARY:💬 Clear every inbox across all channels
+DESCRIPTION:Reddit, Twitter, Skool, email, DMs. Reply to everything. No message left unanswered.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0628-6@contentflywheel
+DTSTART;TZID=Europe/London:20260628T150000
+DTEND;TZID=Europe/London:20260628T153000
+SUMMARY:📊 MILESTONE CHECK — how many paying users?
+DESCRIPTION:Count your paying users. Which channel sent them? What's the gap to 10? Adjust the plan for the final 2 days.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0629-1@contentflywheel
+DTSTART;TZID=Europe/London:20260629T090000
+DTEND;TZID=Europe/London:20260629T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:Apply for 2 jobs minimum.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0629-2@contentflywheel
+DTSTART;TZID=Europe/London:20260629T100000
+DTEND;TZID=Europe/London:20260629T120000
+SUMMARY:🔨 Double down on what worked — more of the best channel
+DESCRIPTION:Whatever drove the most signups this week — do more of it. More Reddit posts, more DMs, more Twitter. This is not a day for new features.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0629-3@contentflywheel
+DTSTART;TZID=Europe/London:20260629T120000
+DTEND;TZID=Europe/London:20260629T130000
+SUMMARY:🍽️ Break
+DESCRIPTION:Take a break.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0629-4@contentflywheel
+DTSTART;TZID=Europe/London:20260629T130000
+DTEND;TZID=Europe/London:20260629T140000
+SUMMARY:📅 Plan July — set 25-user goal
+DESCRIPTION:Based on what worked in June, plan July's outreach calendar. Set a new goal: 25 paying users by end of July. Assign each week a focus channel.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0629-5@contentflywheel
+DTSTART;TZID=Europe/London:20260629T140000
+DTEND;TZID=Europe/London:20260629T150000
+SUMMARY:📩 Final wave of DMs — 20 people
+DESCRIPTION:One more round of targeted DMs to people who've shown interest in digital products or passive income this week.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0629-6@contentflywheel
+DTSTART;TZID=Europe/London:20260629T150000
+DTEND;TZID=Europe/London:20260629T153000
+SUMMARY:💬 Reply to everything + plan tomorrow
+DESCRIPTION:Clear all inboxes. Write tomorrow's 3 tasks — make them count, it's the last day of the month.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0630-1@contentflywheel
+DTSTART;TZID=Europe/London:20260630T090000
+DTEND;TZID=Europe/London:20260630T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:Apply for 2 jobs minimum.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0630-2@contentflywheel
+DTSTART;TZID=Europe/London:20260630T100000
+DTEND;TZID=Europe/London:20260630T120000
+SUMMARY:🔨 Final fixes — polish anything a new user would hit on day 1
+DESCRIPTION:Quick review of the onboarding flow. Does it feel smooth? Is anything confusing on the first screen a new user sees? Make it feel professional and trustworthy for the users you're about to get.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0630-3@contentflywheel
+DTSTART;TZID=Europe/London:20260630T120000
+DTEND;TZID=Europe/London:20260630T130000
+SUMMARY:🍽️ Break
+DESCRIPTION:Last day of June — take a proper break.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0630-4@contentflywheel
+DTSTART;TZID=Europe/London:20260630T130000
+DTEND;TZID=Europe/London:20260630T140000
+SUMMARY:📩 DM everyone who showed interest but didn't convert
+DESCRIPTION:Go through every DM thread from the week. Anyone who replied but didn't sign up — send one final message: "Still happy to get you set up if you want to give it a try this week."
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0630-5@contentflywheel
+DTSTART;TZID=Europe/London:20260630T140000
+DTEND;TZID=Europe/London:20260630T143000
+SUMMARY:🏆 GOAL CHECK — Did you hit 10 paying users?
+DESCRIPTION:Final count. If yes — you have proof this works. Post it everywhere. If not — how close? Use the gap to set July's intensity. Either way, you built a habit this month.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-0630-6@contentflywheel
+DTSTART;TZID=Europe/London:20260630T143000
+DTEND;TZID=Europe/London:20260630T160000
+SUMMARY:🐦 Post June results publicly on Twitter/X
+DESCRIPTION:Share what you built, what you tried, what worked, what didn't. Build-in-public posts attract your next wave of users. Be honest — people respect founders who share real numbers.
+END:VEVENT
+
+END:VCALENDAR

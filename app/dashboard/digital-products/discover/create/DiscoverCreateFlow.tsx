@@ -202,6 +202,7 @@ interface DiscoveryData {
   productName?: string;
   productDescription?: string;
   productIncluded?: string;
+  creatorExpertise?: string;
   productWhy?: string;
   productType?: string;
   productPrice?: string;
@@ -621,6 +622,7 @@ export default function DiscoverCreateFlow() {
             productDescription: data?.productDescription ?? "",
             productIncluded: data?.productIncluded ?? "",
             productWhy: data?.productWhy ?? "",
+            creatorExpertise: data?.creatorExpertise ?? "",
             niche: data?.niche ?? "",
             format,
             hooks: data?.hooks?.map((h) => h.text) ?? [],

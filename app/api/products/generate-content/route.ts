@@ -20,6 +20,7 @@ export async function POST(request: Request) {
     const productWhy = typeof body.productWhy === "string" ? body.productWhy : "";
     const niche = typeof body.niche === "string" ? body.niche : "";
     const format = typeof body.format === "string" ? body.format : "ebook";
+    const creatorExpertise = typeof body.creatorExpertise === "string" ? body.creatorExpertise : "";
     const hooks = Array.isArray(body.hooks) ? body.hooks : [];
     const ctas = Array.isArray(body.ctas) ? body.ctas : [];
     const hookTexts = hooks.map((h: string | { text?: string }) => (typeof h === "string" ? h : h?.text ?? ""));
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
       format,
       hookTexts: hookTexts.filter(Boolean),
       ctaTexts: ctaTexts.filter(Boolean),
+      creatorExpertise: creatorExpertise || undefined,
     });
 
     return NextResponse.json({

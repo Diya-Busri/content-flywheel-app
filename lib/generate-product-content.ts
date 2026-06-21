@@ -43,6 +43,8 @@ export type GenerateProductContentParams = {
   customizationOptions?: CustomizationOptions;
   /** Bundle mode: generate a shorter product (fewer sections) to keep generation fast when 8 run in parallel. */
   bundleMode?: boolean;
+  /** Creator's own expertise, methodology, or unique angle — injected to personalise output beyond generic AI. */
+  creatorExpertise?: string;
 };
 
 const SYSTEM_PREMIUM =
@@ -54,6 +56,7 @@ const CONTEXT_BLOCK = (params: GenerateProductContentParams) =>
 - What's included: ${params.productIncluded || "N/A"}
 - Why it sells / audience: ${params.productWhy || "N/A"}
 ${params.productDescription ? `- Description: ${params.productDescription}` : ""}
+${params.creatorExpertise ? `CREATOR EXPERTISE & UNIQUE ANGLE: The creator has provided the following personal context — you MUST weave this into the content so it reflects their voice, experience, and perspective rather than generic AI output: "${params.creatorExpertise}"` : ""}
 NICHE: ${params.niche || "General audience"}
 ${params.subFocus ? `SUB-FOCUS (this product must cover ONLY this angle of the niche; do not repeat the same content as other products): ${params.subFocus}` : ""}
 ${params.hookTexts?.length ? `HOOKS (weave into content): ${params.hookTexts.join(" | ")}` : ""}
@@ -265,7 +268,7 @@ export async function generateProductContent(params: GenerateProductContentParam
   const { prompt, useGpt4, maxTokens } = buildPrompt(paramsWithCleanTitle);
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-4o",
     messages: [
       { role: "system", content: SYSTEM_PREMIUM },
       { role: "user", content: prompt },
@@ -672,7 +675,7 @@ Return ONLY valid JSON: {"body": "<p>...</p>", "imagePrompt": "optional one sent
   const completion = await withRetry429(
     () =>
       openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemMessage },
           { role: "user", content: prompt },

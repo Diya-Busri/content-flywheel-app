@@ -285,6 +285,7 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
   const [courseVoiceType, setCourseVoiceType] = useState<string>("professional-female");
   const [customization, setCustomization] = useState<CustomizationOptions>(DEFAULT_CUSTOMIZATION);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [creatorExpertise, setCreatorExpertise] = useState("");
   const [generating, setGenerating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [generateStepIndex, setGenerateStepIndex] = useState(0);
@@ -1328,6 +1329,7 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
           hooks,
           ctas,
           customizationOptions: customization,
+          creatorExpertise: creatorExpertise.trim() || undefined,
         }),
       });
 
@@ -2665,6 +2667,24 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                     </select>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Creator expertise */}
+            <Card className={`${cardClass} mb-4`}>
+              <CardContent className="p-5">
+                <label htmlFor="creatorExpertise" className="block font-semibold text-foreground mb-1">
+                  Your expertise or unique angle <span className="font-normal text-muted-foreground">(optional)</span>
+                </label>
+                <textarea
+                  id="creatorExpertise"
+                  rows={3}
+                  placeholder="e.g. I've paid off £12k of debt using this method. I'm a finance grad who discovered most budgeting advice is overcomplicated..."
+                  value={creatorExpertise}
+                  onChange={(e) => setCreatorExpertise(e.target.value)}
+                  className="w-full mt-1.5 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground px-3 py-2 text-sm resize-none"
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">Your personal experience or angle — this makes the AI output sound like <span className="text-orange-500">you</span>, not a generic template.</p>
               </CardContent>
             </Card>
 

@@ -394,7 +394,7 @@ function NextActionBanner({
   let icon = Package;
   let href = "/dashboard/digital-products/create";
   let title = "Create your first digital product";
-  let desc = "Describe your idea and AI writes a complete ebook, planner, or guide in minutes — ready to sell.";
+  let desc = "Get a complete first draft — structure, chapters, frameworks — in minutes. Then make it yours.";
   let cta = "Create Product";
   let step = "Step 1 of 4";
 
@@ -654,7 +654,7 @@ export default async function DashboardPage() {
             icon={Package}
             step="Step 1"
             label="Create Product"
-            description="Generate ebooks, guides, planners, and templates in minutes. Describe your idea — AI does the rest."
+            description="Get a complete first draft — structure, chapters, frameworks — in minutes. Then make it yours."
             cta="Create now"
             highlight={videoStats.digitalProductsCount === 0}
             accent="bg-blue-50 dark:bg-blue-950/30"
