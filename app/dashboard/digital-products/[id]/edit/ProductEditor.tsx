@@ -5565,7 +5565,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </div>
             )}
             {selectedTextElement && (
-              <div className="p-3 border-b border-gray-200 bg-gray-50 space-y-3">
+              <div className="p-3 border-b border-gray-200 bg-gray-50 space-y-3 max-h-[45dvh] overflow-y-auto">
                 <p className="text-xs font-medium text-gray-900">Text box — format</p>
                 <div>
                   <label className="text-xs text-gray-600 font-medium block mb-1.5">Bold · Italic · Underline</label>

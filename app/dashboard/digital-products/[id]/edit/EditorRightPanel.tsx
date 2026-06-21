@@ -50,7 +50,7 @@ export function EditorRightPanel({ children, isDark, mobileOpen = false, onMobil
           // ── Desktop: right sidebar in normal flow ──
           "md:relative md:inset-auto md:rounded-none",
           "md:translate-y-0 md:h-auto",
-          "md:flex md:w-[380px] md:shrink-0 md:border-l",
+          "md:flex md:w-[340px] md:shrink-0 md:border-l",
           darkBg,
           darkBorder,
         ].join(" ")}
