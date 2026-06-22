@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Palette, Trash2, MoreHorizontal, Clock, Copy, Zap, Layers, Sparkles } from "lucide-react";
+import { Plus, Palette, Trash2, MoreHorizontal, Clock, Zap, Layers, Sparkles, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -230,32 +230,40 @@ export function DesignStudioLanding() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [recentlyDuplicated, setRecentlyDuplicated] = useState<Set<string>>(new Set());
+  const [userProducts, setUserProducts] = useState<{ id: string; title: string }[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
 
   useEffect(() => {
     Promise.all([
       fetch("/api/designs").then((r) => r.json()),
       fetch("/api/design-bundles").then((r) => r.json()),
-    ]).then(([designsData, bundlesData]) => {
+      fetch("/api/products").then((r) => r.json()),
+    ]).then(([designsData, bundlesData, productsData]) => {
       setDesigns(designsData.designs ?? []);
       setBundles(bundlesData.bundles ?? []);
+      setUserProducts((productsData.products ?? []).filter((p: { status: string }) => p.status === "complete"));
     }).finally(() => setLoading(false));
   }, []);
 
   async function createDesign(preset: Preset) {
     setCreating(true);
     setCreateError(null);
+    const product = userProducts.find((p) => p.id === selectedProductId);
     try {
       const res = await fetch("/api/designs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: `${preset.label} — ${new Date().toLocaleDateString()}`,
+          title: product
+            ? `${preset.label} — ${product.title}`
+            : `${preset.label} — ${new Date().toLocaleDateString()}`,
           data: {
             width: preset.width,
             height: preset.height,
             background: preset.background,
             elements: [],
             presetName: preset.label,
+            ...(product ? { productId: product.id, productName: product.title } : {}),
           },
         }),
       });
@@ -421,11 +429,34 @@ export function DesignStudioLanding() {
       </div>
 
       {/* New Design Dialog */}
-      <Dialog open={showNew} onOpenChange={setShowNew}>
+      <Dialog open={showNew} onOpenChange={(open) => { setShowNew(open); if (!open) { setSelectedProductId(""); setCreateError(null); } }}>
         <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] sm:w-auto overflow-y-auto max-h-[90dvh]">
           <DialogHeader>
             <DialogTitle>Choose a canvas size</DialogTitle>
           </DialogHeader>
+
+          {/* Optional product selector */}
+          {userProducts.length > 0 && (
+            <div className="mt-3 mb-1">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                <Package className="w-3.5 h-3.5" /> Designing for a product? (optional)
+              </label>
+              <select
+                value={selectedProductId}
+                onChange={(e) => setSelectedProductId(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] text-sm text-gray-900 dark:text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
+              >
+                <option value="">No product — blank canvas</option>
+                {userProducts.map((p) => (
+                  <option key={p.id} value={p.id}>{p.title}</option>
+                ))}
+              </select>
+              {selectedProductId && (
+                <p className="text-[11px] text-orange-500 mt-1">AI Chat in the editor will have context about this product.</p>
+              )}
+            </div>
+          )}
+
           {createError && (
             <p className="mt-2 text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{createError}</p>
           )}

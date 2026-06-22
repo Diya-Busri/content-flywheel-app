@@ -45,6 +45,8 @@ import {
   Eye,
   Lock,
   Youtube,
+  Palette,
+  Layers,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -72,7 +74,7 @@ import { FeaturePreviewGate } from "@/components/feature-preview-gate";
 import { QuickSellSheet } from "@/components/product-editor/QuickSellSheet";
 import { SellOnCFButton } from "@/components/product-editor/SellOnCFButton";
 
-type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "images" | "trash";
+type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "images" | "trash" | "designs";
 
 type TemplatePackItem = {
   id: string;
@@ -391,6 +393,8 @@ export default function LibraryFlow() {
   const [youtubeLoading, setYoutubeLoading] = useState(false);
   const [myImages, setMyImages] = useState<{ id: string; title: string; url: string | null; createdAt: string }[]>([]);
   const [imagesLoading, setImagesLoading] = useState(false);
+  const [designBundles, setDesignBundles] = useState<{ id: string; title: string; style: string; slideCount: number; coverPreviewUrl: string | null; updatedAt: string }[]>([]);
+  const [designBundlesLoading, setDesignBundlesLoading] = useState(false);
   /** YouTube publish sheet state */
   const [ytPublishItem, setYtPublishItem] = useState<{
     videoId?: string;
@@ -521,10 +525,25 @@ export default function LibraryFlow() {
     }
   };
 
+  const fetchDesignBundles = async () => {
+    setDesignBundlesLoading(true);
+    try {
+      const res = await fetch("/api/design-bundles");
+      if (!res.ok) throw new Error("Failed to load design bundles");
+      const data = await res.json();
+      setDesignBundles(data.bundles ?? []);
+    } catch {
+      toast({ title: "Could not load design bundles", variant: "destructive" });
+    } finally {
+      setDesignBundlesLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (tab === "templates" || tab === "history") return;
     if (tab === "youtube") { fetchYouTubePosts(); return; }
     if (tab === "images") { fetchImages(); return; }
+    if (tab === "designs") { fetchDesignBundles(); return; }
     if (tab === "template-packs") fetchTemplatePacks();
     else fetchItems();
   }, [tab]);
@@ -782,6 +801,7 @@ export default function LibraryFlow() {
               <span>YouTube</span>
               <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden />
             </TabsTrigger>
+            <TabsTrigger value="designs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Design Studio</TabsTrigger>
             <TabsTrigger value="images" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Images</TabsTrigger>
             <TabsTrigger value="template-packs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Template Packs</TabsTrigger>
             <TabsTrigger value="templates" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Templates</TabsTrigger>
@@ -968,6 +988,60 @@ export default function LibraryFlow() {
                     </Card>
                   ))}
                 </div>
+              )}
+            </div>
+          ) : tab === "designs" ? (
+            <div className="space-y-4">
+              {designBundlesLoading ? (
+                <div className="py-16 flex flex-col items-center justify-center">
+                  <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">Loading design bundles…</p>
+                </div>
+              ) : designBundles.length === 0 ? (
+                <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+                  <CardContent className="py-12 text-center">
+                    <Palette className="w-12 h-12 text-orange-500 mx-auto mb-4" />
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No design bundles yet</h2>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4 max-w-md mx-auto">
+                      Use the Bulk Content Designer to generate branded social posts — they&apos;ll appear here.
+                    </p>
+                    <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white">
+                      <Link href="/dashboard/design-studio/bulk">Open Bulk Content Designer</Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{designBundles.length} bundle{designBundles.length !== 1 ? "s" : ""}</p>
+                    <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs">
+                      <Link href="/dashboard/design-studio">Open Design Studio</Link>
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+                    {designBundles.map((bundle) => (
+                      <Link key={bundle.id} href={`/dashboard/design-studio/bundle/${bundle.id}`}>
+                        <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden hover:shadow-md transition-shadow cursor-pointer group">
+                          <div className="w-full h-36 flex items-center justify-center overflow-hidden bg-gradient-to-br from-orange-500/20 to-purple-500/20">
+                            {bundle.coverPreviewUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={bundle.coverPreviewUrl} alt={bundle.title} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="flex flex-col items-center gap-2 text-orange-400">
+                                <Layers className="w-8 h-8" />
+                                <span className="text-xs font-medium">{bundle.slideCount} slides</span>
+                              </div>
+                            )}
+                          </div>
+                          <CardContent className="p-3">
+                            <p className="text-sm font-semibold truncate text-gray-900 dark:text-white group-hover:text-orange-500 transition-colors">{bundle.title}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{bundle.slideCount} slide{bundle.slideCount !== 1 ? "s" : ""} · {bundle.style}</p>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           ) : tab === "templates" ? (

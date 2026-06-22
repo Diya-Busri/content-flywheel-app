@@ -274,7 +274,7 @@ export default function CreateFlow() {
       </div>
 
       {/* Sticky bottom bar — sits above mobile nav */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#2A2A2A] bg-[#0F0F0F]/95 backdrop-blur px-4 md:px-6 pt-3 pb-mobile-nav">
+      <div className="fixed bottom-0 left-0 right-0 md:left-[220px] z-40 border-t border-[#2A2A2A] bg-[#0F0F0F]/95 backdrop-blur px-4 md:px-6 pt-3 pb-mobile-nav">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
           <Button variant="ghost" asChild size="sm" className="text-[#A0A0A0] hover:text-white hover:bg-[#1A1A1A] shrink-0">
             <Link href="/dashboard/digital-products">← Back</Link>

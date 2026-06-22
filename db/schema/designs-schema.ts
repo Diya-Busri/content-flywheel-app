@@ -55,6 +55,9 @@ export type DesignData = {
   activePalette?: string[];
   elements: DesignElement[];
   presetName?: string;
+  /** Attached digital product context for AI-assisted design generation. */
+  productId?: string;
+  productName?: string;
 };
 
 export const designsTable = pgTable("designs", {

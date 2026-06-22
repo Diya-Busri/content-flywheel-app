@@ -11,7 +11,7 @@ import {
   MoveLeft, MoveRight, MoveUp, MoveDown, Undo2, Redo2,
   Underline, Strikethrough, ZoomIn, ZoomOut, FileDown, Highlighter,
   LayoutTemplate, Images, Layers, X, Settings2, Palette,
-  Grid3x3, Smartphone, Lock, Unlock, ArrowUp, ArrowDown,
+  Grid3x3, Smartphone, Lock, Unlock, ArrowUp, ArrowDown, MessageSquare, Send, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -405,7 +405,7 @@ export function DesignEditor({ designId }: { designId: string }) {
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activePanel, setActivePanel] = useState<"shapes" | "ai" | "templates" | "uploads" | null>(null);
+  const [activePanel, setActivePanel] = useState<"shapes" | "ai" | "templates" | "uploads" | "chat" | null>(null);
   const [flyoutPos, setFlyoutPos] = useState({ x: 84, y: 60 });
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -414,13 +414,20 @@ export function DesignEditor({ designId }: { designId: string }) {
   const [recentUploads, setRecentUploads] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem("cf_design_uploads") ?? "[]"); } catch { return []; }
   });
-  const [mobileToolSheet, setMobileToolSheet] = useState<"shapes" | "ai" | "templates" | "uploads" | "background" | null>(null);
+  const [mobileToolSheet, setMobileToolSheet] = useState<"shapes" | "ai" | "templates" | "uploads" | "background" | "chat" | null>(null);
+  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [liveCredits, setLiveCredits] = useState<number | null>(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [activeGuides, setActiveGuides] = useState<SnapGuide[]>([]);
   const [showGrid, setShowGrid] = useState(false);
   const [showSafeArea, setShowSafeArea] = useState(false);
 
-  function togglePanel(panel: "shapes" | "ai" | "templates" | "uploads", e: React.MouseEvent) {
+  function togglePanel(panel: "shapes" | "ai" | "templates" | "uploads" | "chat", e: React.MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setFlyoutPos({ x: rect.right + 8, y: Math.max(8, rect.top) });
     setActivePanel((prev) => prev === panel ? null : panel);
@@ -454,6 +461,14 @@ export function DesignEditor({ designId }: { designId: string }) {
       })
       .finally(() => setLoading(false));
   }, [designId]);
+
+  function refreshCredits() {
+    fetch("/api/credits").then((r) => r.json()).then(({ videoCredits }) => {
+      if (typeof videoCredits === "number") setLiveCredits(videoCredits);
+    }).catch(() => {});
+  }
+
+  useEffect(() => { refreshCredits(); }, []);
 
   useEffect(() => {
     const obs = new ResizeObserver(() => {
@@ -582,15 +597,29 @@ export function DesignEditor({ designId }: { designId: string }) {
   function addImage() {
     const input = document.createElement("input");
     input.type = "file"; input.accept = "image/*";
+    input.style.display = "none";
+    document.body.appendChild(input);
     input.onchange = async () => {
-      const file = input.files?.[0]; if (!file) return;
-      const fd = new FormData(); fd.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      if (!res.ok) return;
-      const { url } = await res.json();
-      saveUpload(url);
-      addImageUrl(url);
+      const file = input.files?.[0];
+      document.body.removeChild(input);
+      if (!file) return;
+      setUploadLoading(true);
+      setUploadError(null);
+      try {
+        const fd = new FormData(); fd.append("file", file);
+        const res = await fetch("/api/upload", { method: "POST", body: fd });
+        const json = await res.json();
+        if (!res.ok) { setUploadError(json.error ?? "Upload failed. Please try again."); return; }
+        saveUpload(json.url);
+        addImageUrl(json.url);
+        setActivePanel("uploads");
+      } catch {
+        setUploadError("Network error. Please try again.");
+      } finally {
+        setUploadLoading(false);
+      }
     };
+    input.oncancel = () => { document.body.removeChild(input); };
     input.click();
   }
 
@@ -626,15 +655,28 @@ export function DesignEditor({ designId }: { designId: string }) {
   function addBgImage() {
     const input = document.createElement("input");
     input.type = "file"; input.accept = "image/*";
+    input.style.display = "none";
+    document.body.appendChild(input);
     input.onchange = async () => {
-      const file = input.files?.[0]; if (!file) return;
-      const fd = new FormData(); fd.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      if (!res.ok) return;
-      const { url } = await res.json();
-      saveUpload(url);
-      updateData((prev) => ({ ...prev, backgroundImage: url, backgroundImageFit: "cover" }));
+      const file = input.files?.[0];
+      document.body.removeChild(input);
+      if (!file) return;
+      setUploadLoading(true);
+      setUploadError(null);
+      try {
+        const fd = new FormData(); fd.append("file", file);
+        const res = await fetch("/api/upload", { method: "POST", body: fd });
+        const json = await res.json();
+        if (!res.ok) { setUploadError(json.error ?? "Upload failed."); return; }
+        saveUpload(json.url);
+        updateData((prev) => ({ ...prev, backgroundImage: json.url, backgroundImageFit: "cover" }));
+      } catch {
+        setUploadError("Network error. Please try again.");
+      } finally {
+        setUploadLoading(false);
+      }
     };
+    input.oncancel = () => { document.body.removeChild(input); };
     input.click();
   }
 
@@ -663,9 +705,71 @@ export function DesignEditor({ designId }: { designId: string }) {
       setSelectedId(el.id);
       setAiPrompt("");
       setActivePanel(null);
+      refreshCredits();
     } catch {
       setAiError("Network error. Please try again.");
     } finally { setAiLoading(false); }
+  }
+
+  async function sendChatMessage() {
+    const msg = chatInput.trim();
+    if (!msg || chatLoading) return;
+    const newHistory = [...chatMessages, { role: "user" as const, content: msg }];
+    setChatMessages(newHistory);
+    setChatInput("");
+    setChatLoading(true);
+    try {
+      const res = await fetch("/api/ai-design/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: msg,
+          productId: data.productId ?? null,
+          canvasWidth: data.width,
+          canvasHeight: data.height,
+          history: chatMessages.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+      const json = await res.json();
+      const reply = json.reply ?? "Done!";
+      setChatMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      if (json.elements && json.elements.length > 0) {
+        const newEls: DesignElement[] = (json.elements as Partial<DesignElement>[]).map((el, i) => ({
+          id: uid(),
+          type: (el.type === "shape" ? "shape" : "text") as "text" | "shape",
+          x: el.x ?? 0,
+          y: el.y ?? 0,
+          width: el.width ?? 200,
+          height: el.height ?? 60,
+          zIndex: (data.elements.length + i),
+          ...(el.type === "text" ? {
+            content: el.content ?? "",
+            fontSize: el.fontSize ?? 24,
+            fontFamily: el.fontFamily ?? "Inter",
+            color: el.color ?? "#ffffff",
+            fontWeight: el.fontWeight ?? "700",
+            textAlign: (el.textAlign as "left" | "center" | "right") ?? "center",
+            lineHeight: el.lineHeight ?? 1.3,
+          } : {
+            shapeType: el.shapeType ?? "rect",
+            fill: el.fill ?? "#f97316",
+            borderRadius: el.borderRadius ?? 0,
+          }),
+        }));
+        updateData((prev) => ({
+          ...prev,
+          elements: [...prev.elements, ...newEls],
+          ...(json.background ? { background: json.background } : {}),
+        }));
+      } else if (json.background) {
+        updateData((prev) => ({ ...prev, background: json.background }));
+      }
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    } catch {
+      setChatMessages((prev) => [...prev, { role: "assistant", content: "Sorry, something went wrong. Please try again." }]);
+    } finally {
+      setChatLoading(false);
+    }
   }
 
   function deleteSelected() {
@@ -984,6 +1088,12 @@ export function DesignEditor({ designId }: { designId: string }) {
             <span className="text-[9px] font-medium leading-none">Uploads</span>
           </button>
 
+          <button onClick={(e) => togglePanel("chat", e)}
+            className={`w-full flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg transition-colors ${activePanel === "chat" ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"}`}>
+            <MessageSquare className="w-5 h-5" />
+            <span className="text-[9px] font-medium leading-none">AI Chat</span>
+          </button>
+
           <div className={`w-full my-2 border-t ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`} />
           <SideLabel label="BG" isDark={isDark} />
           <div className="relative w-10 h-10 rounded-lg overflow-hidden border-2 cursor-pointer shadow-sm" style={{ borderColor: isDark ? "#2A2A2A" : "#e5e7eb" }}>
@@ -1224,7 +1334,7 @@ export function DesignEditor({ designId }: { designId: string }) {
             {mobileToolSheet === "ai" && (
               <>
                 <p className="text-sm font-semibold mb-1">Generate AI Image</p>
-                <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Uses 1 video credit · Background auto-removed</p>
+                <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Uses 10 video credits · Background auto-removed{liveCredits !== null ? ` · Balance: ${liveCredits}` : ""}</p>
                 <textarea value={aiPrompt} onChange={(e) => { setAiPrompt(e.target.value); setAiError(null); }}
                   placeholder="e.g. golden crown on white background, detailed illustration"
                   rows={3}
@@ -1252,17 +1362,29 @@ export function DesignEditor({ designId }: { designId: string }) {
             {mobileToolSheet === "uploads" && (
               <>
                 <Button size="sm" variant="outline" className={`w-full mb-3 gap-2 h-11 text-sm ${isDark ? "border-[#2A2A2A] text-gray-300" : ""}`}
-                  onClick={() => { addImage(); setMobileToolSheet(null); }}>
-                  <Images className="w-4 h-4" /> Upload new image
+                  onClick={addImage} disabled={uploadLoading}>
+                  {uploadLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</> : <><Images className="w-4 h-4" /> Upload new image</>}
                 </Button>
+                {uploadError && (
+                  <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{uploadError}</p>
+                )}
                 {recentUploads.length === 0
-                  ? <p className={`text-sm text-center py-8 ${isDark ? "text-gray-600" : "text-gray-400"}`}>No uploads yet.</p>
+                  ? <p className={`text-sm text-center py-8 ${isDark ? "text-gray-600" : "text-gray-400"}`}>No uploads yet. Upload an image to get started.</p>
                   : <div className="grid grid-cols-3 gap-2">
                       {recentUploads.map((url) => (
                         // eslint-disable-next-line @next/next/no-img-element
                         <button key={url} onClick={() => { addImageUrl(url); setMobileToolSheet(null); }}
                           className={`rounded-xl overflow-hidden border-2 hover:border-orange-500 transition-colors ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
-                          <img src={url} alt="" className="w-full h-20 object-cover" />
+                          <img src={url} alt="" className="w-full h-20 object-cover"
+                            onError={(e) => {
+                              setRecentUploads((prev) => {
+                                const next = prev.filter((u) => u !== url);
+                                try { localStorage.setItem("cf_design_uploads", JSON.stringify(next)); } catch { /* ignore */ }
+                                return next;
+                              });
+                              (e.currentTarget.parentElement as HTMLElement)?.remove();
+                            }}
+                          />
                         </button>
                       ))}
                     </div>
@@ -1347,7 +1469,7 @@ export function DesignEditor({ designId }: { designId: string }) {
           {activePanel === "ai" && (
             <div className="p-4 w-80">
               <p className="text-sm font-semibold mb-1">Generate AI Image</p>
-              <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Uses 1 video credit · Background auto-removed</p>
+              <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Uses 10 video credits · Background auto-removed{liveCredits !== null ? ` · Balance: ${liveCredits}` : ""}</p>
               <textarea value={aiPrompt} onChange={(e) => { setAiPrompt(e.target.value); setAiError(null); }}
                 placeholder="e.g. golden crown on white background, detailed illustration"
                 rows={3}
@@ -1394,21 +1516,104 @@ export function DesignEditor({ designId }: { designId: string }) {
               <p className="text-sm font-semibold mb-1">My Uploads</p>
               <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Click an image to add it to the canvas</p>
               <Button size="sm" variant="outline" className={`w-full mb-3 gap-2 ${isDark ? "border-[#2A2A2A] text-gray-300" : ""}`}
-                onClick={() => { addImage(); setActivePanel(null); }}>
-                <Images className="w-4 h-4" /> Upload new image
+                onClick={addImage} disabled={uploadLoading}>
+                {uploadLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</> : <><Images className="w-4 h-4" /> Upload new image</>}
               </Button>
+              {uploadError && (
+                <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{uploadError}</p>
+              )}
               {recentUploads.length === 0
-                ? <p className={`text-xs text-center py-6 ${isDark ? "text-gray-600" : "text-gray-400"}`}>No uploads yet.</p>
+                ? <p className={`text-xs text-center py-6 ${isDark ? "text-gray-600" : "text-gray-400"}`}>No uploads yet. Upload an image to get started.</p>
                 : <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
                     {recentUploads.map((url) => (
                       // eslint-disable-next-line @next/next/no-img-element
                       <button key={url} onClick={() => { addImageUrl(url); setActivePanel(null); }}
                         className={`rounded-lg overflow-hidden border-2 hover:border-orange-500 transition-colors ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
-                        <img src={url} alt="" className="w-full h-16 object-cover" />
+                        <img
+                          src={url} alt="" className="w-full h-16 object-cover"
+                          onError={(e) => {
+                            // Remove broken URL from localStorage and state
+                            setRecentUploads((prev) => {
+                              const next = prev.filter((u) => u !== url);
+                              try { localStorage.setItem("cf_design_uploads", JSON.stringify(next)); } catch { /* ignore */ }
+                              return next;
+                            });
+                            (e.currentTarget.parentElement as HTMLElement)?.remove();
+                          }}
+                        />
                       </button>
                     ))}
                   </div>
               }
+            </div>
+          )}
+
+          {/* AI Chat */}
+          {activePanel === "chat" && (
+            <div className="flex flex-col w-80 h-[480px]">
+              {/* Header */}
+              <div className={`px-4 py-3 border-b shrink-0 ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
+                <p className="text-sm font-semibold flex items-center gap-1.5">
+                  <MessageSquare className="w-4 h-4 text-orange-500" /> AI Design Chat
+                </p>
+                {data.productName ? (
+                  <p className={`text-[11px] mt-0.5 flex items-center gap-1 ${isDark ? "text-orange-400" : "text-orange-500"}`}>
+                    <Package className="w-3 h-3" /> {data.productName}
+                  </p>
+                ) : (
+                  <p className={`text-[11px] mt-0.5 ${isDark ? "text-gray-500" : "text-gray-400"}`}>No product attached · blank canvas context</p>
+                )}
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
+                {chatMessages.length === 0 && (
+                  <div className={`text-xs text-center py-6 space-y-2 ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+                    <MessageSquare className="w-8 h-8 mx-auto opacity-30" />
+                    <p>Try: &ldquo;Make me a story post for this product&rdquo;</p>
+                    <p className="opacity-70">or &ldquo;Design a bold banner with a call to action&rdquo;</p>
+                  </div>
+                )}
+                {chatMessages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
+                      msg.role === "user"
+                        ? "bg-orange-500 text-white rounded-br-sm"
+                        : isDark ? "bg-[#2A2A2A] text-gray-200 rounded-bl-sm" : "bg-gray-100 text-gray-800 rounded-bl-sm"
+                    }`}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex justify-start">
+                    <div className={`rounded-xl rounded-bl-sm px-3 py-2 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-100"}`}>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Input */}
+              <div className={`p-3 border-t shrink-0 ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
+                <div className="flex gap-2">
+                  <input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+                    placeholder="Ask AI to design something…"
+                    className={`flex-1 text-xs rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-400 ${isDark ? "bg-[#111] border-[#2A2A2A] text-white placeholder-gray-600" : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"}`}
+                  />
+                  <button
+                    onClick={sendChatMessage}
+                    disabled={chatLoading || !chatInput.trim()}
+                    className="shrink-0 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white rounded-lg px-3 py-2 transition-colors"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
