@@ -420,6 +420,7 @@ export function DesignEditor({ designId }: { designId: string }) {
   const [liveCredits, setLiveCredits] = useState<number | null>(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [chatProducts, setChatProducts] = useState<{ id: string; title: string }[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
@@ -431,6 +432,11 @@ export function DesignEditor({ designId }: { designId: string }) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setFlyoutPos({ x: rect.right + 8, y: Math.max(8, rect.top) });
     setActivePanel((prev) => prev === panel ? null : panel);
+    if (panel === "chat" && chatProducts.length === 0) {
+      fetch("/api/products").then((r) => r.json()).then((d) => {
+        setChatProducts((d.products ?? []).filter((p: { status: string }) => p.status === "complete"));
+      }).catch(() => {});
+    }
   }
 
   // Undo/redo
@@ -608,18 +614,21 @@ export function DesignEditor({ designId }: { designId: string }) {
       try {
         const fd = new FormData(); fd.append("file", file);
         const res = await fetch("/api/upload", { method: "POST", body: fd });
-        const json = await res.json();
-        if (!res.ok) { setUploadError(json.error ?? "Upload failed. Please try again."); return; }
+        let json: { url?: string; error?: string } = {};
+        try { json = await res.json(); } catch { /* non-JSON response body */ }
+        if (!res.ok) { setUploadError(json.error ?? `Upload failed (${res.status})`); return; }
+        if (!json.url) { setUploadError("Upload succeeded but no URL returned."); return; }
         saveUpload(json.url);
         addImageUrl(json.url);
         setActivePanel("uploads");
-      } catch {
-        setUploadError("Network error. Please try again.");
+      } catch (err) {
+        console.error("[upload]", err);
+        setUploadError("Upload failed. Please try again.");
       } finally {
         setUploadLoading(false);
       }
     };
-    input.oncancel = () => { document.body.removeChild(input); };
+    input.oncancel = () => { try { document.body.removeChild(input); } catch { /* ok */ } };
     input.click();
   }
 
@@ -666,17 +675,20 @@ export function DesignEditor({ designId }: { designId: string }) {
       try {
         const fd = new FormData(); fd.append("file", file);
         const res = await fetch("/api/upload", { method: "POST", body: fd });
-        const json = await res.json();
-        if (!res.ok) { setUploadError(json.error ?? "Upload failed."); return; }
+        let json: { url?: string; error?: string } = {};
+        try { json = await res.json(); } catch { /* non-JSON response body */ }
+        if (!res.ok) { setUploadError(json.error ?? `Upload failed (${res.status})`); return; }
+        if (!json.url) { setUploadError("Upload succeeded but no URL returned."); return; }
         saveUpload(json.url);
-        updateData((prev) => ({ ...prev, backgroundImage: json.url, backgroundImageFit: "cover" }));
-      } catch {
-        setUploadError("Network error. Please try again.");
+        updateData((prev) => ({ ...prev, backgroundImage: json.url!, backgroundImageFit: "cover" }));
+      } catch (err) {
+        console.error("[upload-bg]", err);
+        setUploadError("Upload failed. Please try again.");
       } finally {
         setUploadLoading(false);
       }
     };
-    input.oncancel = () => { document.body.removeChild(input); };
+    input.oncancel = () => { try { document.body.removeChild(input); } catch { /* ok */ } };
     input.click();
   }
 
@@ -1446,7 +1458,7 @@ export function DesignEditor({ designId }: { designId: string }) {
 
       {/* ── Flyout panels – fixed so they escape overflow clipping ── */}
       {activePanel && (
-        <div style={{ position: "fixed", left: flyoutPos.x, top: flyoutPos.y, zIndex: 300, maxHeight: "calc(100dvh - 16px)", overflowY: "auto" }}
+        <div style={{ position: "fixed", left: flyoutPos.x, top: Math.min(flyoutPos.y, Math.max(8, window.innerHeight - (activePanel === "chat" ? 520 : 420))), zIndex: 300, maxHeight: "calc(100dvh - 16px)", display: "flex", flexDirection: "column" }}
           className={`rounded-xl border shadow-2xl ${isDark ? "bg-[#1A1A1A] border-[#2A2A2A] text-white" : "bg-white border-gray-200 text-gray-900"}`}>
 
           {/* Shapes */}
@@ -1550,19 +1562,33 @@ export function DesignEditor({ designId }: { designId: string }) {
 
           {/* AI Chat */}
           {activePanel === "chat" && (
-            <div className="flex flex-col w-80 h-[480px]">
+            <div className="flex flex-col w-80" style={{ height: "min(500px, calc(100dvh - 80px))" }}>
               {/* Header */}
               <div className={`px-4 py-3 border-b shrink-0 ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
                 <p className="text-sm font-semibold flex items-center gap-1.5">
                   <MessageSquare className="w-4 h-4 text-orange-500" /> AI Design Chat
                 </p>
-                {data.productName ? (
-                  <p className={`text-[11px] mt-0.5 flex items-center gap-1 ${isDark ? "text-orange-400" : "text-orange-500"}`}>
-                    <Package className="w-3 h-3" /> {data.productName}
-                  </p>
-                ) : (
-                  <p className={`text-[11px] mt-0.5 ${isDark ? "text-gray-500" : "text-gray-400"}`}>No product attached · blank canvas context</p>
-                )}
+                {/* Product picker */}
+                <div className="mt-2">
+                  <select
+                    value={data.productId ?? ""}
+                    onChange={(e) => {
+                      const p = chatProducts.find((x) => x.id === e.target.value);
+                      updateData((prev) => ({ ...prev, productId: p?.id ?? undefined, productName: p?.title ?? undefined }));
+                    }}
+                    className={`w-full text-xs rounded-lg border px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-400 ${isDark ? "bg-[#111] border-[#2A2A2A] text-white" : "bg-white border-gray-200 text-gray-900"}`}
+                  >
+                    <option value="">No product (blank canvas)</option>
+                    {chatProducts.map((p) => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                  {data.productName && (
+                    <p className={`text-[10px] mt-1 flex items-center gap-1 ${isDark ? "text-orange-400" : "text-orange-500"}`}>
+                      <Package className="w-2.5 h-2.5" /> AI will use this product as context
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Messages */}
@@ -1602,7 +1628,7 @@ export function DesignEditor({ designId }: { designId: string }) {
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
-                    placeholder="Ask AI to design something…"
+                    placeholder="e.g. Make me a story post…"
                     className={`flex-1 text-xs rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-400 ${isDark ? "bg-[#111] border-[#2A2A2A] text-white placeholder-gray-600" : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"}`}
                   />
                   <button

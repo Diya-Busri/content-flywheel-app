@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     const style = STYLES.includes(body.style as StyleId) ? (body.style as StyleId) : "modern-gradient";
     const productType = typeof body.productType === "string" ? body.productType : "Digital Product";
     const orientation = body.orientation === "vertical" ? "vertical" : "horizontal";
-    const size = orientation === "vertical" ? "1024x1792" : "1792x1024";
+    const size = orientation === "vertical" ? "1024x1536" : "1536x1024";
 
     const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) {
@@ -57,24 +57,22 @@ export async function POST(request: NextRequest) {
     const prompt = buildPrompt(style);
 
     const response = await openai.images.generate({
-      model: "dall-e-3",
+      model: "gpt-image-1",
       prompt,
       n: 1,
       size,
-      quality: "standard",
-      style: "natural",
-      response_format: "url",
+      quality: "auto",
     });
 
-    const imageUrl = response.data![0]?.url;
-    if (!imageUrl || typeof imageUrl !== "string") {
+    const b64 = (response.data![0] as { b64_json?: string })?.b64_json;
+    if (!b64) {
       return NextResponse.json(
-        { error: "Image generation did not return a URL. Please try again." },
+        { error: "Image generation did not return image data. Please try again." },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ url: imageUrl, style, orientation });
+    return NextResponse.json({ url: `data:image/png;base64,${b64}`, style, orientation });
   } catch (err) {
     console.error("[generate-thumbnail]", err);
     const message =

@@ -1,0 +1,232 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Content Flywheel//10 Users by June 30//EN
+CALNAME:Content Flywheel - 10 Users by June 30
+X-WR-CALNAME:Content Flywheel - 10 Users by June 30
+X-WR-CALDESC:9-day sprint to 10 paying users. Job apps first, outreach second, build third.
+
+BEGIN:VEVENT
+UID:cf-20260622-jobs@contentflywheel
+DTSTART:20260622T090000
+DTEND:20260622T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:DO THIS FIRST. Two applications before you touch the app or code. Open two tabs\, apply\, close them. Then move on.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260622-outreach@contentflywheel
+DTSTART:20260622T100000
+DTEND:20260622T110000
+SUMMARY:📣 Post Twitter/X screen recording demo
+DESCRIPTION:Post a screen recording showing a beginner going from idea → digital product in under 2 minutes. Caption: "Built this for people who overthink starting. What do you think?" Tag #buildinpublic
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260622-build@contentflywheel
+DTSTART:20260622T110000
+DTEND:20260622T130000
+SUMMARY:🔨 Fix ToC sidebar overflow issue
+DESCRIPTION:Fix the Table of Contents in the right sidebar — chapters are hidden under it. Add overflow-y: auto to the sidebar panel. Remove any fixed height/max-height clipping the ToC list. Check parent flex layout isn't constraining expansion.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260623-jobs@contentflywheel
+DTSTART:20260623T090000
+DTEND:20260623T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:DO THIS FIRST. Two applications before you touch the app or code.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260623-outreach@contentflywheel
+DTSTART:20260623T100000
+DTEND:20260623T110000
+SUMMARY:📣 Post on r/passive_income
+DESCRIPTION:Post: "I'm building a tool to help beginners create and sell digital products. What's been the hardest part of your journey — finding the idea\, making it\, or actually getting sales?" Screenshot the responses — they're your marketing copy.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260623-build@contentflywheel
+DTSTART:20260623T110000
+DTEND:20260623T130000
+SUMMARY:🔨 Add usage tracking
+DESCRIPTION:Log which step in your product flow users drop off. Add basic analytics to see where people stop — you can't fix friction you can't see. Track: sign-up → first product created → product published → payment added.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260624-jobs@contentflywheel
+DTSTART:20260624T090000
+DTEND:20260624T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:DO THIS FIRST. Two applications before you touch the app or code.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260624-outreach@contentflywheel
+DTSTART:20260624T100000
+DTEND:20260624T110000
+SUMMARY:📣 DM 10 people asking about digital products
+DESCRIPTION:Find 10 people on Twitter/X or Reddit who've asked about passive income\, digital products\, or monetising an audience. DM them with a genuine offer: "I built a tool that might help — want to try it free and tell me what you think?"
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260624-build@contentflywheel
+DTSTART:20260624T110000
+DTEND:20260624T130000
+SUMMARY:🔨 Fix user friction in onboarding
+DESCRIPTION:Walk through the app as a total beginner. Note every moment of confusion. Fix the top 2 friction points. Focus on: first-time sign-up experience\, creating first product\, understanding what to do next.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260625-jobs@contentflywheel
+DTSTART:20260625T090000
+DTEND:20260625T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:DO THIS FIRST. Two applications before you touch the app or code.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260625-outreach@contentflywheel
+DTSTART:20260625T100000
+DTEND:20260625T110000
+SUMMARY:📣 Post on r/sidehustle with demo
+DESCRIPTION:Post a screen recording on r/sidehustle. Title: "Built an AI tool that creates digital products for you — here's what it actually generates." Show the full output\, not just the concept.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260625-build@contentflywheel
+DTSTART:20260625T110000
+DTEND:20260625T130000
+SUMMARY:🔨 Improve AI generation output quality
+DESCRIPTION:Review the current AI-generated product outputs. What's weak? Improve the prompts\, structure\, and polish of what Content Flywheel produces. The output quality IS your product — make it something creators would screenshot and share.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260626-jobs@contentflywheel
+DTSTART:20260626T090000
+DTEND:20260626T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:DO THIS FIRST. Two applications before you touch the app or code.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260626-outreach@contentflywheel
+DTSTART:20260626T100000
+DTEND:20260626T110000
+SUMMARY:📣 Engage in Skool communities
+DESCRIPTION:Find 3 Skool communities for creators\, freelancers\, or digital product sellers. Add genuine value in comments. Don't pitch — just be helpful and let your profile/bio do the work. Aim: 3 communities\, 2 comments each.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260626-build@contentflywheel
+DTSTART:20260626T110000
+DTEND:20260626T130000
+SUMMARY:🔨 Test new features end-to-end
+DESCRIPTION:Do a full end-to-end test of Content Flywheel as if you're a first-time user. Document every bug\, confusion point\, and gap. Fix anything that would stop someone from completing their first product.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260627-jobs@contentflywheel
+DTSTART:20260627T090000
+DTEND:20260627T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:DO THIS FIRST. Two applications before you touch the app or code.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260627-outreach@contentflywheel
+DTSTART:20260627T100000
+DTEND:20260627T110000
+SUMMARY:📣 DM 10 creators offering free setup
+DESCRIPTION:DM 10 small-mid creators (10k–100k followers) on Instagram or Twitter. Offer: "I'll set up your Content Flywheel store free in exchange for 10 minutes of feedback and a post if you like it." This gets real users + testimonials.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260627-build@contentflywheel
+DTSTART:20260627T110000
+DTEND:20260627T130000
+SUMMARY:🔨 Add conversion tracking
+DESCRIPTION:Track the sales funnel: visitor → sign up → product created → paid. Add conversion events to your analytics. You need to know what's working before the deadline.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260628-jobs@contentflywheel
+DTSTART:20260628T090000
+DTEND:20260628T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:DO THIS FIRST. Two applications before you touch the app or code.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260628-outreach@contentflywheel
+DTSTART:20260628T100000
+DTEND:20260628T110000
+SUMMARY:📣 Twitter/X: Build in public update
+DESCRIPTION:Post a "building in public" update. Share what you've shipped this week\, what you learned\, and where the user count sits. Be honest. Founders who build in public get users from the audience\, not ads.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260628-build@contentflywheel
+DTSTART:20260628T110000
+DTEND:20260628T130000
+SUMMARY:🔨 Fix top friction from user feedback
+DESCRIPTION:Review any feedback from the week's outreach. What did people say? Fix the top complaint or confusion point. If no feedback yet\, re-test the onboarding and fix whatever slows a beginner down.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260629-jobs@contentflywheel
+DTSTART:20260629T090000
+DTEND:20260629T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:DO THIS FIRST. Two applications before you touch the app or code.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260629-outreach@contentflywheel
+DTSTART:20260629T100000
+DTEND:20260629T110000
+SUMMARY:📣 Post on r/passive_income: progress update
+DESCRIPTION:Share your journey on r/passive_income. Post something honest: "I built an AI tool to help people create digital products and I'm trying to hit 10 paying users by tomorrow. Here's what I've learned." People root for real founders.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260629-build@contentflywheel
+DTSTART:20260629T110000
+DTEND:20260629T130000
+SUMMARY:🔨 Final bug fixes + polish
+DESCRIPTION:Final round of bug fixes. Focus on anything that would prevent a paying user from completing checkout or creating their product. No new features — only stability and polish.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260630-jobs@contentflywheel
+DTSTART:20260630T090000
+DTEND:20260630T100000
+SUMMARY:💼 Job Applications x2
+DESCRIPTION:DO THIS FIRST. Even on deadline day.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260630-outreach@contentflywheel
+DTSTART:20260630T100000
+DTEND:20260630T120000
+SUMMARY:📣 FINAL PUSH: DM + Reddit + Twitter + Skool blitz
+DESCRIPTION:Last day. Go everywhere at once. DM anyone who showed interest this week. Post on Reddit\, Twitter\, and Skool. Make it clear: "Launching today\, first 10 users get [X bonus]." This is the moment to be loud.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260630-build@contentflywheel
+DTSTART:20260630T120000
+DTEND:20260630T130000
+SUMMARY:🔨 Critical fixes only
+DESCRIPTION:No new features. Fix only what's actively broken. The goal today is users\, not code.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:cf-20260630-goal@contentflywheel
+DTSTART:20260630T130000
+DTEND:20260630T133000
+SUMMARY:🎯 COUNT YOUR USERS — Goal: 10
+DESCRIPTION:How many paying users does Content Flywheel have right now? This is the number you've been working toward. Whatever it is\, document it\, learn from the sprint\, and plan what's next.
+END:VEVENT
+
+END:VCALENDAR

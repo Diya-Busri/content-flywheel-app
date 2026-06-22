@@ -45,13 +45,11 @@ async function generateBrandStorySceneImage(
   sceneIndex: number
 ): Promise<string> {
   const imgRes = await openai.images.generate({
-    model: "dall-e-3",
+    model: "gpt-image-1",
     prompt: BRAND_STORY_DALLE_PROMPT,
     n: 1,
     size: "1024x1024",
-    quality: "standard",
-    style: "natural",
-    response_format: "b64_json",
+    quality: "auto",
   });
   const b64 = (imgRes.data![0] as { b64_json?: string })?.b64_json;
   if (!b64) throw new Error(`DALL-E returned no image for scene ${sceneIndex + 1}.`);

@@ -8,9 +8,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 type ThumbnailStyle = "auto" | "viral_stickman" | "viral_realistic";
 
-const DIMENSIONS: Record<string, "1024x1024" | "1792x1024" | "1024x1792"> = {
-  youtube: "1792x1024",
-  tiktok: "1024x1792",
+const DIMENSIONS: Record<string, "1024x1024" | "1536x1024" | "1024x1536"> = {
+  youtube: "1536x1024",
+  tiktok: "1024x1536",
   instagram: "1024x1024",
 };
 
@@ -46,21 +46,19 @@ export async function POST(request: NextRequest) {
     const size = DIMENSIONS[dimKey];
     const openai = new OpenAI({ apiKey });
     const response = await openai.images.generate({
-      model: "dall-e-3",
+      model: "gpt-image-1",
       prompt,
       n: 1,
       size,
-      quality: "hd",
-      style: style === "viral_stickman" ? "vivid" : "natural",
-      response_format: "url",
+      quality: "high",
     });
 
-    const imageUrl = response.data![0]?.url;
-    if (!imageUrl || typeof imageUrl !== "string") {
-      return NextResponse.json({ error: "No image URL returned." }, { status: 500 });
+    const b64 = (response.data![0] as { b64_json?: string })?.b64_json;
+    if (!b64) {
+      return NextResponse.json({ error: "No image data returned." }, { status: 500 });
     }
 
-    return NextResponse.json({ url: imageUrl, dimensions: dimKey });
+    return NextResponse.json({ url: `data:image/png;base64,${b64}`, dimensions: dimKey });
   } catch (err) {
     console.error("[thumbnails/generate-image]", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Generation failed" }, { status: 500 });

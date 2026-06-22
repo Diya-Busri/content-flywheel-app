@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Package, Upload, ArrowRight } from "lucide-react";
+import { X, Package, Upload, Video, ArrowRight } from "lucide-react";
 
 type CreateVideoModalProps = {
   open: boolean;
@@ -11,6 +11,13 @@ type CreateVideoModalProps = {
 };
 
 const OPTIONS = [
+  {
+    id: "guide",
+    icon: Video,
+    title: "Quick Video Guide",
+    description: "Script + scenes + social kit in 30s",
+    href: "/dashboard/video-guide/new",
+  },
   {
     id: "existing",
     icon: Package,

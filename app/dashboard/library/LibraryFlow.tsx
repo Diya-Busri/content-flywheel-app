@@ -1777,7 +1777,11 @@ export default function LibraryFlow() {
                         <Button variant="outline" size="sm" className="flex-1" asChild>
                           <Link href={getEditLink(item)}>
                             <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                            {isTimelineVideoItem(item) ? "Open Editor" : "Open"}
+                            {isTimelineVideoItem(item)
+                              ? "Open Editor"
+                              : item.type === "script" && (item.platform === "video-guide" || item.platform === "content-studio")
+                              ? "▶ Resume Video Guide"
+                              : "Open"}
                           </Link>
                         </Button>
                         {item.type === "product" && (

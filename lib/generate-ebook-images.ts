@@ -29,26 +29,19 @@ export async function generateAndUploadEbookImage(
   const fullPrompt = `Professional ebook illustration: ${prompt}. Context: "${productName}" for ${niche} audience. Clean, modern, high-quality. No text in image. Suitable for digital book.`;
 
   const response = await client.images.generate({
-    model: "dall-e-3",
+    model: "gpt-image-1",
     prompt: fullPrompt,
     n: 1,
     size: "1024x1024",
-    quality: "standard",
-    style: "natural",
-    response_format: "url",
+    quality: "auto",
   });
 
-  const url = response.data![0]?.url;
-  if (!url || typeof url !== "string") {
-    throw new Error("DALL-E did not return an image URL.");
+  const b64 = (response.data![0] as { b64_json?: string })?.b64_json;
+  if (!b64) {
+    throw new Error("Image generation did not return image data.");
   }
 
-  const imageRes = await fetch(url);
-  if (!imageRes.ok) {
-    throw new Error(`Failed to fetch generated image: ${imageRes.status}`);
-  }
-  const arrayBuffer = await imageRes.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  const buffer = Buffer.from(b64, "base64");
 
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     console.warn("[ebook-images] BLOB_READ_WRITE_TOKEN not set. Skipping image upload.");

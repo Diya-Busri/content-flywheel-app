@@ -103,7 +103,7 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
         .slice(0, 900); // DALL-E works best under 1000 chars
 
     // Always request b64_json so we never have to fetch DALL-E's temp URL (often fails with ENOTFOUND).
-    const imageSize = storyVideoImage ? "1792x1024" : "1024x1024";
+    const imageSize = storyVideoImage ? "1536x1024" : "1024x1024";
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
     let response;
@@ -116,11 +116,11 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
           await sleep(attempt * 1500); // 1.5s, 3s backoff
         }
         response = await openai.images.generate({
-          model: "dall-e-3",
+          model: "gpt-image-1",
           prompt: attemptPrompt,
           n: 1,
           size: imageSize,
-          quality: "standard",
+          quality: "auto",
         });
         break; // success
       } catch (err) {
@@ -138,20 +138,19 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
       );
     }
 
-    const tempUrl = (first as { url?: string }).url;
-    if (!tempUrl) {
+    // gpt-image-1 returns b64_json; extract the buffer
+    const b64 = (first as { b64_json?: string }).b64_json;
+    if (!b64) {
       return NextResponse.json(
-        { error: "Image generation did not return a URL. Please try again." },
+        { error: "Image generation did not return image data. Please try again." },
         { status: 500 }
       );
     }
+    const buffer = Buffer.from(b64, "base64");
 
-    // Fetch the image from OpenAI's temporary URL and upload to R2 for persistence
+    // Upload to R2 for persistence when configured
     if (useBlob) {
       try {
-        const imgRes = await fetch(tempUrl);
-        if (!imgRes.ok) throw new Error(`Failed to fetch generated image: ${imgRes.status}`);
-        const buffer = Buffer.from(await imgRes.arrayBuffer());
         const pathname = `editor-images/${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
         const blob = await upload(pathname, buffer, {
           access: "public",
@@ -161,14 +160,14 @@ ${STORY_VIDEO_IMAGE_ANIME_STYLE_CORE}. No text, letters, watermarks, logos, or l
         await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[generate-image] credit deduction failed:", e));
         return NextResponse.json({ url: blob.url });
       } catch (blobErr) {
-        console.error("[generate-image] R2 upload failed, returning temp URL:", blobErr);
-        await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[generate-image] credit deduction failed:", e));
-        return NextResponse.json({ url: tempUrl });
+        console.error("[generate-image] R2 upload failed, returning data URL:", blobErr);
       }
     }
 
+    // Fall back to a data URL so the client can display the image without a hosting dependency
+    const dataUrl = `data:image/png;base64,${b64}`;
     await deductVideoCredit("brandStoryVideo").catch((e) => console.error("[generate-image] credit deduction failed:", e));
-    return NextResponse.json({ url: tempUrl });
+    return NextResponse.json({ url: dataUrl });
   } catch (err) {
     console.error("[generate-image]", err);
     const message = err instanceof Error ? err.message : "Image generation failed";

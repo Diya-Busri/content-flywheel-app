@@ -51,24 +51,17 @@ export async function generateProductInHandImage(
   const prompt = `Professional UGC-style photograph of ${personDesc} holding and showing a product to the camera. The product is: ${productContext}. Soft bedroom or office background. Vertical 9:16 portrait orientation. The product is clearly visible in their hands. Realistic lighting, high quality, TikTok-style aesthetic. Single person, one face visible.`;
 
   const response = await client.images.generate({
-    model: "dall-e-3",
+    model: "gpt-image-1",
     prompt,
     n: 1,
-    size: "1024x1792",
-    quality: "standard",
-    style: "natural",
-    response_format: "url",
+    size: "1024x1536",
+    quality: "auto",
   });
 
-  const url = response.data![0]?.url;
-  if (!url || typeof url !== "string") {
-    throw new Error("DALL-E did not return an image URL.");
+  const b64 = (response.data![0] as { b64_json?: string })?.b64_json;
+  if (!b64) {
+    throw new Error("Image generation did not return image data.");
   }
 
-  const imageRes = await fetch(url);
-  if (!imageRes.ok) {
-    throw new Error(`Failed to fetch generated image: ${imageRes.status}`);
-  }
-  const arrayBuffer = await imageRes.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  return Buffer.from(b64, "base64");
 }
