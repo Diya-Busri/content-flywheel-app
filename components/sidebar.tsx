@@ -62,6 +62,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         { href: "/dashboard/brand-builder", icon: <Brush size={18} />, label: "Brand Builder", emoji: "✨", activeWhenStartsWith: true, featureKey: "brand_builder" },
         { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️", activeWhenStartsWith: true, featureKey: "tiktok_shop" },
         { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦", activeWhenStartsWith: true, featureKey: "digital_products" },
+        { href: "/dashboard/video-guide/new", icon: <Clapperboard size={18} />, label: "Video Guide", emoji: "🎬", activeWhenStartsWith: true, featureKey: "digital_products" },
         { href: "/dashboard/video-credits", icon: <Film size={18} />, label: "Video Credits", emoji: "🎥", featureKey: "video_credits" },
       ],
     },
