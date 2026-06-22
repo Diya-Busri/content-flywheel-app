@@ -384,7 +384,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
         : ELEVENLABS_VOICES[0].voiceId
   );
 
-  const [showConfig, setShowConfig] = useState(false);
+  const [showConfig, setShowConfig] = useState(true);
   const [config, setConfig] = useState(() => {
     const initialVoice =
       preferredVoiceId && preferredVoiceId.trim()
@@ -2412,6 +2412,72 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           {backLabel}
         </Link>
 
+        {/* ── Progress bar — visible at top of page, before all panels ── */}
+        {(() => {
+          const hasImages = Object.keys(guideSceneImageUrls).length > 0;
+          const hasVoiceover = !!(fullVoiceoverUrl || perSceneUrls.some(Boolean));
+          const hasVideoFile = autoGeneratePhase === null && autoGeneratingAll === false && hasImages && hasVoiceover;
+          const hasSocialKit = !!socialKit;
+          const steps: { done: boolean; label: string; tab: "scenes" | "voiceover" | "export" | "social-kit" }[] = [
+            { done: true,          label: "Script",    tab: "scenes" },
+            { done: hasImages,     label: "Images",    tab: "scenes" },
+            { done: hasVoiceover,  label: "Voiceover", tab: "voiceover" },
+            { done: hasVideoFile,  label: "Export",    tab: "export" },
+            { done: hasSocialKit,  label: "Social Kit",tab: "social-kit" },
+          ];
+          const doneCount = steps.filter((s) => s.done).length;
+          const nextStep = steps.find((s) => !s.done);
+          return (
+            <div className="mb-6 rounded-xl border border-gray-200 dark:border-border bg-gray-50 dark:bg-card px-4 py-3">
+              <div className="flex items-center justify-between gap-2 mb-2.5">
+                <span className="text-xs font-semibold text-gray-500 dark:text-muted-foreground uppercase tracking-wide">
+                  Progress — {doneCount}/{steps.length} steps done
+                </span>
+                {nextStep && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab(nextStep.tab)}
+                    className="text-xs font-semibold text-orange-500 hover:text-orange-600 whitespace-nowrap"
+                  >
+                    Next: {nextStep.label} →
+                  </button>
+                )}
+              </div>
+              {/* Step pills */}
+              <div className="flex flex-wrap gap-2">
+                {steps.map((s) => (
+                  <button
+                    key={s.label}
+                    type="button"
+                    onClick={() => setActiveTab(s.tab)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
+                      s.done
+                        ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
+                        : s === nextStep
+                        ? "bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700 text-orange-600 dark:text-orange-400"
+                        : "bg-white dark:bg-background border-gray-200 dark:border-border text-gray-400 dark:text-gray-500"
+                    }`}
+                  >
+                    {s.done
+                      ? <CheckCircle2 className="w-3 h-3 shrink-0" />
+                      : s === nextStep
+                      ? <span className="w-3 h-3 rounded-full border-2 border-orange-400 shrink-0 inline-block" />
+                      : <span className="w-3 h-3 rounded-full border-2 border-gray-300 dark:border-gray-600 shrink-0 inline-block" />}
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              {/* Progress fill bar */}
+              <div className="mt-3 h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-orange-500 transition-all duration-500"
+                  style={{ width: `${Math.round((doneCount / steps.length) * 100)}%` }}
+                />
+              </div>
+            </div>
+          );
+        })()}
+
         {!hasProductName && (
           <div className="mb-6 p-4 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-card">
             <p className="text-sm font-medium text-foreground mb-3">Set your product name so scripts and voiceovers use it instead of &quot;Your product&quot;</p>
@@ -3282,45 +3348,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             Quick at-a-glance view so beginners know exactly where they are.
             Each step links to the relevant tab. Uses only existing state.
         ─────────────────────────────────────────────────────────────────── */}
-        {(() => {
-          const hasImages = Object.keys(guideSceneImageUrls).length > 0;
-          const hasVoiceover = !!(fullVoiceoverUrl || perSceneUrls.some(Boolean));
-          const hasVideoFile = autoGeneratePhase === null && autoGeneratingAll === false && hasImages && hasVoiceover;
-          const steps = [
-            { done: true,        label: "Script ready",        tab: "scenes" as const },
-            { done: hasImages,   label: "Images generated",    tab: "scenes" as const },
-            { done: hasVoiceover,label: "Voiceover recorded",  tab: "voiceover" as const },
-            { done: hasVideoFile,label: "Video file created",   tab: "export" as const },
-          ] as const;
-          const nextStep = steps.find((s) => !s.done);
-          return (
-            <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-gray-200 dark:border-border bg-gray-50 dark:bg-card px-4 py-3">
-              <span className="text-xs font-semibold text-gray-500 dark:text-muted-foreground uppercase tracking-wide shrink-0">Progress</span>
-              {steps.map((s) => (
-                <button
-                  key={s.label}
-                  type="button"
-                  onClick={() => setActiveTab(s.tab)}
-                  className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 hover:text-orange-500 transition-colors"
-                >
-                  {s.done
-                    ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                    : <span className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 dark:border-gray-600 shrink-0 inline-block" />}
-                  <span className={s.done ? "line-through text-gray-400 dark:text-gray-500" : "font-medium"}>{s.label}</span>
-                </button>
-              ))}
-              {nextStep && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab(nextStep.tab)}
-                  className="ml-auto text-xs font-semibold text-orange-500 hover:text-orange-600 whitespace-nowrap"
-                >
-                  Next: {nextStep.label} →
-                </button>
-              )}
-            </div>
-          );
-        })()}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="bg-gray-100 dark:bg-card border border-gray-200 dark:border-border flex flex-wrap gap-1 p-1">
@@ -4499,20 +4526,16 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
 
           <TabsContent value="social-kit" className="mt-6 space-y-4" id="social-media-kit-section">
             {!socialKit ? (
-              (hasTimelineUsage || isDarkInfographicStyle) && libraryScriptId ? (
+              (true) ? (
                 <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
                   <CardContent className="pt-6 pb-6">
                     <div className="flex flex-col items-center text-center max-w-md mx-auto">
                       <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-4">
-                        <Video className="w-8 h-8 text-green-500" />
+                        <Share2 className="w-8 h-8 text-green-500" />
                       </div>
-                      <h3 className="text-lg font-semibold text-foreground mb-2">
-                        {isDarkInfographicStyle ? "Your infographic slides are ready" : "You've used the Video Timeline"}
-                      </h3>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">Generate your Social Media Kit</h3>
                       <p className="text-gray-600 dark:text-muted-foreground text-sm mb-6">
-                        {isDarkInfographicStyle
-                          ? "Generate your Social Media Kit with titles, hashtags, and captions to go with your slides."
-                          : "Generate your Social Media Kit with titles, hashtags, and captions—no proof upload needed."}
+                        Get TikTok titles, Instagram captions, YouTube Shorts descriptions, hashtags, and best posting times — all tailored to your script.
                       </p>
                       <Button
                         className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
