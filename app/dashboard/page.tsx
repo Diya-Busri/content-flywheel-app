@@ -294,128 +294,146 @@ export default async function DashboardPage() {
     ? `You have ${videoStats.digitalProductsCount} product — time to make your first promo video.`
     : `${videoStats.digitalProductsCount} product${videoStats.digitalProductsCount > 1 ? "s" : ""} · ${videoStats.totalLibraryVideos} library item${videoStats.totalLibraryVideos > 1 ? "s" : ""}. Keep the flywheel spinning.`;
 
+  const tools = [
+    { href: "/dashboard/ai-coach",        emoji: "🤖", label: "AI Coach",       desc: "Chat, plan, generate content",  grad: "from-orange-500 to-amber-400" },
+    { href: "/dashboard/digital-products", emoji: "📦", label: "Create Product", desc: "AI writes your eBook or guide", grad: "from-blue-500 to-indigo-500"  },
+    { href: "/dashboard/design-studio",   emoji: "🎨", label: "Design Studio",  desc: "Images, graphics, bulk posts",  grad: "from-violet-500 to-purple-600" },
+    { href: "/dashboard/video-guide/new", emoji: "🎬", label: "Video Guide",    desc: "Script + scenes in 30 sec",    grad: "from-rose-500 to-pink-500"    },
+    { href: "/dashboard/library",         emoji: "📚", label: "My Library",     desc: "All your saved content",       grad: "from-teal-500 to-cyan-500"    },
+    { href: "/dashboard/email-marketing", emoji: "📧", label: "Email",          desc: "Campaigns + subscriber list",  grad: "from-sky-500 to-blue-400"     },
+  ];
+
   return (
-    <main className="p-4 sm:p-6 md:p-8 max-w-[1200px] mx-auto">
+    <main className="min-h-full">
       <Suspense fallback={null}><ReferralCapture /></Suspense>
       <Suspense fallback={null}><InviteCapture /></Suspense>
       <SyncOnboardingSteps digitalProductsCount={videoStats.digitalProductsCount} />
 
-      {/* Greeting */}
-      <div className="mb-5">
-        <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">{greeting} 👋</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{nudge}</p>
+      {/* ── Hero banner ─────────────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-orange-500 via-rose-500 to-violet-600 px-6 pt-10 pb-16 sm:px-10">
+        {/* decorative blobs */}
+        <div className="pointer-events-none absolute -top-20 -right-20 w-72 h-72 rounded-full bg-white/10 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-0 left-10 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
+        <div className="relative max-w-[1200px] mx-auto">
+          <p className="text-white/70 text-sm font-medium mb-1 uppercase tracking-widest">Content Flywheel</p>
+          <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight">
+            {greeting} 👋
+          </h1>
+          <p className="text-white/80 mt-2 text-base max-w-lg">{nudge}</p>
+        </div>
       </div>
 
-      {/* Today's Focus — single most impactful next action */}
-      <TodaysFocus
-        productsCount={videoStats.digitalProductsCount}
-        videosCount={videoStats.totalLibraryVideos}
-        hasThumbnail={checklist.hasThumbnail}
-        totalOrders={totalOrders}
-        emailSubscribers={emailSubscribers}
-      />
+      {/* ── Body (lifted over banner) ────────────────────────────────────────── */}
+      <div className="relative -mt-8 max-w-[1200px] mx-auto px-4 sm:px-6 md:px-8 pb-12">
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        {[
-          { label: "Products", value: videoStats.digitalProductsCount, href: "/dashboard/digital-products", icon: Package, iconBg: "bg-blue-500", barColor: "bg-blue-500" },
-          { label: "Library Items", value: videoStats.totalLibraryVideos, href: "/dashboard/library", icon: Film, iconBg: "bg-orange-500", barColor: "bg-orange-500" },
-          { label: "Videos This Week", value: videosThisWeek, href: "/dashboard/library", icon: Clapperboard, iconBg: "bg-violet-500", barColor: "bg-violet-500" },
-          { label: "Video Credits", value: videoCredits, href: "/dashboard/video-credits", icon: Film, iconBg: "bg-emerald-500", barColor: "bg-emerald-500" },
-        ].map(({ label, value, href, icon: Icon, iconBg, barColor }) => (
-          <Link key={label} href={href} className="group relative overflow-hidden rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-150">
-            <div className={`absolute top-0 left-0 right-0 h-0.5 ${barColor} opacity-70`} />
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${iconBg}`}>
-              <Icon className="w-4 h-4 text-white" />
-            </div>
-            <p className="text-3xl font-black text-gray-900 dark:text-white leading-none">{value.toLocaleString()}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">{label}</p>
-          </Link>
-        ))}
-      </div>
-
-      {/* Incomplete products */}
-      {incompleteProducts.length > 0 && (
-        <section className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-500" />
-              <h2 className="text-sm font-bold text-gray-900 dark:text-white">Finish to sell</h2>
-            </div>
-            <Link href="/dashboard/digital-products" className="text-xs font-medium text-orange-500 hover:text-orange-400 transition-colors">
-              View all →
+        {/* Stats row — float up over the banner */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          {[
+            { label: "Products",        value: videoStats.digitalProductsCount, href: "/dashboard/digital-products", icon: Package,    grad: "from-blue-500 to-indigo-500"  },
+            { label: "Library Items",   value: videoStats.totalLibraryVideos,   href: "/dashboard/library",          icon: Film,       grad: "from-orange-500 to-amber-500" },
+            { label: "Videos This Week",value: videosThisWeek,                  href: "/dashboard/library",          icon: Clapperboard, grad: "from-violet-500 to-purple-600" },
+            { label: "Video Credits",   value: videoCredits,                    href: "/dashboard/video-credits",    icon: Film,       grad: "from-emerald-500 to-teal-500" },
+          ].map(({ label, value, href, icon: Icon, grad }) => (
+            <Link key={label} href={href} className="group">
+              <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] shadow-lg p-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-150">
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center mb-3 shadow-sm`}>
+                  <Icon className="w-5 h-5 text-white" />
+                </div>
+                <p className="text-3xl font-black text-gray-900 dark:text-white leading-none tabular-nums">{value.toLocaleString()}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1.5">{label}</p>
+              </div>
             </Link>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {incompleteProducts.map((product) => (
-              <Link key={product.id} href={`/dashboard/digital-products/${product.id}/edit?tab=${product.missingTab}`} className="group block">
-                <div className="rounded-xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-amber-300 dark:hover:border-amber-500/50 hover:shadow-sm transition-all p-3 flex items-center gap-3">
-                  <div className="relative shrink-0 w-10 h-10">
-                    <svg viewBox="0 0 44 44" className="w-10 h-10 -rotate-90">
-                      <circle cx="22" cy="22" r="18" fill="none" stroke="#e5e7eb" strokeWidth="4" className="dark:stroke-gray-700" />
-                      <circle cx="22" cy="22" r="18" fill="none" stroke={product.completionScore >= 80 ? "#22c55e" : product.completionScore >= 40 ? "#f59e0b" : "#f97316"} strokeWidth="4" strokeDasharray={`${(product.completionScore / 100) * 2 * Math.PI * 18} ${2 * Math.PI * 18}`} strokeLinecap="round" />
-                    </svg>
-                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-700 dark:text-gray-300">{product.completionScore}%</span>
+          ))}
+        </div>
+
+        {/* Today's Focus */}
+        <TodaysFocus
+          productsCount={videoStats.digitalProductsCount}
+          videosCount={videoStats.totalLibraryVideos}
+          hasThumbnail={checklist.hasThumbnail}
+          totalOrders={totalOrders}
+          emailSubscribers={emailSubscribers}
+        />
+
+        {/* Incomplete products */}
+        {incompleteProducts.length > 0 && (
+          <section className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-500" />
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white">Finish to sell</h2>
+              </div>
+              <Link href="/dashboard/digital-products" className="text-xs font-medium text-orange-500 hover:text-orange-400 transition-colors">
+                View all →
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {incompleteProducts.map((product) => (
+                <Link key={product.id} href={`/dashboard/digital-products/${product.id}/edit?tab=${product.missingTab}`} className="group block">
+                  <div className="rounded-xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-amber-300 dark:hover:border-amber-500/50 hover:shadow-md transition-all p-3 flex items-center gap-3">
+                    <div className="relative shrink-0 w-10 h-10">
+                      <svg viewBox="0 0 44 44" className="w-10 h-10 -rotate-90">
+                        <circle cx="22" cy="22" r="18" fill="none" stroke="#e5e7eb" strokeWidth="4" className="dark:stroke-gray-700" />
+                        <circle cx="22" cy="22" r="18" fill="none" stroke={product.completionScore >= 80 ? "#22c55e" : product.completionScore >= 40 ? "#f59e0b" : "#f97316"} strokeWidth="4" strokeDasharray={`${(product.completionScore / 100) * 2 * Math.PI * 18} ${2 * Math.PI * 18}`} strokeLinecap="round" />
+                      </svg>
+                      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-700 dark:text-gray-300">{product.completionScore}%</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-gray-900 dark:text-white truncate text-sm">{product.title}</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Next: {product.missingStep}</p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-orange-500 transition-colors shrink-0" />
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900 dark:text-white truncate text-sm">{product.title}</p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Next: {product.missingStep}</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-orange-500 transition-colors shrink-0" />
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Tools grid */}
+        <section className="mb-6">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Your tools</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {tools.map(({ href, emoji, label, desc, grad }) => (
+              <Link key={href} href={href} className="group">
+                <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${grad} p-5 h-full shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-150`}>
+                  {/* shine overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="text-3xl mb-3 drop-shadow">{emoji}</div>
+                  <p className="font-bold text-white text-sm mb-1">{label}</p>
+                  <p className="text-white/70 text-xs leading-relaxed">{desc}</p>
+                  <ArrowRight className="absolute bottom-4 right-4 w-4 h-4 text-white/40 group-hover:text-white/80 group-hover:translate-x-0.5 transition-all" />
                 </div>
               </Link>
             ))}
           </div>
         </section>
-      )}
 
-      {/* Quick-launch tools grid */}
-      <section className="mb-6">
-        <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Your tools</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {[
-            { href: "/dashboard/ai-coach",        emoji: "🤖", label: "AI Coach",        desc: "Chat, plan, generate content",    cls: "bg-gradient-to-br from-orange-500 to-amber-500 border-orange-400 shadow-orange-500/20 shadow-sm", text: "text-white", sub: "text-white/75" },
-            { href: "/dashboard/digital-products", emoji: "📦", label: "Create Product",  desc: "AI writes your eBook or guide",   cls: "bg-gradient-to-br from-blue-500 to-indigo-600 border-blue-400 shadow-blue-500/20 shadow-sm",   text: "text-white", sub: "text-white/75" },
-            { href: "/dashboard/design-studio",   emoji: "🎨", label: "Design Studio",   desc: "Images, graphics, bulk posts",    cls: "bg-gradient-to-br from-violet-500 to-purple-600 border-violet-400 shadow-violet-500/20 shadow-sm", text: "text-white", sub: "text-white/75" },
-            { href: "/dashboard/video-guide/new", emoji: "🎬", label: "Video Guide",     desc: "Script + scenes in 30 sec",       cls: "bg-gradient-to-br from-rose-500 to-pink-600 border-rose-400 shadow-rose-500/20 shadow-sm",      text: "text-white", sub: "text-white/75" },
-            { href: "/dashboard/library",         emoji: "📚", label: "My Library",      desc: "All your saved content",          cls: "bg-white dark:bg-[#1A1A1A] border-gray-100 dark:border-[#2A2A2A]",                                text: "text-gray-900 dark:text-white", sub: "text-gray-500 dark:text-gray-400" },
-            { href: "/dashboard/email-marketing", emoji: "📧", label: "Email",           desc: "Campaigns + subscriber list",     cls: "bg-white dark:bg-[#1A1A1A] border-gray-100 dark:border-[#2A2A2A]",                                text: "text-gray-900 dark:text-white", sub: "text-gray-500 dark:text-gray-400" },
-          ].map(({ href, emoji, label, desc, cls, text, sub }) => (
-            <Link key={href} href={href} className="group block">
-              <div className={`rounded-2xl border p-4 h-full transition-all duration-150 hover:shadow-lg hover:-translate-y-0.5 ${cls}`}>
-                <div className="text-3xl mb-2.5">{emoji}</div>
-                <p className={`font-bold text-sm mb-0.5 ${text}`}>{label}</p>
-                <p className={`text-xs leading-relaxed ${sub}`}>{desc}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* Recent library items */}
-      {videoStats.recent.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold text-gray-900 dark:text-white">Recent activity</h2>
-            <Link href="/dashboard/library" className="text-xs font-medium text-orange-500 hover:text-orange-400 transition-colors">View all →</Link>
-          </div>
-          <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] overflow-hidden">
-            <ul className="divide-y divide-gray-100 dark:divide-[#2A2A2A]">
-              {videoStats.recent.map((item) => (
-                <li key={`${item.source}-${item.id}`}>
-                  <Link href={item.href} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
-                    <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-950/20 flex items-center justify-center shrink-0">
-                      <Video className="w-4 h-4 text-orange-500" />
-                    </div>
-                    <p className="font-medium text-gray-900 dark:text-white truncate text-sm flex-1">{item.title}</p>
-                    <p className="text-xs text-gray-400 shrink-0">{item.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</p>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-      )}
+        {/* Recent activity */}
+        {videoStats.recent.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wide">Recent activity</h2>
+              <Link href="/dashboard/library" className="text-xs font-medium text-orange-500 hover:text-orange-400 transition-colors">View all →</Link>
+            </div>
+            <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] shadow-sm overflow-hidden">
+              <ul className="divide-y divide-gray-100 dark:divide-[#2A2A2A]">
+                {videoStats.recent.map((item) => (
+                  <li key={`${item.source}-${item.id}`}>
+                    <Link href={item.href} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-rose-500 flex items-center justify-center shrink-0 shadow-sm">
+                        <Video className="w-4 h-4 text-white" />
+                      </div>
+                      <p className="font-medium text-gray-900 dark:text-white truncate text-sm flex-1">{item.title}</p>
+                      <p className="text-xs text-gray-400 shrink-0">{item.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</p>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        )}
+      </div>
     </main>
   );
 }
