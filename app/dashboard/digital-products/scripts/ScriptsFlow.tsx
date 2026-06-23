@@ -341,7 +341,21 @@ export default function ScriptsFlow() {
           }
           if (cancelled) return;
           setProductName(title);
-          // Generate fresh scripts via API (no cache); fallback to mock if API fails
+
+          // Check session cache first — avoids re-generating on browser back
+          try {
+            const cached = sessionStorage.getItem(`generatedScripts_${productIdFromUrl}`);
+            if (cached) {
+              const parsed = JSON.parse(cached) as ScriptData[];
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setScripts(parsed);
+                setLoading(false);
+                return;
+              }
+            }
+          } catch { /* ignore */ }
+
+          // Generate fresh scripts via API; fallback to mock if API fails
           const genRes = await fetch("/api/digital-products/generate-scripts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -369,19 +383,20 @@ export default function ScriptsFlow() {
               compliance: { tiktok: "Approved", instagram: "Approved", youtube: "Approved" } as const,
               isSelected: selectAllForVideoGuide,
             };
-            setScripts(
-              genData.scripts.map((s, i) => ({
-                ...defaults,
-                id: s.id,
-                title: s.title,
-                length: s.length as LengthOption,
-                hook: s.hook,
-                body: s.body,
-                cta: s.cta,
-                isSelected: selectAllForVideoGuide || i === 1,
-                isStarred: i === 1,
-              }))
-            );
+            const newScripts = genData.scripts.map((s, i) => ({
+              ...defaults,
+              id: s.id,
+              title: s.title,
+              length: s.length as LengthOption,
+              hook: s.hook,
+              body: s.body,
+              cta: s.cta,
+              isSelected: selectAllForVideoGuide || i === 1,
+              isStarred: i === 1,
+            }));
+            setScripts(newScripts);
+            // Cache so browser-back doesn't re-generate
+            try { sessionStorage.setItem(`generatedScripts_${productIdFromUrl}`, JSON.stringify(newScripts)); } catch { /* ignore */ }
           } else {
             setScripts(generateMockScripts(formData));
           }
@@ -463,20 +478,21 @@ export default function ScriptsFlow() {
           isSelected: selectAllForVideoGuide,
         };
         const newLength = (targetSec as LengthOption) || (genData.scripts[0]?.length as LengthOption);
-        setScripts(
-          genData.scripts.map((s, i) => ({
-            ...defaults,
-            id: s.id,
-            title: s.title,
-            length: (s.length as LengthOption) || newLength,
-            hook: s.hook,
-            body: s.body,
-            cta: s.cta,
-            isSelected: selectAllForVideoGuide || i === 1,
-            isStarred: i === 1,
-          }))
-        );
+        const regenerated = genData.scripts.map((s, i) => ({
+          ...defaults,
+          id: s.id,
+          title: s.title,
+          length: (s.length as LengthOption) || newLength,
+          hook: s.hook,
+          body: s.body,
+          cta: s.cta,
+          isSelected: selectAllForVideoGuide || i === 1,
+          isStarred: i === 1,
+        }));
+        setScripts(regenerated);
         setScriptVideoLengthSec(newLength);
+        // Update cache with newly regenerated scripts
+        try { if (productIdFromUrl) sessionStorage.setItem(`generatedScripts_${productIdFromUrl}`, JSON.stringify(regenerated)); } catch { /* ignore */ }
       }
     } finally {
       setRegeneratingScripts(false);
