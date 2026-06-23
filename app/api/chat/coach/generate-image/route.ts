@@ -101,7 +101,7 @@ export async function POST(req: Request) {
           prompt: enhanced,
           n: 1,
           size,
-          quality: "low",
+          quality: "medium",
         });
         b64 = response.data![0]?.b64_json;
         if (b64) break;

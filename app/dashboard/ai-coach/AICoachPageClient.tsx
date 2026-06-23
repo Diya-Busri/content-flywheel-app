@@ -2421,6 +2421,41 @@ ${videoLines}`;
                         </div>
                       )}
                   </div>
+                  {/* User message action buttons */}
+                  {msg.role === "user" && msg.content && msg.content !== "(no text)" && (
+                    <div className="flex items-center gap-0.5 mt-0.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigator.clipboard
+                            .writeText(stripMarkdown(msg.content ?? ""))
+                            .then(() => toast({ title: "Copied to clipboard" }))
+                        }
+                        className="rounded p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-white/10 transition-colors"
+                        title="Copy"
+                        aria-label="Copy message"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ta = textareaRef.current;
+                          if (!ta) return;
+                          ta.value = msg.content ?? "";
+                          ta.focus();
+                          // trigger height resize
+                          ta.style.height = "auto";
+                          ta.style.height = `${Math.min(ta.scrollHeight, 144)}px`;
+                        }}
+                        className="rounded p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-white/10 transition-colors"
+                        title="Edit"
+                        aria-label="Edit message"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {msg.role === "user" && (
                   <div className="shrink-0 flex flex-col items-center gap-1 order-first sm:order-none">
