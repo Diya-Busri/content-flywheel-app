@@ -71,8 +71,6 @@ import { Badge } from "@/components/ui/badge";
 import TemplatesClient from "@/app/dashboard/templates/TemplatesClient";
 import HistoryClient from "@/app/dashboard/history/HistoryClient";
 import { FeaturePreviewGate } from "@/components/feature-preview-gate";
-import { QuickSellSheet } from "@/components/product-editor/QuickSellSheet";
-import { SellOnCFButton } from "@/components/product-editor/SellOnCFButton";
 
 type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "images" | "trash" | "designs";
 
@@ -1460,11 +1458,6 @@ export default function LibraryFlow() {
                                     {formatLabel(item.format)}
                                   </Badge>
                                 )}
-                                {item.type === "product" && item.completionScore === 100 && (
-                                  <Badge variant="secondary" className="text-xs font-normal bg-green-500/10 text-green-600 dark:text-green-400 border-0">
-                                    ✓ Ready to sell
-                                  </Badge>
-                                )}
                                 {item.type === "product" && (item.designSource === "ai" || item.designSource === "brand") && (
                                   <Badge variant="secondary" className="text-xs font-normal bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-0">
                                     AI Designed
@@ -1570,17 +1563,6 @@ export default function LibraryFlow() {
                                   Open
                                 </Link>
                               </Button>
-                              {item.type === "product" && (
-                                <SellOnCFButton
-                                  productId={item.id}
-                                  productTitle={item.title}
-                                  isNativePublished={item.isNativePublished}
-                                  nativePrice={item.nativePrice}
-                                />
-                              )}
-                              {item.type === "product" && (
-                                <QuickSellSheet productId={item.id} productTitle={item.title} />
-                              )}
                             </>
                           )}
                         </CardContent>
@@ -1619,11 +1601,6 @@ export default function LibraryFlow() {
                           {item.type === "product" && item.format && (
                             <Badge variant="secondary" className="text-xs font-normal bg-orange-500/10 text-orange-600 dark:text-orange-400 border-0">
                               {formatLabel(item.format)}
-                            </Badge>
-                          )}
-                          {item.type === "product" && item.completionScore === 100 && (
-                            <Badge variant="secondary" className="text-xs font-normal bg-green-500/10 text-green-600 dark:text-green-400 border-0">
-                              ✓ Ready to sell
                             </Badge>
                           )}
                           {item.type === "product" && (item.designSource === "ai" || item.designSource === "brand") && (
@@ -1784,17 +1761,6 @@ export default function LibraryFlow() {
                               : "Open"}
                           </Link>
                         </Button>
-                        {item.type === "product" && (
-                          <SellOnCFButton
-                            productId={item.id}
-                            productTitle={item.title}
-                            isNativePublished={item.isNativePublished}
-                            nativePrice={item.nativePrice}
-                          />
-                        )}
-                        {item.type === "product" && (
-                          <QuickSellSheet productId={item.id} productTitle={item.title} />
-                        )}
                         {item.type === "video" && getVideoDownloadUrl(item) && (
                           <Button
                             variant="outline"
