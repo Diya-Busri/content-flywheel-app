@@ -2758,8 +2758,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           </Card>
         )}
 
-        {/* Video Configuration Panel */}
-        <div className="mb-8 border-2 border-orange-200 dark:border-orange-800 rounded-lg overflow-hidden">
+        {/* Video Configuration Panel — removed */}
+        {false && <div className="mb-8 border-2 border-orange-200 dark:border-orange-800 rounded-lg overflow-hidden">
           <button
             type="button"
             onClick={() => setShowConfig(!showConfig)}
@@ -3009,7 +3009,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               </div>
             </div>
           )}
-        </div>
+        </div>}
 
         {activeTab === "script" && <Card className="mb-8 border-gray-200 dark:border-border bg-gray-50 dark:bg-card overflow-visible">
           <CardHeader className="pb-2">
