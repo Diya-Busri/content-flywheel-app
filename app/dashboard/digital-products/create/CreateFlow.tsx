@@ -135,11 +135,11 @@ export default function CreateFlow() {
   };
 
   return (
-    <main className="min-h-dvh bg-[#0F0F0F] text-white pb-44">
+    <main className="min-h-dvh bg-white dark:bg-[#0F0F0F] text-gray-900 dark:text-white pb-44">
       <div className="max-w-2xl mx-auto px-4 py-6 md:px-10 md:py-10">
         <Link
           href="/dashboard/digital-products"
-          className="inline-flex items-center gap-2 text-sm text-[#A0A0A0] hover:text-orange-500 mb-6 transition-colors"
+          className="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-[#A0A0A0] hover:text-orange-500 mb-6 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
@@ -148,41 +148,41 @@ export default function CreateFlow() {
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs font-medium text-orange-500 uppercase tracking-wider">Step 1 of 3</span>
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">Product Details</h1>
-        <p className="text-[#A0A0A0] text-base mb-10">Tell us about your product</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">Product Details</h1>
+        <p className="text-gray-500 dark:text-[#A0A0A0] text-base mb-10">Tell us about your product</p>
 
         <div className="space-y-8">
           <div className="space-y-2">
-            <Label htmlFor="productName" className="text-white">Product Name</Label>
+            <Label htmlFor="productName" className="text-gray-900 dark:text-white">Product Name</Label>
             <Input
               id="productName"
               placeholder="e.g., Ultimate Budget Planner"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
-              className="bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-[#666] h-11"
+              className="bg-white dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2A2A2A] text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-[#666] h-11"
             />
             {formErrors.productName && (
-              <p className="text-sm text-red-400">{formErrors.productName}</p>
+              <p className="text-sm text-red-500">{formErrors.productName}</p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="productDescription" className="text-white">Product description (optional)</Label>
+            <Label htmlFor="productDescription" className="text-gray-900 dark:text-white">Product description <span className="text-gray-400 dark:text-[#A0A0A0] font-normal">(optional)</span></Label>
             <Textarea
               id="productDescription"
               placeholder="Describe what your product is, who it's for, and the main benefits..."
               value={productDescription}
               onChange={(e) => setProductDescription(e.target.value)}
               rows={4}
-              className="bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-[#666] resize-none"
+              className="bg-white dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2A2A2A] text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-[#666] resize-none"
             />
-            <p className="text-xs text-[#A0A0A0]">The more detail you provide, the better your video scripts will be. Character count: {productDescription.length}</p>
+            <p className="text-xs text-gray-500 dark:text-[#A0A0A0]">The more detail you provide, the better your video scripts will be. Character count: {productDescription.length}</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="creatorExpertise" className="text-white">
+            <Label htmlFor="creatorExpertise" className="text-gray-900 dark:text-white">
               Your expertise or unique angle{" "}
-              <span className="text-[#A0A0A0] font-normal">(optional)</span>
+              <span className="text-gray-400 dark:text-[#A0A0A0] font-normal">(optional)</span>
             </Label>
             <Textarea
               id="creatorExpertise"
@@ -190,15 +190,15 @@ export default function CreateFlow() {
               value={creatorExpertise}
               onChange={(e) => setCreatorExpertise(e.target.value)}
               rows={3}
-              className="bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-[#666] resize-none"
+              className="bg-white dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2A2A2A] text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-[#666] resize-none"
             />
-            <p className="text-xs text-[#A0A0A0]">Your personal experience or angle — this makes the AI output sound like <span className="text-orange-400">you</span>, not a generic template.</p>
+            <p className="text-xs text-gray-500 dark:text-[#A0A0A0]">Your personal experience or angle — this makes the AI output sound like <span className="text-orange-500">you</span>, not a generic template.</p>
           </div>
 
           <div className="space-y-3">
-            <Label className="text-white">Product File or Link</Label>
+            <Label className="text-gray-900 dark:text-white">Product File or Link</Label>
             <Tabs value={mode} onValueChange={(v) => { setMode(v as "file" | "link"); setFormErrors((prev) => ({ ...prev, productFileOrLink: "" })); }}>
-              <TabsList className="bg-[#1A1A1A] border border-[#2A2A2A] p-1 gap-1">
+              <TabsList className="bg-gray-100 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-1 gap-1">
                 <TabsTrigger value="file" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Upload File</TabsTrigger>
                 <TabsTrigger value="link" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Paste Link</TabsTrigger>
               </TabsList>
@@ -209,7 +209,7 @@ export default function CreateFlow() {
                   className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
                     productFile
                       ? "border-orange-500/50 bg-orange-500/10"
-                      : "border-[#2A2A2A] hover:border-[#3A3A3A]"
+                      : "border-gray-200 dark:border-[#2A2A2A] hover:border-gray-300 dark:hover:border-[#3A3A3A] bg-gray-50 dark:bg-transparent"
                   } ${formErrors.productFileOrLink ? "border-red-500" : ""}`}
                 >
                   <input
@@ -221,21 +221,21 @@ export default function CreateFlow() {
                   />
                   {productFile ? (
                     <div className="space-y-2">
-                      <p className="text-sm font-medium text-white">{productFile.name}</p>
-                      <p className="text-xs text-[#A0A0A0]">{formatFileSize(productFile.size)}</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{productFile.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-[#A0A0A0]">{formatFileSize(productFile.size)}</p>
                       <label htmlFor="product-file">
-                        <Button type="button" variant="outline" size="sm" className="border-[#2A2A2A] text-[#A0A0A0] hover:bg-[#2A2A2A] cursor-pointer">
+                        <Button type="button" variant="outline" size="sm" className="cursor-pointer">
                           Change file
                         </Button>
                       </label>
                     </div>
                   ) : (
                     <label htmlFor="product-file" className="cursor-pointer block">
-                      <Upload className="w-12 h-12 mx-auto text-[#666] mb-3" />
-                      <p className="text-sm text-[#E0E0E0]">Drag & drop your file here</p>
-                      <p className="text-sm text-[#A0A0A0] mt-1">or click to browse</p>
-                      <p className="text-xs text-[#666] mt-3">PDF, EPUB, DOCX, PPTX, XLSX, ZIP</p>
-                      <p className="text-xs text-[#666]">Max {MAX_FILE_SIZE_MB}MB</p>
+                      <Upload className="w-12 h-12 mx-auto text-gray-300 dark:text-[#666] mb-3" />
+                      <p className="text-sm text-gray-700 dark:text-[#E0E0E0]">Drag & drop your file here</p>
+                      <p className="text-sm text-gray-400 dark:text-[#A0A0A0] mt-1">or click to browse</p>
+                      <p className="text-xs text-gray-400 dark:text-[#666] mt-3">PDF, EPUB, DOCX, PPTX, XLSX, ZIP</p>
+                      <p className="text-xs text-gray-400 dark:text-[#666]">Max {MAX_FILE_SIZE_MB}MB</p>
                     </label>
                   )}
                 </div>
@@ -246,23 +246,23 @@ export default function CreateFlow() {
                   placeholder="https://..."
                   value={productSalesPageLink}
                   onChange={(e) => { setProductSalesPageLink(e.target.value); setFormErrors((prev) => ({ ...prev, productFileOrLink: "" })); }}
-                  className="bg-[#1A1A1A] border-[#2A2A2A] text-white placeholder:text-[#666] h-11"
+                  className="bg-white dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2A2A2A] text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-[#666] h-11"
                 />
-                <p className="text-xs text-[#A0A0A0] mt-2">Paste your Gumroad, Etsy, or sales page URL</p>
+                <p className="text-xs text-gray-500 dark:text-[#A0A0A0] mt-2">Paste your Gumroad, Etsy, or sales page URL</p>
               </TabsContent>
             </Tabs>
             {formErrors.productFileOrLink && (
-              <p className="text-sm text-red-400">{formErrors.productFileOrLink}</p>
+              <p className="text-sm text-red-500">{formErrors.productFileOrLink}</p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label className="text-white">Product Type</Label>
+            <Label className="text-gray-900 dark:text-white">Product Type</Label>
             <Select value={productType} onValueChange={(v: ProductType) => setProductType(v)}>
-              <SelectTrigger className="bg-[#1A1A1A] border-[#2A2A2A] text-white">
+              <SelectTrigger className="bg-white dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2A2A2A]">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#1A1A1A] border-[#2A2A2A]">
+              <SelectContent>
                 <SelectItem value="digital">Digital Product</SelectItem>
                 <SelectItem value="physical">Physical Product</SelectItem>
                 <SelectItem value="service">Service</SelectItem>
@@ -273,10 +273,10 @@ export default function CreateFlow() {
         </div>
       </div>
 
-      {/* Sticky bottom bar — sits above mobile nav */}
-      <div className="fixed bottom-0 left-0 right-0 md:left-[220px] z-40 border-t border-[#2A2A2A] bg-[#0F0F0F]/95 backdrop-blur px-4 md:px-6 pt-3 pb-mobile-nav">
+      {/* Sticky bottom bar */}
+      <div className="fixed bottom-0 left-0 right-0 md:left-[220px] z-40 border-t border-gray-200 dark:border-[#2A2A2A] bg-white/95 dark:bg-[#0F0F0F]/95 backdrop-blur px-4 md:px-6 pt-3 pb-mobile-nav">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
-          <Button variant="ghost" asChild size="sm" className="text-[#A0A0A0] hover:text-white hover:bg-[#1A1A1A] shrink-0">
+          <Button variant="ghost" asChild size="sm" className="shrink-0">
             <Link href="/dashboard/digital-products">← Back</Link>
           </Button>
           <Button
