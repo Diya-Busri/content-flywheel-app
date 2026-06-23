@@ -29,6 +29,37 @@ const STEPS: { key: Step; label: string }[] = [
   { key: "guide",  label: "Building your video guide" },
 ];
 
+const ANGLES = [
+  {
+    id: "problem-solution",
+    emoji: "🎯",
+    label: "Problem → Solution",
+    desc: "Call out the exact pain, then position your product as the fix.",
+    example: '"I wasted 3 months doing this wrong — here\'s what actually works"',
+  },
+  {
+    id: "transformation",
+    emoji: "✨",
+    label: "Transformation",
+    desc: "Before vs after. Show the life change your product creates.",
+    example: '"This one thing took me from overwhelmed to fully booked"',
+  },
+  {
+    id: "how-it-works",
+    emoji: "⚙️",
+    label: "How It Works",
+    desc: "Step-by-step walkthrough. Great for sceptical audiences.",
+    example: '"Here\'s exactly what\'s inside and how to use it"',
+  },
+  {
+    id: "story",
+    emoji: "🎬",
+    label: "Story / Personal",
+    desc: "Authentic and relatable. Lead with your own experience.",
+    example: '"I created this because I couldn\'t find it anywhere"',
+  },
+];
+
 export default function NewVideoGuidePage() {
   const router = useRouter();
   const [productName, setProductName] = useState("");
@@ -51,14 +82,19 @@ export default function NewVideoGuidePage() {
   };
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [formStep, setFormStep] = useState<1 | 2>(1);
+  const [selectedAngle, setSelectedAngle] = useState<string>("problem-solution");
 
   const currentStepIdx = STEPS.findIndex((s) => s.key === step);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formStep === 1) { setFormStep(2); return; }
     if (!productName.trim() || !description.trim()) return;
     setError(null);
     setStep("script");
+
+    const angleLabel = ANGLES.find((a) => a.id === selectedAngle)?.label ?? selectedAngle;
 
     try {
       // ── Step 1: Generate a script ──────────────────────────────────────────
@@ -68,7 +104,7 @@ export default function NewVideoGuidePage() {
         body: JSON.stringify({
           topic: {
             title: productName.trim(),
-            hook_angle: description.trim(),
+            hook_angle: `${description.trim()} — Use a "${angleLabel}" angle for the script hook.`,
           },
         }),
       });
@@ -148,95 +184,111 @@ export default function NewVideoGuidePage() {
         {/* ── Form ──────────────────────────────────────────────────────────── */}
         {(step === "idle" || step === "error") && (
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Product picker */}
-            {products.length > 0 && (
-              <div className="space-y-1.5">
-                <Label>Select a product (optional)</Label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full h-11 justify-between font-normal"
-                    >
-                      <span className="flex items-center gap-2 min-w-0">
-                        <Package className="h-4 w-4 shrink-0 text-orange-500" />
-                        <span className="truncate">
-                          {selectedProduct ? selectedProduct.title : "Choose from your Digital Products…"}
-                        </span>
-                      </span>
-                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-full min-w-[320px]">
-                    {products.map((p) => (
-                      <DropdownMenuItem
-                        key={p.id}
-                        onClick={() => selectProduct(p)}
-                        className="flex flex-col items-start gap-0.5 py-2"
-                      >
-                        <span className="font-medium">{p.title}</span>
-                        {p.niche && <span className="text-xs text-muted-foreground">{p.niche}</span>}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {selectedProduct && (
-                  <p className="text-xs text-muted-foreground">
-                    Fields pre-filled from your product — edit them below if needed.
-                  </p>
-                )}
-                <div className="relative flex items-center gap-2 my-1">
-                  <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted-foreground">or fill in manually</span>
-                  <div className="flex-1 h-px bg-border" />
+
+            {/* Step indicator */}
+            <div className="flex items-center gap-2 mb-2">
+              {[1, 2].map((s) => (
+                <div key={s} className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                    formStep === s ? "bg-orange-500 text-white" : formStep > s ? "bg-emerald-500 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-400"
+                  }`}>{s}</div>
+                  <span className={`text-xs font-medium ${formStep === s ? "text-gray-900 dark:text-white" : "text-gray-400"}`}>
+                    {s === 1 ? "Your product" : "Script angle"}
+                  </span>
+                  {s < 2 && <div className="w-8 h-px bg-gray-200 dark:bg-gray-700 mx-1" />}
                 </div>
+              ))}
+            </div>
+
+            {/* ── Form step 1: Product details ── */}
+            {formStep === 1 && (
+              <div className="space-y-5">
+                {products.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label>Select a product (optional)</Label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button type="button" variant="outline" className="w-full h-11 justify-between font-normal">
+                          <span className="flex items-center gap-2 min-w-0">
+                            <Package className="h-4 w-4 shrink-0 text-orange-500" />
+                            <span className="truncate">{selectedProduct ? selectedProduct.title : "Choose from your Digital Products…"}</span>
+                          </span>
+                          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-full min-w-[320px]">
+                        {products.map((p) => (
+                          <DropdownMenuItem key={p.id} onClick={() => selectProduct(p)} className="flex flex-col items-start gap-0.5 py-2">
+                            <span className="font-medium">{p.title}</span>
+                            {p.niche && <span className="text-xs text-muted-foreground">{p.niche}</span>}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {selectedProduct && <p className="text-xs text-muted-foreground">Fields pre-filled — edit below if needed.</p>}
+                    <div className="relative flex items-center gap-2 my-1">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-xs text-muted-foreground">or fill in manually</span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label htmlFor="productName">Product or offer name</Label>
+                  <Input id="productName" placeholder="e.g. 30-Day Social Media Planner" value={productName} onChange={(e) => setProductName(e.target.value)} required autoFocus className="h-11" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="description">What does it do / who is it for?</Label>
+                  <Textarea id="description" placeholder="e.g. A planner for content creators who want to post consistently without burnout" value={description} onChange={(e) => setDescription(e.target.value)} required rows={3} className="resize-none" />
+                </div>
+                <Button type="submit" className="w-full h-11 bg-orange-500 hover:bg-orange-600 text-white font-semibold text-sm" disabled={!productName.trim() || !description.trim()}>
+                  Next: Pick your angle →
+                </Button>
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="productName">Product or offer name</Label>
-              <Input
-                id="productName"
-                placeholder="e.g. 30-Day Social Media Planner"
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                required
-                autoFocus
-                className="h-11"
-              />
-            </div>
+            {/* ── Form step 2: Script angle ── */}
+            {formStep === 2 && (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">What angle should the script take?</p>
+                  <p className="text-xs text-gray-500 dark:text-muted-foreground">This shapes the hook and overall narrative of your video.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  {ANGLES.map((angle) => (
+                    <button
+                      key={angle.id}
+                      type="button"
+                      onClick={() => setSelectedAngle(angle.id)}
+                      className={`text-left rounded-xl border-2 p-4 transition-all ${
+                        selectedAngle === angle.id
+                          ? "border-orange-500 bg-orange-50 dark:bg-orange-950/20"
+                          : "border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-700 bg-white dark:bg-card"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xl">{angle.emoji}</span>
+                        <span className={`font-semibold text-sm ${selectedAngle === angle.id ? "text-orange-600 dark:text-orange-400" : "text-gray-900 dark:text-white"}`}>{angle.label}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-muted-foreground mb-1.5">{angle.desc}</p>
+                      <p className={`text-xs italic ${selectedAngle === angle.id ? "text-orange-500" : "text-gray-400"}`}>{angle.example}</p>
+                    </button>
+                  ))}
+                </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="description">What does it do / who is it for?</Label>
-              <Textarea
-                id="description"
-                placeholder="e.g. A step-by-step planner for content creators who want to post consistently without burnout"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                required
-                rows={3}
-                className="resize-none"
-              />
-            </div>
+                {error && (
+                  <p className="text-sm text-red-500 bg-red-50 dark:bg-red-950/20 rounded-lg px-4 py-3 border border-red-200 dark:border-red-800/30">{error}</p>
+                )}
 
-            {error && (
-              <p className="text-sm text-red-500 bg-red-50 dark:bg-red-950/20 rounded-lg px-4 py-3 border border-red-200 dark:border-red-800/30">
-                {error}
-              </p>
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" onClick={() => setFormStep(1)} className="h-11 px-5">← Back</Button>
+                  <Button type="submit" className="flex-1 h-11 bg-orange-500 hover:bg-orange-600 text-white font-semibold text-sm">
+                    Generate My Video Guide →
+                  </Button>
+                </div>
+                <p className="text-center text-xs text-gray-400 dark:text-muted-foreground">Takes ~20–40 seconds. Saved automatically to My Library.</p>
+              </div>
             )}
-
-            <Button
-              type="submit"
-              className="w-full h-11 bg-orange-500 hover:bg-orange-600 text-white font-semibold text-sm"
-              disabled={!productName.trim() || !description.trim()}
-            >
-              Generate My Video Guide →
-            </Button>
-
-            <p className="text-center text-xs text-gray-400 dark:text-muted-foreground">
-              Takes ~20–40 seconds. Saved automatically to My Library.
-            </p>
           </form>
         )}
 

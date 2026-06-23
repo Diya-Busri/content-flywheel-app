@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
-import { videosTable, tiktokShopVideosTable } from "@/db/schema/library-schema";
+import { videosTable, tiktokShopVideosTable, scriptsTable } from "@/db/schema/library-schema";
 import { videoJobsTable } from "@/db/schema/video-jobs-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { emailContactsTable, emailCampaignsTable } from "@/db/schema/email-marketing-schema";
@@ -237,16 +237,18 @@ async function getVideoStats(userId: string) {
 
   try {
     const videoWhere = and(eq(videosTable.userId, userId), isNull(videosTable.deletedAt));
-    const [libraryVideos, ugcJobs, tiktokVideos, tiktokCountRow, libraryVideosCountRow] = await Promise.all([
+    const scriptWhere = and(eq(scriptsTable.userId, userId), isNull(scriptsTable.deletedAt));
+    const [libraryVideos, ugcJobs, tiktokVideos, tiktokCountRow, libraryVideosCountRow, scriptsCountRow] = await Promise.all([
       db.select({ id: videosTable.id, title: videosTable.title, createdAt: videosTable.createdAt }).from(videosTable).where(videoWhere).orderBy(desc(videosTable.createdAt)).limit(5),
       db.select({ id: videoJobsTable.id, hookPreview: videoJobsTable.hookPreview, createdAt: videoJobsTable.createdAt }).from(videoJobsTable).where(eq(videoJobsTable.userId, userId)).orderBy(desc(videoJobsTable.createdAt)).limit(5),
       db.select({ id: tiktokShopVideosTable.id, productLink: tiktokShopVideosTable.productLink, createdAt: tiktokShopVideosTable.createdAt }).from(tiktokShopVideosTable).where(eq(tiktokShopVideosTable.userId, userId)).orderBy(desc(tiktokShopVideosTable.createdAt)).limit(5),
       db.select({ count: count() }).from(tiktokShopVideosTable).where(eq(tiktokShopVideosTable.userId, userId)),
       db.select({ count: count() }).from(videosTable).where(videoWhere),
+      db.select({ count: count() }).from(scriptsTable).where(scriptWhere),
     ]);
 
     tiktokCount = Number(tiktokCountRow[0]?.count ?? 0);
-    totalLibraryVideos = Number(libraryVideosCountRow[0]?.count ?? 0);
+    totalLibraryVideos = Number(libraryVideosCountRow[0]?.count ?? 0) + Number(scriptsCountRow[0]?.count ?? 0);
 
     const withSource: RecentVideoItem[] = [
       ...libraryVideos.map((v) => ({ id: v.id, title: v.title || "Untitled video", createdAt: v.createdAt!, href: "/dashboard/library", source: "library" as const })),

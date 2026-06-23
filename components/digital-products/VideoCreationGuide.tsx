@@ -4001,19 +4001,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                           )}
                         </div>
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
-                          {!isDarkInfographic && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="gap-2 border-gray-300 dark:border-border"
-                              onClick={handleGenerateAllGuideImagesAndOpenTimeline}
-                              disabled={scenes.length === 0 || guideBulkImagesLoading}
-                            >
-                              <Film className="w-4 h-4" />
-                              Open in Timeline
-                            </Button>
-                          )}
                           <Button
                             type="button"
                             size="sm"
@@ -4693,22 +4680,9 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                       {generatingPerScene ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
                       Generate Scene Voiceovers
                     </Button>
-                    <Button
-                      variant="outline"
-                      className="border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-200 dark:hover:bg-muted gap-2"
-                      onClick={() => {
-                        if (libraryScriptId) {
-                          router.push(`/dashboard/video-timeline?libraryScriptId=${encodeURIComponent(libraryScriptId)}`);
-                        }
-                      }}
-                      disabled={!libraryScriptId}
-                    >
-                      <Film className="w-4 h-4" />
-                      Open in Timeline
-                    </Button>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-muted-foreground mt-1.5">
-                    Full script = one audio file (Hook + Body + CTA). Scene voiceovers = one file per scene for the Video Timeline.
+                    Full script = one audio file (Hook + Body + CTA). Scene voiceovers = one file per scene.
                   </p>
                 </div>
 
@@ -4791,19 +4765,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                         );
                       })}
                     </div>
-                    {libraryScriptId && (
-                      <div className="mt-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-gray-200 dark:border-border text-gray-700 dark:text-[#E0E0E0] hover:bg-gray-100 dark:hover:bg-muted gap-2"
-                          onClick={() => router.push(`/dashboard/video-timeline?libraryScriptId=${encodeURIComponent(libraryScriptId)}`)}
-                        >
-                          <Film className="w-4 h-4" />
-                          Open in Timeline
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 )}
               </CardContent>
