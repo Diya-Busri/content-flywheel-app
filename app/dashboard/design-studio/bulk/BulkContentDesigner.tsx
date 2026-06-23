@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Sparkles, ChevronLeft, Loader2, Trash2, Edit3, Download,
   Check, RefreshCw, ChevronRight, Zap, BookOpen, Lightbulb,
-  X, Package,
+  X, Package, Link, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
@@ -26,7 +26,7 @@ export type ContentRow = {
 };
 
 type TemplateStyle = EngineTemplateStyle;
-type Mode = "topic" | "products";
+type Mode = "topic" | "products" | "url";
 
 type UserProduct = {
   id: string;
@@ -272,6 +272,12 @@ export function BulkContentDesigner() {
   const [productsLoading, setProductsLoading] = useState(false);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
 
+  // URL mode
+  const [urlInput, setUrlInput] = useState("");
+  const [urlScraped, setUrlScraped] = useState<{ title: string; description: string; excerpt: string } | null>(null);
+  const [urlScraping, setUrlScraping] = useState(false);
+  const [urlScrapeError, setUrlScrapeError] = useState<string | null>(null);
+
   const containerCls = isDark ? "bg-[#0F0F0F] text-white" : "bg-[#F9FAFB] text-gray-900";
   const cardCls = isDark ? "bg-[#1A1A1A] border-white/10" : "bg-white border-gray-200";
 
@@ -292,10 +298,37 @@ export function BulkContentDesigner() {
     });
   }
 
-  const canGenerate = mode === "topic" ? topic.trim().length > 0 : selectedProductIds.size > 0;
+  const canGenerate = mode === "topic"
+    ? topic.trim().length > 0
+    : mode === "url"
+    ? urlScraped !== null
+    : selectedProductIds.size > 0;
+
   const batchLabel = mode === "products"
     ? `${selectedProductIds.size} product${selectedProductIds.size !== 1 ? "s" : ""}`
+    : mode === "url"
+    ? urlScraped?.title || urlInput || "URL"
     : topic;
+
+  async function scrapeUrl() {
+    if (!urlInput.trim()) return;
+    setUrlScraping(true);
+    setUrlScrapeError(null);
+    setUrlScraped(null);
+    try {
+      const res = await fetch("/api/scrape-url", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: urlInput.trim() }),
+      });
+      const json = await res.json() as { title?: string; description?: string; excerpt?: string; error?: string };
+      if (!res.ok) { setUrlScrapeError(json.error ?? "Could not fetch that URL"); return; }
+      setUrlScraped({ title: json.title ?? "", description: json.description ?? "", excerpt: json.excerpt ?? "" });
+    } catch {
+      setUrlScrapeError("Network error — please try again.");
+    } finally {
+      setUrlScraping(false);
+    }
+  }
 
   async function generate() {
     if (!canGenerate) return;
@@ -309,6 +342,13 @@ export function BulkContentDesigner() {
           title: p.title, format: p.format, niche: p.niche,
           description: p.marketingAssets?.productDescription ?? "",
         }));
+      } else if (mode === "url" && urlScraped) {
+        const parts = [
+          urlScraped.title,
+          urlScraped.description,
+          urlScraped.excerpt,
+        ].filter(Boolean);
+        body.topic = parts.join(". ").slice(0, 800);
       } else {
         body.topic = topic;
       }
@@ -453,13 +493,21 @@ export function BulkContentDesigner() {
 
               {/* Mode toggle */}
               <div className={`rounded-2xl border p-2 flex gap-2 ${cardCls}`}>
-                {(["topic", "products"] as Mode[]).map((m) => (
-                  <button key={m} onClick={() => setMode(m)} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors ${
-                    mode === m ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-900"
-                  }`}>
-                    {m === "topic" ? <><Lightbulb className="w-4 h-4" /> Topic or Niche</> : <><BookOpen className="w-4 h-4" /> My Products</>}
-                  </button>
-                ))}
+                <button onClick={() => setMode("topic")} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors ${
+                  mode === "topic" ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-900"
+                }`}>
+                  <Lightbulb className="w-4 h-4" /> Topic or Niche
+                </button>
+                <button onClick={() => setMode("products")} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors ${
+                  mode === "products" ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-900"
+                }`}>
+                  <BookOpen className="w-4 h-4" /> My Products
+                </button>
+                <button onClick={() => setMode("url")} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors ${
+                  mode === "url" ? "bg-orange-500 text-white" : isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-900"
+                }`}>
+                  <Link className="w-4 h-4" /> From URL
+                </button>
               </div>
 
               {/* Topic mode */}
@@ -504,6 +552,55 @@ export function BulkContentDesigner() {
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-72 overflow-y-auto pr-1">
                       {products.map((p) => <ProductCard key={p.id} product={p} selected={selectedProductIds.has(p.id)} onToggle={() => toggleProduct(p.id)} isDark={isDark} />)}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* URL mode */}
+              {mode === "url" && (
+                <div className={`rounded-2xl border p-6 space-y-4 ${cardCls}`}>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Paste a URL</label>
+                    <p className={`text-xs mb-3 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Product page, blog post, Gumroad listing — we&apos;ll scrape it and generate posts based on what we find.</p>
+                    <div className="flex gap-2">
+                      <input
+                        value={urlInput}
+                        onChange={(e) => { setUrlInput(e.target.value); setUrlScraped(null); setUrlScrapeError(null); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") scrapeUrl(); }}
+                        placeholder="https://yourproduct.gumroad.com/l/…"
+                        className={`flex-1 rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-orange-500 ${isDark ? "bg-[#0F0F0F] border-white/10 text-white placeholder-gray-600" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400"}`}
+                      />
+                      <button
+                        onClick={scrapeUrl}
+                        disabled={!urlInput.trim() || urlScraping}
+                        className="shrink-0 px-4 py-3 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {urlScraping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link className="w-4 h-4" />}
+                        {urlScraping ? "Fetching…" : "Fetch"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {urlScrapeError && (
+                    <div className="flex items-start gap-2 text-red-500 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <p className="text-sm">{urlScrapeError}</p>
+                    </div>
+                  )}
+
+                  {urlScraped && (
+                    <div className={`rounded-xl border p-4 space-y-2 ${isDark ? "bg-emerald-500/5 border-emerald-500/20" : "bg-emerald-50 border-emerald-200"}`}>
+                      <div className="flex items-center gap-2 text-emerald-500">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span className="text-xs font-semibold">Page fetched — ready to generate</span>
+                      </div>
+                      {urlScraped.title && (
+                        <p className="text-sm font-semibold truncate">{urlScraped.title}</p>
+                      )}
+                      {urlScraped.description && (
+                        <p className={`text-xs line-clamp-2 ${isDark ? "text-gray-400" : "text-gray-600"}`}>{urlScraped.description}</p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -634,7 +731,7 @@ export function BulkContentDesigner() {
                 </p>
               </div>
               <div className="flex gap-3 justify-center flex-wrap">
-                <Button variant="outline" onClick={() => { setStep(1); setPosts([]); setPostDesigns([]); setTopic(""); setSavedCount(0); setBundleId(null); setSelectedProductIds(new Set()); }} className={isDark ? "border-white/10 text-gray-300 hover:text-white" : ""}>
+                <Button variant="outline" onClick={() => { setStep(1); setPosts([]); setPostDesigns([]); setTopic(""); setSavedCount(0); setBundleId(null); setSelectedProductIds(new Set()); setUrlInput(""); setUrlScraped(null); setUrlScrapeError(null); }} className={isDark ? "border-white/10 text-gray-300 hover:text-white" : ""}>
                   <RefreshCw className="w-4 h-4 mr-2" /> New Batch
                 </Button>
                 {bundleId ? (
