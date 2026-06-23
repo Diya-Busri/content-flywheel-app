@@ -22,6 +22,7 @@ import {
 } from "@/lib/video-caption-ffmpeg";
 import { Loader2, Menu, PanelLeftClose, ZoomIn, ZoomOut, Maximize2, PanelRightOpen, Undo2, Redo2, SkipBack, SkipForward, Play, Pause, Film, Mic, Type, Music2, Image as ImageIcon } from "lucide-react";
 import { useSidebar } from "@/components/sidebar-context";
+import { useToast } from "@/components/ui/use-toast";
 import type { FFmpeg } from "@ffmpeg/ffmpeg";
 import {
   DndContext,
@@ -1327,6 +1328,7 @@ function getCaptions(content: ScriptContent): CaptionBlock[] {
 function VideoTimelineInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { toast } = useToast();
   const initialScriptId = searchParams?.get("scriptId") ?? searchParams?.get("libraryScriptId") ?? undefined;
 
   const audioRef = useRef<HTMLAudioElement>(null);
