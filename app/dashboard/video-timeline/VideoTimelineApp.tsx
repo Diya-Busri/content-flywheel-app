@@ -1327,7 +1327,7 @@ function getCaptions(content: ScriptContent): CaptionBlock[] {
 function VideoTimelineInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const initialScriptId = searchParams.get("scriptId") ?? searchParams.get("libraryScriptId") ?? undefined;
+  const initialScriptId = searchParams?.get("scriptId") ?? searchParams?.get("libraryScriptId") ?? undefined;
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const musicRef = useRef<HTMLAudioElement>(null);
@@ -2270,8 +2270,8 @@ function VideoTimelineInner() {
   }, []);
 
   // When scriptId or projectId is in URL, set a template so the timeline layout shows and script/project can load.
-  const projectIdFromUrl = searchParams.get("projectId");
-  const scriptIdFromUrl = searchParams.get("scriptId") ?? searchParams.get("libraryScriptId");
+  const projectIdFromUrl = searchParams?.get("projectId") ?? null;
+  const scriptIdFromUrl = searchParams?.get("scriptId") ?? searchParams?.get("libraryScriptId") ?? null;
   useEffect(() => {
     if ((scriptIdFromUrl || projectIdFromUrl) && !selectedTemplate) setSelectedTemplate(VIDEO_TEMPLATES[4]);
   }, [scriptIdFromUrl, projectIdFromUrl, selectedTemplate]);

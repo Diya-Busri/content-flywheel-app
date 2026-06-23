@@ -4,9 +4,14 @@
  * 2. useSearchParams() is used deep in the component tree
  * 3. AudioContext and other browser APIs are used at runtime
  */
-import dynamic from "next/dynamic";
 
-const VideoTimelineApp = dynamic(() => import("./VideoTimelineApp"), {
+// Force dynamic rendering so Next.js never attempts static pre-rendering
+// which could cause auth/searchParams issues at build time.
+export const dynamic = "force-dynamic";
+
+import nextDynamic from "next/dynamic";
+
+const VideoTimelineApp = nextDynamic(() => import("./VideoTimelineApp"), {
   ssr: false,
   loading: () => (
     <div className="flex flex-1 items-center justify-center min-h-[60vh]">
