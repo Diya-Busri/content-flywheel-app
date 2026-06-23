@@ -312,7 +312,7 @@ export default async function DashboardPage() {
       <SyncOnboardingSteps digitalProductsCount={videoStats.digitalProductsCount} />
 
       {/* ── Hero banner ─────────────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-orange-500 via-rose-500 to-violet-600 px-6 pt-10 pb-16 sm:px-10">
+      <div className="relative overflow-hidden bg-gradient-to-br from-orange-600 via-amber-400 to-orange-500 px-6 pt-10 pb-16 sm:px-10">
         {/* decorative blobs */}
         <div className="pointer-events-none absolute -top-20 -right-20 w-72 h-72 rounded-full bg-white/10 blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 left-10 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
