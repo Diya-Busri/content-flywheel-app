@@ -109,72 +109,6 @@ export const PAGE_TOURS: PageTour[] = [
     ],
   },
 
-  // ─── Script Checker ─────────────────────────────────────────────────────
-  {
-    page: "/dashboard/script-checker",
-    label: "Script Checker",
-    steps: [
-      {
-        title: "✅ Script Checker — Avoid Getting Banned or Shadowbanned",
-        description: "Before you post any video, run the script through the Script Checker. It analyses your text against each platform's content policies and flags banned phrases, misleading claims, missing disclaimers, and weak hooks — all the things that can get your video removed or suppressed.",
-      },
-      {
-        element: "[data-tour='checker-platform']",
-        side: "bottom",
-        title: "📱 Step 1: Choose Your Platform",
-        description: "Select where you plan to post. TikTok has the strictest rules (no health claims, no 'guaranteed results', etc). Instagram is slightly more relaxed. YouTube is stricter on medical and financial content. Select 'All platforms' to run it against the combined strictest rules — useful if you're posting everywhere.",
-      },
-      {
-        element: "[data-tour='checker-input']",
-        side: "bottom",
-        title: "📝 Step 2: Paste Your Script",
-        description: "Paste the full video script (or just the voiceover text) into the text area. You can also click 'Try sample script (known violations)' to see an example of what a flagged script looks like — it contains phrases like 'guaranteed cure' and undisclosed affiliate links that would get you penalised. The checker handles up to 5,000 characters.",
-      },
-      {
-        title: "📸 Step 3: Upload Your Visual (Optional)",
-        description: "If your script references on-screen visuals (like showing a product label), you can upload an image. The AI will consider the visual content when checking compliance — for example it can flag if your thumbnail makes a health claim that violates platform rules.",
-      },
-      {
-        title: "🔍 Check Compliance",
-        description: "Click the orange 'Check Compliance' button. The AI analyses your script in about 10-15 seconds. It will highlight specific lines with violations in red and show you the exact reason for each flag.",
-      },
-      {
-        element: "[data-tour='checker-result']",
-        side: "top",
-        title: "📊 Reading Your Results",
-        description: "You'll see two versions side by side: your original script (with violations highlighted in red) and a compliant rewrite (editable, shown in green). Each violation has an explanation. You can edit the compliant version directly, then either Copy it, Download it as a text file, or Save it to My Library as a script you can load into the Video Timeline.",
-      },
-    ],
-  },
-
-  // ─── Goal Tracker ─────────────────────────────────────────────────────────
-  {
-    page: "/dashboard/goals",
-    label: "Goal Tracker",
-    steps: [
-      {
-        title: "🎯 Goal Tracker — Stay Consistent and Accountable",
-        description: "The Goal Tracker helps you set and stick to content creation goals. Most creators fail because they don't have a system — this gives you one. You set a goal with a daily task, and it tracks your streak so you build momentum.",
-      },
-      {
-        title: "➕ Creating a Goal",
-        description: "Click 'Create Goal' or the + button. Give your goal a title (e.g. 'Post 20 TikToks in 30 days'), set the target date, and define the daily task (e.g. 'Film and post one TikTok video'). The tracker breaks your goal into daily steps automatically.",
-      },
-      {
-        title: "🔥 Tracking Your Streak",
-        description: "Each day you complete a task you check it off. Your streak counter increases. The tracker shows your current streak, longest streak, and percentage completion. If you miss a day your streak resets — which is the psychological hook that keeps you showing up.",
-      },
-      {
-        title: "📋 Submitting Proof",
-        description: "Some goals require proof of completion (like a screenshot of your posted video or sales stats). Click 'Submit Proof' on the daily task to upload your evidence. This keeps you honest and gives you a record of everything you've created.",
-      },
-      {
-        title: "📊 Your Goal Dashboard",
-        description: "Active goals show progress bars, streak flames, and completion percentages. Completed goals get a trophy icon and move to the 'Completed' section. You can archive goals you no longer need, or delete them. The AI Coach can reference your goals to keep its strategy advice aligned with your targets.",
-      },
-    ],
-  },
-
   // ─── My Library ───────────────────────────────────────────────────────────
   {
     page: "/dashboard/library",
@@ -279,33 +213,6 @@ export const PAGE_TOURS: PageTour[] = [
     ],
   },
 
-  // ─── TikTok Shop ──────────────────────────────────────────────────────────
-  {
-    page: "/dashboard/tiktok-shop",
-    label: "TikTok Shop",
-    steps: [
-      {
-        title: "🛍️ TikTok Shop — Turn Product Links Into Videos",
-        description: "If you sell on TikTok Shop (or promote affiliate products), this tool generates a complete video brief from just a product URL. Paste the link, and the AI reads the product name, description, and price to write a viral TikTok script optimised for shop conversions.",
-      },
-      {
-        title: "🔗 Step 1: Paste a Product URL",
-        description: "Copy the URL from any TikTok Shop product page (it usually looks like shop.tiktok.com/product/...) and paste it into the product URL field. You can also use Amazon or Shopify product links. The AI extracts product details automatically.",
-      },
-      {
-        title: "📝 Step 2: Choose Your Video Style",
-        description: "Pick from several video styles: 'Product Demo' (show the product in use), 'Problem/Solution' (hook with a pain point), 'Social Proof' (before/after or testimonial style), or 'Fast Facts' (rapid feature rundown). Each style produces a different script structure.",
-      },
-      {
-        title: "🎬 What You Get After Generating",
-        description: "You'll receive: a full scene-by-scene video script, AI image prompts for each scene, suggested text overlays, recommended hashtags, and a caption for the post. You can also generate AI images directly and compile everything into a downloadable MP4.",
-      },
-      {
-        title: "🏪 TikTok Shop Compliance",
-        description: "TikTok Shop has strict rules about what you can and can't say about products — especially health, results claims, and pricing. The scripts are written to avoid common violations, but always run the final script through the Script Checker before posting.",
-      },
-    ],
-  },
 ];
 
 // ─── Live Demo Tours (shown after full app tour completes) ────────────────────
@@ -367,43 +274,6 @@ export const LIVE_DEMOS: LiveDemo[] = [
       {
         title: "⬇️ Step 9: Make Your Full MP4",
         description: "Scroll down to the 'Make full MP4' card and click the orange compile button. The server renders your video in 2-3 minutes. When done, a Download button appears — your video is also saved to My Library automatically. That's it — you've just created a marketing video! 🎉",
-      },
-    ],
-  },
-  {
-    id: "tiktok-shop",
-    emoji: "🛍️",
-    title: "Create a TikTok Shop Video",
-    subtitle: "Product URL → viral video script → compiled MP4",
-    page: "/dashboard/tiktok-shop",
-    steps: [
-      {
-        title: "🚀 Live Demo: TikTok Shop → MP4",
-        description: "This demo walks you through the exact steps to turn any TikTok Shop product link into a ready-to-post video. We're starting on the TikTok Shop page — follow each step as we go.",
-      },
-      {
-        title: "🔗 Step 1: Paste a Product URL",
-        description: "👆 Find the 'Product URL' input field at the top of the page. Paste the URL of any TikTok Shop product (e.g. shop.tiktok.com/product/...). You can also use an Amazon or Shopify link. The AI reads the product details automatically.",
-      },
-      {
-        title: "🎭 Step 2: Choose a Video Style",
-        description: "Select your preferred video style from the dropdown: 'Problem/Solution' works best for conversions (hook with a pain point, solve with the product). 'Product Demo' is great for physical items. 'Social Proof' suits products with good reviews. Pick one and move on.",
-      },
-      {
-        title: "⚡ Step 3: Generate Your Script",
-        description: "Click the orange 'Generate' button. In about 15 seconds you'll see a full scene-by-scene TikTok video script — written specifically to drive shop conversions. It includes a hook, body, and CTA (call to action) with your product link.",
-      },
-      {
-        title: "✅ Step 4: Check Compliance (Important!)",
-        description: "Before recording, copy your script and head to Script Checker. Paste it in, select 'TikTok', and click 'Check Compliance'. TikTok Shop has strict rules about results claims and product descriptions — always verify before posting to avoid bans.",
-      },
-      {
-        title: "🖼️ Step 5: Generate Scene Images",
-        description: "Back on the TikTok Shop page, scroll down to the scene cards. Each scene has an image prompt — click 'Generate Image' on each one. These become the visual backgrounds in your video.",
-      },
-      {
-        title: "🎬 Step 6: Build Your Video",
-        description: "Click 'Open in Video Timeline' to load all your scenes. Add a voiceover (record or generate with ElevenLabs), set your scene durations, and click 'Compile to MP4'. Your finished TikTok Shop video downloads and saves to My Library. Ready to post! 🛍️",
       },
     ],
   },
@@ -525,45 +395,6 @@ export const ALL_FEATURES = [
       "Generate AI images for each scene — they're used as the visual backgrounds in your video",
       "Use 'Animate scenes & open Video Timeline' to add motion to your stills",
       "Make full MP4 requires voiceover to be generated first from the Video Guide's voiceover section",
-    ],
-  },
-  {
-    emoji: "🛍️",
-    title: "TikTok Shop",
-    href: "/dashboard/tiktok-shop",
-    description: "Paste any TikTok Shop, Amazon, or Shopify product URL and get a viral video script, AI image prompts, text overlays, and hashtags — all optimised for TikTok Shop conversions.",
-    tips: [
-      "Works with TikTok Shop, Amazon, and Shopify URLs",
-      "Choose 'Problem/Solution' style for highest-converting scripts",
-      "Always run the final script through Script Checker — TikTok Shop has strict compliance rules",
-      "You can generate AI images for each scene directly from the results page",
-      "Export directly to MP4 or open in Video Timeline to add voiceover",
-    ],
-  },
-  {
-    emoji: "✅",
-    title: "Script Checker",
-    href: "/dashboard/script-checker",
-    description: "Paste any script and get a compliance analysis for TikTok, Instagram, YouTube, or all platforms at once. Flags banned phrases, misleading claims, missing disclaimers, and weak hooks.",
-    tips: [
-      "Run every script before recording or posting — catches issues you'd miss manually",
-      "Use 'Try sample script' to see what a flagged script looks like before using your own",
-      "The compliant rewrite is fully editable — tweak it before saving",
-      "Save the compliant version to Library, then load it in Video Timeline",
-      "Select 'All platforms' if posting everywhere — applies the strictest combined rules",
-    ],
-  },
-  {
-    emoji: "🎯",
-    title: "Goal Tracker",
-    href: "/dashboard/goals",
-    description: "Set monthly content and revenue goals with daily tasks, track your streak, and submit proof of completion. The streak system keeps you consistent.",
-    tips: [
-      "Set a posting goal first — e.g. '20 videos in 30 days'",
-      "Check off daily tasks every day to build and protect your streak",
-      "Submit proof (screenshot of posted video) to stay accountable",
-      "Archive completed goals — don't delete them, they're a record of your progress",
-      "Link your goals to the AI Coach for strategy advice aligned with your targets",
     ],
   },
   {

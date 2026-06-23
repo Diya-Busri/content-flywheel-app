@@ -18,7 +18,7 @@ import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { brandProfilesTable } from "@/db/schema/brand-profiles-schema";
 import {
   Package, Video, AlertCircle,
-  ArrowRight, TrendingUp, Mail, Film,
+  ArrowRight, Mail, Film,
 } from "lucide-react";
 import { SyncOnboardingSteps } from "@/components/onboarding/sync-onboarding-steps";
 import { ReferralCapture } from "@/components/ReferralCapture";
@@ -316,7 +316,7 @@ export default async function DashboardPage() {
           { label: "Products", value: videoStats.digitalProductsCount, href: "/dashboard/digital-products", icon: Package, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-950/30" },
           { label: "Library Items", value: videoStats.totalLibraryVideos, href: "/dashboard/library", icon: Film, color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950/30" },
           { label: "Subscribers", value: emailSubscribers, href: "/dashboard/email-marketing", icon: Mail, color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-950/30" },
-          { label: "Revenue", value: revenueLabel, href: "/dashboard/orders", icon: TrendingUp, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
+          { label: "Video Credits", value: videoCredits, href: "/dashboard/video-credits", icon: Film, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
         ].map(({ label, value, href, icon: Icon, color, bg }) => (
           <Link key={label} href={href} className="group rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4 hover:border-gray-200 dark:hover:border-[#3A3A3A] hover:shadow-sm transition-all">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${bg}`}>
