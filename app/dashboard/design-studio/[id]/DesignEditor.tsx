@@ -739,6 +739,17 @@ export function DesignEditor({ designId }: { designId: string }) {
           productId: data.productId ?? null,
           canvasWidth: data.width,
           canvasHeight: data.height,
+          currentElements: data.elements.map((el) => ({
+            id: el.id,
+            type: el.type,
+            x: el.x,
+            y: el.y,
+            width: el.width,
+            height: el.height,
+            zIndex: el.zIndex,
+            ...(el.type === "text" ? { content: el.content, fontSize: el.fontSize, fontFamily: el.fontFamily, color: el.color, fontWeight: el.fontWeight, textAlign: el.textAlign } : {}),
+            ...(el.type === "shape" ? { shapeType: el.shapeType, fill: el.fill } : {}),
+          })),
           history: chatMessages.map((m) => ({ role: m.role, content: m.content })),
         }),
       });
@@ -746,14 +757,14 @@ export function DesignEditor({ designId }: { designId: string }) {
       const reply = json.reply ?? "Done!";
       setChatMessages((prev) => [...prev, { role: "assistant", content: reply }]);
       if (json.elements && json.elements.length > 0) {
-        const newEls: DesignElement[] = (json.elements as Partial<DesignElement>[]).map((el, i) => ({
-          id: uid(),
+        const toDesignEl = (el: Partial<DesignElement>, i: number): DesignElement => ({
+          id: (el.id && data.elements.find(e => e.id === el.id)) ? el.id : uid(),
           type: (el.type === "shape" ? "shape" : "text") as "text" | "shape",
           x: el.x ?? 0,
           y: el.y ?? 0,
           width: el.width ?? 200,
           height: el.height ?? 60,
-          zIndex: (data.elements.length + i),
+          zIndex: el.zIndex ?? i,
           ...(el.type === "text" ? {
             content: el.content ?? "",
             fontSize: el.fontSize ?? 24,
@@ -767,12 +778,23 @@ export function DesignEditor({ designId }: { designId: string }) {
             fill: el.fill ?? "#f97316",
             borderRadius: el.borderRadius ?? 0,
           }),
-        }));
-        updateData((prev) => ({
-          ...prev,
-          elements: [...prev.elements, ...newEls],
-          ...(json.background ? { background: json.background } : {}),
-        }));
+        });
+        // mode:"replace" = AI modified existing elements; mode:"add" (default) = new elements
+        if (json.mode === "replace") {
+          const replacedEls = (json.elements as Partial<DesignElement>[]).map(toDesignEl);
+          updateData((prev) => ({
+            ...prev,
+            elements: replacedEls,
+            ...(json.background ? { background: json.background } : {}),
+          }));
+        } else {
+          const newEls = (json.elements as Partial<DesignElement>[]).map(toDesignEl);
+          updateData((prev) => ({
+            ...prev,
+            elements: [...prev.elements, ...newEls],
+            ...(json.background ? { background: json.background } : {}),
+          }));
+        }
       } else if (json.background) {
         updateData((prev) => ({ ...prev, background: json.background }));
       }

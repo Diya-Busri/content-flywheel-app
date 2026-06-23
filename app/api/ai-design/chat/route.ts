@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { message, productId, canvasWidth, canvasHeight, history } = await req.json();
+  const { message, productId, canvasWidth, canvasHeight, currentElements, history } = await req.json();
   if (!message?.trim()) return NextResponse.json({ error: "Message required" }, { status: 400 });
 
   // Fetch product context if provided
@@ -37,15 +37,31 @@ ${ma?.hashtags?.length ? `- Keywords: ${ma.hashtags.join(", ")}` : ""}
     }
   }
 
-  const systemPrompt = `You are an AI design assistant for a graphic design tool. The canvas is ${canvasWidth}×${canvasHeight}px.
-${productContext ? `\n${productContext}\n` : ""}
-When the user asks you to create or generate a design (e.g. "make me a story post", "design a banner"), respond with a JSON object containing design elements to place on the canvas. Otherwise respond conversationally.
+  // Summarise current canvas elements so AI can modify them
+  const canvasContext = Array.isArray(currentElements) && currentElements.length > 0
+    ? `\nCURRENT CANVAS ELEMENTS (you can see and modify these):\n${JSON.stringify(currentElements, null, 2)}`
+    : "\nCURRENT CANVAS: empty";
 
-When generating design elements, respond ONLY with valid JSON in this exact shape (no markdown, no explanation outside the JSON):
+  const systemPrompt = `You are an AI design assistant for a graphic design tool. The canvas is ${canvasWidth}×${canvasHeight}px.
+${productContext ? `\n${productContext}\n` : ""}${canvasContext}
+
+You have two modes:
+
+1. MODIFY mode — when the user asks to change, move, resize, recolour, or adjust existing elements.
+   Return the FULL updated elements array (all elements, with changes applied).
+   Set "mode": "replace" so the canvas replaces all elements with your updated list.
+   Preserve the "id" of elements you're modifying so they can be matched.
+
+2. CREATE mode — when the user asks to add new elements or generate a fresh design.
+   Return only the new elements. Set "mode": "add".
+
+Always respond with valid JSON only (no markdown, no text outside JSON):
 {
-  "reply": "Brief description of what you created",
+  "reply": "Brief description of what you did",
+  "mode": "replace" | "add",
   "elements": [
     {
+      "id": string (preserve existing id when modifying, or omit for new elements),
       "type": "text" | "shape",
       "x": number,
       "y": number,
@@ -71,12 +87,11 @@ When generating design elements, respond ONLY with valid JSON in this exact shap
 
 Rules:
 - Keep all elements within 0–${canvasWidth} x 0–${canvasHeight}
-- Use contrasting colors that look good together
-- For story (450×800) or portrait designs: stack elements vertically with generous padding
-- For square (800×800) or landscape designs: center-aligned layouts work well
-- Always include a headline text element and at least one supporting element
+- "Move to middle" or "centre" means x = (${canvasWidth} - width) / 2, y = (${canvasHeight} - height) / 2
+- "Centre horizontally" means x = (${canvasWidth} - width) / 2, keep y the same
+- "Centre vertically" means y = (${canvasHeight} - height) / 2, keep x the same
 - If background is set, it overrides the canvas background color (hex string)
-- If you're just answering a question (not generating), respond with: { "reply": "your answer", "elements": [], "background": null }`;
+- For pure chat (no design change needed): { "reply": "...", "mode": "add", "elements": [], "background": null }`;
 
   const messages: OpenAI.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
@@ -88,20 +103,21 @@ Rules:
     model: "gpt-4o",
     messages,
     temperature: 0.7,
-    max_tokens: 2000,
+    max_tokens: 3000,
     response_format: { type: "json_object" },
   });
 
   const raw = completion.choices[0].message.content ?? "{}";
-  let parsed: { reply?: string; elements?: unknown[]; background?: string | null } = {};
+  let parsed: { reply?: string; mode?: string; elements?: unknown[]; background?: string | null } = {};
   try {
     parsed = JSON.parse(raw);
   } catch {
-    parsed = { reply: raw, elements: [], background: null };
+    parsed = { reply: raw, mode: "add", elements: [], background: null };
   }
 
   return NextResponse.json({
     reply: parsed.reply ?? "Done!",
+    mode: parsed.mode ?? "add",
     elements: parsed.elements ?? [],
     background: parsed.background ?? null,
   });
