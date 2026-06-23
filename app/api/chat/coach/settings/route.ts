@@ -20,8 +20,9 @@ export async function GET() {
       .where(eq(coachSettingsTable.userId, userId))
       .limit(1);
 
+    // Default memory to true for new users — they get a better experience
     return NextResponse.json({
-      memoryEnabled: row?.memoryEnabled ?? false,
+      memoryEnabled: row?.memoryEnabled ?? true,
       coachName: row?.coachName ?? "Coach",
       userName: row?.userName ?? "",
     });

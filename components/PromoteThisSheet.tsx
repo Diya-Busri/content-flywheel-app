@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,11 +57,15 @@ function ContentBlock({ label, text }: { label?: string; text: string }) {
   );
 }
 
-export function PromoteThisSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  const [url, setUrl] = useState("");
+export function PromoteThisSheet({ open, onOpenChange, prefillUrl }: { open: boolean; onOpenChange: (v: boolean) => void; prefillUrl?: string }) {
+  const [url, setUrl] = useState(prefillUrl ?? "");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ContentBundle | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (open && prefillUrl) setUrl(prefillUrl);
+  }, [open, prefillUrl]);
 
   const generate = async () => {
     if (!url.trim()) return;

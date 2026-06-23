@@ -47,7 +47,9 @@ import {
   Youtube,
   Palette,
   Layers,
+  Megaphone,
 } from "lucide-react";
+import { PromoteThisSheet } from "@/components/PromoteThisSheet";
 import { useToast } from "@/components/ui/use-toast";
 import {
   AlertDialog,
@@ -401,6 +403,9 @@ export default function LibraryFlow() {
     thumbnailUrl?: string;
     niche?: string;
   } | null>(null);
+  /** Promote This sheet */
+  const [promoteOpen, setPromoteOpen] = useState(false);
+  const [promoteUrl, setPromoteUrl] = useState("");
   const { toast } = useToast();
 
   const showThumbnail = (item: LibraryItem) =>
@@ -1511,6 +1516,15 @@ export default function LibraryFlow() {
                                     Duplicate
                                   </DropdownMenuItem>
                                 )}
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setPromoteUrl(`/dashboard/digital-products/${item.id}`);
+                                    setPromoteOpen(true);
+                                  }}
+                                >
+                                  <Megaphone className="w-4 h-4 mr-2 text-purple-500" />
+                                  Promote This
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => handleDelete(item, false)}>
                                   <Trash2 className="w-4 h-4 mr-2" />
@@ -1666,6 +1680,15 @@ export default function LibraryFlow() {
                                 <Copy className="w-4 h-4 mr-2" />
                                 Duplicate
                               </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setPromoteUrl(`/dashboard/digital-products/${item.id}`);
+                                  setPromoteOpen(true);
+                                }}
+                              >
+                                <Megaphone className="w-4 h-4 mr-2 text-purple-500" />
+                                Promote This
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-red-600 dark:text-red-400"
@@ -1798,6 +1821,11 @@ export default function LibraryFlow() {
         videoUrl={ytPublishItem?.videoUrl ?? ""}
         thumbnailUrl={ytPublishItem?.thumbnailUrl}
         niche={ytPublishItem?.niche}
+      />
+      <PromoteThisSheet
+        open={promoteOpen}
+        onOpenChange={setPromoteOpen}
+        prefillUrl={promoteUrl}
       />
     </main>
   );
