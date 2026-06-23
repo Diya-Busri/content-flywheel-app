@@ -101,15 +101,6 @@ export async function POST(request: NextRequest) {
       } catch {
         return NextResponse.json({ error: "Invalid script content" }, { status: 400 });
       }
-      // Dark infographic guides export slides directly — no Video Timeline required
-      const isDarkInfographic = content.videoStyle === "dark_infographic";
-      const slots = content.timelineSceneSlots;
-      if (!isDarkInfographic && (!Array.isArray(slots) || slots.length === 0)) {
-        return NextResponse.json(
-          { error: "Use the Video Timeline first to build your video, then you can generate your Social Media Kit here without uploading proof." },
-          { status: 400 }
-        );
-      }
       const script = content.script;
       scriptHook = typeof script?.hook === "string" ? script.hook : scriptHook;
       scriptBody = typeof script?.body === "string" ? script.body : scriptBody;
@@ -123,7 +114,7 @@ export async function POST(request: NextRequest) {
       }
     } else if (!hasFile) {
       return NextResponse.json(
-        { error: "Upload proof required, or open this guide from My Library after using the Video Timeline." },
+        { error: "Please provide your script details or open this guide from My Library." },
         { status: 400 }
       );
     } else {
