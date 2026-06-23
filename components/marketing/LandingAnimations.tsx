@@ -58,8 +58,8 @@ const OUTCOMES = [
   {
     icon: Calendar,
     step: "03",
-    title: "Plan Your Content",
-    desc: "Use the content calendar to schedule posts, track your publishing consistency, and never run out of ideas.",
+    title: "Build Your Audience",
+    desc: "Grow your email list and stay in front of your audience. Send campaigns, collect subscribers, and keep people coming back.",
     detail: "Stay consistent without the mental load.",
     color: "from-violet-500/10 to-violet-600/5",
     border: "hover:border-violet-500/30",
@@ -69,8 +69,8 @@ const OUTCOMES = [
   {
     icon: Rocket,
     step: "04",
-    title: "Launch &amp; Sell",
-    desc: "Your store is built in. Set a price, go live, and collect payments through Stripe — with automatic download delivery to every buyer.",
+    title: "Drive Sales",
+    desc: "List your product on Gumroad, Etsy, or Payhip — then use your Content Flywheel content to drive a steady stream of buyers.",
     detail: "From product to first sale in one afternoon.",
     color: "from-emerald-500/10 to-emerald-600/5",
     border: "hover:border-emerald-500/30",
@@ -189,8 +189,8 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
               {
                 step: "03",
                 emoji: "🚀",
-                title: "Launch & Sell",
-                desc: "Use the content calendar and launch tools to promote your product consistently. Your store is built in — Stripe checkout, auto-delivery, zero fees.",
+                title: "Drive Sales",
+                desc: "List on Gumroad, Etsy, or Payhip — then let your Content Flywheel videos, captions, and email campaigns bring buyers to you consistently.",
               },
             ].map((s, i) => (
               <FadeUp key={s.step} delay={i * 0.12}>
@@ -382,9 +382,9 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
               {[
                 { value: "what", q: "What kind of digital products can I create?", a: "Ebooks, planners, workbooks, guides, templates, checklists — anything text and design based. You describe the topic and AI generates the full product including a cover." },
                 { value: "who", q: "Who is Content Flywheel for?", a: "Creators, coaches, consultants, and anyone who wants to sell digital products. If you have knowledge worth packaging, this platform builds it for you — no tech skills needed." },
-                { value: "sell", q: "How do I sell products and get paid?", a: "Your store connects to Stripe. Buyers pay by card, Stripe sends the money to your account, and Content Flywheel automatically emails the buyer their download link." },
-                { value: "fees", q: "Are there any per-sale fees?", a: "No. We charge a flat monthly subscription. You keep everything Stripe sends you (minus Stripe's standard processing fee of ~1.4% + 20p)." },
-                { value: "email", q: "Is email marketing included?", a: "Yes. Collect subscribers, send broadcasts, and build automated drip sequences. All built in — no Mailchimp or ConvertKit required." },
+                { value: "sell", q: "How do I sell products and get paid?", a: "List your product on Gumroad, Etsy, Payhip, or any platform you choose — Content Flywheel creates the content that drives buyers there. You own your storefront and payments directly." },
+                { value: "fees", q: "Are there any per-sale fees?", a: "No. Content Flywheel charges a flat monthly subscription. There are no per-sale fees from us — whatever you earn from your products is yours." },
+                { value: "email", q: "Is email marketing included?", a: "Yes. Collect subscribers and send email campaigns directly from Content Flywheel — no Mailchimp required." },
                 { value: "cancel", q: "Can I cancel anytime?", a: "Yes. Cancel from your dashboard settings at any time. Your subscription stays active until the end of the billing period." },
               ].map((item) => (
                 <AccordionItem key={item.value} value={item.value}

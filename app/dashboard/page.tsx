@@ -286,11 +286,25 @@ export default async function DashboardPage() {
   const videoCredits = (profileRow as { videoCredits?: number | null } | null)?.videoCredits ?? 0;
   const { totalOrders } = revenue as { totalCents: number; totalOrders: number };
 
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const nudge = videoStats.digitalProductsCount === 0
+    ? "Let's create your first product today."
+    : videoStats.totalLibraryVideos === 0
+    ? `You have ${videoStats.digitalProductsCount} product — time to make your first promo video.`
+    : `${videoStats.digitalProductsCount} product${videoStats.digitalProductsCount > 1 ? "s" : ""} · ${videoStats.totalLibraryVideos} library item${videoStats.totalLibraryVideos > 1 ? "s" : ""}. Keep the flywheel spinning.`;
+
   return (
     <main className="p-4 sm:p-6 md:p-8 max-w-[1200px] mx-auto">
       <Suspense fallback={null}><ReferralCapture /></Suspense>
       <Suspense fallback={null}><InviteCapture /></Suspense>
       <SyncOnboardingSteps digitalProductsCount={videoStats.digitalProductsCount} />
+
+      {/* Greeting */}
+      <div className="mb-5">
+        <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">{greeting} 👋</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{nudge}</p>
+      </div>
 
       {/* Today's Focus — single most impactful next action */}
       <TodaysFocus
@@ -304,20 +318,18 @@ export default async function DashboardPage() {
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
-          { label: "Products", value: videoStats.digitalProductsCount, href: "/dashboard/digital-products", icon: Package, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-950/30", gradient: "from-blue-50 to-blue-50/0 dark:from-blue-950/20 dark:to-transparent" },
-          { label: "Library Items", value: videoStats.totalLibraryVideos, href: "/dashboard/library", icon: Film, color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950/30", gradient: "from-orange-50 to-orange-50/0 dark:from-orange-950/20 dark:to-transparent" },
-          { label: "Videos This Week", value: videosThisWeek, href: "/dashboard/library", icon: Clapperboard, color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-950/30", gradient: "from-violet-50 to-violet-50/0 dark:from-violet-950/20 dark:to-transparent" },
-          { label: "Video Credits", value: videoCredits, href: "/dashboard/video-credits", icon: Film, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/30", gradient: "from-emerald-50 to-emerald-50/0 dark:from-emerald-950/20 dark:to-transparent" },
-        ].map(({ label, value, href, icon: Icon, color, bg, gradient }) => (
-          <Link key={label} href={href} className={`group relative overflow-hidden rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4 hover:border-gray-200 dark:hover:border-[#3A3A3A] hover:shadow-sm transition-all`}>
-            <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-60 pointer-events-none`} />
-            <div className="relative">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${bg}`}>
-                <Icon className={`w-4 h-4 ${color}`} />
-              </div>
-              <p className="text-2xl font-extrabold text-gray-900 dark:text-white">{value}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">{label}</p>
+          { label: "Products", value: videoStats.digitalProductsCount, href: "/dashboard/digital-products", icon: Package, iconBg: "bg-blue-500", barColor: "bg-blue-500" },
+          { label: "Library Items", value: videoStats.totalLibraryVideos, href: "/dashboard/library", icon: Film, iconBg: "bg-orange-500", barColor: "bg-orange-500" },
+          { label: "Videos This Week", value: videosThisWeek, href: "/dashboard/library", icon: Clapperboard, iconBg: "bg-violet-500", barColor: "bg-violet-500" },
+          { label: "Video Credits", value: videoCredits, href: "/dashboard/video-credits", icon: Film, iconBg: "bg-emerald-500", barColor: "bg-emerald-500" },
+        ].map(({ label, value, href, icon: Icon, iconBg, barColor }) => (
+          <Link key={label} href={href} className="group relative overflow-hidden rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-150">
+            <div className={`absolute top-0 left-0 right-0 h-0.5 ${barColor} opacity-70`} />
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${iconBg}`}>
+              <Icon className="w-4 h-4 text-white" />
             </div>
+            <p className="text-3xl font-black text-gray-900 dark:text-white leading-none">{value.toLocaleString()}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">{label}</p>
           </Link>
         ))}
       </div>
@@ -337,7 +349,7 @@ export default async function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {incompleteProducts.map((product) => (
               <Link key={product.id} href={`/dashboard/digital-products/${product.id}/edit?tab=${product.missingTab}`} className="group block">
-                <div className="rounded-xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-amber-300/60 dark:hover:border-amber-500/40 hover:shadow-sm transition-all p-3 flex items-center gap-3">
+                <div className="rounded-xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-amber-300 dark:hover:border-amber-500/50 hover:shadow-sm transition-all p-3 flex items-center gap-3">
                   <div className="relative shrink-0 w-10 h-10">
                     <svg viewBox="0 0 44 44" className="w-10 h-10 -rotate-90">
                       <circle cx="22" cy="22" r="18" fill="none" stroke="#e5e7eb" strokeWidth="4" className="dark:stroke-gray-700" />
@@ -362,28 +374,18 @@ export default async function DashboardPage() {
         <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Your tools</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {[
-            { href: "/dashboard/ai-coach", emoji: "🤖", label: "AI Coach", desc: "Chat, plan, generate content", style: "highlight" },
-            { href: "/dashboard/digital-products", emoji: "📦", label: "Create Product", desc: "AI writes your eBook or guide", style: "blue" },
-            { href: "/dashboard/design-studio", emoji: "🎨", label: "Design Studio", desc: "Images, graphics, bulk posts", style: "purple" },
-            { href: "/dashboard/video-guide/new", emoji: "🎬", label: "Video Guide", desc: "Script + scenes in 30 sec", style: "rose" },
-            { href: "/dashboard/library", emoji: "📚", label: "My Library", desc: "All your saved content", style: "default" },
-            { href: "/dashboard/email-marketing", emoji: "📧", label: "Email", desc: "Campaigns + subscriber list", style: "default" },
-          ].map(({ href, emoji, label, desc, style }) => (
+            { href: "/dashboard/ai-coach",        emoji: "🤖", label: "AI Coach",        desc: "Chat, plan, generate content",    cls: "bg-gradient-to-br from-orange-500 to-amber-500 border-orange-400 shadow-orange-500/20 shadow-sm", text: "text-white", sub: "text-white/75" },
+            { href: "/dashboard/digital-products", emoji: "📦", label: "Create Product",  desc: "AI writes your eBook or guide",   cls: "bg-gradient-to-br from-blue-500 to-indigo-600 border-blue-400 shadow-blue-500/20 shadow-sm",   text: "text-white", sub: "text-white/75" },
+            { href: "/dashboard/design-studio",   emoji: "🎨", label: "Design Studio",   desc: "Images, graphics, bulk posts",    cls: "bg-gradient-to-br from-violet-500 to-purple-600 border-violet-400 shadow-violet-500/20 shadow-sm", text: "text-white", sub: "text-white/75" },
+            { href: "/dashboard/video-guide/new", emoji: "🎬", label: "Video Guide",     desc: "Script + scenes in 30 sec",       cls: "bg-gradient-to-br from-rose-500 to-pink-600 border-rose-400 shadow-rose-500/20 shadow-sm",      text: "text-white", sub: "text-white/75" },
+            { href: "/dashboard/library",         emoji: "📚", label: "My Library",      desc: "All your saved content",          cls: "bg-white dark:bg-[#1A1A1A] border-gray-100 dark:border-[#2A2A2A]",                                text: "text-gray-900 dark:text-white", sub: "text-gray-500 dark:text-gray-400" },
+            { href: "/dashboard/email-marketing", emoji: "📧", label: "Email",           desc: "Campaigns + subscriber list",     cls: "bg-white dark:bg-[#1A1A1A] border-gray-100 dark:border-[#2A2A2A]",                                text: "text-gray-900 dark:text-white", sub: "text-gray-500 dark:text-gray-400" },
+          ].map(({ href, emoji, label, desc, cls, text, sub }) => (
             <Link key={href} href={href} className="group block">
-              <div className={`rounded-2xl border p-4 h-full transition-all hover:shadow-md ${
-                style === "highlight"
-                  ? "bg-gradient-to-br from-orange-500 to-amber-500 border-orange-400 text-white shadow-sm shadow-orange-500/20"
-                  : style === "blue"
-                  ? "bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-900/40 hover:border-blue-300/60 dark:hover:border-blue-500/30"
-                  : style === "purple"
-                  ? "bg-violet-50 dark:bg-violet-950/30 border-violet-100 dark:border-violet-900/40 hover:border-violet-300/60 dark:hover:border-violet-500/30"
-                  : style === "rose"
-                  ? "bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-900/40 hover:border-rose-300/60 dark:hover:border-rose-500/30"
-                  : "bg-white dark:bg-[#1A1A1A] border-gray-100 dark:border-[#2A2A2A] hover:border-orange-300/60 dark:hover:border-orange-500/30"
-              }`}>
-                <div className="text-2xl mb-2">{emoji}</div>
-                <p className={`font-bold text-sm mb-0.5 ${style === "highlight" ? "text-white" : "text-gray-900 dark:text-white"}`}>{label}</p>
-                <p className={`text-xs leading-relaxed ${style === "highlight" ? "text-white/80" : "text-gray-500 dark:text-gray-400"}`}>{desc}</p>
+              <div className={`rounded-2xl border p-4 h-full transition-all duration-150 hover:shadow-lg hover:-translate-y-0.5 ${cls}`}>
+                <div className="text-3xl mb-2.5">{emoji}</div>
+                <p className={`font-bold text-sm mb-0.5 ${text}`}>{label}</p>
+                <p className={`text-xs leading-relaxed ${sub}`}>{desc}</p>
               </div>
             </Link>
           ))}

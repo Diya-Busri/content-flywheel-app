@@ -534,7 +534,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   /** When true, we auto-export once all animated scene videos + voiceovers are ready. */
   const [autoExportWhenAnimationsReady, setAutoExportWhenAnimationsReady] = useState(false);
   const autoExportStartedRef = useRef(false);
-  const [activeTab, setActiveTab] = useState("scenes");
+  const [activeTab, setActiveTab] = useState("script");
   const [socialKitProofFile, setSocialKitProofFile] = useState<File | null>(null);
   const [socialKit, setSocialKit] = useState<SocialMediaKit | null>(() => {
     if (typeof window === "undefined") return null;
@@ -2418,8 +2418,8 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           const hasVoiceover = !!(fullVoiceoverUrl || perSceneUrls.some(Boolean));
           const hasVideoFile = autoGeneratePhase === null && autoGeneratingAll === false && hasImages && hasVoiceover;
           const hasSocialKit = !!socialKit;
-          const steps: { done: boolean; label: string; tab: "scenes" | "voiceover" | "export" | "social-kit" }[] = [
-            { done: true,          label: "Script",    tab: "scenes" },
+          const steps: { done: boolean; label: string; tab: "script" | "scenes" | "voiceover" | "export" | "social-kit" }[] = [
+            { done: true,          label: "Script",    tab: "script" },
             { done: hasImages,     label: "Images",    tab: "scenes" },
             { done: hasVoiceover,  label: "Voiceover", tab: "voiceover" },
             { done: hasVideoFile,  label: "Export",    tab: "export" },
@@ -3011,7 +3011,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           )}
         </div>
 
-        <Card className="mb-8 border-gray-200 dark:border-border bg-gray-50 dark:bg-card overflow-visible">
+        {activeTab === "script" && <Card className="mb-8 border-gray-200 dark:border-border bg-gray-50 dark:bg-card overflow-visible">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-medium text-foreground flex items-center justify-between gap-2 flex-wrap">
               <span className="flex items-center gap-2">
@@ -3238,15 +3238,22 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               </div>
             )}
           </CardContent>
-        </Card>
+        </Card>}
 
-        {/* ── Progress checklist ──────────────────────────────────────────────
-            Quick at-a-glance view so beginners know exactly where they are.
-            Each step links to the relevant tab. Uses only existing state.
-        ─────────────────────────────────────────────────────────────────── */}
+        {/* ── Step navigation footer (script step) ── */}
+        {activeTab === "script" && (
+          <div className="flex justify-end mb-8">
+            <Button
+              className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6"
+              onClick={() => setActiveTab("scenes")}
+            >
+              Continue to Images →
+            </Button>
+          </div>
+        )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="bg-gray-100 dark:bg-card border border-gray-200 dark:border-border flex flex-wrap gap-1 p-1">
+          <TabsList className="hidden">
             <TabsTrigger value="scenes" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
               Your Video Plan
               {guide.videoFormat?.aspectRatio && (
@@ -4248,6 +4255,15 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 </CardContent>
               </Card>
             )}
+            {/* scenes step nav */}
+            <div className="flex justify-between pt-4 mt-4 border-t border-gray-100 dark:border-border">
+              <Button variant="outline" onClick={() => setActiveTab("script")}>
+                ← Back to Script
+              </Button>
+              <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6" onClick={() => setActiveTab("voiceover")}>
+                Continue to Voiceover →
+              </Button>
+            </div>
           </TabsContent>
 
           <TabsContent value="editing" className="mt-6 space-y-4">
@@ -4340,6 +4356,15 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 </CardContent>
               </Card>
             )}
+            {/* export step nav */}
+            <div className="flex justify-between pt-4 mt-4 border-t border-gray-100 dark:border-border">
+              <Button variant="outline" onClick={() => setActiveTab("voiceover")}>
+                ← Back to Voiceover
+              </Button>
+              <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6" onClick={() => setActiveTab("social-kit")}>
+                Continue to Social Kit →
+              </Button>
+            </div>
           </TabsContent>
 
           <TabsContent value="social-kit" className="mt-6 space-y-4" id="social-media-kit-section">
@@ -4540,6 +4565,15 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 ))}
               </div>
             )}
+            {/* social-kit step nav */}
+            <div className="flex justify-between pt-4 mt-4 border-t border-gray-100 dark:border-border">
+              <Button variant="outline" onClick={() => setActiveTab("export")}>
+                ← Back to Export
+              </Button>
+              <Button className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6" onClick={() => setActiveTab("script")}>
+                ✓ Done — Back to Start
+              </Button>
+            </div>
           </TabsContent>
 
           <TabsContent value="voiceover" className="mt-6 space-y-4">
@@ -4774,6 +4808,15 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 )}
               </CardContent>
             </Card>
+            {/* voiceover step nav */}
+            <div className="flex justify-between pt-4 mt-4 border-t border-gray-100 dark:border-border">
+              <Button variant="outline" onClick={() => setActiveTab("scenes")}>
+                ← Back to Images
+              </Button>
+              <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6" onClick={() => setActiveTab("export")}>
+                Continue to Export →
+              </Button>
+            </div>
           </TabsContent>
         </Tabs>
 
