@@ -1,22 +1,23 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import TemplateStudioClient from "./TemplateStudioClient";
+import dynamic from "next/dynamic";
+
+// ssr: false — @react-three/fiber uses unstable_act from React which doesn't
+// exist in server-side React 18+, causing a hard build error if SSR'd.
+const TemplateStudioClient = dynamic(() => import("./TemplateStudioClient"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center min-h-[40vh] text-muted-foreground">
+      Loading Template Studio…
+    </div>
+  ),
+});
 
 export const metadata: Metadata = {
   title: "Template Studio | Content Flywheel",
   description: "Create and manage template packs for quotes, tips, affirmations, product promos, and tutorials",
 };
-
-/** Fallback for Suspense: avoids hydration mismatch when TemplateStudioClient uses useSearchParams(). */
-function TemplateStudioFallback() {
-  return (
-    <div className="flex items-center justify-center min-h-[40vh] text-muted-foreground">
-      Loading Template Studio…
-    </div>
-  );
-}
 
 export default async function TemplateStudioPage() {
   const { userId } = await auth();
@@ -30,9 +31,7 @@ export default async function TemplateStudioPage() {
       <p className="text-gray-600 dark:text-gray-400 mb-8">
         Create template packs with slides and captions for quotes, tips, affirmations, product promos, and tutorials.
       </p>
-      <Suspense fallback={<TemplateStudioFallback />}>
-        <TemplateStudioClient />
-      </Suspense>
+      <TemplateStudioClient />
     </div>
   );
 }

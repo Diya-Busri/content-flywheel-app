@@ -16,22 +16,14 @@ import { eq, desc, isNull, and, count, gte, sql } from "drizzle-orm";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { brandProfilesTable } from "@/db/schema/brand-profiles-schema";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
-  Package, Video, Play, ExternalLink, AlertCircle,
-  ArrowRight, TrendingUp, Mail, Target, Film, Calendar, Rocket,
+  Package, Video, AlertCircle,
+  ArrowRight, TrendingUp, Mail, Film,
 } from "lucide-react";
 import { SyncOnboardingSteps } from "@/components/onboarding/sync-onboarding-steps";
 import { ReferralCapture } from "@/components/ReferralCapture";
 import { InviteCapture } from "@/components/InviteCapture";
 import { Suspense } from "react";
-import { GettingStartedChecklist } from "@/components/dashboard/GettingStartedChecklist";
-import { AnalyticsWidget } from "@/components/dashboard/AnalyticsWidget";
-import { WhatsWorkingSection } from "@/components/dashboard/WhatsWorkingSection";
-import { FirstVideoNudge } from "@/components/dashboard/FirstVideoNudge";
-import { DashboardHero } from "@/components/dashboard/DashboardHero";
-import { FirstTaskBanner } from "@/components/dashboard/FirstTaskBanner";
 import { TodaysFocus } from "@/components/dashboard/TodaysFocus";
 
 export const metadata: Metadata = {
@@ -269,182 +261,6 @@ async function getVideoStats(userId: string) {
   return { digitalProductsCount: productsCount, tiktokShopCount: tiktokCount, totalLibraryVideos, recent };
 }
 
-// ─── Stat card helper ────────────────────────────────────────────────────────
-function StatCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  iconBg,
-  iconColor,
-  href,
-  cta,
-  accent,
-}: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  icon: React.ElementType;
-  iconBg: string;
-  iconColor: string;
-  href?: string;
-  /** CTA text shown as a styled hint — card itself is the link */
-  cta?: string;
-  accent?: boolean;
-}) {
-  const inner = (
-    <div
-      className={`group relative rounded-2xl p-4 sm:p-5 border transition-all hover:shadow-md ${
-        accent
-          ? "bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/10 border-orange-200 dark:border-orange-900/40"
-          : "bg-white dark:bg-[#1A1A1A] border-gray-100 dark:border-[#2A2A2A] hover:border-gray-200 dark:hover:border-[#3A3A3A]"
-      }`}
-    >
-      <div className="flex items-start justify-between mb-3">
-        <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center ${iconBg}`}>
-          <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${iconColor}`} />
-        </div>
-        {href && (
-          <span className="text-xs text-gray-400 dark:text-gray-600 group-hover:text-gray-600 dark:group-hover:text-gray-400 transition-colors font-medium">
-            View →
-          </span>
-        )}
-      </div>
-      <p className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-0.5">
-        {value}
-      </p>
-      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium">{label}</p>
-      {sub && <p className="text-xs text-gray-400 dark:text-gray-600 mt-1 hidden sm:block">{sub}</p>}
-      {cta && (
-        <span className="inline-block mt-2 sm:mt-3 text-xs font-semibold text-orange-500 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
-          {cta} →
-        </span>
-      )}
-    </div>
-  );
-
-  if (href) {
-    return <Link href={href} className="block">{inner}</Link>;
-  }
-  return inner;
-}
-
-// ─── Journey action card ──────────────────────────────────────────────────────
-function JourneyCard({
-  href,
-  icon: Icon,
-  step,
-  label,
-  description,
-  cta,
-  highlight,
-  accent,
-}: {
-  href: string;
-  icon: React.ElementType;
-  step: string;
-  label: string;
-  description: string;
-  cta: string;
-  highlight?: boolean;
-  accent?: string;
-}) {
-  return (
-    <Link href={href} className="block h-full">
-      <div className={`group h-full rounded-2xl border transition-all hover:shadow-lg p-5 sm:p-6 flex flex-col ${
-        highlight
-          ? "bg-gradient-to-br from-orange-500 to-amber-500 border-orange-400 text-white shadow-md shadow-orange-500/20"
-          : "bg-white dark:bg-[#1A1A1A] border-gray-100 dark:border-[#2A2A2A] hover:border-orange-300/60 dark:hover:border-orange-500/30"
-      }`}>
-        <div className="flex items-start justify-between mb-4">
-          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${
-            highlight ? "bg-white/20" : (accent ?? "bg-orange-50 dark:bg-orange-950/30")
-          }`}>
-            <Icon className={`w-5 h-5 ${highlight ? "text-white" : "text-orange-500"}`} />
-          </div>
-          <span className={`text-[10px] font-bold uppercase tracking-widest ${
-            highlight ? "text-white/60" : "text-gray-400 dark:text-gray-600"
-          }`}>{step}</span>
-        </div>
-        <h3 className={`font-bold text-base mb-1.5 ${highlight ? "text-white" : "text-gray-900 dark:text-white"}`}>
-          {label}
-        </h3>
-        <p className={`text-sm leading-relaxed flex-1 ${highlight ? "text-white/80" : "text-gray-500 dark:text-gray-400"}`}>
-          {description}
-        </p>
-        <div className={`mt-4 flex items-center gap-1 text-sm font-semibold ${
-          highlight ? "text-white" : "text-orange-500 group-hover:text-orange-600"
-        }`}>
-          {cta} <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-// ─── Smart next-action banner ─────────────────────────────────────────────────
-function NextActionBanner({
-  productsCount,
-  videosCount,
-  totalOrders,
-}: {
-  productsCount: number;
-  videosCount: number;
-  totalOrders: number;
-}) {
-  let icon = Package;
-  let href = "/dashboard/digital-products/create";
-  let title = "Create your first digital product";
-  let desc = "Get a complete first draft — structure, chapters, frameworks — in minutes. Then make it yours.";
-  let cta = "Create Product";
-  let step = "Step 1 of 4";
-
-  if (productsCount > 0 && videosCount === 0) {
-    icon = Video;
-    href = "/dashboard/digital-products";
-    title = "Create a promo video for your product";
-    desc = "You have products — now turn them into short videos that drive traffic and sales on social media.";
-    cta = "Create Video";
-    step = "Step 2 of 4";
-  } else if (productsCount > 0 && videosCount > 0 && totalOrders === 0) {
-    icon = Calendar;
-    href = "/dashboard/content-calendar";
-    title = "Plan your content to drive sales";
-    desc = "You have products and videos — now schedule your posts consistently to build momentum and get your first sale.";
-    cta = "Plan Content";
-    step = "Step 3 of 4";
-  } else if (productsCount > 0 && videosCount > 0 && totalOrders > 0) {
-    icon = Rocket;
-    href = "/dashboard/digital-products";
-    title = "Keep the flywheel spinning";
-    desc = "Great work — you have products, videos, and sales. Create your next product to grow your catalogue.";
-    cta = "Launch Next Product";
-    step = "Step 4 of 4";
-  }
-
-  const Icon = icon;
-  return (
-    <div className="mb-6 sm:mb-8 rounded-2xl border border-orange-200 dark:border-orange-500/20 bg-orange-50 dark:bg-orange-950/10 p-5 flex items-start gap-4">
-      <div className="w-10 h-10 shrink-0 rounded-xl bg-orange-100 dark:bg-orange-500/20 flex items-center justify-center">
-        <Icon className="w-5 h-5 text-orange-500" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-orange-400">{step} — Next Action</span>
-        </div>
-        <p className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">{title}</p>
-        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">{desc}</p>
-      </div>
-      <Link
-        href={href}
-        className="shrink-0 inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-400 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap"
-      >
-        {cta} <ArrowRight className="w-3.5 h-3.5" />
-      </Link>
-    </div>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default async function DashboardPage() {
   const { userId } = await auth();
@@ -480,18 +296,10 @@ export default async function DashboardPage() {
   const estimatedRevenue = videoStats.digitalProductsCount * 15;
 
   return (
-    <main className="p-4 sm:p-6 md:p-10 max-w-[1280px] mx-auto">
+    <main className="p-4 sm:p-6 md:p-8 max-w-[1200px] mx-auto">
       <Suspense fallback={null}><ReferralCapture /></Suspense>
       <Suspense fallback={null}><InviteCapture /></Suspense>
       <SyncOnboardingSteps digitalProductsCount={videoStats.digitalProductsCount} />
-
-      {/* Hero */}
-      <DashboardHero
-        productsCount={videoStats.digitalProductsCount}
-        videosCount={videoStats.totalLibraryVideos}
-        videosThisWeek={videosThisWeek}
-        emailSubscribers={emailSubscribers}
-      />
 
       {/* Today's Focus — single most impactful next action */}
       <TodaysFocus
@@ -502,134 +310,50 @@ export default async function DashboardPage() {
         emailSubscribers={emailSubscribers}
       />
 
-      {/* Getting Started Checklist */}
-      {showChecklist && (
-        <GettingStartedChecklist
-          hasBrandVoice={checklist.hasBrandVoice}
-          hasProduct={checklist.hasProduct}
-          hasThumbnail={checklist.hasThumbnail}
-          hasPromoVideo={checklist.hasPromoVideo}
-          hasSubscriber={hasSubscriber}
-          hasCampaign={hasCampaign}
-        />
-      )}
-
-      {/* Stats grid */}
-      <section className="mb-8 sm:mb-10" data-tour="quick-stats">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Overview</h2>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <StatCard
-            label="Video Credits"
-            value={videoCredits}
-            sub={videoCredits === 0 ? "Buy credits to generate videos" : `${videoCredits} video${videoCredits !== 1 ? "s" : ""} ready to generate`}
-            icon={Film}
-            iconBg="bg-orange-50 dark:bg-orange-950/30"
-            iconColor="text-orange-500"
-            href="/dashboard/video-credits"
-            cta={videoCredits === 0 ? "Buy credits" : undefined}
-            accent={videoCredits > 0}
-          />
-          <StatCard
-            label="Digital Products"
-            value={videoStats.digitalProductsCount}
-            sub={videoStats.digitalProductsCount === 0 ? "None yet" : `${videoStats.tiktokShopCount} TikTok videos`}
-            icon={Package}
-            iconBg="bg-blue-50 dark:bg-blue-950/30"
-            iconColor="text-blue-500"
-            href={videoStats.digitalProductsCount === 0 ? "/dashboard/digital-products/create" : "/dashboard/digital-products"}
-            cta={videoStats.digitalProductsCount === 0 ? "Create first product" : undefined}
-          />
-          <StatCard
-            label="Email Subscribers"
-            value={emailSubscribers}
-            sub={emailSubscribers === 0 ? "Grow your list" : `${campaignsSent} campaign${campaignsSent !== 1 ? "s" : ""} sent`}
-            icon={Mail}
-            iconBg="bg-violet-50 dark:bg-violet-950/30"
-            iconColor="text-violet-500"
-            href="/dashboard/email-marketing"
-            cta={emailSubscribers === 0 ? "Add subscribers" : undefined}
-          />
-          <StatCard
-            label="Active Goals"
-            value={activeGoals}
-            sub={activeGoals === 0 ? "Set a target" : "goals in progress"}
-            icon={Target}
-            iconBg="bg-emerald-50 dark:bg-emerald-950/30"
-            iconColor="text-emerald-500"
-            href="/dashboard/goals"
-            cta={activeGoals === 0 ? "Set first goal" : undefined}
-          />
-          <StatCard
-            label="Store Revenue"
-            value={revenueLabel}
-            sub={totalOrders > 0 ? `${totalOrders} order${totalOrders !== 1 ? "s" : ""} completed` : "Make your first sale"}
-            icon={TrendingUp}
-            iconBg="bg-orange-50 dark:bg-orange-950/30"
-            iconColor="text-orange-500"
-            href="/dashboard/orders"
-            accent={totalOrders > 0}
-            cta={totalOrders === 0 ? "Set up store" : "View orders"}
-          />
-        </div>
-      </section>
-
-      {/* Analytics Widget */}
-      <AnalyticsWidget />
-
-      {/* Finish to Sell */}
-      {incompleteProducts.length > 0 && (
-        <section className="mb-8 sm:mb-10">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950/30 flex items-center justify-center">
-                <AlertCircle className="w-4 h-4 text-amber-500" />
-              </div>
-              <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-                Finish to Sell
-              </h2>
+      {/* Stats row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Products", value: videoStats.digitalProductsCount, href: "/dashboard/digital-products", icon: Package, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-950/30" },
+          { label: "Library Items", value: videoStats.totalLibraryVideos, href: "/dashboard/library", icon: Film, color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950/30" },
+          { label: "Subscribers", value: emailSubscribers, href: "/dashboard/email-marketing", icon: Mail, color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-950/30" },
+          { label: "Revenue", value: revenueLabel, href: "/dashboard/orders", icon: TrendingUp, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
+        ].map(({ label, value, href, icon: Icon, color, bg }) => (
+          <Link key={label} href={href} className="group rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4 hover:border-gray-200 dark:hover:border-[#3A3A3A] hover:shadow-sm transition-all">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${bg}`}>
+              <Icon className={`w-4 h-4 ${color}`} />
             </div>
-            <Link
-              href="/dashboard/digital-products"
-              className="text-sm font-medium text-orange-500 hover:text-orange-400 flex items-center gap-1 transition-colors"
-            >
-              View all
-              <ExternalLink className="w-3.5 h-3.5" />
+            <p className="text-2xl font-extrabold text-gray-900 dark:text-white">{value}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">{label}</p>
+          </Link>
+        ))}
+      </div>
+
+      {/* Incomplete products */}
+      {incompleteProducts.length > 0 && (
+        <section className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-500" />
+              <h2 className="text-sm font-bold text-gray-900 dark:text-white">Finish to sell</h2>
+            </div>
+            <Link href="/dashboard/digital-products" className="text-xs font-medium text-orange-500 hover:text-orange-400 transition-colors">
+              View all →
             </Link>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {incompleteProducts.map((product) => (
-              <Link
-                key={product.id}
-                href={`/dashboard/digital-products/${product.id}/edit?tab=${product.missingTab}`}
-                className="group block"
-              >
-                <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-amber-300/60 dark:hover:border-amber-500/40 hover:shadow-md transition-all p-4 flex items-center gap-4">
-                  {/* Completion ring */}
-                  <div className="relative shrink-0 w-12 h-12">
-                    <svg viewBox="0 0 44 44" className="w-12 h-12 -rotate-90">
+              <Link key={product.id} href={`/dashboard/digital-products/${product.id}/edit?tab=${product.missingTab}`} className="group block">
+                <div className="rounded-xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] hover:border-amber-300/60 dark:hover:border-amber-500/40 hover:shadow-sm transition-all p-3 flex items-center gap-3">
+                  <div className="relative shrink-0 w-10 h-10">
+                    <svg viewBox="0 0 44 44" className="w-10 h-10 -rotate-90">
                       <circle cx="22" cy="22" r="18" fill="none" stroke="#e5e7eb" strokeWidth="4" className="dark:stroke-gray-700" />
-                      <circle
-                        cx="22" cy="22" r="18" fill="none"
-                        stroke={product.completionScore >= 80 ? "#22c55e" : product.completionScore >= 40 ? "#f59e0b" : "#f97316"}
-                        strokeWidth="4"
-                        strokeDasharray={`${(product.completionScore / 100) * 2 * Math.PI * 18} ${2 * Math.PI * 18}`}
-                        strokeLinecap="round"
-                      />
+                      <circle cx="22" cy="22" r="18" fill="none" stroke={product.completionScore >= 80 ? "#22c55e" : product.completionScore >= 40 ? "#f59e0b" : "#f97316"} strokeWidth="4" strokeDasharray={`${(product.completionScore / 100) * 2 * Math.PI * 18} ${2 * Math.PI * 18}`} strokeLinecap="round" />
                     </svg>
-                    <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-700 dark:text-gray-300">
-                      {product.completionScore}%
-                    </span>
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-700 dark:text-gray-300">{product.completionScore}%</span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900 dark:text-white truncate text-sm">
-                      {product.title}
-                    </p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
-                      <span>Next:</span>
-                      <span className="font-medium">{product.missingStep}</span>
-                    </p>
+                    <p className="font-semibold text-gray-900 dark:text-white truncate text-sm">{product.title}</p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Next: {product.missingStep}</p>
                   </div>
                   <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-orange-500 transition-colors shrink-0" />
                 </div>
@@ -639,138 +363,57 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      {/* Journey Cards */}
-      <section className="mb-8 sm:mb-10" data-tour="quick-actions">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Your Journey</h2>
-          <span className="text-xs text-gray-400 dark:text-gray-600 font-medium">Idea → Product → Content → Sales</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <JourneyCard
-            href="/dashboard/digital-products/create"
-            icon={Package}
-            step="Step 1"
-            label="Create Product"
-            description="Get a complete first draft — structure, chapters, frameworks — in minutes. Then make it yours."
-            cta="Create now"
-            highlight={videoStats.digitalProductsCount === 0}
-            accent="bg-blue-50 dark:bg-blue-950/30"
-          />
-          <JourneyCard
-            href="/dashboard/digital-products"
-            icon={Video}
-            step="Step 2"
-            label="Create Video"
-            description="Turn your product into promo videos and captions for TikTok, Instagram, and YouTube."
-            cta="Create video"
-            highlight={videoStats.digitalProductsCount > 0 && videoStats.totalLibraryVideos === 0}
-            accent="bg-orange-50 dark:bg-orange-950/30"
-          />
-          <JourneyCard
-            href="/dashboard/content-calendar"
-            icon={Calendar}
-            step="Step 3"
-            label="Plan Content"
-            description="Schedule your posts, stay consistent, and build the momentum that drives consistent sales."
-            cta="Plan posts"
-            highlight={videoStats.digitalProductsCount > 0 && videoStats.totalLibraryVideos > 0 && totalOrders === 0}
-            accent="bg-violet-50 dark:bg-violet-950/30"
-          />
-          <JourneyCard
-            href="/dashboard/store"
-            icon={Rocket}
-            step="Step 4"
-            label="Launch & Sell"
-            description="Your store is built in. Set a price, go live, and start collecting payments through Stripe."
-            cta="View store"
-            highlight={videoStats.digitalProductsCount > 0 && videoStats.totalLibraryVideos > 0 && totalOrders > 0}
-            accent="bg-emerald-50 dark:bg-emerald-950/30"
-          />
+      {/* Quick-launch tools grid */}
+      <section className="mb-6">
+        <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Your tools</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3">
+          {[
+            { href: "/dashboard/ai-coach", emoji: "🤖", label: "AI Coach", desc: "Chat, plan, generate content", highlight: true },
+            { href: "/dashboard/digital-products/create", emoji: "📦", label: "Create Product", desc: "AI writes your eBook or guide" },
+            { href: "/dashboard/design-studio", emoji: "🎨", label: "Design Studio", desc: "Images, graphics, bulk posts" },
+            { href: "/dashboard/video-guide/new", emoji: "🎬", label: "Video Guide", desc: "Script + scenes in 30 sec" },
+            { href: "/dashboard/library", emoji: "📚", label: "My Library", desc: "All your saved content" },
+            { href: "/dashboard/email-marketing", emoji: "📧", label: "Email", desc: "Campaigns + subscriber list" },
+          ].map(({ href, emoji, label, desc, highlight }) => (
+            <Link key={href} href={href} className="group block">
+              <div className={`rounded-2xl border p-4 h-full transition-all hover:shadow-md ${
+                highlight
+                  ? "bg-gradient-to-br from-orange-500 to-amber-500 border-orange-400 text-white shadow-sm shadow-orange-500/20"
+                  : "bg-white dark:bg-[#1A1A1A] border-gray-100 dark:border-[#2A2A2A] hover:border-orange-300/60 dark:hover:border-orange-500/30"
+              }`}>
+                <div className="text-2xl mb-2">{emoji}</div>
+                <p className={`font-bold text-sm mb-0.5 ${highlight ? "text-white" : "text-gray-900 dark:text-white"}`}>{label}</p>
+                <p className={`text-xs leading-relaxed ${highlight ? "text-white/80" : "text-gray-500 dark:text-gray-400"}`}>{desc}</p>
+              </div>
+            </Link>
+          ))}
         </div>
       </section>
 
-      {/* What's Working */}
-      <WhatsWorkingSection />
-
-      {/* Recent Videos */}
-      <section className="mt-8 sm:mt-10" data-tour="recent-videos">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-            Recent Videos
-          </h2>
-          {videoStats.recent.length > 0 && (
-            <Link
-              href="/dashboard/library"
-              className="text-sm font-medium text-orange-500 hover:text-orange-400 flex items-center gap-1 transition-colors"
-            >
-              View all
-              <ExternalLink className="w-3.5 h-3.5" />
-            </Link>
-          )}
-        </div>
-        {videoStats.recent.length > 0 ? (
+      {/* Recent library items */}
+      {videoStats.recent.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white">Recent activity</h2>
+            <Link href="/dashboard/library" className="text-xs font-medium text-orange-500 hover:text-orange-400 transition-colors">View all →</Link>
+          </div>
           <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] overflow-hidden">
             <ul className="divide-y divide-gray-100 dark:divide-[#2A2A2A]">
-              {videoStats.recent.map((item) => {
-                const badgeLabel = item.source === "tiktok-shop" ? "TikTok Shop" : "Digital Product";
-                return (
-                  <li key={`${item.source}-${item.id}`}>
-                    <Link
-                      href={item.href}
-                      className="flex items-center gap-3 px-4 sm:px-6 py-3 sm:py-4 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
-                    >
-                      <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/20 flex items-center justify-center shrink-0">
-                        <Video className="w-5 h-5 text-orange-500" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-semibold text-gray-900 dark:text-white truncate text-sm">
-                            {item.title}
-                          </p>
-                          <span
-                            className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                              item.source === "tiktok-shop"
-                                ? "bg-pink-50 dark:bg-pink-950/20 text-pink-600 dark:text-pink-400"
-                                : "bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400"
-                            }`}
-                          >
-                            {badgeLabel}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {item.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                        </p>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-gray-300 hover:text-orange-500 shrink-0 transition-colors" />
-                    </Link>
-                  </li>
-                );
-              })}
+              {videoStats.recent.map((item) => (
+                <li key={`${item.source}-${item.id}`}>
+                  <Link href={item.href} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                    <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-950/20 flex items-center justify-center shrink-0">
+                      <Video className="w-4 h-4 text-orange-500" />
+                    </div>
+                    <p className="font-medium text-gray-900 dark:text-white truncate text-sm flex-1">{item.title}</p>
+                    <p className="text-xs text-gray-400 shrink-0">{item.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</p>
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
-        ) : (
-          <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-dashed border-gray-200 dark:border-[#2A2A2A]">
-            <div className="p-8 sm:p-12 flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center mb-4">
-                <Video className="w-8 h-8 text-gray-400" />
-              </div>
-              <p className="text-gray-800 dark:text-gray-300 mb-1 font-semibold">No videos yet</p>
-              <p className="text-sm text-gray-500 mb-6">
-                Your generated videos will appear here once you create one.
-              </p>
-              <Button
-                asChild
-                className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl gap-2"
-              >
-                <Link href="/dashboard/digital-products/create">
-                  <Play className="w-4 h-4" />
-                  Create Product
-                </Link>
-              </Button>
-            </div>
-          </div>
-        )}
-      </section>
+        </section>
+      )}
     </main>
   );
 }

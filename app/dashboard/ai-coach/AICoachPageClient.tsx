@@ -381,7 +381,7 @@ export default function AICoachPageClient({ isAdmin = false }: { isAdmin?: boole
     memoryEnabled: boolean;
     coachName: string;
     userName: string;
-  }>({ memoryEnabled: false, coachName: "Coach", userName: "" });
+  }>({ memoryEnabled: true, coachName: "Coach", userName: "" });
   const [previousSummaries, setPreviousSummaries] = useState<string[]>([]);
   const [memorySetupModalOpen, setMemorySetupModalOpen] = useState(false);
 
@@ -474,6 +474,23 @@ export default function AICoachPageClient({ isAdmin = false }: { isAdmin?: boole
       // ignore
     }
   }, []);
+
+  // Save the active session summary when the user hides the tab or closes it
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "hidden") return;
+      const active = sessions.find((s) => s.id === activeId);
+      if (coachSettings.memoryEnabled && active && active.messages.length > 0) {
+        const body = JSON.stringify({ messages: active.messages.map((m) => ({ role: m.role, content: m.content ?? "" })) });
+        // Use sendBeacon so it fires even as the page unloads
+        navigator.sendBeacon
+          ? navigator.sendBeacon("/api/chat/coach/summaries", new Blob([body], { type: "application/json" }))
+          : fetch("/api/chat/coach/summaries", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [sessions, activeId, coachSettings.memoryEnabled]);
 
   const toggleSidebarCollapsed = useCallback(() => {
     setSidebarCollapsed((prev) => {

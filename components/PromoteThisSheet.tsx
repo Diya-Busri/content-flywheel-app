@@ -103,7 +103,7 @@ export function PromoteThisSheet({ open, onOpenChange, prefillUrl }: { open: boo
           <div className="flex flex-col gap-4">
             <div>
               <p className="text-sm text-muted-foreground mb-3">
-                Paste any URL — your app, product, or link in bio. We'll read the page and generate a full content bundle ready to post.
+                Paste any URL — your app, product, or link in bio. We&apos;ll read the page and generate a full content bundle ready to post.
               </p>
               <div className="flex gap-2">
                 <div className="relative flex-1">
@@ -135,7 +135,7 @@ export function PromoteThisSheet({ open, onOpenChange, prefillUrl }: { open: boo
             )}
 
             <div className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-              <p className="font-medium text-foreground mb-1">What you'll get</p>
+              <p className="font-medium text-foreground mb-1">What you&apos;ll get</p>
               <p>TikTok/Reels script · Instagram caption · Email copy · Twitter thread</p>
             </div>
           </div>

@@ -31,15 +31,20 @@ export async function POST() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-realtime-preview",
+        model: "gpt-4o-realtime-preview-2024-12-17",
         voice: "shimmer",
       }),
     });
     if (!response.ok) {
-      const err = await response.text();
-      console.error("[realtime-session]", response.status, err);
+      const errText = await response.text();
+      console.error("[realtime-session]", response.status, errText);
+      let errMsg = "Failed to create Realtime session";
+      try {
+        const parsed = JSON.parse(errText);
+        errMsg = parsed?.error?.message ?? errMsg;
+      } catch {}
       return NextResponse.json(
-        { error: "Failed to create Realtime session" },
+        { error: errMsg },
         { status: response.status }
       );
     }
