@@ -406,6 +406,8 @@ export default function LibraryFlow() {
   /** Promote This sheet */
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [promoteUrl, setPromoteUrl] = useState("");
+  const [promoteProductId, setPromoteProductId] = useState<string | undefined>();
+  const [promoteProductTitle, setPromoteProductTitle] = useState<string | undefined>();
   const { toast } = useToast();
 
   const showThumbnail = (item: LibraryItem) =>
@@ -1518,7 +1520,9 @@ export default function LibraryFlow() {
                                 )}
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    setPromoteUrl(`/dashboard/digital-products/${item.id}`);
+                                    setPromoteUrl("");
+                                    setPromoteProductId(item.id);
+                                    setPromoteProductTitle(item.title);
                                     setPromoteOpen(true);
                                   }}
                                 >
@@ -1824,8 +1828,10 @@ export default function LibraryFlow() {
       />
       <PromoteThisSheet
         open={promoteOpen}
-        onOpenChange={setPromoteOpen}
+        onOpenChange={(v) => { setPromoteOpen(v); if (!v) { setPromoteProductId(undefined); setPromoteProductTitle(undefined); } }}
         prefillUrl={promoteUrl}
+        productId={promoteProductId}
+        productTitle={promoteProductTitle}
       />
     </main>
   );

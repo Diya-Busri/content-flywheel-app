@@ -57,15 +57,47 @@ function ContentBlock({ label, text }: { label?: string; text: string }) {
   );
 }
 
-export function PromoteThisSheet({ open, onOpenChange, prefillUrl }: { open: boolean; onOpenChange: (v: boolean) => void; prefillUrl?: string }) {
+export function PromoteThisSheet({ open, onOpenChange, prefillUrl, productId, productTitle }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  prefillUrl?: string;
+  productId?: string;
+  productTitle?: string;
+}) {
   const [url, setUrl] = useState(prefillUrl ?? "");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ContentBundle | null>(null);
   const { toast } = useToast();
 
+  // When opened for a specific product, auto-generate immediately
   useEffect(() => {
-    if (open && prefillUrl) setUrl(prefillUrl);
-  }, [open, prefillUrl]);
+    if (open && productId) {
+      generateFromProduct();
+    } else if (open && prefillUrl) {
+      setUrl(prefillUrl);
+    }
+    if (!open) { setResult(null); setUrl(""); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, productId]);
+
+  const generateFromProduct = async () => {
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/promote-product", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setResult(data.result as ContentBundle);
+    } catch (e) {
+      toast({ title: "Error", description: e instanceof Error ? e.message : "Something went wrong", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const generate = async () => {
     if (!url.trim()) return;
@@ -101,43 +133,53 @@ export function PromoteThisSheet({ open, onOpenChange, prefillUrl }: { open: boo
 
         {!result ? (
           <div className="flex flex-col gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground mb-3">
-                Paste any URL — your app, product, or link in bio. We&apos;ll read the page and generate a full content bundle ready to post.
-              </p>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="contentflywheel.co.uk"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && generate()}
-                    className="pl-9"
-                    disabled={loading}
-                  />
-                </div>
-                <Button
-                  onClick={generate}
-                  disabled={loading || !url.trim()}
-                  className="bg-orange-500 hover:bg-orange-600 text-white shrink-0"
-                >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Generate"}
-                </Button>
-              </div>
-            </div>
-
-            {loading && (
-              <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+            {/* Product mode: just show loading, no URL input */}
+            {productId ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
                 <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-                <p className="text-sm">Reading the page and writing your content…</p>
+                <p className="text-sm">Writing promo content for <span className="font-medium text-foreground">{productTitle ?? "your product"}</span>…</p>
               </div>
-            )}
+            ) : (
+              <>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Paste any URL — your app, product, or link in bio. We&apos;ll read the page and generate a full content bundle ready to post.
+                  </p>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="contentflywheel.co.uk"
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && generate()}
+                        className="pl-9"
+                        disabled={loading}
+                      />
+                    </div>
+                    <Button
+                      onClick={generate}
+                      disabled={loading || !url.trim()}
+                      className="bg-orange-500 hover:bg-orange-600 text-white shrink-0"
+                    >
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Generate"}
+                    </Button>
+                  </div>
+                </div>
 
-            <div className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-              <p className="font-medium text-foreground mb-1">What you&apos;ll get</p>
-              <p>TikTok/Reels script · Instagram caption · Email copy · Twitter thread</p>
-            </div>
+                {loading && (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+                    <p className="text-sm">Reading the page and writing your content…</p>
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground mb-1">What you&apos;ll get</p>
+                  <p>TikTok/Reels script · Instagram caption · Email copy · Twitter thread</p>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -186,9 +228,15 @@ export function PromoteThisSheet({ open, onOpenChange, prefillUrl }: { open: boo
               </div>
             </Section>
 
-            <Button variant="outline" onClick={reset} className="w-full">
-              Try a different URL
-            </Button>
+            {productId ? (
+              <Button variant="outline" onClick={generateFromProduct} className="w-full">
+                Regenerate
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={reset} className="w-full">
+                Try a different URL
+              </Button>
+            )}
           </div>
         )}
       </SheetContent>
