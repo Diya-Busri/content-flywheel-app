@@ -1444,8 +1444,7 @@ function ChatPanel({
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      // GA WebRTC endpoint (released March 2025) — replaces old beta /v1/realtime/calls
-      const sdpRes = await fetch("https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17", {
+            const sdpRes = await fetch("https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
