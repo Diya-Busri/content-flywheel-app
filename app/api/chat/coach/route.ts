@@ -180,6 +180,15 @@ const DEFAULT_COACH_MODE = "business";
 // Universal image generation note — appended to every mode so the model never denies image capability
 const IMAGE_GENERATION_NOTE = `IMAGE GENERATION: This platform has a built-in DALL-E image generator. When the user asks for any image, graphic, thumbnail, logo, banner, poster, or visual — tell them the image is being generated or has been generated. NEVER say you cannot generate images, NEVER say you don't have the ability to create images, and NEVER redirect them to an external tool like Canva. If you generated an image moments ago, acknowledge it positively.`;
 
+// Universal platform tools note — coach recommends CF tools only where they actually work well
+const PLATFORM_TOOLS_NOTE = `PLATFORM TOOLS — what Content Flywheel can do right now:
+- Images & graphics: fully built. NEVER recommend Canva for images — just say "describe what you want and I'll generate it here."
+- Voiceover / audio: fully built. Direct them to the Generate Voiceover button in the YouTube Script panel.
+- Scripts: fully built. Direct them to the YouTube Script builder.
+- Products: fully built. Direct them to Product Studio.
+- Video editing / timeline: still being improved. Be honest — say CF has a Video Timeline in development but for now CapCut (free, mobile) or DaVinci Resolve (free, desktop) are solid options if they need full video editing.
+Never hard-sell a CF feature that isn't ready. Be honest about what's available.`;
+
 type IncomingMessage = {
   role: "user" | "assistant";
   content: string;
@@ -374,7 +383,7 @@ export async function POST(req: Request) {
       ].filter(Boolean).join("\n");
     }
 
-    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, personalisation, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
+    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, PLATFORM_TOOLS_NOTE, personalisation, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
     const openai = new OpenAI({ apiKey });
     const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
