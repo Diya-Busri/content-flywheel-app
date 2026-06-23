@@ -6,16 +6,23 @@
  * No multi-step funnel required.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Video, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Loader2, Video, CheckCircle2, Package, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Step = "idle" | "script" | "guide" | "done" | "error";
+type Product = { id: string; title: string; niche: string; marketingAssets: { productDescription?: string } | null };
 
 const STEPS: { key: Step; label: string }[] = [
   { key: "script", label: "Generating video script" },
@@ -26,6 +33,22 @@ export default function NewVideoGuidePage() {
   const router = useRouter();
   const [productName, setProductName] = useState("");
   const [description, setDescription] = useState("");
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  useEffect(() => {
+    fetch("/api/products")
+      .then((r) => r.ok ? r.json() : { products: [] })
+      .then((data) => setProducts((data.products ?? []) as Product[]))
+      .catch(() => {});
+  }, []);
+
+  const selectProduct = (p: Product) => {
+    setSelectedProduct(p);
+    setProductName(p.title);
+    const desc = p.marketingAssets?.productDescription?.trim() || p.niche?.trim() || "";
+    setDescription(desc);
+  };
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -125,6 +148,52 @@ export default function NewVideoGuidePage() {
         {/* ── Form ──────────────────────────────────────────────────────────── */}
         {(step === "idle" || step === "error") && (
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Product picker */}
+            {products.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Select a product (optional)</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-11 justify-between font-normal"
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <Package className="h-4 w-4 shrink-0 text-orange-500" />
+                        <span className="truncate">
+                          {selectedProduct ? selectedProduct.title : "Choose from your Digital Products…"}
+                        </span>
+                      </span>
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-full min-w-[320px]">
+                    {products.map((p) => (
+                      <DropdownMenuItem
+                        key={p.id}
+                        onClick={() => selectProduct(p)}
+                        className="flex flex-col items-start gap-0.5 py-2"
+                      >
+                        <span className="font-medium">{p.title}</span>
+                        {p.niche && <span className="text-xs text-muted-foreground">{p.niche}</span>}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {selectedProduct && (
+                  <p className="text-xs text-muted-foreground">
+                    Fields pre-filled from your product — edit them below if needed.
+                  </p>
+                )}
+                <div className="relative flex items-center gap-2 my-1">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground">or fill in manually</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="productName">Product or offer name</Label>
               <Input
