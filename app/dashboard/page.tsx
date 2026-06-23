@@ -32,6 +32,7 @@ import { WhatsWorkingSection } from "@/components/dashboard/WhatsWorkingSection"
 import { FirstVideoNudge } from "@/components/dashboard/FirstVideoNudge";
 import { DashboardHero } from "@/components/dashboard/DashboardHero";
 import { FirstTaskBanner } from "@/components/dashboard/FirstTaskBanner";
+import { TodaysFocus } from "@/components/dashboard/TodaysFocus";
 
 export const metadata: Metadata = {
   title: "Dashboard | Content Flywheel",
@@ -492,18 +493,14 @@ export default async function DashboardPage() {
         emailSubscribers={emailSubscribers}
       />
 
-      {/* Smart Next Action */}
-      <NextActionBanner
+      {/* Today's Focus — single most impactful next action */}
+      <TodaysFocus
         productsCount={videoStats.digitalProductsCount}
         videosCount={videoStats.totalLibraryVideos}
+        hasThumbnail={checklist.hasThumbnail}
         totalOrders={totalOrders}
+        emailSubscribers={emailSubscribers}
       />
-
-      {/* First task banner — shown to new users with no products yet */}
-      <FirstTaskBanner hasProduct={videoStats.digitalProductsCount > 0} />
-
-      {/* First Video Nudge */}
-      <FirstVideoNudge totalVideos={videoStats.totalLibraryVideos} />
 
       {/* Getting Started Checklist */}
       {showChecklist && (

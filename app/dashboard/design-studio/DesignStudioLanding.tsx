@@ -3,8 +3,9 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Palette, Trash2, MoreHorizontal, Clock, Zap, Layers, Sparkles, Package } from "lucide-react";
+import { Plus, Palette, Trash2, MoreHorizontal, Clock, Zap, Layers, Sparkles, Package, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PromoteThisSheet } from "@/components/PromoteThisSheet";
 import {
   Dialog,
   DialogContent,
@@ -232,6 +233,7 @@ export function DesignStudioLanding() {
   const [recentlyDuplicated, setRecentlyDuplicated] = useState<Set<string>>(new Set());
   const [userProducts, setUserProducts] = useState<{ id: string; title: string }[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [promoteOpen, setPromoteOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -357,6 +359,27 @@ export function DesignStudioLanding() {
           </div>
           <div className="shrink-0 text-orange-500 group-hover:translate-x-1 transition-transform">→</div>
         </div>
+
+        {/* Promote This banner */}
+        <div
+          onClick={() => setPromoteOpen(true)}
+          className="mb-8 rounded-2xl border border-purple-200 dark:border-purple-500/30 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-500/10 dark:to-pink-500/10 p-5 flex items-center gap-4 cursor-pointer hover:border-purple-400 dark:hover:border-purple-500/60 transition-colors group"
+        >
+          <div className="w-12 h-12 rounded-xl bg-purple-500 flex items-center justify-center shrink-0 group-hover:bg-purple-600 transition-colors">
+            <Megaphone className="w-6 h-6 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              Promote This <span className="text-xs font-semibold bg-purple-500 text-white px-2 py-0.5 rounded-full">NEW</span>
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              Paste any URL → get a TikTok script, Instagram caption, email & Twitter thread instantly
+            </p>
+          </div>
+          <div className="shrink-0 text-purple-500 group-hover:translate-x-1 transition-transform">→</div>
+        </div>
+
+        <PromoteThisSheet open={promoteOpen} onOpenChange={setPromoteOpen} />
 
         {/* Bundles section */}
         {loading ? (

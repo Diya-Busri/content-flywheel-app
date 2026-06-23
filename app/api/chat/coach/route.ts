@@ -6,7 +6,8 @@ import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { coachSettingsTable } from "@/db/schema/coach-settings-schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
+import { eq, and, isNull, count } from "drizzle-orm";
 import { logEvent } from "@/lib/log-event";
 
 export const runtime = "nodejs";
@@ -189,6 +190,10 @@ const PLATFORM_TOOLS_NOTE = `PLATFORM TOOLS — what Content Flywheel can do rig
 - Video editing / timeline: still being improved. Be honest — say CF has a Video Timeline in development but for now CapCut (free, mobile) or DaVinci Resolve (free, desktop) are solid options if they need full video editing.
 Never hard-sell a CF feature that isn't ready. Be honest about what's available.`;
 
+// Universal action bias — coach must DO the thing, not describe doing it
+const ACTION_BIAS_NOTE = `CRITICAL BEHAVIOUR — ALWAYS DO, NEVER DEFLECT:
+When a user asks "show me how", "give me that", "write it", "what prompts", "create it for me", "how do I do that" — DO IT IMMEDIATELY. Write the actual prompts, the actual script, the actual steps. Never say "I can't show you directly", "I can guide you", "here's how you would", or "you could try". Just do the thing. If they ask for prompts — write the prompts. If they ask for a script — write the script. If they ask for a plan — write the plan with real specifics. Be the person who does the work, not the person who explains how work is done.`;
+
 type IncomingMessage = {
   role: "user" | "assistant";
   content: string;
@@ -229,6 +234,36 @@ function toOpenAIContent(m: IncomingMessage): string | OpenAI.Chat.ChatCompletio
     }
   }
   return parts;
+}
+
+function buildWhatNextBlock(productCount: number): string {
+  if (productCount === 0) {
+    return `COACH AWARENESS — USER'S CURRENT STAGE:
+The user has 0 digital products created. They are just getting started.
+If this is the first message or they seem unsure what to do, proactively suggest:
+1. Creating their first digital product (go to Product Studio)
+2. Telling the coach their niche so you can give personalised ideas
+3. Checking out the AI Coach modes for content, business, or YouTube help
+Be encouraging but don't be a cheerleader — be direct and action-focused.`;
+  }
+  if (productCount === 1) {
+    return `COACH AWARENESS — USER'S CURRENT STAGE:
+The user has 1 digital product. Their next focus should be:
+1. Creating content to promote it (TikTok scripts, Instagram captions)
+2. Making sure the product has a thumbnail and promo video
+3. Setting up their store to sell it
+If they seem unsure, nudge them toward one of these three.`;
+  }
+  if (productCount >= 2) {
+    return `COACH AWARENESS — USER'S CURRENT STAGE:
+The user has ${productCount} digital products. They're building momentum.
+Key next actions:
+1. Consistent content schedule (Content Thursday → clips)
+2. Email list to announce new products
+3. Analysing which product is resonating and doubling down on that niche
+Treat them as someone who has the basics and needs to scale, not someone who needs hand-holding.`;
+  }
+  return "";
 }
 
 function buildProductContextBlock(product: {
@@ -338,6 +373,37 @@ export async function POST(req: Request) {
         ? `The user's name is ${userName || "the user"}. They want to be called ${userName || "the user"} in conversation. The coach's name is ${coachName}. Use the coach's name naturally when relevant, not in every message.`
         : "";
 
+    // Brand voice: niche, tone, audience — injected so coach knows who they are
+    let brandVoiceBlock = "";
+    let productCount = 0;
+    if (userId) {
+      try {
+        const [bv, productCountRow] = await Promise.all([
+          db.select({ brandName: brandVoiceTable.brandName, tone: brandVoiceTable.tone, targetAudience: brandVoiceTable.targetAudience })
+            .from(brandVoiceTable)
+            .where(eq(brandVoiceTable.userId, userId))
+            .limit(1)
+            .then(r => r[0] ?? null),
+          db.select({ count: count() })
+            .from(productsTable)
+            .where(and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt)))
+            .then(r => Number(r[0]?.count ?? 0)),
+        ]);
+        productCount = productCountRow;
+        if (bv?.brandName || bv?.targetAudience) {
+          const parts = [
+            bv.brandName ? `Brand/creator name: ${bv.brandName}` : "",
+            bv.targetAudience ? `Their niche: ${bv.targetAudience}` : "",
+            bv.tone ? `Their preferred tone: ${bv.tone}` : "",
+          ].filter(Boolean);
+          brandVoiceBlock = `USER CONTEXT (from their profile):\n${parts.join("\n")}\nAlways tailor advice to their specific niche. Never give generic advice that ignores their niche.`;
+        }
+      } catch { /* non-blocking */ }
+    }
+
+    // What-next nudge: shown only when no explicit product context is set
+    const whatNextBlock = !productId && userId ? buildWhatNextBlock(productCount) : "";
+
     // Memory: previous conversation summaries (only when memory enabled)
     const memoryBlock =
       memoryEnabled && Array.isArray(previousSummaries) && previousSummaries.length > 0
@@ -383,7 +449,7 @@ export async function POST(req: Request) {
       ].filter(Boolean).join("\n");
     }
 
-    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, PLATFORM_TOOLS_NOTE, personalisation, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
+    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, PLATFORM_TOOLS_NOTE, ACTION_BIAS_NOTE, personalisation, brandVoiceBlock, whatNextBlock, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
     const openai = new OpenAI({ apiKey });
     const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Loader2, BookOpen, Video, TrendingUp, Megaphone, Sparkles } from "lucide-react";
+import { ArrowRight, Loader2, Sparkles, Package, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +53,8 @@ const TONES = [
 
 const TOTAL_STEPS = 3;
 
+type ProductIdea = { name: string; description: string; format: string };
+
 export function OnboardingModal({ show, onComplete, onStepComplete }: OnboardingModalProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -62,12 +64,32 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
   const [niche, setNiche] = useState("");
   const [tone, setTone] = useState("friendly");
   const [saving, setSaving] = useState(false);
+  const [productIdea, setProductIdea] = useState<ProductIdea | null>(null);
+  const [generatingIdea, setGeneratingIdea] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
   if (!mounted || !show) return null;
 
   const progressPct = (step / TOTAL_STEPS) * 100;
   const goal = GOALS.find((g) => g.id === selectedGoal);
+
+  /** Generate a product idea in the background after step 2 */
+  async function generateProductIdea(userNiche: string) {
+    if (!userNiche.trim()) return;
+    setGeneratingIdea(true);
+    try {
+      const res = await fetch("/api/onboarding/product-idea", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ niche: userNiche.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProductIdea(data.idea ?? null);
+      }
+    } catch { /* non-blocking */ }
+    setGeneratingIdea(false);
+  }
 
   const handleNext = () => {
     onStepComplete?.(step);
@@ -105,6 +127,8 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
       }
     } catch { /* non-blocking */ }
     setSaving(false);
+    // Fire product idea generation in background (non-blocking)
+    if (niche.trim()) generateProductIdea(niche.trim());
     setStep(3);
     onStepComplete?.(2);
   };
@@ -266,49 +290,89 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
           </div>
         )}
 
-        {/* Step 3: Launch */}
+        {/* Step 3: Launch + personalised product idea */}
         {step === 3 && (
-          <div className="max-w-md w-full text-center">
-            <div className="w-20 h-20 rounded-2xl bg-orange-500/20 flex items-center justify-center mx-auto mb-6 text-4xl">
-              {goal?.emoji ?? "🚀"}
+          <div className="max-w-md w-full">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 rounded-2xl bg-orange-500/20 flex items-center justify-center mx-auto mb-4 text-3xl">
+                🚀
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-1">
+                You&apos;re all set{brandName ? `, ${brandName}` : ""}!
+              </h2>
+              <p className="text-white/40 text-sm">Here&apos;s your personalised starting point.</p>
             </div>
-            <h2 className="text-3xl font-bold text-white mb-3">
-              You&apos;re all set.
-            </h2>
-            <p className="text-white/50 mb-2">
-              Let&apos;s go {goal ? `— ${goal.title.toLowerCase()}` : "build something"}.
-            </p>
-            <p className="text-white/30 text-sm mb-8">
-              Everything else is waiting when you need it.
-            </p>
 
-            <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6 text-left">
-              <p className="text-white/60 text-xs uppercase tracking-wider mb-3 font-semibold">Your starting point</p>
-              {goal ? (
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{goal.emoji}</span>
-                  <div>
-                    <p className="text-white font-medium text-sm">{goal.title}</p>
-                    <p className="text-white/40 text-xs">{goal.description}</p>
+            {/* Product idea card */}
+            {niche.trim() ? (
+              <div className="bg-white/5 border border-orange-500/30 rounded-xl p-4 mb-4">
+                <p className="text-orange-400 text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3" /> Your first product idea
+                </p>
+                {generatingIdea ? (
+                  <div className="flex items-center gap-2 text-white/40 py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">Generating idea for your niche…</span>
                   </div>
+                ) : productIdea ? (
+                  <div>
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="w-9 h-9 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                        <Package className="h-4 w-4 text-orange-400" />
+                      </div>
+                      <div>
+                        <p className="text-white font-semibold text-sm">{productIdea.name}</p>
+                        <p className="text-white/50 text-xs mt-0.5 leading-relaxed">{productIdea.description}</p>
+                        <span className="inline-block mt-1.5 text-[10px] font-medium bg-white/10 text-white/50 rounded-full px-2 py-0.5">
+                          {productIdea.format}
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        onComplete();
+                        router.push(
+                          `/dashboard/digital-products/create?topic=${encodeURIComponent(productIdea.name)}`
+                        );
+                      }}
+                      className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold text-sm py-2.5"
+                    >
+                      Create this product <ArrowRight className="ml-1.5 h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-white/30 text-sm py-1">
+                    Based on your niche: <span className="text-white/60 font-medium">{niche}</span>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {/* Fallback / other goal */}
+            {goal && goal.id !== "digital_products" && (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4 flex items-center gap-3">
+                <span className="text-2xl shrink-0">{goal.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-medium text-sm">{goal.title}</p>
+                  <p className="text-white/40 text-xs">{goal.description}</p>
                 </div>
-              ) : (
-                <p className="text-white/50 text-sm">Dashboard — explore everything</p>
-              )}
-            </div>
+                <ExternalLink className="h-3.5 w-3.5 text-white/20 shrink-0" />
+              </div>
+            )}
 
             <Button
               onClick={handleLaunch}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 text-base"
+              variant="outline"
+              className="w-full border-white/10 text-white/60 hover:text-white hover:bg-white/5 text-sm"
             >
-              Let&apos;s go <ArrowRight className="ml-2 h-5 w-5" />
+              {goal && goal.id !== "digital_products" ? `Go to ${goal.title}` : "Explore the dashboard"}
             </Button>
             <button
               type="button"
               onClick={onComplete}
-              className="mt-3 w-full text-white/30 hover:text-white/50 text-xs transition-colors"
+              className="mt-3 w-full text-white/20 hover:text-white/40 text-xs transition-colors"
             >
-              Go to dashboard instead
+              Skip — go to dashboard
             </button>
           </div>
         )}
