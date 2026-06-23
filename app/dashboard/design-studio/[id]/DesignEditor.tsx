@@ -1126,7 +1126,7 @@ export function DesignEditor({ designId }: { designId: string }) {
         {/* Canvas */}
         <div
           ref={containerRef}
-          className={`flex-1 flex items-center justify-center overflow-auto p-2 sm:p-8 pb-editor-toolbar md:pb-8 ${selectedEl ? "pt-14 md:pt-2" : ""} ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
+          className={`flex-1 flex items-center justify-center overflow-auto p-2 sm:p-8 pb-editor-toolbar md:pb-8 ${selectedEl ? "pt-14" : ""} ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
           style={{ backgroundImage: isDark ? "radial-gradient(circle, #2A2A2A 1px, transparent 1px)" : "radial-gradient(circle, #d1d5db 1px, transparent 1px)", backgroundSize: "24px 24px" }}
           onClick={() => { setSelectedId(null); setActivePanel(null); }}
         >
@@ -1190,14 +1190,12 @@ export function DesignEditor({ designId }: { designId: string }) {
                 elementCount={data.elements.length} />}
         </aside>
 
-        {/* ── Mobile element editing toolbar ────────────────────────────────
-            Appears when an element is selected on phones/tablets.
-            Fixed to the top of the screen (below the 52px header) so it never
-            occludes canvas content. md:hidden — desktop uses the right panel.
+        {/* ── Element editing toolbar ────────────────────────────────────────
+            Appears when an element is selected. Fixed below the 52px header.
         */}
         {selectedEl && (
           <div
-            className={`md:hidden fixed left-0 right-0 z-[49] flex items-center justify-center gap-1 px-3 py-2 border-b shadow-sm ${panelCls}`}
+            className={`fixed left-0 right-0 z-[49] flex items-center justify-center gap-1 px-3 py-2 border-b shadow-sm ${panelCls}`}
             style={{ top: 52 }}
           >
             {/* Lock / Unlock */}
