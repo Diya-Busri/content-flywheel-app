@@ -7307,7 +7307,15 @@ function VideoTimelineInner() {
   );
 }
 
-export { VideoTimelineInner as default };
+function VideoTimelineApp() {
+  return (
+    <Suspense fallback={<div className="flex flex-1 items-center justify-center min-h-[60vh]"><div className="h-8 w-8 rounded-full border-4 border-orange-500 border-t-transparent animate-spin" /></div>}>
+      <VideoTimelineInner />
+    </Suspense>
+  );
+}
+
+export default VideoTimelineApp;
 
 function formatTime(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return "0:00";
