@@ -1,6 +1,7 @@
 "use client";
 
 import "./timeline-scroll.css";
+import { Suspense } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGaplessAudio, type GaplessClip } from "./use-gapless-audio";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -1323,7 +1324,7 @@ function getCaptions(content: ScriptContent): CaptionBlock[] {
     }));
 }
 
-export default function VideoTimelinePage() {
+function VideoTimelineInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialScriptId = searchParams.get("scriptId") ?? searchParams.get("libraryScriptId") ?? undefined;
@@ -7303,6 +7304,14 @@ export default function VideoTimelinePage() {
         </div>
       )}
     </>
+  );
+}
+
+export default function VideoTimelinePage() {
+  return (
+    <Suspense fallback={<div className="flex flex-1 items-center justify-center min-h-[60vh]"><div className="h-8 w-8 rounded-full border-4 border-orange-500 border-t-transparent animate-spin" /></div>}>
+      <VideoTimelineInner />
+    </Suspense>
   );
 }
 
