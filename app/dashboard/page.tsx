@@ -297,12 +297,12 @@ export default async function DashboardPage() {
     : `${videoStats.digitalProductsCount} product${videoStats.digitalProductsCount > 1 ? "s" : ""} · ${videoStats.totalLibraryVideos} library item${videoStats.totalLibraryVideos > 1 ? "s" : ""}. Keep the flywheel spinning.`;
 
   const tools = [
-    { href: "/dashboard/ai-coach",        emoji: "🤖", label: "AI Coach",       desc: "Chat, plan, generate content",  grad: "from-orange-500 to-amber-400" },
-    { href: "/dashboard/digital-products", emoji: "📦", label: "Create Product", desc: "AI writes your eBook or guide", grad: "from-blue-500 to-indigo-500"  },
-    { href: "/dashboard/design-studio",   emoji: "🎨", label: "Design Studio",  desc: "Images, graphics, bulk posts",  grad: "from-violet-500 to-purple-600" },
-    { href: "/dashboard/video-guide/new", emoji: "🎬", label: "Video Guide",    desc: "Script + scenes in 30 sec",    grad: "from-rose-500 to-pink-500"    },
-    { href: "/dashboard/library",         emoji: "📚", label: "My Library",     desc: "All your saved content",       grad: "from-teal-500 to-cyan-500"    },
-    { href: "/dashboard/email-marketing", emoji: "📧", label: "Email",          desc: "Campaigns + subscriber list",  grad: "from-sky-500 to-blue-400"     },
+    { href: "/dashboard/ai-coach",        emoji: "🤖", label: "AI Coach",       desc: "Chat, plan, generate content"  },
+    { href: "/dashboard/digital-products", emoji: "📦", label: "Create Product", desc: "AI writes your eBook or guide" },
+    { href: "/dashboard/design-studio",   emoji: "🎨", label: "Design Studio",  desc: "Images, graphics, bulk posts"  },
+    { href: "/dashboard/video-guide/new", emoji: "🎬", label: "Video Guide",    desc: "Script + scenes in 30 sec"    },
+    { href: "/dashboard/library",         emoji: "📚", label: "My Library",     desc: "All your saved content"       },
+    { href: "/dashboard/email-marketing", emoji: "📧", label: "Email",          desc: "Campaigns + subscriber list"  },
   ];
 
   return (
@@ -396,15 +396,13 @@ export default async function DashboardPage() {
         <section className="mb-6">
           <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3 uppercase tracking-wide">Your tools</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {tools.map(({ href, emoji, label, desc, grad }) => (
+            {tools.map(({ href, emoji, label, desc }) => (
               <Link key={href} href={href} className="group">
-                <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${grad} p-5 h-full shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-150`}>
-                  {/* shine overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="text-3xl mb-3 drop-shadow">{emoji}</div>
-                  <p className="font-bold text-white text-sm mb-1">{label}</p>
-                  <p className="text-white/70 text-xs leading-relaxed">{desc}</p>
-                  <ArrowRight className="absolute bottom-4 right-4 w-4 h-4 text-white/40 group-hover:text-white/80 group-hover:translate-x-0.5 transition-all" />
+                <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-5 h-full shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-orange-200 dark:hover:border-orange-500/30 transition-all duration-150">
+                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center mb-3 text-xl group-hover:bg-orange-500/20 transition-colors">{emoji}</div>
+                  <p className="font-bold text-gray-900 dark:text-white text-sm mb-1">{label}</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed">{desc}</p>
+                  <ArrowRight className="absolute bottom-4 right-4 w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
                 </div>
               </Link>
             ))}
