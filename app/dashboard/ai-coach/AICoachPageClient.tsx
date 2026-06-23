@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Send, Loader2, Volume2, VolumeX, ImagePlus, Plus, Search, Trash2, Mic, Phone, PhoneOff, Paperclip, FileText, X, ChevronDown, ChevronLeft, ChevronRight, Package, Copy, BookOpen, Sparkles, Save, Pencil, Download, Pin, AudioLines, Play, Square, Video } from "lucide-react";
+import { Send, Loader2, Volume2, VolumeX, ImagePlus, Plus, Search, Trash2, Mic, Phone, PhoneOff, Paperclip, FileText, X, ChevronDown, ChevronLeft, ChevronRight, Package, Copy, BookOpen, Sparkles, Save, Pencil, Download, Pin, AudioLines, Play, Square, Video, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -169,13 +169,13 @@ const STARTER_CHIPS = [
 ];
 
 /** Empty state: 6 suggested prompts in 2x3 grid; click pre-fills and auto-sends */
-const EMPTY_STATE_PROMPTS: { title: string; icon: React.ReactNode }[] = [
-  { title: "I'm new here — what should I do first?", icon: <Sparkles className="h-5 w-5" /> },
-  { title: "Give me a digital product idea for my audience", icon: <Package className="h-5 w-5" /> },
-  { title: "Write a short TikTok script I can use today", icon: <FileText className="h-5 w-5" /> },
-  { title: "What price should I sell my product at?", icon: <Package className="h-5 w-5" /> },
-  { title: "Create a simple marketing plan for this week", icon: <FileText className="h-5 w-5" /> },
-  { title: "What should I focus on to grow my sales?", icon: <Sparkles className="h-5 w-5" /> },
+const EMPTY_STATE_PROMPTS: { title: string; description: string; icon: React.ReactNode }[] = [
+  { title: "I'm new here — what should I do first?", description: "Get a personalised quick-start plan", icon: <Sparkles className="h-5 w-5" /> },
+  { title: "Give me a digital product idea for my audience", description: "Find something worth selling in your niche", icon: <Package className="h-5 w-5" /> },
+  { title: "Write a short TikTok script I can use today", description: "Ready-to-film hook + body + CTA", icon: <FileText className="h-5 w-5" /> },
+  { title: "What price should I sell my product at?", description: "Pricing strategy based on your market", icon: <Package className="h-5 w-5" /> },
+  { title: "Create a simple marketing plan for this week", description: "7-day content + promotion roadmap", icon: <FileText className="h-5 w-5" /> },
+  { title: "What should I focus on to grow my sales?", description: "Cut through the noise and prioritise", icon: <Sparkles className="h-5 w-5" /> },
 ];
 
 /** 20 prompts for Prompts Library slide-out, by category */
@@ -1941,25 +1941,28 @@ ${videoLines}`;
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap sm:flex-wrap overflow-x-hidden min-w-0">
+        <div className="flex items-center gap-2 shrink-0">
           {!isVoiceCall ? (
             <>
-              <div className="hidden sm:flex items-center gap-1.5 shrink-0">
-                <span className="text-sm font-medium text-foreground hidden sm:inline">Memory</span>
-                <Switch checked={memoryEnabled} onCheckedChange={onMemoryToggle} aria-label="Memory on or off" />
-                <button
-                  type="button"
-                  onClick={onMemorySettingsOpen}
-                  className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                  aria-label="Edit memory settings"
-                  title="Edit name settings"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              </div>
+              {/* Active product context badge */}
+              {productId && productName && (
+                <span className="hidden sm:inline-flex items-center gap-1.5 rounded-md bg-orange-500/15 text-orange-700 dark:text-orange-300 px-2 py-1 text-xs">
+                  <Package className="h-3.5 w-3.5 shrink-0" />
+                  <span className="max-w-[120px] truncate">{productName}</span>
+                  <button
+                    type="button"
+                    onClick={() => onProductContextChange(null)}
+                    className="rounded p-0.5 hover:bg-orange-500/20"
+                    aria-label="Remove product context"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {/* Coach mode selector */}
               <Select value={coachMode} onValueChange={onCoachModeChange}>
                 <SelectTrigger
-                  className="shrink-0 w-[120px] sm:w-[200px] gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20 h-8 sm:h-9 text-xs sm:text-sm"
+                  className="shrink-0 w-[130px] sm:w-[180px] gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20 h-9 text-xs sm:text-sm"
                   aria-label="Coach mode"
                 >
                   <SelectValue placeholder="Coach Mode">
@@ -1978,106 +1981,81 @@ ${videoLines}`;
                   ))}
                 </SelectContent>
               </Select>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onPromptsLibraryOpenChange(true)}
-                className="hidden sm:flex shrink-0 gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20"
-                aria-label="Open prompts library"
-              >
-                <BookOpen className="h-4 w-4" />
-                <span className="hidden sm:inline">Prompts Library</span>
-              </Button>
-              {productId && productName ? (
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-orange-500/15 text-orange-700 dark:text-orange-300 px-2 py-1 text-xs sm:text-sm sm:px-2.5 sm:py-1.5">
-                  <Package className="h-3.5 w-3.5 shrink-0" />
-                  <span className="max-w-[80px] sm:max-w-[160px] truncate">{productName}</span>
-                  <button
-                    type="button"
-                    onClick={() => onProductContextChange(null)}
-                    className="rounded p-0.5 hover:bg-orange-500/20"
-                    aria-label="Remove product context"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ) : null}
+              {/* ⋯ More dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
-                    className="hidden sm:flex shrink-0 gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20"
-                    aria-label="Add product context"
-                    title="Attach a product to this conversation"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 border-slate-300 dark:border-white/20 text-slate-700 dark:text-slate-300"
+                    aria-label="More options"
+                    title="More options"
                   >
-                    <Package className="h-4 w-4" />
-                    <span className="hidden sm:inline">Add Product Context</span>
-                    <ChevronDown className="h-3.5 w-3.5" />
+                    <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="max-h-[280px] overflow-y-auto">
-                  {products.length === 0 ? (
-                    <DropdownMenuItem disabled className="text-slate-500">
-                      No products yet
-                    </DropdownMenuItem>
-                  ) : (
-                    products.map((p) => (
-                      <DropdownMenuItem
-                        key={p.id}
-                        onClick={() => onProductContextChange(p.id, p.title)}
-                        className="flex flex-col items-start gap-0.5 py-2"
-                      >
-                        <span className="font-medium truncate max-w-full">{p.title}</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 capitalize">
-                          {p.format || "Product"}
-                        </span>
+                <DropdownMenuContent align="end" className="w-56">
+                  {/* Memory toggle row */}
+                  <div className="flex items-center justify-between px-2 py-2 gap-3">
+                    <span className="text-sm text-foreground">Memory</span>
+                    <Switch checked={memoryEnabled} onCheckedChange={onMemoryToggle} aria-label="Memory on or off" />
+                  </div>
+                  <DropdownMenuItem onClick={onMemorySettingsOpen}>
+                    <Pencil className="h-4 w-4 mr-2 shrink-0" />
+                    Edit name settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onPromptsLibraryOpenChange(true)}>
+                    <BookOpen className="h-4 w-4 mr-2 shrink-0" />
+                    Prompts Library
+                  </DropdownMenuItem>
+                  {/* Product context picker */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                        <Package className="h-4 w-4 mr-2 shrink-0" />
+                        Add Product Context
+                        <ChevronDown className="h-3.5 w-3.5 ml-auto" />
                       </DropdownMenuItem>
-                    ))
-                  )}
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent side="left" className="max-h-[280px] overflow-y-auto">
+                      {products.length === 0 ? (
+                        <DropdownMenuItem disabled className="text-slate-500">No products yet</DropdownMenuItem>
+                      ) : (
+                        products.map((p) => (
+                          <DropdownMenuItem
+                            key={p.id}
+                            onClick={() => onProductContextChange(p.id, p.title)}
+                            className="flex flex-col items-start gap-0.5 py-2"
+                          >
+                            <span className="font-medium truncate max-w-full">{p.title}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 capitalize">{p.format || "Product"}</span>
+                          </DropdownMenuItem>
+                        ))
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <DropdownMenuItem onClick={handleStartVoiceCall}>
+                    <Phone className="h-4 w-4 mr-2 shrink-0" />
+                    Start Voice Call
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onMutedChange(!muted)}>
+                    {muted ? (
+                      <Volume2 className="h-4 w-4 mr-2 shrink-0" />
+                    ) : (
+                      <VolumeX className="h-4 w-4 mr-2 shrink-0" />
+                    )}
+                    {muted ? "Unmute responses" : "Mute responses"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleClearChat}
+                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2 shrink-0" />
+                    Clear Chat
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleStartVoiceCall}
-                className="hidden sm:flex shrink-0 gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20"
-                aria-label="Start voice call"
-                title="Start voice call"
-              >
-                <Phone className="h-4 w-4" />
-                <span className="hidden sm:inline">Start Voice Call</span>
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => onMutedChange(!muted)}
-                className={cn(
-                  "shrink-0 hidden sm:flex",
-                  muted ? "text-slate-500 dark:text-slate-400" : "text-orange-500 dark:text-orange-400"
-                )}
-                aria-label={muted ? "Unmute speech" : "Mute speech"}
-                title={muted ? "Unmute" : "Mute TTS"}
-              >
-                {muted ? (
-                  <VolumeX className="h-5 w-5" aria-hidden />
-                ) : (
-                  <Volume2 className="h-5 w-5 fill-current" aria-hidden />
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleClearChat}
-                className="text-slate-600 dark:text-slate-400 hidden sm:flex"
-              >
-                Clear Chat
-              </Button>
             </>
           ) : (
             <span className="text-sm text-slate-500 dark:text-slate-400">Voice call active</span>
@@ -2126,32 +2104,40 @@ ${videoLines}`;
             </div>
           )}
           {messages.length === 0 && (
-            /* Mobile: single-row horizontal scroll so long chip text never overflows.
-               sm+: wrap into multiple rows, centered. */
-            <div className="flex gap-2 pt-6 pb-2 overflow-x-auto px-4 sm:flex-wrap sm:overflow-visible sm:justify-center sm:pb-4 no-scrollbar">
-              {(products.length > 0
-                ? [
-                    `Help me improve "${products[0]?.title ?? "my product"}"`,
-                    "What should I create next?",
-                    "What should I focus on today?",
-                  ]
-                : STARTER_CHIPS
-              ).map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => sendMessage(label)}
-                  disabled={isLoading}
-                  className={cn(
-                    "shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap",
-                    "bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20",
-                    "dark:bg-orange-500/20 dark:hover:bg-orange-500/30",
-                    "disabled:opacity-50 disabled:pointer-events-none"
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="flex flex-col items-center pt-10 pb-4 px-2">
+              <div className="mb-1 flex items-center justify-center w-12 h-12 rounded-full bg-orange-500/15">
+                <Sparkles className="h-6 w-6 text-orange-500" />
+              </div>
+              <h2 className="mt-3 text-xl font-semibold text-foreground text-center">What can I help with?</h2>
+              <p className="mt-1 text-sm text-muted-foreground text-center max-w-xs">
+                Ask anything about your content, strategy, or products.
+              </p>
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-xl">
+                {EMPTY_STATE_PROMPTS.map(({ title, description, icon }) => (
+                  <button
+                    key={title}
+                    type="button"
+                    onClick={() => sendMessage(title)}
+                    disabled={isLoading}
+                    className={cn(
+                      "flex items-start gap-3 rounded-xl border border-border bg-card",
+                      "px-4 py-3 text-left transition-all shadow-sm",
+                      "hover:border-orange-500/50 hover:bg-orange-500/5 hover:shadow-md",
+                      "disabled:opacity-50 disabled:pointer-events-none"
+                    )}
+                  >
+                    <span className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-orange-500/15 text-orange-600 dark:text-orange-400 mt-0.5">
+                      {icon}
+                    </span>
+                    <span className="flex flex-col gap-0.5 min-w-0">
+                      <span className="text-sm font-medium text-foreground">{title}</span>
+                      {description && (
+                        <span className="text-xs text-muted-foreground leading-snug">{description}</span>
+                      )}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -2522,7 +2508,7 @@ ${videoLines}`;
         >
           <textarea
             ref={textareaRef}
-            placeholder={isRecording ? "Speak now…" : "Ask your coach or describe an image…"}
+            placeholder={isRecording ? "Speak now…" : "Message your coach…"}
             onKeyDown={handleKeyDown}
             onInput={handleTextareaInput}
             disabled={isLoading || fetchingTikTok}

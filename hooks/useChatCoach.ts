@@ -10,6 +10,14 @@ const IMAGE_SUBJECT_WORDS = /\b(image|picture|photo|illustration|design|graphic|
 // Strip conversational prefix ("can u create me some as aesthetic images of") → extract the actual description
 const IMAGE_PREFIX_RE = /^(?:can\s+(?:u|you)\s+)?(?:create|make|generate|draw|design|build|produce|give\s+me|show\s+me|i\s+want\s+a|can\s+you\s+make)\s+(?:me\s+)?(?:some\s+)?(?:as\s+)?(?:(?:a|an|some|few|the)\s+)?(?:aesthetic\s+)?(?:image|picture|photo|illustration|design|graphic|poster|thumbnail|banner|visual|mockup|logo|flyer|infographic|artwork|cover|background|icon|sticker|meme|frame|slide|creative|ad)s?\s+(?:of\s+|for\s+|showing\s+)?/i;
 
+/** Detect aspect ratio from prompt keywords. Defaults to 16:9. */
+export function detectAspectRatio(prompt: string): "16:9" | "9:16" | "1:1" {
+  const p = prompt.toLowerCase();
+  if (/\b(vertical|portrait|9[:\s]16|story|stories|reel|tiktok|tik\s*tok|phone|mobile|instagram\s+story|stories\s+post)\b/.test(p)) return "9:16";
+  if (/\b(square|1[:\s]1|instagram\s+post|grid\s+post)\b/.test(p)) return "1:1";
+  return "16:9";
+}
+
 /** Strip conversational preamble from an image request to get a clean DALL-E prompt. */
 export function extractImagePrompt(text: string): string {
   const stripped = text.trim().replace(IMAGE_PREFIX_RE, "").trim();
@@ -164,7 +172,7 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
         const res = await fetch("/api/chat/coach/generate-image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: trimmed, aspectRatio: "16:9" }),
+          body: JSON.stringify({ prompt: trimmed, aspectRatio: detectAspectRatio(trimmed) }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -242,7 +250,7 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
           const res = await fetch("/api/chat/coach/generate-image", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: imagePrompt, aspectRatio: "16:9" }),
+            body: JSON.stringify({ prompt: imagePrompt, aspectRatio: detectAspectRatio(imagePrompt) }),
           });
           const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
           if (data.url) {

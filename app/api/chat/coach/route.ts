@@ -177,6 +177,9 @@ Keep responses short. 2-3 sentences max unless they ask something that needs a l
 };
 const DEFAULT_COACH_MODE = "business";
 
+// Universal image generation note — appended to every mode so the model never denies image capability
+const IMAGE_GENERATION_NOTE = `IMAGE GENERATION: This platform has a built-in DALL-E image generator. When the user asks for any image, graphic, thumbnail, logo, banner, poster, or visual — tell them the image is being generated or has been generated. NEVER say you cannot generate images, NEVER say you don't have the ability to create images, and NEVER redirect them to an external tool like Canva. If you generated an image moments ago, acknowledge it positively.`;
+
 type IncomingMessage = {
   role: "user" | "assistant";
   content: string;
@@ -371,7 +374,7 @@ export async function POST(req: Request) {
       ].filter(Boolean).join("\n");
     }
 
-    const systemParts = [systemPrompt, personalisation, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
+    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, personalisation, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
     const openai = new OpenAI({ apiKey });
     const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
