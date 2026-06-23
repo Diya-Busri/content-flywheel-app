@@ -18,7 +18,7 @@ import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { brandProfilesTable } from "@/db/schema/brand-profiles-schema";
 import {
   Package, Video, AlertCircle,
-  ArrowRight, Mail, Film,
+  ArrowRight, Film, Clapperboard,
 } from "lucide-react";
 import { SyncOnboardingSteps } from "@/components/onboarding/sync-onboarding-steps";
 import { ReferralCapture } from "@/components/ReferralCapture";
@@ -284,16 +284,7 @@ export default async function DashboardPage() {
       ];
 
   const videoCredits = (profileRow as { videoCredits?: number | null } | null)?.videoCredits ?? 0;
-  const { totalCents, totalOrders } = revenue as { totalCents: number; totalOrders: number };
-  const revenueLabel = totalCents > 0 ? `£${(totalCents / 100).toFixed(2)}` : "£0.00";
-
-  const hasSubscriber = emailSubscribers > 0;
-  const hasCampaign = campaignsSent > 0;
-  const showChecklist =
-    !checklist.hasBrandVoice || !checklist.hasProduct || !checklist.hasThumbnail ||
-    !checklist.hasPromoVideo || !hasSubscriber || !hasCampaign;
-
-  const estimatedRevenue = videoStats.digitalProductsCount * 15;
+  const { totalOrders } = revenue as { totalCents: number; totalOrders: number };
 
   return (
     <main className="p-4 sm:p-6 md:p-8 max-w-[1200px] mx-auto">
@@ -313,17 +304,20 @@ export default async function DashboardPage() {
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
-          { label: "Products", value: videoStats.digitalProductsCount, href: "/dashboard/digital-products", icon: Package, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-950/30" },
-          { label: "Library Items", value: videoStats.totalLibraryVideos, href: "/dashboard/library", icon: Film, color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950/30" },
-          { label: "Subscribers", value: emailSubscribers, href: "/dashboard/email-marketing", icon: Mail, color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-950/30" },
-          { label: "Video Credits", value: videoCredits, href: "/dashboard/video-credits", icon: Film, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
-        ].map(({ label, value, href, icon: Icon, color, bg }) => (
-          <Link key={label} href={href} className="group rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4 hover:border-gray-200 dark:hover:border-[#3A3A3A] hover:shadow-sm transition-all">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${bg}`}>
-              <Icon className={`w-4 h-4 ${color}`} />
+          { label: "Products", value: videoStats.digitalProductsCount, href: "/dashboard/digital-products", icon: Package, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-950/30", gradient: "from-blue-50 to-blue-50/0 dark:from-blue-950/20 dark:to-transparent" },
+          { label: "Library Items", value: videoStats.totalLibraryVideos, href: "/dashboard/library", icon: Film, color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950/30", gradient: "from-orange-50 to-orange-50/0 dark:from-orange-950/20 dark:to-transparent" },
+          { label: "Videos This Week", value: videosThisWeek, href: "/dashboard/library", icon: Clapperboard, color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-950/30", gradient: "from-violet-50 to-violet-50/0 dark:from-violet-950/20 dark:to-transparent" },
+          { label: "Video Credits", value: videoCredits, href: "/dashboard/video-credits", icon: Film, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/30", gradient: "from-emerald-50 to-emerald-50/0 dark:from-emerald-950/20 dark:to-transparent" },
+        ].map(({ label, value, href, icon: Icon, color, bg, gradient }) => (
+          <Link key={label} href={href} className={`group relative overflow-hidden rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] p-4 hover:border-gray-200 dark:hover:border-[#3A3A3A] hover:shadow-sm transition-all`}>
+            <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-60 pointer-events-none`} />
+            <div className="relative">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${bg}`}>
+                <Icon className={`w-4 h-4 ${color}`} />
+              </div>
+              <p className="text-2xl font-extrabold text-gray-900 dark:text-white">{value}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">{label}</p>
             </div>
-            <p className="text-2xl font-extrabold text-gray-900 dark:text-white">{value}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">{label}</p>
           </Link>
         ))}
       </div>
@@ -366,24 +360,30 @@ export default async function DashboardPage() {
       {/* Quick-launch tools grid */}
       <section className="mb-6">
         <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Your tools</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {[
-            { href: "/dashboard/ai-coach", emoji: "🤖", label: "AI Coach", desc: "Chat, plan, generate content", highlight: true },
-            { href: "/dashboard/digital-products/create", emoji: "📦", label: "Create Product", desc: "AI writes your eBook or guide" },
-            { href: "/dashboard/design-studio", emoji: "🎨", label: "Design Studio", desc: "Images, graphics, bulk posts" },
-            { href: "/dashboard/video-guide/new", emoji: "🎬", label: "Video Guide", desc: "Script + scenes in 30 sec" },
-            { href: "/dashboard/library", emoji: "📚", label: "My Library", desc: "All your saved content" },
-            { href: "/dashboard/email-marketing", emoji: "📧", label: "Email", desc: "Campaigns + subscriber list" },
-          ].map(({ href, emoji, label, desc, highlight }) => (
+            { href: "/dashboard/ai-coach", emoji: "🤖", label: "AI Coach", desc: "Chat, plan, generate content", style: "highlight" },
+            { href: "/dashboard/digital-products", emoji: "📦", label: "Create Product", desc: "AI writes your eBook or guide", style: "blue" },
+            { href: "/dashboard/design-studio", emoji: "🎨", label: "Design Studio", desc: "Images, graphics, bulk posts", style: "purple" },
+            { href: "/dashboard/video-guide/new", emoji: "🎬", label: "Video Guide", desc: "Script + scenes in 30 sec", style: "rose" },
+            { href: "/dashboard/library", emoji: "📚", label: "My Library", desc: "All your saved content", style: "default" },
+            { href: "/dashboard/email-marketing", emoji: "📧", label: "Email", desc: "Campaigns + subscriber list", style: "default" },
+          ].map(({ href, emoji, label, desc, style }) => (
             <Link key={href} href={href} className="group block">
               <div className={`rounded-2xl border p-4 h-full transition-all hover:shadow-md ${
-                highlight
+                style === "highlight"
                   ? "bg-gradient-to-br from-orange-500 to-amber-500 border-orange-400 text-white shadow-sm shadow-orange-500/20"
+                  : style === "blue"
+                  ? "bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-900/40 hover:border-blue-300/60 dark:hover:border-blue-500/30"
+                  : style === "purple"
+                  ? "bg-violet-50 dark:bg-violet-950/30 border-violet-100 dark:border-violet-900/40 hover:border-violet-300/60 dark:hover:border-violet-500/30"
+                  : style === "rose"
+                  ? "bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-900/40 hover:border-rose-300/60 dark:hover:border-rose-500/30"
                   : "bg-white dark:bg-[#1A1A1A] border-gray-100 dark:border-[#2A2A2A] hover:border-orange-300/60 dark:hover:border-orange-500/30"
               }`}>
                 <div className="text-2xl mb-2">{emoji}</div>
-                <p className={`font-bold text-sm mb-0.5 ${highlight ? "text-white" : "text-gray-900 dark:text-white"}`}>{label}</p>
-                <p className={`text-xs leading-relaxed ${highlight ? "text-white/80" : "text-gray-500 dark:text-gray-400"}`}>{desc}</p>
+                <p className={`font-bold text-sm mb-0.5 ${style === "highlight" ? "text-white" : "text-gray-900 dark:text-white"}`}>{label}</p>
+                <p className={`text-xs leading-relaxed ${style === "highlight" ? "text-white/80" : "text-gray-500 dark:text-gray-400"}`}>{desc}</p>
               </div>
             </Link>
           ))}
