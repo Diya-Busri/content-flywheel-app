@@ -24,7 +24,7 @@ import { SyncOnboardingSteps } from "@/components/onboarding/sync-onboarding-ste
 import { ReferralCapture } from "@/components/ReferralCapture";
 import { InviteCapture } from "@/components/InviteCapture";
 import { Suspense } from "react";
-import { TodaysFocus } from "@/components/dashboard/TodaysFocus";
+import { DailyStreakTracker } from "@/components/dashboard/DailyStreakTracker";
 
 export const metadata: Metadata = {
   title: "Dashboard | Content Flywheel",
@@ -348,14 +348,8 @@ export default async function DashboardPage() {
           ))}
         </div>
 
-        {/* Today's Focus */}
-        <TodaysFocus
-          productsCount={videoStats.digitalProductsCount}
-          videosCount={videoStats.totalLibraryVideos}
-          hasThumbnail={checklist.hasThumbnail}
-          totalOrders={totalOrders}
-          emailSubscribers={emailSubscribers}
-        />
+        {/* Daily Streak */}
+        <DailyStreakTracker />
 
         {/* Incomplete products */}
         {incompleteProducts.length > 0 && (
