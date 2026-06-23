@@ -2666,15 +2666,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               Copy All AI Prompts
             </Button>
             <Button
-              variant="outline"
-              size="sm"
-              className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted hover:text-foreground"
-              onClick={copyAllPromptsMidjourney}
-            >
-              <Copy className="w-3.5 h-3.5 mr-1.5" />
-              Copy All Prompts (Midjourney)
-            </Button>
-            <Button
               className="bg-orange-500 hover:bg-orange-600 text-white"
               size="sm"
               onClick={downloadGuide}
@@ -2705,20 +2696,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             <Copy className="w-3.5 h-3.5" />
             {copiedCaption ? "Copied!" : "Copy Caption"}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className={[
-              "gap-1.5 shrink-0 transition-colors",
-              showTikTokChecklist
-                ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white"
-                : "border-gray-300 dark:border-border text-gray-700 dark:text-muted-foreground hover:bg-gray-100 dark:hover:bg-muted",
-            ].join(" ")}
-            onClick={() => setShowTikTokChecklist((v) => !v)}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Post on TikTok checklist
-          </Button>
           {productId && (
             <Button
               variant="outline"
@@ -2736,87 +2713,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             </Button>
           )}
         </div>
-
-        {/* ── TikTok Posting Checklist ── */}
-        {showTikTokChecklist && (
-          <Card className="mb-6 border-gray-200 dark:border-border overflow-visible">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
-                <span className="text-lg leading-none">📱</span>
-                Post on TikTok — Step-by-Step
-              </CardTitle>
-              <CardDescription className="text-sm text-gray-600 dark:text-muted-foreground">
-                Tick each step off as you go
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              {[
-                { label: "Film your video using the hook, body and CTA from the script above", extra: null },
-                { label: "Export as vertical MP4 (1080 × 1920, 30 fps)", extra: null },
-                {
-                  label: "Copy your caption — hit \"Copy Caption\" above, or use your Social Media Kit description + hashtags",
-                  extra: (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); copyCaption(); }}
-                      className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors"
-                    >
-                      <Copy className="w-3 h-3" />
-                      {copiedCaption ? "Copied!" : "Copy Caption"}
-                    </button>
-                  ),
-                },
-                { label: "Open TikTok → tap + → upload your video", extra: null },
-                { label: "Paste your caption and hashtags, set your cover thumbnail", extra: null },
-                { label: "Schedule or post at your peak time (check your TikTok Analytics)", extra: null },
-                { label: "Reply to every comment in the first 30 minutes to boost the algorithm", extra: null },
-              ].map((item, i) => (
-                <label
-                  key={i}
-                  className="flex items-start gap-2.5 cursor-pointer group select-none"
-                  onClick={() =>
-                    setTiktokCheckItems((prev) => {
-                      const next = [...prev];
-                      next[i] = !next[i];
-                      return next;
-                    })
-                  }
-                >
-                  <span
-                    className={[
-                      "mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors",
-                      tiktokCheckItems[i]
-                        ? "bg-black dark:bg-white border-black dark:border-white"
-                        : "border-gray-300 dark:border-border group-hover:border-gray-400 dark:group-hover:border-muted-foreground",
-                    ].join(" ")}
-                  >
-                    {tiktokCheckItems[i] && (
-                      <svg className="w-2.5 h-2.5 text-white dark:text-black" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 12 12">
-                        <polyline points="1.5,6 4.5,9 10.5,3" />
-                      </svg>
-                    )}
-                  </span>
-                  <div>
-                    <span className={tiktokCheckItems[i] ? "line-through text-gray-400 dark:text-muted-foreground" : "text-foreground"}>
-                      {item.label}
-                    </span>
-                    {item.extra}
-                  </div>
-                </label>
-              ))}
-              <div className="pt-3 border-t border-gray-100 dark:border-border">
-                <a
-                  href="https://www.tiktok.com/upload"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-black hover:bg-gray-900 text-white transition-colors"
-                >
-                  📱 Open TikTok Upload
-                </a>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {isYouTubeMode && (
           <Card className="mb-6 border-green-200 dark:border-green-800/50 bg-green-50/50 dark:bg-green-950/20 overflow-visible">
@@ -3363,13 +3259,13 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               How to Edit
             </TabsTrigger>
             <TabsTrigger value="subtitles" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
-              Captions
+              Subtitles
             </TabsTrigger>
             <TabsTrigger value="music" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
               Music
             </TabsTrigger>
             <TabsTrigger value="export" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
-              Download & Post
+              Export
             </TabsTrigger>
             <TabsTrigger value="social-kit" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
               Captions & Hashtags
@@ -3380,84 +3276,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           </TabsList>
 
           <TabsContent value="scenes" className="mt-6 space-y-4">
-            {/* Character Setup */}
-            <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
-                  <ImagePlus className="w-4 h-4 text-orange-500" />
-                  Video Setup
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-gray-600 dark:text-muted-foreground">
-                  Use the same reference image across all scenes for consistent characters. Works best with Midjourney (--cref) and ChatGPT.
-                </p>
-                <label className="block">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={handleCharacterRefFile}
-                  />
-                  <div className="border-2 border-dashed border-gray-200 dark:border-border rounded-lg p-6 text-center hover:border-orange-500/50 transition-colors cursor-pointer bg-gray-100 dark:bg-background">
-                    <ImagePlus className="w-10 h-10 mx-auto text-gray-500 dark:text-muted-foreground mb-2" />
-                    <p className="text-sm text-gray-600 dark:text-muted-foreground">Upload your character reference image</p>
-                    <p className="text-xs text-gray-500 dark:text-muted-foreground mt-1">PNG, JPG or WebP</p>
-                  </div>
-                </label>
-                {characterRefPreviewUrl && (
-                  <div className="flex flex-wrap items-start gap-4">
-                    <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-border bg-gray-100 dark:bg-background w-24 h-24 shrink-0">
-                      <img
-                        src={characterRefPreviewUrl}
-                        alt="Character reference"
-                        className="w-full h-full object-cover"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-0 right-0 h-6 w-6 rounded-bl bg-background/80 text-foreground hover:bg-background"
-                        onClick={() => {
-                          URL.revokeObjectURL(characterRefPreviewUrl);
-                          setCharacterRefPreviewUrl(null);
-                          setCharacterRefPublicUrl(null);
-                        }}
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </div>
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <label className="block">
-                        <span className="text-xs text-orange-500 font-medium uppercase tracking-wide">Reference image URL (for Midjourney --cref)</span>
-                        <input
-                          type="url"
-                          placeholder="Paste your hosted image URL"
-                          value={characterRefPublicUrl ?? ""}
-                          onChange={(e) => setCharacterRefPublicUrl(e.target.value || null)}
-                          className="mt-1 w-full rounded-md bg-gray-100 dark:bg-background border border-gray-200 dark:border-border px-3 py-2 text-sm text-foreground placeholder:text-gray-500 dark:placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-orange-500"
-                        />
-                      </label>
-                      <p className="text-xs text-gray-500 dark:text-muted-foreground">Host your image (e.g. Discord, imgur) and paste the direct image URL here for --cref.</p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Pro tip */}
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 flex gap-3">
-              <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-              <div className="text-sm text-foreground space-y-2">
-                <p className="font-medium text-foreground">Pro tip: Generate your main character first, then use that image as a reference for all scenes.</p>
-                <ul className="list-disc list-inside space-y-0.5 text-gray-700 dark:text-gray-200">
-                  <li><strong>Midjourney:</strong> Use --cref flag (best consistency)</li>
-                  <li><strong>ChatGPT:</strong> Upload reference image in each prompt</li>
-                  <li><strong>Grok:</strong> Upload reference and ask to maintain character</li>
-                </ul>
-              </div>
-            </div>
-
             {onScenesRegenerated && (
               <div className="flex justify-end">
                 <Button
@@ -4485,7 +4303,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                 <p><span className="text-foreground">Mood:</span> {music.mood ?? "—"}</p>
                 <p><span className="text-foreground">Sources:</span> {Array.isArray(music.sources) ? music.sources.join(", ") : "—"}</p>
                 <p><span className="text-foreground">Volume:</span> {music.volume ?? "—"}</p>
-                <p className="text-xs text-gray-500 dark:text-muted-foreground mt-2">Sync beat drops with scene transitions. Use TikTok Sounds for trending audio.</p>
+                <p className="text-xs text-gray-500 dark:text-muted-foreground mt-2">Sync beat drops with scene transitions. Use royalty-free sources like Epidemic Sound or YouTube Audio Library.</p>
               </CardContent>
             </Card>
           </TabsContent>

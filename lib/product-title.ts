@@ -8,7 +8,8 @@
  */
 export function cleanProductTitle(title: string | null | undefined): string {
   if (title == null) return "";
-  return String(title).split("|")[0].split("-")[0].trim();
+  // Only split on " - " (Etsy-style with spaces) — bare hyphens in names like "30-Day" must be preserved
+  return String(title).split("|")[0].split(" - ")[0].trim();
 }
 
 /**
