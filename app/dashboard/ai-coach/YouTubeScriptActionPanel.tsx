@@ -45,51 +45,92 @@ const VOICE_OPTIONS = [
 
 /** Stop patterns: start of non-narrative content (next steps, instructions, button labels, etc.) */
 const NARRATIVE_STOP_PATTERNS = [
-  /^\s*---\s*$/m,
-  /^\s*Next steps\s*:?\s*/im,
+  // NOTE: standalone --- is intentionally excluded — it's used as a section separator within scripts
+  /^\s*Clip (Ideas?|Moments?)\s*:/im,
+  /^\s*Visual Prompts?\s*:/im,
+  /^\s*Next steps\s*:?\s*$/im,
   /^\s*\*\*Next steps\*\*\s*:?\s*/im,
   /^\s*Instructions\s*:?\s*/im,
   /^\s*\*\*Instructions\*\*\s*:?\s*/im,
   /^\s*Summary\s*:?\s*/im,
   /^\s*How to use\s+/im,
-  /^\s*Use \*\*Generate Voiceover\*\*/im,
-  /^\s*Use the \*\*Generate\s+/im,
-  /^\s*Click \*\*Export Timeline\*\*/im,
-  /^\s*Click \*\*Generate\s+/im,
-  /^\s*Download SEO Package\s+/im,
-  /^\s*Export Timeline for Editing\s+/im,
-  /^\s*Generate Thumbnail Prompts\s+/im,
+  /^\s*Use (\*\*)?Generate Voiceover(\*\*)?/im,
+  /^\s*Use (the )?(\*\*)?Generate\s+/im,
+  /^\s*Click (\*\*)?Export Timeline(\*\*)?/im,
+  /^\s*Click (\*\*)?Generate\s+/im,
+  /^\s*Download SEO Package/im,
+  /^\s*Export Timeline for Editing/im,
+  /^\s*Generate Thumbnail Prompts/im,
   /^\s*The Timeline holds\s+/im,
-  /^\s*You can also click \*\*Generate SEO\*\*/im,
+  /^\s*You can also click (\*\*)?Generate SEO(\*\*)?/im,
   /^\s*\(1\)\s+Export Timeline/im,
   /^\s*\(2\)\s+Download SEO/im,
   /^\s*\(3\)\s+Generate Thumbnail/im,
 ];
 
 /**
+ * Lines to strip from the script before voiceover generation.
+ * These are structural labels / headers, not spoken content.
+ */
+function isStructuralLine(line: string): boolean {
+  const l = line.trim();
+  if (!l) return false;
+  // "Script: Title" header
+  if (/^Script\s*:/i.test(l)) return true;
+  // "Timestamps/Sections:" label
+  if (/^Timestamps\s*\/?\s*Sections\s*:/i.test(l)) return true;
+  // Section headers with timestamps, e.g. "Hook (0:00 - 0:30)" or "- Relatable Problem (2:00 - 4:00)"
+  if (/\(\d+:\d+\s*[-–]\s*\d+:\d+\)/.test(l) && l.length < 100) return true;
+  return false;
+}
+
+/**
  * Extracts only the script narrative (dialogue/narration) from the full AI Coach response.
- * Strips "Next steps", instructions, button labels, and post-script actions so
- * voiceover is generated only for the actual spoken content.
+ * - Skips preamble before the first --- delimiter (if present)
+ * - Strips structural labels (section headers with timestamps, "Script: Title")
+ * - Stops at "Clip Ideas:", "Visual Prompts:", "Next steps:", instructions, etc.
  */
 function extractScriptNarrativeOnly(fullText: string): string {
   const trimmed = fullText.trim();
   if (!trimmed) return trimmed;
 
-  // Split into paragraphs (double newline) so we can stop at the first non-narrative block
-  const paragraphs = trimmed.split(/\n\n+/);
+  // If there's a --- delimiter, skip the preamble before it and start from the script body
+  const firstDelimiterIdx = trimmed.search(/\n\s*---\s*\n/);
+  let workingText = trimmed;
+  if (firstDelimiterIdx !== -1) {
+    const afterDelimiter = trimmed.slice(firstDelimiterIdx).replace(/^\n\s*---\s*\n/, "");
+    if (afterDelimiter.trim()) workingText = afterDelimiter;
+  }
 
+  // Strip structural/non-spoken lines
+  workingText = workingText
+    .split("\n")
+    .filter((line) => !isStructuralLine(line))
+    .join("\n");
+
+  // Split into paragraphs and stop at first instruction/non-narrative block
+  const paragraphs = workingText.split(/\n\n+/);
   for (let i = 0; i < paragraphs.length; i++) {
     const block = paragraphs[i].trim();
     if (!block) continue;
+    // Also stop at a standalone --- that precedes post-script content
+    if (/^\s*---\s*$/.test(block)) {
+      const remaining = paragraphs.slice(i + 1).join("\n\n").trim();
+      if (!remaining || NARRATIVE_STOP_PATTERNS.some((p) => p.test(remaining.split("\n")[0]))) {
+        return paragraphs.slice(0, i).join("\n\n").trim() || workingText.trim();
+      }
+      // It's a mid-script ---, keep going but skip this block
+      continue;
+    }
     for (const pattern of NARRATIVE_STOP_PATTERNS) {
       if (pattern.test(block)) {
         const narrative = paragraphs.slice(0, i).join("\n\n").trim();
-        return narrative || trimmed;
+        return narrative || workingText.trim();
       }
     }
   }
 
-  return trimmed;
+  return workingText.trim();
 }
 
 type ScenePrompt = { scene_number: number; prompt: string; section_label?: string; animation_style?: string; duration_seconds?: number };
