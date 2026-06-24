@@ -1220,6 +1220,35 @@ export function DesignEditor({ designId }: { designId: string }) {
             className={`fixed left-0 right-0 z-[49] flex items-center justify-center gap-1 px-3 py-2 border-b shadow-sm ${panelCls}`}
             style={{ top: 52 }}
           >
+            {/* Font size controls — text elements only */}
+            {selectedEl.type === "text" && !selectedEl.locked && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => updateElement(selectedEl.id, { fontSize: Math.max(8, (selectedEl.fontSize ?? 32) - 2) })}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+                  title="Decrease font size"
+                >
+                  <Minus className="w-4 h-4" />
+                  <span className="text-[9px] font-medium leading-none">Smaller</span>
+                </button>
+                <div className={`flex flex-col items-center justify-center rounded-xl px-2 py-1 min-w-[44px] ${isDark ? "bg-white/5 text-gray-200" : "bg-gray-100 text-gray-700"}`}>
+                  <span className="text-sm font-bold leading-none">{selectedEl.fontSize ?? 32}</span>
+                  <span className="text-[9px] font-medium leading-none mt-0.5">pt</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateElement(selectedEl.id, { fontSize: (selectedEl.fontSize ?? 32) + 2 })}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+                  title="Increase font size"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="text-[9px] font-medium leading-none">Bigger</span>
+                </button>
+                <div className={`w-px h-6 mx-1 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+              </>
+            )}
+
             {/* Lock / Unlock */}
             <button
               type="button"
@@ -1785,7 +1814,7 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRes
         <textarea autoFocus value={el.content ?? ""} onChange={(e) => onUpdate({ content: e.target.value })} onBlur={() => setEditing(false)}
           style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", border: "none", outline: "none", resize: "none", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, cursor: "text", touchAction: "auto" }} />
       ) : (
-        <div style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, wordBreak: "break-word", whiteSpace: "pre-wrap", overflow: "hidden" }}>
+        <div style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, wordBreak: "break-word", whiteSpace: "pre-wrap", overflow: "visible" }}>
           {el.content}
         </div>
       )}
