@@ -45,6 +45,8 @@ export type VideoPrefill = {
   voiceoverText?: string;
   /** From Campaign Mode / Template Studio: scenes to pre-fill timeline */
   timelineScenes?: TimelineScenePrefill[];
+  /** Preferred aspect ratio for the timeline: "16:9" (landscape) or "9:16" (portrait/Shorts) */
+  aspectRatio?: "16:9" | "9:16";
 };
 
 export function getVideoPrefill(): VideoPrefill | null {
@@ -87,6 +89,7 @@ export function getVideoPrefill(): VideoPrefill | null {
       source: typeof p.source === "string" ? p.source as VideoPrefill["source"] : undefined,
       voiceoverText: typeof p.voiceoverText === "string" ? p.voiceoverText : undefined,
       timelineScenes,
+      aspectRatio: p.aspectRatio === "9:16" ? "9:16" : p.aspectRatio === "16:9" ? "16:9" : undefined,
     };
   } catch {
     return memoryPrefill;

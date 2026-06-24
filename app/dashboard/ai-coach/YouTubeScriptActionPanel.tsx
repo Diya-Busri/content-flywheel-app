@@ -171,6 +171,9 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
   const [videoSearchResults, setVideoSearchResults] = useState<Record<number, VideoHit[]>>({});
   const [videoSearchLoading, setVideoSearchLoading] = useState<Record<number, boolean>>({});
   const [generateProgress, setGenerateProgress] = useState<string | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<"16:9" | "9:16">(() => {
+    try { return (localStorage.getItem("cf:aspect-ratio") as "16:9" | "9:16") || "16:9"; } catch { return "16:9"; }
+  });
 
   // ── localStorage persistence ──────────────────────────────────────────────
   // Keyed by a hash of the script text so each script gets its own cache.
@@ -706,7 +709,7 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
         }
       }
 
-      setVideoPrefill({ scriptId: created.id });
+      setVideoPrefill({ scriptId: created.id, aspectRatio });
       window.location.href = getTimelineUrl(created.id);
     } catch (err) {
       toast({ title: "Failed to build timeline", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
@@ -1010,6 +1013,30 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
       {/* STEP 3: OPEN IN VIDEO TIMELINE */}
       {isAdmin && <div>
         <p className="text-sm font-medium text-foreground mb-2">── STEP 3: OPEN IN VIDEO TIMELINE ──</p>
+        <div className="flex items-center gap-1.5 mb-2">
+          <span className="text-xs text-muted-foreground">Format:</span>
+          {(["16:9", "9:16"] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => {
+                setAspectRatio(r);
+                try { localStorage.setItem("cf:aspect-ratio", r); } catch { /* ignore */ }
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                aspectRatio === r
+                  ? "bg-orange-500 border-orange-500 text-white"
+                  : "border-border text-muted-foreground hover:border-orange-400 hover:text-foreground"
+              }`}
+            >
+              {r === "16:9" ? (
+                <><span className="inline-block w-4 h-2.5 border border-current rounded-sm" /> Horizontal</>
+              ) : (
+                <><span className="inline-block w-2 h-3.5 border border-current rounded-sm" /> Vertical</>
+              )}
+            </button>
+          ))}
+        </div>
         <Button
           type="button"
           variant="default"

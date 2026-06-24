@@ -1915,7 +1915,13 @@ function VideoTimelineInner() {
                 start += dur;
                 return [block];
               }
-              const chunkDur = dur / chunks.length;
+              // Time captions by speech rate (~3.2 words/sec for ElevenLabs TTS) rather than
+              // dividing scene duration evenly — this keeps captions in sync with the audio.
+              // If the natural timing would overflow the scene, fall back to even distribution.
+              const SPEAKING_WPS = 3.2;
+              const naturalChunkDur = WORDS_PER_CHUNK / SPEAKING_WPS;
+              const naturalTotal = chunks.length * naturalChunkDur;
+              const chunkDur = naturalTotal <= dur ? naturalChunkDur : dur / chunks.length;
               const blocks = chunks.map((chunk, ci) => ({
                 id: `cap-${i}-${ci}`,
                 text: chunk,
@@ -2139,6 +2145,7 @@ function VideoTimelineInner() {
       videoTimelinePrefillStrictModeBackup = fromSession;
     }
     if (prefill.scriptId) setScriptId(prefill.scriptId);
+    if (prefill.aspectRatio === "16:9" || prefill.aspectRatio === "9:16") setAspectRatio(prefill.aspectRatio);
     if (prefill.title?.trim()) setScriptName(prefill.title.trim());
     if (prefill.thumbnailUrl?.trim()) setPrefillThumbnailUrl(prefill.thumbnailUrl.trim());
     if (prefill.description !== undefined) setPrefillDescription(prefill.description || null);
