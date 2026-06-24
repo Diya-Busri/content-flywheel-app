@@ -15,6 +15,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
+  themeColor: "#f97316",
 };
 
 export const metadata: Metadata = {
@@ -22,7 +23,16 @@ export const metadata: Metadata = {
   description:
     "Build ebooks, planners and templates with AI. Create promotional videos and plan your content strategy — all from one platform.",
   metadataBase: new URL("https://contentflywheel.co.uk"),
-  icons: { icon: "/icon.svg" },
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Content Flywheel",
+  },
   alternates: {
     canonical: "https://contentflywheel.co.uk",
   },
