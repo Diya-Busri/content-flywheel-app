@@ -153,7 +153,9 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
   /** Per-section voiceover blob URLs (scene number 1..N). When set, timeline uses these instead of single voiceoverUrl. */
   const [sceneVoiceoverUrls, setSceneVoiceoverUrls] = useState<Record<number, string>>({});
   const [voiceoverLoading, setVoiceoverLoading] = useState(false);
-  const [selectedVoiceId, setSelectedVoiceId] = useState(DEFAULT_VOICE_ID);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>(() => {
+    try { return localStorage.getItem("cf:voice-id") || DEFAULT_VOICE_ID; } catch { return DEFAULT_VOICE_ID; }
+  });
   const [prompts, setPrompts] = useState<ScenePrompt[]>([]);
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [sceneImages, setSceneImages] = useState<Record<number, string>>({});
@@ -233,10 +235,16 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
       toast({ title: "No script narrative found", description: "The message doesn't contain script dialogue to read. Add a script first.", variant: "destructive" });
       return;
     }
-    const sectionCount = prompts.length >= 1 ? prompts.length : Math.max(1, Math.ceil(narrativeOnly.split(/\n\n+/).filter(Boolean).length));
-    const chunks = splitScriptIntoScenes(narrativeOnly.trim(), sectionCount);
-    if (chunks.some((c) => !c.trim())) {
-      toast({ title: "Empty section", description: "Some sections have no text. Add script or use Get sections.", variant: "destructive" });
+    // Cap sections at the number of actual non-empty paragraphs — image prompts can exceed
+    // the text paragraph count, which produces silent 0s clips for the extras.
+    const actualParas = narrativeOnly.split(/\n\n+/).filter((p) => p.trim()).length;
+    const sectionCount = Math.min(
+      prompts.length >= 1 ? prompts.length : actualParas,
+      Math.max(1, actualParas)
+    );
+    const chunks = splitScriptIntoScenes(narrativeOnly.trim(), sectionCount).filter((c) => c.trim());
+    if (chunks.length === 0) {
+      toast({ title: "No script content found", description: "Nothing to voiceover. Add a script first.", variant: "destructive" });
       return;
     }
     setVoiceoverLoading(true);
@@ -718,7 +726,10 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
         <div className="mb-2">
           <select
             value={selectedVoiceId}
-            onChange={(e) => setSelectedVoiceId(e.target.value)}
+            onChange={(e) => {
+              setSelectedVoiceId(e.target.value);
+              try { localStorage.setItem("cf:voice-id", e.target.value); } catch { /* ignore */ }
+            }}
             className="text-xs rounded-md border border-input bg-background px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-orange-500 w-full max-w-[260px]"
           >
             {VOICE_OPTIONS.map((v) => (
