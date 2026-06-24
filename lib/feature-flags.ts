@@ -79,15 +79,17 @@ export async function getDisabledFeatures(userId: string): Promise<Set<string>> 
       .from(featureFlagsTable)
       .where(or(isNull(featureFlagsTable.userId), eq(featureFlagsTable.userId, userId)));
 
-    // Group by key, per-user flag always wins over global
+    // Group by key, per-user flag always wins over global.
+    // Normalize keys so "video-timeline" and "video_timeline" are treated identically.
     const resolved = new Map<string, boolean>();
     for (const flag of flags) {
+      const key = flag.key.replace(/-/g, "_");
       if (flag.userId === userId) {
         // Per-user override — highest priority
-        resolved.set(flag.key, flag.enabled);
-      } else if (!resolved.has(flag.key)) {
+        resolved.set(key, flag.enabled);
+      } else if (!resolved.has(key)) {
         // Global flag — only set if no per-user flag already recorded
-        resolved.set(flag.key, flag.enabled);
+        resolved.set(key, flag.enabled);
       }
     }
 
@@ -110,6 +112,38 @@ export async function getDisabledFeatures(userId: string): Promise<Set<string>> 
     // Log so DB errors are visible rather than silently showing all features.
     // Fail open (return empty disabled set) so the page still loads.
     console.error("[feature-flags] getDisabledFeatures failed:", err);
+    return new Set();
+  }
+}
+
+/**
+ * Returns a Set of feature keys that have been EXPLICITLY enabled via a flag
+ * (global or per-user). This is used to let admin-enabled flags override
+ * use-case-based hiding in the dashboard layout.
+ */
+export async function getExplicitlyEnabledFeatures(userId: string): Promise<Set<string>> {
+  try {
+    const flags = await db
+      .select()
+      .from(featureFlagsTable)
+      .where(or(isNull(featureFlagsTable.userId), eq(featureFlagsTable.userId, userId)));
+
+    const resolved = new Map<string, boolean>();
+    for (const flag of flags) {
+      const key = flag.key.replace(/-/g, "_");
+      if (flag.userId === userId) {
+        resolved.set(key, flag.enabled);
+      } else if (!resolved.has(key)) {
+        resolved.set(key, flag.enabled);
+      }
+    }
+
+    const explicitlyEnabled = new Set<string>();
+    for (const [key, enabled] of Array.from(resolved)) {
+      if (enabled) explicitlyEnabled.add(key);
+    }
+    return explicitlyEnabled;
+  } catch {
     return new Set();
   }
 }

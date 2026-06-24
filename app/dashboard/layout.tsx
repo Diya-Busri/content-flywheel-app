@@ -11,7 +11,7 @@ import { redirect } from "next/navigation";
 import { DashboardLayoutClient } from "@/components/dashboard-layout-client";
 import { DashboardSetupError } from "@/components/dashboard-setup-error";
 import { DashboardUpgradeWall } from "@/components/dashboard-upgrade-wall";
-import { getDisabledFeatures } from "@/lib/feature-flags";
+import { getDisabledFeatures, getExplicitlyEnabledFeatures } from "@/lib/feature-flags";
 import { getHiddenFeaturesByUseCases, USE_CASES } from "@/lib/use-cases";
 
 /** Paywall: user must have an active subscription to access the dashboard. */
@@ -93,10 +93,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   let allDisabled: string[] = [];
 
   if (!isAdmin) {
-    const disabledFeatures = await getDisabledFeatures(userId);
+    const [disabledFeatures, explicitlyEnabled] = await Promise.all([
+      getDisabledFeatures(userId),
+      getExplicitlyEnabledFeatures(userId),
+    ]);
 
     // Apply user's use-case preferences on top of global feature flags.
-    // use-case hiding cannot override an admin-set global OFF flag.
+    // Crucially: if an admin has explicitly enabled a feature flag, it must
+    // override use-case hiding — so we filter those out of effectiveUserHidden.
     const selectedUseCases: string[] | null = profile.enabledFeatures
       ? JSON.parse(profile.enabledFeatures)
       : null;
@@ -104,7 +108,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     const userExplicitKeys = selectedUseCases && selectedUseCases.length > 0
       ? new Set(USE_CASES.filter(uc => selectedUseCases.includes(uc.id)).flatMap(uc => uc.featureKeys))
       : new Set<string>();
-    const effectiveUserHidden = new Set(Array.from(userHidden).filter(k => !userExplicitKeys.has(k)));
+    const effectiveUserHidden = new Set(
+      Array.from(userHidden).filter(k => !userExplicitKeys.has(k) && !explicitlyEnabled.has(k))
+    );
 
     allDisabled = Array.from(new Set([...Array.from(effectiveUserHidden), ...Array.from(disabledFeatures)]));
   }

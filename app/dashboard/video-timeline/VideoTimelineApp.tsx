@@ -5216,13 +5216,14 @@ function VideoTimelineInner() {
                   className={`absolute inset-0 pointer-events-none flex items-center justify-center`}
                 >
                   <div
-                    className={`absolute left-0 right-0 flex justify-center px-4 pointer-events-none ${
+                    className={`absolute left-0 right-0 flex justify-center px-4 pointer-events-none overflow-hidden ${
                       captionPosition === "top"
                         ? "top-[10%]"
                         : captionPosition === "middle"
                           ? "top-1/2 -translate-y-1/2"
                           : "bottom-[10%]"
                     }`}
+                    style={{ maxHeight: "35%" }}
                   >
                     {(captionDisplayMode === "wordByWord" || captionDisplayMode === "singleWord") ? (() => {
                       const hasWordTimings = Array.isArray(activeCaption.wordTimings) && activeCaption.wordTimings.length > 0;
@@ -5284,7 +5285,7 @@ function VideoTimelineInner() {
                                   : ""
                           }`}
                           style={{
-                            fontSize: captionFontSize === "small" ? 18 : captionFontSize === "large" ? 28 : 22,
+                            fontSize: captionFontSize === "small" ? 11 : captionFontSize === "large" ? 16 : 13,
                             color: captionTextColor,
                             textShadow: captionBackground === "none" ? "2px 2px 4px rgba(0,0,0,0.9)" : "1px 1px 2px rgba(0,0,0,0.6)",
                           }}
