@@ -275,7 +275,7 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
     } finally {
       setVoiceoverLoading(false);
     }
-  }, [scriptText, prompts.length, toast]);
+  }, [scriptText, prompts.length, selectedVoiceId, toast]);
 
   const handleGetImagePrompts = useCallback(async () => {
     if (!scriptText.trim()) return;
