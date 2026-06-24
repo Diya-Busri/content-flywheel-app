@@ -87,12 +87,20 @@ const FORMAT_LABELS: Record<string, string> = {
 
 const PREVIEW_SCALE = 0.175;
 
+// Canvas format options — determines exported PNG dimensions
+export const CANVAS_FORMATS = [
+  { label: "Carousel", sublabel: "1080×1350", height: 1350, ratio: 4 / 5 },
+  { label: "Square",   sublabel: "1080×1080", height: 1080, ratio: 1 },
+  { label: "Story",    sublabel: "1080×1920", height: 1920, ratio: 9 / 16 },
+] as const;
+export type CanvasFormatHeight = typeof CANVAS_FORMATS[number]["height"];
+
 function PostPreview({ post, design, index, onDelete, onEdit, onQuickEdit, isDark }: {
   post: ContentRow; design: DesignData; index: number;
   onDelete: () => void; onEdit: () => void; onQuickEdit: () => void; isDark: boolean;
 }) {
-  const previewW = Math.round(1080 * PREVIEW_SCALE);
-  const previewH = Math.round(1920 * PREVIEW_SCALE);
+  const previewW = Math.round((design.width ?? 1080) * PREVIEW_SCALE);
+  const previewH = Math.round((design.height ?? 1350) * PREVIEW_SCALE);
 
   return (
     <div className={`group rounded-xl overflow-hidden border ${isDark ? "border-white/10 bg-[#1A1A1A]" : "border-gray-200 bg-white"} shadow-sm hover:shadow-md transition-shadow`}>
@@ -255,6 +263,7 @@ export function BulkContentDesigner() {
   const [niche, setNiche] = useState("");
   const [tone, setTone] = useState<Tone>("Inspirational");
   const [style, setStyle] = useState<TemplateStyle>("minimal-luxury");
+  const [canvasFormatHeight, setCanvasFormatHeight] = useState<CanvasFormatHeight>(1350);
   const [count, setCount] = useState(10);
   const [posts, setPosts] = useState<ContentRow[]>([]);
   const [postDesigns, setPostDesigns] = useState<DesignData[]>([]);
@@ -364,7 +373,7 @@ export function BulkContentDesigner() {
       // Compute layout-varied designs immediately — one pass, carousel-aware
       const usedLayouts: string[] = [];
       const newDesigns = newPosts.map((post, idx) => {
-        const { data, layoutId } = buildSlideDesign(post, style, idx, newPosts.length, usedLayouts);
+        const { data, layoutId } = buildSlideDesign(post, style, idx, newPosts.length, usedLayouts, canvasFormatHeight);
         usedLayouts.push(layoutId);
         return data;
       });
@@ -384,7 +393,7 @@ export function BulkContentDesigner() {
         : `${topic} — ${new Date().toLocaleDateString()}`;
       const slides = posts.map((post, idx) => ({
         title: post.productTitle ? `${post.productTitle} — Slide ${idx + 1}` : `${batchLabel} — Slide ${idx + 1}`,
-        data: postDesigns[idx] ?? buildSlideDesign(post, style, idx, posts.length, []).data,
+        data: postDesigns[idx] ?? buildSlideDesign(post, style, idx, posts.length, [], canvasFormatHeight).data,
       }));
       const res = await fetch("/api/design-bundles", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -408,7 +417,7 @@ export function BulkContentDesigner() {
 
   async function saveAndEdit(post: ContentRow, index: number) {
     const label = post.productTitle ? `${post.productTitle} — Post ${index + 1}` : `${batchLabel} — Post ${index + 1}`;
-    const data = postDesigns[index] ?? buildSlideDesign(post, style, index, posts.length, []).data;
+    const data = postDesigns[index] ?? buildSlideDesign(post, style, index, posts.length, [], canvasFormatHeight).data;
     const res = await fetch("/api/designs", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: label, data }),
@@ -426,7 +435,7 @@ export function BulkContentDesigner() {
         setPostDesigns((prevDesigns) => {
           const next = [...prevDesigns];
           const usedBefore = next.slice(0, idx).map((d) => d.presetName ?? "");
-          next[idx] = buildSlideDesign(updated, style, idx, newPosts.length, usedBefore).data;
+          next[idx] = buildSlideDesign(updated, style, idx, newPosts.length, usedBefore, canvasFormatHeight).data;
           return next;
         });
       }
@@ -644,6 +653,37 @@ export function BulkContentDesigner() {
                 </div>
               </div>
 
+              {/* Canvas format */}
+              <div className={`rounded-2xl border p-6 space-y-3 ${cardCls}`}>
+                <div>
+                  <label className="block text-sm font-semibold">Canvas format</label>
+                  <p className={`text-xs mt-0.5 ${isDark ? "text-gray-500" : "text-gray-400"}`}>Sets the exported PNG dimensions. Carousel (4:5) is optimised for Instagram feed posts.</p>
+                </div>
+                <div className="flex gap-3">
+                  {CANVAS_FORMATS.map((fmt) => (
+                    <button
+                      key={fmt.height}
+                      onClick={() => setCanvasFormatHeight(fmt.height as CanvasFormatHeight)}
+                      className={`flex-1 rounded-xl border-2 py-3 px-3 flex flex-col items-center gap-1 transition-colors ${
+                        canvasFormatHeight === fmt.height
+                          ? "border-orange-500 bg-orange-500 text-white"
+                          : isDark
+                          ? "border-white/10 text-gray-300 hover:border-orange-500/50"
+                          : "border-gray-200 text-gray-700 hover:border-orange-300"
+                      }`}
+                    >
+                      {/* Aspect ratio thumbnail */}
+                      <div
+                        className={`rounded border ${canvasFormatHeight === fmt.height ? "border-white/40 bg-white/20" : isDark ? "border-white/20 bg-white/5" : "border-gray-300 bg-gray-100"}`}
+                        style={{ width: 24, height: Math.round(24 / fmt.ratio) }}
+                      />
+                      <span className="text-xs font-bold leading-tight">{fmt.label}</span>
+                      <span className={`text-[10px] leading-none ${canvasFormatHeight === fmt.height ? "text-white/70" : isDark ? "text-gray-500" : "text-gray-400"}`}>{fmt.sublabel}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Auto layout info */}
               <div className={`rounded-2xl border p-4 flex items-start gap-3 ${cardCls}`}>
                 <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
@@ -680,7 +720,7 @@ export function BulkContentDesigner() {
                 <div>
                   <h2 className="text-xl font-bold">{posts.length} posts generated</h2>
                   <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-                    {TEMPLATE_META[style].label} · Dynamic Layouts · {tone}
+                    {TEMPLATE_META[style].label} · {CANVAS_FORMATS.find((f) => f.height === canvasFormatHeight)?.sublabel ?? `1080×${canvasFormatHeight}`} · {tone}
                   </p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
@@ -701,7 +741,7 @@ export function BulkContentDesigner() {
 
               <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {posts.map((post, i) => (
-                  <PostPreview key={post.id} post={post} design={postDesigns[i] ?? { width: 1080, height: 1920, background: "#fff", elements: [] }} index={i} isDark={isDark}
+                  <PostPreview key={post.id} post={post} design={postDesigns[i] ?? { width: 1080, height: canvasFormatHeight, background: "#fff", elements: [] }} index={i} isDark={isDark}
                     onDelete={() => { setPosts((prev) => prev.filter((p) => p.id !== post.id)); setPostDesigns((prev) => prev.filter((_, di) => di !== i)); }}
                     onQuickEdit={() => setEditingPost(post)}
                     onEdit={() => saveAndEdit(post, i)}

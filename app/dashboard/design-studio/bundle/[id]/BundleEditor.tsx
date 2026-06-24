@@ -140,7 +140,7 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
     const activeSlide = slides[activeIdx];
     const blankData: DesignData = {
       width: activeSlide?.data.width ?? 1080,
-      height: activeSlide?.data.height ?? 1920,
+      height: activeSlide?.data.height ?? 1350,
       background: "#ffffff",
       elements: [],
     };
@@ -172,11 +172,10 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
         import("jszip"),
       ]);
       const zip = new JSZip();
-      const W = slides[0]?.data.width ?? 1080;
-      const H = slides[0]?.data.height ?? 1920;
-
       for (let i = 0; i < slides.length; i++) {
         const slide = slides[i];
+        const W = slide.data.width ?? 1080;
+        const H = slide.data.height ?? 1350;
         const container = document.createElement("div");
         container.style.cssText = `position:fixed;left:-9999px;top:0;width:${W}px;height:${H}px;overflow:hidden;z-index:-1`;
         document.body.appendChild(container);
@@ -216,7 +215,7 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
 
   const activeSlide = slides[activeIdx] ?? null;
   const slideW = activeSlide?.data.width ?? 1080;
-  const slideH = activeSlide?.data.height ?? 1920;
+  const slideH = activeSlide?.data.height ?? 1350;
 
   // Fit preview into available center area (account for counter + actions ~180px)
   const maxPreviewH = Math.max(centerDims.h - 180, 300);
@@ -552,7 +551,7 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
                 </div>
                 <div className={`flex justify-between text-xs ${dimCls}`}>
                   <span>Canvas</span>
-                  <span className="font-semibold">{slides[0]?.data.width ?? 1080}×{slides[0]?.data.height ?? 1920}</span>
+                  <span className="font-semibold">{slides[0]?.data.width ?? 1080}×{slides[0]?.data.height ?? 1350}</span>
                 </div>
               </div>
             </div>

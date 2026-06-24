@@ -952,6 +952,7 @@ export function buildSlideDesign(
   slideIndex: number,
   totalSlides: number,
   usedLayoutIds: string[],
+  canvasHeight: number = 1350,
 ): { data: DesignData; layoutId: string } {
   const seed = (hashStr(post.hook + post.id) ^ (slideIndex * 2654435761)) >>> 0;
   const rng = seededRng(seed);
@@ -964,7 +965,7 @@ export function buildSlideDesign(
   const bgList = STYLE_BACKGROUNDS[styleKey];
   const bgVariant = bgList[Math.floor(rng() * bgList.length)];
 
-  const W = 1080, H = 1920;
+  const W = 1080, H = canvasHeight;
   const elements = PERSONALITY_BUILDERS[personality](post, cfg, analysis, rng, W, H);
 
   return {
