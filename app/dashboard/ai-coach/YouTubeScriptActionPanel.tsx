@@ -79,8 +79,11 @@ function isStructuralLine(line: string): boolean {
   if (/^Script\s*:/i.test(l)) return true;
   // "Timestamps/Sections:" label
   if (/^Timestamps\s*\/?\s*Sections\s*:/i.test(l)) return true;
-  // Section headers with timestamps, e.g. "Hook (0:00 - 0:30)" or "- Relatable Problem (2:00 - 4:00)"
-  if (/\(\d+:\d+\s*[-–]\s*\d+:\d+\)/.test(l) && l.length < 100) return true;
+  // Pure section headers: label + timestamp and NOTHING else after the closing parenthesis.
+  // e.g. "Hook (0:00 - 0:30)" or "- Relatable Problem (0:30 - 2:00)"
+  // Lines like "- Show the System (6:00-16:00)   Here's the framework:" are NOT stripped
+  // because they have content after the timestamp.
+  if (/^[-*•]?\s*[\w\s/&,'"'-]+\(\d+:\d+\s*[-–]\s*\d+:\d+\)\s*$/.test(l)) return true;
   return false;
 }
 
@@ -579,32 +582,61 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
     setBuildLoading(true);
     try {
       let startSec = 0;
-      const scenesJson = chunks.map((script_text, i) => {
+      // Max seconds before a section gets split into sub-scenes (~25s each)
+      const MAX_SCENE_SEC = 30;
+      const SUB_SCENE_SEC = 25;
+
+      type SceneEntry = {
+        scene_number: number; duration: number; script_text: string;
+        image_url: string | null; video_url: string | null; caption: string;
+        animation_type: string | null; section_label: string; voiceover_url: string | null;
+      };
+      const scenesJson: SceneEntry[] = [];
+
+      chunks.forEach((script_text, i) => {
         const sceneNum = i + 1;
         const video = sceneVideos[sceneNum];
         const imageUrl = sceneImages[sceneNum] ?? (video ? video.thumbnail : null);
         const promptForScene = prompts[i];
-        const durationSeconds = promptForScene?.duration_seconds ?? video?.duration ?? 30;
-        const endSec = startSec + durationSeconds;
-        const timestamp = formatTimestamp(startSec) + "-" + formatTimestamp(endSec);
-        const sectionLabel = promptForScene?.section_label
-          ? `${promptForScene.section_label} (${timestamp})`
-          : `Scene ${sceneNum} (${timestamp})`;
-        // Use section label as caption fallback when script text is empty (padded scene)
+
+        // Parse actual section duration from section_label timestamp — GPT's duration_seconds
+        // is the animation clip length (5-8s), NOT the section length.
+        const totalDuration = (() => {
+          const label = promptForScene?.section_label ?? "";
+          const m = label.match(/\((\d+):(\d+)\s*[-–]\s*(\d+):(\d+)\)/);
+          if (m) {
+            const start = parseInt(m[1]) * 60 + parseInt(m[2]);
+            const end = parseInt(m[3]) * 60 + parseInt(m[4]);
+            if (end > start) return end - start;
+          }
+          return video?.duration ?? 30;
+        })();
+
+        // Split long sections into multiple sub-scenes so the video stays engaging
+        const numSubs = totalDuration > MAX_SCENE_SEC ? Math.ceil(totalDuration / SUB_SCENE_SEC) : 1;
+        const subDur = Math.round(totalDuration / numSubs);
         const captionBase = script_text.trim() || promptForScene?.section_label || `Scene ${sceneNum}`;
-        const caption = video ? `${captionBase.slice(0, 80)} [Video]` : captionBase.slice(0, 100);
-        startSec = endSec;
-        return {
-          scene_number: sceneNum,
-          duration: durationSeconds,
-          script_text,
-          image_url: imageUrl ?? null,
-          video_url: video?.url ?? null,
-          caption,
-          animation_type: promptForScene?.animation_style ?? null,
-          section_label: sectionLabel,
-          voiceover_url: null as string | null,
-        };
+
+        for (let j = 0; j < numSubs; j++) {
+          const endSec = startSec + subDur;
+          const ts = `${formatTimestamp(startSec)}-${formatTimestamp(endSec)}`;
+          const sectionLabel = promptForScene?.section_label
+            ? `${promptForScene.section_label}${numSubs > 1 ? ` · Part ${j + 1}` : ""} (${ts})`
+            : `Scene ${sceneNum}${numSubs > 1 ? `.${j + 1}` : ""} (${ts})`;
+          const caption = video ? `${captionBase.slice(0, 80)} [Video]` : captionBase.slice(0, 100);
+          startSec = endSec;
+          scenesJson.push({
+            scene_number: scenesJson.length + 1,
+            duration: subDur,
+            script_text: j === 0 ? script_text : "",
+            image_url: imageUrl ?? null,
+            video_url: video?.url ?? null,
+            caption,
+            animation_type: promptForScene?.animation_style ?? null,
+            section_label: sectionLabel,
+            voiceover_url: null,
+          });
+        }
       });
 
       const createRes = await fetch("/api/saved-scripts", {
@@ -863,6 +895,15 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
                         <Button type="button" variant="ghost" size="sm" className="gap-1 h-8 text-xs" onClick={() => clearSceneMedia(scene_number)}>
                           Remove / use stock video
                         </Button>
+                        <a
+                          href={sceneImages[scene_number]}
+                          download={`section-${scene_number}.jpg`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 h-8 px-2 rounded text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <Download className="h-3 w-3" /> Download
+                        </a>
                         <Button type="button" variant="ghost" size="sm" className="gap-1 h-8 text-xs" onClick={() => window.open("https://www.midjourney.com", "_blank")}>
                           <ExternalLink className="h-3 w-3" /> Midjourney
                         </Button>

@@ -62,7 +62,7 @@ JSON RULES:
 - Output valid JSON only, no markdown or extra text.
 - Format: { "prompts": [ { "scene_number": 1, "prompt": "detailed description", "section_label": "Introduction (0:00-0:30) - Hook", "animation_style": "slow zoom in", "duration_seconds": 5 }, ... ] }
 - Include "animation_style" for each: e.g. "zoom in", "pan left", "fade cut", "ken burns", "static".
-- Include "duration_seconds" (number) for each scene, e.g. 5 or 8.
+- Do NOT include "duration_seconds" — durations are derived from the section timestamps.
 - Every prompt must end with: "Photorealistic, professional b-roll style, 16:9 landscape format for YouTube."
 - 6-9 prompts when the script has that many distinct sections/concepts. Include section_label for every prompt so users can match images to script timestamps for editing.
 - No abstract art, no decorative patterns. All images 16:9 landscape.`,
