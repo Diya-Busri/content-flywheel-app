@@ -883,7 +883,7 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
           <LucideIcon className="w-full h-full" style={{ color: graphicsAccentColor }} />
         ) : element.type === "image" ? (
           <img
-            src={element.content}
+            src={getProxiedBackgroundImageUrl(element.content) ?? element.content}
             alt=""
             className="w-full h-full object-cover"
             style={{
@@ -1041,6 +1041,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [includeCover, setIncludeCover] = useState(true);
   const [includeBackPage, setIncludeBackPage] = useState(true);
   const previewPagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const [previewPageScale, setPreviewPageScale] = useState(1);
   const { theme: dashboardTheme } = useDashboardTheme();
   const uiTheme = dashboardTheme;
   const [placedElementsByPage, setPlacedElementsByPage] = useState<PlacedElement[][]>([]);
@@ -1462,6 +1463,20 @@ export default function ProductEditor({ productId }: { productId: string }) {
     if (searchParams.get("created") === "1") setShowCreatedBanner(true);
     if (searchParams.get("ai") === "1") setActiveEditorTab("ai");
   }, [searchParams]);
+
+  // Compute preview page scale so pages fit on mobile screens
+  useEffect(() => {
+    if (!showFullPreview) return;
+    const container = previewPagesContainerRef.current;
+    const update = () => {
+      const availableWidth = (container?.clientWidth ?? window.innerWidth) - 32;
+      setPreviewPageScale(Math.min(1, availableWidth / CANVAS_WIDTH));
+    };
+    update();
+    const obs = new ResizeObserver(update);
+    if (container) obs.observe(container);
+    return () => obs.disconnect();
+  }, [showFullPreview]);
 
   const totalPages = Math.max(2, sections.length + 2);
   const effectiveCanvasHeight = pageOrientation === "landscape" ? CANVAS_LANDSCAPE_HEIGHT : CANVAS_HEIGHT;
@@ -2194,10 +2209,12 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const handleAddPhoto = useCallback(
     (url: string) => {
       recordUndo();
+      // Proxy external URLs so they don't expire or hit CORS issues in canvas/PDF
+      const storedUrl = getBackgroundUrlToSave(url) ?? url;
       const newElement: PlacedElement = {
         id: `image-${Date.now()}`,
         type: "image",
-        content: url,
+        content: storedUrl,
         position: { x: CANVAS_WIDTH / 2 - 100, y: 280 },
         size: { width: 200, height: 200 },
         rotation: 0,
@@ -2819,31 +2836,39 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const applyCoverBackgroundToBackCover = useCallback(() => {
     const coverPage = pageBackgrounds[0];
-    if (!coverPage) return;
+    if (!coverPage?.backgroundImage) {
+      toast({ title: "No background on cover page to copy", variant: "destructive" });
+      return;
+    }
     recordUndo();
     const backBg: PageBackground = {
       backgroundImage: coverPage.backgroundImage ?? undefined,
       backgroundSettings: coverPage.backgroundSettings ? { ...coverPage.backgroundSettings } : undefined,
       overlaySettings: coverPage.overlaySettings ? { ...coverPage.overlaySettings } : undefined,
     };
-    const nextPages = [...pageBackgrounds];
-    nextPages[nextPages.length - 1] = backBg;
+    // Pad array to totalPages length so the back cover slot is correct
+    const backCoverIdx = totalPages - 1;
+    const nextPages = Array.from({ length: Math.max(pageBackgrounds.length, totalPages) }, (_, i) => pageBackgrounds[i] ?? {});
+    nextPages[backCoverIdx] = backBg;
     setPageBackgrounds(nextPages);
     saveToServer({ designSettings: { ...product?.designSettings, pages: nextPages, placedElementsByPage } });
-    toast({ title: "Background applied to back cover" });
-  }, [pageBackgrounds, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo]);
+    toast({ title: "Background copied to back cover" });
+  }, [pageBackgrounds, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo, totalPages]);
 
   const applyBackBackgroundToCover = useCallback(() => {
-    const backIdx = pageBackgrounds.length - 1;
+    const backIdx = totalPages - 1;
     const backPage = pageBackgrounds[backIdx];
-    if (!backPage) return;
+    if (!backPage?.backgroundImage) {
+      toast({ title: "No background on back cover to copy", variant: "destructive" });
+      return;
+    }
     recordUndo();
     const coverBg: PageBackground = {
       backgroundImage: backPage.backgroundImage ?? undefined,
       backgroundSettings: backPage.backgroundSettings ? { ...backPage.backgroundSettings } : undefined,
       overlaySettings: backPage.overlaySettings ? { ...backPage.overlaySettings } : undefined,
     };
-    const nextPages = [...pageBackgrounds];
+    const nextPages = Array.from({ length: Math.max(pageBackgrounds.length, totalPages) }, (_, i) => pageBackgrounds[i] ?? {});
     nextPages[0] = coverBg;
     setPageBackgrounds(nextPages);
     if (currentPageIndex === 0) {
@@ -2852,8 +2877,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
       setOverlaySettings(coverBg.overlaySettings ? { ...DEFAULT_OVERLAY, ...coverBg.overlaySettings } : DEFAULT_OVERLAY);
     }
     saveToServer({ designSettings: { ...product?.designSettings, pages: nextPages, placedElementsByPage } });
-    toast({ title: "Background applied to front cover" });
-  }, [pageBackgrounds, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo, currentPageIndex]);
+    toast({ title: "Background copied to front cover" });
+  }, [pageBackgrounds, placedElementsByPage, product?.designSettings, saveToServer, toast, recordUndo, currentPageIndex, totalPages]);
 
   const runAutoDesign = useCallback(
     async (options?: {
@@ -6075,17 +6100,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       <div className="flex gap-3 items-start">
                         <div className="w-16 h-16 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0">
                           <img
-                            src={backgroundImage}
+                            src={getProxiedBackgroundImageUrl(backgroundImage) ?? backgroundImage}
                             alt="Background preview"
                             className="w-full h-full object-cover"
                             style={{ opacity: 1 }}
+                            crossOrigin="anonymous"
                           />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs text-gray-600 truncate" title={backgroundImage}>
-                            {backgroundImage.startsWith("data:")
-                              ? "Image"
-                              : backgroundImage.split("/").filter(Boolean).pop()?.split("?")[0] || "Background image"}
+                            Background image
                           </p>
                           <div className="flex gap-1.5 mt-1.5 flex-wrap">
                             <button
@@ -7612,7 +7636,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
               className="editor-canvas flex-1 overflow-hidden flex flex-col"
               style={pdfExporting ? { position: "fixed", left: "-9999px", top: 0, zIndex: -1 } : undefined}
             >
-            <div ref={previewPagesContainerRef} data-print-source className="preview-pages-container flex-1 overflow-y-auto p-6 flex flex-col items-center gap-6">
+            <div ref={previewPagesContainerRef} data-print-source className="preview-pages-container flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col items-center gap-4 sm:gap-6">
+                {/* Scale pages to fit viewport width on mobile */}
+                <style dangerouslySetInnerHTML={{ __html: `
+                  @media (max-width: 860px) {
+                    .preview-page-scaler {
+                      transform-origin: top center;
+                      transform: scale(calc(min(1, (100vw - 32px) / ${CANVAS_WIDTH})));
+                      margin-bottom: calc((min(1, (100vw - 32px) / ${CANVAS_WIDTH}) - 1) * ${CANVAS_HEIGHT}px);
+                    }
+                  }
+                `}} />
                 {(() => {
                   const contentPageCount = sections.length || 1;
                   const pages: { type: "cover" | "content" | "back"; contentIndex?: number }[] = [];
@@ -7628,7 +7662,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       return (
                         <div key={element.id} className="absolute flex items-center justify-center" style={{ left: element.position.x, top: element.position.y, width: element.size.width, height: element.size.height, zIndex: Math.max(1, element.zIndex) }}>
                           {element.type === "icon" && isIconify ? <Icon icon={element.content} className="w-full h-full" style={{ color: iconColor }} /> : element.type === "icon" && LucideIcon ? <LucideIcon className="w-full h-full" style={{ color: iconColor }} /> : element.type === "image" ? (
-                            <img src={element.content} alt="" crossOrigin="anonymous" className="w-full h-full object-cover" style={{ opacity: element.imageSettings?.opacity ?? 1, filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)` }} />
+                            <img src={getProxiedBackgroundImageUrl(element.content) ?? element.content} alt="" crossOrigin="anonymous" className="w-full h-full object-cover" style={{ opacity: element.imageSettings?.opacity ?? 1, filter: `blur(${element.imageSettings?.blur ?? 0}px) brightness(${element.imageSettings?.brightness ?? 100}%) contrast(${element.imageSettings?.contrast ?? 100}%) saturate(${element.imageSettings?.saturation ?? 100}%)` }} />
                           ) : element.type === "social" ? (
                             element.linkUrl ? (
                               <a href={element.linkUrl} target="_blank" rel="noopener noreferrer" className="w-full h-full flex items-center justify-center" style={{ color: iconColor }}>
@@ -7661,8 +7695,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       const coverBgSettings = coverPageBg?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...coverPageBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS;
                       const coverOverlay = coverPageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...coverPageBg.overlaySettings } : DEFAULT_OVERLAY;
                       return (
+                        <div key="cover" className="preview-page-scaler shrink-0" style={{ width: CANVAS_WIDTH * previewPageScale, height: CANVAS_HEIGHT * previewPageScale, transformOrigin: "top left", transform: previewPageScale < 1 ? `scale(${previewPageScale})` : undefined }}>
                         <div
-                          key="cover"
                           id="preview-page-0"
                           data-pdf-page
                           data-page
@@ -7692,6 +7726,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           <div className="absolute inset-0 pointer-events-none z-20">{renderPlacedElements(placedElementsByPage[0] ?? [])}</div>
                           <div className="absolute left-0 right-0 bottom-0 py-2 text-center text-[11px] text-gray-500 pointer-events-none" style={{ opacity: 0.45, zIndex: 25 }} aria-hidden>Created with Content Flywheel</div>
                         </div>
+                        </div>
                       );
                     }
                     if (page.type === "back") {
@@ -7701,8 +7736,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       const backBgSettings = backPageBg?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...backPageBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS;
                       const backOverlay = backPageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...backPageBg.overlaySettings } : DEFAULT_OVERLAY;
                       return (
+                        <div key="back" className="preview-page-scaler shrink-0" style={{ width: CANVAS_WIDTH * previewPageScale, height: CANVAS_HEIGHT * previewPageScale, transformOrigin: "top left", transform: previewPageScale < 1 ? `scale(${previewPageScale})` : undefined }}>
                         <div
-                          key="back"
                           id={`preview-page-${pageIdx}`}
                           data-pdf-page
                           data-page
@@ -7730,6 +7765,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           <div className="absolute inset-0 pointer-events-none z-20">{renderPlacedElements(placedElementsByPage[backIdx] ?? [])}</div>
                           <div className="absolute left-0 right-0 bottom-0 py-2 text-center text-[11px] text-gray-500 pointer-events-none" style={{ opacity: 0.45, zIndex: 25 }} aria-hidden>Created with Content Flywheel</div>
                         </div>
+                        </div>
                       );
                     }
                     const contentIdx = page.contentIndex!;
@@ -7742,8 +7778,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     const bodyStyles = product.designSettings?.textStyles?.[section.id]?.body;
                     const pageTextColor = pageBg?.pageTextColor ?? null;
                     return (
+                      <div key={section.id} className="preview-page-scaler shrink-0" style={{ width: CANVAS_WIDTH * previewPageScale, height: CANVAS_HEIGHT * previewPageScale, transformOrigin: "top left", transform: previewPageScale < 1 ? `scale(${previewPageScale})` : undefined }}>
                       <div
-                        key={section.id}
                         id={`preview-page-${pageIdx}`}
                         data-pdf-page
                         data-page
@@ -7833,6 +7869,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           {renderPlacedElements(placedElementsByPage[contentIdx + 1] ?? [])}
                         </div>
                         <div className="absolute left-0 right-0 bottom-0 py-2 text-center text-[11px] text-gray-500 pointer-events-none" style={{ opacity: 0.45, zIndex: 25 }} aria-hidden>Created with Content Flywheel</div>
+                      </div>
                       </div>
                     );
                   });
