@@ -24,6 +24,7 @@
     "render": "remotion render src/remotion/index.tsx ShowcaseVideo out/video.mp4"
   },
   "dependencies": {
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@aws-sdk/client-s3": "^3.1073.0",
     "@aws-sdk/s3-request-presigner": "^3.1073.0",
     "@clerk/backend": "^1.9.0",
