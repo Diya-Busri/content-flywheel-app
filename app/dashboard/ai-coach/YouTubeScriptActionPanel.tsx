@@ -906,15 +906,26 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
                         <Button type="button" variant="ghost" size="sm" className="gap-1 h-8 text-xs" onClick={() => clearSceneMedia(scene_number)}>
                           Remove / use stock video
                         </Button>
-                        <a
-                          href={sceneImages[scene_number]}
-                          download={`section-${scene_number}.jpg`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
                           className="inline-flex items-center gap-1 h-8 px-2 rounded text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(sceneImages[scene_number]);
+                              const blob = await res.blob();
+                              const objectUrl = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = objectUrl;
+                              a.download = `section-${scene_number}.jpg`;
+                              a.click();
+                              URL.revokeObjectURL(objectUrl);
+                            } catch {
+                              window.open(sceneImages[scene_number], "_blank");
+                            }
+                          }}
                         >
                           <Download className="h-3 w-3" /> Download
-                        </a>
+                        </button>
                         <Button type="button" variant="ghost" size="sm" className="gap-1 h-8 text-xs" onClick={() => window.open("https://www.midjourney.com", "_blank")}>
                           <ExternalLink className="h-3 w-3" /> Midjourney
                         </Button>
