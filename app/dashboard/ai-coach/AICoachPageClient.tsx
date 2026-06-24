@@ -1223,6 +1223,10 @@ function ChatPanel({
 
   const [voiceOverOpen, setVoiceOverOpen] = useState(false);
   const [voiceOverScript, setVoiceOverScript] = useState("");
+  /** Inline script editor for the last assistant message in YouTube mode */
+  const [editedScript, setEditedScript] = useState<string | null>(null);
+  const [scriptEditorOpen, setScriptEditorOpen] = useState(false);
+  const [scriptEditorDraft, setScriptEditorDraft] = useState("");
   const [voiceOverVoiceId, setVoiceOverVoiceId] = useState("pNInz6obpgDQGcFmaJgB");
   const [voiceOverVoices, setVoiceOverVoices] = useState<{ voice_id: string; name: string; description?: string; preview_url?: string }[]>([]);
   const [voiceOverStability, setVoiceOverStability] = useState(0.5);
@@ -2416,24 +2420,87 @@ ${videoLines}`;
                       i === messages.length - 1 &&
                       (msg.content?.trim()?.length ?? 0) > 100 && (
                         <div className="mt-3 w-full">
-                          <YouTubeScriptActionPanel scriptText={stripMarkdown(msg.content ?? "")} isAdmin={isAdminUser} />
-                          <div className="mt-3">
-                            <Button
-                              type="button"
-                              className="gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold"
-                              onClick={() => {
-                                const scriptText = stripMarkdown(msg.content ?? "");
-                                try {
-                                  sessionStorage.setItem("cf_coach_script", scriptText);
-                                } catch {
-                                  // ignore storage errors
-                                }
-                                window.location.href = "/dashboard/video-timeline";
-                              }}
-                            >
-                              🎬 Create Video from this Script
-                            </Button>
+                          {/* Script editor toggle */}
+                          <div className="mb-2 flex items-center gap-2">
+                            {!scriptEditorOpen ? (
+                              <button
+                                type="button"
+                                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 underline underline-offset-2"
+                                onClick={() => {
+                                  const current = editedScript ?? stripMarkdown(msg.content ?? "");
+                                  setScriptEditorDraft(current);
+                                  setScriptEditorOpen(true);
+                                }}
+                              >
+                                ✏️ Edit script
+                              </button>
+                            ) : (
+                              <div className="w-full space-y-2">
+                                <textarea
+                                  className="w-full min-h-[300px] rounded-md border border-border bg-background text-sm p-3 font-mono resize-y focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                  value={scriptEditorDraft}
+                                  onChange={(e) => setScriptEditorDraft(e.target.value)}
+                                  spellCheck={false}
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                                    onClick={() => {
+                                      setEditedScript(scriptEditorDraft);
+                                      setScriptEditorOpen(false);
+                                      toast({ title: "Script updated" });
+                                    }}
+                                  >
+                                    Save changes
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setScriptEditorOpen(false)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  {editedScript && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="text-muted-foreground"
+                                      onClick={() => {
+                                        setEditedScript(null);
+                                        setScriptEditorOpen(false);
+                                        toast({ title: "Reverted to original" });
+                                      }}
+                                    >
+                                      Revert to original
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
+                          {!scriptEditorOpen && (
+                            <>
+                              <YouTubeScriptActionPanel scriptText={editedScript ?? stripMarkdown(msg.content ?? "")} isAdmin={isAdminUser} />
+                              <div className="mt-3">
+                                <Button
+                                  type="button"
+                                  className="gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold"
+                                  onClick={() => {
+                                    const scriptText = editedScript ?? stripMarkdown(msg.content ?? "");
+                                    try {
+                                      sessionStorage.setItem("cf_coach_script", scriptText);
+                                    } catch {
+                                      // ignore storage errors
+                                    }
+                                    window.location.href = "/dashboard/video-timeline";
+                                  }}
+                                >
+                                  🎬 Create Video from this Script
+                                </Button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                   </div>
