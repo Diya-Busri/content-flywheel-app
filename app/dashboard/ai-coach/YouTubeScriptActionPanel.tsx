@@ -614,9 +614,21 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
           {(voiceoverUrl || Object.keys(sceneVoiceoverUrls).length > 0) && (
             <>
               {Object.keys(sceneVoiceoverUrls).length > 0 ? (
-                <span className="text-xs text-muted-foreground">
-                  {Object.keys(sceneVoiceoverUrls).length} section clip(s) · use Open in Video Timeline to sync
-                </span>
+                <div className="flex flex-col gap-1.5 mt-1">
+                  {Object.entries(sceneVoiceoverUrls)
+                    .sort(([a], [b]) => Number(a) - Number(b))
+                    .map(([sceneNum, url]) => (
+                      <div key={sceneNum} className="flex items-center gap-2">
+                        {Object.keys(sceneVoiceoverUrls).length > 1 && (
+                          <span className="text-xs text-muted-foreground shrink-0">Clip {sceneNum}:</span>
+                        )}
+                        <audio controls src={url} className="h-9 max-w-[220px]" />
+                      </div>
+                    ))}
+                  <span className="text-xs text-muted-foreground">
+                    {Object.keys(sceneVoiceoverUrls).length} clip(s) ready · click &ldquo;Open in Video Timeline&rdquo; below to sync
+                  </span>
+                </div>
               ) : voiceoverUrl ? (
                 <>
                   <audio controls src={voiceoverUrl} className="h-9 max-w-[200px]" />
