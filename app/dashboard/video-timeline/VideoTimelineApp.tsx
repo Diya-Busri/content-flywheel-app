@@ -2866,7 +2866,7 @@ function VideoTimelineInner() {
         }));
         toast({ title: "Image applied to scene" });
       } else {
-        toast({ title: "Image generated", description: "Click a scene then drag the image onto it" });
+        toast({ title: "Image generated", description: "Click a scene on the timeline, then hover the image and click Apply to scene." });
       }
     } catch (err) {
       toast({ title: "Image generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
@@ -4711,21 +4711,23 @@ function VideoTimelineInner() {
                             }}
                           >
                             <img src={url} alt="" className="w-full h-full object-cover" />
-                            {selectedSceneIndex !== null && (
-                              <button
-                                type="button"
-                                className="absolute bottom-0 left-0 right-0 bg-[#f97316] text-white text-[9px] py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={() => {
-                                  setScenes((prev) => prev.map((s, si) => si !== selectedSceneIndex ? s : {
-                                    ...s,
-                                    elements: s.elements.map((el, ei) => ei === 0 ? { ...el, media: { url, type: "image" as const } } : el),
-                                  }));
-                                  toast({ title: "Applied to scene" });
-                                }}
-                              >
-                                Apply
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              className="absolute bottom-0 left-0 right-0 bg-[#f97316] text-white text-[9px] py-0.5 opacity-0 group-hover:opacity-100 transition-opacity font-semibold"
+                              onClick={() => {
+                                if (selectedSceneIndex === null) {
+                                  toast({ title: "Select a scene first", description: "Click a scene block on the timeline, then click Apply." });
+                                  return;
+                                }
+                                setScenes((prev) => prev.map((s, si) => si !== selectedSceneIndex ? s : {
+                                  ...s,
+                                  elements: s.elements.map((el, ei) => ei === 0 ? { ...el, media: { url, type: "image" as const } } : el),
+                                }));
+                                toast({ title: "✅ Applied to scene" });
+                              }}
+                            >
+                              Apply to scene
+                            </button>
                           </div>
                         ))}
                       </div>
