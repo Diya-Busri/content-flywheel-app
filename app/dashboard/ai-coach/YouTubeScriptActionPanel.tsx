@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Download, Image as ImageIcon, Film, Copy, ExternalLink, FileText, Layout, Video, Search } from "lucide-react";
@@ -125,6 +125,62 @@ export function YouTubeScriptActionPanel({ scriptText, isAdmin = false }: Props)
   const [videoSearchResults, setVideoSearchResults] = useState<Record<number, VideoHit[]>>({});
   const [videoSearchLoading, setVideoSearchLoading] = useState<Record<number, boolean>>({});
   const [generateProgress, setGenerateProgress] = useState<string | null>(null);
+
+  // ── localStorage persistence ──────────────────────────────────────────────
+  // Keyed by a hash of the script text so each script gets its own cache.
+  // Voiceover blob URLs can't be persisted (they're in-memory), but images,
+  // videos, prompts, and SEO data are all saved so a refresh doesn't nuke them.
+  const scriptCacheKey = useMemo(() => {
+    const sample = scriptText.trim().slice(0, 500);
+    let h = 0;
+    for (let i = 0; i < sample.length; i++) {
+      h = (Math.imul(31, h) + sample.charCodeAt(i)) | 0;
+    }
+    return `cf:ai-coach-panel:${h >>> 0}`;
+  }, [scriptText]);
+
+  // Restore on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(scriptCacheKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as {
+        prompts?: ScenePrompt[];
+        sceneImages?: Record<string, string>;
+        sceneVideos?: Record<string, { url: string; thumbnail: string; duration: number }>;
+        seoPackage?: SeoPackage | null;
+        thumbnailPrompts?: string[];
+      };
+      if (saved.prompts?.length) setPrompts(saved.prompts);
+      if (saved.sceneImages && Object.keys(saved.sceneImages).length) {
+        const imgs: Record<number, string> = {};
+        for (const [k, v] of Object.entries(saved.sceneImages)) imgs[Number(k)] = v;
+        setSceneImages(imgs);
+      }
+      if (saved.sceneVideos && Object.keys(saved.sceneVideos).length) {
+        const vids: Record<number, { url: string; thumbnail: string; duration: number }> = {};
+        for (const [k, v] of Object.entries(saved.sceneVideos)) vids[Number(k)] = v;
+        setSceneVideos(vids);
+      }
+      if (saved.seoPackage) setSeoPackage(saved.seoPackage);
+      if (saved.thumbnailPrompts?.length) setThumbnailPrompts(saved.thumbnailPrompts);
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scriptCacheKey]);
+
+  // Persist whenever state changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(scriptCacheKey, JSON.stringify({
+        prompts,
+        sceneImages,
+        sceneVideos,
+        seoPackage,
+        thumbnailPrompts,
+      }));
+    } catch { /* ignore — storage full etc. */ }
+  }, [scriptCacheKey, prompts, sceneImages, sceneVideos, seoPackage, thumbnailPrompts]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const handleGenerateVoiceover = useCallback(async () => {
     if (!scriptText.trim()) return;
