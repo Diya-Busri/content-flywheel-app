@@ -771,7 +771,7 @@ export default function LibraryFlow() {
   const showDeleteAll = !isTrashView && tab !== "template-packs" && tab !== "templates" && tab !== "history" && tab !== "youtube" && items.length > 0;
 
   return (
-    <main className="p-3 md:p-10 max-w-5xl mx-auto overflow-x-hidden">
+    <main className="p-3 md:p-10 max-w-5xl mx-auto w-full overflow-x-hidden" style={{ maxWidth: "100vw" }}>
       <Link
         href="/dashboard"
         className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-orange-500 mb-6"
@@ -795,7 +795,7 @@ export default function LibraryFlow() {
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 mb-6">
-          <div className="overflow-x-auto -mx-3 px-3 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
+          <div className="overflow-x-auto pb-1 sm:pb-0" style={{ WebkitOverflowScrolling: "touch" }}>
           <TabsList data-tour="library-tabs" className="bg-gray-200 dark:bg-[#1A1A1A] border border-[#E5E7EB] dark:border-[#2A2A2A] flex-nowrap whitespace-nowrap w-max">
             <TabsTrigger value="all" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">All items</TabsTrigger>
             <TabsTrigger value="products" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Digital Products</TabsTrigger>
@@ -1251,7 +1251,7 @@ export default function LibraryFlow() {
                   {timelineOnlyFiltered.length > 0 && (
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Compiled Videos</h2>
                   )}
-                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
                     {compiledVideoFiltered.map((video) => {
                       const downloadUrl = getVideoDownloadUrl(video);
                       return (
@@ -1313,7 +1313,7 @@ export default function LibraryFlow() {
                         {section.seriesTitle ?? "Other videos"}
                       </h2>
                     ) : null}
-                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
                       {section.items.map((project) => {
                         const content = (project.metadata ?? {}) as {
                           scenes?: { duration?: number; elements?: { media?: { url?: string } }[] }[];
@@ -1435,7 +1435,7 @@ export default function LibraryFlow() {
               {groupByBundle(filtered).map(({ bundleId, bundleName, items: bundleItems }) => (
                 <section key={bundleId}>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{bundleName}</h2>
-                  <div className="grid gap-3 md:gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid gap-3 md:gap-4 grid-cols-2 lg:grid-cols-3">
                     {bundleItems.map((item) => (
                       <Card key={item.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
                         <div className="h-28 sm:h-auto sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
@@ -1541,7 +1541,7 @@ export default function LibraryFlow() {
                             {formatDate(item.createdAt)} • {item.status === "generating" ? <span className="text-orange-500 font-medium">generating…</span> : statusLabel(item.status)}
                           </CardDescription>
                         </CardHeader>
-                        <CardContent className="pt-0 flex gap-2">
+                        <CardContent className="pt-0 px-3 pb-3 sm:px-6 sm:pb-6 flex gap-2">
                           {item.type === "product" && item.status === "generating" ? (
                             <div className="flex-1 flex flex-col gap-2 min-w-0">
                               {generatingProgress[item.id] ? (
@@ -1591,10 +1591,10 @@ export default function LibraryFlow() {
               ))}
             </div>
           ) : (
-            <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 md:gap-4 grid-cols-2 lg:grid-cols-3">
               {filtered.map((item) => (
                 <Card key={`${item.type}-${item.id}`} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden">
-                  <div className="h-28 sm:h-auto sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
+                  <div className="aspect-[4/3] sm:aspect-video bg-gray-200 dark:bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
                     {showThumbnail(item) ? (
                       <img
                         src={item.thumbnail}
@@ -1606,11 +1606,11 @@ export default function LibraryFlow() {
                       <ThumbnailPlaceholder item={item} />
                     )}
                   </div>
-                  <CardHeader className="pb-2 pt-3">
-                    <div className="flex items-start justify-between gap-2">
+                  <CardHeader className="pb-2 pt-2 px-3 sm:px-6 sm:pt-3">
+                    <div className="flex items-start justify-between gap-1">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-base truncate text-gray-900 dark:text-white flex-1">{item.title}</CardTitle>
+                        <div className="flex items-center gap-1">
+                          <CardTitle className="text-sm sm:text-base truncate text-gray-900 dark:text-white flex-1">{item.title}</CardTitle>
                           {item.type === "product" && typeof item.completionScore === "number" && (
                             <CompletionRing score={item.completionScore} />
                           )}
@@ -1729,7 +1729,7 @@ export default function LibraryFlow() {
                       )}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="pt-0 flex gap-2">
+                  <CardContent className="pt-0 px-3 pb-3 sm:px-6 sm:pb-6 flex gap-2">
                     {isTrashView ? (
                       <>
                         <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => handleRestore(item)}>
