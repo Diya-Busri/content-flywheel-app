@@ -3859,13 +3859,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   useEffect(() => {
     if (!resizingImageId) return;
-    const onMove = (e: MouseEvent) => {
+    const getCoords = (e: MouseEvent | TouchEvent) => {
+      if ("touches" in e && e.touches.length > 0) return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+      return { clientX: (e as MouseEvent).clientX, clientY: (e as MouseEvent).clientY };
+    };
+    const onMove = (e: MouseEvent | TouchEvent) => {
       if (!resizeStartRef.current) return;
-      const dy = e.clientY - resizeStartRef.current.y;
+      const { clientX, clientY } = getCoords(e);
+      const dy = clientY - resizeStartRef.current.y;
       const newHeight = Math.max(80, resizeStartRef.current.height + dy);
       if (resizeStartRef.current.x !== undefined && resizeStartRef.current.width !== undefined) {
-        // Corner resize: update both width and height
-        const dx = e.clientX - resizeStartRef.current.x;
+        const dx = clientX - resizeStartRef.current.x;
         const newWidth = Math.max(80, resizeStartRef.current.width + dx);
         setSections((prev) => prev.map((s) => s.id === resizingImageId ? { ...s, imageHeightPx: newHeight, imageWidthPx: newWidth } : s));
       } else {
@@ -3881,22 +3885,32 @@ export default function ProductEditor({ productId }: { productId: string }) {
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onUp);
     return () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onUp);
     };
   }, [resizingImageId, saveToServer]);
 
   // Image drag-to-move
   useEffect(() => {
     if (!movingImageSectionId) return;
-    const onMove = (e: MouseEvent) => {
+    const getCoords = (e: MouseEvent | TouchEvent) => {
+      if ("touches" in e && e.touches.length > 0) return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+      return { clientX: (e as MouseEvent).clientX, clientY: (e as MouseEvent).clientY };
+    };
+    const onMove = (e: MouseEvent | TouchEvent) => {
       if (!movingImageRef.current) return;
+      if ("touches" in e) e.preventDefault();
+      const { clientX, clientY } = getCoords(e);
       const container = canvasContainerRef.current;
       const rect = container?.getBoundingClientRect();
       const scale = rect ? rect.width / CANVAS_WIDTH : 1;
-      const dx = (e.clientX - movingImageRef.current.startMouseX) / scale;
-      const dy = (e.clientY - movingImageRef.current.startMouseY) / scale;
+      const dx = (clientX - movingImageRef.current.startMouseX) / scale;
+      const dy = (clientY - movingImageRef.current.startMouseY) / scale;
       const newX = movingImageRef.current.startImageX + dx;
       const newY = movingImageRef.current.startImageY + dy;
       setSections((prev) => prev.map((s) => s.id === movingImageRef.current!.sectionId ? { ...s, imageX: newX, imageY: newY } : s));
@@ -3909,9 +3923,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onUp);
     return () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onUp);
     };
   }, [movingImageSectionId, saveToServer]);
 
@@ -5359,6 +5377,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           setMovingImageSectionId(section.id);
                           setShowAlignGuides(true);
                         }}
+                        onTouchStart={(e) => {
+                          if ((e.target as HTMLElement).closest("[data-resize-handle]")) return;
+                          const touch = e.touches[0];
+                          movingImageRef.current = { sectionId: section.id, startMouseX: touch.clientX, startMouseY: touch.clientY, startImageX: section.imageX!, startImageY: section.imageY ?? 0 };
+                          setMovingImageSectionId(section.id);
+                          setShowAlignGuides(true);
+                        }}
                       >
                         {regeneratingSectionImageId === section.id ? (
                           <div className="w-full h-full flex items-center justify-center bg-gray-100"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
@@ -5367,12 +5392,14 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         )}
                         {/* Bottom-centre height resize handle */}
                         <div data-resize-handle className="absolute bottom-0 left-8 right-8 h-3 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-s-resize" style={{ zIndex: 31 }}
-                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeStartRef.current = { y: e.clientY, height: imgHeight }; setResizingImageId(section.id); }}>
+                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeStartRef.current = { y: e.clientY, height: imgHeight }; setResizingImageId(section.id); }}
+                          onTouchStart={(e) => { e.stopPropagation(); const t = e.touches[0]; resizeStartRef.current = { y: t.clientY, height: imgHeight }; setResizingImageId(section.id); }}>
                           <div className="w-8 h-1 rounded-full bg-black/30" />
                         </div>
                         {/* Bottom-right corner resize handle */}
                         <div data-resize-handle className="absolute bottom-0 right-0 w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity cursor-se-resize flex items-end justify-end" style={{ zIndex: 32 }}
-                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeStartRef.current = { y: e.clientY, height: imgHeight, x: e.clientX, width: imgWidth }; setResizingImageId(section.id); }}>
+                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); resizeStartRef.current = { y: e.clientY, height: imgHeight, x: e.clientX, width: imgWidth }; setResizingImageId(section.id); }}
+                          onTouchStart={(e) => { e.stopPropagation(); const t = e.touches[0]; resizeStartRef.current = { y: t.clientY, height: imgHeight, x: t.clientX, width: imgWidth }; setResizingImageId(section.id); }}>
                           <div className="w-3 h-3 border-r-2 border-b-2 border-black/50 rounded-br-sm" />
                         </div>
                         {/* Action buttons */}
@@ -5801,6 +5828,23 @@ export default function ProductEditor({ productId }: { productId: string }) {
               <TabsContent value="graphics" className="mt-0 p-4 space-y-4">
                 {/* Social links for back cover are shown at top of right panel when on back page (BackCoverEditor) */}
                 <p className="text-xs text-gray-500 mb-3">Click to add to canvas. Drag to move and resize. Icons and graphics are on the current page only.</p>
+                {/* Mobile element action buttons — shown when something is selected */}
+                {selectedElement && (
+                  <div className="md:hidden flex gap-1.5 flex-wrap">
+                    <Button type="button" size="sm" variant="outline" onClick={() => duplicateElement(selectedElement)} className="flex-1 border-gray-200 text-gray-700 hover:bg-gray-100 text-xs gap-1">
+                      <Copy className="w-3.5 h-3.5" />Duplicate
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => bringToFront(selectedElement)} className="flex-1 border-gray-200 text-gray-700 hover:bg-gray-100 text-xs gap-1">
+                      <ArrowUp className="w-3.5 h-3.5" />Forward
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => sendToBack(selectedElement)} className="flex-1 border-gray-200 text-gray-700 hover:bg-gray-100 text-xs gap-1">
+                      <ArrowDown className="w-3.5 h-3.5" />Back
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => deleteElement(selectedElement)} className="flex-1 border-red-200 text-red-600 hover:bg-red-50 text-xs gap-1">
+                      <Trash2 className="w-3.5 h-3.5" />Delete
+                    </Button>
+                  </div>
+                )}
                 <Button
                   type="button"
                   size="sm"
@@ -6748,18 +6792,24 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             type="file"
                             accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                             className="hidden"
-                            onChange={(e) => {
+                            onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
-                              const reader = new FileReader();
-                              reader.onload = () => {
-                                const dataUrl = reader.result;
-                                if (typeof dataUrl === "string") {
-                                  addImageToCanvasAndClose(dataUrl);
-                                }
-                              };
-                              reader.readAsDataURL(file);
                               e.target.value = "";
+                              try {
+                                const fd = new FormData();
+                                fd.append("file", file);
+                                fd.append("type", "canvas");
+                                const res = await fetch("/api/upload/store-image", { method: "POST", body: fd });
+                                const data = await res.json();
+                                if (data.url) {
+                                  addImageToCanvasAndClose(data.url);
+                                } else {
+                                  toast({ title: "Upload failed", description: data.error ?? "Unknown error", variant: "destructive" });
+                                }
+                              } catch {
+                                toast({ title: "Upload failed", description: "Could not upload image", variant: "destructive" });
+                              }
                             }}
                           />
                         </label>
@@ -7379,7 +7429,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
             { tab: "design",    Icon: Palette,     label: "Design"   },
             { tab: "graphics",  Icon: ImageIcon,   label: "Graphics" },
             { tab: "layout",    Icon: LayoutGrid,  label: "Layout"   },
-            { tab: "videos",    Icon: Video,       label: "Videos"   },
+            { tab: "marketing", Icon: Megaphone,   label: "Marketing" },
             { tab: "export",    Icon: FileOutput,  label: "Export"   },
             { tab: "ai",        Icon: Sparkles,    label: "AI"       },
           ] as const
@@ -7637,10 +7687,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
               style={pdfExporting ? { position: "fixed", left: "-9999px", top: 0, zIndex: -1 } : undefined}
             >
             <div ref={previewPagesContainerRef} data-print-source className="preview-pages-container flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col items-center gap-4 sm:gap-6">
-                {/* Scale pages to fit viewport width on mobile */}
+                {/* Scale pages to fit viewport width on mobile — disabled during PDF export */}
                 <style dangerouslySetInnerHTML={{ __html: `
                   @media (max-width: 860px) {
-                    .preview-page-scaler {
+                    .preview-page-scaler:not([data-exporting]) {
                       transform-origin: top center;
                       transform: scale(calc(min(1, (100vw - 32px) / ${CANVAS_WIDTH})));
                       margin-bottom: calc((min(1, (100vw - 32px) / ${CANVAS_WIDTH}) - 1) * ${CANVAS_HEIGHT}px);
@@ -7695,7 +7745,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       const coverBgSettings = coverPageBg?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...coverPageBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS;
                       const coverOverlay = coverPageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...coverPageBg.overlaySettings } : DEFAULT_OVERLAY;
                       return (
-                        <div key="cover" className="preview-page-scaler shrink-0" style={{ width: CANVAS_WIDTH * previewPageScale, height: CANVAS_HEIGHT * previewPageScale, transformOrigin: "top left", transform: previewPageScale < 1 ? `scale(${previewPageScale})` : undefined }}>
+                        <div key="cover" className="preview-page-scaler shrink-0" {...(pdfExporting ? { "data-exporting": "true" } : {})} style={{ width: pdfExporting ? CANVAS_WIDTH : CANVAS_WIDTH * previewPageScale, height: pdfExporting ? CANVAS_HEIGHT : CANVAS_HEIGHT * previewPageScale, transformOrigin: "top left", transform: (!pdfExporting && previewPageScale < 1) ? `scale(${previewPageScale})` : undefined }}>
                         <div
                           id="preview-page-0"
                           data-pdf-page
@@ -7736,7 +7786,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       const backBgSettings = backPageBg?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...backPageBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS;
                       const backOverlay = backPageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...backPageBg.overlaySettings } : DEFAULT_OVERLAY;
                       return (
-                        <div key="back" className="preview-page-scaler shrink-0" style={{ width: CANVAS_WIDTH * previewPageScale, height: CANVAS_HEIGHT * previewPageScale, transformOrigin: "top left", transform: previewPageScale < 1 ? `scale(${previewPageScale})` : undefined }}>
+                        <div key="back" className="preview-page-scaler shrink-0" {...(pdfExporting ? { "data-exporting": "true" } : {})} style={{ width: pdfExporting ? CANVAS_WIDTH : CANVAS_WIDTH * previewPageScale, height: pdfExporting ? CANVAS_HEIGHT : CANVAS_HEIGHT * previewPageScale, transformOrigin: "top left", transform: (!pdfExporting && previewPageScale < 1) ? `scale(${previewPageScale})` : undefined }}>
                         <div
                           id={`preview-page-${pageIdx}`}
                           data-pdf-page
@@ -7778,7 +7828,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     const bodyStyles = product.designSettings?.textStyles?.[section.id]?.body;
                     const pageTextColor = pageBg?.pageTextColor ?? null;
                     return (
-                      <div key={section.id} className="preview-page-scaler shrink-0" style={{ width: CANVAS_WIDTH * previewPageScale, height: CANVAS_HEIGHT * previewPageScale, transformOrigin: "top left", transform: previewPageScale < 1 ? `scale(${previewPageScale})` : undefined }}>
+                      <div key={section.id} className="preview-page-scaler shrink-0" {...(pdfExporting ? { "data-exporting": "true" } : {})} style={{ width: pdfExporting ? CANVAS_WIDTH : CANVAS_WIDTH * previewPageScale, height: pdfExporting ? CANVAS_HEIGHT : CANVAS_HEIGHT * previewPageScale, transformOrigin: "top left", transform: (!pdfExporting && previewPageScale < 1) ? `scale(${previewPageScale})` : undefined }}>
                       <div
                         id={`preview-page-${pageIdx}`}
                         data-pdf-page
