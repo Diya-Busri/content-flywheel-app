@@ -1339,6 +1339,77 @@ export function DesignEditor({ designId }: { designId: string }) {
               </>
             )}
 
+            {/* Shape-specific controls: fill color + width/height */}
+            {selectedEl.type === "shape" && !selectedEl.locked && (
+              <>
+                {/* Fill color */}
+                <div className="flex flex-col items-center gap-0.5 min-w-[44px]">
+                  <div className="relative w-7 h-7 rounded-lg overflow-hidden border-2 cursor-pointer shadow-sm" style={{ borderColor: isDark ? "#3A3A3A" : "#e5e7eb" }}>
+                    <div className="absolute inset-0" style={{ background: selectedEl.fill ?? "#f97316" }} />
+                    <input
+                      type="color"
+                      value={selectedEl.fill ?? "#f97316"}
+                      onChange={(e) => updateElement(selectedEl.id, { fill: e.target.value })}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      title="Shape fill color"
+                    />
+                  </div>
+                  <span className="text-[9px] font-medium leading-none">Color</span>
+                </div>
+                <div className={`w-px h-6 mx-0.5 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+                {/* Width stepper */}
+                <button
+                  type="button"
+                  onClick={() => updateElement(selectedEl.id, { width: Math.max(10, Math.round((selectedEl.width ?? 100) - 10)) })}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+                  title="Narrower"
+                >
+                  <Minus className="w-4 h-4" />
+                  <span className="text-[9px] font-medium leading-none">Narrower</span>
+                </button>
+                <div className={`flex flex-col items-center justify-center rounded-xl px-2 py-1 min-w-[44px] ${isDark ? "bg-white/5 text-gray-200" : "bg-gray-100 text-gray-700"}`}>
+                  <span className="text-sm font-bold leading-none">{Math.round(selectedEl.width ?? 100)}</span>
+                  <span className="text-[9px] font-medium leading-none mt-0.5">W</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateElement(selectedEl.id, { width: Math.round((selectedEl.width ?? 100) + 10) })}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+                  title="Wider"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="text-[9px] font-medium leading-none">Wider</span>
+                </button>
+                <div className={`w-px h-6 mx-0.5 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+                {/* Height stepper */}
+                <button
+                  type="button"
+                  onClick={() => updateElement(selectedEl.id, { height: Math.max(10, Math.round((selectedEl.height ?? 100) - 10)) })}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+                  title="Shorter"
+                >
+                  <Minus className="w-4 h-4" />
+                  <span className="text-[9px] font-medium leading-none">Shorter</span>
+                </button>
+                <div className={`flex flex-col items-center justify-center rounded-xl px-2 py-1 min-w-[44px] ${isDark ? "bg-white/5 text-gray-200" : "bg-gray-100 text-gray-700"}`}>
+                  <span className="text-sm font-bold leading-none">{Math.round(selectedEl.height ?? 100)}</span>
+                  <span className="text-[9px] font-medium leading-none mt-0.5">H</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateElement(selectedEl.id, { height: Math.round((selectedEl.height ?? 100) + 10) })}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+                  title="Taller"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="text-[9px] font-medium leading-none">Taller</span>
+                </button>
+                <div className={`w-px h-6 mx-1 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+              </>
+            )}
+
             {/* Lock / Unlock */}
             <button
               type="button"
