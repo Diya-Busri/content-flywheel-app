@@ -1250,15 +1250,69 @@ export function DesignEditor({ designId }: { designId: string }) {
 
         {/* ── Element editing toolbar ────────────────────────────────────────
             Appears when an element is selected. Fixed below the 52px header.
+            Horizontally scrollable so all controls are reachable on mobile.
         */}
         {selectedEl && (
           <div
-            className={`fixed left-0 right-0 z-[49] flex items-center justify-center gap-1 px-3 py-2 border-b shadow-sm ${panelCls}`}
-            style={{ top: 52 }}
+            className={`fixed left-0 right-0 z-[49] overflow-x-auto border-b shadow-sm ${panelCls}`}
+            style={{ top: 52, WebkitOverflowScrolling: "touch" } as React.CSSProperties}
           >
-            {/* Font size controls — text elements only */}
+          <div className="inline-flex items-center gap-1 px-3 py-2 min-w-max">
+            {/* Text-specific controls: color, font, size, bold/italic */}
             {selectedEl.type === "text" && !selectedEl.locked && (
               <>
+                {/* Color picker */}
+                <div className="flex flex-col items-center gap-0.5 min-w-[44px]">
+                  <div className="relative w-7 h-7 rounded-lg overflow-hidden border-2 cursor-pointer shadow-sm" style={{ borderColor: isDark ? "#3A3A3A" : "#e5e7eb" }}>
+                    <div className="absolute inset-0" style={{ background: selectedEl.color ?? "#1a1a1a" }} />
+                    <input
+                      type="color"
+                      value={selectedEl.color ?? "#1a1a1a"}
+                      onChange={(e) => updateElement(selectedEl.id, { color: e.target.value })}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      title="Text color"
+                    />
+                  </div>
+                  <span className="text-[9px] font-medium leading-none">Color</span>
+                </div>
+                <div className={`w-px h-6 mx-0.5 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+                {/* Font family */}
+                <div className="flex flex-col items-center gap-0.5">
+                  <select
+                    value={selectedEl.fontFamily ?? "Inter"}
+                    onChange={(e) => updateElement(selectedEl.id, { fontFamily: e.target.value })}
+                    className={`h-7 text-[10px] rounded-lg border px-1.5 cursor-pointer ${isDark ? "bg-[#1A1A1A] border-[#3A3A3A] text-gray-200" : "bg-white border-gray-200 text-gray-700"}`}
+                    title="Font family"
+                  >
+                    {FONT_FAMILIES.map((f) => <option key={f}>{f}</option>)}
+                  </select>
+                  <span className="text-[9px] font-medium leading-none">Font</span>
+                </div>
+                <div className={`w-px h-6 mx-0.5 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+                {/* Bold / Italic */}
+                <button
+                  type="button"
+                  onClick={() => updateElement(selectedEl.id, { fontWeight: selectedEl.fontWeight === "700" ? "400" : "700" })}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${selectedEl.fontWeight === "700" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+                  title="Bold"
+                >
+                  <Bold className="w-4 h-4" />
+                  <span className="text-[9px] font-medium leading-none">Bold</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateElement(selectedEl.id, { fontStyle: selectedEl.fontStyle === "italic" ? "normal" : "italic" })}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${selectedEl.fontStyle === "italic" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+                  title="Italic"
+                >
+                  <Italic className="w-4 h-4" />
+                  <span className="text-[9px] font-medium leading-none">Italic</span>
+                </button>
+                <div className={`w-px h-6 mx-0.5 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+                {/* Font size */}
                 <button
                   type="button"
                   onClick={() => updateElement(selectedEl.id, { fontSize: Math.max(8, (selectedEl.fontSize ?? 32) - 2) })}
@@ -1382,6 +1436,7 @@ export function DesignEditor({ designId }: { designId: string }) {
               <X className="w-4 h-4" />
               <span className="text-[9px] font-medium leading-none">Done</span>
             </button>
+          </div>{/* end scrollable inner */}
           </div>
         )}
       </div>
