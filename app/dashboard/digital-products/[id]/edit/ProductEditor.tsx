@@ -2582,6 +2582,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const updateTextBoxSetting = useCallback(
     (key: keyof TextBoxSettings, value: string | number | boolean) => {
       if (!selectedElement) return;
+      const pageOfElement = placedElementsByPage.findIndex((pageArr) =>
+        pageArr.some((el) => el.id === selectedElement && el.type === "text")
+      );
       recordUndoDebounced();
       const normalizedValue = key === "color" && typeof value === "string"
         ? (value.startsWith("#") ? value : `#${value}`).toLowerCase()
@@ -2598,7 +2601,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
           })
         );
         if (updatedCount === 0) {
-          console.warn("[ProductEditor] updateTextBoxSetting — updater ran but no element was updated (updatedCount=0)");
+          // element not found — may have been deleted
         }
         return next;
       });
