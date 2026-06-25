@@ -4987,18 +4987,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 {/* On mobile, scale cover/back pages (Rnd elements) to fit. Content pages flow at 100% width. */}
                 {(() => {
                   const needsScale = canvasPageScale < 1 && (isOnCoverPage || isOnBackPage);
-                  const scaledHeight = needsScale ? Math.round(effectiveCanvasHeight * canvasPageScale) : effectiveCanvasHeight;
                   return (
-                // Outer wrapper clips to the visually-scaled height so no blank gap appears below on mobile
-                <div style={{ width: "100%", height: scaledHeight, overflow: "hidden", position: "relative", zIndex: 10 }}>
                 <div
                   className="relative text-[#1A1A1A] overflow-visible"
                   style={{
                     position: "relative",
+                    zIndex: 10,
                     width: needsScale ? CANVAS_WIDTH : "100%",
                     minHeight: effectiveCanvasHeight,
                     padding: 0,
                     margin: 0,
+                    marginBottom: needsScale ? `${effectiveCanvasHeight * (canvasPageScale - 1)}px` : 0,
                     boxSizing: "border-box",
                     fontFamily: "var(--font-sans), sans-serif",
                     backgroundColor: canvasBgUrl ? "transparent" : (currentPageBackgroundColor ?? "#ffffff"),
@@ -5386,7 +5385,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </svg>
                   )}
                 </div>
-                </div>{/* end scaled-height clip wrapper */}
                   );
                 })()}
             </div>
