@@ -19,6 +19,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 import { useToast } from "@/components/ui/use-toast";
 import { DesignData, DesignElement } from "@/db/schema/designs-schema";
+import { getProxiedBackgroundImageUrl } from "@/lib/proxy-image-url";
 
 // ── Shape library ──────────────────────────────────────────────────────────
 
@@ -452,6 +453,11 @@ export function DesignEditor({ designId }: { designId: string }) {
   const resizeRef = useRef<ResizeState | null>(null);
   const rotateRef = useRef<{ startAngle: number; origRotation: number; cx: number; cy: number } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Always-fresh refs so keyboard/pointer handlers don't capture stale closures
+  const dataRef = useRef<DesignData>(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
+  const selectedIdRef = useRef<string | null>(selectedId);
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
   useEffect(() => {
     fetch(`/api/designs/${designId}`)
@@ -850,6 +856,16 @@ export function DesignEditor({ designId }: { designId: string }) {
     if (!selectedEl) return;
     updateElement(selectedEl.id, { zIndex: Math.max(0, (selectedEl.zIndex ?? 0) - 1) });
   }
+  function bringToFront() {
+    if (!selectedEl) return;
+    const maxZ = Math.max(0, ...data.elements.map((e) => e.zIndex ?? 0));
+    updateElement(selectedEl.id, { zIndex: maxZ + 1 });
+  }
+  function sendToBack() {
+    if (!selectedEl) return;
+    const minZ = Math.min(0, ...data.elements.map((e) => e.zIndex ?? 0));
+    updateElement(selectedEl.id, { zIndex: minZ - 1 });
+  }
 
   // ── Drag/resize/rotate — pointer events work for both mouse and touch ──
 
@@ -977,32 +993,52 @@ export function DesignEditor({ designId }: { designId: string }) {
     if ((e.target as HTMLElement) === canvasRef.current) setSelectedId(null);
   }
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — use refs to avoid stale closures and unnecessary re-registration
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
+      const activeEl = document.activeElement as HTMLElement;
+      const inInput = activeEl?.tagName === "INPUT" || activeEl?.tagName === "TEXTAREA" || activeEl?.isContentEditable;
+
       if (meta && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); return; }
       if (meta && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); return; }
       if (meta && e.key === "d") { e.preventDefault(); duplicateSelected(); return; }
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
-        const el = document.activeElement as HTMLElement;
-        if (el?.tagName === "INPUT" || el?.tagName === "TEXTAREA" || el?.isContentEditable) return;
+
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedIdRef.current && !inInput) {
         deleteSelected();
+        return;
+      }
+
+      // Arrow key nudge — 1px normally, 10px with Shift
+      if (selectedIdRef.current && !inInput && ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)) {
+        e.preventDefault();
+        const dist = e.shiftKey ? 10 : 1;
+        const id = selectedIdRef.current;
+        const el = dataRef.current.elements.find((x) => x.id === id);
+        if (!el || el.locked) return;
+        const dx = e.key === "ArrowLeft" ? -dist : e.key === "ArrowRight" ? dist : 0;
+        const dy = e.key === "ArrowUp" ? -dist : e.key === "ArrowDown" ? dist : 0;
+        updateElement(id, { x: el.x + dx, y: el.y + dy });
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, data]);
+  }, []); // stable — uses refs internally
 
   async function captureCanvas(): Promise<string> {
     const { toPng } = await import("html-to-image");
     const el = canvasRef.current!;
+    // Wait for all web fonts to load so text renders correctly in the export
+    await document.fonts.ready;
     // Remove the zoom transform so html-to-image captures the element at its
     // native CSS size (data.width × data.height) with no scaling artifacts.
     const saved = el.style.transform;
     el.style.transform = "none";
     try {
+      // Run twice — first pass loads cross-origin images into the browser cache,
+      // second pass captures them correctly (html-to-image known limitation)
+      await toPng(el, { pixelRatio: 2, width: data.width, height: data.height });
       return await toPng(el, { pixelRatio: 2, width: data.width, height: data.height });
     } finally {
       el.style.transform = saved;
@@ -1155,12 +1191,12 @@ export function DesignEditor({ designId }: { designId: string }) {
           <div style={{ width: data.width * scale, height: data.height * scale, position: "relative", flexShrink: 0 }}>
             <div
               ref={canvasRef}
-              style={{ width: data.width, height: data.height, background: buildBg(data), backgroundImage: data.backgroundImage && !(data.backgroundImageBlur ?? 0) ? `url(${data.backgroundImage})` : undefined, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left", overflow: "hidden", boxShadow: "0 4px 40px rgba(0,0,0,0.25)" }}
+              style={{ width: data.width, height: data.height, background: buildBg(data), backgroundImage: data.backgroundImage && !(data.backgroundImageBlur ?? 0) ? `url(${getProxiedBackgroundImageUrl(data.backgroundImage) ?? data.backgroundImage})` : undefined, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left", overflow: "hidden", boxShadow: "0 4px 40px rgba(0,0,0,0.25)" }}
               onClick={onCanvasClick}
             >
               {/* Blurred background image layer */}
               {data.backgroundImage && (data.backgroundImageBlur ?? 0) > 0 && (
-                <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${data.backgroundImage})`, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", filter: `blur(${data.backgroundImageBlur}px)`, transform: "scale(1.06)", transformOrigin: "center", zIndex: -1, pointerEvents: "none" }} />
+                <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${getProxiedBackgroundImageUrl(data.backgroundImage) ?? data.backgroundImage})`, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", filter: `blur(${data.backgroundImageBlur}px)`, transform: "scale(1.06)", transformOrigin: "center", zIndex: -1, pointerEvents: "none" }} />
               )}
               {/* Overlay / dim layer */}
               {(data.backgroundImageOverlayOpacity ?? 0) > 0 && data.backgroundImage && (
@@ -1268,7 +1304,7 @@ export function DesignEditor({ designId }: { designId: string }) {
               onClick={bringForward}
               disabled={!!selectedEl.locked}
               className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors disabled:opacity-40 ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
-              title="Bring forward"
+              title="Bring forward (one step)"
             >
               <ArrowUp className="w-4 h-4" />
               <span className="text-[9px] font-medium leading-none">Forward</span>
@@ -1280,10 +1316,34 @@ export function DesignEditor({ designId }: { designId: string }) {
               onClick={sendBackward}
               disabled={!!selectedEl.locked}
               className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors disabled:opacity-40 ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
-              title="Send backward"
+              title="Send backward (one step)"
             >
               <ArrowDown className="w-4 h-4" />
               <span className="text-[9px] font-medium leading-none">Back</span>
+            </button>
+
+            {/* Bring to Front */}
+            <button
+              type="button"
+              onClick={bringToFront}
+              disabled={!!selectedEl.locked}
+              className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors disabled:opacity-40 ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+              title="Bring to front"
+            >
+              <MoveUp className="w-4 h-4" />
+              <span className="text-[9px] font-medium leading-none">Front</span>
+            </button>
+
+            {/* Send to Back */}
+            <button
+              type="button"
+              onClick={sendToBack}
+              disabled={!!selectedEl.locked}
+              className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors disabled:opacity-40 ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+              title="Send to back"
+            >
+              <MoveDown className="w-4 h-4" />
+              <span className="text-[9px] font-medium leading-none">Back-most</span>
             </button>
 
             <div className={`w-px h-6 mx-1 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
@@ -1352,13 +1412,22 @@ export function DesignEditor({ designId }: { designId: string }) {
           <Sparkles className="w-5 h-5" />
           <span className="text-[9px] font-medium">AI</span>
         </button>
+        <button onClick={() => setMobileToolSheet((prev) => prev === "templates" ? null : "templates")} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${mobileToolSheet === "templates" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+          <LayoutTemplate className="w-5 h-5" />
+          <span className="text-[9px] font-medium">Templates</span>
+        </button>
         <button onClick={() => setMobileToolSheet((prev) => prev === "background" ? null : "background")} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${mobileToolSheet === "background" ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Palette className="w-5 h-5" />
           <span className="text-[9px] font-medium">Canvas</span>
         </button>
-        <button onClick={() => setShowGrid((v) => !v)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${showGrid ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
-          <Grid3x3 className="w-5 h-5" />
-          <span className="text-[9px] font-medium">Grid</span>
+        {/* Zoom controls — mobile only */}
+        <button onClick={() => setScale((s) => Math.max(0.2, +(s - 0.15).toFixed(2)))} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+          <ZoomOut className="w-5 h-5" />
+          <span className="text-[9px] font-medium">{Math.round(scale * 100)}%</span>
+        </button>
+        <button onClick={() => setScale((s) => Math.min(3, +(s + 0.15).toFixed(2)))} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
+          <ZoomIn className="w-5 h-5" />
+          <span className="text-[9px] font-medium">Zoom</span>
         </button>
         <button onClick={() => setMobileSettingsOpen((prev) => !prev)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl ${mobileSettingsOpen ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}>
           <Settings2 className="w-5 h-5" />
@@ -1450,6 +1519,23 @@ export function DesignEditor({ designId }: { designId: string }) {
                       ))}
                     </div>
                 }
+              </>
+            )}
+
+            {/* Templates */}
+            {mobileToolSheet === "templates" && (
+              <>
+                <p className="text-sm font-semibold mb-1">Templates</p>
+                <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Tap to apply — replaces background &amp; adds starter elements</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {TEMPLATES.map((tpl) => (
+                    <button key={tpl.id} onClick={() => { applyTemplate(tpl); setMobileToolSheet(null); }}
+                      className={`rounded-xl overflow-hidden border-2 hover:border-orange-500 transition-colors text-left ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
+                      <div className="h-24" style={{ background: tpl.preview }} />
+                      <div className={`px-2 py-2 text-xs font-semibold ${isDark ? "text-gray-300" : "text-gray-700"}`}>{tpl.label}</div>
+                    </button>
+                  ))}
+                </div>
               </>
             )}
 
@@ -1827,8 +1913,8 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRes
       {rotateHandle}
       {el.imageUrl
         // eslint-disable-next-line @next/next/no-img-element
-        ? <img src={el.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: (el.objectFit as "cover" | "contain" | "fill") ?? "cover", display: "block", pointerEvents: "none" }} draggable={false} />
-        : <div style={{ width: "100%", height: "100%", background: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 14 }}>No image</div>}
+        ? <img src={getProxiedBackgroundImageUrl(el.imageUrl) ?? el.imageUrl} crossOrigin="anonymous" alt="" style={{ width: "100%", height: "100%", objectFit: (el.objectFit as "cover" | "contain" | "fill") ?? "cover", display: "block", pointerEvents: "none" }} draggable={false} />
+        : <div style={{ width: "100%", height: "100%", background: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 14 }}>🖼 No image</div>}
       {cornerHandles}
     </div>
   );

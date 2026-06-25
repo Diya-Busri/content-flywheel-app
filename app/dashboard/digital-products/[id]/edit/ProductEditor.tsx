@@ -925,7 +925,7 @@ const CanvasPlacedElement = React.memo(function CanvasPlacedElement({
           ) : (
             <div
               key={`text-display-${element.id}-${textColor}`}
-              className={`w-full h-full overflow-auto p-1 flex items-center select-text ${isWebsiteLink ? "cursor-pointer hover:opacity-90" : "cursor-text"}`}
+              className={`w-full h-full overflow-hidden p-1 flex items-center select-text ${isWebsiteLink ? "cursor-pointer hover:opacity-90" : "cursor-text"}`}
               style={{ ...textStyleNoBackground, color: textColor, backgroundColor: "transparent" }}
               onDoubleClick={handleDoubleClickText}
               onClick={isWebsiteLink ? (e) => {
@@ -1140,6 +1140,19 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const lastPreviewHtmlRef = useRef<{ sectionId: string; html: string } | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const [canvasPageScale, setCanvasPageScale] = useState(1);
+
+  // Inject Google Fonts used in the font pickers
+  useEffect(() => {
+    const id = "product-editor-google-fonts";
+    if (document.getElementById(id)) return;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href =
+      "https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;600;700&family=Lato:wght@300;400;700&family=Montserrat:wght@300;400;600;700&family=Nunito:wght@300;400;600;700&family=Open+Sans:wght@300;400;600;700&family=Playfair+Display:wght@400;600;700&family=Roboto:wght@300;400;600;700&display=swap";
+    document.head.appendChild(link);
+  }, []);
+
   // Keep canvas scale in sync with container width so Rnd elements are fully visible on narrow screens
   useEffect(() => {
     if (loading) return;
@@ -1332,14 +1345,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
       // Debug: cover and back page data loaded
       const coverPage = pages[0];
       const backPage = pages[pages.length - 1];
-      console.log("[ProductEditor] Load — cover page (index 0):", {
-        backgroundImage: coverPage?.backgroundImage ?? null,
-        overlaySettings: coverPage?.overlaySettings ?? null,
-      });
-      console.log("[ProductEditor] Load — back cover page (index " + (pages.length - 1) + "):", {
-        backgroundImage: backPage?.backgroundImage ?? null,
-        overlaySettings: backPage?.overlaySettings ?? null,
-      });
       setCurrentPageIndex(0);
       setUndoStack([]);
       setRedoStack([]);
@@ -1376,16 +1381,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
         const backPage = pages.length > 0 ? pages[pages.length - 1] : undefined;
         const coverEls = byPage[0] ?? [];
         const backEls = byPage.length > 0 ? (byPage[byPage.length - 1] ?? []) : [];
-        console.log("[ProductEditor] Save — cover page (index 0):", {
-          backgroundImage: coverPage?.backgroundImage ?? null,
-          overlaySettings: coverPage?.overlaySettings ?? null,
-          placedElementsCount: coverEls.length,
-        });
-        console.log("[ProductEditor] Save — back cover page (index " + (pages.length - 1) + "):", {
-          backgroundImage: backPage?.backgroundImage ?? null,
-          overlaySettings: backPage?.overlaySettings ?? null,
-          placedElementsCount: backEls.length,
-        });
       }
       setSaving(true);
       try {
@@ -2380,7 +2375,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
         body: JSON.stringify({ prompt }),
       });
       const data = (await res.json()) as { url?: string; imageUrl?: string; data?: { url?: string }[]; error?: string };
-      console.log("DALL-E Response:", data);
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
       const imageUrl =
         (typeof data.url === "string" && data.url.trim()) ||
@@ -2449,17 +2443,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
       const isCover = foundPageIndex === 0;
       const isBack = totalPages > 0 && foundPageIndex === totalPages - 1;
       const isContent = !isCover && !isBack;
-      console.log("[ProductEditor] selectedTextElement — data structure", {
-        currentPageIndex,
-        totalPages,
-        foundPageIndex,
-        pageType: isCover ? "COVER" : isBack ? "BACK" : "CONTENT",
-        elementId: el.id,
-        elementKeys: Object.keys(el),
-        textSettingsKeys: el.textSettings ? Object.keys(el.textSettings) : null,
-        textSettings: el.textSettings ? { ...el.textSettings } : null,
-        fullElement: JSON.stringify({ id: el.id, type: el.type, content: el.content?.slice(0, 30), textSettings: el.textSettings }),
-      });
     }
     return el;
   }, [selectedElement, placedElementsByPage, currentPageIndex]);
@@ -2598,40 +2581,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const updateTextBoxSetting = useCallback(
     (key: keyof TextBoxSettings, value: string | number | boolean) => {
-      console.log("[ProductEditor] updateTextBoxSetting called", {
-        selectedElementId: selectedElement ?? null,
-        key,
-        value,
-        isColorUpdate: key === "color",
-      });
-      if (!selectedElement) {
-        console.log("[ProductEditor] updateTextBoxSetting — no selectedElement, returning");
-        return;
-      }
-      const pageOfElement = placedElementsByPage.findIndex((pageArr) =>
-        pageArr.some((el) => el.id === selectedElement && el.type === "text")
-      );
-      const elementBefore = placedElementsByPage.flat().find((el) => el.id === selectedElement && el.type === "text");
-      console.log("[ProductEditor] updateTextBoxSetting — where formatting is applied", {
-        selectedElement,
-        key,
-        value,
-        currentPageIndex,
-        pageOfElement,
-        elementLivesOnPage: pageOfElement,
-        elementBefore: elementBefore
-          ? { id: elementBefore.id, textSettings: elementBefore.textSettings ? { ...elementBefore.textSettings } : null }
-          : null,
-        placedElementsByPageLength: placedElementsByPage.length,
-        placedElementsByPagePageLengths: placedElementsByPage.map((arr) => arr.length),
-      });
+      if (!selectedElement) return;
       recordUndoDebounced();
       const normalizedValue = key === "color" && typeof value === "string"
         ? (value.startsWith("#") ? value : `#${value}`).toLowerCase()
         : value;
-      if (key === "color") {
-        console.log("Updating element:", selectedElement, "colour:", normalizedValue);
-      }
       setPlacedElementsByPage((prev) => {
         let updatedCount = 0;
         const next = prev.map((pageArr, pageIdx) =>
@@ -2640,12 +2594,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
             updatedCount++;
             const nextSettings = { ...el.textSettings, [key]: normalizedValue } as TextBoxSettings;
             const updated = { ...el, textSettings: { ...DEFAULT_TEXT_BOX, ...nextSettings } };
-            console.log("[ProductEditor] updateTextBoxSetting — inside updater", {
-              pageIdx,
-              updatedCount,
-              key,
-              newTextSettings: updated.textSettings,
-            });
             return updated;
           })
         );
@@ -5017,11 +4965,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             : `brightness(${backgroundSettings.brightness ?? 100}%) contrast(${backgroundSettings.contrast ?? 100}%) saturate(${backgroundSettings.saturation ?? 100}%)`,
                       }}
                       aria-hidden
-                      ref={(el) => {
-                        if (el && typeof window !== "undefined" && canvasBgUrl) {
-                          console.log("[ProductEditor] Cover/canvas background URL:", canvasBgUrl);
-                        }
-                      }}
                     />
                     <div
                       className="absolute inset-0"
@@ -5041,17 +4984,18 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 {/* On mobile, scale cover/back pages (Rnd elements) to fit. Content pages flow at 100% width. */}
                 {(() => {
                   const needsScale = canvasPageScale < 1 && (isOnCoverPage || isOnBackPage);
+                  const scaledHeight = needsScale ? Math.round(effectiveCanvasHeight * canvasPageScale) : effectiveCanvasHeight;
                   return (
+                // Outer wrapper clips to the visually-scaled height so no blank gap appears below on mobile
+                <div style={{ width: "100%", height: scaledHeight, overflow: "hidden", position: "relative", zIndex: 10 }}>
                 <div
                   className="relative text-[#1A1A1A] overflow-visible"
                   style={{
                     position: "relative",
-                    zIndex: 10,
                     width: needsScale ? CANVAS_WIDTH : "100%",
                     minHeight: effectiveCanvasHeight,
                     padding: 0,
                     margin: 0,
-                    marginBottom: needsScale ? `${effectiveCanvasHeight * (canvasPageScale - 1)}px` : 0,
                     boxSizing: "border-box",
                     fontFamily: "var(--font-sans), sans-serif",
                     backgroundColor: canvasBgUrl ? "transparent" : (currentPageBackgroundColor ?? "#ffffff"),
@@ -5439,6 +5383,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     </svg>
                   )}
                 </div>
+                </div>{/* end scaled-height clip wrapper */}
                   );
                 })()}
             </div>
@@ -6009,7 +5954,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         <HexColorPicker
                           color={selectedTextElement.textSettings?.color ?? DEFAULT_TEXT_BOX.color}
                           onChange={(c) => {
-                            console.log("[ProductEditor] Text colour picker onChange fired → calling updateTextBoxSetting('color', …)");
                             updateTextBoxSetting("color", c);
                           }}
                         />
@@ -7725,9 +7669,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             )
                           ) : element.type === "text" ? (
                             (element.id === "back-url" && /^https?:\/\//i.test((element.content || "").trim()) ? (
-                              <div className="w-full h-full overflow-auto p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: "#2563eb", textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word", textDecoration: "underline" }} data-website-link={(element.content || "").trim()}>{element.content || ""}</div>
+                              <div className="w-full h-full overflow-hidden p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: "#2563eb", textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word", textDecoration: "underline" }} data-website-link={(element.content || "").trim()}>{element.content || ""}</div>
                             ) : (
-                              <div className="w-full h-full overflow-auto p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color, textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word", textShadow: (element.textSettings?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? `${element.textSettings?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX}px ${element.textSettings?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY}px ${element.textSettings?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur}px ${element.textSettings?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor}` : "none", WebkitTextStroke: (element.textSettings?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${element.textSettings?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${element.textSettings?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none" }}>{element.content || ""}</div>
+                              <div className="w-full h-full overflow-hidden p-1 flex items-center" style={{ fontSize: element.textSettings?.fontSize ?? DEFAULT_TEXT_BOX.fontSize, fontFamily: element.textSettings?.fontFamily ?? DEFAULT_TEXT_BOX.fontFamily, color: element.textSettings?.color ?? DEFAULT_TEXT_BOX.color, textAlign: element.textSettings?.textAlign ?? DEFAULT_TEXT_BOX.textAlign, wordBreak: "break-word", textShadow: (element.textSettings?.textShadowEnabled ?? DEFAULT_TEXT_BOX.textShadowEnabled) ? `${element.textSettings?.textShadowOffsetX ?? DEFAULT_TEXT_BOX.textShadowOffsetX}px ${element.textSettings?.textShadowOffsetY ?? DEFAULT_TEXT_BOX.textShadowOffsetY}px ${element.textSettings?.textShadowBlur ?? DEFAULT_TEXT_BOX.textShadowBlur}px ${element.textSettings?.textShadowColor ?? DEFAULT_TEXT_BOX.textShadowColor}` : "none", WebkitTextStroke: (element.textSettings?.textStrokeEnabled ?? DEFAULT_TEXT_BOX.textStrokeEnabled) ? `${element.textSettings?.textStrokeWidth ?? DEFAULT_TEXT_BOX.textStrokeWidth}px ${element.textSettings?.textStrokeColor ?? DEFAULT_TEXT_BOX.textStrokeColor}` : "none" }}>{element.content || ""}</div>
                             ))
                           ) : <span className="text-[#999] text-xs">?</span>}
                         </div>
@@ -7739,9 +7683,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     if (page.type === "cover") {
                       const coverPageBg = pageBackgrounds[0];
                       const coverBgUrl = getProxiedBackgroundImageUrl(coverPageBg?.backgroundImage ?? null) ?? null;
-                      if (typeof window !== "undefined" && coverBgUrl && process.env.NODE_ENV !== "production") {
-                        console.log("[ProductEditor] Multi-page strip cover background URL:", coverBgUrl.slice(0, 120));
-                      }
                       const coverBgSettings = coverPageBg?.backgroundSettings ? { ...DEFAULT_IMAGE_SETTINGS, ...coverPageBg.backgroundSettings } : DEFAULT_IMAGE_SETTINGS;
                       const coverOverlay = coverPageBg?.overlaySettings ? { ...DEFAULT_OVERLAY, ...coverPageBg.overlaySettings } : DEFAULT_OVERLAY;
                       return (
