@@ -5652,7 +5652,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
               </div>
             )}
             <Tabs value={activeEditorTab} onValueChange={setActiveEditorTab} className="w-full flex flex-col flex-1 min-h-0">
-              <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className={`flex-1 min-h-0 flex flex-col ${activeEditorTab === "ai" ? "overflow-hidden" : "overflow-y-auto"}`}>
               <TabsContent value="content" className="mt-0 p-4 space-y-3">
                 <BrandVoiceIndicator />
                 <ReadyToSellChecklist
@@ -5679,6 +5679,34 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 />
               </TabsContent>
               <TabsContent value="design" className="mt-0 p-4 space-y-4">
+                {/* Auto-Design actions — visible on mobile only (desktop has these in the header toolbar) */}
+                <div className="md:hidden space-y-2">
+                  <h3 className={`text-sm font-semibold mb-1 ${isDark ? "text-white" : "text-gray-900"}`}>AI Cover Design</h3>
+                  <p className={`text-xs mb-2 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Generate colours, fonts, and a cover background image automatically.</p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAutoDesignClick}
+                      disabled={autoDesignLoading || regenerateDesignLoading}
+                      className="flex-1 bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+                    >
+                      {autoDesignLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      Auto-Design
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleRegenerateDesign}
+                      disabled={regenerateDesignLoading || autoDesignLoading}
+                      className={`flex-1 gap-1.5 ${isDark ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A]" : "border-gray-200 text-gray-700 hover:bg-gray-100"}`}
+                    >
+                      {regenerateDesignLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      Regenerate
+                    </Button>
+                  </div>
+                </div>
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Template</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {TEMPLATES.map((t) => (
@@ -7335,7 +7363,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                   />
                 )}
               </TabsContent>
-              <TabsContent value="ai" className="mt-0 p-4 space-y-4">
+              <TabsContent value="ai" className="mt-0 flex-1 min-h-0 flex flex-col">
                 <EditorAIPanel
                   productId={product.id}
                   sections={sections}
