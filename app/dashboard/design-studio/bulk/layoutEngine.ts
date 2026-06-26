@@ -254,14 +254,14 @@ function rect(
   return { id, type: "shape", x, y, width: w, height: h, fill, zIndex: 1, shapeType: "rect", ...opts };
 }
 
-// Rough hook height estimate for layout math
-// Uses 0.68 char width (wider than mixed-case) to account for ALL CAPS bold text
-function hookBlockHeight(fs: number, wordCount: number, lineW: number): number {
-  const charsPerLine = Math.max(Math.floor(lineW / (fs * 0.68)), 1);
-  const totalChars = wordCount * 7; // avg 7 chars per word including space
+// Hook height estimate using actual string length for accuracy.
+// 0.58 char-width factor suits all-caps bold (Oswald is condensed, Inter/Playfair moderate).
+// 1.2× safety buffer prevents clipping without creating excessive dead space.
+function hookBlockHeight(fs: number, hookText: string, lineW: number): number {
+  const charsPerLine = Math.max(Math.floor(lineW / (fs * 0.58)), 1);
+  const totalChars = hookText.trim().length;
   const lines = Math.max(Math.ceil(totalChars / charsPerLine), 1);
-  // 1.3 line height + 50% safety buffer — prevents text clipping for bold/serif fonts
-  return Math.max(lines * fs * 1.3 * 1.5, fs * 3.0);
+  return Math.max(lines * fs * 1.3 * 1.2, fs * 2.2);
 }
 
 // Body font size — smaller when mainText is long
@@ -277,12 +277,12 @@ function buildHeroStatement(
   post: ContentRow, cfg: StyleCfg, analysis: HookAnalysis,
   rng: () => number, W: number, H: number,
 ): DesignElement[] {
-  const fs: number = analysis.lengthClass === "short" ? 128 : analysis.lengthClass === "medium" ? 108 : 88;
+  const fs: number = analysis.lengthClass === "short" ? 96 : analysis.lengthClass === "medium" ? 76 : 64;
   const bodyFs = bodyFontSize(post.mainText) - 6;
   const hookW = W - 80;
   const hookX = 40;
-  const hookY = 220;
-  const hH = Math.min(hookBlockHeight(fs, analysis.wordCount, hookW), Math.round(H * 0.42));
+  const hookY = 160;
+  const hH = Math.min(hookBlockHeight(fs, post.hook, hookW), Math.round(H * 0.40));
   const bodyY = hookY + hH + 90;
   // Cap body height so it never overlaps the CTA at H - 220
   const ctaY = H - 220;
@@ -333,7 +333,7 @@ function buildEditorial(
   const leftX = 120;
   const hookW = W - 200;
   const hookY = 260 + Math.round(rng() * 60);
-  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const hH = hookBlockHeight(fs, post.hook, hookW);
   const ruleY = hookY + hH + 30;
   const bodyY = ruleY + 36;
   const bodyW = W - 300; // narrower than hook — intentionally asymmetric
@@ -388,7 +388,7 @@ function buildQuoteFocus(
   const hookW = W - 200;
   const hookX = (W - hookW) / 2;
   const hookY = 300 + Math.round(rng() * 60);
-  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const hH = hookBlockHeight(fs, post.hook, hookW);
   const sub = rng();
 
   const elements: DesignElement[] = [
@@ -440,7 +440,7 @@ function buildSplitComposition(
   const bottomZoneY = dividerY + dividerH + 40;
   const hookY = 180 + Math.round(rng() * 60);
   const hookW = W - 120;
-  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const hH = hookBlockHeight(fs, post.hook, hookW);
   const sub = rng();
 
   const elements: DesignElement[] = [
@@ -491,7 +491,7 @@ function buildCtaPunch(
   const bodyFs = bodyFontSize(post.mainText) - 4;
   const hookY = 160 + Math.round(rng() * 50);
   const hookW = W - 140;
-  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const hH = hookBlockHeight(fs, post.hook, hookW);
   const bodyY = hookY + hH + 70;
   const ctaBlockY = H - 500;
   const ctaBlockH = 440;
@@ -546,8 +546,8 @@ function buildMinimalLuxury(
   // Hook sits in the upper-middle of the canvas — still elegant but not blank at top
   const hookW = 680;
   const hookX = (W - hookW) / 2;
-  const hookY = 360 + Math.round(rng() * 80);
-  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const hookY = 300 + Math.round(rng() * 60);
+  const hH = hookBlockHeight(fs, post.hook, hookW);
   const bodyY = hookY + hH + 100;
   const sub = rng();
 
@@ -603,13 +603,13 @@ function buildAggressiveViral(
   const p1W = W - 120;
   const p1X = 80;
   const p1Y = 180;
-  const p1H = hookBlockHeight(fs1, splitAt, p1W);
+  const p1H = hookBlockHeight(fs1, p1, p1W);
 
   // p2 is offset to the right — staggered effect
   const p2X = p2 ? 200 : p1X;
   const p2Y = p1Y + p1H + 12;
   const p2W = W - 280;
-  const p2H = p2 ? hookBlockHeight(fs2, words.length - splitAt, p2W) : 0;
+  const p2H = p2 ? hookBlockHeight(fs2, p2, p2W) : 0;
 
   const bodyY = (p2 ? p2Y + p2H : p1Y + p1H) + 80;
   const sub = rng();
@@ -673,7 +673,7 @@ function buildEducational(
   const tagY = 190;
   const tagH = 54;
   const hookY = tagY + tagH + 70;
-  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const hH = hookBlockHeight(fs, post.hook, hookW);
   const divY = hookY + hH + 44;
   const bodyY = divY + 48;
   const sub = rng();
@@ -730,7 +730,7 @@ function buildCinematicFlow(
   const hookY = Math.round(H * 0.18) + Math.round(rng() * 50);
   const hookW = W - 160;
   const hookX = (W - hookW) / 2;
-  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const hH = hookBlockHeight(fs, post.hook, hookW);
   const bodyY = hookY + hH + 130;
   const sub = rng();
 
@@ -779,7 +779,7 @@ function buildRawHighlight(
   const leftX = 90;
   const hookW = W - 180;
   const hookY = 210 + Math.round(rng() * 60);
-  const hH = hookBlockHeight(fs, analysis.wordCount, hookW);
+  const hH = hookBlockHeight(fs, post.hook, hookW);
   const bodyY = hookY + hH + 90;
   const sub = rng();
 
