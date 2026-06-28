@@ -26,6 +26,7 @@ const relevantEvents = new Set([
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",
+  "customer.subscription.trial_will_end",
   "invoice.payment_succeeded",
   "invoice.payment_failed",
 ]);
@@ -91,6 +92,9 @@ export async function POST(request: NextRequest) {
       case "customer.subscription.deleted":
         await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
         break;
+      case "customer.subscription.trial_will_end":
+        // No-op: just acknowledging so Stripe knows we got it
+        break;
       case "invoice.payment_succeeded":
         await handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
         break;
@@ -136,6 +140,10 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
   const planDuration = interval === "year" ? "yearly" : interval === "month" ? "monthly" : null;
   const billingCycleEnd = new Date(subscription.current_period_end * 1000);
   const stripePriceId = price?.id ?? null;
+  const isTrial = subscription.status === "trialing";
+  const trialFields = isTrial && subscription.trial_end
+    ? { trialStartedAt: new Date(), trialEndsAt: new Date(subscription.trial_end * 1000) }
+    : {};
 
   if (userId) {
     await updateProfile(userId, {
@@ -146,6 +154,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       status: "active",
       planDuration,
       billingCycleEnd,
+      ...trialFields,
     });
   } else {
     await updateProfileByStripeCustomerId(customerId, {
@@ -155,6 +164,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       status: "active",
       planDuration,
       billingCycleEnd,
+      ...trialFields,
     });
   }
 }
@@ -476,14 +486,19 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   const planDuration = interval === "year" ? "yearly" : interval === "month" ? "monthly" : null;
   const billingCycleEnd = new Date(subscription.current_period_end * 1000);
   const stripePriceId = price?.id ?? null;
+  const isTrial = subscription.status === "trialing";
+  const trialFields = isTrial && subscription.trial_end
+    ? { trialStartedAt: new Date(), trialEndsAt: new Date(subscription.trial_end * 1000) }
+    : {};
 
   await updateProfileByStripeCustomerId(customerId, {
     stripeSubscriptionId: subscription.id,
     stripePriceId: stripePriceId ?? undefined,
     membership: "pro",
-    status: subscription.status === "active" || subscription.status === "trialing" ? "active" : (subscription.status as string),
+    status: "active",
     planDuration,
     billingCycleEnd,
+    ...trialFields,
   });
 }
 
@@ -506,6 +521,10 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string;
+  // Detect trial cancellation: trial_end is in the future, so they bailed early
+  const trialEnd = subscription.trial_end ? subscription.trial_end * 1000 : null;
+  const cancelledDuringTrial = trialEnd !== null && trialEnd > Date.now();
+
   await updateProfileByStripeCustomerId(customerId, {
     membership: "free",
     status: "cancelled",
@@ -513,6 +532,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     stripePriceId: null,
     planDuration: null,
     billingCycleEnd: null,
+    ...(cancelledDuringTrial ? { trialCancelledAt: new Date() } : {}),
   });
 }
 
@@ -521,10 +541,14 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string;
   const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
   const billingCycleEnd = new Date(subscription.current_period_end * 1000);
+  // If this subscription had a trial and the invoice has a positive amount,
+  // the user just converted from trial to paid
+  const convertedFromTrial = !!(subscription.trial_end && (invoice.amount_paid ?? 0) > 0);
 
   await updateProfileByStripeCustomerId(customerId, {
     status: "active",
     billingCycleEnd,
+    ...(convertedFromTrial ? { trialConverted: true } : {}),
   });
 }
 
