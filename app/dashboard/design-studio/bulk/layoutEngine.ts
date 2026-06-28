@@ -267,7 +267,7 @@ function hookBlockHeight(fs: number, hookText: string, lineW: number): number {
 // Body font size — smaller when mainText is long
 function bodyFontSize(mainText: string): number {
   const wc = mainText.trim().split(/\s+/).length;
-  return wc > 45 ? 36 : wc > 30 ? 40 : 44;
+  return wc > 45 ? 30 : wc > 30 ? 34 : 38;
 }
 
 // ── 8 Layout Personalities ─────────────────────────────────────────────────────
@@ -337,6 +337,7 @@ function buildEditorial(
   const ruleY = hookY + hH + 30;
   const bodyY = ruleY + 36;
   const bodyW = W - 300; // narrower than hook — intentionally asymmetric
+  const bodyH = Math.max(Math.min(440, (H - 260) - bodyY - 30), 80);
   const sub = rng();
 
   const elements: DesignElement[] = [
@@ -354,7 +355,7 @@ function buildEditorial(
     // Horizontal rule separates hook from body
     rect("h-rule", leftX, ruleY, W - 240, 2, cfg.accentColor, { opacity: 0.35 }),
     // Body: left-aligned, narrower than hook
-    txt("body", post.mainText, leftX, bodyY, bodyW, 560, {
+    txt("body", post.mainText, leftX, bodyY, bodyW, bodyH, {
       fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
       textAlign: "left", lineHeight: 1.55,
     }),
@@ -405,7 +406,7 @@ function buildQuoteFocus(
     // Em-dash separator below
     rect("em-dash", W / 2 - 40, hookY + hH + 50, 80, 2, cfg.accentColor, { opacity: 0.5 }),
     // Very small body — attribution style
-    txt("body", post.mainText, W / 2 - 260, hookY + hH + 90, 520, 400, {
+    txt("body", post.mainText, W / 2 - 260, hookY + hH + 90, 520, Math.max(Math.min(360, (H - 230) - (hookY + hH + 90) - 30), 60), {
       fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
       textAlign: "center", lineHeight: 1.6, opacity: 0.7,
     }),
@@ -457,7 +458,8 @@ function buildSplitComposition(
 
   if (sub < 0.5) {
     // Bottom zone: left-aligned body + CTA
-    elements.push(txt("body", post.mainText, 120, bottomZoneY + 20, W - 240, 560, {
+    const bY1 = bottomZoneY + 20;
+    elements.push(txt("body", post.mainText, 120, bY1, W - 240, Math.max(Math.min(460, (H - 320) - bY1 - 20), 80), {
       fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
       textAlign: "left", lineHeight: 1.55,
     }));
@@ -468,7 +470,8 @@ function buildSplitComposition(
     }));
   } else {
     // Bottom zone: centered body + CTA
-    elements.push(txt("body", post.mainText, 100, bottomZoneY + 20, W - 200, 560, {
+    const bY2 = bottomZoneY + 20;
+    elements.push(txt("body", post.mainText, 100, bY2, W - 200, Math.max(Math.min(460, (H - 310) - bY2 - 20), 80), {
       fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
       textAlign: "center", lineHeight: 1.55,
     }));
@@ -506,7 +509,7 @@ function buildCtaPunch(
       fontWeight: "bold", textAlign: "center", lineHeight: 1.1,
     }),
     // Body: compact, secondary
-    txt("body", post.mainText, 140, bodyY, W - 280, 480, {
+    txt("body", post.mainText, 140, bodyY, W - 280, Math.max(Math.min(380, ctaBlockY - bodyY - 30), 60), {
       fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
       textAlign: "center", lineHeight: 1.5, opacity: 0.8,
     }),
@@ -549,6 +552,7 @@ function buildMinimalLuxury(
   const hookY = 300 + Math.round(rng() * 60);
   const hH = hookBlockHeight(fs, post.hook, hookW);
   const bodyY = hookY + hH + 100;
+  const bodyH = Math.max(Math.min(360, (H - 220) - bodyY - 30), 60);
   const sub = rng();
 
   const elements: DesignElement[] = [
@@ -560,12 +564,12 @@ function buildMinimalLuxury(
       fontWeight: "bold", textAlign: "center", lineHeight: 1.35, letterSpacing: 1,
     }),
     // Tiny body — very secondary
-    txt("body", post.mainText, W / 2 - 250, bodyY, 500, 420, {
+    txt("body", post.mainText, W / 2 - 250, bodyY, 500, bodyH, {
       fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
       textAlign: "center", lineHeight: 1.65, opacity: 0.65,
     }),
     // Bottom rule
-    rect("bottom-rule", W / 2 - 35, bodyY + 460, 70, 1, cfg.accentColor, { opacity: 0.3 }),
+    rect("bottom-rule", W / 2 - 35, bodyY + bodyH + 20, 70, 1, cfg.accentColor, { opacity: 0.3 }),
   ];
 
   if (sub < 0.5) {
@@ -634,7 +638,7 @@ function buildAggressiveViral(
   }
 
   // Body: left-aligned
-  elements.push(txt("body", post.mainText, 100, bodyY, W - 200, 520, {
+  elements.push(txt("body", post.mainText, 100, bodyY, W - 200, Math.max(Math.min(420, (H - 350) - bodyY - 20), 60), {
     fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
     textAlign: "left", lineHeight: 1.5,
   }));
@@ -694,7 +698,7 @@ function buildEducational(
     // Full-width separator rule — feels like a section break
     rect("section-rule", leftX, divY, W - 240, 2, cfg.accentColor, { opacity: 0.25 }),
     // Body: structured, left-aligned, readable
-    txt("body", post.mainText, leftX, bodyY, W - 240, 580, {
+    txt("body", post.mainText, leftX, bodyY, W - 240, Math.max(Math.min(480, (H - 290) - bodyY - 20), 60), {
       fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
       textAlign: "left", lineHeight: 1.6,
     }),
@@ -745,7 +749,7 @@ function buildCinematicFlow(
       letterSpacing: analysis.lengthClass === "short" ? -2 : -1,
     }),
     // Body: subtitle-small, fades into the dark
-    txt("body", post.mainText, W / 2 - 250, bodyY, 500, 580, {
+    txt("body", post.mainText, W / 2 - 250, bodyY, 500, Math.max(Math.min(480, (H - 210) - bodyY - 30), 60), {
       fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
       textAlign: "center", lineHeight: 1.75, opacity: 0.5,
     }),
@@ -781,6 +785,7 @@ function buildRawHighlight(
   const hookY = 210 + Math.round(rng() * 60);
   const hH = hookBlockHeight(fs, post.hook, hookW);
   const bodyY = hookY + hH + 90;
+  const bodyH = Math.max(Math.min(380, (H - 340) - bodyY - 20), 60);
   const sub = rng();
 
   // Hook highlight block — manually drawn so we control the padding
@@ -798,10 +803,10 @@ function buildRawHighlight(
       fontWeight: "bold", textAlign: "left", lineHeight: 1.1, zIndex: 2,
     }),
     // Note-card body — subtle fill for the "sticky note" feel
-    rect("body-bg", leftX - 16, bodyY - 16, W - 148, 520, cfg.accentColor + "12", {
+    rect("body-bg", leftX - 16, bodyY - 16, W - 148, bodyH + 40, cfg.accentColor + "12", {
       borderRadius: 10, zIndex: 1,
     }),
-    txt("body", post.mainText, leftX + 4, bodyY + 4, W - 184, 490, {
+    txt("body", post.mainText, leftX + 4, bodyY + 4, W - 184, bodyH, {
       fontSize: bodyFs, fontFamily: cfg.bodyFont, color: cfg.bodyColor,
       textAlign: "left", lineHeight: 1.55, zIndex: 2,
     }),
