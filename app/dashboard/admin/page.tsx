@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Users, CreditCard, Flag, Activity, FileCheck, TrendingUp, AlertCircle, Loader2, BarChart2, Inbox } from "lucide-react";
+import { Users, CreditCard, Flag, Activity, FileCheck, TrendingUp, AlertCircle, Loader2, BarChart2, Inbox, Timer } from "lucide-react";
 
 type QuickStats = {
   totalUsers: number;
@@ -77,6 +77,14 @@ export default function AdminOverviewPage() {
       description: "DAU/WAU/MAU, top features, most active users, engagement trends",
       stat: null,
       color: "text-cyan-500",
+    },
+    {
+      href: "/dashboard/admin/trial",
+      icon: <Timer className="w-6 h-6" />,
+      label: "Trial Analytics",
+      description: "Who cancels, when they cancel, conversion rates, active trials",
+      stat: null,
+      color: "text-orange-500",
     },
     {
       href: "/dashboard/admin/feedback",

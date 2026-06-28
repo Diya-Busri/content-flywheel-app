@@ -27,6 +27,11 @@ export const profilesTable = pgTable("profiles", {
   videoCredits: integer("video_credits").default(0).notNull(),
   // Subscription status tracking
   status: text("status").default("active"),
+  // Trial tracking
+  trialStartedAt: timestamp("trial_started_at"),
+  trialEndsAt: timestamp("trial_ends_at"),
+  trialCancelledAt: timestamp("trial_cancelled_at"),
+  trialConverted: boolean("trial_converted").default(false),
   // User-selected feature preferences (JSON string: '["videos","digital_products"]')
   enabledFeatures: text("enabled_features"),
   // Activity tracking
