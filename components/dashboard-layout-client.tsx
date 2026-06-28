@@ -12,6 +12,7 @@ import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { BundleProgressBanner } from "@/components/dashboard/BundleProgressBanner";
 import { DevOnboardingReset } from "@/components/dev/DevOnboardingReset";
+import { AnalyticsTracker } from "@/components/analytics-tracker";
 import { SelectProfile } from "@/db/schema/profiles-schema";
 
 interface DashboardLayoutClientProps {
@@ -46,6 +47,7 @@ export function DashboardLayoutClient({ profile, userEmail, disabledFeatures = [
           className={`z-0 flex-1 min-w-0 min-h-0 flex flex-col max-w-full relative bg-[#F9FAFB] dark:bg-[#0F0F0F] text-gray-900 dark:text-white md:pb-0 ${needsFullHeight ? "overflow-hidden" : "pb-mobile-nav overflow-x-hidden overflow-y-auto"}`}
           style={{ minWidth: 0, minHeight: 0, flex: "1 1 0%" }}
         >
+          <AnalyticsTracker />
           <AnnouncementBanner />
           <BundleProgressBanner />
           {children}
