@@ -28,8 +28,8 @@ export const academyLessonsTable = pgTable("academy_lessons", {
   moduleId: uuid("module_id").notNull().references(() => academyModulesTable.id, { onDelete: "cascade" }),
   courseId: uuid("course_id").notNull().references(() => academyCoursesTable.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
-  content: text("content"), // markdown/rich text
-  videoUrl: text("video_url"), // YouTube URL
+  content: text("content"), // JSON-stringified Block[] (see lib/academy-blocks.ts); legacy rows may hold plain text/markdown
+  videoUrl: text("video_url"), // legacy YouTube URL (superseded by video blocks in content)
   lessonType: text("lesson_type").default("video"), // video/text/mixed
   orderIndex: integer("order_index").default(0).notNull(),
   isPublished: boolean("is_published").default(true).notNull(),

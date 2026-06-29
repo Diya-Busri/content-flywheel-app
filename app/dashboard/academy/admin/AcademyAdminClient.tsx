@@ -10,8 +10,6 @@ import {
   Pin,
   Star,
   Loader2,
-  GripVertical,
-  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,19 +29,12 @@ import {
   updateCourseAction,
   deleteCourseAction,
   publishCourseAction,
-  createModuleAction,
-  updateModuleAction,
-  deleteModuleAction,
-  reorderModulesAction,
-  createLessonAction,
-  updateLessonAction,
-  deleteLessonAction,
-  reorderLessonsAction,
   pinPostAction,
   featurePostAction,
   deletePostAction,
 } from "@/actions/academy-actions";
 import { categoryLabel, timeAgo } from "@/lib/academy";
+import { SortableModuleList } from "@/components/academy/sortable-module-list";
 
 type AnyRow = Record<string, any>;
 
@@ -135,7 +126,7 @@ export function AcademyAdminClient({
                   pending={pending}
                   onSave={(data) => run(() => updateCourseAction(course.id, data), "Course updated")}
                 />
-                <ModuleManager
+                <SortableModuleList
                   course={course}
                   modules={modulesByCourse[course.id] ?? []}
                   lessons={lessonsByCourse[course.id] ?? []}
@@ -307,285 +298,6 @@ function CourseEditForm({
         <Button disabled={pending} onClick={() => onSave(form)}>
           {pending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}Save course
         </Button>
-      </div>
-    </div>
-  );
-}
-
-function ModuleManager({
-  course,
-  modules,
-  lessons,
-  pending,
-  run,
-}: {
-  course: AnyRow;
-  modules: AnyRow[];
-  lessons: AnyRow[];
-  pending: boolean;
-  run: (fn: () => Promise<{ isSuccess: boolean; message: string }>, msg?: string) => Promise<boolean>;
-}) {
-  const [newModuleTitle, setNewModuleTitle] = useState("");
-  const sorted = [...modules].sort((a, b) => a.orderIndex - b.orderIndex);
-
-  function move(idx: number, dir: -1 | 1) {
-    const arr = [...sorted];
-    const target = idx + dir;
-    if (target < 0 || target >= arr.length) return;
-    [arr[idx], arr[target]] = [arr[target], arr[idx]];
-    run(() => reorderModulesAction(arr.map((m) => m.id)), "Reordered");
-  }
-
-  return (
-    <div className="rounded-lg border bg-background/50 p-3">
-      <h3 className="mb-2 text-sm font-semibold text-foreground">Modules</h3>
-      <div className="space-y-3">
-        {sorted.map((mod, idx) => (
-          <div key={mod.id} className="rounded-lg border bg-card p-3">
-            <div className="flex items-center gap-2">
-              <GripVertical className="h-4 w-4 text-muted-foreground" />
-              <Input
-                defaultValue={mod.title}
-                className="flex-1"
-                onBlur={(e) => {
-                  if (e.target.value !== mod.title)
-                    run(() => updateModuleAction(mod.id, { title: e.target.value }), "Module updated");
-                }}
-              />
-              <Button size="sm" variant="ghost" disabled={pending || idx === 0} onClick={() => move(idx, -1)}>
-                <ChevronUp className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={pending || idx === sorted.length - 1}
-                onClick={() => move(idx, 1)}
-              >
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={pending}
-                onClick={() => {
-                  if (confirm("Delete module and its lessons?")) run(() => deleteModuleAction(mod.id));
-                }}
-              >
-                <Trash2 className="h-4 w-4 text-red-500" />
-              </Button>
-            </div>
-            <LessonManager
-              course={course}
-              moduleId={mod.id}
-              lessons={lessons.filter((l) => l.moduleId === mod.id)}
-              pending={pending}
-              run={run}
-            />
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-3 flex items-end gap-2">
-        <div className="flex-1">
-          <Label>New module</Label>
-          <Input value={newModuleTitle} onChange={(e) => setNewModuleTitle(e.target.value)} placeholder="Module title" />
-        </div>
-        <Button
-          disabled={pending || !newModuleTitle.trim()}
-          onClick={async () => {
-            const ok = await run(
-              () => createModuleAction({ courseId: course.id, title: newModuleTitle.trim() }),
-              "Module added"
-            );
-            if (ok) setNewModuleTitle("");
-          }}
-        >
-          <Plus className="mr-1 h-4 w-4" />Add
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function LessonManager({
-  course,
-  moduleId,
-  lessons,
-  pending,
-  run,
-}: {
-  course: AnyRow;
-  moduleId: string;
-  lessons: AnyRow[];
-  pending: boolean;
-  run: (fn: () => Promise<{ isSuccess: boolean; message: string }>, msg?: string) => Promise<boolean>;
-}) {
-  const [showNew, setShowNew] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
-  const sorted = [...lessons].sort((a, b) => a.orderIndex - b.orderIndex);
-
-  function move(idx: number, dir: -1 | 1) {
-    const arr = [...sorted];
-    const target = idx + dir;
-    if (target < 0 || target >= arr.length) return;
-    [arr[idx], arr[target]] = [arr[target], arr[idx]];
-    run(() => reorderLessonsAction(arr.map((l) => l.id)), "Reordered");
-  }
-
-  return (
-    <div className="ml-6 mt-2 space-y-2 border-l pl-3">
-      {sorted.map((lesson, idx) => (
-        <div key={lesson.id} className="rounded-md border bg-background/50 p-2">
-          <div className="flex items-center gap-1">
-            <span className="flex-1 text-sm text-foreground">{lesson.title}</span>
-            {!lesson.isPublished && <span className="text-[10px] text-muted-foreground">(draft)</span>}
-            <Button size="sm" variant="ghost" onClick={() => setEditing(editing === lesson.id ? null : lesson.id)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button size="sm" variant="ghost" disabled={pending || idx === 0} onClick={() => move(idx, -1)}>
-              <ChevronUp className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={pending || idx === sorted.length - 1}
-              onClick={() => move(idx, 1)}
-            >
-              <ChevronDown className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={pending}
-              onClick={() => {
-                if (confirm("Delete lesson?")) run(() => deleteLessonAction(lesson.id));
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5 text-red-500" />
-            </Button>
-          </div>
-          {editing === lesson.id && (
-            <LessonForm
-              initial={lesson}
-              pending={pending}
-              onSave={async (data) => {
-                const ok = await run(() => updateLessonAction(lesson.id, data), "Lesson updated");
-                if (ok) setEditing(null);
-              }}
-            />
-          )}
-        </div>
-      ))}
-
-      {showNew ? (
-        <LessonForm
-          initial={{}}
-          pending={pending}
-          onSave={async (data) => {
-            const ok = await run(
-              () => createLessonAction({ ...data, courseId: course.id, moduleId, title: data.title }),
-              "Lesson added"
-            );
-            if (ok) setShowNew(false);
-          }}
-          onCancel={() => setShowNew(false)}
-        />
-      ) : (
-        <Button size="sm" variant="outline" onClick={() => setShowNew(true)}>
-          <Plus className="mr-1 h-3.5 w-3.5" />Add lesson
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function LessonForm({
-  initial,
-  pending,
-  onSave,
-  onCancel,
-}: {
-  initial: AnyRow;
-  pending: boolean;
-  onSave: (data: AnyRow) => void;
-  onCancel?: () => void;
-}) {
-  const [form, setForm] = useState({
-    title: initial.title ?? "",
-    videoUrl: initial.videoUrl ?? "",
-    content: initial.content ?? "",
-    lessonType: initial.lessonType ?? "video",
-    durationMinutes: initial.durationMinutes ?? "",
-    isPublished: initial.isPublished ?? true,
-  });
-
-  return (
-    <div className="mt-2 grid gap-2">
-      <Input
-        value={form.title}
-        onChange={(e) => setForm({ ...form, title: e.target.value })}
-        placeholder="Lesson title"
-      />
-      <Input
-        value={form.videoUrl}
-        onChange={(e) => setForm({ ...form, videoUrl: e.target.value })}
-        placeholder="YouTube URL (optional)"
-      />
-      <Textarea
-        value={form.content}
-        onChange={(e) => setForm({ ...form, content: e.target.value })}
-        placeholder="Lesson content / notes (optional)"
-        rows={3}
-      />
-      <div className="flex gap-2">
-        <Select value={form.lessonType} onValueChange={(v) => setForm({ ...form, lessonType: v })}>
-          <SelectTrigger className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="video">Video</SelectItem>
-            <SelectItem value="text">Text</SelectItem>
-            <SelectItem value="mixed">Mixed</SelectItem>
-          </SelectContent>
-        </Select>
-        <Input
-          type="number"
-          value={form.durationMinutes}
-          onChange={(e) => setForm({ ...form, durationMinutes: e.target.value })}
-          placeholder="Minutes"
-          className="w-28"
-        />
-        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={form.isPublished}
-            onChange={(e) => setForm({ ...form, isPublished: e.target.checked })}
-          />
-          Published
-        </label>
-      </div>
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          disabled={pending || !form.title.trim()}
-          onClick={() =>
-            onSave({
-              title: form.title.trim(),
-              videoUrl: form.videoUrl || null,
-              content: form.content || null,
-              lessonType: form.lessonType,
-              durationMinutes: form.durationMinutes ? Number(form.durationMinutes) : null,
-              isPublished: form.isPublished,
-            })
-          }
-        >
-          {pending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}Save
-        </Button>
-        {onCancel && (
-          <Button size="sm" variant="ghost" onClick={onCancel}>
-            Cancel
-          </Button>
-        )}
       </div>
     </div>
   );

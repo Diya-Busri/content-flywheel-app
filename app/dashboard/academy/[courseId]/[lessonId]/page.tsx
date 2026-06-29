@@ -11,6 +11,8 @@ import {
 } from "@/db/queries/academy-queries";
 import { LessonPlayer } from "@/components/academy/lesson-player";
 import { LessonSidebar } from "@/components/academy/lesson-sidebar";
+import { BlockViewer } from "@/components/academy/block-viewer";
+import { parseLessonBlocks } from "@/lib/academy-blocks";
 import { LessonComplete } from "./LessonComplete";
 
 export const dynamic = "force-dynamic";
@@ -66,17 +68,21 @@ export default async function LessonViewerPage({
         <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6">
           <h1 className="text-xl font-bold text-foreground">{lesson.title}</h1>
 
+          {/* Legacy YouTube field — only shown for older lessons that predate block content */}
           {lesson.videoUrl && (
             <div className="mt-4">
               <LessonPlayer videoUrl={lesson.videoUrl} />
             </div>
           )}
 
-          {lesson.content && (
-            <div className="prose prose-sm dark:prose-invert mt-6 max-w-none whitespace-pre-wrap text-foreground">
-              {lesson.content}
-            </div>
-          )}
+          {(() => {
+            const blocks = parseLessonBlocks(lesson.content);
+            return blocks.length > 0 ? (
+              <div className="mt-6">
+                <BlockViewer blocks={blocks} />
+              </div>
+            ) : null;
+          })()}
 
           {resources.length > 0 && (
             <div className="mt-6">
