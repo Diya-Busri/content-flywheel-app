@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, Paperclip, X, FileText } from "lucide-react";
+import { Plus, Loader2, Paperclip, X, FileText, Link2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,7 @@ export function NewPostModal({ isAdmin = false }: { isAdmin?: boolean }) {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("general");
   const [content, setContent] = useState("");
+  const [url, setUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [attachments, setAttachments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -72,9 +73,12 @@ export function NewPostModal({ isAdmin = false }: { isAdmin?: boolean }) {
       return;
     }
     setSubmitting(true);
+    const fullContent = url.trim()
+      ? `${content.trim()}\n\n🔗 ${url.trim()}`
+      : content.trim();
     const res = await createPostAction({
       title: title.trim(),
-      content: content.trim(),
+      content: fullContent,
       category,
       imageUrls: attachments.length ? JSON.stringify(attachments) : undefined,
     });
@@ -84,6 +88,7 @@ export function NewPostModal({ isAdmin = false }: { isAdmin?: boolean }) {
       setTitle("");
       setContent("");
       setCategory("general");
+      setUrl("");
       setAttachments([]);
       setOpen(false);
       router.refresh();
@@ -139,6 +144,21 @@ export function NewPostModal({ isAdmin = false }: { isAdmin?: boolean }) {
               placeholder="Share details, questions, or wins..."
               rows={6}
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="post-url">Link (optional)</Label>
+            <div className="relative">
+              <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="post-url"
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://..."
+                className="pl-9"
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">

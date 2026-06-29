@@ -1,8 +1,13 @@
 import Link from "next/link";
-import { Heart, MessageCircle, Pin, Star } from "lucide-react";
+import { Heart, MessageCircle, Pin, Star, Link2 } from "lucide-react";
 import { CATEGORY_COLORS, categoryLabel, timeAgo } from "@/lib/academy";
 import type { SelectAcademyCommunityPost } from "@/db/schema/academy-schema";
 import { ReportButton } from "@/components/community/report-button";
+
+function extractUrl(content: string): string | null {
+  const m = content.match(/\n\n🔗 (https?:\/\/\S+)$/);
+  return m ? m[1] : null;
+}
 
 export function CommunityPostCard({ post }: { post: SelectAcademyCommunityPost }) {
   return (
@@ -29,7 +34,15 @@ export function CommunityPostCard({ post }: { post: SelectAcademyCommunityPost }
         <span className="ml-auto text-[11px] text-muted-foreground">{timeAgo(post.createdAt)}</span>
       </div>
       <h3 className="mt-2 font-semibold text-foreground line-clamp-1">{post.title}</h3>
-      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{post.content}</p>
+      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+        {post.content.replace(/\n\n🔗 https?:\/\/\S+$/, "")}
+      </p>
+      {extractUrl(post.content) && (
+        <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary">
+          <Link2 className="h-3 w-3" />
+          {extractUrl(post.content)}
+        </span>
+      )}
       <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <Heart className="h-3.5 w-3.5" /> {post.likesCount}
