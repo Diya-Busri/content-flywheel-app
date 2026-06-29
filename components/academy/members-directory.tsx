@@ -7,6 +7,7 @@ import { MemberCard } from "./member-card";
 export interface DirectoryMember {
   userId: string;
   userEmail: string;
+  displayName: string | null;
   postCount: number;
 }
 
@@ -18,8 +19,10 @@ export function MembersDirectory({
   currentUserId?: string | null;
 }) {
   const [query, setQuery] = useState("");
+  const q = query.toLowerCase();
   const filtered = members.filter((m) =>
-    m.userEmail.toLowerCase().includes(query.toLowerCase())
+    m.userEmail.toLowerCase().includes(q) ||
+    (m.displayName ?? "").toLowerCase().includes(q)
   );
 
   return (
@@ -46,6 +49,7 @@ export function MembersDirectory({
               key={m.userId}
               userId={m.userId}
               userEmail={m.userEmail}
+              displayName={m.displayName}
               postCount={m.postCount}
               currentUserId={currentUserId}
             />

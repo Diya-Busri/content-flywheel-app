@@ -19,6 +19,7 @@ import {
   SelectAcademyLesson,
 } from "@/db/schema/academy-schema";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { userSettingsTable } from "@/db/schema/user-settings-schema";
 
 /* ----------------------------- Courses ----------------------------- */
 
@@ -213,16 +214,18 @@ export async function listCommunityPosts(category?: string) {
 }
 
 export async function getCommunityMembers(): Promise<
-  { userId: string; userEmail: string; postCount: number }[]
+  { userId: string; userEmail: string; displayName: string | null; postCount: number }[]
 > {
   const rows = await db
     .select({
       userId: academyCommunityPostsTable.userId,
       userEmail: academyCommunityPostsTable.userEmail,
+      displayName: userSettingsTable.displayName,
       postCount: sql<number>`count(*)`,
     })
     .from(academyCommunityPostsTable)
-    .groupBy(academyCommunityPostsTable.userId, academyCommunityPostsTable.userEmail)
+    .leftJoin(userSettingsTable, eq(userSettingsTable.userId, academyCommunityPostsTable.userId))
+    .groupBy(academyCommunityPostsTable.userId, academyCommunityPostsTable.userEmail, userSettingsTable.displayName)
     .orderBy(desc(sql`count(*)`));
 
   return rows
@@ -230,6 +233,7 @@ export async function getCommunityMembers(): Promise<
     .map((r) => ({
       userId: r.userId,
       userEmail: r.userEmail as string,
+      displayName: r.displayName ?? null,
       postCount: Number(r.postCount),
     }));
 }

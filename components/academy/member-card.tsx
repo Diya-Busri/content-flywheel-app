@@ -5,18 +5,22 @@ import { useRouter } from "next/navigation";
 import { MessageCircle } from "lucide-react";
 import { startDirectConversationAction } from "@/actions/messaging-actions";
 
-function initials(email: string): string {
-  return email.slice(0, 2).toUpperCase();
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
 }
 
 export function MemberCard({
   userId,
   userEmail,
+  displayName,
   postCount,
   currentUserId,
 }: {
   userId: string;
   userEmail: string;
+  displayName?: string | null;
   postCount: number;
   currentUserId?: string | null;
 }) {
@@ -37,10 +41,11 @@ export function MemberCard({
   return (
     <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
-        {initials(userEmail)}
+        {initials(displayName || userEmail)}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{userEmail}</p>
+        <p className="truncate text-sm font-medium text-foreground">{displayName || userEmail}</p>
+        {displayName && <p className="truncate text-xs text-muted-foreground">{userEmail}</p>}
         <p className="text-xs text-muted-foreground">
           {postCount} {postCount === 1 ? "post" : "posts"}
         </p>
