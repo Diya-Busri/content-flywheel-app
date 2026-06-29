@@ -18,7 +18,8 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, Trash2, Pencil, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import Link from "next/link";
+import { GripVertical, Plus, Trash2, Pencil, Loader2, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -299,6 +300,11 @@ function SortableLesson({
         </button>
         <span className="flex-1 text-sm text-foreground">{lesson.title}</span>
         {!lesson.isPublished && <span className="text-[10px] text-muted-foreground">(draft)</span>}
+        <Button asChild size="sm" variant="ghost" title="Open full lesson editor">
+          <Link href={`/dashboard/academy/admin/courses/${course.id}/lessons/${lesson.id}`}>
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+        </Button>
         <Button size="sm" variant="ghost" onClick={onToggleEdit}>
           {isEditing ? <ChevronUp className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
         </Button>

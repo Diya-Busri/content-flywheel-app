@@ -12,6 +12,12 @@ import {
   SelectAcademyModule,
   SelectAcademyLesson,
 } from "@/db/schema/academy-schema";
+import {
+  generateCoursePlan,
+  generateLessonPlan,
+  type GeneratedCourse,
+  type GeneratedLesson,
+} from "@/lib/academy-ai";
 
 function isAdminEmail(email: string): boolean {
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
@@ -88,6 +94,86 @@ export async function publishCourseAction(id: string, isPublished: boolean): Pro
     return ok(row, isPublished ? "Course published" : "Course unpublished");
   } catch (e) {
     return fail(e, "Failed to update course");
+  }
+}
+
+export async function duplicateCourseAction(courseId: string): Promise<ActionResult<SelectAcademyCourse>> {
+  try {
+    await requireAdmin();
+    const row = await q.duplicateCourse(courseId);
+    if (!row) throw new Error("Course not found");
+    revalidatePath("/dashboard/academy/admin");
+    return ok(row, "Course duplicated");
+  } catch (e) {
+    return fail(e, "Failed to duplicate course");
+  }
+}
+
+export async function archiveCourseAction(courseId: string): Promise<ActionResult<SelectAcademyCourse>> {
+  try {
+    await requireAdmin();
+    const row = await q.updateCourseRow(courseId, { status: "archived", isPublished: false });
+    revalidatePath("/dashboard/academy/admin");
+    revalidatePath("/dashboard/academy");
+    return ok(row, "Course archived");
+  } catch (e) {
+    return fail(e, "Failed to archive course");
+  }
+}
+
+export async function updateCourseStatusAction(
+  courseId: string,
+  status: "draft" | "published" | "archived"
+): Promise<ActionResult<SelectAcademyCourse>> {
+  try {
+    await requireAdmin();
+    const row = await q.updateCourseRow(courseId, {
+      status,
+      isPublished: status === "published",
+    });
+    revalidatePath("/dashboard/academy/admin");
+    revalidatePath(`/dashboard/academy/${courseId}`);
+    revalidatePath("/dashboard/academy");
+    return ok(row, `Course set to ${status}`);
+  } catch (e) {
+    return fail(e, "Failed to update status");
+  }
+}
+
+export async function updateCourseSlugAction(courseId: string, slug: string): Promise<ActionResult<SelectAcademyCourse>> {
+  try {
+    await requireAdmin();
+    const row = await q.updateCourseRow(courseId, { slug: slug.trim() || null });
+    revalidatePath("/dashboard/academy/admin");
+    return ok(row, "Slug updated");
+  } catch (e) {
+    return fail(e, "Failed to update slug");
+  }
+}
+
+export async function toggleCourseFeaturedAction(courseId: string): Promise<ActionResult<SelectAcademyCourse>> {
+  try {
+    await requireAdmin();
+    const course = await q.getCourseById(courseId);
+    if (!course) throw new Error("Course not found");
+    const row = await q.updateCourseRow(courseId, { isFeatured: !course.isFeatured });
+    revalidatePath("/dashboard/academy/admin");
+    revalidatePath("/dashboard/academy");
+    return ok(row, row.isFeatured ? "Course featured" : "Course unfeatured");
+  } catch (e) {
+    return fail(e, "Failed to toggle featured");
+  }
+}
+
+export async function updateCourseImageAction(courseId: string, imageUrl: string): Promise<ActionResult<SelectAcademyCourse>> {
+  try {
+    await requireAdmin();
+    const row = await q.updateCourseRow(courseId, { coverImageUrl: imageUrl || null });
+    revalidatePath("/dashboard/academy/admin");
+    revalidatePath("/dashboard/academy");
+    return ok(row, "Cover image updated");
+  } catch (e) {
+    return fail(e, "Failed to update image");
   }
 }
 
@@ -313,9 +399,50 @@ export async function featurePostAction(id: string, isFeatured: boolean): Promis
   }
 }
 
+export async function lockPostAction(id: string): Promise<ActionResult<any>> {
+  try {
+    await requireAdmin();
+    const post = await q.getCommunityPostById(id);
+    if (!post) throw new Error("Post not found");
+    const row = await q.updateCommunityPostRow(id, { isLocked: !post.isLocked });
+    revalidatePath("/dashboard/academy/community");
+    return ok(row, row.isLocked ? "Post locked" : "Post unlocked");
+  } catch (e) {
+    return fail(e, "Failed to lock post");
+  }
+}
+
+export async function createAnnouncementAction(data: {
+  title: string;
+  content: string;
+  category?: string;
+  scheduledFor?: string | null;
+}): Promise<ActionResult<any>> {
+  try {
+    const { userId, email } = await requireAdmin();
+    const row = await q.insertCommunityPost({
+      userId,
+      userEmail: email,
+      title: data.title,
+      content: data.content,
+      category: data.category || "admin",
+      isAnnouncement: true,
+      isPinned: true,
+      scheduledFor: data.scheduledFor ? new Date(data.scheduledFor) : null,
+    });
+    revalidatePath("/dashboard/academy/community");
+    revalidatePath("/dashboard/academy/admin");
+    return ok(row, data.scheduledFor ? "Announcement scheduled" : "Announcement posted");
+  } catch (e) {
+    return fail(e, "Failed to create announcement");
+  }
+}
+
 export async function createCommentAction(postId: string, content: string): Promise<ActionResult<any>> {
   try {
     const { userId, email } = await requireUser();
+    const post = await q.getCommunityPostById(postId);
+    if (post?.isLocked) throw new Error("This post is locked");
     const row = await q.insertComment({ postId, userId, userEmail: email, content });
     revalidatePath(`/dashboard/academy/community/${postId}`);
     revalidatePath("/dashboard/academy/community");
@@ -348,5 +475,32 @@ export async function toggleLikeAction(postId: string): Promise<ActionResult<{ l
     return ok(res, res.liked ? "Liked" : "Unliked");
   } catch (e) {
     return fail(e, "Failed to toggle like");
+  }
+}
+
+/* ----------------------------- AI generation ----------------------------- */
+
+export async function generateCourseAIAction(title: string): Promise<ActionResult<GeneratedCourse>> {
+  try {
+    await requireAdmin();
+    if (!title.trim()) throw new Error("Title is required");
+    const result = await generateCoursePlan(title.trim());
+    return ok(result, "Course generated");
+  } catch (e) {
+    return fail(e, "Failed to generate course");
+  }
+}
+
+export async function generateLessonAIAction(
+  lessonTitle: string,
+  courseTitle: string
+): Promise<ActionResult<GeneratedLesson>> {
+  try {
+    await requireAdmin();
+    if (!lessonTitle.trim()) throw new Error("Lesson title is required");
+    const result = await generateLessonPlan(lessonTitle.trim(), courseTitle.trim());
+    return ok(result, "Lesson suggestions generated");
+  } catch (e) {
+    return fail(e, "Failed to generate lesson");
   }
 }

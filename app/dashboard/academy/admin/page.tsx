@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import { isAdmin } from "@/lib/is-admin";
 import {
-  listAllCourses,
-  listModulesByCourse,
+  getAllCourses,
   listLessonsByCourse,
-  listCommunityPosts,
+  getAcademyStats,
+  getRecentActivity,
+  getCommunityPostsForAdmin,
 } from "@/db/queries/academy-queries";
 import { AcademyAdminClient } from "./AcademyAdminClient";
 
@@ -14,27 +15,29 @@ export const metadata = { title: "Academy Admin | Content Flywheel" };
 export default async function AcademyAdminPage() {
   if (!(await isAdmin())) redirect("/dashboard/academy");
 
-  const courses = await listAllCourses();
-  const modulesByCourse: Record<string, any[]> = {};
-  const lessonsByCourse: Record<string, any[]> = {};
+  const [courses, stats, activity, posts] = await Promise.all([
+    getAllCourses(),
+    getAcademyStats(),
+    getRecentActivity(),
+    getCommunityPostsForAdmin(),
+  ]);
+
+  // lesson counts per course
+  const lessonCounts: Record<string, number> = {};
   await Promise.all(
     courses.map(async (c) => {
-      const [mods, lessons] = await Promise.all([listModulesByCourse(c.id), listLessonsByCourse(c.id)]);
-      modulesByCourse[c.id] = mods;
-      lessonsByCourse[c.id] = lessons;
+      const lessons = await listLessonsByCourse(c.id);
+      lessonCounts[c.id] = lessons.length;
     })
   );
-  const posts = await listCommunityPosts("all");
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6">
-      <h1 className="mb-4 text-2xl font-bold text-foreground">Academy Admin</h1>
-      <AcademyAdminClient
-        courses={courses}
-        modulesByCourse={modulesByCourse}
-        lessonsByCourse={lessonsByCourse}
-        posts={posts}
-      />
-    </div>
+    <AcademyAdminClient
+      courses={JSON.parse(JSON.stringify(courses))}
+      lessonCounts={lessonCounts}
+      stats={stats}
+      activity={JSON.parse(JSON.stringify(activity))}
+      posts={JSON.parse(JSON.stringify(posts))}
+    />
   );
 }

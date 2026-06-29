@@ -54,6 +54,32 @@ export function categoryLabel(id: string): string {
   return ACADEMY_CATEGORIES.find((c) => c.id === id)?.label ?? id.replace(/_/g, " ");
 }
 
+/** Generate a URL-safe slug from a title. */
+export function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim()
+    .replace(/^-+|-+$/g, "");
+}
+
+export const COURSE_STATUS_COLORS: Record<string, string> = {
+  draft: "bg-gray-500/15 text-gray-400 border-gray-500/30",
+  published: "bg-green-500/15 text-green-500 border-green-500/30",
+  archived: "bg-red-500/15 text-red-500 border-red-500/30",
+};
+
+export const COURSE_CATEGORIES = [
+  "Digital Products",
+  "Marketing",
+  "Business",
+  "Mindset",
+  "Technical",
+  "General",
+] as const;
+
 export function timeAgo(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const seconds = Math.floor((Date.now() - d.getTime()) / 1000);
