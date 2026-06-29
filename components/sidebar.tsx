@@ -85,7 +85,6 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
     {
       label: "Content",
       items: [
-        { href: "/dashboard/messages", icon: <MessageCircle size={18} />, label: "Messages", emoji: "✉️", activeWhenStartsWith: true, badge: unreadCount > 0 ? String(unreadCount) : undefined },
         { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚", featureKey: "my_library" },
         { href: "/dashboard/caption-library", icon: <BookMarked size={18} />, label: "Caption Library", emoji: "💬", activeWhenStartsWith: true, featureKey: "caption_library" },
         { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅", featureKey: "content_calendar" },

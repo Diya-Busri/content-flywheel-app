@@ -73,22 +73,6 @@ export default async function AcademyHomePage() {
             Learn how to build, market, and sell your digital products.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {admin && (
-            <Link
-              href="/dashboard/academy/admin"
-              className="hidden items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 sm:flex"
-            >
-              <Settings2 className="h-4 w-4" /> Manage Academy
-            </Link>
-          )}
-          <Link
-            href="/dashboard/academy/community"
-            className="hidden items-center gap-1.5 rounded-lg border bg-card px-3 py-2 text-sm font-medium hover:bg-muted sm:flex"
-          >
-            <Users className="h-4 w-4" /> Community
-          </Link>
-        </div>
       </div>
 
       {/* Stats */}

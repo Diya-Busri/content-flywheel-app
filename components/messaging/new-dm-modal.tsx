@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { startDirectConversationAction } from "@/actions/messaging-actions";
 
-export function NewDmModal() {
+export function NewDmModal({ baseUrl = "/dashboard/messages" }: { baseUrl?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -37,7 +37,7 @@ export function NewDmModal() {
     }
     setOpen(false);
     setEmail("");
-    router.push(`/dashboard/messages/${res.data.id}`);
+    router.push(`${baseUrl}/${res.data.id}`);
   }
 
   return (
