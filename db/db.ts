@@ -38,6 +38,16 @@ import { chatSummariesTable } from "./schema/chat-summaries-schema";
 import { emailContactsTable, emailCampaignsTable } from "./schema/email-marketing-schema";
 import { productSalesTable } from "./schema/product-sales-schema";
 import { promoCodesTable } from "./schema/promo-codes-schema";
+import {
+  academyCoursesTable,
+  academyModulesTable,
+  academyLessonsTable,
+  academyResourcesTable,
+  academyProgressTable,
+  academyCommunityPostsTable,
+  academyCommunityCommentsTable,
+  academyCommunityLikesTable,
+} from "./schema/academy-schema";
 
 // Define the schema properly
 const schema = {
@@ -85,6 +95,14 @@ const schema = {
   emailCampaigns: emailCampaignsTable,
   productSales: productSalesTable,
   promoCodes: promoCodesTable,
+  academyCourses: academyCoursesTable,
+  academyModules: academyModulesTable,
+  academyLessons: academyLessonsTable,
+  academyResources: academyResourcesTable,
+  academyProgress: academyProgressTable,
+  academyCommunityPosts: academyCommunityPostsTable,
+  academyCommunityComments: academyCommunityCommentsTable,
+  academyCommunityLikes: academyCommunityLikesTable,
 };
 
 // Connection options tuned for Supabase pgBouncer (port 6543 pooler).

@@ -25,6 +25,7 @@ import { ReferralCapture } from "@/components/ReferralCapture";
 import { InviteCapture } from "@/components/InviteCapture";
 import { Suspense } from "react";
 import { DailyStreakTracker } from "@/components/dashboard/DailyStreakTracker";
+import { ContinueLearningCard } from "@/components/dashboard/ContinueLearningCard";
 
 export const metadata: Metadata = {
   title: "Dashboard | Content Flywheel",
@@ -350,6 +351,9 @@ export default async function DashboardPage() {
 
         {/* Daily Streak */}
         <DailyStreakTracker />
+
+        {/* Continue Learning (Academy) */}
+        <Suspense fallback={null}><ContinueLearningCard /></Suspense>
 
         {/* Incomplete products */}
         {incompleteProducts.length > 0 && (

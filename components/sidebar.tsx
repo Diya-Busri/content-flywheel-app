@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen, GraduationCap } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NotificationBell } from "@/components/NotificationBell";
 import Link from "next/link";
@@ -54,6 +54,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
     {
       label: "Create",
       items: [
+        { href: "/dashboard/academy", icon: <GraduationCap size={18} />, label: "Academy", emoji: "🎓", activeWhenStartsWith: true },
         { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", emoji: "🤖", featureKey: "ai_coach" },
         { href: "/dashboard/design-studio", icon: <Palette size={18} />, label: "Design Studio", emoji: "✏️", activeWhenStartsWith: true, featureKey: "design_studio" },
         { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true, featureKey: "template_studio" },
