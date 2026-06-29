@@ -19,3 +19,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   await db.delete(adminExpensesTable).where(eq(adminExpensesTable.id, id));
   return NextResponse.json({ ok: true });
 }
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!await requireAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { id } = await params;
+  const body = await req.json();
+  const { description } = body;
+  if (!description?.trim()) return NextResponse.json({ error: "Description required" }, { status: 400 });
+  await db.update(adminExpensesTable).set({ description: description.trim() }).where(eq(adminExpensesTable.id, id));
+  return NextResponse.json({ ok: true });
+}

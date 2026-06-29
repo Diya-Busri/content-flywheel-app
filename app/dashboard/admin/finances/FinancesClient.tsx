@@ -146,6 +146,25 @@ export default function FinancesClient({
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   }
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDesc, setEditingDesc] = useState("");
+
+  function startEdit(e: Expense) {
+    setEditingId(e.id);
+    setEditingDesc(e.description);
+  }
+
+  async function saveEdit(id: string) {
+    if (!editingDesc.trim()) return;
+    await fetch(`/api/admin/finances/expenses/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: editingDesc.trim() }),
+    });
+    setExpenses((prev) => prev.map((e) => e.id === id ? { ...e, description: editingDesc.trim() } : e));
+    setEditingId(null);
+  }
+
   async function addNote() {
     if (!noteText.trim()) return;
     setAddingNote(true);
@@ -367,7 +386,29 @@ export default function FinancesClient({
                     return (
                       <tr key={e.id} style={{ borderBottom: `1px solid ${c.border}` }}>
                         <td style={{ padding: "13px 16px", fontSize: "13px", color: c.textMuted, whiteSpace: "nowrap" }}>{fmtDate(e.date)}</td>
-                        <td style={{ padding: "13px 16px", fontSize: "14px", fontWeight: 500, color: c.text }}>{e.description}</td>
+                        <td style={{ padding: "13px 16px", fontSize: "14px", fontWeight: 500, color: c.text }}>
+                          {editingId === e.id ? (
+                            <input
+                              autoFocus
+                              value={editingDesc}
+                              onChange={(ev) => setEditingDesc(ev.target.value)}
+                              onBlur={() => saveEdit(e.id)}
+                              onKeyDown={(ev) => {
+                                if (ev.key === "Enter") saveEdit(e.id);
+                                if (ev.key === "Escape") setEditingId(null);
+                              }}
+                              style={{ padding: "4px 8px", borderRadius: "6px", border: `1px solid ${c.inputBorder}`, background: c.inputBg, color: c.text, fontSize: "14px", width: "100%", minWidth: "140px" }}
+                            />
+                          ) : (
+                            <span
+                              onClick={() => startEdit(e)}
+                              title="Click to edit"
+                              style={{ cursor: "text", borderBottom: `1px dashed ${c.textMuted}` }}
+                            >
+                              {e.description}
+                            </span>
+                          )}
+                        </td>
                         <td style={{ padding: "13px 16px" }}>
                           <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700, background: color + "15", color, border: `1px solid ${color}33` }}>
                             {catLabel}
