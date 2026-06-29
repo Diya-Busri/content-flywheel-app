@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
-import { GraduationCap, Users, CheckCircle2, BookOpen, ArrowRight } from "lucide-react";
+import { GraduationCap, Users, CheckCircle2, BookOpen, ArrowRight, Settings2 } from "lucide-react";
+import { isAdmin } from "@/lib/is-admin";
 import {
   listPublishedCourses,
   listLessonsByCourse,
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AcademyHomePage() {
   const { userId } = await auth();
+  const admin = await isAdmin();
   const courses = await listPublishedCourses();
 
   const lessonsByCourse: Record<string, Awaited<ReturnType<typeof listLessonsByCourse>>> = {};
@@ -71,12 +73,22 @@ export default async function AcademyHomePage() {
             Learn how to build, market, and sell your digital products.
           </p>
         </div>
-        <Link
-          href="/dashboard/academy/community"
-          className="hidden items-center gap-1.5 rounded-lg border bg-card px-3 py-2 text-sm font-medium hover:bg-muted sm:flex"
-        >
-          <Users className="h-4 w-4" /> Community
-        </Link>
+        <div className="flex items-center gap-2">
+          {admin && (
+            <Link
+              href="/dashboard/academy/admin"
+              className="hidden items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 sm:flex"
+            >
+              <Settings2 className="h-4 w-4" /> Manage Academy
+            </Link>
+          )}
+          <Link
+            href="/dashboard/academy/community"
+            className="hidden items-center gap-1.5 rounded-lg border bg-card px-3 py-2 text-sm font-medium hover:bg-muted sm:flex"
+          >
+            <Users className="h-4 w-4" /> Community
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
