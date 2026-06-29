@@ -6,11 +6,16 @@ import { pgTable, text, boolean, timestamp, uuid } from "drizzle-orm/pg-core";
 // 'direct' conversations are private user↔user, NOT visible to admin
 export const conversationsTable = pgTable("conversations", {
   id: uuid("id").primaryKey().defaultRandom(),
-  conversationType: text("conversation_type").notNull().default("direct"), // 'direct' | 'support'
+  conversationType: text("conversation_type").notNull().default("direct"), // 'direct' | 'support' | 'group'
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date()),
   lastMessageAt: timestamp("last_message_at").defaultNow(),
   lastMessagePreview: text("last_message_preview"),
+  // Group chat fields — null for DMs/support, set for 'group' conversations.
+  groupName: text("group_name"),
+  groupDescription: text("group_description"),
+  groupAvatarUrl: text("group_avatar_url"),
+  createdByUserId: text("created_by_user_id"),
 });
 
 // Who is in each conversation (2 participants for DM, can be extended for groups)

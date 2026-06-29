@@ -88,6 +88,68 @@ export async function startDirectConversationAction(
   }
 }
 
+/* ----------------------------- Group Chat ----------------------------- */
+
+export async function createGroupChatAction(
+  groupName: string,
+  memberEmails: string[]
+): Promise<ActionResult<SelectConversation>> {
+  try {
+    const { userId, email } = await requireUser();
+    const name = groupName.trim();
+    if (!name) throw new Error("Group name is required");
+    const emails = (memberEmails ?? []).map((e) => e.trim()).filter(Boolean);
+    if (emails.length === 0) throw new Error("Add at least one member");
+
+    const conv = await q.createGroupConversation(userId, email, emails, name);
+    revalidatePath("/dashboard/academy/messages");
+    return ok(conv, "Group created");
+  } catch (e) {
+    return fail(e, "Failed to create group");
+  }
+}
+
+export async function addGroupMemberAction(
+  conversationId: string,
+  targetEmail: string
+): Promise<ActionResult<null>> {
+  try {
+    const { userId } = await requireUser();
+    if (!(await q.isParticipant(conversationId, userId))) throw new Error("Forbidden");
+
+    const conv = await q.getConversationById(conversationId);
+    if (!conv || conv.conversationType !== "group") throw new Error("Not a group conversation");
+
+    const normalized = targetEmail.trim().toLowerCase();
+    if (!normalized) throw new Error("Email required");
+    const profile =
+      (await getProfileByEmail(normalized)) ?? (await getProfileByEmail(targetEmail.trim()));
+    if (!profile) throw new Error("User not found");
+
+    await q.addGroupMember(conversationId, profile.userId, profile.email ?? normalized);
+    revalidatePath(`/dashboard/academy/messages/${conversationId}`);
+    return ok(null, "Member added");
+  } catch (e) {
+    return fail(e, "Failed to add member");
+  }
+}
+
+export async function leaveGroupAction(conversationId: string): Promise<ActionResult<null>> {
+  try {
+    const { userId } = await requireUser();
+    if (!(await q.isParticipant(conversationId, userId))) throw new Error("Forbidden");
+
+    const conv = await q.getConversationById(conversationId);
+    if (!conv || conv.conversationType !== "group") throw new Error("Not a group conversation");
+
+    await q.removeGroupMember(conversationId, userId);
+    revalidatePath("/dashboard/academy/messages");
+    return ok(null, "Left group");
+  } catch (e) {
+    return fail(e, "Failed to leave group");
+  }
+}
+
 export async function markReadAction(conversationId: string): Promise<ActionResult<null>> {
   try {
     const { userId } = await requireUser();

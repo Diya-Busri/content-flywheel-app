@@ -1,19 +1,63 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Heart, MessageCircle, Pin, Star, Link2 } from "lucide-react";
 import { CATEGORY_COLORS, categoryLabel, timeAgo } from "@/lib/academy";
 import type { SelectAcademyCommunityPost } from "@/db/schema/academy-schema";
 import { ReportButton } from "@/components/community/report-button";
+import { startDirectConversationAction } from "@/actions/messaging-actions";
 
 function extractUrl(content: string): string | null {
   const m = content.match(/\n\n🔗 (https?:\/\/\S+)$/);
   return m ? m[1] : null;
 }
 
-export function CommunityPostCard({ post }: { post: SelectAcademyCommunityPost }) {
+function MessageButton({ authorEmail }: { authorEmail: string }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (loading) return;
+    setLoading(true);
+    const res = await startDirectConversationAction(authorEmail);
+    setLoading(false);
+    if (res.isSuccess && res.data) {
+      router.push(`/dashboard/academy/messages/${res.data.id}`);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={loading}
+      className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60 md:opacity-0 md:group-hover:opacity-100"
+      aria-label={`Message ${authorEmail}`}
+    >
+      <MessageCircle className="h-3.5 w-3.5" />
+      <span>{loading ? "…" : "Message"}</span>
+    </button>
+  );
+}
+
+export function CommunityPostCard({
+  post,
+  currentUserId,
+}: {
+  post: SelectAcademyCommunityPost;
+  currentUserId?: string | null;
+}) {
+  const canMessage =
+    !!post.userEmail && !!currentUserId && post.userId !== currentUserId;
+
   return (
     <Link
       href={`/dashboard/academy/community/${post.id}`}
-      className="block rounded-xl border bg-card p-4 transition-all hover:border-primary/50 hover:shadow-sm"
+      className="group block rounded-xl border bg-card p-4 transition-all hover:border-primary/50 hover:shadow-sm"
     >
       <div className="flex items-center gap-2">
         <span
@@ -50,6 +94,7 @@ export function CommunityPostCard({ post }: { post: SelectAcademyCommunityPost }
         <span className="flex items-center gap-1">
           <MessageCircle className="h-3.5 w-3.5" /> {post.commentsCount}
         </span>
+        {canMessage && <MessageButton authorEmail={post.userEmail as string} />}
         {post.userEmail && <span className="ml-auto truncate max-w-[160px]">{post.userEmail}</span>}
         <ReportButton postId={post.id} reportedUserId={post.userId} className="ml-1" />
       </div>

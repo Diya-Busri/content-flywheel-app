@@ -9,6 +9,7 @@ import {
 } from "@/db/queries/academy-queries";
 import { CATEGORY_COLORS, categoryLabel, timeAgo } from "@/lib/academy";
 import { PostInteractions } from "./PostInteractions";
+import { PostMessageButton } from "./PostMessageButton";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,9 @@ export default async function CommunityPostPage({ params }: { params: { postId: 
 
         <h1 className="mt-2 text-xl font-bold text-foreground">{post.title}</h1>
         {post.userEmail && <p className="text-xs text-muted-foreground">by {post.userEmail}</p>}
+        {post.userEmail && userId && post.userId !== userId && (
+          <PostMessageButton authorEmail={post.userEmail} />
+        )}
 
         <p className="mt-3 whitespace-pre-wrap text-foreground">{post.content}</p>
 

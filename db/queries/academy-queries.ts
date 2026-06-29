@@ -212,6 +212,28 @@ export async function listCommunityPosts(category?: string) {
     .orderBy(desc(academyCommunityPostsTable.isPinned), desc(academyCommunityPostsTable.createdAt));
 }
 
+export async function getCommunityMembers(): Promise<
+  { userId: string; userEmail: string; postCount: number }[]
+> {
+  const rows = await db
+    .select({
+      userId: academyCommunityPostsTable.userId,
+      userEmail: academyCommunityPostsTable.userEmail,
+      postCount: sql<number>`count(*)`,
+    })
+    .from(academyCommunityPostsTable)
+    .groupBy(academyCommunityPostsTable.userId, academyCommunityPostsTable.userEmail)
+    .orderBy(desc(sql`count(*)`));
+
+  return rows
+    .filter((r) => !!r.userEmail)
+    .map((r) => ({
+      userId: r.userId,
+      userEmail: r.userEmail as string,
+      postCount: Number(r.postCount),
+    }));
+}
+
 export async function getCommunityPostById(id: string) {
   const rows = await db.select().from(academyCommunityPostsTable).where(eq(academyCommunityPostsTable.id, id)).limit(1);
   return rows[0];

@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Search, Shield } from "lucide-react";
+import { Search, Shield, Users } from "lucide-react";
 import { messageTime } from "./message-time";
 
 export interface ConversationListItem {
   id: string;
   conversationType: string;
   otherUserEmail: string | null;
+  groupName: string | null;
   lastMessagePreview: string | null;
   lastMessageAt: string | null;
   unreadCount: number;
@@ -26,6 +27,7 @@ export function ConversationList({ conversations, basePath = "/dashboard/message
   const [query, setQuery] = useState("");
   const filtered = conversations.filter((c) =>
     (c.otherUserEmail ?? "").toLowerCase().includes(query.toLowerCase()) ||
+    (c.groupName ?? "").toLowerCase().includes(query.toLowerCase()) ||
     (c.lastMessagePreview ?? "").toLowerCase().includes(query.toLowerCase())
   );
 
@@ -49,19 +51,25 @@ export function ConversationList({ conversations, basePath = "/dashboard/message
         <div className="space-y-1.5">
           {filtered.map((c) => {
             const isSupport = c.conversationType === "support";
+            const isGroup = c.conversationType === "group";
+            const title = isSupport
+              ? "Content Flywheel Support"
+              : isGroup
+                ? c.groupName ?? "Group chat"
+                : c.otherUserEmail ?? "Unknown user";
             return (
               <Link
                 key={c.id}
                 href={`${basePath}/${c.id}`}
                 className="flex items-center gap-3 rounded-xl border bg-card p-3 transition-colors hover:border-primary/50"
               >
-                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${isSupport ? "bg-primary/10 text-primary" : "bg-muted text-foreground"}`}>
-                  {isSupport ? <Shield className="h-5 w-5" /> : initials(c.otherUserEmail)}
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${isSupport || isGroup ? "bg-primary/10 text-primary" : "bg-muted text-foreground"}`}>
+                  {isSupport ? <Shield className="h-5 w-5" /> : isGroup ? <Users className="h-5 w-5" /> : initials(c.otherUserEmail)}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium text-foreground">
-                      {isSupport ? "Content Flywheel Support" : c.otherUserEmail ?? "Unknown user"}
+                      {title}
                     </span>
                     {c.lastMessageAt && (
                       <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">

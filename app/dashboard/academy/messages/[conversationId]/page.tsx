@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect, notFound } from "next/navigation";
-import { ArrowLeft, Shield } from "lucide-react";
+import { ArrowLeft, Shield, Users } from "lucide-react";
 import {
   getConversationMessages,
   getConversationById,
@@ -28,7 +28,15 @@ export default async function AcademyConversationPage({
   const participants = await getConversationParticipants(params.conversationId);
   const other = participants.find((p) => p.userId !== userId) ?? null;
   const isSupport = conversation.conversationType === "support";
-  const title = isSupport ? "Content Flywheel Support" : other?.userEmail ?? "Conversation";
+  const isGroup = conversation.conversationType === "group";
+  const title = isSupport
+    ? "Content Flywheel Support"
+    : isGroup
+      ? conversation.groupName ?? "Group chat"
+      : other?.userEmail ?? "Conversation";
+
+  const user = await currentUser();
+  const currentUserEmail = user?.emailAddresses?.[0]?.emailAddress ?? null;
 
   return (
     <div className="mx-auto flex h-[calc(100dvh-7rem)] w-full max-w-3xl flex-col px-0 md:px-4">
@@ -40,9 +48,15 @@ export default async function AcademyConversationPage({
           <ArrowLeft className="h-5 w-5" />
         </Link>
         {isSupport && <Shield className="h-5 w-5 text-primary" />}
+        {isGroup && <Users className="h-5 w-5 text-primary" />}
         <div className="min-w-0">
           <p className="truncate font-semibold text-foreground">{title}</p>
           {isSupport && <p className="text-[11px] text-muted-foreground">Support</p>}
+          {isGroup && (
+            <p className="text-[11px] text-muted-foreground">
+              {participants.length} {participants.length === 1 ? "member" : "members"}
+            </p>
+          )}
         </div>
       </div>
 
@@ -59,6 +73,10 @@ export default async function AcademyConversationPage({
         }))}
         otherUserEmail={other?.userEmail}
         isSupport={isSupport}
+        isGroup={isGroup}
+        groupName={conversation.groupName}
+        groupMemberCount={participants.length}
+        currentUserEmail={currentUserEmail}
         backUrl="/dashboard/academy/messages"
       />
     </div>

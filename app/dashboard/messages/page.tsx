@@ -20,6 +20,7 @@ export default async function MessagesPage() {
       id: c.id,
       conversationType: c.conversationType,
       otherUserEmail: c.otherUserEmail,
+      groupName: c.groupName,
       lastMessagePreview: c.lastMessagePreview,
       lastMessageAt: c.lastMessageAt ? new Date(c.lastMessageAt).toISOString() : null,
       unreadCount: c.unreadCount,

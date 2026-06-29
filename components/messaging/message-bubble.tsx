@@ -9,9 +9,12 @@ interface MessageBubbleProps {
   senderEmail?: string | null;
   timestamp: Date | string;
   isAdmin?: boolean;
+  // In group chats, show every sender's email above the bubble (including own).
+  showSender?: boolean;
 }
 
-export function MessageBubble({ content, isOwn, senderEmail, timestamp, isAdmin }: MessageBubbleProps) {
+export function MessageBubble({ content, isOwn, senderEmail, timestamp, isAdmin, showSender }: MessageBubbleProps) {
+  const shouldShowSender = senderEmail && !isAdmin && (showSender || !isOwn);
   return (
     <div className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
       {isAdmin && !isOwn && (
@@ -19,7 +22,7 @@ export function MessageBubble({ content, isOwn, senderEmail, timestamp, isAdmin 
           <Shield className="h-3 w-3" /> Content Flywheel Support
         </span>
       )}
-      {!isAdmin && !isOwn && senderEmail && (
+      {shouldShowSender && (
         <span className="mb-0.5 max-w-[200px] truncate text-[11px] text-muted-foreground">{senderEmail}</span>
       )}
       <div

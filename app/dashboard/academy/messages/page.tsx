@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getUserConversations } from "@/db/queries/messaging-queries";
 import { ConversationList, ConversationListItem } from "@/components/messaging/conversation-list";
 import { NewDmModal } from "@/components/messaging/new-dm-modal";
+import { CreateGroupModal } from "@/components/messaging/create-group-modal";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Messages | Academy" };
@@ -21,6 +22,7 @@ export default async function AcademyMessagesPage() {
       id: c.id,
       conversationType: c.conversationType,
       otherUserEmail: c.otherUserEmail,
+      groupName: c.groupName,
       lastMessagePreview: c.lastMessagePreview,
       lastMessageAt: c.lastMessageAt ? new Date(c.lastMessageAt).toISOString() : null,
       unreadCount: c.unreadCount,
@@ -33,8 +35,10 @@ export default async function AcademyMessagesPage() {
     <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6">
       <div className="mb-5 flex items-center justify-between">
         <h2 className="text-xl font-bold text-foreground">Messages</h2>
-        <NewDmModal baseUrl="/dashboard/academy/messages" />
-
+        <div className="flex items-center gap-2">
+          <CreateGroupModal baseUrl="/dashboard/academy/messages" />
+          <NewDmModal baseUrl="/dashboard/academy/messages" />
+        </div>
       </div>
 
       <Link

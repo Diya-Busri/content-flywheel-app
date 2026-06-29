@@ -19,7 +19,7 @@ export default async function CommunityPage({
   const allPosts = await listCommunityPosts(category);
   const posts = unansweredOnly ? allPosts.filter((p) => p.commentsCount === 0) : allPosts;
 
-  await auth();
+  const { userId } = await auth();
   const user = await currentUser();
   const email = user?.emailAddresses?.[0]?.emailAddress ?? "";
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
@@ -85,7 +85,7 @@ export default async function CommunityPage({
       ) : (
         <div className="space-y-3">
           {posts.map((post) => (
-            <CommunityPostCard key={post.id} post={post} />
+            <CommunityPostCard key={post.id} post={post} currentUserId={userId} />
           ))}
         </div>
       )}

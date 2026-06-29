@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Send, Shield } from "lucide-react";
+import { Send, Shield, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MessageBubble } from "./message-bubble";
+import { GroupMembersSheet } from "./group-members-sheet";
 
 interface Message {
   id: string;
@@ -24,6 +25,13 @@ interface ConversationViewProps {
   asAdmin?: boolean;
   // Override the GET endpoint used for polling messages (admin uses a dedicated route).
   fetchPath?: string;
+  // Group chat support.
+  isGroup?: boolean;
+  groupName?: string | null;
+  groupMemberCount?: number;
+  currentUserEmail?: string | null;
+  // Accepted for compatibility with callers; not used internally.
+  backUrl?: string;
 }
 
 export function ConversationView({
@@ -34,6 +42,10 @@ export function ConversationView({
   isSupport,
   asAdmin,
   fetchPath,
+  isGroup,
+  groupName,
+  groupMemberCount,
+  currentUserEmail,
 }: ConversationViewProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -88,7 +100,7 @@ export function ConversationView({
     const optimistic: Message = {
       id: `temp-${Date.now()}`,
       senderId: currentUserId,
-      senderEmail: null,
+      senderEmail: currentUserEmail ?? null,
       content,
       isAdminMessage: !!asAdmin,
       createdAt: new Date().toISOString(),
@@ -120,6 +132,17 @@ export function ConversationView({
 
   return (
     <div className="flex h-full flex-col">
+      {isGroup && (
+        <div className="flex items-center justify-between border-b bg-background px-4 py-2">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Users className="h-3.5 w-3.5" />
+            {typeof groupMemberCount === "number"
+              ? `${groupMemberCount} ${groupMemberCount === 1 ? "member" : "members"}`
+              : "Group chat"}
+          </span>
+          <GroupMembersSheet conversationId={conversationId} currentUserId={currentUserId} />
+        </div>
+      )}
       {/* Messages */}
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 0 ? (
@@ -139,6 +162,7 @@ export function ConversationView({
                 senderEmail={m.senderEmail}
                 timestamp={m.createdAt}
                 isAdmin={m.isAdminMessage}
+                showSender={isGroup}
               />
             );
           })

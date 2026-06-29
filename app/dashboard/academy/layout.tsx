@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 const NAV_ITEMS = [
   { href: "/dashboard/academy", label: "Courses", icon: BookOpen, exact: true },
   { href: "/dashboard/academy/community", label: "Community", icon: Users },
+  { href: "/dashboard/academy/members", label: "Members", icon: Users },
   { href: "/dashboard/academy/messages", label: "Messages", icon: MessageCircle },
   { href: "/dashboard/academy/progress", label: "Progress", icon: BarChart2 },
 ];

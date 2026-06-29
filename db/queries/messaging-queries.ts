@@ -9,6 +9,7 @@ import {
   SelectMessage,
   SelectCommunityReport,
 } from "@/db/schema/messaging-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { and, asc, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 
 export const SUPPORT_USER_ID = "support";
@@ -116,11 +117,93 @@ export async function findOrCreateDirectConversation(
   return conv;
 }
 
+/* --------------------------- Groups --------------------------- */
+
+// Create a group conversation. Looks up member profiles by email; emails with no
+// matching profile are silently skipped. The creator is always a participant.
+export async function createGroupConversation(
+  creatorUserId: string,
+  creatorEmail: string | null,
+  memberEmails: string[],
+  groupName: string
+): Promise<SelectConversation> {
+  const [conv] = await db
+    .insert(conversationsTable)
+    .values({
+      conversationType: "group",
+      groupName,
+      createdByUserId: creatorUserId,
+    })
+    .returning();
+
+  const normalized = Array.from(
+    new Set(
+      memberEmails
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => e && e !== (creatorEmail ?? "").trim().toLowerCase())
+    )
+  );
+
+  const profiles = normalized.length
+    ? await db
+        .select({ userId: profilesTable.userId, email: profilesTable.email })
+        .from(profilesTable)
+        .where(inArray(sql`lower(${profilesTable.email})`, normalized))
+    : [];
+
+  const participantValues = [
+    { conversationId: conv.id, userId: creatorUserId, userEmail: creatorEmail ?? null },
+    ...profiles.map((p) => ({
+      conversationId: conv.id,
+      userId: p.userId,
+      userEmail: p.email ?? null,
+    })),
+  ];
+
+  // De-dupe by userId in case a member email resolves to the creator.
+  const seen = new Set<string>();
+  const unique = participantValues.filter((p) => {
+    if (seen.has(p.userId)) return false;
+    seen.add(p.userId);
+    return true;
+  });
+
+  await db.insert(conversationParticipantsTable).values(unique);
+  return conv;
+}
+
+export async function addGroupMember(
+  conversationId: string,
+  userId: string,
+  userEmail: string | null
+): Promise<void> {
+  if (await isParticipant(conversationId, userId)) return;
+  await db
+    .insert(conversationParticipantsTable)
+    .values({ conversationId, userId, userEmail });
+}
+
+export async function removeGroupMember(conversationId: string, userId: string): Promise<void> {
+  await db
+    .delete(conversationParticipantsTable)
+    .where(
+      and(
+        eq(conversationParticipantsTable.conversationId, conversationId),
+        eq(conversationParticipantsTable.userId, userId)
+      )
+    );
+}
+
+export async function getGroupMembers(conversationId: string) {
+  return getConversationParticipants(conversationId);
+}
+
 /* --------------------------- Lists --------------------------- */
 
 export type ConversationSummary = SelectConversation & {
   otherUserId: string | null;
   otherUserEmail: string | null;
+  groupName: string | null;
   unreadCount: number;
 };
 
@@ -144,7 +227,9 @@ export async function getUserConversations(userId: string): Promise<Conversation
   for (const conv of convs) {
     const parts = participants.filter((p) => p.conversationId === conv.id);
     const me = parts.find((p) => p.userId === userId);
-    const other = parts.find((p) => p.userId !== userId) ?? null;
+    const isGroup = conv.conversationType === "group";
+    // For groups there is no single "other" participant.
+    const other = isGroup ? null : parts.find((p) => p.userId !== userId) ?? null;
 
     // unread = messages after my lastReadAt that I didn't send
     const lastReadAt = me?.lastReadAt ?? null;
@@ -163,7 +248,8 @@ export async function getUserConversations(userId: string): Promise<Conversation
     summaries.push({
       ...conv,
       otherUserId: other?.userId ?? null,
-      otherUserEmail: other?.userEmail ?? null,
+      otherUserEmail: isGroup ? null : other?.userEmail ?? null,
+      groupName: conv.groupName ?? null,
       unreadCount,
     });
   }
