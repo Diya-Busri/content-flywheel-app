@@ -26,7 +26,15 @@ export async function listPublishedCourses(): Promise<SelectAcademyCourse[]> {
   return db
     .select()
     .from(academyCoursesTable)
-    .where(eq(academyCoursesTable.isPublished, true))
+    .where(eq(academyCoursesTable.status, "published"))
+    .orderBy(asc(academyCoursesTable.orderIndex), desc(academyCoursesTable.createdAt));
+}
+
+/** All courses regardless of status (admin only). */
+export async function getAllCourses(): Promise<SelectAcademyCourse[]> {
+  return db
+    .select()
+    .from(academyCoursesTable)
     .orderBy(asc(academyCoursesTable.orderIndex), desc(academyCoursesTable.createdAt));
 }
 
@@ -191,14 +199,17 @@ export async function countCompletedLessons(userId: string): Promise<number> {
 /* ----------------------------- Community ----------------------------- */
 
 export async function listCommunityPosts(category?: string) {
-  const base = db.select().from(academyCommunityPostsTable);
-  const rows =
+  // Hide scheduled announcements whose scheduledFor is still in the future.
+  const visible = sql`(${academyCommunityPostsTable.scheduledFor} IS NULL OR ${academyCommunityPostsTable.scheduledFor} <= now())`;
+  const where =
     category && category !== "all"
-      ? await base
-          .where(eq(academyCommunityPostsTable.category, category))
-          .orderBy(desc(academyCommunityPostsTable.isPinned), desc(academyCommunityPostsTable.createdAt))
-      : await base.orderBy(desc(academyCommunityPostsTable.isPinned), desc(academyCommunityPostsTable.createdAt));
-  return rows;
+      ? and(eq(academyCommunityPostsTable.category, category), visible)
+      : visible;
+  return db
+    .select()
+    .from(academyCommunityPostsTable)
+    .where(where)
+    .orderBy(desc(academyCommunityPostsTable.isPinned), desc(academyCommunityPostsTable.createdAt));
 }
 
 export async function getCommunityPostById(id: string) {
@@ -294,4 +305,176 @@ export async function listLikedPostIds(userId: string, postIds: string[]): Promi
     .from(academyCommunityLikesTable)
     .where(eq(academyCommunityLikesTable.userId, userId));
   return new Set(rows.map((r) => r.postId));
+}
+
+/* ----------------------------- CMS: Course tree ----------------------------- */
+
+/** Full course tree: course + modules + lessons (admin editor). */
+export async function getCourseWithModulesAndLessons(courseId: string) {
+  const course = await getCourseById(courseId);
+  if (!course) return undefined;
+  const [modules, lessons] = await Promise.all([
+    listModulesByCourse(courseId),
+    listLessonsByCourse(courseId),
+  ]);
+  return { course, modules, lessons };
+}
+
+/** Deep-copy a course with all modules, lessons and resources. Returns the new course. */
+export async function duplicateCourse(courseId: string): Promise<SelectAcademyCourse | undefined> {
+  const source = await getCourseById(courseId);
+  if (!source) return undefined;
+
+  const { id, createdAt, updatedAt, ...rest } = source as any;
+  const [newCourse] = await db
+    .insert(academyCoursesTable)
+    .values({
+      ...rest,
+      title: `${source.title} (Copy)`,
+      status: "draft",
+      isPublished: false,
+      slug: null,
+    })
+    .returning();
+
+  const modules = await listModulesByCourse(courseId);
+  for (const mod of modules) {
+    const { id: modId, createdAt: mc, updatedAt: mu, ...modRest } = mod as any;
+    const [newModule] = await db
+      .insert(academyModulesTable)
+      .values({ ...modRest, courseId: newCourse.id })
+      .returning();
+
+    const lessons = await listLessonsByModule(modId);
+    for (const lesson of lessons) {
+      const { id: lessonId, createdAt: lc, updatedAt: lu, ...lessonRest } = lesson as any;
+      const [newLesson] = await db
+        .insert(academyLessonsTable)
+        .values({ ...lessonRest, moduleId: newModule.id, courseId: newCourse.id })
+        .returning();
+
+      const resources = await db
+        .select()
+        .from(academyResourcesTable)
+        .where(eq(academyResourcesTable.lessonId, lessonId));
+      for (const res of resources) {
+        const { id: resId, createdAt: rc, ...resRest } = res as any;
+        await db.insert(academyResourcesTable).values({ ...resRest, lessonId: newLesson.id });
+      }
+    }
+  }
+
+  return newCourse;
+}
+
+/* ----------------------------- CMS: Stats & activity ----------------------------- */
+
+export async function getAcademyStats() {
+  const [courseStats] = await db
+    .select({
+      totalCourses: sql<number>`count(*)::int`,
+      publishedCourses: sql<number>`count(*) filter (where ${academyCoursesTable.status} = 'published')::int`,
+      draftCourses: sql<number>`count(*) filter (where ${academyCoursesTable.status} = 'draft')::int`,
+      archivedCourses: sql<number>`count(*) filter (where ${academyCoursesTable.status} = 'archived')::int`,
+    })
+    .from(academyCoursesTable);
+
+  const [lessonStats] = await db
+    .select({ totalLessons: sql<number>`count(*)::int` })
+    .from(academyLessonsTable);
+
+  const [postStats] = await db
+    .select({ communityPosts: sql<number>`count(*)::int` })
+    .from(academyCommunityPostsTable);
+
+  const [learnerStats] = await db
+    .select({
+      activeLearners: sql<number>`count(distinct ${academyProgressTable.userId})::int`,
+      completedLessons: sql<number>`count(*)::int`,
+    })
+    .from(academyProgressTable);
+
+  const totalLessons = lessonStats?.totalLessons ?? 0;
+  const activeLearners = learnerStats?.activeLearners ?? 0;
+  const completedLessons = learnerStats?.completedLessons ?? 0;
+  // total possible = published lessons * active learners
+  const totalPossible = totalLessons * Math.max(activeLearners, 1);
+  const completionRate = totalPossible > 0 ? Math.round((completedLessons / totalPossible) * 100) : 0;
+
+  return {
+    totalCourses: courseStats?.totalCourses ?? 0,
+    publishedCourses: courseStats?.publishedCourses ?? 0,
+    draftCourses: courseStats?.draftCourses ?? 0,
+    archivedCourses: courseStats?.archivedCourses ?? 0,
+    totalLessons,
+    communityPosts: postStats?.communityPosts ?? 0,
+    activeLearners,
+    completionRate,
+  };
+}
+
+/** Last 10 progress events + community posts combined, newest first. */
+export async function getRecentActivity() {
+  const progress = await db
+    .select({
+      userId: academyProgressTable.userId,
+      lessonTitle: academyLessonsTable.title,
+      courseTitle: academyCoursesTable.title,
+      at: academyProgressTable.completedAt,
+    })
+    .from(academyProgressTable)
+    .leftJoin(academyLessonsTable, eq(academyProgressTable.lessonId, academyLessonsTable.id))
+    .leftJoin(academyCoursesTable, eq(academyProgressTable.courseId, academyCoursesTable.id))
+    .orderBy(desc(academyProgressTable.completedAt))
+    .limit(10);
+
+  const posts = await db
+    .select({
+      userEmail: academyCommunityPostsTable.userEmail,
+      title: academyCommunityPostsTable.title,
+      category: academyCommunityPostsTable.category,
+      at: academyCommunityPostsTable.createdAt,
+    })
+    .from(academyCommunityPostsTable)
+    .orderBy(desc(academyCommunityPostsTable.createdAt))
+    .limit(10);
+
+  const items = [
+    ...progress.map((p) => ({
+      type: "progress" as const,
+      actor: p.userId,
+      text: `completed "${p.lessonTitle ?? "a lesson"}" in ${p.courseTitle ?? "a course"}`,
+      at: p.at as Date,
+    })),
+    ...posts.map((p) => ({
+      type: "post" as const,
+      actor: p.userEmail ?? "Someone",
+      text: `posted "${p.title}" in ${p.category}`,
+      at: p.at as Date,
+    })),
+  ];
+
+  return items.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 10);
+}
+
+/* ----------------------------- CMS: Community admin ----------------------------- */
+
+/** All posts including locked/announcements, full data. */
+export async function getCommunityPostsForAdmin() {
+  return db
+    .select()
+    .from(academyCommunityPostsTable)
+    .orderBy(
+      desc(academyCommunityPostsTable.isPinned),
+      desc(academyCommunityPostsTable.createdAt)
+    );
+}
+
+/** Posts with no comments yet. */
+export async function getUnansweredPosts() {
+  return db
+    .select()
+    .from(academyCommunityPostsTable)
+    .where(eq(academyCommunityPostsTable.commentsCount, 0))
+    .orderBy(desc(academyCommunityPostsTable.createdAt));
 }

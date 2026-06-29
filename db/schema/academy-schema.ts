@@ -8,6 +8,12 @@ export const academyCoursesTable = pgTable("academy_courses", {
   difficulty: text("difficulty").default("beginner"), // beginner/intermediate/advanced
   estimatedDuration: text("estimated_duration"),
   isPublished: boolean("is_published").default(false).notNull(),
+  status: text("status").default("draft").notNull(), // draft | published | archived
+  slug: text("slug"), // SEO-friendly URL slug
+  category: text("category"), // e.g. "Digital Products", "Marketing", "Business"
+  isFeatured: boolean("is_featured").default(false).notNull(),
+  learningOutcomes: text("learning_outcomes"), // JSON array of strings
+  coverImageUrl: text("cover_image_url"),
   orderIndex: integer("order_index").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -65,6 +71,9 @@ export const academyCommunityPostsTable = pgTable("academy_community_posts", {
   imageUrls: text("image_urls"), // JSON array string
   isPinned: boolean("is_pinned").default(false).notNull(),
   isFeatured: boolean("is_featured").default(false).notNull(),
+  isLocked: boolean("is_locked").default(false).notNull(),
+  isAnnouncement: boolean("is_announcement").default(false).notNull(),
+  scheduledFor: timestamp("scheduled_for"), // for scheduled announcements
   likesCount: integer("likes_count").default(0).notNull(),
   commentsCount: integer("comments_count").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
