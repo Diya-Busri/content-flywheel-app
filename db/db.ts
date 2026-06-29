@@ -48,6 +48,12 @@ import {
   academyCommunityCommentsTable,
   academyCommunityLikesTable,
 } from "./schema/academy-schema";
+import {
+  conversationsTable,
+  conversationParticipantsTable,
+  messagesTable,
+  communityReportsTable,
+} from "./schema/messaging-schema";
 
 // Define the schema properly
 const schema = {
@@ -103,6 +109,10 @@ const schema = {
   academyCommunityPosts: academyCommunityPostsTable,
   academyCommunityComments: academyCommunityCommentsTable,
   academyCommunityLikes: academyCommunityLikesTable,
+  conversations: conversationsTable,
+  conversationParticipants: conversationParticipantsTable,
+  messages: messagesTable,
+  communityReports: communityReportsTable,
 };
 
 // Connection options tuned for Supabase pgBouncer (port 6543 pooler).

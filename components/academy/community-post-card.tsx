@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Heart, MessageCircle, Pin, Star } from "lucide-react";
 import { CATEGORY_COLORS, categoryLabel, timeAgo } from "@/lib/academy";
 import type { SelectAcademyCommunityPost } from "@/db/schema/academy-schema";
+import { ReportButton } from "@/components/community/report-button";
 
 export function CommunityPostCard({ post }: { post: SelectAcademyCommunityPost }) {
   return (
@@ -37,6 +38,7 @@ export function CommunityPostCard({ post }: { post: SelectAcademyCommunityPost }
           <MessageCircle className="h-3.5 w-3.5" /> {post.commentsCount}
         </span>
         {post.userEmail && <span className="ml-auto truncate max-w-[160px]">{post.userEmail}</span>}
+        <ReportButton postId={post.id} reportedUserId={post.userId} className="ml-1" />
       </div>
     </Link>
   );

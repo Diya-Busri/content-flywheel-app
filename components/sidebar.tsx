@@ -39,9 +39,24 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
   const isCollapsed = sidebar?.isCollapsed ?? false;
   const toggleCollapsed = sidebar?.toggleCollapsed ?? (() => {});
   const { theme, toggleTheme } = useDashboardTheme();
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // Poll unread message count for the Messages badge.
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      fetch("/api/messages/unread")
+        .then((r) => (r.ok ? r.json() : { count: 0 }))
+        .then((d) => { if (active) setUnreadCount(Number(d?.count ?? 0)); })
+        .catch(() => {});
+    };
+    load();
+    const interval = setInterval(load, 15000);
+    return () => { active = false; clearInterval(interval); };
   }, []);
 
   const isActive = (path: string, activeWhenStartsWith?: boolean) =>
@@ -70,6 +85,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
     {
       label: "Content",
       items: [
+        { href: "/dashboard/messages", icon: <MessageCircle size={18} />, label: "Messages", emoji: "✉️", activeWhenStartsWith: true, badge: unreadCount > 0 ? String(unreadCount) : undefined },
         { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚", featureKey: "my_library" },
         { href: "/dashboard/caption-library", icon: <BookMarked size={18} />, label: "Caption Library", emoji: "💬", activeWhenStartsWith: true, featureKey: "caption_library" },
         { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅", featureKey: "content_calendar" },
@@ -103,6 +119,9 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       { href: "/dashboard/admin/feature-flags", icon: <Flag size={18} />, label: "Feature Flags", emoji: "🚩", activeWhenStartsWith: true },
       { href: "/dashboard/admin/analytics", icon: <BarChart2 size={18} />, label: "Analytics", emoji: "📊", activeWhenStartsWith: true },
       { href: "/dashboard/admin/feedback", icon: <Inbox size={18} />, label: "Feedback Inbox", emoji: "💬", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/support", icon: <Inbox size={18} />, label: "Support Inbox", emoji: "🛟", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/reports", icon: <Flag size={18} />, label: "Reports", emoji: "🚩", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/community-analytics", icon: <BarChart2 size={18} />, label: "Community Analytics", emoji: "📊", activeWhenStartsWith: true },
       { href: "/dashboard/admin/health", icon: <Activity size={18} />, label: "Platform Health", emoji: "❤️", activeWhenStartsWith: true },
       { href: "/dashboard/admin/announcements", icon: <Megaphone size={18} />, label: "Announcements", emoji: "📣", activeWhenStartsWith: true },
       { href: "/dashboard/admin/notifications", icon: <Bell size={18} />, label: "Push Notifications", emoji: "🔔", activeWhenStartsWith: true },

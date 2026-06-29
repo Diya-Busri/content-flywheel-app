@@ -12,10 +12,12 @@ export const metadata = { title: "Community | Academy" };
 export default async function CommunityPage({
   searchParams,
 }: {
-  searchParams: { category?: string };
+  searchParams: { category?: string; filter?: string };
 }) {
   const category = searchParams.category ?? "all";
-  const posts = await listCommunityPosts(category);
+  const unansweredOnly = searchParams.filter === "unanswered";
+  const allPosts = await listCommunityPosts(category);
+  const posts = unansweredOnly ? allPosts.filter((p) => p.commentsCount === 0) : allPosts;
 
   await auth();
   const user = await currentUser();
@@ -53,6 +55,26 @@ export default async function CommunityPage({
             </Link>
           );
         })}
+      </div>
+
+      {/* Filter tabs */}
+      <div className="mb-5 flex gap-2">
+        <Link
+          href={category === "all" ? "/dashboard/academy/community" : `/dashboard/academy/community?category=${category}`}
+          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+            !unansweredOnly ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"
+          }`}
+        >
+          All Posts
+        </Link>
+        <Link
+          href={category === "all" ? "/dashboard/academy/community?filter=unanswered" : `/dashboard/academy/community?category=${category}&filter=unanswered`}
+          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+            unansweredOnly ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"
+          }`}
+        >
+          Unanswered
+        </Link>
       </div>
 
       {posts.length === 0 ? (
