@@ -12,14 +12,22 @@ type AffiliateLink = {
   createdAt: Date;
 };
 
-const BASE_URL = "https://contentflywheel.co.uk";
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
 
-export default function AffiliatesClient({ initialLinks }: { initialLinks: AffiliateLink[] }) {
+export default function AffiliatesClient({
+  initialLinks,
+  creatorUserId,
+}: {
+  initialLinks: AffiliateLink[];
+  creatorUserId: string;
+}) {
   const [links, setLinks] = useState<AffiliateLink[]>(initialLinks);
   const [form, setForm] = useState({ affiliateName: "", affiliateEmail: "", commissionPercent: "20" });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
+
+  const storeUrl = `${BASE_URL}/c/${creatorUserId}`;
 
   async function create() {
     if (!form.affiliateName.trim()) { setError("Name is required"); return; }
@@ -50,22 +58,44 @@ export default function AffiliatesClient({ initialLinks }: { initialLinks: Affil
   }
 
   function copyLink(code: string) {
-    const url = `${BASE_URL}?ref=${code}`;
+    const url = `${storeUrl}?ref=${code}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopied(code);
       setTimeout(() => setCopied(null), 2000);
     });
   }
 
+  const totalCommissionCents = links.reduce((s, l) => s + (l.totalEarnedCents ?? 0), 0);
+
   return (
     <div style={{ padding: "32px 24px", maxWidth: "960px" }}>
       <h1 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: 800, color: "#111827" }}>🔗 Affiliates</h1>
-      <p style={{ margin: "0 0 8px", fontSize: "14px", color: "#6b7280" }}>
-        Create referral links for partners. They share the link; you track clicks and commissions.
+      <p style={{ margin: "0 0 20px", fontSize: "14px", color: "#6b7280" }}>
+        Create referral links for partners. They earn a commission on every sale they refer.
       </p>
+
+      {/* Summary stats */}
+      {links.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginBottom: "28px" }}>
+          {[
+            { label: "Active affiliates", value: links.filter(l => l.active).length.toString() },
+            { label: "Total affiliates", value: links.length.toString() },
+            { label: "Total commissions earned", value: `£${(totalCommissionCents / 100).toFixed(2)}` },
+          ].map((s) => (
+            <div key={s.label} style={{ background: "#fff", borderRadius: "12px", padding: "16px 20px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", border: "1px solid #f3f4f6" }}>
+              <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.label}</p>
+              <p style={{ margin: 0, fontSize: "22px", fontWeight: 800, color: "#111827" }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* How it works */}
       <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "10px", padding: "12px 16px", marginBottom: "28px" }}>
         <p style={{ margin: 0, fontSize: "13px", color: "#92400e" }}>
-          💡 <strong>How it works:</strong> Create a link for each affiliate. They share <code style={{ background: "#fef3c7", padding: "1px 4px", borderRadius: "4px" }}>{BASE_URL}?ref=their-code</code>. When someone clicks and buys, you see it here. Commission tracking coming soon.
+          💡 <strong>How it works:</strong> Affiliates share your store link with their unique code
+          (e.g. <code style={{ background: "#fef3c7", padding: "1px 4px", borderRadius: "4px" }}>{storeUrl}?ref=their-code</code>).
+          When someone clicks and buys, the commission is recorded automatically.
         </p>
       </div>
 

@@ -49,7 +49,7 @@ export function EmailCaptureWidget({
         background: "linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%)",
         border: "1.5px solid #fed7aa",
         borderRadius: "20px",
-        padding: "28px",
+        padding: "clamp(18px, 5vw, 28px)",
         marginBottom: "24px",
       }}
     >
@@ -92,7 +92,7 @@ export function EmailCaptureWidget({
               background: "#fff",
             }}
           />
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <input
               type="email"
               required
@@ -100,7 +100,8 @@ export function EmailCaptureWidget({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               style={{
-                flex: 1,
+                flex: "1 1 180px",
+                minWidth: 0,
                 padding: "10px 14px",
                 borderRadius: "10px",
                 border: "1.5px solid #e5e7eb",
@@ -114,6 +115,7 @@ export function EmailCaptureWidget({
               type="submit"
               disabled={status === "loading"}
               style={{
+                flex: "0 0 auto",
                 padding: "10px 20px",
                 borderRadius: "10px",
                 background: "linear-gradient(135deg, #f97316, #ea580c)",

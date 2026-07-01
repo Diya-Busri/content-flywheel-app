@@ -79,11 +79,12 @@ export default async function ProductSalesPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ purchased?: string; session_id?: string }>;
+  searchParams: Promise<{ purchased?: string; session_id?: string; ref?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
   const purchased = sp?.purchased === "true";
+  const refCode = sp?.ref ?? null;
   const { userId: viewerUserId } = await auth();
 
   let product: { id: string; title: string; niche: string | null; format: string | null; userId: string; marketingAssets: unknown; content: unknown } | undefined;
@@ -200,6 +201,7 @@ export default async function ProductSalesPage({
         .desc-para { margin: 0 0 16px; font-size: 15px; color: #374151; line-height: 1.75; }
         .desc-para:last-child { margin-bottom: 0; }
         @media (max-width: 767px) { .purchase-card { position: static; } }
+        @media (max-width: 480px) { .purchase-card { padding: 20px; border-radius: 16px; } .product-grid { gap: 20px; padding: 16px 12px 60px; } }
       `}</style>
 
       {/* JSON-LD structured data — lets Google show price/rating rich snippets */}
@@ -436,6 +438,7 @@ export default async function ProductSalesPage({
                   priceLabel={hasSalePrice ? salePriceLabel! : nativePriceLabel!}
                   creatorUserId={product.userId}
                   isFree={ma.nativePrice === 0}
+                  refCode={refCode}
                 />
               </>
             ) : (

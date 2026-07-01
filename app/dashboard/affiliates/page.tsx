@@ -17,5 +17,5 @@ export default async function AffiliatesPage() {
     .where(eq(affiliateLinksTable.creatorUserId, userId))
     .orderBy(desc(affiliateLinksTable.createdAt));
 
-  return <AffiliatesClient initialLinks={links} />;
+  return <AffiliatesClient initialLinks={links} creatorUserId={userId} />;
 }

@@ -7,9 +7,10 @@ interface BuyButtonProps {
   priceLabel: string;
   creatorUserId: string;
   isFree?: boolean;
+  refCode?: string | null;
 }
 
-export function BuyButton({ productId, priceLabel, creatorUserId, isFree }: BuyButtonProps) {
+export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCode }: BuyButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [promoCode, setPromoCode] = useState("");
@@ -50,7 +51,10 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree }: BuyB
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/products/${productId}/buy`, {
+      const buyUrl = refCode
+        ? `/api/products/${productId}/buy?ref=${encodeURIComponent(refCode)}`
+        : `/api/products/${productId}/buy`;
+      const res = await fetch(buyUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ promoCode: promoResult?.code ?? null }),

@@ -14,10 +14,10 @@ const THEMES: Record<string, {
   text: string; subText: string; mutedText: string;
   isDark: boolean; inputBg: string;
 }> = {
-  warm:    { page: "#FAFAF7", card: "#FFFFFF", cardBorder: "#EDEBE6", text: "#111111", subText: "#555555", mutedText: "#AAAAAA", isDark: false, inputBg: "#F5F3EF" },
+  warm:    { page: "#FDF6EE", card: "#FFFFFF", cardBorder: "#EDE8DF", text: "#111111", subText: "#555555", mutedText: "#AAAAAA", isDark: false, inputBg: "#F5F0E8" },
   dark:    { page: "#0A0A0C", card: "#141418", cardBorder: "#222228", text: "#F5F5F5", subText: "rgba(255,255,255,0.55)", mutedText: "rgba(255,255,255,0.25)", isDark: true, inputBg: "#1A1A1E" },
-  light:   { page: "#FFFFFF", card: "#F9F9FB", cardBorder: "#EBEBEB", text: "#111111", subText: "#555555", mutedText: "#BBBBBB", isDark: false, inputBg: "#F3F3F5" },
-  minimal: { page: "#F4F4F2", card: "#FFFFFF", cardBorder: "#E5E5E3", text: "#111111", subText: "#666666", mutedText: "#BBBBBB", isDark: false, inputBg: "#EBEBEB" },
+  light:   { page: "#F8F8FB", card: "#FFFFFF", cardBorder: "#E8E8EE", text: "#111111", subText: "#555555", mutedText: "#BBBBBB", isDark: false, inputBg: "#F0F0F5" },
+  minimal: { page: "#F2F2F0", card: "#FFFFFF", cardBorder: "#E2E2DF", text: "#111111", subText: "#666666", mutedText: "#BBBBBB", isDark: false, inputBg: "#E8E8E5" },
   bold:    { page: "#0C0C1A", card: "#12122A", cardBorder: "#1E1E3A", text: "#FFFFFF", subText: "rgba(255,255,255,0.6)", mutedText: "rgba(255,255,255,0.25)", isDark: true, inputBg: "#181828" },
 };
 
@@ -139,7 +139,18 @@ export default async function CreatorProfilePage({
   };
 
   return (
-    <main style={{ minHeight: "100vh", background: `radial-gradient(ellipse 140% 50% at 50% -10%, ${accent}40 0%, transparent 60%), radial-gradient(ellipse 100% 40% at 10% 100%, ${accent}28 0%, transparent 55%), ${t.page}`, fontFamily: pageFontFamily }}>
+    <main style={{ minHeight: "100vh", background: t.isDark
+        ? `radial-gradient(ellipse 160% 60% at 50% -5%, ${accent}70 0%, transparent 55%), radial-gradient(ellipse 100% 50% at 85% 100%, ${accent}50 0%, transparent 55%), ${t.page}`
+        : `radial-gradient(ellipse 160% 55% at 50% -5%, ${accent}55 0%, transparent 52%), radial-gradient(ellipse 100% 45% at 85% 95%, ${accent}38 0%, transparent 55%), linear-gradient(180deg, ${t.page} 0%, #fff 100%)`,
+      fontFamily: pageFontFamily }}>
+      <style>{`
+        .cf-grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
+        .cf-avatar-row { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 16px; margin-bottom: 16px; }
+        @media (max-width: 420px) {
+          .cf-grid-2 { grid-template-columns: 1fr; }
+          .cf-avatar-row { align-items: flex-start; }
+        }
+      `}</style>
       {/* Announcement bar */}
       {announcementText && (
         <div style={{ background: accent, padding: "9px 16px", textAlign: "center", fontSize: "13px", fontWeight: "700", color: "#fff", letterSpacing: "0.01em" }}>
@@ -150,15 +161,15 @@ export default async function CreatorProfilePage({
       {/* ── Hero banner ── */}
       <div style={{ position: "relative", height: "160px", overflow: "hidden" }}>
         <div style={{ width: "100%", height: "100%", background: bannerBg }} />
-        {/* Gradient fade to page color — keep short so banner is visible */}
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "40px", background: `linear-gradient(to bottom, transparent 0%, ${t.page} 100%)` }} />
+        {/* Gradient fade — blend into the page background (tinted, not hard white) */}
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "60px", background: `linear-gradient(to bottom, transparent 0%, ${t.isDark ? t.page : `${accent}18`} 60%, ${t.page} 100%)` }} />
       </div>
 
       {/* ── Content ── */}
       <div style={{ maxWidth: "620px", margin: "0 auto", padding: "0 24px 96px" }}>
 
         {/* Avatar — sits below banner with a gap */}
-        <div style={{ marginTop: "16px", marginBottom: "16px", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <div className="cf-avatar-row">
           {profileImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={profileImageUrl} alt={brandName} style={{
@@ -353,7 +364,7 @@ export default async function CreatorProfilePage({
                 })()}
                 {/* Rest in 2-col */}
                 {publishedProducts.length > 1 && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div className="cf-grid-2" style={{ gap: "10px" }}>
                     {publishedProducts.slice(1).map((p) => {
                       const ma = p.marketingAssets as MarketingAssets | null;
                       const isNative = !!ma?.isNativePublished;
@@ -386,7 +397,7 @@ export default async function CreatorProfilePage({
 
             ) : (
               /* Default: grid */
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div className="cf-grid-2" style={{ gap: "12px" }}>
                 {publishedProducts.map((p) => {
                   const ma = p.marketingAssets as MarketingAssets | null;
                   const isNative = !!ma?.isNativePublished;
