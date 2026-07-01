@@ -157,8 +157,8 @@ export default async function CreatorProfilePage({
       {/* ── Content ── */}
       <div style={{ maxWidth: "620px", margin: "0 auto", padding: "0 24px 96px" }}>
 
-        {/* Avatar — slight overlap with banner bottom edge */}
-        <div style={{ marginTop: "-28px", marginBottom: "16px", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+        {/* Avatar — sits below banner with a gap */}
+        <div style={{ marginTop: "16px", marginBottom: "16px", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
           {profileImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={profileImageUrl} alt={brandName} style={{
