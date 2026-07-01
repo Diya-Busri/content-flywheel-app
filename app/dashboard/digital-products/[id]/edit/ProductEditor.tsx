@@ -7159,55 +7159,55 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       />
                     </div>
 
-                    {/* Sales page cover image upload */}
+                    {/* Sales page cover image */}
                     <div className="space-y-2 pt-2 border-t border-gray-100">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <Label className="text-xs font-medium text-gray-700">Sales page cover image</Label>
-                          <p className="text-xs text-gray-400 mt-0.5">Shown at the top of your public product page &amp; store</p>
-                        </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-8 gap-1.5 shrink-0 border-gray-200 text-xs"
-                          onClick={() => coverImageInputRef.current?.click()}
-                        >
-                          <Upload className="w-3.5 h-3.5" />
-                          Upload image
-                        </Button>
-                        <input
-                          ref={coverImageInputRef}
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) handleCoverImageUpload(f);
-                            e.target.value = "";
-                          }}
-                        />
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700">Sales page cover image</Label>
+                        <p className="text-xs text-gray-400 mt-0.5">Shown at the top of your public product page &amp; store</p>
                       </div>
+                      {/* Quick-pick buttons */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {marketingAssets.bookMockupUrl && (
+                          <Button type="button" size="sm" variant="outline"
+                            className="h-7 text-xs gap-1 border-gray-200"
+                            onClick={() => saveMarketingEdits({ coverThumbnailUrl: marketingAssets.bookMockupUrl })}>
+                            📚 Use Book Mockup
+                          </Button>
+                        )}
+                        {marketingAssets.thumbnailUrl && (
+                          <Button type="button" size="sm" variant="outline"
+                            className="h-7 text-xs gap-1 border-gray-200"
+                            onClick={() => saveMarketingEdits({ coverThumbnailUrl: marketingAssets.thumbnailUrl })}>
+                            ✨ Use AI Thumbnail
+                          </Button>
+                        )}
+                        <Button type="button" size="sm" variant="outline"
+                          className="h-7 text-xs gap-1 border-gray-200"
+                          onClick={() => setCoverThumbnailCaptureTrigger((n) => n + 1)}>
+                          🖼 Capture Cover Page
+                        </Button>
+                        <Button type="button" size="sm" variant="outline"
+                          className="h-7 text-xs gap-1 border-gray-200"
+                          onClick={() => coverImageInputRef.current?.click()}>
+                          <Upload className="w-3 h-3" /> Upload
+                        </Button>
+                        <input ref={coverImageInputRef} type="file" accept="image/*" className="hidden"
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleCoverImageUpload(f); e.target.value = ""; }} />
+                      </div>
+                      {/* Preview */}
                       {marketingAssets.coverThumbnailUrl ? (
                         <div className="relative rounded-lg overflow-hidden border border-gray-200">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={marketingAssets.coverThumbnailUrl} alt="Cover" className="w-full object-cover max-h-48" />
-                          <button
-                            type="button"
-                            onClick={() => saveMarketingEdits({ coverThumbnailUrl: null })}
-                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors text-xs"
-                          >
+                          <button type="button" onClick={() => saveMarketingEdits({ coverThumbnailUrl: null })}
+                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors text-xs">
                             ✕
                           </button>
                         </div>
                       ) : (
-                        <div
-                          className="rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 p-6 text-center cursor-pointer hover:border-orange-300 hover:bg-orange-50 transition-colors"
-                          onClick={() => coverImageInputRef.current?.click()}
-                        >
-                          <ImageIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                          <p className="text-xs text-gray-400">Click to upload a cover image</p>
-                          <p className="text-xs text-gray-300 mt-0.5">JPG, PNG, WEBP · max 5MB</p>
+                        <div className="rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 p-4 text-center">
+                          <ImageIcon className="w-6 h-6 text-gray-300 mx-auto mb-1" />
+                          <p className="text-xs text-gray-400">Pick an option above or upload your own</p>
                         </div>
                       )}
                     </div>
