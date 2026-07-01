@@ -86,7 +86,7 @@ import {
 } from "@/components/ui/select";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 import { EditorToolbar } from "./EditorToolbar";
-import { EditorAIPanel } from "./EditorAIPanel";
+import { EditorAIPanel, type DesignCommand } from "./EditorAIPanel";
 import { CoverPageEditor } from "./CoverPageEditor";
 import { BackCoverEditor } from "./BackCoverEditor";
 import { ContentPageEditor } from "./ContentPageEditor";
@@ -1777,6 +1777,67 @@ export default function ProductEditor({ productId }: { productId: string }) {
       });
     },
     [product?.designSettings, sections, pageBackgrounds, layoutSettings, placedElementsByPage, saveToServer]
+  );
+
+  // Handles design commands from the AI panel (e.g. "make all text black")
+  const handleAIDesignCommand = useCallback(
+    (cmd: DesignCommand) => {
+      if (cmd.type === "all_text_color" || cmd.type === "heading_color" || cmd.type === "body_color") {
+        const currentTextStyles = product?.designSettings?.textStyles ?? {};
+        const contentSectionIds = sections
+          .filter((s) => s.id !== "cover" && s.id !== "back")
+          .map((s) => s.id);
+        const nextTextStyles: Record<string, { title?: Record<string, string>; body?: Record<string, string>; blocks?: Record<string, string>[] }> = { ...currentTextStyles };
+        for (const sId of contentSectionIds) {
+          const existing = nextTextStyles[sId] ?? {};
+          if (cmd.type === "all_text_color") {
+            nextTextStyles[sId] = {
+              ...existing,
+              title: { ...(existing.title ?? {}), color: cmd.value },
+              body: { ...(existing.body ?? {}), color: cmd.value },
+            };
+          } else if (cmd.type === "heading_color") {
+            nextTextStyles[sId] = {
+              ...existing,
+              title: { ...(existing.title ?? {}), color: cmd.value },
+            };
+          } else {
+            nextTextStyles[sId] = {
+              ...existing,
+              body: { ...(existing.body ?? {}), color: cmd.value },
+            };
+          }
+        }
+        setProduct((p) =>
+          p
+            ? {
+                ...p,
+                designSettings: {
+                  ...p.designSettings,
+                  textStyles: nextTextStyles,
+                },
+              }
+            : p
+        );
+        saveToServer({
+          designSettings: {
+            ...product?.designSettings,
+            textStyles: nextTextStyles,
+          },
+        });
+      } else if (cmd.type === "accent_color") {
+        setGraphicsAccentColor(cmd.value);
+        saveToServer({
+          designSettings: {
+            ...product?.designSettings,
+            colors: { ...product?.designSettings?.colors, graphics: cmd.value },
+          },
+        });
+      } else if (cmd.type === "template") {
+        handleTemplateSelect(cmd.value);
+      }
+    },
+    [product, sections, saveToServer, handleTemplateSelect]
   );
 
   useEffect(() => {
@@ -5808,10 +5869,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     <Button type="button" size="sm" variant="outline" onClick={() => duplicateElement(selectedElement)} className="flex-1 border-gray-200 text-gray-700 hover:bg-gray-100 text-xs gap-1">
                       <Copy className="w-3.5 h-3.5" />Duplicate
                     </Button>
-                    <Button type="button" size="sm" variant="outline" onClick={() => bringToFront(selectedElement)} className="flex-1 border-gray-200 text-gray-700 hover:bg-gray-100 text-xs gap-1">
+                    <Button type="button" size="sm" variant="outline" onClick={() => bringToFront()} className="flex-1 border-gray-200 text-gray-700 hover:bg-gray-100 text-xs gap-1">
                       <ArrowUp className="w-3.5 h-3.5" />Forward
                     </Button>
-                    <Button type="button" size="sm" variant="outline" onClick={() => sendToBack(selectedElement)} className="flex-1 border-gray-200 text-gray-700 hover:bg-gray-100 text-xs gap-1">
+                    <Button type="button" size="sm" variant="outline" onClick={() => sendToBack()} className="flex-1 border-gray-200 text-gray-700 hover:bg-gray-100 text-xs gap-1">
                       <ArrowDown className="w-3.5 h-3.5" />Back
                     </Button>
                     <Button type="button" size="sm" variant="outline" onClick={() => deleteElement(selectedElement)} className="flex-1 border-red-200 text-red-600 hover:bg-red-50 text-xs gap-1">
@@ -7375,6 +7436,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     setPageOrientation(orientation);
                     saveToServer({ content: { sections, pageOrientation: orientation } });
                   }}
+                  onApplyDesignCommand={handleAIDesignCommand}
                 />
               </TabsContent>
               </div>

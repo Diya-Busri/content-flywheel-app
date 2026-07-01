@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import { Send, Loader2, Sparkles, CheckCircle2 } from "lucide-react";
+import { Send, Loader2, Sparkles, CheckCircle2, Paintbrush } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,26 +15,101 @@ type UpdateSectionAction = { type: "update_section"; sectionId: string; title?: 
 type ReplaceAllAction = { type: "replace_all"; sections: { title: string; content: string }[] };
 type Action = AddSectionAction | UpdateSectionAction | ReplaceAllAction;
 
+export type DesignCommand = {
+  type: "all_text_color" | "heading_color" | "body_color" | "accent_color" | "template";
+  value: string;
+};
+
 type LocalMessage = {
   role: "user" | "assistant";
   content: string;
   applied?: { count: number; titles: string[] };
+  designApplied?: boolean;
 };
 
 const WRITE_INTENT_RE =
   /\b(write|create|add|generate|fill|update|rewrite|replace|plan|structure|build|draft|make)\b.{0,50}\b(page|section|chapter|content|text|intro|introduction|outline|pages|sections|chapters|structure|layout|book|guide|template|workbook|worksheet|journal|planner|checklist|product)\b/i;
+
+const DESIGN_INTENT_RE =
+  /\b(change|make|set|turn|convert|switch)\b.{0,60}\b(text|colour|color|font|background|theme|dark|light|accent|heading|title|body)\b/i;
 
 const STARTER_CHIPS = [
   "Write an intro page",
   "Add 3 pages about this topic",
   "Plan out my whole product",
   "Rewrite page 1",
-  "How should I price this?",
+  "Make all text black",
   "Give me a TikTok hook",
 ];
 
+// Named colour map
+const COLOR_NAMES: Record<string, string> = {
+  black: "#000000", white: "#ffffff", red: "#dc2626", blue: "#2563eb",
+  green: "#16a34a", orange: "#f97316", purple: "#7c3aed", pink: "#ec4899",
+  teal: "#0d9488", gray: "#6b7280", grey: "#6b7280", yellow: "#eab308",
+  brown: "#92400e", navy: "#1e3a8a", gold: "#d97706", silver: "#9ca3af",
+  dark: "#1a1a1a", light: "#f9fafb",
+};
+
+function resolveColor(raw: string): string | null {
+  const lower = raw.toLowerCase().trim();
+  if (COLOR_NAMES[lower]) return COLOR_NAMES[lower];
+  if (/^#[0-9a-fA-F]{3,6}$/.test(raw.trim())) return raw.trim();
+  return null;
+}
+
+function parseDesignCommand(text: string): DesignCommand | null {
+  // "change/make/set * text * to black"
+  const textColorMatch = text.match(
+    /(?:change|make|set|turn|convert)\s+(?:the\s+)?(?:\w+\s+)?text\s+(?:on\s+\S+\s+pages?\s+)?(?:all\s+)?(?:to|into|all\s+to)?\s*(\w+)/i
+  );
+  if (textColorMatch) {
+    const color = resolveColor(textColorMatch[1]);
+    if (color) return { type: "all_text_color", value: color };
+  }
+
+  // "make all text black"
+  const allTextMatch = text.match(/make\s+(?:all\s+)?(?:the\s+)?text\s+(\w+)/i);
+  if (allTextMatch) {
+    const color = resolveColor(allTextMatch[1]);
+    if (color) return { type: "all_text_color", value: color };
+  }
+
+  // "text/font color to black"
+  const colorToMatch = text.match(/(?:text|font)\s+(?:color|colour)\s+(?:to|into)\s+(\w+)/i);
+  if (colorToMatch) {
+    const color = resolveColor(colorToMatch[1]);
+    if (color) return { type: "all_text_color", value: color };
+  }
+
+  // "heading/title color to X"
+  const headingMatch =
+    text.match(/(?:heading|title)s?\s+(?:color|colour)\s+(?:to\s+)?(\w+)/i) ||
+    text.match(/(?:change|make|set)\s+(?:the\s+)?(?:heading|title)s?\s+(\w+)/i);
+  if (headingMatch) {
+    const color = resolveColor(headingMatch[1]);
+    if (color) return { type: "heading_color", value: color };
+  }
+
+  // Template switches
+  const t = text.toLowerCase();
+  if (/dark\s*mode|dark\s*theme/.test(t)) return { type: "template", value: "bold" };
+  if (/light\s*mode|light\s*theme/.test(t)) return { type: "template", value: "minimal" };
+  if (/\bclassic\b/.test(t)) return { type: "template", value: "classic" };
+  if (/\belegant\b|\bluxury\b/.test(t)) return { type: "template", value: "elegant" };
+  if (/\bmodern\b/.test(t)) return { type: "template", value: "modern" };
+  if (/\bcreative\b|\bplayful\b/.test(t)) return { type: "template", value: "creative" };
+  if (/\bminimal\b/.test(t)) return { type: "template", value: "minimal" };
+
+  return null;
+}
+
 function isWriteIntent(text: string): boolean {
   return WRITE_INTENT_RE.test(text);
+}
+
+function isDesignIntent(text: string): boolean {
+  return DESIGN_INTENT_RE.test(text);
 }
 
 function applyActions(sections: Section[], actions: Action[]): Section[] {
@@ -56,7 +131,6 @@ function applyActions(sections: Section[], actions: Action[]): Section[] {
           : s
       );
     } else if (action.type === "replace_all") {
-      // Keep cover/back, replace content pages
       const cover = result.find((s) => s.id === "cover");
       const back = result.find((s) => s.id === "back");
       const newSections = action.sections.map((s, i) => ({
@@ -91,11 +165,13 @@ export function EditorAIPanel({
   sections,
   onSectionsChange,
   onOrientationChange,
+  onApplyDesignCommand,
 }: {
   productId: string;
   sections: Section[];
   onSectionsChange: (sections: Section[]) => void;
   onOrientationChange?: (orientation: "portrait" | "landscape") => void;
+  onApplyDesignCommand?: (cmd: DesignCommand) => void;
 }) {
   const { messages: coachMessages, sendMessage: sendCoach, isLoading: coachLoading } =
     useChatCoach("product-editor", { productId, coachMode: "content" });
@@ -204,9 +280,9 @@ export function EditorAIPanel({
     if (!value || isLoading) return;
     if (input) input.value = "";
 
-    addMessage({ role: "user", content: value });
-
     if (isWriteIntent(value)) {
+      // For write intents we manage the full conversation locally
+      addMessage({ role: "user", content: value });
       if (COLOURING_RE.test(value)) {
         setPendingInstruction(value);
         setPendingBookType("coloring");
@@ -216,22 +292,64 @@ export function EditorAIPanel({
       } else {
         await executeWrite(value, {});
       }
+    } else if (isDesignIntent(value)) {
+      // Try to handle design commands directly
+      addMessage({ role: "user", content: value });
+      const cmd = parseDesignCommand(value);
+      if (cmd && onApplyDesignCommand) {
+        onApplyDesignCommand(cmd);
+        const descriptions: Record<string, string> = {
+          all_text_color: `Changed all text colour to ${value.match(/\b(\w+)$/i)?.[1] ?? "the new colour"}`,
+          heading_color: `Updated heading colour`,
+          body_color: `Updated body text colour`,
+          accent_color: `Updated accent colour`,
+          template: `Switched to ${cmd.value} template`,
+        };
+        addMessage({ role: "assistant", content: `✅ Done! ${descriptions[cmd.type]}. The changes are live on your canvas.`, designApplied: true });
+      } else {
+        // Couldn't parse it locally — fall back to AI chat
+        // Don't add user message again; sendCoach handles it via sync
+        setDisplayMessages((prev) => [
+          ...prev.slice(0, -1), // remove the user msg we just added
+        ]);
+        sendCoach(value);
+      }
     } else {
+      // General Q&A — let coachMessages sync handle adding user + assistant messages
       sendCoach(value);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, executeWrite, addMessage, sendCoach]);
+  }, [isLoading, executeWrite, addMessage, sendCoach, onApplyDesignCommand]);
 
   // Sync coach messages into displayMessages
+  // - When length grows: add new messages
+  // - When content changes (streaming): update the last assistant message
   const prevCoachLenRef = useRef(0);
   useEffect(() => {
     if (coachMessages.length > prevCoachLenRef.current) {
+      // New messages arrived (user + initial empty assistant placeholder)
       const newMsgs = coachMessages.slice(prevCoachLenRef.current);
       setDisplayMessages((prev) => [
         ...prev,
         ...newMsgs.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
       ]);
       prevCoachLenRef.current = coachMessages.length;
+    } else if (coachMessages.length > 0 && prevCoachLenRef.current === coachMessages.length) {
+      // Same length but content changed — streaming update on the last message
+      const lastCoach = coachMessages[coachMessages.length - 1];
+      if (lastCoach.role === "assistant") {
+        setDisplayMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const updated = [...prev];
+          const lastDisplay = updated[updated.length - 1];
+          // Only update if this is the assistant placeholder we're streaming into
+          if (lastDisplay.role === "assistant" && lastDisplay.content !== lastCoach.content) {
+            updated[updated.length - 1] = { ...lastDisplay, content: lastCoach.content };
+            return updated;
+          }
+          return prev;
+        });
+      }
     }
   }, [coachMessages]);
 
@@ -248,7 +366,7 @@ export function EditorAIPanel({
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Style/orientation picker */}
+      {/* Style/orientation picker for colouring books */}
       {pendingInstruction && pendingBookType === "coloring" && (
         <div className="mx-4 mt-4 rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-3 shrink-0">
           <p className="text-sm font-medium text-orange-900">Choose page orientation</p>
@@ -289,6 +407,7 @@ export function EditorAIPanel({
           </Button>
         </div>
       )}
+
       {displayMessages.length === 0 && (
         <div className="px-4 pt-4 pb-2 space-y-3">
           <div className="flex items-center gap-2 text-orange-500">
@@ -296,7 +415,7 @@ export function EditorAIPanel({
             <p className="text-sm font-medium text-gray-900">AI Product Assistant</p>
           </div>
           <p className="text-xs text-gray-500">
-            Tell me what to write and I&apos;ll add it directly to your product. Or ask me anything about it.
+            Tell me what to write, or ask me to change design — I&apos;ll apply it directly.
           </p>
           <div className="flex flex-wrap gap-2 pt-1">
             {STARTER_CHIPS.map((label) => (
@@ -341,6 +460,12 @@ export function EditorAIPanel({
                   </ul>
                 </div>
               )}
+              {msg.designApplied && (
+                <div className="mt-1.5 max-w-[85%] rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 flex items-center gap-1.5">
+                  <Paintbrush className="w-3.5 h-3.5" />
+                  Design updated on canvas
+                </div>
+              )}
             </div>
           ))}
           <div ref={scrollRef} />
@@ -350,7 +475,7 @@ export function EditorAIPanel({
       <div className="p-3 border-t border-gray-200 flex gap-2 shrink-0">
         <Input
           ref={inputRef}
-          placeholder='e.g. "Write a page about budgeting tips"'
+          placeholder='e.g. "Make all text black" or "Write a budgeting page"'
           onKeyDown={handleKeyDown}
           disabled={isLoading}
           className="flex-1 text-sm"
