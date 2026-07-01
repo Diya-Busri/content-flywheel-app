@@ -8,8 +8,8 @@ import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, and, isNull } from "drizzle-orm";
 
-// Platform fee: 5% on all plans
-const PLATFORM_FEE_PERCENT = 5;
+// 2% platform fee on sales — transparent on pricing page, still far below competitors
+const PLATFORM_FEE_PERCENT = 2;
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";

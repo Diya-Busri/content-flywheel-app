@@ -34,7 +34,7 @@ export default function AnimatedHero() {
           </Link>
         </Button>
       </div>
-      <p className="text-sm text-muted-foreground pt-2">No per-sale fees · Cancel anytime</p>
+      <p className="text-sm text-muted-foreground pt-2">Just 2% on sales · Cancel anytime</p>
     </motion.div>
   );
 } 

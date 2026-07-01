@@ -164,7 +164,7 @@ export default function PricingPage() {
               </span>
             </h1>
             <p className="mx-auto mt-5 max-w-xl text-lg text-white/40">
-              No per-sale fees. No hidden charges. No extra tools to pay for.
+              Just 2% on sales. No hidden charges. No extra tools to pay for.
             </p>
 
             {/* Promo code */}
@@ -295,7 +295,7 @@ export default function PricingPage() {
                     )}
                   </motion.button>
 
-                  <p className="text-center text-xs text-white/20 mt-3">No per-sale fees. Cancel anytime.</p>
+                  <p className="text-center text-xs text-white/20 mt-3">2% on sales. Cancel anytime.</p>
                 </motion.div>
               );
             })}
