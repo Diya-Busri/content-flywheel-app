@@ -1783,47 +1783,43 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const handleAIDesignCommand = useCallback(
     (cmd: DesignCommand) => {
       if (cmd.type === "all_text_color" || cmd.type === "heading_color" || cmd.type === "body_color") {
-        const currentTextStyles = product?.designSettings?.textStyles ?? {};
-        const contentSectionIds = sections
-          .filter((s) => s.id !== "cover" && s.id !== "back")
-          .map((s) => s.id);
-        const nextTextStyles: Record<string, { title?: Record<string, string>; body?: Record<string, string>; blocks?: Record<string, string>[] }> = { ...currentTextStyles };
-        for (const sId of contentSectionIds) {
-          const existing = nextTextStyles[sId] ?? {};
-          if (cmd.type === "all_text_color") {
-            nextTextStyles[sId] = {
-              ...existing,
-              title: { ...(existing.title ?? {}), color: cmd.value },
-              body: { ...(existing.body ?? {}), color: cmd.value },
-            };
-          } else if (cmd.type === "heading_color") {
-            nextTextStyles[sId] = {
-              ...existing,
-              title: { ...(existing.title ?? {}), color: cmd.value },
-            };
-          } else {
-            nextTextStyles[sId] = {
-              ...existing,
-              body: { ...(existing.body ?? {}), color: cmd.value },
-            };
+        // Text colour on content pages is controlled by pageBackgrounds[i].pageTextColor.
+        // We also update textStyles for fine-grained per-element overrides.
+        const totalContentPages = Math.max(0, sections.length); // cover=0, back=last
+        setPageBackgrounds((prev) => {
+          const next = prev.length > 0 ? [...prev] : Array.from({ length: totalContentPages + 2 }, () => ({}));
+          // Pages 1..length-2 are content pages (0=cover, last=back)
+          for (let i = 1; i < next.length - 1; i++) {
+            next[i] = { ...next[i], pageTextColor: cmd.value };
           }
+          return next;
+        });
+
+        // Also update textStyles so per-element styling is consistent
+        const currentTextStyles = product?.designSettings?.textStyles ?? {};
+        const nextTextStyles: Record<string, { title?: Record<string, string>; body?: Record<string, string>; blocks?: Record<string, string>[] }> = { ...currentTextStyles };
+        for (const s of sections.filter((s) => s.id !== "cover" && s.id !== "back")) {
+          const existing = nextTextStyles[s.id] ?? {};
+          nextTextStyles[s.id] = {
+            ...existing,
+            title: { ...(existing.title ?? {}), color: cmd.value },
+            body: { ...(existing.body ?? {}), color: cmd.value },
+          };
         }
-        setProduct((p) =>
-          p
-            ? {
-                ...p,
-                designSettings: {
-                  ...p.designSettings,
-                  textStyles: nextTextStyles,
-                },
-              }
-            : p
-        );
-        saveToServer({
-          designSettings: {
-            ...product?.designSettings,
-            textStyles: nextTextStyles,
-          },
+
+        // Persist both — use queueMicrotask so state updates flush first
+        queueMicrotask(() => {
+          setPageBackgrounds((latest) => {
+            saveToServer({
+              designSettings: {
+                ...product?.designSettings,
+                textStyles: nextTextStyles,
+                pages: latest,
+                placedElementsByPage,
+              },
+            });
+            return latest;
+          });
         });
       } else if (cmd.type === "accent_color") {
         setGraphicsAccentColor(cmd.value);
@@ -1837,7 +1833,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         handleTemplateSelect(cmd.value);
       }
     },
-    [product, sections, saveToServer, handleTemplateSelect]
+    [product, sections, placedElementsByPage, saveToServer, handleTemplateSelect]
   );
 
   useEffect(() => {

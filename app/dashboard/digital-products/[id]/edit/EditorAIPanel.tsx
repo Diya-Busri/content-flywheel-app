@@ -277,7 +277,26 @@ export function EditorAIPanel({
     if (!value || isLoading) return;
     if (input) input.value = "";
 
-    if (isWriteIntent(value)) {
+    // Try design command FIRST — must happen before write-intent check because
+    // phrases like "make all text black" match both (write: make + text).
+    const designCmd = parseDesignCommand(value);
+    if (designCmd) {
+      addMessage({ role: "user", content: value });
+      if (onApplyDesignCommand) {
+        onApplyDesignCommand(designCmd);
+        const destWord = value.match(/\b([a-z]+)\s*[.!?]?\s*$/i)?.[1] ?? "the new colour";
+        const descriptions: Record<string, string> = {
+          all_text_color: `Changed all text colour to ${destWord}`,
+          heading_color: `Updated heading colour to ${destWord}`,
+          body_color: `Updated body text colour to ${destWord}`,
+          accent_color: `Updated accent colour to ${destWord}`,
+          template: `Switched to ${designCmd.value} template`,
+        };
+        addMessage({ role: "assistant", content: `✅ Done! ${descriptions[designCmd.type]}. The changes are live on your canvas.`, designApplied: true });
+      } else {
+        addMessage({ role: "assistant", content: "Design changes aren't available here." });
+      }
+    } else if (isWriteIntent(value)) {
       // For write intents we manage the full conversation locally
       addMessage({ role: "user", content: value });
       if (COLOURING_RE.test(value)) {
@@ -290,27 +309,12 @@ export function EditorAIPanel({
         await executeWrite(value, {});
       }
     } else if (isDesignIntent(value)) {
-      // Try to handle design commands directly
+      // Has design keywords but couldn't parse a specific command — give a helpful hint
       addMessage({ role: "user", content: value });
-      const cmd = parseDesignCommand(value);
-      if (cmd && onApplyDesignCommand) {
-        onApplyDesignCommand(cmd);
-        const destWord = value.match(/\b(\w+)\s*[.!?]?\s*$/i)?.[1] ?? "the new colour";
-        const descriptions: Record<string, string> = {
-          all_text_color: `Changed all text colour to ${destWord}`,
-          heading_color: `Updated heading colour to ${destWord}`,
-          body_color: `Updated body text colour to ${destWord}`,
-          accent_color: `Updated accent colour to ${destWord}`,
-          template: `Switched to ${cmd.value} template`,
-        };
-        addMessage({ role: "assistant", content: `✅ Done! ${descriptions[cmd.type]}. The changes are live on your canvas.`, designApplied: true });
-      } else {
-        // Couldn't parse this as a design command — show a helpful hint
-        addMessage({
-          role: "assistant",
-          content: `I couldn't figure out exactly what to change. Try something like:\n• "Make all text black"\n• "Change heading colour to blue"\n• "Switch to dark mode"\n\nOr use the Design tab to adjust colours manually.`,
-        });
-      }
+      addMessage({
+        role: "assistant",
+        content: `I couldn't figure out exactly what to change. Try something like:\n• "Make all text black"\n• "Change heading colour to blue"\n• "Switch to dark mode"\n\nOr use the Design tab to adjust colours manually.`,
+      });
     } else {
       // General Q&A — let coachMessages sync handle adding user + assistant messages
       sendCoach(value);
