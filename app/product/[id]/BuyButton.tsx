@@ -6,13 +6,18 @@ interface BuyButtonProps {
   productId: string;
   priceLabel: string;
   creatorUserId: string;
+  isFree?: boolean;
 }
 
-export function BuyButton({ productId, priceLabel, creatorUserId }: BuyButtonProps) {
+export function BuyButton({ productId, priceLabel, creatorUserId, isFree }: BuyButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [promoCode, setPromoCode] = useState("");
   const [promoOpen, setPromoOpen] = useState(false);
+  // Free product state
+  const [freeEmail, setFreeEmail] = useState("");
+  const [freeName, setFreeName] = useState("");
+  const [freeStatus, setFreeStatus] = useState<"idle" | "loading" | "success">("idle");
   const [promoValidating, setPromoValidating] = useState(false);
   const [promoResult, setPromoResult] = useState<{ discount: string; code: string } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
@@ -59,6 +64,83 @@ export function BuyButton({ productId, priceLabel, creatorUserId }: BuyButtonPro
       setLoading(false);
     }
   };
+
+  const handleFreeGet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!freeEmail.trim()) return;
+    setFreeStatus("loading");
+    try {
+      const res = await fetch("/api/email/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: freeEmail.trim(),
+          name: freeName.trim() || null,
+          userId: creatorUserId,
+          tags: ["free-product"],
+          leadMagnetProductId: productId,
+        }),
+      });
+      if (res.ok || res.status === 409) {
+        setFreeStatus("success");
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setError((d as { error?: string }).error ?? "Something went wrong");
+        setFreeStatus("idle");
+      }
+    } catch {
+      setError("Failed to connect. Please try again.");
+      setFreeStatus("idle");
+    }
+  };
+
+  // Free product flow — collect email and deliver via lead magnet system
+  if (isFree) {
+    if (freeStatus === "success") {
+      return (
+        <div style={{ padding: "20px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "14px", textAlign: "center" }}>
+          <div style={{ fontSize: "32px", marginBottom: "8px" }}>🎉</div>
+          <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: "15px", color: "#15803d" }}>Check your inbox!</p>
+          <p style={{ margin: 0, fontSize: "13px", color: "#16a34a" }}>Your download link is on its way to {freeEmail}.</p>
+        </div>
+      );
+    }
+    return (
+      <form onSubmit={handleFreeGet} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <input
+          type="text"
+          placeholder="Your name (optional)"
+          value={freeName}
+          onChange={(e) => setFreeName(e.target.value)}
+          style={{ padding: "11px 14px", borderRadius: "10px", border: "1.5px solid #e5e7eb", fontSize: "14px", color: "#111827", outline: "none" }}
+        />
+        <input
+          type="email"
+          required
+          placeholder="your@email.com"
+          value={freeEmail}
+          onChange={(e) => setFreeEmail(e.target.value)}
+          style={{ padding: "11px 14px", borderRadius: "10px", border: "1.5px solid #e5e7eb", fontSize: "14px", color: "#111827", outline: "none" }}
+        />
+        <button
+          type="submit"
+          disabled={freeStatus === "loading"}
+          style={{
+            width: "100%", padding: "14px", borderRadius: "12px", justifyContent: "center",
+            background: "linear-gradient(135deg,#f97316 0%,#ea6c0a 100%)",
+            color: "#fff", fontSize: "16px", fontWeight: 700, border: "none",
+            cursor: freeStatus === "loading" ? "not-allowed" : "pointer",
+            boxShadow: "0 4px 20px rgba(249,115,22,0.35)",
+            opacity: freeStatus === "loading" ? 0.8 : 1,
+          }}
+        >
+          {freeStatus === "loading" ? "Sending…" : "Get it free — send to my email →"}
+        </button>
+        {error && <p style={{ margin: 0, fontSize: "13px", color: "#dc2626" }}>{error}</p>}
+        <p style={{ margin: 0, fontSize: "11px", color: "#9ca3af", textAlign: "center" }}>No spam. Unsubscribe any time.</p>
+      </form>
+    );
+  }
 
   return (
     <div>

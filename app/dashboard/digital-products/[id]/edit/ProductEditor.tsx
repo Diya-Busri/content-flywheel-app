@@ -4187,22 +4187,24 @@ export default function ProductEditor({ productId }: { productId: string }) {
     if (!productId) return;
     setCoverCapturing(true);
     const previousTab = activeEditorTab;
+    const previousPageIndex = currentPageIndex;
     try {
-      // Switch to content tab so canvas is visible, then navigate to cover page
+      // Switch to content tab and navigate to the cover page (index 0)
       setActiveEditorTab("content");
       setCurrentPageIndex(0);
-      await new Promise((r) => setTimeout(r, 900));
-      const el = (document.querySelector('[data-page-type="cover"]') as HTMLElement | null);
+      // Wait for React to render the canvas with the cover page
+      await new Promise((r) => setTimeout(r, 1200));
+      // Capture the main editor canvas — it always shows the current page
+      const el = canvasContainerRef.current;
       if (!el) {
         toast({ title: "Canvas not ready", description: "Please try again.", variant: "destructive" });
         return;
       }
-      el.scrollIntoView({ block: "center", behavior: "instant" });
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 300));
       const canvas = await html2canvas(el, {
         useCORS: true, allowTaint: true, scale: 1.5, backgroundColor: "#ffffff", logging: false,
         width: el.offsetWidth, height: el.offsetHeight,
-        windowWidth: el.offsetWidth, windowHeight: el.offsetHeight,
+        windowWidth: document.documentElement.clientWidth, windowHeight: document.documentElement.clientHeight,
       });
       const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.82));
       const fd = new FormData();
@@ -4221,31 +4223,29 @@ export default function ProductEditor({ productId }: { productId: string }) {
     } catch (err) {
       toast({ title: "Capture failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
     } finally {
+      setCurrentPageIndex(previousPageIndex);
       setActiveEditorTab(previousTab);
       setCoverCapturing(false);
     }
-  }, [productId, activeEditorTab, saveMarketingEdits, toast]);
+  }, [productId, activeEditorTab, currentPageIndex, saveMarketingEdits, toast]);
 
   const handleCapturePreviewPage = useCallback(async () => {
     if (!productId) return;
     setPreviewCapturing(true);
-    // Remember which tab we're on so we can restore it after capture
     const previousTab = activeEditorTab;
     try {
-      // Switch to content tab so the canvas is fully visible and rendered
+      // Switch to content tab so the main canvas is visible — it already shows currentPageIndex
       setActiveEditorTab("content");
-      // Wait for the tab switch + React re-render + any images to paint
-      await new Promise((r) => setTimeout(r, 800));
+      // Wait for tab switch + React re-render + images to paint
+      await new Promise((r) => setTimeout(r, 1200));
 
-      // Find the specific page element — scroll it into view first
-      const el = document.getElementById(`preview-page-${currentPageIndex}`) as HTMLElement | null;
+      // Capture the main editor canvas — always shows the current page
+      const el = canvasContainerRef.current;
       if (!el) {
-        toast({ title: "Canvas not ready", description: "Could not find the page element. Try again.", variant: "destructive" });
+        toast({ title: "Canvas not ready", description: "Please try again.", variant: "destructive" });
         return;
       }
-      el.scrollIntoView({ block: "center", behavior: "instant" });
-      // Extra wait after scroll for images/fonts to fully paint
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 300));
 
       const canvas = await html2canvas(el, {
         useCORS: true,
@@ -4253,11 +4253,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
         scale: 1.5,
         backgroundColor: "#ffffff",
         logging: false,
-        // Capture the element at its natural size, ignoring any CSS scale transform
         width: el.offsetWidth,
         height: el.offsetHeight,
-        windowWidth: el.offsetWidth,
-        windowHeight: el.offsetHeight,
+        windowWidth: document.documentElement.clientWidth,
+        windowHeight: document.documentElement.clientHeight,
       });
       const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.82));
       const fd = new FormData();

@@ -14,6 +14,9 @@ import ViewTracker from "./ViewTracker";
 import { ProductCoverSection } from "./ProductCoverSection";
 import { ProductInfoTabs } from "./ProductInfoTabs";
 import { FaqSection } from "./FaqSection";
+import { EmailCaptureWidget } from "./EmailCaptureWidget";
+import { ExitIntentModal } from "./ExitIntentModal";
+import { SalePriceCountdown } from "./SalePriceCountdown";
 
 type MarketingAssets = {
   productTitle?: string;
@@ -290,6 +293,11 @@ export default async function ProductSalesPage({
           {/* FAQ */}
           <FaqSection customFaqs={ma.faqs} />
 
+          {/* Email capture — shown to non-buyers to grow creator's list */}
+          {!purchased && (
+            <EmailCaptureWidget creatorUserId={product.userId} />
+          )}
+
           {/* Hashtags */}
           {hashtags.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -419,6 +427,9 @@ export default async function ProductSalesPage({
                     {hasSalePrice ? salePriceLabel : nativePriceLabel}
                   </span>
                   <span style={{ fontSize: "14px", color: "#9ca3af", marginLeft: "6px" }}>one-time</span>
+                  {hasSalePrice && (
+                    <div><SalePriceCountdown productId={product.id} durationHours={24} /></div>
+                  )}
                 </div>
                 <BuyButton productId={product.id} priceLabel={hasSalePrice ? salePriceLabel! : nativePriceLabel!} creatorUserId={product.userId} />
               </>
@@ -562,6 +573,15 @@ export default async function ProductSalesPage({
           </div>
         </div>
       )}
+    {/* Exit-intent modal — only for non-buyers on paid products */}
+    {!purchased && isNativePublished && (
+      <ExitIntentModal
+        productId={product.id}
+        creatorUserId={product.userId}
+        priceLabel={hasSalePrice ? salePriceLabel! : nativePriceLabel!}
+        discountPercent={10}
+      />
+    )}
     </main>
   );
 }
