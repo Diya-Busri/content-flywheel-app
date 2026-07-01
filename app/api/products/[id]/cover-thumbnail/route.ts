@@ -87,14 +87,14 @@ export async function POST(
         }
       }
 
-      if (!uploadResult.error) {
-        const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-        url = urlData.publicUrl;
-      } else {
-        url = `data:image/png;base64,${base64}`;
+      if (uploadResult.error) {
+        console.error("[cover-thumbnail] Supabase upload failed:", uploadResult.error);
+        return NextResponse.json({ error: "Failed to upload thumbnail to storage" }, { status: 500 });
       }
+      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      url = urlData.publicUrl;
     } else {
-      url = `data:image/png;base64,${base64}`;
+      return NextResponse.json({ error: "Storage not configured" }, { status: 503 });
     }
 
     const currentAssets = (product.marketingAssets ?? {}) as Record<string, unknown>;
