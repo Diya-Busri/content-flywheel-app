@@ -95,247 +95,149 @@ const FAKE_PRODUCTS = [
   { id: "3", title: "Social Media Masterclass", desc: "Grow from 0 to 10k followers", price: "£47" },
 ];
 
-// ─── Live Preview ────────────────────────────────────────────────────────────
+// ─── Theme config (mirrors /c/[userId]/page.tsx) ─────────────────────────────
 
-function StorePreview({
-  settings,
-  brandName,
-}: {
-  settings: StoreSettings;
-  brandName: string;
-}) {
-  const theme = THEMES.find((t) => t.key === settings.theme) ?? THEMES[0];
-  const accent = settings.accentColor || theme.accent;
-  const textColor = theme.text;
-  const cardBg = theme.cardBg;
-  const bg = theme.bg;
+const THEME_CONFIG: Record<string, { page: string; card: string; cardBorder: string; text: string; subText: string; mutedText: string; isDark: boolean }> = {
+  warm:    { page: "#FAFAF8", card: "#FFFFFF", cardBorder: "#F0EDE8", text: "#111111", subText: "#555555", mutedText: "#999999", isDark: false },
+  dark:    { page: "#0A0A0A", card: "#141414", cardBorder: "#222222", text: "#F5F5F5", subText: "rgba(255,255,255,0.55)", mutedText: "rgba(255,255,255,0.25)", isDark: true },
+  light:   { page: "#FFFFFF", card: "#F8F8F8", cardBorder: "#EFEFEF", text: "#111111", subText: "#555555", mutedText: "#AAAAAA", isDark: false },
+  minimal: { page: "#F5F5F5", card: "#FFFFFF", cardBorder: "#E8E8E8", text: "#111111", subText: "#666666", mutedText: "#AAAAAA", isDark: false },
+  bold:    { page: "#0D0D1A", card: "#13131F", cardBorder: "#1F1F2E", text: "#FFFFFF", subText: "rgba(255,255,255,0.6)", mutedText: "rgba(255,255,255,0.25)", isDark: true },
+};
 
-  const hasBanner = settings.bannerImageUrl || settings.bannerGradient;
-  const bannerStyle: React.CSSProperties = settings.bannerImageUrl
-    ? { backgroundImage: `url(${settings.bannerImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
-    : settings.bannerGradient
-    ? { background: `linear-gradient(${settings.bannerGradient})` }
-    : { background: `linear-gradient(${GRADIENTS[0].value})` };
+// ─── Live Preview ─────────────────────────────────────────────────────────────
 
-  const initials = brandName
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+function StorePreview({ settings, brandName }: { settings: StoreSettings; brandName: string }) {
+  const t = THEME_CONFIG[settings.theme] ?? THEME_CONFIG.warm;
+  const accent = settings.accentColor || "#f97316";
 
+  const initials = brandName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const isList = settings.layout === "list";
   const isFeatured = settings.layout === "featured";
 
+  // Banner background
+  let bannerBg: string;
+  if (settings.bannerImageUrl) {
+    bannerBg = `url(${settings.bannerImageUrl}) center/cover no-repeat`;
+  } else if (settings.bannerGradient) {
+    bannerBg = `linear-gradient(${settings.bannerGradient})`;
+  } else {
+    bannerBg = t.isDark
+      ? `radial-gradient(ellipse at 60% 0%, ${accent}55 0%, transparent 70%), radial-gradient(ellipse at 20% 100%, ${accent}33 0%, transparent 60%), ${t.page}`
+      : `radial-gradient(ellipse at 60% 0%, ${accent}44 0%, transparent 65%), linear-gradient(180deg, ${accent}18 0%, transparent 100%)`;
+  }
+
   return (
-    <div
-      style={{
-        background: bg,
-        minHeight: "100%",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-        color: textColor,
-        borderRadius: "12px",
-        overflow: "hidden",
-      }}
-    >
+    <div style={{ background: t.page, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", overflow: "hidden", minHeight: "600px" }}>
+
       {/* Banner */}
-      <div style={{ height: "100px", ...bannerStyle, position: "relative" }}>
-        {!hasBanner && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background: `linear-gradient(135deg, ${accent}aa, ${accent}55)`,
-            }}
-          />
-        )}
+      <div style={{ position: "relative", height: "120px", overflow: "hidden" }}>
+        <div style={{ width: "100%", height: "100%", background: bannerBg }} />
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "48px", background: `linear-gradient(to bottom, transparent, ${t.page})` }} />
       </div>
 
-      {/* Profile area */}
-      <div style={{ padding: "0 16px 16px", marginTop: "-32px" }}>
-        {settings.profileImageUrl ? (
-          <img
-            src={settings.profileImageUrl}
-            alt="Profile"
-            style={{
-              width: "64px",
-              height: "64px",
-              borderRadius: "50%",
-              border: `3px solid ${bg}`,
-              objectFit: "cover",
-              display: "block",
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              width: "64px",
-              height: "64px",
-              borderRadius: "50%",
-              background: accent,
-              border: `3px solid ${bg}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "20px",
-              fontWeight: "800",
-              color: "#fff",
-            }}
-          >
-            {initials}
-          </div>
-        )}
+      {/* Content */}
+      <div style={{ padding: "0 16px 32px" }}>
 
-        <h2
-          style={{
-            margin: "10px 0 4px",
-            fontSize: "16px",
-            fontWeight: "800",
-            color: textColor,
-          }}
-        >
-          {brandName}
-        </h2>
+        {/* Avatar */}
+        <div style={{ marginTop: "-36px", marginBottom: "12px" }}>
+          {settings.profileImageUrl ? (
+            <img src={settings.profileImageUrl} alt="" style={{ width: "64px", height: "64px", borderRadius: "50%", objectFit: "cover", border: `3px solid ${t.page}`, boxShadow: `0 0 0 1px ${t.cardBorder}` }} />
+          ) : (
+            <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: `linear-gradient(135deg, ${accent}, ${accent}bb)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", fontWeight: "800", color: "#fff", border: `3px solid ${t.page}`, boxShadow: `0 0 0 1px ${t.cardBorder}, 0 4px 16px ${accent}44` }}>
+              {initials}
+            </div>
+          )}
+        </div>
 
+        {/* Name */}
+        <h2 style={{ margin: "0 0 4px", fontSize: "17px", fontWeight: "800", color: t.text, letterSpacing: "-0.3px" }}>{brandName}</h2>
+
+        {/* Bio */}
         {settings.bio && (
-          <p
-            style={{
-              margin: "0 0 10px",
-              fontSize: "11px",
-              color: textColor === "#ffffff" ? "rgba(255,255,255,0.6)" : "#6b7280",
-              lineHeight: "1.5",
-            }}
-          >
-            {settings.bio}
-          </p>
+          <p style={{ margin: "0 0 12px", fontSize: "11px", color: t.subText, lineHeight: "1.5" }}>{settings.bio}</p>
         )}
 
         {/* Subscribe button */}
-        <div
-          style={{
-            display: "inline-block",
-            padding: "6px 14px",
-            borderRadius: "8px",
-            background: accent,
-            color: "#ffffff",
-            fontSize: "11px",
-            fontWeight: "700",
-            marginBottom: "16px",
-          }}
-        >
-          ✉️ Subscribe for updates
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px", background: accent, color: "#fff", fontSize: "11px", fontWeight: "700", marginBottom: "24px", boxShadow: `0 3px 10px ${accent}44` }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          Subscribe for updates
         </div>
 
-        {/* Products */}
-        <p
-          style={{
-            fontSize: "9px",
-            fontWeight: "700",
-            color: textColor === "#ffffff" ? "rgba(255,255,255,0.4)" : "#9ca3af",
-            textTransform: "uppercase",
-            letterSpacing: "0.1em",
-            margin: "0 0 8px",
-          }}
-        >
-          Products
-        </p>
+        {/* Products label */}
+        <p style={{ margin: "0 0 10px", fontSize: "9px", fontWeight: "700", color: t.mutedText, textTransform: "uppercase", letterSpacing: "0.1em" }}>Products</p>
 
-        {/* Grid layout */}
+        {/* Grid */}
         {!isList && !isFeatured && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
             {FAKE_PRODUCTS.map((p) => (
-              <div
-                key={p.id}
-                style={{
-                  background: cardBg,
-                  borderRadius: "8px",
-                  padding: "10px",
-                  border: `1px solid ${textColor === "#ffffff" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)"}`,
-                }}
-              >
-                <p style={{ margin: "0 0 3px", fontSize: "10px", fontWeight: "700", color: textColor }}>{p.title}</p>
-                <p style={{ margin: "0 0 6px", fontSize: "9px", color: textColor === "#ffffff" ? "rgba(255,255,255,0.5)" : "#9ca3af" }}>{p.desc}</p>
-                <span style={{ fontSize: "11px", fontWeight: "800", color: accent }}>{p.price}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* List layout */}
-        {isList && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {FAKE_PRODUCTS.map((p) => (
-              <div
-                key={p.id}
-                style={{
-                  background: cardBg,
-                  borderRadius: "8px",
-                  padding: "10px 14px",
-                  border: `1px solid ${textColor === "#ffffff" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)"}`,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <p style={{ margin: "0 0 2px", fontSize: "11px", fontWeight: "700", color: textColor }}>{p.title}</p>
-                  <p style={{ margin: 0, fontSize: "9px", color: textColor === "#ffffff" ? "rgba(255,255,255,0.5)" : "#9ca3af" }}>{p.desc}</p>
+              <div key={p.id} style={{ background: t.card, borderRadius: "10px", overflow: "hidden", border: `1px solid ${t.cardBorder}` }}>
+                <div style={{ width: "100%", aspectRatio: "1/1", background: `linear-gradient(135deg, ${accent}18, ${accent}38)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px" }}>📄</div>
+                <div style={{ padding: "8px 10px 10px" }}>
+                  <p style={{ margin: "0 0 2px", fontSize: "10px", fontWeight: "700", color: t.text, lineHeight: "1.3" }}>{p.title}</p>
+                  <p style={{ margin: "0 0 6px", fontSize: "9px", color: t.subText }}>{p.desc}</p>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "12px", fontWeight: "800", color: accent }}>{p.price}</span>
+                    <div style={{ fontSize: "9px", fontWeight: "700", color: "#fff", background: accent, padding: "3px 8px", borderRadius: "6px" }}>Buy</div>
+                  </div>
                 </div>
-                <span style={{ fontSize: "12px", fontWeight: "800", color: accent, flexShrink: 0, marginLeft: "8px" }}>{p.price}</span>
               </div>
             ))}
           </div>
         )}
 
-        {/* Featured layout */}
+        {/* List */}
+        {isList && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
+            {FAKE_PRODUCTS.map((p) => (
+              <div key={p.id} style={{ background: t.card, borderRadius: "10px", border: `1px solid ${t.cardBorder}`, display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px" }}>
+                <div style={{ width: "40px", height: "40px", borderRadius: "7px", background: `linear-gradient(135deg, ${accent}20, ${accent}40)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", flexShrink: 0 }}>📄</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: "0 0 1px", fontSize: "10px", fontWeight: "700", color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</p>
+                  <p style={{ margin: 0, fontSize: "9px", color: t.subText }}>{p.desc}</p>
+                </div>
+                <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "12px", fontWeight: "800", color: accent }}>{p.price}</span>
+                  <div style={{ width: "20px", height: "20px", borderRadius: "50%", background: `${accent}18`, display: "flex", alignItems: "center", justifyContent: "center", color: accent, fontSize: "10px" }}>→</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Featured */}
         {isFeatured && (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {/* First product — large */}
-            <div
-              style={{
-                background: cardBg,
-                borderRadius: "10px",
-                padding: "14px",
-                border: `1px solid ${accent}40`,
-                borderLeft: `3px solid ${accent}`,
-              }}
-            >
-              <p style={{ margin: "0 0 4px", fontSize: "13px", fontWeight: "800", color: textColor }}>{FAKE_PRODUCTS[0].title}</p>
-              <p style={{ margin: "0 0 8px", fontSize: "10px", color: textColor === "#ffffff" ? "rgba(255,255,255,0.5)" : "#9ca3af" }}>{FAKE_PRODUCTS[0].desc}</p>
-              <div
-                style={{
-                  display: "inline-block",
-                  padding: "4px 10px",
-                  borderRadius: "6px",
-                  background: accent,
-                  color: "#fff",
-                  fontSize: "10px",
-                  fontWeight: "700",
-                }}
-              >
-                Get it for {FAKE_PRODUCTS[0].price}
+            <div style={{ background: t.card, borderRadius: "12px", overflow: "hidden", border: `1px solid ${t.cardBorder}`, boxShadow: `0 4px 20px ${accent}18` }}>
+              <div style={{ height: "90px", background: `linear-gradient(135deg, ${accent}30, ${accent}60)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px" }}>📄</div>
+              <div style={{ padding: "12px 14px" }}>
+                <span style={{ display: "inline-block", fontSize: "8px", fontWeight: "700", color: accent, background: `${accent}18`, padding: "2px 7px", borderRadius: "20px", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Featured</span>
+                <p style={{ margin: "0 0 4px", fontSize: "12px", fontWeight: "800", color: t.text }}>{FAKE_PRODUCTS[0].title}</p>
+                <p style={{ margin: "0 0 10px", fontSize: "9px", color: t.subText }}>{FAKE_PRODUCTS[0].desc}</p>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "14px", fontWeight: "800", color: accent }}>{FAKE_PRODUCTS[0].price}</span>
+                  <div style={{ padding: "5px 12px", borderRadius: "7px", background: accent, color: "#fff", fontSize: "9px", fontWeight: "700" }}>Get it →</div>
+                </div>
               </div>
             </div>
-            {/* Remaining in grid */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
               {FAKE_PRODUCTS.slice(1).map((p) => (
-                <div
-                  key={p.id}
-                  style={{
-                    background: cardBg,
-                    borderRadius: "8px",
-                    padding: "10px",
-                    border: `1px solid ${textColor === "#ffffff" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)"}`,
-                  }}
-                >
-                  <p style={{ margin: "0 0 3px", fontSize: "10px", fontWeight: "700", color: textColor }}>{p.title}</p>
-                  <p style={{ margin: "0 0 6px", fontSize: "9px", color: textColor === "#ffffff" ? "rgba(255,255,255,0.5)" : "#9ca3af" }}>{p.desc}</p>
-                  <span style={{ fontSize: "11px", fontWeight: "800", color: accent }}>{p.price}</span>
+                <div key={p.id} style={{ background: t.card, borderRadius: "10px", overflow: "hidden", border: `1px solid ${t.cardBorder}` }}>
+                  <div style={{ width: "100%", aspectRatio: "1/1", background: `linear-gradient(135deg, ${accent}18, ${accent}38)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>📄</div>
+                  <div style={{ padding: "8px 10px 10px" }}>
+                    <p style={{ margin: "0 0 3px", fontSize: "10px", fontWeight: "700", color: t.text, lineHeight: "1.3" }}>{p.title}</p>
+                    <span style={{ fontSize: "11px", fontWeight: "800", color: accent }}>{p.price}</span>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         )}
+
+        {/* Footer */}
+        <p style={{ textAlign: "center", marginTop: "24px", fontSize: "9px", color: t.mutedText }}>
+          Powered by <span style={{ color: accent, fontWeight: "700" }}>Content Flywheel</span>
+        </p>
       </div>
     </div>
   );
