@@ -4223,8 +4223,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
     if (!productId) return;
     setPreviewCapturing(true);
     try {
-      // Capture whatever content page is currently visible in the editor canvas
-      const el = canvasContainerRef.current;
+      // Target the specific current page by its ID — avoids capturing page 0 when on a later page
+      const el = (document.getElementById(`preview-page-${currentPageIndex}`) as HTMLElement | null)
+        ?? canvasContainerRef.current;
       if (!el) {
         toast({ title: "Canvas not ready", description: "Please switch to the Content tab first.", variant: "destructive" });
         return;
@@ -4249,7 +4250,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     } finally {
       setPreviewCapturing(false);
     }
-  }, [productId, saveMarketingEdits, toast]);
+  }, [productId, currentPageIndex, saveMarketingEdits, toast]);
 
   const hasDalleThumbnail = !!marketingAssets.thumbnailUrl;
   const effectiveOrientation = (marketingAssets as { thumbnailOrientation?: "horizontal" | "vertical" }).thumbnailOrientation ?? thumbnailOrientation;
