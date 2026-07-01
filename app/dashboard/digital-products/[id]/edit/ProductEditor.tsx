@@ -4186,19 +4186,25 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const handleCaptureCoverPage = useCallback(async () => {
     if (!productId) return;
     setCoverCapturing(true);
+    const previousTab = activeEditorTab;
     try {
-      // Navigate to cover page and wait for render
+      // Switch to content tab so canvas is visible, then navigate to cover page
+      setActiveEditorTab("content");
       setCurrentPageIndex(0);
       await new Promise((r) => setTimeout(r, 900));
-      // Target the actual cover page element, not the whole editor canvas
-      const el = (document.querySelector('[data-page-type="cover"]') as HTMLElement | null)
-        ?? canvasContainerRef.current;
+      const el = (document.querySelector('[data-page-type="cover"]') as HTMLElement | null);
       if (!el) {
-        toast({ title: "Canvas not ready", description: "Please switch to the Content tab and try again.", variant: "destructive" });
+        toast({ title: "Canvas not ready", description: "Please try again.", variant: "destructive" });
         return;
       }
-      const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 1.5, backgroundColor: "#ffffff", logging: false });
-      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.80));
+      el.scrollIntoView({ block: "center", behavior: "instant" });
+      await new Promise((r) => setTimeout(r, 400));
+      const canvas = await html2canvas(el, {
+        useCORS: true, allowTaint: true, scale: 1.5, backgroundColor: "#ffffff", logging: false,
+        width: el.offsetWidth, height: el.offsetHeight,
+        windowWidth: el.offsetWidth, windowHeight: el.offsetHeight,
+      });
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.82));
       const fd = new FormData();
       fd.append("file", blob, "cover.jpg");
       const res = await fetch(`/api/products/${productId}/cover-thumbnail`, { method: "POST", body: fd });
@@ -4215,23 +4221,45 @@ export default function ProductEditor({ productId }: { productId: string }) {
     } catch (err) {
       toast({ title: "Capture failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
     } finally {
+      setActiveEditorTab(previousTab);
       setCoverCapturing(false);
     }
-  }, [productId, saveMarketingEdits, toast]);
+  }, [productId, activeEditorTab, saveMarketingEdits, toast]);
 
   const handleCapturePreviewPage = useCallback(async () => {
     if (!productId) return;
     setPreviewCapturing(true);
+    // Remember which tab we're on so we can restore it after capture
+    const previousTab = activeEditorTab;
     try {
-      // Target the specific current page by its ID — avoids capturing page 0 when on a later page
-      const el = (document.getElementById(`preview-page-${currentPageIndex}`) as HTMLElement | null)
-        ?? canvasContainerRef.current;
+      // Switch to content tab so the canvas is fully visible and rendered
+      setActiveEditorTab("content");
+      // Wait for the tab switch + React re-render + any images to paint
+      await new Promise((r) => setTimeout(r, 800));
+
+      // Find the specific page element — scroll it into view first
+      const el = document.getElementById(`preview-page-${currentPageIndex}`) as HTMLElement | null;
       if (!el) {
-        toast({ title: "Canvas not ready", description: "Please switch to the Content tab first.", variant: "destructive" });
+        toast({ title: "Canvas not ready", description: "Could not find the page element. Try again.", variant: "destructive" });
         return;
       }
-      const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 1.5, backgroundColor: "#ffffff", logging: false });
-      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.80));
+      el.scrollIntoView({ block: "center", behavior: "instant" });
+      // Extra wait after scroll for images/fonts to fully paint
+      await new Promise((r) => setTimeout(r, 500));
+
+      const canvas = await html2canvas(el, {
+        useCORS: true,
+        allowTaint: true,
+        scale: 1.5,
+        backgroundColor: "#ffffff",
+        logging: false,
+        // Capture the element at its natural size, ignoring any CSS scale transform
+        width: el.offsetWidth,
+        height: el.offsetHeight,
+        windowWidth: el.offsetWidth,
+        windowHeight: el.offsetHeight,
+      });
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.82));
       const fd = new FormData();
       fd.append("file", blob, "preview.jpg");
       const res = await fetch(`/api/products/${productId}/preview-thumbnail`, { method: "POST", body: fd });
@@ -4248,9 +4276,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
     } catch (err) {
       toast({ title: "Capture failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
     } finally {
+      // Restore the original tab
+      setActiveEditorTab(previousTab);
       setPreviewCapturing(false);
     }
-  }, [productId, currentPageIndex, saveMarketingEdits, toast]);
+  }, [productId, currentPageIndex, activeEditorTab, saveMarketingEdits, toast]);
 
   const hasDalleThumbnail = !!marketingAssets.thumbnailUrl;
   const effectiveOrientation = (marketingAssets as { thumbnailOrientation?: "horizontal" | "vertical" }).thumbnailOrientation ?? thumbnailOrientation;

@@ -111,6 +111,13 @@ export function BuyButton({ productId, priceLabel, creatorUserId }: BuyButtonPro
       </div>
 
       {error && <p style={{ margin: "8px 0 0", fontSize: "13px", color: "#dc2626" }}>{error}</p>}
+
+      {/* Money-back guarantee */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", marginTop: "14px", padding: "10px 14px", borderRadius: "10px", background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+        <span style={{ fontSize: "16px" }}>🛡️</span>
+        <span style={{ fontSize: "12px", fontWeight: 600, color: "#15803d" }}>30-day money-back guarantee</span>
+      </div>
+
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );

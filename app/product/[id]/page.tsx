@@ -13,6 +13,7 @@ import { ShareButtons } from "./ShareButtons";
 import ViewTracker from "./ViewTracker";
 import { ProductCoverSection } from "./ProductCoverSection";
 import { ProductInfoTabs } from "./ProductInfoTabs";
+import { FaqSection } from "./FaqSection";
 
 type MarketingAssets = {
   productTitle?: string;
@@ -33,6 +34,7 @@ type MarketingAssets = {
   comingSoon?: boolean;
   uploadedFileUrl?: string | null;
   previewPageUrl?: string | null;
+  faqs?: Array<{ q: string; a: string }>;
 };
 
 type ProductContent = {
@@ -244,6 +246,9 @@ export default async function ProductSalesPage({
             descParagraphs={descParagraphs}
             testimonials={ma.testimonials}
           />
+
+          {/* FAQ */}
+          <FaqSection customFaqs={ma.faqs} />
 
           {/* Hashtags */}
           {hashtags.length > 0 && (
