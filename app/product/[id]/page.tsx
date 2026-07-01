@@ -173,6 +173,43 @@ export default async function ProductSalesPage({
     ? fullDescription.split(/\n\n+/).filter(Boolean)
     : [];
 
+  // Render a single paragraph — detects " - item - item" bullet patterns
+  function renderDescBlock(para: string, i: number) {
+    const clean = para.replace(/\*\*/g, "").trim();
+    // Split on newline bullets
+    if (/\n\s*[-•]\s/.test(clean)) {
+      const lines = clean.split(/\n/).map((l) => l.trim()).filter(Boolean);
+      const intro = lines[0].startsWith("-") ? null : lines[0];
+      const items = lines.filter((l) => l.startsWith("-") || l.startsWith("•")).map((l) => l.replace(/^[-•]\s*/, ""));
+      return (
+        <div key={i} style={{ marginBottom: "14px" }}>
+          {intro && <p style={{ margin: "0 0 8px", fontSize: "14px", color: "#374151", lineHeight: 1.7 }}>{intro}</p>}
+          <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "4px" }}>
+            {items.map((item, j) => <li key={j} style={{ fontSize: "14px", color: "#374151", lineHeight: 1.6 }}>{item}</li>)}
+          </ul>
+        </div>
+      );
+    }
+    // Inline " - " bullet pattern: "Heading: - item - item - item"
+    if (/ - /.test(clean) && clean.indexOf(" - ") < clean.length - 3) {
+      const colonIdx = clean.indexOf(": - ");
+      if (colonIdx !== -1) {
+        const heading = clean.slice(0, colonIdx + 1);
+        const rest = clean.slice(colonIdx + 2);
+        const items = rest.split(/ - /).map((s) => s.trim()).filter(Boolean);
+        return (
+          <div key={i} style={{ marginBottom: "14px" }}>
+            <p style={{ margin: "0 0 8px", fontSize: "14px", color: "#374151", lineHeight: 1.7, fontWeight: 600 }}>{heading}</p>
+            <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "4px" }}>
+              {items.map((item, j) => <li key={j} style={{ fontSize: "14px", color: "#374151", lineHeight: 1.6 }}>{item}</li>)}
+            </ul>
+          </div>
+        );
+      }
+    }
+    return <p key={i} style={{ margin: "0 0 14px", fontSize: "14px", color: "#374151", lineHeight: 1.7 }}>{clean}</p>;
+  }
+
   const creatorInitials = creatorName
     ? creatorName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()
     : "CF";
@@ -258,9 +295,7 @@ export default async function ProductSalesPage({
           {descParagraphs.length > 0 && (
             <div style={{ background: "#fff", borderRadius: "20px", padding: "28px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginBottom: "24px" }}>
               <h2 style={{ margin: "0 0 16px", fontSize: "16px", fontWeight: 700, color: "#111827" }}>About this product</h2>
-              {descParagraphs.map((para, i) => (
-                <p key={i} className="desc-para">{para.replace(/\*\*/g, "")}</p>
-              ))}
+              {descParagraphs.map((para, i) => renderDescBlock(para, i))}
             </div>
           )}
 
