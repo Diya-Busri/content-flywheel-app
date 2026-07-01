@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Loader2, Save, ArrowLeft, Palette, Layout, User, Image as ImageIcon,
-  Upload, X, Link as LinkIcon, Megaphone, Type, Settings2, Share2,
+  Upload, X, Megaphone, Settings2, Share2, Sparkles, ChevronDown, ChevronUp,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -409,6 +409,48 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
     }
   };
 
+  // ── AI Design state ──
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiReasoning, setAiReasoning] = useState<string | null>(null);
+
+  const handleAiDesign = async () => {
+    setAiLoading(true);
+    setAiReasoning(null);
+    try {
+      const res = await fetch("/api/store-settings/ai-design", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiPrompt.trim() || undefined }),
+      });
+      if (!res.ok) throw new Error("AI design failed");
+      const data = await res.json() as {
+        theme?: string; accentColor?: string; tagline?: string | null;
+        bio?: string | null; announcementText?: string | null;
+        buttonText?: string; fontFamily?: string; bannerGradient?: string;
+        reasoning?: string | null;
+      };
+      setSettings((prev) => ({
+        ...prev,
+        ...(data.theme && { theme: data.theme }),
+        ...(data.accentColor && { accentColor: data.accentColor }),
+        ...(data.tagline !== undefined && { tagline: data.tagline }),
+        ...(data.bio !== undefined && { bio: data.bio }),
+        ...(data.announcementText !== undefined && { announcementText: data.announcementText }),
+        ...(data.buttonText && { buttonText: data.buttonText }),
+        ...(data.fontFamily && { fontFamily: data.fontFamily }),
+        ...(data.bannerGradient && { bannerGradient: data.bannerGradient, bannerImageUrl: null }),
+      }));
+      if (data.reasoning) setAiReasoning(data.reasoning);
+      toast({ title: "✨ AI design applied!", description: data.reasoning ?? "Your store has been redesigned." });
+    } catch {
+      toast({ title: "AI design failed", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -452,6 +494,85 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
         {/* Left — settings */}
         <div className="w-[380px] flex-shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50">
           <div className="p-5 space-y-7">
+
+            {/* ── AI Design ── */}
+            <div className="rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setAiOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-orange-100/50 transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center flex-shrink-0">
+                    <Sparkles size={14} className="text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-gray-900 leading-none mb-0.5">AI Auto-Design</p>
+                    <p className="text-[11px] text-gray-500">Let AI design your store in seconds</p>
+                  </div>
+                </div>
+                {aiOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+              </button>
+
+              {aiOpen && (
+                <div className="px-4 pb-4 space-y-3 border-t border-orange-200/60">
+                  <p className="text-xs text-gray-500 pt-3">
+                    AI will pick your theme, colours, font, tagline, bio and banner based on your brand.
+                    Optionally describe what you want.
+                  </p>
+
+                  {/* Quick niche chips */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {["Wellness & fitness", "Tech & SaaS", "Fashion & lifestyle", "Finance & business", "Art & creative", "Education & courses", "Food & cooking"].map((chip) => (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() => setAiPrompt(chip)}
+                        className={`text-[11px] px-2.5 py-1 rounded-full border transition-all font-medium ${
+                          aiPrompt === chip
+                            ? "border-orange-500 bg-orange-500 text-white"
+                            : "border-gray-200 bg-white text-gray-600 hover:border-orange-300"
+                        }`}
+                      >
+                        {chip}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      placeholder="Or describe your brand / vibe…"
+                      maxLength={300}
+                      className="flex-1 h-9 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 px-3 placeholder:text-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20"
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAiDesign(); }}
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleAiDesign}
+                      disabled={aiLoading}
+                      className="h-9 bg-orange-500 hover:bg-orange-600 text-white text-sm gap-1.5 flex-shrink-0"
+                    >
+                      {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                      {aiLoading ? "Designing…" : "Design"}
+                    </Button>
+                  </div>
+
+                  {aiReasoning && (
+                    <div className="flex gap-2 p-3 bg-white rounded-xl border border-orange-100">
+                      <span className="text-base flex-shrink-0">✨</span>
+                      <p className="text-xs text-gray-600 leading-relaxed">{aiReasoning}</p>
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-gray-400">
+                    Changes are previewed live — save when you&apos;re happy.
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* ── Identity ── */}
             <div>
