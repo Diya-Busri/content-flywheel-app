@@ -5,12 +5,14 @@ import { productReviewsTable } from "@/db/schema/product-reviews-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { auth } from "@clerk/nextjs/server";
 import { BuyButton } from "./BuyButton";
 import { WaitlistForm } from "./WaitlistForm";
 import { ReviewForm } from "./ReviewForm";
 import { ShareButtons } from "./ShareButtons";
 import ViewTracker from "./ViewTracker";
 import DiscountInput from "./DiscountInput";
+import { ProductCoverSection } from "./ProductCoverSection";
 
 type MarketingAssets = {
   productTitle?: string;
@@ -29,6 +31,7 @@ type MarketingAssets = {
   stripePriceId?: string;
   testimonials?: Array<{ name: string; text: string; rating?: number }>;
   comingSoon?: boolean;
+  uploadedFileUrl?: string | null;
 };
 
 type ProductContent = {
@@ -75,6 +78,7 @@ export default async function ProductSalesPage({
   const { id } = await params;
   const sp = await searchParams;
   const purchased = sp?.purchased === "true";
+  const { userId: viewerUserId } = await auth();
 
   let product: { id: string; title: string; niche: string | null; format: string | null; userId: string; marketingAssets: unknown; content: unknown } | undefined;
   try {
@@ -148,6 +152,8 @@ export default async function ProductSalesPage({
     ? fullDescription.split(/\n\n+/)[0].replace(/\*\*/g, "").slice(0, 180)
     : null;
   const coverImage = ma.bookMockupUrl ?? ma.coverThumbnailUrl ?? ma.thumbnailUrl ?? null;
+  const uploadedFileUrl = ma.uploadedFileUrl ?? null;
+  const isOwner = viewerUserId === product.userId;
   const hashtags: string[] = (ma.hashtags ?? []).slice(0, 8);
   const creatorName = bv?.brandName ?? null;
   const checkoutUrl = ma.checkoutUrl?.trim() || null;
@@ -219,13 +225,15 @@ export default async function ProductSalesPage({
       <div className="product-grid">
         {/* LEFT COLUMN */}
         <div>
-          {/* Cover image */}
-          {coverImage && (
-            <div style={{ borderRadius: "20px", overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.12)", marginBottom: "28px", lineHeight: 0, background: "#f3f4f6", display: "flex", justifyContent: "center", alignItems: "center" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={coverImage} alt={displayTitle} style={{ width: "100%", maxWidth: "600px", height: "auto", display: "block", objectFit: "contain" }} />
-            </div>
-          )}
+          {/* Cover image / placeholder / PDF preview */}
+          <ProductCoverSection
+            coverImage={coverImage}
+            productTitle={displayTitle}
+            format={product.format}
+            uploadedFileUrl={uploadedFileUrl}
+            productId={id}
+            isOwner={isOwner}
+          />
 
           {/* What's inside */}
           {sections.length > 0 && (

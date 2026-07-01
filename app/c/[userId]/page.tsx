@@ -63,21 +63,52 @@ export default async function CreatorProfilePage({
       .catch(() => [] as { id: string; title: string; description: string | null; bundlePrice: number; productIds: string[] }[]),
   ]);
 
-  const brandName = brandVoice?.brandName?.trim() || "Creator";
+  const brandName = (storeSettings?.storeName?.trim() || brandVoice?.brandName?.trim() || "Creator") as string;
   const initials = brandName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
 
-  const publishedProducts = products.filter((p) => {
+  const rawProducts = products.filter((p) => {
     const ma = p.marketingAssets as MarketingAssets | null;
     return ma?.isNativePublished || ma?.checkoutUrl || ma?.priceLabel;
+  });
+
+  // Sort products
+  const productSort = storeSettings?.productSort ?? "newest";
+  const publishedProducts = [...rawProducts].sort((a, b) => {
+    if (productSort === "oldest") return 0; // DB order (oldest first from limit)
+    if (productSort === "price-asc") {
+      const pa = ((a.marketingAssets as MarketingAssets | null)?.nativePrice ?? 0);
+      const pb = ((b.marketingAssets as MarketingAssets | null)?.nativePrice ?? 0);
+      return pa - pb;
+    }
+    if (productSort === "price-desc") {
+      const pa = ((a.marketingAssets as MarketingAssets | null)?.nativePrice ?? 0);
+      const pb = ((b.marketingAssets as MarketingAssets | null)?.nativePrice ?? 0);
+      return pb - pa;
+    }
+    return 0; // newest = default DB order
   });
 
   const theme = storeSettings?.theme ?? "warm";
   const accent = storeSettings?.accentColor ?? "#f97316";
   const layout = storeSettings?.layout ?? "grid";
   const bio = storeSettings?.bio ?? brandVoice?.targetAudience ?? null;
+  const tagline = (storeSettings as unknown as { tagline?: string | null })?.tagline ?? null;
+  const announcementText = (storeSettings as unknown as { announcementText?: string | null })?.announcementText ?? null;
+  const buttonText = (storeSettings as unknown as { buttonText?: string | null })?.buttonText ?? "Subscribe for updates";
+  const fontFamily = (storeSettings as unknown as { fontFamily?: string | null })?.fontFamily ?? "inter";
+  const showTrustBadges = (storeSettings as unknown as { showTrustBadges?: boolean | null })?.showTrustBadges ?? true;
   const profileImageUrl = storeSettings?.profileImageUrl ?? null;
   const bannerImageUrl = storeSettings?.bannerImageUrl ?? null;
   const bannerGradient = storeSettings?.bannerGradient ?? null;
+
+  const FONT_CSS: Record<string, string> = {
+    inter:       "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    poppins:     "'Poppins', sans-serif",
+    playfair:    "'Playfair Display', Georgia, serif",
+    montserrat:  "'Montserrat', sans-serif",
+    "dm-sans":   "'DM Sans', sans-serif",
+  };
+  const pageFontFamily = FONT_CSS[fontFamily] ?? FONT_CSS.inter;
 
   const t = THEMES[theme] ?? THEMES.warm;
 
@@ -108,7 +139,13 @@ export default async function CreatorProfilePage({
   };
 
   return (
-    <main style={{ minHeight: "100vh", background: t.page, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+    <main style={{ minHeight: "100vh", background: t.page, fontFamily: pageFontFamily }}>
+      {/* Announcement bar */}
+      {announcementText && (
+        <div style={{ background: accent, padding: "9px 16px", textAlign: "center", fontSize: "13px", fontWeight: "700", color: "#fff", letterSpacing: "0.01em" }}>
+          📢 {announcementText}
+        </div>
+      )}
 
       {/* ── Hero banner ── */}
       <div style={{ position: "relative", height: "220px", overflow: "hidden" }}>
@@ -153,14 +190,19 @@ export default async function CreatorProfilePage({
             marginBottom: "4px",
           }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            Subscribe
+            {buttonText}
           </Link>
         </div>
 
-        {/* Name + bio */}
-        <h1 style={{ margin: "0 0 8px", fontSize: "28px", fontWeight: "800", color: t.text, letterSpacing: "-0.8px", lineHeight: 1.15 }}>
+        {/* Name + tagline + bio */}
+        <h1 style={{ margin: "0 0 4px", fontSize: "28px", fontWeight: "800", color: t.text, letterSpacing: "-0.8px", lineHeight: 1.15 }}>
           {brandName}
         </h1>
+        {tagline && (
+          <p style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: "600", color: accent }}>
+            {tagline}
+          </p>
+        )}
         {bio && (
           <p style={{ margin: "0 0 16px", fontSize: "15px", color: t.subText, lineHeight: "1.65", maxWidth: "480px" }}>
             {bio}
@@ -439,7 +481,7 @@ export default async function CreatorProfilePage({
         )}
 
         {/* ── Trust badges ── */}
-        {publishedProducts.length > 0 && (
+        {publishedProducts.length > 0 && showTrustBadges && (
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             gap: "24px", flexWrap: "wrap",

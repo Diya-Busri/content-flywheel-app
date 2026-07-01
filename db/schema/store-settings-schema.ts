@@ -13,9 +13,20 @@ export const storeSettingsTable = pgTable("store_settings", {
   bannerGradient: text("banner_gradient"), // e.g. "135deg, #f97316, #ea580c"
   profileImageUrl: text("profile_image_url"),
   bio: text("bio"),
+  // Identity
+  storeName: text("store_name"), // Override display name (falls back to brand name)
+  tagline: text("tagline"),      // Short line under store name
   // Display options
   showSocialLinks: boolean("show_social_links").default(false),
-  socialLinks: text("social_links"), // JSON string of {twitter, instagram, youtube, tiktok}
+  socialLinks: text("social_links"), // JSON string of {twitter, instagram, youtube, tiktok, linkedin, website}
+  // Announcement bar
+  announcementText: text("announcement_text"), // null = hidden
+  announcementColor: text("announcement_color").default("#f97316"),
+  // Storefront behaviour
+  buttonText: text("button_text").default("Subscribe for updates"),
+  fontFamily: text("font_family").default("inter"), // inter | poppins | playfair | montserrat | dm-sans
+  productSort: text("product_sort").default("newest"), // newest | oldest | price-asc | price-desc
+  showTrustBadges: boolean("show_trust_badges").default(true),
   // Tax / VAT
   vatEnabled: boolean("vat_enabled").default(false),
   vatRate: integer("vat_rate").default(20), // percentage e.g. 20 for 20%
