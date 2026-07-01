@@ -9,7 +9,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
-import { ChevronLeft, Check, Loader2, Sparkles, RefreshCw, Eye, Video, X, ImageIcon, Type, BookOpen, Palette, LayoutGrid, FileOutput, Megaphone } from "lucide-react";
+import { ChevronLeft, Check, Loader2, Sparkles, RefreshCw, Eye, Video, X, ImageIcon, Type, BookOpen, Palette, LayoutGrid, FileOutput, Megaphone, ExternalLink } from "lucide-react";
 
 const PANEL_TABS = [
   { tab: "content",   Icon: BookOpen,   label: "Content"  },
@@ -23,6 +23,7 @@ const PANEL_TABS = [
 
 export type EditorToolbarProps = {
   productTitle: string;
+  productId?: string;
   saving: boolean;
   lastSaved: Date | null;
   formatLastSaved: (date: Date) => string;
@@ -48,6 +49,7 @@ export type EditorToolbarProps = {
 
 export function EditorToolbar({
   productTitle,
+  productId,
   saving,
   lastSaved,
   formatLastSaved,
@@ -240,6 +242,29 @@ export function EditorToolbar({
                 <TooltipContent>Preview</TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            {productId && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a
+                      href={`/product/${productId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={[
+                        "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium border transition-colors",
+                        isDark
+                          ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white"
+                          : "border-gray-200 text-gray-700 hover:bg-gray-100",
+                      ].join(" ")}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span className="hidden sm:inline">Preview as buyer</span>
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent>Open the public product page as a buyer would see it</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <Button
               size="sm"
               className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"

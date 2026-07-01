@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
@@ -29,6 +30,9 @@ export async function POST(
   const url = new URL(request.url);
   const refCode = url.searchParams.get("ref") ?? null;
 
+  // Check if the buyer is the product owner — Stripe blocks self-purchases
+  const { userId: buyerUserId } = await auth();
+
   try {
     const [product] = await db
       .select({
@@ -43,6 +47,14 @@ export async function POST(
 
     if (!product) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+
+    // Block self-purchases — Stripe rejects transfer_data[destination] pointing to own account
+    if (buyerUserId && buyerUserId === product.userId) {
+      return NextResponse.json(
+        { error: "You can't purchase your own product. Share the link with your customers to test the checkout." },
+        { status: 400 }
+      );
     }
 
     const ma = (product.marketingAssets ?? {}) as ExtendedMarketingAssets;

@@ -4955,6 +4955,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
       <EditorToolbar
         productTitle={product.title}
+        productId={productId}
         saving={saving}
         lastSaved={lastSaved}
         formatLastSaved={formatLastSaved}

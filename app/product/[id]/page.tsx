@@ -11,7 +11,6 @@ import { WaitlistForm } from "./WaitlistForm";
 import { ReviewForm } from "./ReviewForm";
 import { ShareButtons } from "./ShareButtons";
 import ViewTracker from "./ViewTracker";
-import DiscountInput from "./DiscountInput";
 import { ProductCoverSection } from "./ProductCoverSection";
 import { ProductInfoTabs } from "./ProductInfoTabs";
 
@@ -318,6 +317,25 @@ export default async function ProductSalesPage({
               </p>
             )}
 
+            {/* Social proof */}
+            {(avgRating || reviews.length > 0) && (
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
+                {avgRating && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    {[1,2,3,4,5].map((star) => (
+                      <span key={star} style={{ fontSize: "14px", color: Number(avgRating) >= star ? "#f97316" : "#e5e7eb" }}>★</span>
+                    ))}
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#111827", marginLeft: "3px" }}>{avgRating}</span>
+                  </div>
+                )}
+                {reviews.length > 0 && (
+                  <span style={{ fontSize: "13px", color: "#6b7280" }}>
+                    {reviews.length} review{reviews.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Price + CTA */}
             {isComingSoon ? (
               <div>
@@ -358,7 +376,6 @@ export default async function ProductSalesPage({
                   <span style={{ fontSize: "14px", color: "#9ca3af", marginLeft: "6px" }}>one-time</span>
                 </div>
                 <BuyButton productId={product.id} priceLabel={hasSalePrice ? salePriceLabel! : nativePriceLabel!} creatorUserId={product.userId} />
-                <DiscountInput productId={product.id} />
               </>
             ) : (
               <>
@@ -422,6 +439,36 @@ export default async function ProductSalesPage({
               <a href={`/c/${product.userId}`} style={{ fontSize: "12px", color: "#f97316", fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>
                 More →
               </a>
+            </div>
+          )}
+
+          {/* Pre-purchase upsell — shown to all visitors */}
+          {!purchased && upsellProducts.length > 0 && (
+            <div style={{ background: "#fff", borderRadius: "16px", padding: "20px", marginTop: "16px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
+              <p style={{ margin: "0 0 14px", fontSize: "12px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em" }}>You might also like</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {upsellProducts.slice(0, 3).map((p) => {
+                  const pma = (p.marketingAssets ?? {}) as MarketingAssets;
+                  const thumb = pma.coverThumbnailUrl ?? pma.bookMockupUrl ?? pma.thumbnailUrl;
+                  const href = pma.isNativePublished ? `/product/${p.id}` : (pma.checkoutUrl ?? `/product/${p.id}`);
+                  const uprice = pma.nativePrice ? `£${(pma.nativePrice / 100).toFixed(2)}` : pma.priceLabel ?? null;
+                  return (
+                    <a key={p.id} href={href} style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", padding: "10px 12px", borderRadius: "12px", border: "1px solid #f3f4f6", background: "#fafafa" }}>
+                      {thumb ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={thumb} alt={p.title} style={{ width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: "48px", height: "48px", borderRadius: "8px", background: "linear-gradient(135deg,#fff7ed,#fed7aa)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", flexShrink: 0 }}>📦</div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: "13px", fontWeight: 600, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</p>
+                        {uprice && <p style={{ margin: "2px 0 0", fontSize: "13px", fontWeight: 700, color: "#f97316" }}>{uprice}</p>}
+                      </div>
+                      <span style={{ fontSize: "16px", color: "#d1d5db", flexShrink: 0 }}>›</span>
+                    </a>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

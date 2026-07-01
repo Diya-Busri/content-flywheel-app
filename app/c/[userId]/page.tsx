@@ -408,21 +408,19 @@ export default async function CreatorProfilePage({
                           fontSize: "40px",
                         }}>{emoji}</div>
                       )}
-                      <div style={{ padding: "14px 16px 18px", flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
-                        <p style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: t.text, lineHeight: "1.35", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", letterSpacing: "-0.2px" }}>{p.title}</p>
-                        {ma?.productDescription && (
-                          <p style={{ margin: 0, fontSize: "12px", color: t.subText, lineHeight: "1.45", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{ma.productDescription}</p>
-                        )}
-                        {price != null && (
-                          <div style={{ marginTop: "auto", paddingTop: "10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: "19px", fontWeight: "800", color: accent, letterSpacing: "-0.5px" }}>{price}</span>
-                            <div style={{
-                              fontSize: "12px", fontWeight: "700", color: "#fff",
-                              background: accent, padding: "6px 14px", borderRadius: "100px",
-                              boxShadow: `0 2px 8px ${accent}40`,
-                            }}>Buy</div>
-                          </div>
-                        )}
+                      <div style={{ padding: "12px 14px 14px", flex: 1, display: "flex", flexDirection: "column" }}>
+                        <p style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: "700", color: t.text, lineHeight: "1.35", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", letterSpacing: "-0.2px" }}>{p.title}</p>
+                        <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                          {price
+                            ? <span style={{ fontSize: "18px", fontWeight: "800", color: accent, letterSpacing: "-0.5px" }}>{price}</span>
+                            : <span style={{ fontSize: "12px", color: t.subText, fontWeight: 600 }}>View →</span>
+                          }
+                          <div style={{
+                            fontSize: "12px", fontWeight: "700", color: "#fff",
+                            background: accent, padding: "6px 14px", borderRadius: "100px",
+                            boxShadow: `0 2px 8px ${accent}40`, flexShrink: 0,
+                          }}>{price ? "Buy" : "Get it"}</div>
+                        </div>
                       </div>
                     </a>
                   );
