@@ -4196,12 +4196,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
         return;
       }
       const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 1, backgroundColor: "#ffffff", logging: false });
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
-      const res = await fetch(`/api/products/${productId}/cover-thumbnail`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataUrl }),
-      });
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.80));
+      const fd = new FormData();
+      fd.append("file", blob, "cover.jpg");
+      const res = await fetch(`/api/products/${productId}/cover-thumbnail`, { method: "POST", body: fd });
       const text = await res.text();
       let data: { url?: string; error?: string } = {};
       try { data = JSON.parse(text); } catch { data = { error: text.slice(0, 120) }; }
