@@ -261,7 +261,7 @@ export default async function CreatorProfilePage({
                   const ma = p.marketingAssets as MarketingAssets | null;
                   const isNative = !!ma?.isNativePublished;
                   const href = isNative ? `/product/${p.id}` : (ma?.checkoutUrl || `/product/${p.id}`);
-                  const coverImg = ma?.bookMockupUrl ?? ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? null;
+                  const coverImg = ma?.coverThumbnailUrl ?? ma?.bookMockupUrl ?? ma?.thumbnailUrl ?? null;
                   const price = ma?.nativePrice ? fmtPrice(ma.nativePrice) : ma?.priceLabel ?? null;
                   const emoji = productEmoji(ma);
                   return (
@@ -310,7 +310,7 @@ export default async function CreatorProfilePage({
                   const ma = p.marketingAssets as MarketingAssets | null;
                   const isNative = !!ma?.isNativePublished;
                   const href = isNative ? `/product/${p.id}` : (ma?.checkoutUrl || `/product/${p.id}`);
-                  const coverImg = ma?.bookMockupUrl ?? ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? null;
+                  const coverImg = ma?.coverThumbnailUrl ?? ma?.bookMockupUrl ?? ma?.thumbnailUrl ?? null;
                   const price = ma?.nativePrice ? fmtPrice(ma.nativePrice) : ma?.priceLabel ?? null;
                   const emoji = productEmoji(ma);
                   return (
@@ -358,7 +358,7 @@ export default async function CreatorProfilePage({
                       const ma = p.marketingAssets as MarketingAssets | null;
                       const isNative = !!ma?.isNativePublished;
                       const href = isNative ? `/product/${p.id}` : (ma?.checkoutUrl || `/product/${p.id}`);
-                      const coverImg = ma?.bookMockupUrl ?? ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? null;
+                      const coverImg = ma?.coverThumbnailUrl ?? ma?.bookMockupUrl ?? ma?.thumbnailUrl ?? null;
                       const price = ma?.nativePrice ? fmtPrice(ma.nativePrice) : ma?.priceLabel ?? null;
                       const emoji = productEmoji(ma);
                       return (
@@ -391,7 +391,7 @@ export default async function CreatorProfilePage({
                   const ma = p.marketingAssets as MarketingAssets | null;
                   const isNative = !!ma?.isNativePublished;
                   const href = isNative ? `/product/${p.id}` : (ma?.checkoutUrl || `/product/${p.id}`);
-                  const coverImg = ma?.bookMockupUrl ?? ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? null;
+                  const coverImg = ma?.coverThumbnailUrl ?? ma?.bookMockupUrl ?? ma?.thumbnailUrl ?? null;
                   const price = ma?.nativePrice ? fmtPrice(ma.nativePrice) : ma?.priceLabel ?? null;
                   const emoji = productEmoji(ma);
                   return (
