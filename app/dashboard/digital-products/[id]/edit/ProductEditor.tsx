@@ -7509,7 +7509,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                               className="text-sm"
                               onBlur={(e) => saveMarketingEdits({ thankYouBonusUrl: e.target.value.trim() || null })}
                             />
-                            <p className="text-xs text-gray-400">If set, a "Claim your bonus" button appears on the thank-you card.</p>
+                            <p className="text-xs text-gray-400">If set, a &ldquo;Claim your bonus&rdquo; button appears on the thank-you card.</p>
                           </div>
                         </div>
                       );
