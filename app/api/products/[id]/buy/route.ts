@@ -235,10 +235,8 @@ export async function POST(
       sessionParams.tax_id_collection = { enabled: true };
     }
 
-    // Create the session on behalf of the connected account
-    const session = await stripe.checkout.sessions.create(sessionParams, {
-      stripeAccount: connectAccountId,
-    });
+    // Create the session on the platform account — destination charge routes payment to creator
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
