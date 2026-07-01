@@ -1036,6 +1036,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   } | null>(null);
   const [thumbnailTemplate, setThumbnailTemplate] = useState<ThumbnailTemplateId>("modern-gradient");
   const [thumbnailOrientation, setThumbnailOrientation] = useState<"horizontal" | "vertical">("horizontal");
+  const [showThumbnailOptions, setShowThumbnailOptions] = useState(false);
   const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
   const thumbnailCaptureRef = useRef<HTMLDivElement | null>(null);
   const [includeCover, setIncludeCover] = useState(true);
@@ -7064,73 +7065,55 @@ export default function ProductEditor({ productId }: { productId: string }) {
                 ) : (
                   <>
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <Label className="text-xs font-medium text-gray-700">
-                          Product thumbnail ({effectiveOrientation === "vertical" ? "1024×1792" : "1792×1024"})
-                        </Label>
-                        <div className="flex gap-1.5">
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="bg-orange-500 hover:bg-orange-600 gap-1"
-                            onClick={handleGenerateThumbnail}
-                            disabled={thumbnailGenerating}
-                          >
-                            {thumbnailGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                            {hasDalleThumbnail ? "Regenerate Thumbnail" : "Generate Thumbnail"}
+                      {/* Primary generate button */}
+                      <Button
+                        type="button"
+                        className="w-full bg-orange-500 hover:bg-orange-600 gap-2 h-10 text-sm font-semibold"
+                        onClick={handleGenerateThumbnail}
+                        disabled={thumbnailGenerating}
+                      >
+                        {thumbnailGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        {thumbnailGenerating ? "Generating…" : hasDalleThumbnail ? "Regenerate Thumbnail" : "Generate Thumbnail"}
+                      </Button>
+                      {/* Download + customise row */}
+                      <div className="flex items-center justify-between">
+                        {hasDalleThumbnail && (
+                          <Button type="button" variant="outline" size="sm" className="gap-1 h-7 text-xs" onClick={handleDownloadThumbnail}>
+                            <Download className="w-3 h-3" /> Download
                           </Button>
-                          {hasDalleThumbnail && (
-                            <Button type="button" variant="outline" size="sm" className="gap-1 h-8" onClick={handleDownloadThumbnail}>
-                              <Download className="w-3.5 h-3.5" /> Download
-                            </Button>
-                          )}
+                        )}
+                        <button
+                          type="button"
+                          className="text-xs text-gray-400 hover:text-gray-600 underline ml-auto"
+                          onClick={() => setShowThumbnailOptions((v) => !v)}
+                        >
+                          Customise style & orientation
+                        </button>
+                      </div>
+                      {/* Collapsible options */}
+                      {showThumbnailOptions && (
+                        <div className="space-y-2 pt-1 border-t border-gray-100">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-medium text-gray-700">Orientation</span>
+                            <div className="flex rounded-md border border-gray-200 p-0.5 bg-gray-50">
+                              <Button type="button" variant={thumbnailOrientation === "horizontal" ? "default" : "ghost"} size="sm"
+                                className={`h-7 px-3 text-xs rounded ${thumbnailOrientation === "horizontal" ? "bg-orange-500 hover:bg-orange-600 text-white" : "hover:bg-gray-100"}`}
+                                onClick={() => setThumbnailOrientation("horizontal")}>Horizontal</Button>
+                              <Button type="button" variant={thumbnailOrientation === "vertical" ? "default" : "ghost"} size="sm"
+                                className={`h-7 px-3 text-xs rounded ${thumbnailOrientation === "vertical" ? "bg-orange-500 hover:bg-orange-600 text-white" : "hover:bg-gray-100"}`}
+                                onClick={() => setThumbnailOrientation("vertical")}>Vertical</Button>
+                            </div>
+                            <span className="text-xs text-gray-400">{thumbnailOrientation === "horizontal" ? "1792×1024" : "1024×1792"}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {THUMBNAIL_TEMPLATES.map((t) => (
+                              <Button key={t.id} type="button" variant={thumbnailTemplate === t.id ? "default" : "outline"} size="sm"
+                                className={`text-xs h-7 ${thumbnailTemplate === t.id ? "bg-orange-500 hover:bg-orange-600" : ""}`}
+                                onClick={() => setThumbnailTemplate(t.id)}>{t.label}</Button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        {hasDalleThumbnail
-                          ? "AI-generated thumbnail saved to your store. Choose a style and click Regenerate for a new design."
-                          : "Generate an AI thumbnail for your store listing. Choose a style and click Generate."}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-medium text-gray-700">Orientation</span>
-                        <div className="flex rounded-md border border-gray-200 p-0.5 bg-gray-50">
-                          <Button
-                            type="button"
-                            variant={thumbnailOrientation === "horizontal" ? "default" : "ghost"}
-                            size="sm"
-                            className={`h-8 px-3 text-xs rounded ${thumbnailOrientation === "horizontal" ? "bg-orange-500 hover:bg-orange-600 text-white" : "hover:bg-gray-100"}`}
-                            onClick={() => setThumbnailOrientation("horizontal")}
-                          >
-                            Horizontal
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={thumbnailOrientation === "vertical" ? "default" : "ghost"}
-                            size="sm"
-                            className={`h-8 px-3 text-xs rounded ${thumbnailOrientation === "vertical" ? "bg-orange-500 hover:bg-orange-600 text-white" : "hover:bg-gray-100"}`}
-                            onClick={() => setThumbnailOrientation("vertical")}
-                          >
-                            Vertical
-                          </Button>
-                        </div>
-                        <span className="text-xs text-gray-500">
-                          {thumbnailOrientation === "horizontal" ? "1792×1024 — marketplace" : "1024×1792 — TikTok, IG, Pinterest"}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {THUMBNAIL_TEMPLATES.map((t) => (
-                          <Button
-                            key={t.id}
-                            type="button"
-                            variant={thumbnailTemplate === t.id ? "default" : "outline"}
-                            size="sm"
-                            className={thumbnailTemplate === t.id ? "bg-orange-500 hover:bg-orange-600" : ""}
-                            onClick={() => setThumbnailTemplate(t.id)}
-                          >
-                            {t.label}
-                          </Button>
-                        ))}
-                      </div>
+                      )}
                       <div className="rounded-lg border border-gray-200 bg-gray-100 flex items-center justify-center p-2">
                         <ThumbnailMockup
                           productTitle={product?.title ?? "Product"}
