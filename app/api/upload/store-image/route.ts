@@ -17,18 +17,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Only image files are allowed" }, { status: 400 });
   }
 
-  // Max 5MB
-  if (file.size > 5 * 1024 * 1024) {
-    return NextResponse.json({ error: "File must be under 5MB" }, { status: 400 });
+  // Max 4MB (Vercel Hobby plan caps request body at 4.5MB)
+  if (file.size > 4 * 1024 * 1024) {
+    return NextResponse.json({ error: "File must be under 4MB" }, { status: 400 });
   }
 
   const ext = file.name.split(".").pop() ?? "jpg";
   const filename = `store/${userId}/${type}-${Date.now()}.${ext}`;
 
-  const blob = await upload(filename, file, {
-    access: "public",
-    contentType: file.type,
-  });
-
-  return NextResponse.json({ url: blob.url });
+  try {
+    const blob = await upload(filename, file, {
+      access: "public",
+      contentType: file.type,
+    });
+    return NextResponse.json({ url: blob.url });
+  } catch (err) {
+    console.error("[upload/store-image] R2 upload failed:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Upload failed. Check storage configuration." },
+      { status: 500 }
+    );
+  }
 }

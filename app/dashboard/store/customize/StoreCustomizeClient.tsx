@@ -271,14 +271,25 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
     const setUploading = type === "banner" ? setUploadingBanner : setUploadingProfile;
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("type", type);
-      const res = await fetch("/api/upload/store-image", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      // Step 1: get a presigned URL (avoids Vercel's 4.5MB body limit)
+      const presignRes = await fetch("/api/upload/store-image-presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, contentType: file.type, uploadType: type }),
+      });
+      const presignData = await presignRes.json();
+      if (!presignRes.ok) throw new Error(presignData.error ?? "Failed to get upload URL");
+
+      // Step 2: PUT the file directly to R2
+      const uploadRes = await fetch(presignData.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!uploadRes.ok) throw new Error("Upload to storage failed");
+
       const key = type === "banner" ? "bannerImageUrl" : "profileImageUrl";
-      setSettings((prev) => ({ ...prev, [key]: data.url }));
+      setSettings((prev) => ({ ...prev, [key]: presignData.publicUrl }));
       toast({ title: `${type === "banner" ? "Banner" : "Profile"} image uploaded!` });
     } catch (err) {
       toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
