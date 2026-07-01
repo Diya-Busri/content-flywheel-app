@@ -148,17 +148,17 @@ export default async function CreatorProfilePage({
       )}
 
       {/* ── Hero banner ── */}
-      <div style={{ position: "relative", height: "220px", overflow: "hidden" }}>
+      <div style={{ position: "relative", height: "160px", overflow: "hidden" }}>
         <div style={{ width: "100%", height: "100%", background: bannerBg }} />
-        {/* Gradient fade to page color */}
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "100px", background: `linear-gradient(to bottom, transparent 0%, ${t.page} 100%)` }} />
+        {/* Gradient fade to page color — keep short so banner is visible */}
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "40px", background: `linear-gradient(to bottom, transparent 0%, ${t.page} 100%)` }} />
       </div>
 
       {/* ── Content ── */}
       <div style={{ maxWidth: "620px", margin: "0 auto", padding: "0 24px 96px" }}>
 
-        {/* Avatar — overlaps banner */}
-        <div style={{ marginTop: "-60px", marginBottom: "16px", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+        {/* Avatar — slight overlap with banner bottom edge */}
+        <div style={{ marginTop: "-28px", marginBottom: "16px", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
           {profileImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={profileImageUrl} alt={brandName} style={{
