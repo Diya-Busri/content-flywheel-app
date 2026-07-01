@@ -7514,6 +7514,25 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       );
                     })()}
 
+                    {/* Embed buy-button snippet */}
+                    {(marketingAssets as { isNativePublished?: boolean }).isNativePublished && (() => {
+                      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
+                      const embedSnippet = `<script src="${appUrl}/embed/${productId}" data-color="#f97316"></script>`;
+                      return (
+                        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-semibold text-gray-700">Embed buy button</Label>
+                            <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0"
+                              onClick={() => copyToClipboard(embedSnippet, "Embed code")}>
+                              <Copy className="w-3.5 h-3.5 mr-1" /> Copy
+                            </Button>
+                          </div>
+                          <p className="text-xs text-gray-400">Paste this snippet anywhere on your website to show a buy button.</p>
+                          <pre className="text-[11px] bg-white border border-gray-200 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap break-all text-gray-600 select-all">{`<script src="${appUrl}/embed/${productId}" data-color="#f97316"></script>`}</pre>
+                        </div>
+                      );
+                    })()}
+
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Label className="text-xs font-medium text-gray-700">Hashtags / tags</Label>

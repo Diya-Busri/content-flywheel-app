@@ -3,10 +3,14 @@ import { auth } from "@clerk/nextjs/server";
 import Stripe from "stripe";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
+import { productWaitlistsTable } from "@/db/schema/product-waitlists-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import type { MarketingAssets } from "@/db/schema/products-schema";
+import { Resend } from "resend";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const resend = new Resend(process.env.RESEND_API_KEY);
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
 
 export async function POST(
   request: Request,
@@ -101,6 +105,13 @@ export async function POST(
       .set({ marketingAssets: updatedAssets, updatedAt: new Date() })
       .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId)));
 
+    // If this is the first publish (was not already published), notify waitlist subscribers
+    if (!existing.isNativePublished) {
+      notifyWaitlist(productId, product.title, priceLabel).catch((e) =>
+        console.error("[native-publish] waitlist notify error:", e)
+      );
+    }
+
     return NextResponse.json({ success: true, priceLabel });
   } catch (err) {
     console.error("[native-publish] POST error:", err);
@@ -109,6 +120,68 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+// ── Fire-and-forget: email all waitlist subscribers that the product is live ──
+async function notifyWaitlist(productId: string, productTitle: string, priceLabel: string) {
+  const subscribers = await db
+    .select({ email: productWaitlistsTable.email, name: productWaitlistsTable.name })
+    .from(productWaitlistsTable)
+    .where(eq(productWaitlistsTable.productId, productId));
+
+  if (subscribers.length === 0) return;
+
+  const productUrl = `${APP_URL}/product/${productId}`;
+
+  // Send individually so each can have personalised greeting
+  await Promise.allSettled(
+    subscribers.map(({ email, name }) =>
+      resend.emails.send({
+        from: "Content Flywheel <noreply@contentflywheel.co.uk>",
+        to: email,
+        subject: `🎉 It's live! ${productTitle} is now available`,
+        html: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#f97316 0%,#fb923c 100%);padding:36px 40px;text-align:center;">
+            <p style="margin:0;font-size:40px;">🚀</p>
+            <h1 style="margin:12px 0 0;color:#fff;font-size:24px;font-weight:700;letter-spacing:-0.3px;">It&rsquo;s live!</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="margin:0 0 16px;color:#374151;font-size:16px;line-height:1.6;">
+              Hi${name ? ` ${name}` : ""},
+            </p>
+            <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.6;">
+              You joined the waitlist for <strong>${productTitle}</strong> — and it&rsquo;s now available!
+            </p>
+            <p style="margin:0 0 28px;color:#6b7280;font-size:15px;line-height:1.7;">
+              Price: <strong style="color:#111827;">${priceLabel}</strong>
+            </p>
+            <a href="${productUrl}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-weight:700;font-size:16px;border-radius:12px;text-decoration:none;letter-spacing:-0.2px;">
+              Get it now &rarr;
+            </a>
+            <hr style="border:none;border-top:1px solid #f3f4f6;margin:32px 0;"/>
+            <p style="margin:0;color:#9ca3af;font-size:13px;">
+              You&rsquo;re receiving this because you joined the waitlist.
+              <a href="${APP_URL}/unsubscribe" style="color:#f97316;">Unsubscribe</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+      })
+    )
+  );
 }
 
 export async function DELETE(
