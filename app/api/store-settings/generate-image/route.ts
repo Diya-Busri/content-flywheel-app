@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       prompt,
       n: 1,
       size,
-      quality: "standard",
+      quality: "medium",
     });
 
     const b64 = (response.data?.[0] as { b64_json?: string })?.b64_json;

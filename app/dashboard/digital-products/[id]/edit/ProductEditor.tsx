@@ -4011,8 +4011,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
       setProduct((p) => (p ? { ...p, marketingAssets: { ...p.marketingAssets, thumbnailUrl: url, thumbnailStyle: data.style ?? thumbnailTemplate, thumbnailOrientation: orientation } } : null));
       saveToServer({ marketingAssets: { ...marketingAssets, thumbnailUrl: url, thumbnailStyle: data.style ?? thumbnailTemplate, thumbnailOrientation: orientation } });
       toast({
-        title: "Thumbnail generated",
-        description: "Download it soon—the image link may expire in about an hour.",
+        title: "✨ Thumbnail generated",
+        description: "Saved to your store. Looks great on your product listing!",
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : "Thumbnail generation failed. Please try again.";
@@ -7088,8 +7088,8 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       </div>
                       <p className="text-xs text-gray-500">
                         {hasDalleThumbnail
-                          ? "AI-generated image with your title and badges. Choose a style and click Regenerate for a new design."
-                          : "Choose a style, then generate an AI thumbnail. No product background image is used—thumbnail is marketplace-only."}
+                          ? "AI-generated thumbnail saved to your store. Choose a style and click Regenerate for a new design."
+                          : "Generate an AI thumbnail for your store listing. Choose a style and click Generate."}
                       </p>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-medium text-gray-700">Orientation</span>

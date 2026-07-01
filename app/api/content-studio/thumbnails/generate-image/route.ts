@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import OpenAI from "openai";
+import { upload } from "@/lib/storage";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 
@@ -58,7 +59,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No image data returned." }, { status: 500 });
     }
 
-    return NextResponse.json({ url: `data:image/png;base64,${b64}`, dimensions: dimKey });
+    // Upload to persistent storage — do NOT return base64 (it's 3-5MB and breaks when stored in DB JSONB)
+    const buffer = Buffer.from(b64, "base64");
+    const filename = `thumbnails/${userId}/${dimKey}-${Date.now()}.png`;
+    const blob = await upload(filename, buffer, { access: "public", contentType: "image/png" });
+
+    return NextResponse.json({ url: blob.url, dimensions: dimKey });
   } catch (err) {
     console.error("[thumbnails/generate-image]", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Generation failed" }, { status: 500 });

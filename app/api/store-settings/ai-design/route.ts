@@ -63,15 +63,16 @@ export async function POST(req: NextRequest) {
   "reasoning": 1 sentence explaining your choices
 }
 
-Design rules:
-- wellness/health/fitness → warm or minimal theme, greens/oranges, playfair or poppins
-- tech/coding/SaaS → dark or bold theme, blue/purple accent, inter or dm-sans
-- fashion/lifestyle/beauty → bold or light theme, pink/purple accent, montserrat or poppins
-- finance/business/marketing → minimal or light theme, dark accent, inter or dm-sans
-- art/creative/photography → warm or bold theme, vibrant accent, playfair or poppins
-- food/cooking → warm theme, orange/red accent, poppins
-- education/courses → light or minimal, blue/teal, inter
-- Unknown/general → warm theme, orange, inter`;
+Design rules (STRICT — do not use orange for wellness/tech/fashion):
+- wellness/health/fitness → minimal or warm theme, GREEN accent (#16a34a or #0d9488), playfair or poppins, teal gradient
+- tech/coding/SaaS → dark or bold theme, BLUE/PURPLE accent (#2563eb or #7c3aed), inter or dm-sans, dark gradient
+- fashion/lifestyle/beauty → bold or light theme, PINK/PURPLE accent (#db2777 or #7c3aed), montserrat or poppins
+- finance/business/marketing → minimal or light theme, DARK NEUTRAL accent (#1f2937 or #374151), inter or dm-sans
+- art/creative/photography → warm or bold theme, VIBRANT accent (#7c3aed or #db2777), playfair or poppins
+- food/cooking → warm theme, RED/ORANGE accent (#ef4444 or #f97316), poppins
+- education/courses → light or minimal theme, BLUE/TEAL accent (#0891b2 or #2563eb), inter
+- Unknown/general → warm theme, orange (#f97316), inter
+Pick the accent color that BEST represents the niche — do not default to orange unless it truly fits.`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
