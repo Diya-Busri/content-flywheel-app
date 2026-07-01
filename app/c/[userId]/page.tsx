@@ -139,7 +139,7 @@ export default async function CreatorProfilePage({
   };
 
   return (
-    <main style={{ minHeight: "100vh", background: t.page, fontFamily: pageFontFamily }}>
+    <main style={{ minHeight: "100vh", background: `radial-gradient(ellipse 120% 40% at 50% -5%, ${accent}18 0%, transparent 65%), radial-gradient(ellipse 80% 30% at 80% 100%, ${accent}0d 0%, transparent 60%), ${t.page}`, fontFamily: pageFontFamily }}>
       {/* Announcement bar */}
       {announcementText && (
         <div style={{ background: accent, padding: "9px 16px", textAlign: "center", fontSize: "13px", fontWeight: "700", color: "#fff", letterSpacing: "0.01em" }}>
