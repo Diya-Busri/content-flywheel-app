@@ -4195,14 +4195,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
         toast({ title: "Canvas not ready", description: "Please switch to the Content tab and try again.", variant: "destructive" });
         return;
       }
-      const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 2, backgroundColor: "#ffffff", logging: false });
-      const dataUrl = canvas.toDataURL("image/png");
+      const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 1, backgroundColor: "#ffffff", logging: false });
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
       const res = await fetch(`/api/products/${productId}/cover-thumbnail`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: dataUrl }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: { url?: string; error?: string } = {};
+      try { data = JSON.parse(text); } catch { data = { error: text.slice(0, 120) }; }
       if (res.ok && data.url) {
         setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, coverThumbnailUrl: data.url } } : null);
         saveMarketingEdits({ coverThumbnailUrl: data.url });
