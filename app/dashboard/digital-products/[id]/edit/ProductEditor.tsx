@@ -1780,67 +1780,54 @@ export default function ProductEditor({ productId }: { productId: string }) {
   );
 
   // Handles design commands from the AI panel (e.g. "make all text black")
+  // Uses setPageBackgrounds for all colour commands — pageTextColor is the most reliable
+  // persistence mechanism and is automatically included in the 5-second auto-save.
   const handleAIDesignCommand = useCallback(
     (cmd: DesignCommand) => {
-      const contentSections = sections.filter((s) => s.id !== "cover" && s.id !== "back");
       const totalPages = Math.max(2, sections.length + 2);
 
-      if (cmd.type === "all_text_color") {
-        // pageTextColor is the page-level text override — affects all text on the page
+      if (
+        cmd.type === "all_text_color" ||
+        cmd.type === "heading_color" ||
+        cmd.type === "body_color"
+      ) {
+        // pageTextColor is the page-level text colour override — covers title, heading, body.
+        // It's the only mechanism that persists reliably via auto-save.
         setPageBackgrounds((prev) => {
-          const next = prev.length >= totalPages ? [...prev] : Array.from({ length: totalPages }, (_, i) => prev[i] ?? {});
+          const next =
+            prev.length >= totalPages
+              ? [...prev]
+              : Array.from({ length: totalPages }, (_, i) => prev[i] ?? {});
+          // Content pages are indices 1 to length-2 (index 0=cover, last=back)
           for (let i = 1; i < next.length - 1; i++) {
             next[i] = { ...next[i], pageTextColor: cmd.value };
           }
-          setTimeout(() => saveToServer({ designSettings: { ...product?.designSettings, pages: next, placedElementsByPage } }), 50);
           return next;
         });
-
-      } else if (cmd.type === "heading_color" || cmd.type === "body_color") {
-        // Per-element colour — use textStyles. Clear pageTextColor first so textStyles take effect.
-        setPageBackgrounds((prev) => {
-          const next = prev.length >= totalPages ? [...prev] : Array.from({ length: totalPages }, (_, i) => prev[i] ?? {});
-          for (let i = 1; i < next.length - 1; i++) {
-            const { pageTextColor: _removed, ...rest } = next[i] as PageBackground & { pageTextColor?: string };
-            next[i] = rest;
-          }
-          return next;
-        });
-        const currentTS = product?.designSettings?.textStyles ?? {};
-        const nextTS: Record<string, { title?: Record<string, string>; body?: Record<string, string>; blocks?: Record<string, string>[] }> = { ...currentTS };
-        for (const s of contentSections) {
-          const ex = nextTS[s.id] ?? {};
-          nextTS[s.id] = cmd.type === "heading_color"
-            ? { ...ex, title: { ...(ex.title ?? {}), color: cmd.value } }
-            : { ...ex, body: { ...(ex.body ?? {}), color: cmd.value } };
-        }
-        setProduct((p) => p ? { ...p, designSettings: { ...p.designSettings, textStyles: nextTS } } : p);
-        saveToServer({ designSettings: { ...product?.designSettings, textStyles: nextTS } });
 
       } else if (cmd.type === "background_color") {
-        // Set solid background colour on all content pages
         setPageBackgrounds((prev) => {
-          const next = prev.length >= totalPages ? [...prev] : Array.from({ length: totalPages }, (_, i) => prev[i] ?? {});
+          const next =
+            prev.length >= totalPages
+              ? [...prev]
+              : Array.from({ length: totalPages }, (_, i) => prev[i] ?? {});
           for (let i = 1; i < next.length - 1; i++) {
             next[i] = { ...next[i], backgroundColor: cmd.value };
           }
-          setTimeout(() => saveToServer({ designSettings: { ...product?.designSettings, pages: next, placedElementsByPage } }), 50);
           return next;
         });
 
       } else if (cmd.type === "accent_color") {
+        // graphicsAccentColor is included in the auto-save via the colors.graphics field
         setGraphicsAccentColor(cmd.value);
-        saveToServer({
-          designSettings: {
-            ...product?.designSettings,
-            colors: { ...product?.designSettings?.colors, graphics: cmd.value },
-          },
-        });
+
       } else if (cmd.type === "template") {
         handleTemplateSelect(cmd.value);
       }
+      // All pageBackgrounds / graphicsAccentColor changes are picked up automatically
+      // by the 5-second auto-save interval — no manual saveToServer needed.
     },
-    [product, sections, placedElementsByPage, saveToServer, handleTemplateSelect]
+    [sections, handleTemplateSelect]
   );
 
   useEffect(() => {
