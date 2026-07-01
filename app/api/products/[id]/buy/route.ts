@@ -4,7 +4,11 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, and, isNull } from "drizzle-orm";
+
+// Platform fee: 5% on all plans
+const PLATFORM_FEE_PERCENT = 5;
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
@@ -57,17 +61,36 @@ export async function POST(
       );
     }
 
-    // Fetch store settings to check VAT
-    const [storeSettings] = await db
-      .select({
-        vatEnabled: storeSettingsTable.vatEnabled,
-        vatRate: storeSettingsTable.vatRate,
-      })
-      .from(storeSettingsTable)
-      .where(eq(storeSettingsTable.userId, product.userId))
-      .limit(1);
+    // Fetch store settings + creator's Stripe Connect account in parallel
+    const [[storeSettings], [creatorProfile]] = await Promise.all([
+      db
+        .select({ vatEnabled: storeSettingsTable.vatEnabled, vatRate: storeSettingsTable.vatRate })
+        .from(storeSettingsTable)
+        .where(eq(storeSettingsTable.userId, product.userId))
+        .limit(1),
+      db
+        .select({
+          stripeConnectAccountId: profilesTable.stripeConnectAccountId,
+          stripeConnectChargesEnabled: profilesTable.stripeConnectChargesEnabled,
+          membership: profilesTable.membership,
+        })
+        .from(profilesTable)
+        .where(eq(profilesTable.userId, product.userId))
+        .limit(1),
+    ]);
 
     const vatEnabled = storeSettings?.vatEnabled ?? false;
+
+    // Require the creator to have Stripe Connect set up before selling
+    const connectAccountId = creatorProfile?.stripeConnectAccountId;
+    if (!connectAccountId || !creatorProfile?.stripeConnectChargesEnabled) {
+      return NextResponse.json(
+        { error: "Creator has not set up payouts yet. Please check back soon." },
+        { status: 402 }
+      );
+    }
+
+    const platformFeePercent = PLATFORM_FEE_PERCENT;
 
     // Parse optional promo code from request body
     let promoCode: string | null = null;
@@ -153,7 +176,23 @@ export async function POST(
       lineItems = [{ price: ma.stripePriceId, quantity: 1 }];
     }
 
-    // Build checkout session params
+    // Calculate the platform fee (taken from the payment before it reaches the creator)
+    // We need the unit amount to compute the fee
+    let unitAmountForFee: number;
+    if (discountedUnitAmount !== null) {
+      unitAmountForFee = discountedUnitAmount;
+    } else if (typeof ma.salePrice === "number") {
+      const stripePrice = await stripe.prices.retrieve(ma.stripePriceId);
+      unitAmountForFee =
+        ma.salePrice < (stripePrice.unit_amount ?? 0) ? ma.salePrice : (stripePrice.unit_amount ?? 0);
+    } else {
+      const stripePrice = await stripe.prices.retrieve(ma.stripePriceId);
+      unitAmountForFee = stripePrice.unit_amount ?? 0;
+    }
+    const applicationFeeAmount =
+      platformFeePercent > 0 ? Math.round(unitAmountForFee * (platformFeePercent / 100)) : undefined;
+
+    // Build checkout session params — route payment through creator's connected account
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "payment",
       line_items: lineItems,
@@ -172,6 +211,11 @@ export async function POST(
       allow_promotion_codes: discountedUnitAmount === null,
       billing_address_collection: "auto",
       customer_creation: "always",
+      // Route money to the creator's Stripe account
+      payment_intent_data: {
+        application_fee_amount: applicationFeeAmount,
+        transfer_data: { destination: connectAccountId },
+      },
     };
 
     // If VAT is enabled, collect tax IDs and note that price is VAT-inclusive
@@ -179,7 +223,10 @@ export async function POST(
       sessionParams.tax_id_collection = { enabled: true };
     }
 
-    const session = await stripe.checkout.sessions.create(sessionParams);
+    // Create the session on behalf of the connected account
+    const session = await stripe.checkout.sessions.create(sessionParams, {
+      stripeAccount: connectAccountId,
+    });
 
     return NextResponse.json({ url: session.url });
   } catch (err) {

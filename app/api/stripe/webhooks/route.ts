@@ -49,11 +49,12 @@ async function addSubscriptionVideoCredits(
 
 export const dynamic = "force-dynamic";
 const relevantEvents = new Set([
-  "checkout.session.completed", 
-  "customer.subscription.updated", 
+  "checkout.session.completed",
+  "customer.subscription.updated",
   "customer.subscription.deleted",
   "invoice.payment_succeeded",
-  "invoice.payment_failed"
+  "invoice.payment_failed",
+  "account.updated", // Stripe Connect: creator onboarding
 ]);
 
 // Default usage credits for Pro plan
@@ -94,6 +95,10 @@ export async function POST(req: Request) {
           
         case "invoice.payment_failed":
           await handlePaymentFailed(event);
+          break;
+
+        case "account.updated":
+          await handleConnectAccountUpdated(event);
           break;
 
         default:
@@ -251,13 +256,13 @@ async function handlePaymentSuccess(event: Stripe.Event) {
 async function handlePaymentFailed(event: Stripe.Event) {
   const invoice = event.data.object as Stripe.Invoice;
   const customerId = invoice.customer as string;
-  
+
   try {
     // Update profile directly by Stripe customer ID
     const updatedProfile = await updateProfileByStripeCustomerId(customerId, {
       status: "payment_failed"
     });
-    
+
     if (updatedProfile) {
       console.log(`Marked payment as failed for user ${updatedProfile.userId}`);
     } else {
@@ -265,5 +270,36 @@ async function handlePaymentFailed(event: Stripe.Event) {
     }
   } catch (error) {
     console.error(`Error processing payment failure: ${error}`);
+  }
+}
+
+/**
+ * Stripe Connect: fired when a creator's connected account is updated.
+ * Syncs charges_enabled and details_submitted to their profile.
+ */
+async function handleConnectAccountUpdated(event: Stripe.Event) {
+  const account = event.data.object as Stripe.Account;
+  const contentFlyWheelUserId = account.metadata?.contentFlyWheelUserId;
+
+  if (!contentFlyWheelUserId) {
+    // Not a ContentFlywheel-created account (or missing metadata), skip
+    return;
+  }
+
+  try {
+    await db
+      .update(profilesTable)
+      .set({
+        stripeConnectOnboardingComplete: account.details_submitted,
+        stripeConnectChargesEnabled: account.charges_enabled,
+      })
+      .where(eq(profilesTable.userId, contentFlyWheelUserId));
+
+    console.log(
+      `[connect] Updated account for user ${contentFlyWheelUserId}: ` +
+      `charges_enabled=${account.charges_enabled}, details_submitted=${account.details_submitted}`
+    );
+  } catch (err) {
+    console.error("[connect] Failed to update profile:", err);
   }
 }

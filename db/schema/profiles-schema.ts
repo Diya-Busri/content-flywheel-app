@@ -34,6 +34,10 @@ export const profilesTable = pgTable("profiles", {
   trialConverted: boolean("trial_converted").default(false),
   // User-selected feature preferences (JSON string: '["videos","digital_products"]')
   enabledFeatures: text("enabled_features"),
+  // Stripe Connect (creator payouts)
+  stripeConnectAccountId: text("stripe_connect_account_id"),
+  stripeConnectOnboardingComplete: boolean("stripe_connect_onboarding_complete").default(false),
+  stripeConnectChargesEnabled: boolean("stripe_connect_charges_enabled").default(false),
   // Activity tracking
   lastActiveAt: timestamp("last_active_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

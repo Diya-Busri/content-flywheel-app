@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+
+interface ConnectStatus {
+  connected: boolean;
+  accountId?: string;
+  onboardingComplete?: boolean;
+  chargesEnabled?: boolean;
+}
 
 interface StripeBalanceAmount {
   amount: number;
@@ -82,9 +90,17 @@ export default function PayoutsClient() {
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
+  const [connectLoading, setConnectLoading] = useState(false);
+  const searchParams = useSearchParams();
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
+    setLoading(true);
     Promise.all([
+      fetch("/api/stripe/connect/status")
+        .then((r) => r.json())
+        .then((d) => setConnectStatus(d))
+        .catch(() => setConnectStatus({ connected: false })),
       fetch("/api/stripe/balance")
         .then((r) => r.json())
         .then((d) => {
@@ -100,6 +116,32 @@ export default function PayoutsClient() {
         .catch(() => {}),
     ]).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Re-fetch when returning from Stripe onboarding
+  useEffect(() => {
+    if (searchParams.get("connect") === "done") {
+      loadData();
+    }
+  }, [searchParams, loadData]);
+
+  const handleConnectStripe = async () => {
+    setConnectLoading(true);
+    try {
+      const res = await fetch("/api/stripe/connect/onboard", { method: "POST" });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch {
+      alert("Failed to start Stripe Connect. Please try again.");
+    } finally {
+      setConnectLoading(false);
+    }
+  };
 
   // This month revenue
   const thisMonthCents = (() => {
@@ -121,6 +163,53 @@ export default function PayoutsClient() {
             Your Stripe balance and transaction history
           </p>
         </div>
+
+        {/* Stripe Connect Banner */}
+        {connectStatus && !connectStatus.chargesEnabled && (
+          <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-orange-400 font-semibold text-sm">
+                {connectStatus.connected && !connectStatus.onboardingComplete
+                  ? "⚠️ Finish setting up your Stripe account"
+                  : "💳 Connect Stripe to start receiving payments"}
+              </p>
+              <p className="text-gray-400 text-xs mt-1">
+                {connectStatus.connected && !connectStatus.onboardingComplete
+                  ? "You started onboarding but haven't finished. Complete it to enable payouts."
+                  : "Connect your Stripe account so buyers can pay you directly. ContentFlywheel charges a 5% platform fee per sale."}
+              </p>
+            </div>
+            <button
+              onClick={handleConnectStripe}
+              disabled={connectLoading}
+              className="shrink-0 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors"
+            >
+              {connectLoading
+                ? "Redirecting…"
+                : connectStatus.connected
+                ? "Resume Onboarding →"
+                : "Connect Stripe →"}
+            </button>
+          </div>
+        )}
+
+        {connectStatus?.chargesEnabled && (
+          <div className="bg-green-500/10 border border-green-500/20 rounded-xl px-5 py-3 flex items-center gap-3">
+            <span className="text-green-400 text-lg">✓</span>
+            <div>
+              <p className="text-green-400 font-semibold text-sm">Stripe Connected</p>
+              <p className="text-gray-400 text-xs">Payments go directly to your Stripe account.</p>
+            </div>
+            <a
+              href={`https://dashboard.stripe.com`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-auto text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              Stripe Dashboard →
+            </a>
+          </div>
+        )}
 
         {/* Balance Card */}
         <div className="bg-card border border-white/10 rounded-xl p-6">
@@ -185,8 +274,7 @@ export default function PayoutsClient() {
             </div>
           </div>
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 text-sm text-blue-200">
-            Content Flywheel charges 0% platform fee — you keep 100% of your sales (minus
-            Stripe&apos;s standard processing fee of ~1.5% + 20p per transaction).
+            ContentFlywheel charges a 5% platform fee per sale. You keep the rest, minus Stripe&apos;s standard processing fee (~1.5% + 20p per transaction).
           </div>
         </div>
 
