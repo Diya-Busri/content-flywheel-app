@@ -13,6 +13,7 @@ import { ShareButtons } from "./ShareButtons";
 import ViewTracker from "./ViewTracker";
 import DiscountInput from "./DiscountInput";
 import { ProductCoverSection } from "./ProductCoverSection";
+import { ProductInfoTabs } from "./ProductInfoTabs";
 
 type MarketingAssets = {
   productTitle?: string;
@@ -175,43 +176,6 @@ export default async function ProductSalesPage({
     ? fullDescription.split(/\n\n+/).filter(Boolean)
     : [];
 
-  // Render a single paragraph — detects " - item - item" bullet patterns
-  function renderDescBlock(para: string, i: number) {
-    const clean = para.replace(/\*\*/g, "").trim();
-    // Split on newline bullets
-    if (/\n\s*[-•]\s/.test(clean)) {
-      const lines = clean.split(/\n/).map((l) => l.trim()).filter(Boolean);
-      const intro = lines[0].startsWith("-") ? null : lines[0];
-      const items = lines.filter((l) => l.startsWith("-") || l.startsWith("•")).map((l) => l.replace(/^[-•]\s*/, ""));
-      return (
-        <div key={i} style={{ marginBottom: "14px" }}>
-          {intro && <p style={{ margin: "0 0 8px", fontSize: "14px", color: "#374151", lineHeight: 1.7 }}>{intro}</p>}
-          <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "4px" }}>
-            {items.map((item, j) => <li key={j} style={{ fontSize: "14px", color: "#374151", lineHeight: 1.6 }}>{item}</li>)}
-          </ul>
-        </div>
-      );
-    }
-    // Inline " - " bullet pattern: "Heading: - item - item - item"
-    if (/ - /.test(clean) && clean.indexOf(" - ") < clean.length - 3) {
-      const colonIdx = clean.indexOf(": - ");
-      if (colonIdx !== -1) {
-        const heading = clean.slice(0, colonIdx + 1);
-        const rest = clean.slice(colonIdx + 2);
-        const items = rest.split(/ - /).map((s) => s.trim()).filter(Boolean);
-        return (
-          <div key={i} style={{ marginBottom: "14px" }}>
-            <p style={{ margin: "0 0 8px", fontSize: "14px", color: "#374151", lineHeight: 1.7, fontWeight: 600 }}>{heading}</p>
-            <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "4px" }}>
-              {items.map((item, j) => <li key={j} style={{ fontSize: "14px", color: "#374151", lineHeight: 1.6 }}>{item}</li>)}
-            </ul>
-          </div>
-        );
-      }
-    }
-    return <p key={i} style={{ margin: "0 0 14px", fontSize: "14px", color: "#374151", lineHeight: 1.7 }}>{clean}</p>;
-  }
-
   const creatorInitials = creatorName
     ? creatorName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()
     : "CF";
@@ -274,75 +238,13 @@ export default async function ProductSalesPage({
             isOwner={isOwner}
           />
 
-          {/* Content page preview teaser */}
-          {previewPageUrl && (
-            <div style={{ background: "#fff", borderRadius: "20px", overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginBottom: "24px" }}>
-              <div style={{ padding: "18px 24px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#111827" }}>Inside the product</h2>
-                <span style={{ fontSize: "12px", color: "#9ca3af" }}>Preview</span>
-              </div>
-              <div style={{ position: "relative" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={previewPageUrl}
-                  alt="Product content preview"
-                  style={{ width: "100%", display: "block", maxHeight: "420px", objectFit: "cover", objectPosition: "top" }}
-                />
-                {/* Fade-out gradient at bottom to hint there's more */}
-                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "140px", background: "linear-gradient(to bottom, transparent, rgba(255,255,255,0.97))", pointerEvents: "none" }} />
-                <div style={{ position: "absolute", bottom: "18px", left: 0, right: 0, textAlign: "center" }}>
-                  <span style={{ fontSize: "13px", color: "#6b7280", fontStyle: "italic" }}>Purchase to unlock the full content</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* What's inside */}
-          {sections.length > 0 && (
-            <div style={{ background: "#fff", borderRadius: "20px", padding: "28px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginBottom: "24px" }}>
-              <h2 style={{ margin: "0 0 20px", fontSize: "16px", fontWeight: 700, color: "#111827" }}>
-                What&apos;s inside
-              </h2>
-              <div className="section-list">
-                {sections.map((s, i) => (
-                  <div key={s.id ?? i} className="section-item">
-                    <div style={{ width: "22px", height: "22px", borderRadius: "50%", background: "#fff7ed", border: "1.5px solid #fed7aa", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: "11px", fontWeight: 700, color: "#f97316" }}>
-                      {i + 1}
-                    </div>
-                    <span style={{ fontSize: "14px", fontWeight: 600, color: "#374151", lineHeight: 1.4 }}>{s.title}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Full description */}
-          {descParagraphs.length > 0 && (
-            <div style={{ background: "#fff", borderRadius: "20px", padding: "28px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginBottom: "24px" }}>
-              <h2 style={{ margin: "0 0 16px", fontSize: "16px", fontWeight: 700, color: "#111827" }}>About this product</h2>
-              {descParagraphs.map((para, i) => renderDescBlock(para, i))}
-            </div>
-          )}
-
-          {/* Testimonials */}
-          {ma.testimonials && ma.testimonials.length > 0 && (
-            <div style={{ background: "#fff", borderRadius: "20px", padding: "28px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginBottom: "24px" }}>
-              <h2 style={{ margin: "0 0 20px", fontSize: "16px", fontWeight: 700, color: "#111827" }}>What customers say</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                {ma.testimonials.map((t, i) => (
-                  <div key={i} style={{ padding: "16px", background: "#fafafa", borderRadius: "12px", border: "1px solid #f3f4f6" }}>
-                    {t.rating && (
-                      <div style={{ marginBottom: "8px" }}>
-                        {"★".repeat(t.rating)}{"☆".repeat(5 - t.rating)}
-                      </div>
-                    )}
-                    <p style={{ margin: "0 0 10px", fontSize: "14px", color: "#374151", lineHeight: 1.6, fontStyle: "italic" }}>&ldquo;{t.text}&rdquo;</p>
-                    <p style={{ margin: 0, fontSize: "13px", fontWeight: 600, color: "#111827" }}>— {t.name}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Tabbed info: Preview / Contents / About */}
+          <ProductInfoTabs
+            previewPageUrl={previewPageUrl}
+            sections={sections}
+            descParagraphs={descParagraphs}
+            testimonials={ma.testimonials}
+          />
 
           {/* Hashtags */}
           {hashtags.length > 0 && (
