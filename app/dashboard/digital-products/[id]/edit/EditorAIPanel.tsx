@@ -59,40 +59,9 @@ function resolveColor(raw: string): string | null {
 }
 
 function parseDesignCommand(text: string): DesignCommand | null {
-  // "change/make/set * text * to black"
-  const textColorMatch = text.match(
-    /(?:change|make|set|turn|convert)\s+(?:the\s+)?(?:\w+\s+)?text\s+(?:on\s+\S+\s+pages?\s+)?(?:all\s+)?(?:to|into|all\s+to)?\s*(\w+)/i
-  );
-  if (textColorMatch) {
-    const color = resolveColor(textColorMatch[1]);
-    if (color) return { type: "all_text_color", value: color };
-  }
+  const t = text.toLowerCase().trim();
 
-  // "make all text black"
-  const allTextMatch = text.match(/make\s+(?:all\s+)?(?:the\s+)?text\s+(\w+)/i);
-  if (allTextMatch) {
-    const color = resolveColor(allTextMatch[1]);
-    if (color) return { type: "all_text_color", value: color };
-  }
-
-  // "text/font color to black"
-  const colorToMatch = text.match(/(?:text|font)\s+(?:color|colour)\s+(?:to|into)\s+(\w+)/i);
-  if (colorToMatch) {
-    const color = resolveColor(colorToMatch[1]);
-    if (color) return { type: "all_text_color", value: color };
-  }
-
-  // "heading/title color to X"
-  const headingMatch =
-    text.match(/(?:heading|title)s?\s+(?:color|colour)\s+(?:to\s+)?(\w+)/i) ||
-    text.match(/(?:change|make|set)\s+(?:the\s+)?(?:heading|title)s?\s+(\w+)/i);
-  if (headingMatch) {
-    const color = resolveColor(headingMatch[1]);
-    if (color) return { type: "heading_color", value: color };
-  }
-
-  // Template switches
-  const t = text.toLowerCase();
+  // Template switches — check first so "make dark mode" doesn't fall into color parsing
   if (/dark\s*mode|dark\s*theme/.test(t)) return { type: "template", value: "bold" };
   if (/light\s*mode|light\s*theme/.test(t)) return { type: "template", value: "minimal" };
   if (/\bclassic\b/.test(t)) return { type: "template", value: "classic" };
@@ -100,6 +69,25 @@ function parseDesignCommand(text: string): DesignCommand | null {
   if (/\bmodern\b/.test(t)) return { type: "template", value: "modern" };
   if (/\bcreative\b|\bplayful\b/.test(t)) return { type: "template", value: "creative" };
   if (/\bminimal\b/.test(t)) return { type: "template", value: "minimal" };
+
+  // Robust colour extraction: find the LAST word in the string — the destination colour is almost always last.
+  // Handles typos like "too" instead of "to" naturally.
+  const lastWordMatch = t.match(/\b([a-z]+)\s*[.!?]?\s*$/);
+  const lastWord = lastWordMatch?.[1] ?? "";
+  const destColor = resolveColor(lastWord);
+
+  if (destColor) {
+    const hasChangeVerb = /\b(change|make|set|turn|convert|switch)\b/.test(t);
+    const hasTextRef = /\b(text|colour|color|font)\b/.test(t);
+    const hasHeadingRef = /\b(heading|title)s?\b/.test(t);
+    const hasBodyRef = /\b(body|paragraph|content)\b/.test(t);
+    const hasAccentRef = /\b(accent|highlight|button)\b/.test(t);
+
+    if (hasChangeVerb && hasAccentRef) return { type: "accent_color", value: destColor };
+    if (hasChangeVerb && hasHeadingRef && !hasBodyRef) return { type: "heading_color", value: destColor };
+    if (hasChangeVerb && hasBodyRef && !hasHeadingRef) return { type: "body_color", value: destColor };
+    if (hasChangeVerb && hasTextRef) return { type: "all_text_color", value: destColor };
+  }
 
   return null;
 }
@@ -110,6 +98,15 @@ function isWriteIntent(text: string): boolean {
 
 function isDesignIntent(text: string): boolean {
   return DESIGN_INTENT_RE.test(text);
+}
+
+/** Strip basic markdown so chat responses don't show raw **bold** asterisks */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "$1")   // **bold** → bold
+    .replace(/\*(.+?)\*/g, "$1")        // *italic* → italic
+    .replace(/^#{1,3}\s+/gm, "")        // ## Heading → Heading
+    .replace(/^[-*]\s+/gm, "• ");       // - item → • item
 }
 
 function applyActions(sections: Section[], actions: Action[]): Section[] {
@@ -298,21 +295,21 @@ export function EditorAIPanel({
       const cmd = parseDesignCommand(value);
       if (cmd && onApplyDesignCommand) {
         onApplyDesignCommand(cmd);
+        const destWord = value.match(/\b(\w+)\s*[.!?]?\s*$/i)?.[1] ?? "the new colour";
         const descriptions: Record<string, string> = {
-          all_text_color: `Changed all text colour to ${value.match(/\b(\w+)$/i)?.[1] ?? "the new colour"}`,
-          heading_color: `Updated heading colour`,
-          body_color: `Updated body text colour`,
-          accent_color: `Updated accent colour`,
+          all_text_color: `Changed all text colour to ${destWord}`,
+          heading_color: `Updated heading colour to ${destWord}`,
+          body_color: `Updated body text colour to ${destWord}`,
+          accent_color: `Updated accent colour to ${destWord}`,
           template: `Switched to ${cmd.value} template`,
         };
         addMessage({ role: "assistant", content: `✅ Done! ${descriptions[cmd.type]}. The changes are live on your canvas.`, designApplied: true });
       } else {
-        // Couldn't parse it locally — fall back to AI chat
-        // Don't add user message again; sendCoach handles it via sync
-        setDisplayMessages((prev) => [
-          ...prev.slice(0, -1), // remove the user msg we just added
-        ]);
-        sendCoach(value);
+        // Couldn't parse this as a design command — show a helpful hint
+        addMessage({
+          role: "assistant",
+          content: `I couldn't figure out exactly what to change. Try something like:\n• "Make all text black"\n• "Change heading colour to blue"\n• "Switch to dark mode"\n\nOr use the Design tab to adjust colours manually.`,
+        });
       }
     } else {
       // General Q&A — let coachMessages sync handle adding user + assistant messages
@@ -331,20 +328,24 @@ export function EditorAIPanel({
       const newMsgs = coachMessages.slice(prevCoachLenRef.current);
       setDisplayMessages((prev) => [
         ...prev,
-        ...newMsgs.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+        ...newMsgs.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.role === "assistant" ? stripMarkdown(m.content) : m.content,
+        })),
       ]);
       prevCoachLenRef.current = coachMessages.length;
     } else if (coachMessages.length > 0 && prevCoachLenRef.current === coachMessages.length) {
       // Same length but content changed — streaming update on the last message
       const lastCoach = coachMessages[coachMessages.length - 1];
       if (lastCoach.role === "assistant") {
+        const stripped = stripMarkdown(lastCoach.content);
         setDisplayMessages((prev) => {
           if (prev.length === 0) return prev;
           const updated = [...prev];
           const lastDisplay = updated[updated.length - 1];
           // Only update if this is the assistant placeholder we're streaming into
-          if (lastDisplay.role === "assistant" && lastDisplay.content !== lastCoach.content) {
-            updated[updated.length - 1] = { ...lastDisplay, content: lastCoach.content };
+          if (lastDisplay.role === "assistant" && lastDisplay.content !== stripped) {
+            updated[updated.length - 1] = { ...lastDisplay, content: stripped };
             return updated;
           }
           return prev;
