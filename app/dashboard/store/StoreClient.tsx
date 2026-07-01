@@ -282,6 +282,67 @@ function UnpublishedProductRow({ item, onRefresh }: { item: LibraryItem; onRefre
   );
 }
 
+// ── LibraryPickerRow ──────────────────────────────────────────────────────────
+
+function LibraryPickerRow({ item, publishing, onPublish }: {
+  item: LibraryItem;
+  publishing: boolean;
+  onPublish: (price: number) => Promise<void>;
+}) {
+  const [showPrice, setShowPrice] = useState(false);
+  const [priceInput, setPriceInput] = useState("");
+  const { toast } = useToast();
+
+  const handlePublish = async () => {
+    const num = parseFloat(priceInput);
+    if (isNaN(num) || num < 1) {
+      toast({ title: "Enter a price of at least £1", variant: "destructive" });
+      return;
+    }
+    await onPublish(Math.round(num * 100));
+    setShowPrice(false);
+    setPriceInput("");
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-3.5">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200 flex items-center justify-center shrink-0">
+          <BookOpen className="w-4 h-4 text-orange-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
+          {item.format && <p className="text-xs text-gray-500 capitalize">{item.format}</p>}
+        </div>
+        {!showPrice && (
+          <Button size="sm" variant="outline" className="h-7 text-xs border-orange-300 text-orange-600 hover:bg-orange-50 shrink-0 gap-1" onClick={() => setShowPrice(true)}>
+            <ShoppingBag className="w-3 h-3" />Publish
+          </Button>
+        )}
+      </div>
+      {showPrice && (
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+          <span className="text-sm text-gray-500 shrink-0">Set price:</span>
+          <div className="relative flex-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">£</span>
+            <input type="number" min="1" step="0.01" value={priceInput} onChange={(e) => setPriceInput(e.target.value)}
+              className="w-full pl-7 pr-3 h-8 text-sm rounded-lg border border-gray-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500/20"
+              placeholder="9.99" autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") handlePublish(); if (e.key === "Escape") { setShowPrice(false); setPriceInput(""); } }}
+            />
+          </div>
+          <Button size="sm" className="h-8 text-xs bg-orange-500 hover:bg-orange-600 text-white shrink-0" disabled={publishing} onClick={handlePublish}>
+            {publishing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Go live"}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 text-xs text-gray-500" onClick={() => { setShowPrice(false); setPriceInput(""); }}>
+            <X className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Revenue Mini Chart (pure CSS) ─────────────────────────────────────────────
 
 function RevenueChart({ data }: { data: DayRevenue[] }) {
@@ -384,6 +445,10 @@ export function StoreClient({ userId }: StoreClientProps) {
   const [affiliateCommission, setAffiliateCommission] = useState("20");
   const [savingAffiliate, setSavingAffiliate] = useState(false);
 
+  // Library picker
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [libraryPickerPublishing, setLibraryPickerPublishing] = useState<string | null>(null);
+
   // Analytics + Customers + Email (shared fetch)
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
@@ -412,10 +477,11 @@ export function StoreClient({ userId }: StoreClientProps) {
   const fetchLibrary = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const res = await fetch("/api/library?type=products");
+      const res = await fetch("/api/library");
       if (!res.ok) throw new Error("Failed to load library");
       const data: LibraryItem[] = await res.json();
-      setItems(data.filter((d) => d.type === "product"));
+      // Include all sellable types — ebook, template, course, workbook, product, etc.
+      setItems(data.filter((d) => ["product", "ebook", "template", "course", "workbook", "guide", "checklist", "script"].includes(d.type) || d.type != null));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally { setLoading(false); }
@@ -604,18 +670,68 @@ export function StoreClient({ userId }: StoreClientProps) {
                   </section>
                 )}
 
-                <div className="flex items-center justify-center gap-3 pt-2">
-                  <Link href="/dashboard/digital-products/upload">
-                    <Button variant="outline" size="sm" className="gap-2 border-gray-300 text-gray-600 hover:text-orange-600 hover:border-orange-300 h-8 text-xs">
-                      <Upload className="w-3.5 h-3.5" />Upload a product
+                {/* ── Add more products bar ── */}
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 flex items-center gap-4 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">Add products to your store</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Upload a file or pick something you&apos;ve already made in the app</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <Link href="/dashboard/digital-products/upload">
+                      <Button variant="outline" size="sm" className="gap-2 border-gray-300 text-gray-700 hover:text-orange-600 hover:border-orange-300 h-8 text-xs">
+                        <Upload className="w-3.5 h-3.5" />Upload file
+                      </Button>
+                    </Link>
+                    <Button size="sm" className="gap-2 bg-orange-500 hover:bg-orange-600 text-white h-8 text-xs" onClick={() => setShowLibraryPicker((v) => !v)}>
+                      <BookOpen className="w-3.5 h-3.5" />{showLibraryPicker ? "Close library" : "Pick from library"}
                     </Button>
-                  </Link>
-                  <Link href="/dashboard/digital-products">
-                    <Button variant="outline" size="sm" className="gap-2 border-gray-300 text-gray-600 hover:text-orange-600 hover:border-orange-300 h-8 text-xs">
-                      <Plus className="w-3.5 h-3.5" />Create with AI
-                    </Button>
-                  </Link>
+                  </div>
                 </div>
+
+                {/* ── Library picker ── */}
+                {showLibraryPicker && (
+                  <div className="rounded-2xl border border-orange-200 bg-orange-50 p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <BookOpen className="w-4 h-4 text-orange-600" />
+                      <p className="text-sm font-semibold text-gray-900">Your library — click any item to publish it</p>
+                    </div>
+                    {unpublished.length === 0 ? (
+                      <div className="text-center py-8">
+                        <p className="text-sm text-gray-500 mb-3">Everything in your library is already published, or your library is empty.</p>
+                        <Link href="/dashboard/digital-products">
+                          <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
+                            <Plus className="w-3.5 h-3.5" />Create something with AI
+                          </Button>
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {unpublished.map((item) => (
+                          <LibraryPickerRow
+                            key={item.id}
+                            item={item}
+                            publishing={libraryPickerPublishing === item.id}
+                            onPublish={async (price) => {
+                              setLibraryPickerPublishing(item.id);
+                              try {
+                                const res = await fetch(`/api/products/${item.id}/native-publish`, {
+                                  method: "POST", headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ price }),
+                                });
+                                const data = await res.json();
+                                if (!res.ok) throw new Error(data.error || "Failed to publish");
+                                toast({ title: "Published!", description: `"${item.title}" is now live at ${data.priceLabel}` });
+                                fetchLibrary();
+                              } catch (err) {
+                                toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+                              } finally { setLibraryPickerPublishing(null); }
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

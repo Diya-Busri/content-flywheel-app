@@ -10,6 +10,9 @@ type CreatorInfo = {
   targetAudience: string | null;
   tone: string | null;
   productCount: number;
+  profileImageUrl: string | null;
+  accentColor: string;
+  bio: string | null;
 };
 
 export default function SubscribePage() {
@@ -26,436 +29,225 @@ export default function SubscribePage() {
     if (!userId) return;
     fetch(`/api/public/creator/${userId}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: CreatorInfo | null) => {
-        if (data) setCreator(data);
-      })
+      .then((data: CreatorInfo | null) => { if (data) setCreator(data); })
       .catch(() => {});
   }, [userId]);
 
-  const displayName = creator?.brandName ?? null;
+  const accent = creator?.accentColor ?? "#f97316";
+  const brandName = creator?.brandName ?? null;
+  const initials = brandName
+    ? brandName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
+    : "CF";
 
-  const headline = displayName
-    ? `Get exclusive updates from ${displayName}`
+  const headline = brandName
+    ? `Get exclusive updates from ${brandName}`
     : "Subscribe for exclusive updates & offers";
 
-  const subheadline = (() => {
-    if (displayName && creator?.targetAudience) {
-      return `Join ${creator.targetAudience} already following ${displayName} — get content, deals, and updates straight to your inbox.`;
-    }
-    if (displayName) {
-      return `Be the first to hear about new content, deals, and offers from ${displayName}.`;
-    }
-    return "Join the list and be the first to know about new content, deals, and more.";
-  })();
-
-  const successHeadline = displayName
-    ? `You&rsquo;re subscribed to ${displayName}!`
-    : "You&rsquo;re subscribed!";
-
-  const successBody = displayName
-    ? `Check your inbox for a welcome email. You&rsquo;ll be the first to know about new drops and exclusive offers from ${displayName}.`
-    : "Check your inbox for a welcome email. We&rsquo;re excited to have you on board!";
+  const subheadline = brandName && creator?.targetAudience
+    ? `Join ${creator.targetAudience} already following ${brandName} — content, deals and new drops straight to your inbox.`
+    : brandName
+    ? `Be the first to hear about new content, deals, and offers from ${brandName}.`
+    : "Join the list and be the first to know about new content, deals, and more.";
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
     const trimmedEmail = email.trim();
-    const trimmedName = name.trim();
-
-    if (!trimmedEmail) {
-      setErrorMessage("Please enter your email address.");
-      setFormState("error");
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
+    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       setErrorMessage("Please enter a valid email address.");
       setFormState("error");
       return;
     }
-
     setFormState("loading");
     setErrorMessage("");
-
     try {
       const res = await fetch("/api/email/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: trimmedEmail,
-          name: trimmedName || undefined,
-          userId,
-        }),
+        body: JSON.stringify({ email: trimmedEmail, name: name.trim() || undefined, userId }),
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        setErrorMessage(data.error ?? "Something went wrong. Please try again.");
-        setFormState("error");
-        return;
-      }
-
+      if (!res.ok) { setErrorMessage(data.error ?? "Something went wrong."); setFormState("error"); return; }
       setFormState("success");
     } catch {
-      setErrorMessage("Network error. Please check your connection and try again.");
+      setErrorMessage("Network error. Please check your connection.");
       setFormState("error");
     }
   };
 
-  const handleReset = () => {
-    setFormState("idle");
-    setErrorMessage("");
-  };
-
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "linear-gradient(135deg, #fff7ed 0%, #ffedd5 40%, #fed7aa 100%)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px 16px",
-        fontFamily:
-          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
-      }}
-    >
-      <div style={{ width: "100%", maxWidth: "460px" }}>
+    <main style={{
+      minHeight: "100vh",
+      background: "#f9fafb",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "24px 16px",
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    }}>
+      <div style={{ width: "100%", maxWidth: "480px" }}>
+
         {/* Card */}
-        <div
-          style={{
-            backgroundColor: "#ffffff",
-            borderRadius: "24px",
-            padding: "48px 40px 40px",
-            boxShadow:
-              "0 4px 6px -1px rgba(0,0,0,0.07), 0 20px 60px -10px rgba(249,115,22,0.15)",
-            border: "1px solid rgba(249,115,22,0.1)",
-          }}
-        >
-          {formState === "success" ? (
-            /* ---- Success state ---- */
-            <div style={{ textAlign: "center" }}>
-              <div
-                style={{
-                  width: "72px",
-                  height: "72px",
-                  borderRadius: "50%",
-                  background: "linear-gradient(135deg,#f97316,#fb923c)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 24px",
-                  fontSize: "32px",
-                }}
-              >
-                🎉
+        <div style={{
+          backgroundColor: "#ffffff",
+          borderRadius: "24px",
+          overflow: "hidden",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 20px 60px rgba(0,0,0,0.10)",
+          border: "1px solid #e5e7eb",
+        }}>
+
+          {/* Top colour bar */}
+          <div style={{ height: "6px", background: `linear-gradient(90deg, ${accent}, ${accent}cc)` }} />
+
+          <div style={{ padding: "40px 40px 36px" }}>
+
+            {formState === "success" ? (
+              /* ── Success ── */
+              <div style={{ textAlign: "center", padding: "16px 0" }}>
+                <div style={{
+                  width: "72px", height: "72px", borderRadius: "50%",
+                  background: `linear-gradient(135deg, ${accent}, ${accent}cc)`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  margin: "0 auto 24px", fontSize: "34px",
+                  boxShadow: `0 8px 24px ${accent}40`,
+                }}>🎉</div>
+                <h1 style={{ margin: "0 0 12px", fontSize: "24px", fontWeight: "800", color: "#111827", letterSpacing: "-0.5px", lineHeight: 1.2 }}>
+                  {brandName ? `You're subscribed to ${brandName}!` : "You're subscribed!"}
+                </h1>
+                <p style={{ margin: 0, fontSize: "15px", color: "#6b7280", lineHeight: "1.65" }}>
+                  {brandName
+                    ? `Check your inbox for a welcome email. You'll be the first to know about new drops from ${brandName}.`
+                    : "Check your inbox for a welcome email. Excited to have you!"}
+                </p>
               </div>
-              <h1
-                style={{
-                  margin: "0 0 12px",
-                  fontSize: "22px",
-                  fontWeight: "700",
-                  color: "#111827",
-                  lineHeight: "1.3",
-                }}
-                dangerouslySetInnerHTML={{ __html: successHeadline }}
-              />
-              <p
-                style={{
-                  margin: "0",
-                  fontSize: "15px",
-                  color: "#6b7280",
-                  lineHeight: "1.65",
-                }}
-                dangerouslySetInnerHTML={{ __html: successBody }}
-              />
-            </div>
-          ) : (
-            /* ---- Form state ---- */
-            <>
-              {/* Icon */}
-              <div
-                style={{
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "16px",
-                  background: "linear-gradient(135deg,#f97316,#fb923c)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: "24px",
-                  fontSize: "24px",
-                  boxShadow: "0 4px 12px rgba(249,115,22,0.3)",
-                }}
-              >
-                ✉️
-              </div>
-
-              {/* Headline */}
-              <h1
-                style={{
-                  margin: "0 0 8px",
-                  fontSize: "26px",
-                  fontWeight: "800",
-                  color: "#111827",
-                  lineHeight: "1.25",
-                  letterSpacing: "-0.4px",
-                }}
-              >
-                {headline}
-              </h1>
-              <p
-                style={{
-                  margin: "0 0 28px",
-                  fontSize: "15px",
-                  color: "#6b7280",
-                  lineHeight: "1.6",
-                }}
-              >
-                {subheadline}
-              </p>
-
-              {/* Social proof pill — product count */}
-              {creator && creator.productCount > 0 && (
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    backgroundColor: "#fff7ed",
-                    border: "1px solid #fed7aa",
-                    borderRadius: "999px",
-                    padding: "5px 12px",
-                    marginBottom: "24px",
-                    fontSize: "13px",
-                    color: "#c2410c",
-                    fontWeight: "600",
-                  }}
-                >
-                  <span style={{ fontSize: "14px" }}>🔥</span>
-                  {creator.productCount} digital product{creator.productCount !== 1 ? "s" : ""} available
-                </div>
-              )}
-
-              {/* Error banner */}
-              {formState === "error" && (
-                <div
-                  style={{
-                    backgroundColor: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    borderRadius: "10px",
-                    padding: "12px 16px",
-                    marginBottom: "20px",
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: "10px",
-                  }}
-                >
-                  <span style={{ fontSize: "16px", flexShrink: 0, marginTop: "1px" }}>⚠️</span>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "14px",
-                      color: "#b91c1c",
-                      lineHeight: "1.5",
-                    }}
-                  >
-                    {errorMessage}
-                  </p>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                {/* Name field */}
-                <div>
-                  <label
-                    htmlFor="sub-name"
-                    style={{
-                      display: "block",
-                      fontSize: "13px",
-                      fontWeight: "600",
-                      color: "#374151",
-                      marginBottom: "6px",
-                      letterSpacing: "0.01em",
-                    }}
-                  >
-                    Name{" "}
-                    <span style={{ color: "#9ca3af", fontWeight: "400" }}>(optional)</span>
-                  </label>
-                  <input
-                    id="sub-name"
-                    type="text"
-                    placeholder="Jane Smith"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    disabled={formState === "loading"}
-                    style={{
-                      width: "100%",
-                      padding: "11px 14px",
-                      borderRadius: "10px",
-                      border: "1.5px solid #e5e7eb",
-                      fontSize: "15px",
-                      color: "#111827",
-                      outline: "none",
-                      transition: "border-color 0.15s",
-                      boxSizing: "border-box",
-                      backgroundColor: formState === "loading" ? "#f9fafb" : "#ffffff",
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = "#f97316";
-                      e.target.style.boxShadow = "0 0 0 3px rgba(249,115,22,0.12)";
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = "#e5e7eb";
-                      e.target.style.boxShadow = "none";
-                    }}
-                  />
-                </div>
-
-                {/* Email field */}
-                <div>
-                  <label
-                    htmlFor="sub-email"
-                    style={{
-                      display: "block",
-                      fontSize: "13px",
-                      fontWeight: "600",
-                      color: "#374151",
-                      marginBottom: "6px",
-                      letterSpacing: "0.01em",
-                    }}
-                  >
-                    Email address <span style={{ color: "#f97316" }}>*</span>
-                  </label>
-                  <input
-                    id="sub-email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      if (formState === "error") handleReset();
-                    }}
-                    disabled={formState === "loading"}
-                    required
-                    style={{
-                      width: "100%",
-                      padding: "11px 14px",
-                      borderRadius: "10px",
-                      border: `1.5px solid ${formState === "error" ? "#fca5a5" : "#e5e7eb"}`,
-                      fontSize: "15px",
-                      color: "#111827",
-                      outline: "none",
-                      transition: "border-color 0.15s",
-                      boxSizing: "border-box",
-                      backgroundColor: formState === "loading" ? "#f9fafb" : "#ffffff",
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = "#f97316";
-                      e.target.style.boxShadow = "0 0 0 3px rgba(249,115,22,0.12)";
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor =
-                        formState === "error" ? "#fca5a5" : "#e5e7eb";
-                      e.target.style.boxShadow = "none";
-                    }}
-                  />
-                </div>
-
-                {/* Submit button */}
-                <button
-                  type="submit"
-                  disabled={formState === "loading"}
-                  style={{
-                    width: "100%",
-                    padding: "13px 20px",
-                    borderRadius: "10px",
-                    border: "none",
-                    background:
-                      formState === "loading"
-                        ? "#fb923c"
-                        : "linear-gradient(135deg,#f97316 0%,#ea6c0a 100%)",
-                    color: "#ffffff",
-                    fontSize: "15px",
-                    fontWeight: "700",
-                    cursor: formState === "loading" ? "not-allowed" : "pointer",
-                    transition: "opacity 0.15s, transform 0.1s",
-                    boxShadow: "0 4px 14px rgba(249,115,22,0.35)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "8px",
-                    marginTop: "4px",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (formState !== "loading") {
-                      (e.currentTarget as HTMLButtonElement).style.opacity = "0.92";
-                      (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.opacity = "1";
-                    (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
-                  }}
-                >
-                  {formState === "loading" ? (
-                    <>
-                      <span
-                        style={{
-                          display: "inline-block",
-                          width: "16px",
-                          height: "16px",
-                          border: "2px solid rgba(255,255,255,0.4)",
-                          borderTopColor: "#ffffff",
-                          borderRadius: "50%",
-                          animation: "spin 0.7s linear infinite",
-                        }}
-                      />
-                      Subscribing&hellip;
-                    </>
+            ) : (
+              /* ── Form ── */
+              <>
+                {/* Profile */}
+                <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "28px" }}>
+                  {creator?.profileImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={creator.profileImageUrl} alt={brandName ?? "Creator"}
+                      style={{ width: "64px", height: "64px", borderRadius: "50%", objectFit: "cover", border: `3px solid ${accent}30`, flexShrink: 0 }} />
                   ) : (
-                    "Subscribe Now"
+                    <div style={{
+                      width: "64px", height: "64px", borderRadius: "50%", flexShrink: 0,
+                      background: `linear-gradient(135deg, ${accent}, ${accent}cc)`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "22px", fontWeight: "800", color: "#fff", letterSpacing: "-1px",
+                      boxShadow: `0 4px 14px ${accent}40`,
+                    }}>{initials}</div>
                   )}
-                </button>
-              </form>
+                  <div>
+                    {brandName && (
+                      <p style={{ margin: "0 0 2px", fontSize: "17px", fontWeight: "800", color: "#111827", letterSpacing: "-0.3px" }}>{brandName}</p>
+                    )}
+                    <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>Newsletter & updates</p>
+                  </div>
+                </div>
 
-              <p
-                style={{
-                  margin: "20px 0 0",
-                  fontSize: "12px",
-                  color: "#9ca3af",
-                  textAlign: "center",
-                  lineHeight: "1.5",
-                }}
-              >
-                No spam, ever. Unsubscribe at any time.
-              </p>
-            </>
-          )}
+                {/* Headline */}
+                <h1 style={{ margin: "0 0 10px", fontSize: "24px", fontWeight: "800", color: "#111827", lineHeight: "1.25", letterSpacing: "-0.5px" }}>
+                  {headline}
+                </h1>
+                <p style={{ margin: "0 0 24px", fontSize: "15px", color: "#6b7280", lineHeight: "1.65" }}>
+                  {subheadline}
+                </p>
+
+                {/* Social proof */}
+                {creator && creator.productCount > 0 && (
+                  <div style={{
+                    display: "inline-flex", alignItems: "center", gap: "6px",
+                    background: `${accent}12`, border: `1px solid ${accent}30`,
+                    borderRadius: "100px", padding: "5px 14px",
+                    marginBottom: "24px", fontSize: "13px",
+                    color: accent, fontWeight: "700",
+                  }}>
+                    🔥 {creator.productCount} digital product{creator.productCount !== 1 ? "s" : ""} available
+                  </div>
+                )}
+
+                {/* Error */}
+                {formState === "error" && (
+                  <div style={{
+                    background: "#fef2f2", border: "1px solid #fecaca",
+                    borderRadius: "10px", padding: "12px 16px",
+                    marginBottom: "20px", display: "flex", gap: "10px",
+                  }}>
+                    <span style={{ fontSize: "15px", flexShrink: 0 }}>⚠️</span>
+                    <p style={{ margin: 0, fontSize: "14px", color: "#b91c1c", lineHeight: "1.5" }}>{errorMessage}</p>
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {/* Name */}
+                  <div>
+                    <label htmlFor="sub-name" style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#374151", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Name <span style={{ color: "#9ca3af", fontWeight: "400", textTransform: "none" }}>(optional)</span>
+                    </label>
+                    <input id="sub-name" type="text" placeholder="Jane Smith"
+                      value={name} onChange={(e) => setName(e.target.value)}
+                      disabled={formState === "loading"}
+                      style={{ width: "100%", padding: "12px 14px", borderRadius: "10px", border: "1.5px solid #e5e7eb", fontSize: "15px", color: "#111827", outline: "none", boxSizing: "border-box", backgroundColor: "#fff" }}
+                      onFocus={(e) => { e.target.style.borderColor = accent; e.target.style.boxShadow = `0 0 0 3px ${accent}20`; }}
+                      onBlur={(e) => { e.target.style.borderColor = "#e5e7eb"; e.target.style.boxShadow = "none"; }}
+                    />
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label htmlFor="sub-email" style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#374151", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Email address <span style={{ color: accent }}>*</span>
+                    </label>
+                    <input id="sub-email" type="email" placeholder="you@example.com"
+                      value={email} onChange={(e) => { setEmail(e.target.value); if (formState === "error") { setFormState("idle"); setErrorMessage(""); } }}
+                      disabled={formState === "loading"} required
+                      style={{ width: "100%", padding: "12px 14px", borderRadius: "10px", border: `1.5px solid ${formState === "error" ? "#fca5a5" : "#e5e7eb"}`, fontSize: "15px", color: "#111827", outline: "none", boxSizing: "border-box", backgroundColor: "#fff" }}
+                      onFocus={(e) => { e.target.style.borderColor = accent; e.target.style.boxShadow = `0 0 0 3px ${accent}20`; }}
+                      onBlur={(e) => { e.target.style.borderColor = formState === "error" ? "#fca5a5" : "#e5e7eb"; e.target.style.boxShadow = "none"; }}
+                    />
+                  </div>
+
+                  {/* Submit */}
+                  <button type="submit" disabled={formState === "loading"}
+                    style={{
+                      width: "100%", padding: "14px 20px", borderRadius: "12px", border: "none",
+                      background: formState === "loading" ? `${accent}cc` : accent,
+                      color: "#fff", fontSize: "15px", fontWeight: "700",
+                      cursor: formState === "loading" ? "not-allowed" : "pointer",
+                      boxShadow: `0 4px 16px ${accent}45`,
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                      marginTop: "4px", transition: "opacity 0.15s, transform 0.1s",
+                    }}
+                    onMouseEnter={(e) => { if (formState !== "loading") { (e.currentTarget as HTMLButtonElement).style.opacity = "0.92"; (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)"; } }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
+                  >
+                    {formState === "loading" ? (
+                      <>
+                        <span style={{ display: "inline-block", width: "16px", height: "16px", border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+                        Subscribing…
+                      </>
+                    ) : "Subscribe Now"}
+                  </button>
+                </form>
+
+                {/* Trust line */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "16px", marginTop: "20px" }}>
+                  {["🔒 No spam", "✉️ Free forever", "👋 Unsubscribe anytime"].map((t) => (
+                    <span key={t} style={{ fontSize: "11px", color: "#9ca3af", fontWeight: "500" }}>{t}</span>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
-        <p
-          style={{
-            textAlign: "center",
-            marginTop: "24px",
-            fontSize: "12px",
-            color: "#d1d5db",
-          }}
-        >
-          Powered by{" "}
-          <span style={{ color: "#f97316", fontWeight: "600" }}>Content Flywheel</span>
+        <p style={{ textAlign: "center", marginTop: "20px", fontSize: "12px", color: "#9ca3af" }}>
+          Powered by <span style={{ color: accent, fontWeight: "700" }}>Content Flywheel</span>
         </p>
       </div>
 
-      {/* Inline keyframe for spinner */}
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </main>
   );
 }

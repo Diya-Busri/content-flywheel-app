@@ -3,6 +3,7 @@ import { db } from "@/db/db";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { productsTable } from "@/db/schema/products-schema";
+import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { eq, and, isNull, count } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -33,27 +34,15 @@ export async function GET(
       return NextResponse.json({ error: "Creator not found" }, { status: 404 });
     }
 
-    // Fetch brand voice (optional — may not exist)
-    const [brandVoice] = await db
-      .select({
-        brandName: brandVoiceTable.brandName,
-        targetAudience: brandVoiceTable.targetAudience,
-        tone: brandVoiceTable.tone,
-      })
-      .from(brandVoiceTable)
-      .where(eq(brandVoiceTable.userId, userId))
-      .limit(1);
-
-    // Fetch active product count for social proof
-    const [productCountRow] = await db
-      .select({ count: count() })
-      .from(productsTable)
-      .where(
-        and(
-          eq(productsTable.userId, userId),
-          isNull(productsTable.deletedAt)
-        )
-      );
+    // Fetch brand voice + store settings in parallel
+    const [[brandVoice], [storeSettings], [productCountRow]] = await Promise.all([
+      db.select({ brandName: brandVoiceTable.brandName, targetAudience: brandVoiceTable.targetAudience, tone: brandVoiceTable.tone })
+        .from(brandVoiceTable).where(eq(brandVoiceTable.userId, userId)).limit(1),
+      db.select({ profileImageUrl: storeSettingsTable.profileImageUrl, accentColor: storeSettingsTable.accentColor, bio: storeSettingsTable.bio })
+        .from(storeSettingsTable).where(eq(storeSettingsTable.userId, userId)).limit(1),
+      db.select({ count: count() }).from(productsTable)
+        .where(and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt))),
+    ]);
 
     const productCount = Number(productCountRow?.count ?? 0);
 
@@ -62,6 +51,9 @@ export async function GET(
       targetAudience: brandVoice?.targetAudience ?? null,
       tone: brandVoice?.tone ?? null,
       productCount,
+      profileImageUrl: storeSettings?.profileImageUrl ?? null,
+      accentColor: storeSettings?.accentColor ?? "#f97316",
+      bio: storeSettings?.bio ?? null,
     });
   } catch (e) {
     console.error("[public/creator] GET error:", e);
