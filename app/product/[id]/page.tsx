@@ -32,6 +32,7 @@ type MarketingAssets = {
   testimonials?: Array<{ name: string; text: string; rating?: number }>;
   comingSoon?: boolean;
   uploadedFileUrl?: string | null;
+  previewPageUrl?: string | null;
 };
 
 type ProductContent = {
@@ -151,7 +152,8 @@ export default async function ProductSalesPage({
   const tagline = fullDescription
     ? fullDescription.split(/\n\n+/)[0].replace(/\*\*/g, "").slice(0, 180)
     : null;
-  const coverImage = ma.bookMockupUrl ?? ma.coverThumbnailUrl ?? ma.thumbnailUrl ?? null;
+  const coverImage = ma.coverThumbnailUrl ?? ma.bookMockupUrl ?? ma.thumbnailUrl ?? null;
+  const previewPageUrl = ma.previewPageUrl ?? null;
   const uploadedFileUrl = ma.uploadedFileUrl ?? null;
   const isOwner = viewerUserId === product.userId;
   const hashtags: string[] = (ma.hashtags ?? []).slice(0, 8);
@@ -271,6 +273,29 @@ export default async function ProductSalesPage({
             productId={id}
             isOwner={isOwner}
           />
+
+          {/* Content page preview teaser */}
+          {previewPageUrl && (
+            <div style={{ background: "#fff", borderRadius: "20px", overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginBottom: "24px" }}>
+              <div style={{ padding: "18px 24px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#111827" }}>Inside the product</h2>
+                <span style={{ fontSize: "12px", color: "#9ca3af" }}>Preview</span>
+              </div>
+              <div style={{ position: "relative" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewPageUrl}
+                  alt="Product content preview"
+                  style={{ width: "100%", display: "block", maxHeight: "420px", objectFit: "cover", objectPosition: "top" }}
+                />
+                {/* Fade-out gradient at bottom to hint there's more */}
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "140px", background: "linear-gradient(to bottom, transparent, rgba(255,255,255,0.97))", pointerEvents: "none" }} />
+                <div style={{ position: "absolute", bottom: "18px", left: 0, right: 0, textAlign: "center" }}>
+                  <span style={{ fontSize: "13px", color: "#6b7280", fontStyle: "italic" }}>Purchase to unlock the full content</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* What's inside */}
           {sections.length > 0 && (

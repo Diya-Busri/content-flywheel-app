@@ -1039,6 +1039,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [showThumbnailOptions, setShowThumbnailOptions] = useState(false);
   const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
   const [coverCapturing, setCoverCapturing] = useState(false);
+  const [previewCapturing, setPreviewCapturing] = useState(false);
   const thumbnailCaptureRef = useRef<HTMLDivElement | null>(null);
   const [includeCover, setIncludeCover] = useState(true);
   const [includeBackPage, setIncludeBackPage] = useState(true);
@@ -4218,6 +4219,38 @@ export default function ProductEditor({ productId }: { productId: string }) {
     }
   }, [productId, saveMarketingEdits, toast]);
 
+  const handleCapturePreviewPage = useCallback(async () => {
+    if (!productId) return;
+    setPreviewCapturing(true);
+    try {
+      // Capture whatever content page is currently visible in the editor canvas
+      const el = canvasContainerRef.current;
+      if (!el) {
+        toast({ title: "Canvas not ready", description: "Please switch to the Content tab first.", variant: "destructive" });
+        return;
+      }
+      const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 1.5, backgroundColor: "#ffffff", logging: false });
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.80));
+      const fd = new FormData();
+      fd.append("file", blob, "preview.jpg");
+      const res = await fetch(`/api/products/${productId}/preview-thumbnail`, { method: "POST", body: fd });
+      const text = await res.text();
+      let data: { url?: string; error?: string } = {};
+      try { data = JSON.parse(text); } catch { data = { error: text.slice(0, 120) }; }
+      if (res.ok && data.url) {
+        setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, previewPageUrl: data.url } } : null);
+        saveMarketingEdits({ previewPageUrl: data.url });
+        toast({ title: "Preview captured ✓", description: "This page will now show as a teaser on your store." });
+      } else {
+        toast({ title: "Capture failed", description: data.error ?? "Unknown error", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Capture failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setPreviewCapturing(false);
+    }
+  }, [productId, saveMarketingEdits, toast]);
+
   const hasDalleThumbnail = !!marketingAssets.thumbnailUrl;
   const effectiveOrientation = (marketingAssets as { thumbnailOrientation?: "horizontal" | "vertical" }).thumbnailOrientation ?? thumbnailOrientation;
   const thumbCaptureWidth = effectiveOrientation === "vertical" ? 1024 : hasDalleThumbnail ? 1792 : 1600;
@@ -7246,6 +7279,38 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         <div className="rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 p-4 text-center">
                           <ImageIcon className="w-6 h-6 text-gray-300 mx-auto mb-1" />
                           <p className="text-xs text-gray-400">Pick an option above or upload your own</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Content page preview teaser */}
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700">Content page preview</Label>
+                        <p className="text-xs text-gray-400 mt-0.5">A teaser page shown on your store so buyers can see inside the product</p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button type="button" size="sm" variant="outline"
+                          className="h-7 text-xs gap-1 border-gray-200"
+                          onClick={handleCapturePreviewPage}
+                          disabled={previewCapturing}>
+                          {previewCapturing ? <Loader2 className="w-3 h-3 animate-spin" /> : "📸"} {previewCapturing ? "Capturing…" : "Capture Current Page"}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-gray-400">Tip: navigate to the page you want buyers to see, then click Capture.</p>
+                      {(marketingAssets as { previewPageUrl?: string }).previewPageUrl ? (
+                        <div className="relative rounded-lg overflow-hidden border border-gray-200">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={(marketingAssets as { previewPageUrl?: string }).previewPageUrl} alt="Preview" className="w-full object-cover max-h-48" />
+                          <button type="button" onClick={() => saveMarketingEdits({ previewPageUrl: null })}
+                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors text-xs">
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 p-4 text-center">
+                          <ImageIcon className="w-6 h-6 text-gray-300 mx-auto mb-1" />
+                          <p className="text-xs text-gray-400">No preview captured yet</p>
                         </div>
                       )}
                     </div>
