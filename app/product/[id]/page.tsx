@@ -221,9 +221,9 @@ export default async function ProductSalesPage({
         <div>
           {/* Cover image */}
           {coverImage && (
-            <div style={{ borderRadius: "20px", overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.12)", marginBottom: "28px", lineHeight: 0 }}>
+            <div style={{ borderRadius: "20px", overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.12)", marginBottom: "28px", lineHeight: 0, background: "#f3f4f6", display: "flex", justifyContent: "center", alignItems: "center" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={coverImage} alt={displayTitle} style={{ width: "100%", display: "block" }} />
+              <img src={coverImage} alt={displayTitle} style={{ width: "100%", maxWidth: "600px", height: "auto", display: "block", objectFit: "contain" }} />
             </div>
           )}
 

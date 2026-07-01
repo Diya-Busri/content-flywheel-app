@@ -377,7 +377,7 @@ function SectionHeader({ title, subtitle, action }: { title: string; subtitle?: 
   return (
     <div className="flex items-start justify-between gap-4 mb-5">
       <div>
-        <h2 className="text-base font-semibold text-white">{title}</h2>
+        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
         {subtitle && <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>}
       </div>
       {action}
@@ -778,7 +778,7 @@ export function StoreClient({ userId }: StoreClientProps) {
                       ) : items.filter((i) => i.isNativePublished).map((item) => (
                         <label key={item.id} className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-100">
                           <input type="checkbox" checked={bundleProductIds.includes(item.id)} onChange={(e) => { if (e.target.checked) setBundleProductIds((p) => [...p, item.id]); else setBundleProductIds((p) => p.filter((id) => id !== item.id)); }} className="accent-orange-500" />
-                          <span className="text-sm text-white">{item.title}</span>
+                          <span className="text-sm text-gray-900">{item.title}</span>
                           {item.nativePrice != null && <span className="text-xs text-gray-500 ml-auto">{formatPrice(item.nativePrice)}</span>}
                         </label>
                       ))}
@@ -871,7 +871,7 @@ export function StoreClient({ userId }: StoreClientProps) {
                   </div>
                   <div className="space-y-1.5">
                     <p className="text-xs font-medium text-gray-600">Expires (optional)</p>
-                    <Input type="date" value={promoExpiry} onChange={(e) => setPromoExpiry(e.target.value)} className="h-9 text-sm bg-gray-100 border-gray-300 text-white" />
+                    <Input type="date" value={promoExpiry} onChange={(e) => setPromoExpiry(e.target.value)} className="h-9 text-sm bg-gray-100 border-gray-300 text-gray-900" />
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -1032,7 +1032,7 @@ export function StoreClient({ userId }: StoreClientProps) {
               <>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-xl bg-white border border-gray-200 p-4 text-center">
-                    <p className="text-xl font-bold text-white">{customers.length}</p>
+                    <p className="text-xl font-bold text-gray-900">{customers.length}</p>
                     <p className="text-xs text-gray-500 mt-1">Total customers</p>
                   </div>
                   <div className="rounded-xl bg-orange-50 border border-orange-200 p-4 text-center">
@@ -1040,7 +1040,7 @@ export function StoreClient({ userId }: StoreClientProps) {
                     <p className="text-xs text-gray-500 mt-1">Total revenue</p>
                   </div>
                   <div className="rounded-xl bg-white border border-gray-200 p-4 text-center">
-                    <p className="text-xl font-bold text-white">{customers.length > 0 ? formatPrice(Math.round(customers.reduce((s, c) => s + c.totalCents, 0) / customers.length)) : "\xa30.00"}</p>
+                    <p className="text-xl font-bold text-gray-900">{customers.length > 0 ? formatPrice(Math.round(customers.reduce((s, c) => s + c.totalCents, 0) / customers.length)) : "\xa30.00"}</p>
                     <p className="text-xs text-gray-500 mt-1">Avg. LTV</p>
                   </div>
                 </div>
@@ -1100,7 +1100,7 @@ export function StoreClient({ userId }: StoreClientProps) {
                 <Mail className="w-6 h-6 text-orange-600" />
               </div>
               <div className="flex-1">
-                <p className="text-2xl font-bold text-white">{analyticsLoading ? "—" : analytics?.subscriberCount ?? 0}</p>
+                <p className="text-2xl font-bold text-gray-900">{analyticsLoading ? "—" : analytics?.subscriberCount ?? 0}</p>
                 <p className="text-sm text-gray-600">email subscribers</p>
               </div>
               <Link href="/dashboard/email-marketing">
@@ -1133,7 +1133,7 @@ export function StoreClient({ userId }: StoreClientProps) {
                           <Icon className="w-5 h-5" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-white">{item.title}</p>
+                          <p className="text-sm font-semibold text-gray-900">{item.title}</p>
                           <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
                         </div>
                         <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-orange-600 transition-colors shrink-0" />
@@ -1147,7 +1147,7 @@ export function StoreClient({ userId }: StoreClientProps) {
             <div className="rounded-2xl bg-gray-50 border border-gray-200 p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Star className="w-4 h-4 text-orange-600" />
-                <p className="text-sm font-semibold text-white">Growth tips</p>
+                <p className="text-sm font-semibold text-gray-900">Growth tips</p>
               </div>
               <div className="space-y-3">
                 {[
@@ -1197,7 +1197,7 @@ export function StoreClient({ userId }: StoreClientProps) {
                 {analytics?.dailyRevenue && analytics.dailyRevenue.length > 0 && (
                   <div className="rounded-2xl bg-gray-50 border border-gray-200 p-5">
                     <div className="flex items-center justify-between mb-5">
-                      <p className="text-sm font-semibold text-white">Revenue — Last 14 Days</p>
+                      <p className="text-sm font-semibold text-gray-900">Revenue — Last 14 Days</p>
                       <p className="text-xs text-gray-500">{formatPrice(analytics.last30DaysRevenueCents)} this month</p>
                     </div>
                     <RevenueChart data={analytics.dailyRevenue} />
@@ -1239,7 +1239,7 @@ export function StoreClient({ userId }: StoreClientProps) {
                 {analytics?.recentOrders && analytics.recentOrders.length > 0 && (
                   <div className="rounded-2xl bg-gray-50 border border-gray-200 overflow-hidden">
                     <div className="px-5 py-4 border-b border-gray-200">
-                      <p className="text-sm font-semibold text-white">Recent Orders</p>
+                      <p className="text-sm font-semibold text-gray-900">Recent Orders</p>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
@@ -1308,7 +1308,7 @@ export function StoreClient({ userId }: StoreClientProps) {
                   <Paintbrush className="w-5 h-5 text-orange-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">Store Design</p>
+                  <p className="text-sm font-semibold text-gray-900">Store Design</p>
                   <p className="text-sm text-gray-500 mt-0.5">Change banner, profile image, theme and layout.</p>
                 </div>
               </div>
@@ -1322,7 +1322,7 @@ export function StoreClient({ userId }: StoreClientProps) {
             <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6">
               <div className="flex items-center gap-2 mb-1.5">
                 <Mail className="w-4 h-4 text-orange-600" />
-                <h3 className="text-sm font-semibold text-white">Email Branding</h3>
+                <h3 className="text-sm font-semibold text-gray-900">Email Branding</h3>
               </div>
               <p className="text-sm text-gray-500 mb-5">Purchase confirmation emails are sent automatically when a buyer checks out.</p>
               <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
