@@ -199,6 +199,33 @@ export default async function ProductSalesPage({
         @media (max-width: 767px) { .purchase-card { position: static; } }
       `}</style>
 
+      {/* JSON-LD structured data — lets Google show price/rating rich snippets */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Product",
+            name: displayTitle,
+            description: ma.productDescription ?? undefined,
+            image: coverImage ?? undefined,
+            brand: { "@type": "Brand", name: creatorName ?? "Content Flywheel" },
+            offers: ma.nativePrice ? {
+              "@type": "Offer",
+              price: ((ma.salePrice ?? ma.nativePrice) / 100).toFixed(2),
+              priceCurrency: "GBP",
+              availability: "https://schema.org/InStock",
+              url: `https://contentflywheel.co.uk/product/${id}`,
+            } : undefined,
+            aggregateRating: avgRating && reviews.length > 0 ? {
+              "@type": "AggregateRating",
+              ratingValue: avgRating,
+              reviewCount: reviews.length,
+            } : undefined,
+          }),
+        }}
+      />
+
       <ViewTracker productId={id} />
 
       {/* Top nav */}
@@ -217,11 +244,24 @@ export default async function ProductSalesPage({
 
       {/* Purchase success banner */}
       {purchased && (
-        <div style={{ background: "#f0fdf4", borderBottom: "1px solid #86efac", padding: "14px 24px", display: "flex", alignItems: "center", gap: "12px", justifyContent: "center" }}>
-          <span style={{ fontSize: "18px" }}>✅</span>
-          <div>
-            <span style={{ fontWeight: 700, fontSize: "14px", color: "#166534" }}>Purchase complete! </span>
-            <span style={{ fontSize: "14px", color: "#16a34a" }}>Check your email for your download link (valid 7 days).</span>
+        <div style={{ background: "linear-gradient(135deg, #f0fdf4, #dcfce7)", borderBottom: "1px solid #86efac", padding: "28px 24px" }}>
+          <div style={{ maxWidth: "680px", margin: "0 auto", textAlign: "center" }}>
+            <div style={{ fontSize: "40px", marginBottom: "10px" }}>🎉</div>
+            <h2 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: 800, color: "#14532d" }}>
+              {(ma as {thankYouMessage?: string}).thankYouMessage || "You're in! Purchase complete."}
+            </h2>
+            <p style={{ margin: "0 0 16px", fontSize: "14px", color: "#16a34a" }}>
+              Check your email for your download link — it&apos;s valid for 7 days.
+            </p>
+            {(ma as {thankYouBonusUrl?: string}).thankYouBonusUrl && (
+              <a
+                href={(ma as {thankYouBonusUrl?: string}).thankYouBonusUrl}
+                target="_blank" rel="noopener noreferrer"
+                style={{ display: "inline-block", padding: "10px 24px", borderRadius: "10px", background: "#16a34a", color: "#fff", fontSize: "14px", fontWeight: 700, textDecoration: "none" }}
+              >
+                🎁 Claim your bonus →
+              </a>
+            )}
           </div>
         </div>
       )}

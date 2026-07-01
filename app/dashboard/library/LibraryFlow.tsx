@@ -1680,10 +1680,12 @@ export default function LibraryFlow() {
                                 <Download className="w-4 h-4 mr-2" />
                                 Download
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => navigator.clipboard.writeText(item.title)}>
-                                <Copy className="w-4 h-4 mr-2" />
-                                Duplicate
-                              </DropdownMenuItem>
+                              {item.type === "product" && (
+                                <DropdownMenuItem onClick={() => handleDuplicate(item)}>
+                                  <Copy className="w-4 h-4 mr-2" />
+                                  Duplicate
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 onClick={() => {
                                   setPromoteUrl(`/dashboard/digital-products/${item.id}`);

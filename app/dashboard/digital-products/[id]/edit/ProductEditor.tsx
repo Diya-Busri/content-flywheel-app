@@ -7482,6 +7482,39 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       );
                     })()}
 
+                    {/* Thank-you message */}
+                    {(() => {
+                      const tyMsg = (marketingAssets as { thankYouMessage?: string }).thankYouMessage ?? "";
+                      const tyBonus = (marketingAssets as { thankYouBonusUrl?: string }).thankYouBonusUrl ?? "";
+                      return (
+                        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-3">
+                          <div>
+                            <Label className="text-xs font-semibold text-gray-700">Post-purchase thank-you</Label>
+                            <p className="text-xs text-gray-400 mt-0.5">Shown to buyers after checkout on the product page.</p>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-gray-600">Message</Label>
+                            <Input
+                              defaultValue={tyMsg}
+                              placeholder="e.g. Thank you! You're going to love this — enjoy every page 🎉"
+                              className="text-sm"
+                              onBlur={(e) => saveMarketingEdits({ thankYouMessage: e.target.value.trim() || null })}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-gray-600">Bonus URL (optional)</Label>
+                            <Input
+                              defaultValue={tyBonus}
+                              placeholder="https://… (e.g. link to a bonus resource)"
+                              className="text-sm"
+                              onBlur={(e) => saveMarketingEdits({ thankYouBonusUrl: e.target.value.trim() || null })}
+                            />
+                            <p className="text-xs text-gray-400">If set, a "Claim your bonus" button appears on the thank-you card.</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Label className="text-xs font-medium text-gray-700">Hashtags / tags</Label>
