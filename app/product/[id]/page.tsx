@@ -138,6 +138,8 @@ export default async function ProductSalesPage({
       .limit(20);
   } catch { reviews = []; }
 
+  const ma = (product.marketingAssets ?? {}) as MarketingAssets;
+
   let upsellProducts: { id: string; title: string; marketingAssets: unknown }[] = [];
   let featuredUpsell: { id: string; title: string; marketingAssets: unknown } | null = null;
   const upsellProductId = (ma as { upsellProductId?: string | null }).upsellProductId;
@@ -163,7 +165,6 @@ export default async function ProductSalesPage({
 
   const upsellBundles: { id: string; title: string; bundlePrice: number; productIds: string[] }[] = [];
 
-  const ma = (product.marketingAssets ?? {}) as MarketingAssets;
   const content = (product.content ?? {}) as ProductContent;
   const sections = (content.sections ?? []).sort((a, b) => a.order - b.order);
 
