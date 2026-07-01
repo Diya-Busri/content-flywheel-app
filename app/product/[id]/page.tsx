@@ -431,7 +431,12 @@ export default async function ProductSalesPage({
                     <div><SalePriceCountdown productId={product.id} durationHours={24} /></div>
                   )}
                 </div>
-                <BuyButton productId={product.id} priceLabel={hasSalePrice ? salePriceLabel! : nativePriceLabel!} creatorUserId={product.userId} />
+                <BuyButton
+                  productId={product.id}
+                  priceLabel={hasSalePrice ? salePriceLabel! : nativePriceLabel!}
+                  creatorUserId={product.userId}
+                  isFree={ma.nativePrice === 0}
+                />
               </>
             ) : (
               <>
