@@ -27,6 +27,7 @@ import { Suspense } from "react";
 import { DailyStreakTracker } from "@/components/dashboard/DailyStreakTracker";
 import { ContinueLearningCard } from "@/components/dashboard/ContinueLearningCard";
 import { RevenueGoalWidget } from "@/components/dashboard/RevenueGoalWidget";
+import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
 
 export const metadata: Metadata = {
   title: "Dashboard | Content Flywheel",
@@ -352,6 +353,9 @@ export default async function DashboardPage() {
 
         {/* Revenue goal */}
         <RevenueGoalWidget />
+
+        {/* Onboarding checklist — auto-hides when all steps complete */}
+        <OnboardingChecklist />
 
         {/* Daily Streak */}
         <DailyStreakTracker />

@@ -14,6 +14,30 @@ type Order = {
   isCourseFormat?: boolean;
 };
 
+function InvoiceButton({ orderId, token }: { orderId: string; token: string }) {
+  return (
+    <a
+      href={`/api/orders/${orderId}/invoice?token=${encodeURIComponent(token)}`}
+      download
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+        padding: "8px 16px",
+        borderRadius: "8px",
+        background: "#f9fafb",
+        border: "1.5px solid #e5e7eb",
+        color: "#374151",
+        fontSize: "13px",
+        fontWeight: 700,
+        textDecoration: "none",
+      }}
+    >
+      🧾 Invoice
+    </a>
+  );
+}
+
 function formatAmount(amountCents: number, currency: string): string {
   const symbol = currency.toLowerCase() === "gbp" ? "£" : currency.toLowerCase() === "usd" ? "$" : currency.toUpperCase() + " ";
   return `${symbol}${(amountCents / 100).toFixed(2)}`;
@@ -327,11 +351,15 @@ export default function MyOrdersPage() {
                               fontWeight: 700,
                               textDecoration: "none",
                               transition: "background 0.15s",
+                              marginRight: "8px",
                             }}
                           >
                             <span>📥</span>
                             {expired ? "Download (expired)" : "Download Again"}
                           </a>
+                        )}
+                        {order.downloadToken && (
+                          <InvoiceButton orderId={order.id} token={order.downloadToken} />
                         )}
                       </div>
                     );

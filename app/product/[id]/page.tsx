@@ -496,6 +496,8 @@ export default async function ProductSalesPage({
                   isFree={ma.nativePrice === 0}
                   refCode={refCode}
                   autoCoupon={autoCoupon}
+                  payWhatYouWant={(ma as { payWhatYouWant?: boolean }).payWhatYouWant ?? false}
+                  minPrice={(ma as { minPrice?: number | null }).minPrice ?? null}
                 />
               </>
             ) : (

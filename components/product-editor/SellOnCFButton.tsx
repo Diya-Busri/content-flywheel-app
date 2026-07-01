@@ -22,6 +22,8 @@ interface SellOnCFButtonProps {
   isNativePublished?: boolean;
   nativePrice?: number;
   subscriptionInterval?: "month" | "year" | null;
+  payWhatYouWant?: boolean;
+  minPrice?: number | null;
   onPublished?: (price: number) => void;
   onUnpublished?: () => void;
 }
@@ -32,6 +34,8 @@ export function SellOnCFButton({
   isNativePublished: initialPublished = false,
   nativePrice: initialPrice,
   subscriptionInterval: initialInterval,
+  payWhatYouWant: initialPWYW = false,
+  minPrice: initialMinPrice,
   onPublished,
   onUnpublished,
 }: SellOnCFButtonProps) {
@@ -43,6 +47,10 @@ export function SellOnCFButton({
   );
   const [billingInterval, setBillingInterval] = useState<"one_time" | "month" | "year">(
     initialInterval === "month" ? "month" : initialInterval === "year" ? "year" : "one_time"
+  );
+  const [isPWYW, setIsPWYW] = useState(initialPWYW);
+  const [minPriceInput, setMinPriceInput] = useState(
+    initialMinPrice ? (initialMinPrice / 100).toFixed(2) : "0"
   );
   const [loading, setLoading] = useState(false);
   const [connectChecking, setConnectChecking] = useState(false);
@@ -83,6 +91,8 @@ export function SellOnCFButton({
         body: JSON.stringify({
           price: pence,
           subscriptionInterval: billingInterval === "one_time" ? null : billingInterval,
+          payWhatYouWant: isPWYW,
+          minPrice: isPWYW ? Math.round(parseFloat(minPriceInput || "0") * 100) : null,
         }),
       });
 
@@ -212,6 +222,43 @@ export function SellOnCFButton({
                 <p className="text-xs text-muted-foreground">
                   Buyers will be charged {billingInterval === "month" ? "every month" : "every year"} until they cancel.
                 </p>
+              )}
+            </div>
+          )}
+
+          {/* Pay-what-you-want toggle (new publishes only) */}
+          {!published && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium text-foreground">Pay what you want</label>
+                  <p className="text-xs text-muted-foreground">Buyer types their own amount at checkout</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPWYW((v) => !v)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${isPWYW ? "bg-orange-500" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${isPWYW ? "translate-x-4" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+              {isPWYW && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Minimum price (£)</label>
+                  <div className="relative w-36">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">£</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={minPriceInput}
+                      onChange={(e) => setMinPriceInput(e.target.value)}
+                      className="pl-7"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Set 0 for truly free / donation-only</p>
+                </div>
               )}
             </div>
           )}

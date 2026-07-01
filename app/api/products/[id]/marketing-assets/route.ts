@@ -38,6 +38,9 @@ export async function PATCH(
     "upsellDiscountPercent",
     "isCourseFormat",
     "freePreviewLessons",
+    "payWhatYouWant",
+    "minPrice",
+    "sequenceId",
   ] as const;
   const updates: Record<string, unknown> = {};
   for (const field of allowedFields) {

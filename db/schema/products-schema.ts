@@ -58,6 +58,12 @@ export type MarketingAssets = {
   subscriptionInterval?: "month" | "year" | null;
   /** Stripe recurring price ID for subscription products. */
   stripeSubscriptionPriceId?: string | null;
+  /** If true, buyer sets their own price (must be >= minPrice). */
+  payWhatYouWant?: boolean;
+  /** Minimum price in pence for pay-what-you-want (e.g. 100 = £1 minimum). 0 = truly free. */
+  minPrice?: number | null;
+  /** Email sequence ID to enroll buyers in after purchase. */
+  sequenceId?: string | null;
   updatedAt?: string;
 };
 

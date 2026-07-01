@@ -16,7 +16,7 @@ import { useToast } from "@/components/ui/use-toast";
 const FEATURES = [
   { text: "AI digital product creator (ebooks, planners, workbooks)", highlight: true },
   { text: "Branded creator store with custom URL" },
-  { text: "Stripe payments — 0% platform fees" },
+  { text: "Stripe payments — just 2% platform fee" },
   { text: "Unlimited digital products" },
   { text: "Order management & automatic download delivery" },
   { text: "Email marketing & subscriber list" },

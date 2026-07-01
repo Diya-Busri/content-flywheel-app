@@ -9,13 +9,18 @@ interface BuyButtonProps {
   isFree?: boolean;
   refCode?: string | null;
   autoCoupon?: string | null;
+  payWhatYouWant?: boolean;
+  minPrice?: number | null;
 }
 
-export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCode, autoCoupon }: BuyButtonProps) {
+export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCode, autoCoupon, payWhatYouWant, minPrice }: BuyButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [promoCode, setPromoCode] = useState(autoCoupon ?? "");
   const [promoOpen, setPromoOpen] = useState(!!autoCoupon);
+  const [pwywAmount, setPwywAmount] = useState<string>(
+    minPrice ? (minPrice / 100).toFixed(2) : "0.00"
+  );
   // Free product state
   const [freeEmail, setFreeEmail] = useState("");
   const [freeName, setFreeName] = useState("");
@@ -64,10 +69,21 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
       const buyUrl = refCode
         ? `/api/products/${productId}/buy?ref=${encodeURIComponent(refCode)}`
         : `/api/products/${productId}/buy`;
+      const body: Record<string, unknown> = { promoCode: promoResult?.code ?? null };
+      if (payWhatYouWant) {
+        const parsed = Math.round(parseFloat(pwywAmount || "0") * 100);
+        const minPence = minPrice ?? 0;
+        if (parsed < minPence) {
+          setError(`Minimum amount is £${(minPence / 100).toFixed(2)}`);
+          setLoading(false);
+          return;
+        }
+        body.customAmount = parsed;
+      }
       const res = await fetch(buyUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ promoCode: promoResult?.code ?? null }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Something went wrong");
@@ -158,6 +174,31 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
 
   return (
     <div>
+      {/* Pay-what-you-want amount input */}
+      {payWhatYouWant && (
+        <div style={{ marginBottom: "12px" }}>
+          <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
+            Name your price
+            {minPrice && minPrice > 0 && (
+              <span style={{ fontWeight: 400, color: "#9ca3af", marginLeft: "6px" }}>
+                (min £{(minPrice / 100).toFixed(2)})
+              </span>
+            )}
+          </label>
+          <div style={{ position: "relative" }}>
+            <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "15px", fontWeight: 700, color: "#374151" }}>£</span>
+            <input
+              type="number"
+              min={minPrice ? (minPrice / 100).toFixed(2) : "0"}
+              step="0.01"
+              value={pwywAmount}
+              onChange={(e) => setPwywAmount(e.target.value)}
+              style={{ width: "100%", padding: "11px 14px 11px 28px", borderRadius: "10px", border: "1.5px solid #e5e7eb", fontSize: "16px", fontWeight: 700, color: "#111827", outline: "none", boxSizing: "border-box" }}
+            />
+          </div>
+        </div>
+      )}
+
       <button
         onClick={handleBuy}
         disabled={loading}
@@ -174,7 +215,13 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
           </svg>
         )}
-        {loading ? "Redirecting…" : promoResult ? `Buy Now – ${priceLabel} (${promoResult.discount})` : `Buy Now – ${priceLabel}`}
+        {loading
+          ? "Redirecting…"
+          : payWhatYouWant
+          ? `Support with £${parseFloat(pwywAmount || "0").toFixed(2)} →`
+          : promoResult
+          ? `Buy Now – ${priceLabel} (${promoResult.discount})`
+          : `Buy Now – ${priceLabel}`}
       </button>
 
       {/* Promo code section */}

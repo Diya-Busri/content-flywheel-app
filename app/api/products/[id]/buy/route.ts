@@ -22,6 +22,8 @@ type ExtendedMarketingAssets = {
   subscriptionInterval?: "month" | "year" | null;
   stripeSubscriptionPriceId?: string | null;
   isCourseFormat?: boolean;
+  payWhatYouWant?: boolean;
+  minPrice?: number | null;
 };
 
 export async function POST(
@@ -137,14 +139,37 @@ export async function POST(
       return NextResponse.json({ url: subSession.url });
     }
 
+    // ── Pay-what-you-want: buyer supplies a custom amount ─────────────────
+    let pwywAmount: number | null = null;
+    let bodyForPromo: Record<string, unknown> = {};
+    try {
+      bodyForPromo = await request.json().catch(() => ({}));
+    } catch { /* ok */ }
+
+    if (ma.payWhatYouWant) {
+      const raw = typeof bodyForPromo.customAmount === "number" ? bodyForPromo.customAmount : null;
+      const minPence = ma.minPrice ?? 0;
+      if (raw !== null) {
+        if (raw < minPence) {
+          return NextResponse.json(
+            { error: `Minimum amount is £${(minPence / 100).toFixed(2)}` },
+            { status: 400 }
+          );
+        }
+        pwywAmount = raw;
+      } else {
+        // Fall back to the creator's set price if no custom amount supplied
+        pwywAmount = ma.nativePrice ?? minPence;
+      }
+    }
+
     // Parse optional promo code from request body
     let promoCode: string | null = null;
     let appliedPromoCodeId: string | null = null;
     let discountedUnitAmount: number | null = null;
 
     try {
-      const body = await request.json().catch(() => ({}));
-      const rawCode = typeof body?.promoCode === "string" ? body.promoCode.trim() : null;
+      const rawCode = typeof bodyForPromo?.promoCode === "string" ? bodyForPromo.promoCode.trim() : null;
 
       if (rawCode) {
         // Validate the promo code
@@ -185,11 +210,25 @@ export async function POST(
       // If body parse or promo lookup fails, proceed without discount
     }
 
-    // Build line items — use inline price if a discount or sale price was applied
+    // Build line items — PWYW overrides everything else
     let lineItems: Stripe.Checkout.SessionCreateParams.LineItem[];
-    if (discountedUnitAmount !== null) {
-      // Fetch currency from the original Stripe price
-      const stripePrice = await stripe.prices.retrieve(ma.stripePriceId);
+    let unitAmountForFee: number;
+
+    if (pwywAmount !== null) {
+      // Pay-what-you-want: use inline price_data with buyer-supplied amount
+      lineItems = [
+        {
+          price_data: {
+            currency: "gbp",
+            product_data: { name: product.title },
+            unit_amount: pwywAmount,
+          },
+          quantity: 1,
+        },
+      ];
+      unitAmountForFee = pwywAmount;
+    } else if (discountedUnitAmount !== null) {
+      const stripePrice = await stripe.prices.retrieve(ma.stripePriceId!);
       lineItems = [
         {
           price_data: {
@@ -200,9 +239,9 @@ export async function POST(
           quantity: 1,
         },
       ];
+      unitAmountForFee = discountedUnitAmount;
     } else if (typeof ma.salePrice === "number") {
-      // Check if sale price is less than the Stripe price before applying
-      const stripePrice = await stripe.prices.retrieve(ma.stripePriceId);
+      const stripePrice = await stripe.prices.retrieve(ma.stripePriceId!);
       if (ma.salePrice < (stripePrice.unit_amount ?? 0)) {
         lineItems = [
           {
@@ -214,26 +253,17 @@ export async function POST(
             quantity: 1,
           },
         ];
+        unitAmountForFee = ma.salePrice;
       } else {
         lineItems = [{ price: ma.stripePriceId, quantity: 1 }];
+        unitAmountForFee = stripePrice.unit_amount ?? 0;
       }
     } else {
+      const stripePrice = await stripe.prices.retrieve(ma.stripePriceId!);
       lineItems = [{ price: ma.stripePriceId, quantity: 1 }];
-    }
-
-    // Calculate the platform fee (taken from the payment before it reaches the creator)
-    // We need the unit amount to compute the fee
-    let unitAmountForFee: number;
-    if (discountedUnitAmount !== null) {
-      unitAmountForFee = discountedUnitAmount;
-    } else if (typeof ma.salePrice === "number") {
-      const stripePrice = await stripe.prices.retrieve(ma.stripePriceId);
-      unitAmountForFee =
-        ma.salePrice < (stripePrice.unit_amount ?? 0) ? ma.salePrice : (stripePrice.unit_amount ?? 0);
-    } else {
-      const stripePrice = await stripe.prices.retrieve(ma.stripePriceId);
       unitAmountForFee = stripePrice.unit_amount ?? 0;
     }
+
     const applicationFeeAmount =
       platformFeePercent > 0 ? Math.round(unitAmountForFee * (platformFeePercent / 100)) : undefined;
 

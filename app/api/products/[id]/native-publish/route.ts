@@ -27,7 +27,11 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const price = body.price;
     const subscriptionInterval: "month" | "year" | null = body.subscriptionInterval ?? null;
-    if (typeof price !== "number" || price < 100) {
+    const payWhatYouWant: boolean = body.payWhatYouWant ?? false;
+    const minPrice: number | null = typeof body.minPrice === "number" ? body.minPrice : null;
+
+    // For PWYW, price is the suggested/default amount — allow £0 minimum
+    if (typeof price !== "number" || (!payWhatYouWant && price < 100)) {
       return NextResponse.json(
         { error: "Invalid price. Minimum is 100 pence (£1.00)." },
         { status: 400 }
@@ -95,7 +99,12 @@ export async function POST(
     }
 
     const intervalLabel = subscriptionInterval === "month" ? "/mo" : subscriptionInterval === "year" ? "/yr" : "";
-    const priceLabel = `£${(price / 100).toFixed(2)}${intervalLabel}`;
+    const pwywLabel = payWhatYouWant
+      ? minPrice && minPrice > 0
+        ? `£${(minPrice / 100).toFixed(2)}+`
+        : "Pay what you want"
+      : null;
+    const priceLabel = pwywLabel ?? `£${(price / 100).toFixed(2)}${intervalLabel}`;
 
     const updatedAssets: MarketingAssets & {
       nativePrice: number;
@@ -105,12 +114,13 @@ export async function POST(
     } = {
       ...existing,
       nativePrice: price,
-      // For one-time: set stripePriceId. For subscription: set stripeSubscriptionPriceId + keep stripePriceId for display.
       stripePriceId: subscriptionInterval ? (existing.stripePriceId ?? stripePrice.id) : stripePrice.id,
       ...(subscriptionInterval ? { stripeSubscriptionPriceId: stripePrice.id, subscriptionInterval } : { stripeSubscriptionPriceId: null, subscriptionInterval: null }),
       stripeProductId,
       isNativePublished: true,
       priceLabel,
+      payWhatYouWant,
+      minPrice: payWhatYouWant ? (minPrice ?? 0) : null,
     };
 
     await db

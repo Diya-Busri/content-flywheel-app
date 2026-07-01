@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { db } from "@/db/db";
 import { productBundlesTable } from "@/db/schema/product-bundles-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, and } from "drizzle-orm";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
+const PLATFORM_FEE_PERCENT = 2;
 
 export async function POST(
   _request: NextRequest,
@@ -22,6 +24,26 @@ export async function POST(
   if (!bundle) {
     return NextResponse.json({ error: "Bundle not found" }, { status: 404 });
   }
+
+  // Fetch creator's Stripe Connect account
+  const [creatorProfile] = await db
+    .select({
+      stripeConnectAccountId: profilesTable.stripeConnectAccountId,
+      stripeConnectChargesEnabled: profilesTable.stripeConnectChargesEnabled,
+    })
+    .from(profilesTable)
+    .where(eq(profilesTable.userId, bundle.creatorUserId))
+    .limit(1);
+
+  const connectAccountId = creatorProfile?.stripeConnectAccountId;
+  if (!connectAccountId || !creatorProfile?.stripeConnectChargesEnabled) {
+    return NextResponse.json(
+      { error: "Creator has not set up payouts yet. Please check back soon." },
+      { status: 402 }
+    );
+  }
+
+  const applicationFeeAmount = Math.round(bundle.bundlePrice * (PLATFORM_FEE_PERCENT / 100));
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -46,6 +68,10 @@ export async function POST(
       },
       billing_address_collection: "auto",
       customer_creation: "always",
+      payment_intent_data: {
+        application_fee_amount: applicationFeeAmount,
+        transfer_data: { destination: connectAccountId },
+      },
     });
 
     return NextResponse.json({ url: session.url });

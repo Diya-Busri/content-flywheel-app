@@ -99,7 +99,7 @@ export default function PayoutsClient() {
                 <p className="text-xs text-gray-500 mt-0.5">
                   {connectStatus.connected && !connectStatus.onboardingComplete
                     ? "You started onboarding but haven't finished. Complete it to enable payouts."
-                    : "Buyers pay you directly via Stripe. ContentFlywheel charges a 5% platform fee per sale."}
+                    : "Buyers pay you directly via Stripe. ContentFlywheel charges a 2% platform fee per sale."}
                 </p>
               </div>
             </div>
@@ -171,7 +171,7 @@ export default function PayoutsClient() {
 
         {/* Fee info */}
         <div className="bg-blue-50 border border-blue-100 rounded-2xl px-5 py-4 text-sm text-blue-700">
-          ContentFlywheel charges a <strong>5% platform fee</strong> per sale. You keep the rest, minus Stripe&apos;s standard processing fee (~1.5% + 20p per transaction).
+          ContentFlywheel charges a <strong>2% platform fee</strong> per sale. You keep the rest, minus Stripe&apos;s standard processing fee (~1.5% + 20p per transaction).
         </div>
 
         {/* Transactions */}

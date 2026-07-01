@@ -1039,6 +1039,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [showThumbnailOptions, setShowThumbnailOptions] = useState(false);
   const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
   const [upsellProducts, setUpsellProducts] = useState<{ id: string; title: string }[]>([]);
+  const [creatorSequences, setCreatorSequences] = useState<{ id: string; name: string }[]>([]);
   const [coverCapturing, setCoverCapturing] = useState(false);
   const [previewCapturing, setPreviewCapturing] = useState(false);
   const thumbnailCaptureRef = useRef<HTMLDivElement | null>(null);
@@ -1381,6 +1382,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
       })
       .catch(() => {});
   }, [productId]);
+
+  // Load creator's email sequences for the drip picker
+  useEffect(() => {
+    fetch("/api/email-sequences")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { id: string; name: string }[] | null) => {
+        if (Array.isArray(data)) setCreatorSequences(data.map((s) => ({ id: s.id, name: s.name })));
+      })
+      .catch(() => {});
+  }, []);
 
   const saveToServer = useCallback(
     async (payload: {
@@ -7650,6 +7661,41 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             <p className="text-xs text-orange-600 font-medium">
                               🎓 Course viewer: <a href={`/course/${productId}`} target="_blank" rel="noopener noreferrer" className="underline">/course/{productId}</a>
                             </p>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Drip email sequence */}
+                    {(marketingAssets as { isNativePublished?: boolean }).isNativePublished && (() => {
+                      const currentSeqId = (marketingAssets as { sequenceId?: string | null }).sequenceId ?? "";
+                      return (
+                        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
+                          <div>
+                            <Label className="text-xs font-semibold text-gray-700">Post-purchase drip sequence</Label>
+                            <p className="text-xs text-gray-400 mt-0.5">Buyers are automatically enrolled after purchase. Manage sequences in <a href="/dashboard/email-sequences" target="_blank" className="underline text-orange-500">Email Sequences</a>.</p>
+                          </div>
+                          {creatorSequences.length === 0 ? (
+                            <p className="text-xs text-gray-400 italic">No sequences yet — <a href="/dashboard/email-sequences" target="_blank" className="underline text-orange-500">create one first</a>.</p>
+                          ) : (
+                            <select
+                              value={currentSeqId}
+                              onChange={async (e) => {
+                                const val = e.target.value || null;
+                                await fetch(`/api/products/${productId}/marketing-assets`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ sequenceId: val }),
+                                }).catch(() => null);
+                                setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, sequenceId: val } } : null);
+                              }}
+                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                            >
+                              <option value="">— No sequence —</option>
+                              {creatorSequences.map((s) => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))}
+                            </select>
                           )}
                         </div>
                       );

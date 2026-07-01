@@ -7,6 +7,9 @@ import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { productSalesTable } from "@/db/schema/product-sales-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { emailAutomationsTable } from "@/db/schema/email-automations-schema";
+import { emailSequencesTable, emailSequenceStepsTable } from "@/db/schema/email-sequences-schema";
+import { emailSequenceEnrollmentsTable } from "@/db/schema/email-sequence-enrollments-schema";
+import { deliverWebhooks } from "@/lib/deliver-webhook";
 import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
 import { productBundlesTable } from "@/db/schema/product-bundles-schema";
 import { affiliateLinksTable, affiliateCommissionsTable } from "@/db/schema/affiliate-links-schema";
@@ -206,9 +209,9 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
     emailSent: false,
   });
 
-  // Fetch product title for the email
+  // Fetch product title + marketingAssets for email and sequence enrollment
   const [product] = await db
-    .select({ title: productsTable.title, id: productsTable.id })
+    .select({ title: productsTable.title, id: productsTable.id, marketingAssets: productsTable.marketingAssets })
     .from(productsTable)
     .where(eq(productsTable.id, productId))
     .limit(1);
@@ -346,6 +349,54 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
     }
   }
 
+  // Enroll buyer in drip email sequence if product has one configured
+  try {
+    const ma = (product?.marketingAssets ?? {}) as { sequenceId?: string | null };
+    const sequenceId = ma.sequenceId;
+    if (sequenceId && buyerEmail) {
+      const [seq] = await db
+        .select({ id: emailSequencesTable.id, active: emailSequencesTable.active })
+        .from(emailSequencesTable)
+        .where(and(eq(emailSequencesTable.id, sequenceId), eq(emailSequencesTable.active, true)))
+        .limit(1);
+
+      if (seq) {
+        const steps = await db
+          .select()
+          .from(emailSequenceStepsTable)
+          .where(eq(emailSequenceStepsTable.sequenceId, sequenceId))
+          .orderBy(emailSequenceStepsTable.stepNumber);
+
+        if (steps.length > 0) {
+          const firstStep = steps[0];
+          const nextSendAt = new Date(Date.now() + firstStep.delayDays * 24 * 60 * 60 * 1000);
+          await db.insert(emailSequenceEnrollmentsTable).values({
+            sequenceId,
+            productId,
+            creatorUserId,
+            buyerEmail,
+            nextSendAt,
+            nextStepNumber: firstStep.stepNumber,
+          }).catch((e) => console.warn("[stripe-webhook] Enrollment insert warn:", e));
+          console.log(`[stripe-webhook] Enrolled ${buyerEmail} in sequence ${sequenceId}`);
+        }
+      }
+    }
+  } catch (seqErr) {
+    console.error("[stripe-webhook] Sequence enrollment error:", seqErr);
+  }
+
+  // Fire outbound webhook to creator's registered endpoints
+  deliverWebhooks(creatorUserId, "product_sold", {
+    productId,
+    productTitle: product?.title ?? "",
+    buyerEmail,
+    buyerName,
+    amountCents,
+    currency: session.currency ?? "gbp",
+    stripeSessionId: session.id,
+  }).catch((e) => console.error("[stripe-webhook] deliverWebhooks error:", e));
+
   // Increment promo code usedCount if one was applied
   const promoCodeId = session.metadata?.promoCodeId;
   if (promoCodeId) {
@@ -478,6 +529,18 @@ async function handleBundlePurchase(session: Stripe.Checkout.Session) {
   }).catch((err) => {
     console.warn("[stripe-webhook] Failed to log bundle sale:", err);
   });
+
+  // Fire outbound webhook
+  deliverWebhooks(creatorUserId, "bundle_sold", {
+    bundleId,
+    bundleTitle,
+    buyerEmail,
+    buyerName,
+    amountCents,
+    currency: session.currency ?? "gbp",
+    stripeSessionId: session.id,
+    productCount: productIds.length,
+  }).catch((e) => console.error("[stripe-webhook] deliverWebhooks error:", e));
 }
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
