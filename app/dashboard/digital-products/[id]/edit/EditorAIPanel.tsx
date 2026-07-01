@@ -16,7 +16,7 @@ type ReplaceAllAction = { type: "replace_all"; sections: { title: string; conten
 type Action = AddSectionAction | UpdateSectionAction | ReplaceAllAction;
 
 export type DesignCommand = {
-  type: "all_text_color" | "heading_color" | "body_color" | "accent_color" | "template";
+  type: "all_text_color" | "heading_color" | "body_color" | "background_color" | "accent_color" | "template";
   value: string;
 };
 
@@ -61,32 +61,50 @@ function resolveColor(raw: string): string | null {
 function parseDesignCommand(text: string): DesignCommand | null {
   const t = text.toLowerCase().trim();
 
-  // Template switches — check first so "make dark mode" doesn't fall into color parsing
+  // Dark/light mode — unambiguous keywords, no verb required
   if (/dark\s*mode|dark\s*theme/.test(t)) return { type: "template", value: "bold" };
   if (/light\s*mode|light\s*theme/.test(t)) return { type: "template", value: "minimal" };
-  if (/\bclassic\b/.test(t)) return { type: "template", value: "classic" };
-  if (/\belegant\b|\bluxury\b/.test(t)) return { type: "template", value: "elegant" };
-  if (/\bmodern\b/.test(t)) return { type: "template", value: "modern" };
-  if (/\bcreative\b|\bplayful\b/.test(t)) return { type: "template", value: "creative" };
-  if (/\bminimal\b/.test(t)) return { type: "template", value: "minimal" };
 
-  // Robust colour extraction: find the LAST word in the string — the destination colour is almost always last.
-  // Handles typos like "too" instead of "to" naturally.
-  const lastWordMatch = t.match(/\b([a-z]+)\s*[.!?]?\s*$/);
-  const lastWord = lastWordMatch?.[1] ?? "";
+  // Named template switches — ONLY trigger when user clearly means a design change
+  // Requires a switch/change verb OR a design context word to avoid false positives
+  // like "write something elegant" or "add a page about modern wellness"
+  const hasTemplateVerb = /\b(switch|change|use|apply|go)\b/.test(t);
+  const hasTemplateContext = /\b(template|theme|style|design|layout|look)\b/.test(t);
+  if (hasTemplateVerb || hasTemplateContext) {
+    if (/\bclassic\b/.test(t)) return { type: "template", value: "classic" };
+    if (/\belegant\b|\bluxury\b/.test(t)) return { type: "template", value: "elegant" };
+    if (/\bmodern\b/.test(t)) return { type: "template", value: "modern" };
+    if (/\bcreative\b|\bplayful\b/.test(t)) return { type: "template", value: "creative" };
+    if (/\bminimal\b/.test(t)) return { type: "template", value: "minimal" };
+    if (/\bbold\b/.test(t)) return { type: "template", value: "bold" };
+  }
+
+  // Colour extraction: the destination colour is almost always the LAST word.
+  // This handles typos ("too black" → "black") and any phrasing naturally.
+  const lastWord = t.match(/\b([a-z]+)\s*[.!?]?\s*$/)?.[1] ?? "";
   const destColor = resolveColor(lastWord);
 
   if (destColor) {
-    const hasChangeVerb = /\b(change|make|set|turn|convert|switch)\b/.test(t);
-    const hasTextRef = /\b(text|colour|color|font)\b/.test(t);
+    const hasVerb = /\b(change|make|set|turn|convert|switch)\b/.test(t);
+    // "background" or "bg" only — NOT "page" alone to avoid matching "content pages"
+    const hasBgRef = /\b(background|bg)\b/.test(t);
+    // "accent", "highlight", "button/buttons" — decorative colour
+    const hasAccentRef = /\b(accent|highlight|buttons?)\b/.test(t);
+    // Heading/title — section titles specifically
     const hasHeadingRef = /\b(heading|title)s?\b/.test(t);
-    const hasBodyRef = /\b(body|paragraph|content)\b/.test(t);
-    const hasAccentRef = /\b(accent|highlight|button)\b/.test(t);
+    // Body/paragraph — body paragraphs specifically. NOTE: "content" is intentionally
+    // excluded because "content pages" is a page reference, not a body-text selector.
+    const hasBodyRef = /\b(body|paragraph)\b/.test(t);
+    // Generic text / colour ref
+    const hasTextRef = /\b(text|colour|color|font)\b/.test(t);
 
-    if (hasChangeVerb && hasAccentRef) return { type: "accent_color", value: destColor };
-    if (hasChangeVerb && hasHeadingRef && !hasBodyRef) return { type: "heading_color", value: destColor };
-    if (hasChangeVerb && hasBodyRef && !hasHeadingRef) return { type: "body_color", value: destColor };
-    if (hasChangeVerb && hasTextRef) return { type: "all_text_color", value: destColor };
+    if (hasVerb && hasBgRef) return { type: "background_color", value: destColor };
+    if (hasVerb && hasAccentRef) return { type: "accent_color", value: destColor };
+    if (hasVerb && hasHeadingRef && !hasBodyRef) return { type: "heading_color", value: destColor };
+    if (hasVerb && hasBodyRef && !hasHeadingRef) return { type: "body_color", value: destColor };
+    if (hasVerb && hasTextRef) return { type: "all_text_color", value: destColor };
+    // Broad fallback: "make it black", "turn it white" — change verb + colour, no other hints
+    if (hasVerb) return { type: "all_text_color", value: destColor };
   }
 
   return null;
@@ -287,8 +305,9 @@ export function EditorAIPanel({
         const destWord = value.match(/\b([a-z]+)\s*[.!?]?\s*$/i)?.[1] ?? "the new colour";
         const descriptions: Record<string, string> = {
           all_text_color: `Changed all text colour to ${destWord}`,
-          heading_color: `Updated heading colour to ${destWord}`,
+          heading_color: `Updated heading/title colour to ${destWord}`,
           body_color: `Updated body text colour to ${destWord}`,
+          background_color: `Changed page background to ${destWord}`,
           accent_color: `Updated accent colour to ${destWord}`,
           template: `Switched to ${designCmd.value} template`,
         };

@@ -1782,45 +1782,52 @@ export default function ProductEditor({ productId }: { productId: string }) {
   // Handles design commands from the AI panel (e.g. "make all text black")
   const handleAIDesignCommand = useCallback(
     (cmd: DesignCommand) => {
-      if (cmd.type === "all_text_color" || cmd.type === "heading_color" || cmd.type === "body_color") {
-        // Text colour on content pages is controlled by pageBackgrounds[i].pageTextColor.
-        // We also update textStyles for fine-grained per-element overrides.
-        const totalContentPages = Math.max(0, sections.length); // cover=0, back=last
+      const contentSections = sections.filter((s) => s.id !== "cover" && s.id !== "back");
+      const totalPages = Math.max(2, sections.length + 2);
+
+      if (cmd.type === "all_text_color") {
+        // pageTextColor is the page-level text override — affects all text on the page
         setPageBackgrounds((prev) => {
-          const next = prev.length > 0 ? [...prev] : Array.from({ length: totalContentPages + 2 }, () => ({}));
-          // Pages 1..length-2 are content pages (0=cover, last=back)
+          const next = prev.length >= totalPages ? [...prev] : Array.from({ length: totalPages }, (_, i) => prev[i] ?? {});
           for (let i = 1; i < next.length - 1; i++) {
             next[i] = { ...next[i], pageTextColor: cmd.value };
           }
+          setTimeout(() => saveToServer({ designSettings: { ...product?.designSettings, pages: next, placedElementsByPage } }), 50);
           return next;
         });
 
-        // Also update textStyles so per-element styling is consistent
-        const currentTextStyles = product?.designSettings?.textStyles ?? {};
-        const nextTextStyles: Record<string, { title?: Record<string, string>; body?: Record<string, string>; blocks?: Record<string, string>[] }> = { ...currentTextStyles };
-        for (const s of sections.filter((s) => s.id !== "cover" && s.id !== "back")) {
-          const existing = nextTextStyles[s.id] ?? {};
-          nextTextStyles[s.id] = {
-            ...existing,
-            title: { ...(existing.title ?? {}), color: cmd.value },
-            body: { ...(existing.body ?? {}), color: cmd.value },
-          };
-        }
-
-        // Persist both — use queueMicrotask so state updates flush first
-        queueMicrotask(() => {
-          setPageBackgrounds((latest) => {
-            saveToServer({
-              designSettings: {
-                ...product?.designSettings,
-                textStyles: nextTextStyles,
-                pages: latest,
-                placedElementsByPage,
-              },
-            });
-            return latest;
-          });
+      } else if (cmd.type === "heading_color" || cmd.type === "body_color") {
+        // Per-element colour — use textStyles. Clear pageTextColor first so textStyles take effect.
+        setPageBackgrounds((prev) => {
+          const next = prev.length >= totalPages ? [...prev] : Array.from({ length: totalPages }, (_, i) => prev[i] ?? {});
+          for (let i = 1; i < next.length - 1; i++) {
+            const { pageTextColor: _removed, ...rest } = next[i] as PageBackground & { pageTextColor?: string };
+            next[i] = rest;
+          }
+          return next;
         });
+        const currentTS = product?.designSettings?.textStyles ?? {};
+        const nextTS: Record<string, { title?: Record<string, string>; body?: Record<string, string>; blocks?: Record<string, string>[] }> = { ...currentTS };
+        for (const s of contentSections) {
+          const ex = nextTS[s.id] ?? {};
+          nextTS[s.id] = cmd.type === "heading_color"
+            ? { ...ex, title: { ...(ex.title ?? {}), color: cmd.value } }
+            : { ...ex, body: { ...(ex.body ?? {}), color: cmd.value } };
+        }
+        setProduct((p) => p ? { ...p, designSettings: { ...p.designSettings, textStyles: nextTS } } : p);
+        saveToServer({ designSettings: { ...product?.designSettings, textStyles: nextTS } });
+
+      } else if (cmd.type === "background_color") {
+        // Set solid background colour on all content pages
+        setPageBackgrounds((prev) => {
+          const next = prev.length >= totalPages ? [...prev] : Array.from({ length: totalPages }, (_, i) => prev[i] ?? {});
+          for (let i = 1; i < next.length - 1; i++) {
+            next[i] = { ...next[i], backgroundColor: cmd.value };
+          }
+          setTimeout(() => saveToServer({ designSettings: { ...product?.designSettings, pages: next, placedElementsByPage } }), 50);
+          return next;
+        });
+
       } else if (cmd.type === "accent_color") {
         setGraphicsAccentColor(cmd.value);
         saveToServer({
