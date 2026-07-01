@@ -26,7 +26,9 @@ export async function POST(request: Request) {
   const filename = `store/${userId}/${type}-${Date.now()}.${ext}`;
 
   try {
-    const blob = await upload(filename, file, {
+    // Convert File → Buffer so AWS SDK can compute a checksum (File is a Blob/stream)
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const blob = await upload(filename, buffer, {
       access: "public",
       contentType: file.type,
     });

@@ -67,7 +67,7 @@ export async function upload(
   const client = getClient();
   const bucket = getBucket();
 
-  let uploadBody: Buffer | Uint8Array | Blob;
+  let uploadBody: Buffer | Uint8Array;
   if (body instanceof ReadableStream) {
     const chunks: Uint8Array[] = [];
     const reader = (body as ReadableStream<Uint8Array>).getReader();
@@ -78,8 +78,11 @@ export async function upload(
       done = d;
     }
     uploadBody = Buffer.concat(chunks);
+  } else if (typeof Blob !== "undefined" && body instanceof Blob) {
+    // File extends Blob — AWS SDK v3 cannot hash a Blob/File stream; convert to Buffer first
+    uploadBody = Buffer.from(await body.arrayBuffer());
   } else {
-    uploadBody = body as Buffer | Uint8Array | Blob;
+    uploadBody = body as Buffer | Uint8Array;
   }
 
   await client.send(
