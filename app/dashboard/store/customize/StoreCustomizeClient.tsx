@@ -297,6 +297,8 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
   const [saving, setSaving] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingProfile, setUploadingProfile] = useState(false);
+  const [generatingBanner, setGeneratingBanner] = useState(false);
+  const [generatingProfile, setGeneratingProfile] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
 
@@ -329,6 +331,30 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
     const updated = { ...current, [key]: value || undefined };
     set("socialLinks", JSON.stringify(updated));
   };
+
+  const generateImage = useCallback(async (type: "banner" | "profile") => {
+    const setGenerating = type === "banner" ? setGeneratingBanner : setGeneratingProfile;
+    setGenerating(true);
+    try {
+      // Build a brand context hint from whatever the user has filled in
+      const hint = [settings.storeName, settings.tagline, settings.bio]
+        .filter(Boolean).join(". ").slice(0, 200);
+      const res = await fetch("/api/store-settings/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, hint }),
+      });
+      const data: { url?: string; error?: string } = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Generation failed");
+      const key = type === "banner" ? "bannerImageUrl" : "profileImageUrl";
+      setSettings((prev) => ({ ...prev, [key]: data.url!, ...(type === "banner" ? { bannerGradient: null } : {}) }));
+      toast({ title: `✨ AI ${type} generated!`, description: "Hit Save Changes to publish it." });
+    } catch (err) {
+      toast({ title: "Generation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setGenerating(false);
+    }
+  }, [settings.storeName, settings.tagline, settings.bio, toast]);
 
   const uploadImage = useCallback(async (file: File, type: "banner" | "profile") => {
     const setUploading = type === "banner" ? setUploadingBanner : setUploadingProfile;
@@ -753,12 +779,20 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                     <button onClick={() => set("profileImageUrl", null)} className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"><X size={14} /></button>
                   </div>
                 ) : (
-                  <Button type="button" variant="outline" size="sm" onClick={() => profileInputRef.current?.click()}
-                    disabled={uploadingProfile}
-                    className="w-full border-gray-200 text-gray-600 hover:border-orange-500 bg-white h-9">
-                    {uploadingProfile ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Upload size={14} className="mr-1.5" />}
-                    {uploadingProfile ? "Uploading…" : "Upload from device"}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => profileInputRef.current?.click()}
+                      disabled={uploadingProfile || generatingProfile}
+                      className="flex-1 border-gray-200 text-gray-600 hover:border-orange-500 bg-white h-9">
+                      {uploadingProfile ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Upload size={14} className="mr-1.5" />}
+                      {uploadingProfile ? "Uploading…" : "Upload"}
+                    </Button>
+                    <Button type="button" size="sm" onClick={() => generateImage("profile")}
+                      disabled={uploadingProfile || generatingProfile}
+                      className="flex-1 bg-gradient-to-r from-purple-500 to-orange-500 hover:from-purple-600 hover:to-orange-600 text-white h-9 border-0">
+                      {generatingProfile ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Sparkles size={14} className="mr-1.5" />}
+                      {generatingProfile ? "Generating…" : "AI Generate"}
+                    </Button>
+                  </div>
                 )}
                 <p className="text-[11px] text-gray-400">Or paste a URL:</p>
                 <Input value={settings.profileImageUrl ?? ""} onChange={(e) => set("profileImageUrl", e.target.value || null)}
@@ -785,12 +819,20 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                       </button>
                     </div>
                   ) : (
-                    <Button type="button" variant="outline" size="sm" onClick={() => bannerInputRef.current?.click()}
-                      disabled={uploadingBanner}
-                      className="w-full border-gray-200 text-gray-600 hover:border-orange-500 bg-white h-9 mb-2">
-                      {uploadingBanner ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Upload size={14} className="mr-1.5" />}
-                      {uploadingBanner ? "Uploading…" : "Upload from device"}
-                    </Button>
+                    <div className="flex gap-2 mb-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => bannerInputRef.current?.click()}
+                        disabled={uploadingBanner || generatingBanner}
+                        className="flex-1 border-gray-200 text-gray-600 hover:border-orange-500 bg-white h-9">
+                        {uploadingBanner ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Upload size={14} className="mr-1.5" />}
+                        {uploadingBanner ? "Uploading…" : "Upload"}
+                      </Button>
+                      <Button type="button" size="sm" onClick={() => generateImage("banner")}
+                        disabled={uploadingBanner || generatingBanner}
+                        className="flex-1 bg-gradient-to-r from-purple-500 to-orange-500 hover:from-purple-600 hover:to-orange-600 text-white h-9 border-0">
+                        {generatingBanner ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Sparkles size={14} className="mr-1.5" />}
+                        {generatingBanner ? "Generating…" : "AI Generate"}
+                      </Button>
+                    </div>
                   )}
                   <p className="text-[11px] text-gray-400">Or paste a URL:</p>
                   <Input value={settings.bannerImageUrl ?? ""} onChange={(e) => set("bannerImageUrl", e.target.value || null)}

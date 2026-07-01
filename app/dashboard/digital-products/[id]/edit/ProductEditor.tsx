@@ -1856,7 +1856,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
   }, [sections, template, product, placedElementsByPage, graphicsAccentColor, layoutSettings, pageBackgrounds, saveToServer]);
 
   useEffect(() => {
-    if (currentPageIndex !== 0 || !productId || coverThumbnailCaptureTrigger === 0) return;
+    // Capture cover thumbnail whenever the user is on the cover page (index 0).
+    // Previously gated on coverThumbnailCaptureTrigger, but that broke when auto-save
+    // fired while the user was on a different page — the trigger incremented but the
+    // effect returned early, and a later navigation to page 0 didn't re-fire it.
+    if (currentPageIndex !== 0 || !productId) return;
     const restorePage = savedPageIndexRef.current;
     const t = setTimeout(async () => {
       const el = canvasContainerRef.current;
@@ -1903,7 +1907,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       }
     }, 700);
     return () => clearTimeout(t);
-  }, [currentPageIndex, productId, coverThumbnailCaptureTrigger, placedElementsByPage, pageBackgrounds]);
+  }, [currentPageIndex, productId, placedElementsByPage, pageBackgrounds]);
 
   const openEdit = (section: Section) => {
     setEditingSectionId(section.id);
