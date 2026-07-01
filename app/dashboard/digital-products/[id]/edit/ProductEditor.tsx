@@ -1818,7 +1818,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         const canvas = await html2canvas(el, {
           useCORS: true,
           allowTaint: true,
-          scale: 0.5,
+          scale: 2,
           backgroundColor: "#ffffff",
           logging: false,
         });
