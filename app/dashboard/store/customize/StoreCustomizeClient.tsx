@@ -271,25 +271,22 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
     const setUploading = type === "banner" ? setUploadingBanner : setUploadingProfile;
     setUploading(true);
     try {
-      // Step 1: get a presigned URL (avoids Vercel's 4.5MB body limit)
-      const presignRes = await fetch("/api/upload/store-image-presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: file.name, contentType: file.type, uploadType: type }),
-      });
-      const presignData = await presignRes.json();
-      if (!presignRes.ok) throw new Error(presignData.error ?? "Failed to get upload URL");
+      // Server-proxied upload — avoids CORS issues with direct R2 PUT from the browser.
+      // Store images are small (<4MB) so this stays within Vercel's body limit.
+      if (!file.type.startsWith("image/")) throw new Error("Only image files are allowed");
+      if (file.size > 4 * 1024 * 1024) throw new Error("Image must be under 4MB");
 
-      // Step 2: PUT the file directly to R2
-      const uploadRes = await fetch(presignData.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!uploadRes.ok) throw new Error("Upload to storage failed");
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("type", type);
+
+      const res = await fetch("/api/upload/store-image", { method: "POST", body: fd });
+      let data: { url?: string; error?: string } = {};
+      try { data = await res.json(); } catch { throw new Error("Upload failed — please try again"); }
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
 
       const key = type === "banner" ? "bannerImageUrl" : "profileImageUrl";
-      setSettings((prev) => ({ ...prev, [key]: presignData.publicUrl }));
+      setSettings((prev) => ({ ...prev, [key]: data.url! }));
       toast({ title: `${type === "banner" ? "Banner" : "Profile"} image uploaded!` });
     } catch (err) {
       toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });

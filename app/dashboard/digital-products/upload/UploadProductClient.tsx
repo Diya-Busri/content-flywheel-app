@@ -75,12 +75,24 @@ export default function UploadProductClient() {
     setUploadingFile(true);
     setProductFile(file);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/upload/product-file", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Upload failed");
-      setProductFileUrl(data.url);
+      // Step 1: get a presigned URL — bypasses Vercel's 4.5MB body limit
+      const presignRes = await fetch("/api/upload/product-file-presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      });
+      const presignData = await presignRes.json();
+      if (!presignRes.ok) throw new Error(presignData.error ?? "Failed to prepare upload");
+
+      // Step 2: PUT the file directly to R2 (no Vercel in the loop)
+      const uploadRes = await fetch(presignData.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!uploadRes.ok) throw new Error("Storage upload failed — please try again");
+
+      setProductFileUrl(presignData.publicUrl);
       toast({ title: "File uploaded ✓" });
     } catch (err) {
       toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
