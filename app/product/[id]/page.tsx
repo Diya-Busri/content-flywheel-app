@@ -17,6 +17,7 @@ import { FaqSection } from "./FaqSection";
 import { EmailCaptureWidget } from "./EmailCaptureWidget";
 import { ExitIntentModal } from "./ExitIntentModal";
 import { SalePriceCountdown } from "./SalePriceCountdown";
+import { SaleDeadlineCountdown } from "./SaleDeadlineCountdown";
 
 type MarketingAssets = {
   productTitle?: string;
@@ -79,12 +80,13 @@ export default async function ProductSalesPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ purchased?: string; session_id?: string; ref?: string }>;
+  searchParams: Promise<{ purchased?: string; session_id?: string; ref?: string; coupon?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
   const purchased = sp?.purchased === "true";
   const refCode = sp?.ref ?? null;
+  const autoCoupon = sp?.coupon ?? null;
   const { userId: viewerUserId } = await auth();
 
   let product: { id: string; title: string; niche: string | null; format: string | null; userId: string; marketingAssets: unknown; content: unknown } | undefined;
@@ -267,6 +269,30 @@ export default async function ProductSalesPage({
                 🎁 Claim your bonus →
               </a>
             )}
+            {/* Social share nudge */}
+            <div style={{ marginTop: "20px", paddingTop: "20px", borderTop: "1px solid #bbf7d0" }}>
+              <p style={{ margin: "0 0 10px", fontSize: "13px", color: "#15803d", fontWeight: 600 }}>
+                Enjoying it? Share with your audience 👇
+              </p>
+              <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
+                <a
+                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Just grabbed "${displayTitle}" — highly recommend it! 🔥`)}&url=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk"}/product/${product.id}`)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 18px", borderRadius: "100px", background: "#000", color: "#fff", fontSize: "13px", fontWeight: 700, textDecoration: "none" }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.843L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                  Share on X
+                </a>
+                <a
+                  href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk"}/product/${product.id}`)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 18px", borderRadius: "100px", background: "#1877f2", color: "#fff", fontSize: "13px", fontWeight: 700, textDecoration: "none" }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                  Share on Facebook
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -432,6 +458,9 @@ export default async function ProductSalesPage({
                   {hasSalePrice && (
                     <div><SalePriceCountdown productId={product.id} durationHours={24} /></div>
                   )}
+                  {(ma as { saleEndsAt?: string | null }).saleEndsAt && (
+                    <div><SaleDeadlineCountdown endsAt={(ma as { saleEndsAt: string }).saleEndsAt} /></div>
+                  )}
                 </div>
                 <BuyButton
                   productId={product.id}
@@ -439,6 +468,7 @@ export default async function ProductSalesPage({
                   creatorUserId={product.userId}
                   isFree={ma.nativePrice === 0}
                   refCode={refCode}
+                  autoCoupon={autoCoupon}
                 />
               </>
             ) : (

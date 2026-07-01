@@ -125,6 +125,10 @@ type LibraryItem = {
   isNativePublished?: boolean;
   /** Native price in pence (GBP). */
   nativePrice?: number;
+  /** Total page views (native store only). */
+  pageViews?: number;
+  /** Total completed orders (native store only). */
+  orderCount?: number;
   /** Video: timeline project metadata (scenes, template, etc.). */
   metadata?: Record<string, unknown>;
   /** Video: platforms array, e.g. ['video-timeline']. */
@@ -1540,6 +1544,15 @@ export default function LibraryFlow() {
                           <CardDescription className="text-xs">
                             {formatDate(item.createdAt)} • {item.status === "generating" ? <span className="text-orange-500 font-medium">generating…</span> : statusLabel(item.status)}
                           </CardDescription>
+                          {item.type === "product" && item.isNativePublished && typeof item.pageViews === "number" && (
+                            <div className="flex gap-3 mt-1.5">
+                              <span className="text-xs text-gray-500 dark:text-gray-400"><span className="font-semibold text-gray-700 dark:text-gray-200">{item.pageViews.toLocaleString()}</span> views</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400"><span className="font-semibold text-gray-700 dark:text-gray-200">{item.orderCount ?? 0}</span> sales</span>
+                              {(item.pageViews ?? 0) > 0 && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400"><span className="font-semibold text-green-600">{(((item.orderCount ?? 0) / item.pageViews) * 100).toFixed(1)}%</span> CVR</span>
+                              )}
+                            </div>
+                          )}
                         </CardHeader>
                         <CardContent className="pt-0 px-3 pb-3 sm:px-6 sm:pb-6 flex gap-2">
                           {item.type === "product" && item.status === "generating" ? (
@@ -1730,6 +1743,15 @@ export default function LibraryFlow() {
                         <span className="text-muted-foreground"> • From: {scriptSourceLabel(item.platform)}</span>
                       )}
                     </CardDescription>
+                    {item.type === "product" && item.isNativePublished && typeof item.pageViews === "number" && (
+                      <div className="flex gap-3 mt-1.5">
+                        <span className="text-xs text-gray-500 dark:text-gray-400"><span className="font-semibold text-gray-700 dark:text-gray-200">{item.pageViews.toLocaleString()}</span> views</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400"><span className="font-semibold text-gray-700 dark:text-gray-200">{item.orderCount ?? 0}</span> sales</span>
+                        {(item.pageViews ?? 0) > 0 && (
+                          <span className="text-xs text-gray-500 dark:text-gray-400"><span className="font-semibold text-green-600">{(((item.orderCount ?? 0) / item.pageViews) * 100).toFixed(1)}%</span> CVR</span>
+                        )}
+                      </div>
+                    )}
                   </CardHeader>
                   <CardContent className="pt-0 px-3 pb-3 sm:px-6 sm:pb-6 flex gap-2">
                     {isTrashView ? (

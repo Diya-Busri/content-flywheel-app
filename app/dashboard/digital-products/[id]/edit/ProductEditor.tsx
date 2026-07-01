@@ -4202,11 +4202,16 @@ export default function ProductEditor({ productId }: { productId: string }) {
       }
       await new Promise((r) => setTimeout(r, 300));
       const canvas = await html2canvas(el, {
-        useCORS: true, allowTaint: true, scale: 1.5, backgroundColor: "#ffffff", logging: false,
+        useCORS: true, allowTaint: false, scale: 1.5, backgroundColor: "#ffffff", logging: false,
         width: el.offsetWidth, height: el.offsetHeight,
         windowWidth: document.documentElement.clientWidth, windowHeight: document.documentElement.clientHeight,
+        ignoreElements: (node) => node.tagName === "SCRIPT" || node.tagName === "IFRAME",
       });
-      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.82));
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.85));
+      if (!blob) {
+        toast({ title: "Capture failed", description: "Canvas could not be exported. Try again in a moment.", variant: "destructive" });
+        return;
+      }
       const fd = new FormData();
       fd.append("file", blob, "cover.jpg");
       const res = await fetch(`/api/products/${productId}/cover-thumbnail`, { method: "POST", body: fd });
@@ -4247,9 +4252,10 @@ export default function ProductEditor({ productId }: { productId: string }) {
       }
       await new Promise((r) => setTimeout(r, 300));
 
+      // allowTaint: false so cross-origin images don't taint the canvas (toBlob returns null on tainted canvas)
       const canvas = await html2canvas(el, {
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         scale: 1.5,
         backgroundColor: "#ffffff",
         logging: false,
@@ -4257,8 +4263,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
         height: el.offsetHeight,
         windowWidth: document.documentElement.clientWidth,
         windowHeight: document.documentElement.clientHeight,
+        ignoreElements: (node) => node.tagName === "SCRIPT" || node.tagName === "IFRAME",
       });
-      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.82));
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.85));
+      if (!blob) {
+        toast({ title: "Capture failed", description: "Canvas could not be exported. Try scrolling to a text-only section.", variant: "destructive" });
+        return;
+      }
       const fd = new FormData();
       fd.append("file", blob, "preview.jpg");
       const res = await fetch(`/api/products/${productId}/preview-thumbnail`, { method: "POST", body: fd });
@@ -7529,6 +7540,45 @@ export default function ProductEditor({ productId }: { productId: string }) {
                           </div>
                           <p className="text-xs text-gray-400">Paste this snippet anywhere on your website to show a buy button.</p>
                           <pre className="text-[11px] bg-white border border-gray-200 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap break-all text-gray-600 select-all">{`<script src="${appUrl}/embed/${productId}" data-color="#f97316"></script>`}</pre>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Sale deadline */}
+                    {(marketingAssets as { isNativePublished?: boolean }).isNativePublished && (() => {
+                      const currentEndsAt = (marketingAssets as { saleEndsAt?: string | null }).saleEndsAt;
+                      // Convert ISO string to datetime-local value (strip seconds/ms)
+                      const toLocal = (iso: string) => {
+                        const d = new Date(iso);
+                        const pad = (n: number) => String(n).padStart(2, "0");
+                        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                      };
+                      return (
+                        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
+                          <div>
+                            <Label className="text-xs font-semibold text-gray-700">Sale deadline (optional)</Label>
+                            <p className="text-xs text-gray-400 mt-0.5">Show a live countdown on your product page. Leave blank for no deadline.</p>
+                          </div>
+                          <input
+                            type="datetime-local"
+                            defaultValue={currentEndsAt ? toLocal(currentEndsAt) : ""}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                            onBlur={async (e) => {
+                              const val = e.target.value;
+                              const iso = val ? new Date(val).toISOString() : null;
+                              await fetch(`/api/products/${productId}/marketing-assets`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ saleEndsAt: iso }),
+                              }).catch(() => null);
+                              setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, saleEndsAt: iso } } : null);
+                            }}
+                          />
+                          {currentEndsAt && (
+                            <p className="text-xs text-orange-600 font-medium">
+                              ⏳ Closes {new Date(currentEndsAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}
+                            </p>
+                          )}
                         </div>
                       );
                     })()}

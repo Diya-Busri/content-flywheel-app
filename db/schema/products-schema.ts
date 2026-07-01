@@ -38,6 +38,14 @@ export type MarketingAssets = {
   testimonials?: Array<{ name: string; text: string; rating?: number }>;
   /** Whether this product is coming soon (shows waitlist instead of buy button). */
   comingSoon?: boolean;
+  /** ISO date string — if set, the product closes after this date (auto-unpublished). */
+  saleEndsAt?: string | null;
+  /** Supabase URL of a captured content page screenshot shown as a teaser on the store. */
+  previewPageUrl?: string | null;
+  /** Custom thank-you message shown to the buyer after purchase. */
+  thankYouMessage?: string | null;
+  /** Optional bonus URL (e.g. Discord invite) shown after purchase. */
+  thankYouBonusUrl?: string | null;
   updatedAt?: string;
 };
 

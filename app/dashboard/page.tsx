@@ -26,6 +26,7 @@ import { InviteCapture } from "@/components/InviteCapture";
 import { Suspense } from "react";
 import { DailyStreakTracker } from "@/components/dashboard/DailyStreakTracker";
 import { ContinueLearningCard } from "@/components/dashboard/ContinueLearningCard";
+import { RevenueGoalWidget } from "@/components/dashboard/RevenueGoalWidget";
 
 export const metadata: Metadata = {
   title: "Dashboard | Content Flywheel",
@@ -348,6 +349,9 @@ export default async function DashboardPage() {
             </Link>
           ))}
         </div>
+
+        {/* Revenue goal */}
+        <RevenueGoalWidget />
 
         {/* Daily Streak */}
         <DailyStreakTracker />

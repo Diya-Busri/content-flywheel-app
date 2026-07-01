@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface BuyButtonProps {
   productId: string;
@@ -8,13 +8,14 @@ interface BuyButtonProps {
   creatorUserId: string;
   isFree?: boolean;
   refCode?: string | null;
+  autoCoupon?: string | null;
 }
 
-export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCode }: BuyButtonProps) {
+export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCode, autoCoupon }: BuyButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [promoCode, setPromoCode] = useState("");
-  const [promoOpen, setPromoOpen] = useState(false);
+  const [promoCode, setPromoCode] = useState(autoCoupon ?? "");
+  const [promoOpen, setPromoOpen] = useState(!!autoCoupon);
   // Free product state
   const [freeEmail, setFreeEmail] = useState("");
   const [freeName, setFreeName] = useState("");
@@ -23,8 +24,17 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
   const [promoResult, setPromoResult] = useState<{ discount: string; code: string } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
 
-  const validatePromo = async () => {
-    if (!promoCode.trim()) return;
+  // Auto-validate coupon from URL on first render
+  useEffect(() => {
+    if (autoCoupon) {
+      validatePromo(autoCoupon);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const validatePromo = async (codeOverride?: string) => {
+    const code = (codeOverride ?? promoCode).trim();
+    if (!code) return;
     setPromoValidating(true);
     setPromoError(null);
     setPromoResult(null);
@@ -32,7 +42,7 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
       const res = await fetch("/api/creator/promo-codes/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: promoCode.trim(), creatorUserId }),
+        body: JSON.stringify({ code, creatorUserId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Invalid code");

@@ -51,6 +51,11 @@ export function OrdersClient() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [resending, setResending] = useState<string | null>(null);
+  const [blastOpen, setBlastOpen] = useState(false);
+  const [blastProductId, setBlastProductId] = useState("");
+  const [blastSubject, setBlastSubject] = useState("");
+  const [blastMessage, setBlastMessage] = useState("");
+  const [blasting, setBlasting] = useState(false);
   const { toast } = useToast();
 
   const fetchData = useCallback(async () => {
@@ -71,6 +76,31 @@ export function OrdersClient() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const handleBlast = async () => {
+    if (!blastProductId || !blastSubject.trim() || !blastMessage.trim()) {
+      toast({ title: "Please fill in all fields", variant: "destructive" });
+      return;
+    }
+    setBlasting(true);
+    try {
+      const res = await fetch(`/api/products/${blastProductId}/blast-buyers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: blastSubject.trim(), message: blastMessage.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      toast({ title: `✅ Sent to ${data.sent} buyer${data.sent !== 1 ? "s" : ""}${data.failed ? ` (${data.failed} failed)` : ""}` });
+      setBlastOpen(false);
+      setBlastSubject("");
+      setBlastMessage("");
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed to send", variant: "destructive" });
+    } finally {
+      setBlasting(false);
+    }
+  };
+
   const handleResend = async (orderId: string) => {
     setResending(orderId);
     try {
@@ -83,6 +113,10 @@ export function OrdersClient() {
       setResending(null);
     }
   };
+
+  const uniqueProducts = Array.from(
+    new Map(orders.filter(o => o.productId && o.productTitle).map(o => [o.productId, o.productTitle])).entries()
+  ).map(([id, title]) => ({ id, title }));
 
   const filtered = orders.filter((o) => {
     if (!search) return true;
@@ -125,6 +159,59 @@ export function OrdersClient() {
               </p>
               <p className="text-sm font-bold text-white truncate">{revenue.bestSeller.productTitle ?? "Unknown"}</p>
               <p className="text-xs text-gray-500 mt-0.5">{revenue.bestSeller.salesCount} sales · {formatPrice(Number(revenue.bestSeller.revenueCents))}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Email blast panel */}
+      {orders.length > 0 && (
+        <div className="rounded-2xl bg-card border border-white/8 overflow-hidden">
+          <button
+            onClick={() => setBlastOpen((o) => !o)}
+            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/[0.02] transition-colors"
+          >
+            <div className="flex items-center gap-2.5">
+              <Mail className="w-4 h-4 text-orange-400" />
+              <span className="text-sm font-semibold text-white">Email your buyers</span>
+              <span className="text-xs text-gray-500">Send a message to all buyers of a product</span>
+            </div>
+            <span className="text-gray-500 text-xs">{blastOpen ? "▲" : "▼"}</span>
+          </button>
+          {blastOpen && (
+            <div className="px-5 pb-5 space-y-3 border-t border-white/8 pt-4">
+              <select
+                value={blastProductId}
+                onChange={(e) => setBlastProductId(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-white/5 text-sm text-white px-3 py-2 focus:outline-none focus:border-orange-500/50"
+              >
+                <option value="">Select a product…</option>
+                {uniqueProducts.map((p) => (
+                  <option key={p.id} value={p.id}>{p.title}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={blastSubject}
+                onChange={(e) => setBlastSubject(e.target.value)}
+                placeholder="Email subject…"
+                className="w-full rounded-lg border border-white/10 bg-white/5 text-sm text-white px-3 py-2 placeholder:text-gray-500 focus:outline-none focus:border-orange-500/50"
+              />
+              <textarea
+                value={blastMessage}
+                onChange={(e) => setBlastMessage(e.target.value)}
+                placeholder="Your message to buyers…"
+                rows={4}
+                className="w-full rounded-lg border border-white/10 bg-white/5 text-sm text-white px-3 py-2 placeholder:text-gray-500 focus:outline-none focus:border-orange-500/50 resize-none"
+              />
+              <Button
+                onClick={handleBlast}
+                disabled={blasting || !blastProductId || !blastSubject.trim() || !blastMessage.trim()}
+                className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+              >
+                {blasting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                {blasting ? "Sending…" : "Send to all buyers"}
+              </Button>
             </div>
           )}
         </div>

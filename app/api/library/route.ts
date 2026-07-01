@@ -6,7 +6,9 @@ import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { validateSearchParams } from "@/lib/api-validate";
 import { productsTable } from "@/db/schema/products-schema";
 import { scriptsTable, videosTable } from "@/db/schema/library-schema";
-import { eq, desc, and, isNull, isNotNull } from "drizzle-orm";
+import { productViewsTable } from "@/db/schema/product-views-schema";
+import { productOrdersTable } from "@/db/schema/product-orders-schema";
+import { eq, desc, and, isNull, isNotNull, inArray, count } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +49,10 @@ type LibraryItem = {
   isNativePublished?: boolean;
   /** Native price in pence (GBP). */
   nativePrice?: number;
+  /** Total page views for this product (native store only). */
+  pageViews?: number;
+  /** Total completed orders for this product (native store only). */
+  orderCount?: number;
   /** Video: timeline project metadata (scenes, template, etc.). */
   metadata?: Record<string, unknown>;
   /** Video: platforms array, e.g. ['video-timeline']. */
@@ -135,6 +141,31 @@ export async function GET(request: NextRequest) {
     // Run only the needed queries in parallel
     [products, scripts, videos] = await Promise.all([productQuery, scriptQuery, videoQuery]);
 
+    // Fetch per-product analytics (views + completed orders) for native-published products
+    const publishedIds = products
+      .filter((p) => !!(p.marketingAssets as { isNativePublished?: boolean } | null)?.isNativePublished)
+      .map((p) => p.id);
+
+    const viewCountMap: Record<string, number> = {};
+    const orderCountMap: Record<string, number> = {};
+
+    if (publishedIds.length > 0) {
+      const [viewCounts, orderCounts] = await Promise.all([
+        db.select({ productId: productViewsTable.productId, cnt: count() })
+          .from(productViewsTable)
+          .where(inArray(productViewsTable.productId, publishedIds))
+          .groupBy(productViewsTable.productId)
+          .catch(() => []),
+        db.select({ productId: productOrdersTable.productId, cnt: count() })
+          .from(productOrdersTable)
+          .where(and(inArray(productOrdersTable.productId, publishedIds), eq(productOrdersTable.status, "completed")))
+          .groupBy(productOrdersTable.productId)
+          .catch(() => []),
+      ]);
+      for (const row of viewCounts) viewCountMap[row.productId] = Number(row.cnt);
+      for (const row of orderCounts) orderCountMap[row.productId] = Number(row.cnt);
+    }
+
     const productItems: LibraryItem[] = products.map((p) => {
       const ma = p.marketingAssets as {
         coverThumbnailUrl?: string | null;
@@ -160,6 +191,7 @@ export async function GET(request: NextRequest) {
         (hasBookMockup ? 20 : 0) +
         (hasMarketingAssets ? 20 : 0) +
         (hasPromoVideo ? 20 : 0);
+      const isNativePublished = !!(ma?.isNativePublished);
       return {
         id: p.id,
         type: "product" as const,
@@ -175,8 +207,9 @@ export async function GET(request: NextRequest) {
         hasThumbnail,
         hasMarketingAssets,
         completionScore,
-        isNativePublished: !!(ma?.isNativePublished),
+        isNativePublished,
         nativePrice: ma?.nativePrice ?? undefined,
+        ...(isNativePublished && { pageViews: viewCountMap[p.id] ?? 0, orderCount: orderCountMap[p.id] ?? 0 }),
         ...(showDeleted && p.deletedAt && { deletedAt: (p.deletedAt as Date)?.toISOString?.() ?? String(p.deletedAt) }),
       };
     });
