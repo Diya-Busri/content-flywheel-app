@@ -24,6 +24,7 @@ export async function POST(request: Request) {
         downloadToken: productOrdersTable.downloadToken,
         downloadExpiresAt: productOrdersTable.downloadExpiresAt,
         productTitle: productsTable.title,
+        productMarketingAssets: productsTable.marketingAssets,
       })
       .from(productOrdersTable)
       .leftJoin(productsTable, eq(productOrdersTable.productId, productsTable.id))
@@ -35,16 +36,20 @@ export async function POST(request: Request) {
       )
       .orderBy(desc(productOrdersTable.createdAt));
 
-    const orders = rows.map((row) => ({
-      id: row.id,
-      productId: row.productId,
-      productTitle: row.productTitle ?? "Digital Product",
-      amountCents: row.amountCents,
-      currency: row.currency,
-      createdAt: row.createdAt.toISOString(),
-      downloadToken: row.downloadToken ?? null,
-      downloadExpiresAt: row.downloadExpiresAt ? row.downloadExpiresAt.toISOString() : null,
-    }));
+    const orders = rows.map((row) => {
+      const ma = (row.productMarketingAssets ?? {}) as { isCourseFormat?: boolean };
+      return {
+        id: row.id,
+        productId: row.productId,
+        productTitle: row.productTitle ?? "Digital Product",
+        amountCents: row.amountCents,
+        currency: row.currency,
+        createdAt: row.createdAt.toISOString(),
+        downloadToken: row.downloadToken ?? null,
+        downloadExpiresAt: row.downloadExpiresAt ? row.downloadExpiresAt.toISOString() : null,
+        isCourseFormat: !!ma.isCourseFormat,
+      };
+    });
 
     return NextResponse.json(orders);
   } catch (err) {

@@ -46,6 +46,18 @@ export type MarketingAssets = {
   thankYouMessage?: string | null;
   /** Optional bonus URL (e.g. Discord invite) shown after purchase. */
   thankYouBonusUrl?: string | null;
+  /** Product ID to show as a highlighted upsell after purchase. */
+  upsellProductId?: string | null;
+  /** Discount % offered on the upsell (e.g. 20 = 20% off). */
+  upsellDiscountPercent?: number | null;
+  /** If true, the product is a course — sections are displayed as lessons with gated access. */
+  isCourseFormat?: boolean;
+  /** Number of free preview lessons visible before purchase (default 1). */
+  freePreviewLessons?: number;
+  /** If set, this is a subscription product: "month" | "year" */
+  subscriptionInterval?: "month" | "year" | null;
+  /** Stripe recurring price ID for subscription products. */
+  stripeSubscriptionPriceId?: string | null;
   updatedAt?: string;
 };
 

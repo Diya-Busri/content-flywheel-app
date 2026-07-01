@@ -23,6 +23,7 @@ const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
 const relevantEvents = new Set([
   "checkout.session.completed",
+  "checkout.session.expired",
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",
@@ -82,6 +83,9 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed":
         await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+      case "checkout.session.expired":
+        await handleCheckoutSessionExpired(event.data.object as Stripe.Checkout.Session);
         break;
       case "customer.subscription.created":
         await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
@@ -558,6 +562,75 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
   await updateProfileByStripeCustomerId(customerId, {
     status: "past_due",
   });
+}
+
+async function handleCheckoutSessionExpired(session: Stripe.Checkout.Session) {
+  // Only recover abandoned product purchases
+  if (session.metadata?.type !== "product_purchase") return;
+
+  const email = session.customer_details?.email;
+  const productId = session.metadata?.productId;
+  if (!email || !productId) return;
+
+  // Fetch product details for the email
+  const [product] = await db
+    .select({ title: productsTable.title, marketingAssets: productsTable.marketingAssets })
+    .from(productsTable)
+    .where(and(eq(productsTable.id, productId), isNull(productsTable.deletedAt)))
+    .limit(1);
+
+  if (!product) return;
+
+  const ma = (product.marketingAssets ?? {}) as { nativePrice?: number; coverThumbnailUrl?: string | null };
+  const priceLabel = ma.nativePrice ? `£${(ma.nativePrice / 100).toFixed(2)}` : "";
+  const productUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk"}/product/${productId}`;
+  const buyUrl = `${productUrl}`;
+
+  // Fire-and-forget — if this fails, we just don't send the email
+  await resend.emails.send({
+    from: "Content Flywheel <noreply@contentflywheel.co.uk>",
+    to: email,
+    subject: `You left something behind — ${product.title}`,
+    html: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#f97316 0%,#fb923c 100%);padding:36px 40px;text-align:center;">
+            <p style="margin:0;font-size:40px;">🛒</p>
+            <h1 style="margin:12px 0 0;color:#fff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">You left something behind</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="margin:0 0 16px;color:#374151;font-size:16px;line-height:1.6;">
+              Hi there,
+            </p>
+            <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.6;">
+              You were this close to getting <strong>${product.title}</strong>${priceLabel ? ` for ${priceLabel}` : ""}.
+            </p>
+            <p style="margin:0 0 28px;color:#6b7280;font-size:15px;line-height:1.7;">
+              Your spot is still available — click below to complete your purchase.
+            </p>
+            <a href="${buyUrl}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-weight:700;font-size:16px;border-radius:12px;text-decoration:none;letter-spacing:-0.2px;">
+              Complete my purchase →
+            </a>
+            <hr style="border:none;border-top:1px solid #f3f4f6;margin:32px 0;"/>
+            <p style="margin:0;color:#9ca3af;font-size:13px;">
+              You received this because you started checkout but didn&rsquo;t complete it.
+              If you&rsquo;re not interested, simply ignore this email.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  }).catch((e) => console.error("[abandoned-checkout] email error:", e));
 }
 
 function mapStripeStatus(stripeStatus: Stripe.Subscription["status"]): string {

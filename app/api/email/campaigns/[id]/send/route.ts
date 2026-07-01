@@ -4,6 +4,8 @@ import { db } from "@/db/db";
 import { emailCampaignsTable, emailContactsTable } from "@/db/schema/email-marketing-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
+import { productWaitlistsTable } from "@/db/schema/product-waitlists-schema";
+import { waitlistEntriesTable } from "@/db/schema/bio-page-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { Resend } from "resend";
 
@@ -161,6 +163,52 @@ export async function POST(
       await db.update(emailCampaignsTable)
         .set({ status: "sent", sentAt: new Date(), recipientCount: totalSent })
         .where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.userId, userId)));
+      return NextResponse.json({ success: true, sent: totalSent });
+    }
+
+    // ── Product waitlist audience ─────────────────────────────────────────
+    if (effectiveTag === "waitlist:all" || effectiveTag?.startsWith("waitlist:")) {
+      const productId = effectiveTag === "waitlist:all" ? null : effectiveTag.slice("waitlist:".length);
+      const rows = await db
+        .select({ email: productWaitlistsTable.email, name: productWaitlistsTable.name, id: productWaitlistsTable.id })
+        .from(productWaitlistsTable)
+        .where(
+          and(
+            eq(productWaitlistsTable.creatorUserId, userId),
+            ...(productId ? [eq(productWaitlistsTable.productId, productId)] : [])
+          )
+        );
+
+      const seen = new Set<string>();
+      const recipients = rows.filter((r) => { if (seen.has(r.email)) return false; seen.add(r.email); return true; });
+      if (recipients.length === 0) return NextResponse.json({ error: "No waitlist subscribers found" }, { status: 400 });
+
+      for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+        const chunk = recipients.slice(i, i + BATCH_SIZE);
+        await resend.batch.send(chunk.map((r) => ({ from, to: r.email, subject: campaign.subject, html: buildEmailHtml({ id: r.id, name: r.name ?? null }, campaign.bodyHtml) })));
+        totalSent += chunk.length;
+      }
+      await db.update(emailCampaignsTable).set({ status: "sent", sentAt: new Date(), recipientCount: totalSent }).where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.userId, userId)));
+      return NextResponse.json({ success: true, sent: totalSent });
+    }
+
+    // ── Bio page waitlist audience ────────────────────────────────────────
+    if (effectiveTag === "bio_waitlist:all") {
+      const rows = await db
+        .select({ email: waitlistEntriesTable.email, name: waitlistEntriesTable.name, id: waitlistEntriesTable.id })
+        .from(waitlistEntriesTable)
+        .where(eq(waitlistEntriesTable.userId, userId));
+
+      const seen = new Set<string>();
+      const recipients = rows.filter((r) => { if (seen.has(r.email)) return false; seen.add(r.email); return true; });
+      if (recipients.length === 0) return NextResponse.json({ error: "No bio page subscribers found" }, { status: 400 });
+
+      for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+        const chunk = recipients.slice(i, i + BATCH_SIZE);
+        await resend.batch.send(chunk.map((r) => ({ from, to: r.email, subject: campaign.subject, html: buildEmailHtml({ id: r.id, name: r.name ?? null }, campaign.bodyHtml) })));
+        totalSent += chunk.length;
+      }
+      await db.update(emailCampaignsTable).set({ status: "sent", sentAt: new Date(), recipientCount: totalSent }).where(and(eq(emailCampaignsTable.id, id), eq(emailCampaignsTable.userId, userId)));
       return NextResponse.json({ success: true, sent: totalSent });
     }
 

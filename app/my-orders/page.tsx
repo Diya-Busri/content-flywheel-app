@@ -11,6 +11,7 @@ type Order = {
   downloadToken: string | null;
   productId: string;
   downloadExpiresAt: string | null;
+  isCourseFormat?: boolean;
 };
 
 function formatAmount(amountCents: number, currency: string): string {
@@ -289,6 +290,27 @@ export default function MyOrdersPage() {
                           )}
                         </div>
 
+                        {hasDownload && order.isCourseFormat && (
+                          <a
+                            href={`/course/${order.productId}?token=${order.downloadToken}`}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              padding: "8px 16px",
+                              borderRadius: "8px",
+                              background: "#fff7ed",
+                              border: "1.5px solid #fed7aa",
+                              color: "#c2410c",
+                              fontSize: "13px",
+                              fontWeight: 700,
+                              textDecoration: "none",
+                              marginRight: "8px",
+                            }}
+                          >
+                            🎓 Go to course →
+                          </a>
+                        )}
                         {hasDownload && (
                           <a
                             href={`/download/${order.productId}?token=${order.downloadToken}`}

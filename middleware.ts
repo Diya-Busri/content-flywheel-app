@@ -1,5 +1,41 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+const PLATFORM_HOSTNAME = process.env.NEXT_PUBLIC_APP_URL
+  ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname
+  : "contentflywheel.co.uk";
+
+/**
+ * Check if this request comes from a custom creator domain (not the main platform domain).
+ * If so, look up the creator's userId and rewrite to /c/[userId].
+ */
+async function handleCustomDomain(req: NextRequest): Promise<NextResponse | null> {
+  const host = req.headers.get("host") ?? "";
+  const hostname = host.split(":")[0].toLowerCase();
+
+  // Skip if this is the main platform domain or a subdomain of it
+  if (hostname === PLATFORM_HOSTNAME || hostname.endsWith(`.${PLATFORM_HOSTNAME}`) || hostname === "localhost") {
+    return null;
+  }
+
+  // Look up the custom domain in DB via a lightweight API call
+  try {
+    const lookupUrl = new URL(`/api/custom-domain/lookup?host=${encodeURIComponent(hostname)}`, req.url);
+    const res = await fetch(lookupUrl.toString(), { next: { revalidate: 60 } }); // cache 60s
+    if (!res.ok) return null;
+    const data = await res.json() as { userId?: string };
+    if (!data.userId) return null;
+
+    // Rewrite to the creator's store page, preserving path after the root
+    const path = req.nextUrl.pathname;
+    const rewriteUrl = new URL(`/c/${data.userId}${path === "/" ? "" : path}`, req.url);
+    rewriteUrl.search = req.nextUrl.search;
+    return NextResponse.rewrite(rewriteUrl);
+  } catch {
+    return null;
+  }
+}
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -24,6 +60,10 @@ const isPublicRoute = createRouteMatcher([
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)"]);
 
 export default clerkMiddleware(async (auth, req) => {
+  // Handle custom creator domains first — rewrite to /c/[userId] transparently
+  const customDomainResponse = await handleCustomDomain(req);
+  if (customDomainResponse) return customDomainResponse;
+
   const { userId } = await auth();
   const url = req.nextUrl;
 

@@ -139,13 +139,26 @@ export default async function ProductSalesPage({
   } catch { reviews = []; }
 
   let upsellProducts: { id: string; title: string; marketingAssets: unknown }[] = [];
+  let featuredUpsell: { id: string; title: string; marketingAssets: unknown } | null = null;
+  const upsellProductId = (ma as { upsellProductId?: string | null }).upsellProductId;
+  const upsellDiscountPercent = (ma as { upsellDiscountPercent?: number | null }).upsellDiscountPercent;
+
   try {
     const rows = await db
       .select({ id: productsTable.id, title: productsTable.title, marketingAssets: productsTable.marketingAssets })
       .from(productsTable)
       .where(and(eq(productsTable.userId, product.userId), isNull(productsTable.deletedAt)))
-      .limit(6);
-    upsellProducts = rows.filter((p) => p.id !== id && ((p.marketingAssets as MarketingAssets)?.isNativePublished || (p.marketingAssets as MarketingAssets)?.checkoutUrl)).slice(0, 3);
+      .limit(10);
+
+    // Check if there's a specific configured upsell product
+    if (upsellProductId) {
+      const found = rows.find((p) => p.id === upsellProductId && p.id !== id);
+      if (found && ((found.marketingAssets as MarketingAssets)?.isNativePublished)) {
+        featuredUpsell = found;
+      }
+    }
+
+    upsellProducts = rows.filter((p) => p.id !== id && p.id !== upsellProductId && ((p.marketingAssets as MarketingAssets)?.isNativePublished || (p.marketingAssets as MarketingAssets)?.checkoutUrl)).slice(0, 3);
   } catch { upsellProducts = []; }
 
   const upsellBundles: { id: string; title: string; bundlePrice: number; productIds: string[] }[] = [];
@@ -257,9 +270,23 @@ export default async function ProductSalesPage({
             <h2 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: 800, color: "#14532d" }}>
               {(ma as {thankYouMessage?: string}).thankYouMessage || "You're in! Purchase complete."}
             </h2>
-            <p style={{ margin: "0 0 16px", fontSize: "14px", color: "#16a34a" }}>
-              Check your email for your download link — it&apos;s valid for 7 days.
-            </p>
+            {(ma as { isCourseFormat?: boolean }).isCourseFormat ? (
+              <p style={{ margin: "0 0 16px", fontSize: "14px", color: "#16a34a" }}>
+                Check your email for your course access link. You can also start right now:
+              </p>
+            ) : (
+              <p style={{ margin: "0 0 16px", fontSize: "14px", color: "#16a34a" }}>
+                Check your email for your download link — it&apos;s valid for 7 days.
+              </p>
+            )}
+            {(ma as { isCourseFormat?: boolean }).isCourseFormat && sp?.session_id && (
+              <a
+                href={`/course/${product.id}?session_id=${sp.session_id}`}
+                style={{ display: "inline-block", padding: "12px 28px", borderRadius: "10px", background: "#f97316", color: "#fff", fontSize: "15px", fontWeight: 700, textDecoration: "none", marginBottom: "16px" }}
+              >
+                🎓 Start course now →
+              </a>
+            )}
             {(ma as {thankYouBonusUrl?: string}).thankYouBonusUrl && (
               <a
                 href={(ma as {thankYouBonusUrl?: string}).thankYouBonusUrl}
@@ -567,6 +594,54 @@ export default async function ProductSalesPage({
           )}
         </div>
       </div>
+
+      {/* Featured post-purchase upsell (creator-configured) */}
+      {purchased && featuredUpsell && (() => {
+        const fma = (featuredUpsell.marketingAssets ?? {}) as MarketingAssets;
+        const thumb = fma.bookMockupUrl ?? fma.coverThumbnailUrl ?? fma.thumbnailUrl;
+        const originalPence = fma.nativePrice ?? 0;
+        const discountedPence = upsellDiscountPercent && upsellDiscountPercent > 0
+          ? Math.round(originalPence * (1 - upsellDiscountPercent / 100))
+          : originalPence;
+        return (
+          <div style={{ background: "linear-gradient(135deg,#fff7ed,#ffedd5)", borderTop: "2px solid #fed7aa", padding: "40px 16px" }}>
+            <div style={{ maxWidth: "720px", margin: "0 auto" }}>
+              <div style={{ textAlign: "center", marginBottom: "20px" }}>
+                <span style={{ display: "inline-block", padding: "4px 14px", background: "#f97316", color: "#fff", borderRadius: "999px", fontSize: "11px", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "10px" }}>
+                  🎁 Special one-time offer
+                </span>
+                <h2 style={{ margin: "0 0 6px", fontSize: "20px", fontWeight: 800, color: "#111827" }}>
+                  {upsellDiscountPercent ? `Get ${upsellDiscountPercent}% off your next purchase` : "Complete your collection"}
+                </h2>
+                <p style={{ margin: 0, color: "#6b7280", fontSize: "14px" }}>This offer is exclusive to customers who just purchased.</p>
+              </div>
+              <a
+                href={`/product/${featuredUpsell.id}${upsellDiscountPercent ? `?coupon=upsell${upsellDiscountPercent}` : ""}`}
+                style={{ display: "flex", gap: "20px", alignItems: "center", background: "#fff", border: "2px solid #fed7aa", borderRadius: "20px", padding: "16px 20px", textDecoration: "none", boxShadow: "0 4px 20px rgba(249,115,22,0.1)", transition: "box-shadow 0.2s" }}
+              >
+                {thumb ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={thumb} alt={featuredUpsell.title} style={{ width: "90px", height: "90px", objectFit: "cover", borderRadius: "12px", flexShrink: 0 }} />
+                ) : (
+                  <div style={{ width: "90px", height: "90px", background: "linear-gradient(135deg,#fff7ed,#fed7aa)", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px", flexShrink: 0 }}>📦</div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: "16px", color: "#111827" }}>{featuredUpsell.title}</p>
+                  {originalPence > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontWeight: 800, fontSize: "18px", color: "#f97316" }}>£{(discountedPence / 100).toFixed(2)}</span>
+                      {upsellDiscountPercent && discountedPence < originalPence && (
+                        <span style={{ fontWeight: 500, fontSize: "14px", color: "#9ca3af", textDecoration: "line-through" }}>£{(originalPence / 100).toFixed(2)}</span>
+                      )}
+                    </div>
+                  )}
+                  <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#f97316", fontWeight: 600 }}>Add to my collection →</p>
+                </div>
+              </a>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Post-purchase upsell */}
       {hasUpsell && (

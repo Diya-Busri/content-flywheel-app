@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen, GraduationCap } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen, GraduationCap, UserPlus } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NotificationBell } from "@/components/NotificationBell";
 import Link from "next/link";
@@ -98,6 +98,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         { href: "/dashboard/store", icon: <Store size={18} />, label: "My Store", emoji: "🛒", activeWhenStartsWith: true },
         { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", emoji: "👕", activeWhenStartsWith: true, featureKey: "print_on_demand" },
         { href: "/dashboard/drop-campaign", icon: <Gift size={18} />, label: "Drop Campaign", emoji: "🎁", activeWhenStartsWith: true, featureKey: "drop_campaign" },
+        { href: "/dashboard/referral", icon: <UserPlus size={18} />, label: "Invite Creators", emoji: "🤝", activeWhenStartsWith: true },
       ],
     },
     {

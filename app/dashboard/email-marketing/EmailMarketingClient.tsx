@@ -719,7 +719,7 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
   }, []);
 
   // --- Quick Blast state ---
-  type AudienceType = "all" | "tag" | "specific" | "buyers";
+  type AudienceType = "all" | "tag" | "specific" | "buyers" | "waitlist" | "bio_waitlist";
   const [blastSubject, setBlastSubject] = useState("");
   const [blastBody, setBlastBody] = useState("");
   const [blastAudience, setBlastAudience] = useState<AudienceType>("all");
@@ -994,6 +994,8 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
     const resolvedAudienceTag =
       blastAudience === "tag" ? blastTag.trim() :
       blastAudience === "buyers" ? `buyers:${blastBuyerProductId}` :
+      blastAudience === "waitlist" ? "waitlist:all" :
+      blastAudience === "bio_waitlist" ? "bio_waitlist:all" :
       null;
 
     setBlastSending(true);
@@ -1261,12 +1263,14 @@ export default function EmailMarketingClient({ userId }: { userId: string }) {
                 </h3>
 
                 <div className="space-y-2">
-                  {(["all", "tag", "buyers", "specific"] as const).map((opt) => {
-                    const labels = { all: "All Subscribers", tag: "By Tag", buyers: "Product Buyers", specific: "Specific Email" };
+                  {(["all", "tag", "buyers", "waitlist", "bio_waitlist", "specific"] as const).map((opt) => {
+                    const labels: Record<string, string> = { all: "All Subscribers", tag: "By Tag", buyers: "Product Buyers", waitlist: "Product Waitlists", bio_waitlist: "Bio Page Signups", specific: "Specific Email" };
                     const descs: Record<string, string> = {
                       all: `${contacts.filter((c) => !c.unsubscribedAt).length} subscriber${contacts.filter((c) => !c.unsubscribedAt).length !== 1 ? "s" : ""}`,
                       tag: "Send to a tagged segment",
                       buyers: "Email people who bought your products",
+                      waitlist: "People who joined your product waitlists",
+                      bio_waitlist: "People who signed up via your bio page",
                       specific: "Send to one address",
                     };
                     return (

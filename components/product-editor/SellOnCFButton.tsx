@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,13 +13,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, ShoppingBag, ExternalLink } from "lucide-react";
+import { Loader2, ShoppingBag, ExternalLink, AlertTriangle } from "lucide-react";
+import Link from "next/link";
 
 interface SellOnCFButtonProps {
   productId: string;
   productTitle: string;
   isNativePublished?: boolean;
   nativePrice?: number;
+  subscriptionInterval?: "month" | "year" | null;
   onPublished?: (price: number) => void;
   onUnpublished?: () => void;
 }
@@ -29,6 +31,7 @@ export function SellOnCFButton({
   productTitle,
   isNativePublished: initialPublished = false,
   nativePrice: initialPrice,
+  subscriptionInterval: initialInterval,
   onPublished,
   onUnpublished,
 }: SellOnCFButtonProps) {
@@ -38,8 +41,26 @@ export function SellOnCFButton({
   const [priceInput, setPriceInput] = useState(
     initialPrice ? (initialPrice / 100).toFixed(2) : ""
   );
+  const [billingInterval, setBillingInterval] = useState<"one_time" | "month" | "year">(
+    initialInterval === "month" ? "month" : initialInterval === "year" ? "year" : "one_time"
+  );
   const [loading, setLoading] = useState(false);
+  const [connectChecking, setConnectChecking] = useState(false);
+  const [chargesEnabled, setChargesEnabled] = useState<boolean | null>(null);
   const { toast } = useToast();
+
+  const checkConnectStatus = useCallback(async () => {
+    setConnectChecking(true);
+    try {
+      const res = await fetch("/api/stripe/connect/status");
+      const data = await res.json();
+      setChargesEnabled(data.chargesEnabled ?? false);
+    } catch {
+      setChargesEnabled(false);
+    } finally {
+      setConnectChecking(false);
+    }
+  }, []);
 
   const handlePublish = async () => {
     const priceNum = parseFloat(priceInput);
@@ -59,7 +80,10 @@ export function SellOnCFButton({
       const res = await fetch(`/api/products/${productId}/native-publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ price: pence }),
+        body: JSON.stringify({
+          price: pence,
+          subscriptionInterval: billingInterval === "one_time" ? null : billingInterval,
+        }),
       });
 
       const data = await res.json();
@@ -114,7 +138,7 @@ export function SellOnCFButton({
       <Button
         variant="outline"
         size="sm"
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen(true); void checkConnectStatus(); }}
         title={published ? `Selling at £${(currentPrice! / 100).toFixed(2)}` : "Sell on Content Flywheel"}
         className={published ? "border-green-500/50 text-green-700 dark:text-green-400 hover:border-green-500 hover:text-green-700 dark:hover:text-green-300" : ""}
       >
@@ -138,6 +162,59 @@ export function SellOnCFButton({
                 : `Set a price and publish "${productTitle}" — buyers pay via Stripe and receive an instant download link.`}
             </DialogDescription>
           </DialogHeader>
+
+          {/* Stripe Connect gate */}
+          {connectChecking && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Checking payout setup…
+            </div>
+          )}
+          {!connectChecking && chargesEnabled === false && (
+            <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700/50 dark:bg-amber-950/30 px-4 py-3">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Connect Stripe to receive payments</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                  You need to set up payouts before you can sell. It only takes a couple of minutes.
+                </p>
+                <Link
+                  href="/dashboard/store/payouts"
+                  className="mt-2 inline-block text-xs font-semibold text-amber-700 dark:text-amber-300 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100"
+                  onClick={() => setOpen(false)}
+                >
+                  Set up payouts →
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {!published && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Billing type</label>
+              <div className="flex gap-2">
+                {(["one_time", "month", "year"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setBillingInterval(opt)}
+                    className={`flex-1 text-xs py-2 rounded-lg border transition-colors ${
+                      billingInterval === opt
+                        ? "bg-orange-500 text-white border-orange-500 font-semibold"
+                        : "border-gray-200 text-gray-600 hover:border-orange-300"
+                    }`}
+                  >
+                    {opt === "one_time" ? "One-time" : opt === "month" ? "Monthly" : "Yearly"}
+                  </button>
+                ))}
+              </div>
+              {billingInterval !== "one_time" && (
+                <p className="text-xs text-muted-foreground">
+                  Buyers will be charged {billingInterval === "month" ? "every month" : "every year"} until they cancel.
+                </p>
+              )}
+            </div>
+          )}
 
           {published ? (
             <div className="space-y-4">
@@ -226,8 +303,9 @@ export function SellOnCFButton({
             {!published && (
               <Button
                 onClick={handlePublish}
-                disabled={loading}
-                className="bg-orange-500 hover:bg-orange-600 text-white w-full sm:w-auto"
+                disabled={loading || chargesEnabled === false}
+                title={chargesEnabled === false ? "Connect Stripe first to receive payments" : undefined}
+                className="bg-orange-500 hover:bg-orange-600 text-white w-full sm:w-auto disabled:opacity-50"
               >
                 {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Publish &amp; start selling

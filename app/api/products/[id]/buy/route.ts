@@ -19,6 +19,9 @@ type ExtendedMarketingAssets = {
   stripePriceId?: string;
   nativePrice?: number;
   salePrice?: number;
+  subscriptionInterval?: "month" | "year" | null;
+  stripeSubscriptionPriceId?: string | null;
+  isCourseFormat?: boolean;
 };
 
 export async function POST(
@@ -103,6 +106,36 @@ export async function POST(
     }
 
     const platformFeePercent = PLATFORM_FEE_PERCENT;
+
+    // ── Subscription mode — use Stripe Subscriptions checkout ────────────
+    if (ma.subscriptionInterval && ma.stripeSubscriptionPriceId) {
+      const subscriptionPriceId = ma.stripeSubscriptionPriceId;
+      const subPrice = await stripe.prices.retrieve(subscriptionPriceId);
+      const unitAmount = subPrice.unit_amount ?? 0;
+      const appFee = platformFeePercent > 0 ? Math.round(unitAmount * (platformFeePercent / 100)) : undefined;
+
+      const subSuccessBase = ma.isCourseFormat ? `${baseUrl}/course/${productId}` : `${baseUrl}/product/${productId}`;
+      const subSession = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        line_items: [{ price: subscriptionPriceId, quantity: 1 }],
+        success_url: `${subSuccessBase}?purchased=true&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/product/${productId}`,
+        metadata: {
+          type: "product_purchase",
+          productId: product.id,
+          creatorUserId: product.userId,
+          vatEnabled: vatEnabled ? "true" : "false",
+          ...(refCode ? { affiliateRef: refCode } : {}),
+        },
+        subscription_data: {
+          application_fee_percent: platformFeePercent > 0 ? platformFeePercent : undefined,
+          transfer_data: { destination: connectAccountId },
+        },
+        billing_address_collection: "auto",
+        customer_creation: "always",
+      });
+      return NextResponse.json({ url: subSession.url });
+    }
 
     // Parse optional promo code from request body
     let promoCode: string | null = null;
@@ -205,10 +238,11 @@ export async function POST(
       platformFeePercent > 0 ? Math.round(unitAmountForFee * (platformFeePercent / 100)) : undefined;
 
     // Build checkout session params — route payment through creator's connected account
+    const successBase = ma.isCourseFormat ? `${baseUrl}/course/${productId}` : `${baseUrl}/product/${productId}`;
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "payment",
       line_items: lineItems,
-      success_url: `${baseUrl}/product/${productId}?purchased=true&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${successBase}?purchased=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/product/${productId}`,
       metadata: {
         type: "product_purchase",

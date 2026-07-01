@@ -26,6 +26,7 @@ export async function POST(
 
     const body = await request.json().catch(() => ({}));
     const price = body.price;
+    const subscriptionInterval: "month" | "year" | null = body.subscriptionInterval ?? null;
     if (typeof price !== "number" || price < 100) {
       return NextResponse.json(
         { error: "Invalid price. Minimum is 100 pence (£1.00)." },
@@ -73,18 +74,28 @@ export async function POST(
     }
 
     // Always create a new price (Stripe prices are immutable)
+    // For subscription products, use a recurring price
     const stripePrice = await stripe.prices.create({
       product: stripeProductId,
       unit_amount: price,
       currency: "gbp",
+      ...(subscriptionInterval
+        ? { recurring: { interval: subscriptionInterval } }
+        : {}),
     });
 
     // Archive old price if there was one
     if (existing.stripePriceId && existing.stripePriceId !== stripePrice.id) {
       await stripe.prices.update(existing.stripePriceId, { active: false }).catch(() => {});
     }
+    // Also archive old subscription price if switching modes
+    const existingSubPriceId = (existing as { stripeSubscriptionPriceId?: string }).stripeSubscriptionPriceId;
+    if (existingSubPriceId && existingSubPriceId !== stripePrice.id) {
+      await stripe.prices.update(existingSubPriceId, { active: false }).catch(() => {});
+    }
 
-    const priceLabel = `£${(price / 100).toFixed(2)}`;
+    const intervalLabel = subscriptionInterval === "month" ? "/mo" : subscriptionInterval === "year" ? "/yr" : "";
+    const priceLabel = `£${(price / 100).toFixed(2)}${intervalLabel}`;
 
     const updatedAssets: MarketingAssets & {
       nativePrice: number;
@@ -94,7 +105,9 @@ export async function POST(
     } = {
       ...existing,
       nativePrice: price,
-      stripePriceId: stripePrice.id,
+      // For one-time: set stripePriceId. For subscription: set stripeSubscriptionPriceId + keep stripePriceId for display.
+      stripePriceId: subscriptionInterval ? (existing.stripePriceId ?? stripePrice.id) : stripePrice.id,
+      ...(subscriptionInterval ? { stripeSubscriptionPriceId: stripePrice.id, subscriptionInterval } : { stripeSubscriptionPriceId: null, subscriptionInterval: null }),
       stripeProductId,
       isNativePublished: true,
       priceLabel,

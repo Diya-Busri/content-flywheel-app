@@ -1038,6 +1038,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [thumbnailOrientation, setThumbnailOrientation] = useState<"horizontal" | "vertical">("horizontal");
   const [showThumbnailOptions, setShowThumbnailOptions] = useState(false);
   const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
+  const [upsellProducts, setUpsellProducts] = useState<{ id: string; title: string }[]>([]);
   const [coverCapturing, setCoverCapturing] = useState(false);
   const [previewCapturing, setPreviewCapturing] = useState(false);
   const thumbnailCaptureRef = useRef<HTMLDivElement | null>(null);
@@ -1366,6 +1367,20 @@ export default function ProductEditor({ productId }: { productId: string }) {
   useEffect(() => {
     fetchProduct();
   }, [fetchProduct]);
+
+  // Load creator's other published products for the upsell picker
+  useEffect(() => {
+    fetch("/api/library")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { items?: { id: string; title?: string; name?: string; type?: string; isNativePublished?: boolean }[] } | null) => {
+        if (!data?.items) return;
+        const published = data.items
+          .filter((item) => item.type === "product" && item.isNativePublished && item.id !== productId)
+          .map((item) => ({ id: item.id, title: item.title ?? item.name ?? "Untitled" }));
+        setUpsellProducts(published);
+      })
+      .catch(() => {});
+  }, [productId]);
 
   const saveToServer = useCallback(
     async (payload: {
@@ -7521,6 +7536,121 @@ export default function ProductEditor({ productId }: { productId: string }) {
                             />
                             <p className="text-xs text-gray-400">If set, a &ldquo;Claim your bonus&rdquo; button appears on the thank-you card.</p>
                           </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Post-purchase upsell picker */}
+                    {(marketingAssets as { isNativePublished?: boolean }).isNativePublished && (() => {
+                      const currentUpsellId = (marketingAssets as { upsellProductId?: string | null }).upsellProductId;
+                      const currentDiscount = (marketingAssets as { upsellDiscountPercent?: number | null }).upsellDiscountPercent;
+                      return (
+                        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-3">
+                          <div>
+                            <Label className="text-xs font-semibold text-gray-700">Post-purchase upsell</Label>
+                            <p className="text-xs text-gray-400 mt-0.5">Offer buyers a featured product immediately after checkout.</p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs text-gray-600">Upsell product</Label>
+                            <select
+                              defaultValue={currentUpsellId ?? ""}
+                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                              onBlur={async (e) => {
+                                const val = e.target.value || null;
+                                await fetch(`/api/products/${productId}/marketing-assets`, {
+                                  method: "PATCH", headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ upsellProductId: val }),
+                                }).catch(() => null);
+                                setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, upsellProductId: val } } : null);
+                              }}
+                            >
+                              <option value="">None (no upsell)</option>
+                              {upsellProducts.map((p) => (
+                                <option key={p.id} value={p.id}>{p.title}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {currentUpsellId && (
+                            <div className="space-y-1">
+                              <Label className="text-xs text-gray-600">Discount % (optional)</Label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="90"
+                                step="5"
+                                defaultValue={currentDiscount ?? ""}
+                                placeholder="e.g. 20"
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                                onBlur={async (e) => {
+                                  const val = e.target.value ? parseInt(e.target.value) : null;
+                                  await fetch(`/api/products/${productId}/marketing-assets`, {
+                                    method: "PATCH", headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ upsellDiscountPercent: val }),
+                                  }).catch(() => null);
+                                  setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, upsellDiscountPercent: val } } : null);
+                                }}
+                              />
+                              <p className="text-xs text-gray-400">Leave blank for no discount. Set e.g. 20 to show &quot;20% off&quot; on the upsell card.</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Course format toggle */}
+                    {(marketingAssets as { isNativePublished?: boolean }).isNativePublished && (() => {
+                      const isCourse = !!(marketingAssets as { isCourseFormat?: boolean }).isCourseFormat;
+                      const freePreview = (marketingAssets as { freePreviewLessons?: number }).freePreviewLessons ?? 1;
+                      return (
+                        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <Label className="text-xs font-semibold text-gray-700">Course format</Label>
+                              <p className="text-xs text-gray-400 mt-0.5">Displays product sections as lessons with gated access</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const next = !isCourse;
+                                await fetch(`/api/products/${productId}/marketing-assets`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ isCourseFormat: next }),
+                                }).catch(() => null);
+                                setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, isCourseFormat: next } } : null);
+                              }}
+                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${isCourse ? "bg-orange-500" : "bg-gray-300"}`}
+                            >
+                              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${isCourse ? "translate-x-4" : "translate-x-0.5"}`} />
+                            </button>
+                          </div>
+                          {isCourse && (
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium text-gray-700">Free preview lessons</Label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={20}
+                                defaultValue={freePreview}
+                                className="w-24 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                                onBlur={async (e) => {
+                                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                                  await fetch(`/api/products/${productId}/marketing-assets`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ freePreviewLessons: val }),
+                                  }).catch(() => null);
+                                  setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, freePreviewLessons: val } } : null);
+                                }}
+                              />
+                              <p className="text-xs text-gray-400">Lessons visible without purchase (0 = all locked)</p>
+                            </div>
+                          )}
+                          {isCourse && (
+                            <p className="text-xs text-orange-600 font-medium">
+                              🎓 Course viewer: <a href={`/course/${productId}`} target="_blank" rel="noopener noreferrer" className="underline">/course/{productId}</a>
+                            </p>
+                          )}
                         </div>
                       );
                     })()}

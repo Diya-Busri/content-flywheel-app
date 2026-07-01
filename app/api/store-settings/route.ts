@@ -88,6 +88,7 @@ export async function PATCH(req: NextRequest) {
       "vatNumber",
       "businessName",
       "businessAddress",
+      "customDomain",
     ] as const;
 
     const updates: Record<string, unknown> = {};
