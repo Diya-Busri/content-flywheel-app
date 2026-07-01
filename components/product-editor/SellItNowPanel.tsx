@@ -13,8 +13,9 @@ type Platform = {
 };
 
 const PLATFORMS: Platform[] = [
+  { id: "contentflywheel", label: "Content Flywheel", emoji: "🚀", url: "https://contentflywheel.co.uk/dashboard/store", color: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800/40" },
   { id: "gumroad",    label: "Gumroad",    emoji: "🛒", url: "https://gumroad.com/products/new",        color: "bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100 dark:bg-pink-900/20 dark:text-pink-300 dark:border-pink-800/40" },
-  { id: "etsy",       label: "Etsy",       emoji: "🏪", url: "https://www.etsy.com/sell",                color: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800/40" },
+  { id: "etsy",       label: "Etsy",       emoji: "🏪", url: "https://www.etsy.com/sell",                color: "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-800/40" },
   { id: "stan-store", label: "Stan Store", emoji: "⚡", url: "https://stan.store",                       color: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800/40" },
   { id: "beacons",    label: "Beacons",    emoji: "🔮", url: "https://beacons.ai",                       color: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800/40" },
   { id: "payhip",     label: "Payhip",     emoji: "💳", url: "https://payhip.com/dashboard/product/new", color: "bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 dark:bg-teal-900/20 dark:text-teal-300 dark:border-teal-800/40" },
