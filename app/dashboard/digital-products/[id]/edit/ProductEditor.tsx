@@ -1910,30 +1910,6 @@ export default function ProductEditor({ productId }: { productId: string }) {
     return () => clearTimeout(t);
   }, [currentPageIndex, productId, placedElementsByPage, pageBackgrounds]);
 
-  const handleCaptureCoverPage = useCallback(async () => {
-    if (!productId) return;
-    const el = canvasContainerRef.current;
-    if (!el) return;
-    try {
-      const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 2, backgroundColor: "#ffffff", logging: false });
-      const dataUrl = canvas.toDataURL("image/png");
-      const res = await fetch(`/api/products/${productId}/cover-thumbnail`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataUrl }),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { url?: string };
-        if (data.url) {
-          setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, coverThumbnailUrl: data.url } } : null);
-          saveMarketingEdits({ coverThumbnailUrl: data.url });
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }, [productId, saveMarketingEdits]);
-
   const openEdit = (section: Section) => {
     setEditingSectionId(section.id);
     setEditingContent(section.content);
@@ -4204,6 +4180,30 @@ export default function ProductEditor({ productId }: { productId: string }) {
       toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
     }
   }, [saveMarketingEdits, toast]);
+
+  const handleCaptureCoverPage = useCallback(async () => {
+    if (!productId) return;
+    const el = canvasContainerRef.current;
+    if (!el) return;
+    try {
+      const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 2, backgroundColor: "#ffffff", logging: false });
+      const dataUrl = canvas.toDataURL("image/png");
+      const res = await fetch(`/api/products/${productId}/cover-thumbnail`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { url?: string };
+        if (data.url) {
+          setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, coverThumbnailUrl: data.url } } : null);
+          saveMarketingEdits({ coverThumbnailUrl: data.url });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [productId, saveMarketingEdits]);
 
   const hasDalleThumbnail = !!marketingAssets.thumbnailUrl;
   const effectiveOrientation = (marketingAssets as { thumbnailOrientation?: "horizontal" | "vertical" }).thumbnailOrientation ?? thumbnailOrientation;
