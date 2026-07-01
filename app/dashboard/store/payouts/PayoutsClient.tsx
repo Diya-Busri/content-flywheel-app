@@ -62,10 +62,15 @@ export default function PayoutsClient() {
   const handleConnect = async () => {
     setConnectLoading(true);
     try {
-      const { url } = await fetch("/api/stripe/connect/onboard", { method: "POST" }).then((r) => r.json());
-      if (url) window.location.href = url;
-    } catch { alert("Failed to start Stripe Connect. Please try again."); }
-    finally { setConnectLoading(false); }
+      const res = await fetch("/api/stripe/connect/onboard", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `Server error ${res.status}`);
+      if (data.url) window.location.href = data.url;
+    } catch (err) {
+      alert(`Stripe Connect error: ${err instanceof Error ? err.message : "Unknown error"}. Check the browser console for details.`);
+    } finally {
+      setConnectLoading(false);
+    }
   };
 
   const thisMonthCents = analytics?.recentOrders.filter((o) => new Date(o.createdAt) >= new Date(new Date().getFullYear(), new Date().getMonth(), 1)).reduce((s, o) => s + o.amountCents, 0) ?? 0;
