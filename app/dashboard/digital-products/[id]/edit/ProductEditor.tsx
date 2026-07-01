@@ -4186,16 +4186,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
     if (!productId) return;
     setCoverCapturing(true);
     try {
-      // Make sure we're on the cover page (page 0)
+      // Navigate to cover page and wait for render
       setCurrentPageIndex(0);
-      // Wait for the canvas to render
-      await new Promise((r) => setTimeout(r, 800));
-      const el = canvasContainerRef.current;
+      await new Promise((r) => setTimeout(r, 900));
+      // Target the actual cover page element, not the whole editor canvas
+      const el = (document.querySelector('[data-page-type="cover"]') as HTMLElement | null)
+        ?? canvasContainerRef.current;
       if (!el) {
         toast({ title: "Canvas not ready", description: "Please switch to the Content tab and try again.", variant: "destructive" });
         return;
       }
-      const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 1, backgroundColor: "#ffffff", logging: false });
+      const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 1.5, backgroundColor: "#ffffff", logging: false });
       const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.80));
       const fd = new FormData();
       fd.append("file", blob, "cover.jpg");
