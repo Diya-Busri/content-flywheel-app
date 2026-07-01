@@ -301,6 +301,20 @@ export default function PricingPage() {
             })}
           </div>
 
+          {/* Video credits callout */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.25 }}
+            className="max-w-xl mx-auto mb-12 rounded-2xl bg-white/[0.03] border border-white/8 px-6 py-4 flex items-center gap-4"
+          >
+            <span className="text-2xl">🎬</span>
+            <div>
+              <p className="text-sm font-semibold text-white">100 free video credits on signup</p>
+              <p className="text-xs text-white/40 mt-0.5">Generate avatar videos, AI designs & more. Credits never expire. Top up anytime from £1.49.</p>
+            </div>
+          </motion.div>
+
           {/* Features list */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}
