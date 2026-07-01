@@ -1038,6 +1038,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [thumbnailOrientation, setThumbnailOrientation] = useState<"horizontal" | "vertical">("horizontal");
   const [showThumbnailOptions, setShowThumbnailOptions] = useState(false);
   const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
+  const [coverCapturing, setCoverCapturing] = useState(false);
   const thumbnailCaptureRef = useRef<HTMLDivElement | null>(null);
   const [includeCover, setIncludeCover] = useState(true);
   const [includeBackPage, setIncludeBackPage] = useState(true);
@@ -4183,9 +4184,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const handleCaptureCoverPage = useCallback(async () => {
     if (!productId) return;
-    const el = canvasContainerRef.current;
-    if (!el) return;
+    setCoverCapturing(true);
     try {
+      // Make sure we're on the cover page (page 0)
+      setCurrentPageIndex(0);
+      // Wait for the canvas to render
+      await new Promise((r) => setTimeout(r, 800));
+      const el = canvasContainerRef.current;
+      if (!el) {
+        toast({ title: "Canvas not ready", description: "Please switch to the Content tab and try again.", variant: "destructive" });
+        return;
+      }
       const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 2, backgroundColor: "#ffffff", logging: false });
       const dataUrl = canvas.toDataURL("image/png");
       const res = await fetch(`/api/products/${productId}/cover-thumbnail`, {
@@ -4193,17 +4202,20 @@ export default function ProductEditor({ productId }: { productId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: dataUrl }),
       });
-      if (res.ok) {
-        const data = (await res.json()) as { url?: string };
-        if (data.url) {
-          setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, coverThumbnailUrl: data.url } } : null);
-          saveMarketingEdits({ coverThumbnailUrl: data.url });
-        }
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setProduct((p) => p ? { ...p, marketingAssets: { ...p.marketingAssets, coverThumbnailUrl: data.url } } : null);
+        saveMarketingEdits({ coverThumbnailUrl: data.url });
+        toast({ title: "Cover captured ✓", description: "Your cover page is now the sales image." });
+      } else {
+        toast({ title: "Capture failed", description: data.error ?? "Unknown error", variant: "destructive" });
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      toast({ title: "Capture failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setCoverCapturing(false);
     }
-  }, [productId, saveMarketingEdits]);
+  }, [productId, saveMarketingEdits, toast]);
 
   const hasDalleThumbnail = !!marketingAssets.thumbnailUrl;
   const effectiveOrientation = (marketingAssets as { thumbnailOrientation?: "horizontal" | "vertical" }).thumbnailOrientation ?? thumbnailOrientation;
@@ -7207,8 +7219,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
                         )}
                         <Button type="button" size="sm" variant="outline"
                           className="h-7 text-xs gap-1 border-gray-200"
-                          onClick={handleCaptureCoverPage}>
-                          🖼 Capture Cover Page
+                          onClick={handleCaptureCoverPage}
+                          disabled={coverCapturing}>
+                          {coverCapturing ? <Loader2 className="w-3 h-3 animate-spin" /> : "🖼"} {coverCapturing ? "Capturing…" : "Capture Cover Page"}
                         </Button>
                         <Button type="button" size="sm" variant="outline"
                           className="h-7 text-xs gap-1 border-gray-200"
