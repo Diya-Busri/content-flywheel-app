@@ -71,7 +71,7 @@ export default function MarketplaceClient() {
       {/* Hero header */}
       <div style={{ background: "#0B0B0F", padding: "64px 24px 48px", textAlign: "center" }}>
         <a href="/" style={{ display: "inline-block", marginBottom: "32px" }}>
-          <img src="/logo.png" alt="Content Flywheel" style={{ height: "36px", objectFit: "contain" }} />
+          <img src="/logo.png" alt="Content Flywheel" style={{ height: "56px", objectFit: "contain" }} />
         </a>
         <h1 style={{ margin: "0 0 12px", fontSize: "clamp(28px,5vw,48px)", fontWeight: 800, color: "#fff", letterSpacing: "-0.03em" }}>
           Digital Product Marketplace
