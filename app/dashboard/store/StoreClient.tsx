@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ import {
   Send,
   Star,
   Zap,
+  UserPlus,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -92,16 +94,19 @@ const STORE_BASE = "https://contentflywheel.co.uk/c";
 
 type Tab = "products" | "bundles" | "promo" | "affiliates" | "customers" | "email" | "analytics" | "payouts" | "settings";
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: "products",   label: "Products",    icon: <ShoppingBag className="w-3.5 h-3.5" /> },
-  { id: "bundles",    label: "Bundles",     icon: <Layers className="w-3.5 h-3.5" /> },
-  { id: "promo",      label: "Promo Codes", icon: <Tag className="w-3.5 h-3.5" /> },
-  { id: "affiliates", label: "Affiliates",  icon: <Users className="w-3.5 h-3.5" /> },
-  { id: "customers",  label: "Customers",   icon: <UserCircle className="w-3.5 h-3.5" /> },
-  { id: "email",      label: "Email",       icon: <Mail className="w-3.5 h-3.5" /> },
-  { id: "analytics",  label: "Analytics",   icon: <TrendingUp className="w-3.5 h-3.5" /> },
-  { id: "payouts",    label: "Payouts",     icon: <CreditCard className="w-3.5 h-3.5" /> },
-  { id: "settings",   label: "Settings",    icon: <Settings className="w-3.5 h-3.5" /> },
+const TABS: { id: string; label: string; icon: React.ReactNode; href?: string }[] = [
+  { id: "products",   label: "Products",       icon: <ShoppingBag className="w-3.5 h-3.5" /> },
+  { id: "bundles",    label: "Bundles",        icon: <Layers className="w-3.5 h-3.5" /> },
+  { id: "promo",      label: "Promo Codes",    icon: <Tag className="w-3.5 h-3.5" /> },
+  { id: "affiliates", label: "Affiliates",     icon: <Users className="w-3.5 h-3.5" /> },
+  { id: "customers",  label: "Customers",      icon: <UserCircle className="w-3.5 h-3.5" /> },
+  { id: "email",      label: "Email",          icon: <Mail className="w-3.5 h-3.5" /> },
+  { id: "analytics",  label: "Analytics",      icon: <TrendingUp className="w-3.5 h-3.5" /> },
+  { id: "payouts",    label: "Payouts",        icon: <CreditCard className="w-3.5 h-3.5" /> },
+  { id: "settings",   label: "Settings",       icon: <Settings className="w-3.5 h-3.5" /> },
+  { id: "reviews",    label: "Reviews",        icon: <Star className="w-3.5 h-3.5" />,    href: "/dashboard/reviews" },
+  { id: "webhooks",   label: "Webhooks",       icon: <Zap className="w-3.5 h-3.5" />,     href: "/dashboard/webhooks" },
+  { id: "referral",   label: "Invite Creators",icon: <UserPlus className="w-3.5 h-3.5" />, href: "/dashboard/referral" },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -407,6 +412,7 @@ function EmptyState({ icon: Icon, title, subtitle, action }: {
 
 export function StoreClient({ userId }: StoreClientProps) {
   const storeUrl = `${STORE_BASE}/${userId}`;
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("products");
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
@@ -590,7 +596,8 @@ export function StoreClient({ userId }: StoreClientProps) {
         <div className="border-b border-gray-200 mb-7">
           <nav className="-mb-px flex gap-0 overflow-x-auto scrollbar-none">
             {TABS.map((tab) => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              <button key={tab.id}
+                onClick={() => tab.href ? router.push(tab.href) : setActiveTab(tab.id as Tab)}
                 className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? "border-orange-500 text-orange-600 bg-orange-50"
