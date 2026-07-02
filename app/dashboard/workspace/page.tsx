@@ -461,7 +461,7 @@ function NotesTab() {
   return (
     <div className="flex gap-0 h-[calc(100vh-220px)] min-h-[460px] rounded-xl border border-border overflow-hidden">
       {/* Sidebar */}
-      <div className="w-52 shrink-0 flex flex-col bg-muted/30 border-r border-border">
+      <div className="w-64 shrink-0 flex flex-col bg-muted/30 border-r border-border">
         {/* Header */}
         <div className="p-3 border-b border-border space-y-2">
           <div className="relative">
@@ -606,14 +606,14 @@ function CalendarTab() {
 
         <div className="grid grid-cols-7 border-t border-l border-border rounded-lg overflow-hidden">
           {days.map((d, i) => {
-            if (!d) return <div key={`pad-${i}`} className="border-b border-r border-border bg-muted/20 h-16 sm:h-20" />;
+            if (!d) return <div key={`pad-${i}`} className="border-b border-r border-border bg-muted/20 h-20 sm:h-24" />;
             const dayEvents = eventsOn(d);
             const dateStr = fmt(d);
             const isSelected = selectedDate === dateStr;
             const hasDomEvents = dayEvents.length > 0;
             return (
               <div key={dateStr} onClick={() => setSelectedDate(isSelected ? null : dateStr)}
-                className={cn("border-b border-r border-border h-16 sm:h-20 p-1 cursor-pointer transition-all duration-150 overflow-hidden",
+                className={cn("border-b border-r border-border h-20 sm:h-24 p-1.5 cursor-pointer transition-all duration-150 overflow-hidden",
                   isSelected ? "bg-orange-500/10 ring-inset ring-1 ring-orange-500/40" : hasDomEvents ? "bg-purple-500/5 hover:bg-purple-500/10" : "hover:bg-accent")}>
                 <p className={cn("text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full", isToday(d) ? "bg-orange-500 text-white" : "text-foreground")}>{d.getDate()}</p>
                 <div className="mt-0.5 space-y-px">
@@ -639,7 +639,7 @@ function CalendarTab() {
       </div>
 
       {/* Side panel */}
-      <div className="w-60 shrink-0 space-y-3">
+      <div className="w-72 shrink-0 space-y-3">
         {selectedDate ? (
           <>
             <div className="flex items-center justify-between">
@@ -922,7 +922,7 @@ export default function WorkspacePage() {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-none">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground">Workspace</h1>
