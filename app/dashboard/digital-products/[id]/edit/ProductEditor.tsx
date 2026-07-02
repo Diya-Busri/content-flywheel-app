@@ -4239,12 +4239,23 @@ export default function ProductEditor({ productId }: { productId: string }) {
       }
       await new Promise((r) => setTimeout(r, 300));
       const canvas = await html2canvas(el, {
-        useCORS: true, allowTaint: false, proxy: "/api/image-proxy", scale: 1.5, backgroundColor: "#ffffff", logging: false,
-        width: el.offsetWidth, height: el.offsetHeight,
-        windowWidth: document.documentElement.clientWidth, windowHeight: document.documentElement.clientHeight,
+        useCORS: true,
+        allowTaint: false,
+        proxy: "/api/image-proxy",
+        scale: 1,
+        backgroundColor: "#ffffff",
+        logging: false,
         ignoreElements: (node) => node.tagName === "SCRIPT" || node.tagName === "IFRAME",
       });
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.85));
+      let blob: Blob | null = null;
+      try {
+        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.85));
+      } catch {
+        // Canvas tainted by cross-origin image — retry without images
+        toast({ title: "Retrying without images…", description: "Some images couldn't be captured due to browser security restrictions." });
+        const canvas2 = await html2canvas(el, { scale: 1, backgroundColor: "#ffffff", logging: false, allowTaint: false, useCORS: false });
+        blob = await new Promise<Blob | null>((resolve) => canvas2.toBlob((b) => resolve(b), "image/jpeg", 0.85));
+      }
       if (!blob) {
         toast({ title: "Capture failed", description: "Canvas could not be exported. Try again in a moment.", variant: "destructive" });
         return;
@@ -4289,24 +4300,27 @@ export default function ProductEditor({ productId }: { productId: string }) {
       }
       await new Promise((r) => setTimeout(r, 300));
 
-      // proxy: images from Supabase/CDN are cross-origin — the proxy fetches them server-side
-      // so html2canvas can render them without tainting the canvas.
+      // proxy: /api/image-proxy fetches cross-origin images server-side so html2canvas can
+      // render them without tainting the canvas (bypasses browser CORS cache issue).
       const canvas = await html2canvas(el, {
         useCORS: true,
         allowTaint: false,
         proxy: "/api/image-proxy",
-        scale: 1.5,
+        scale: 1,
         backgroundColor: "#ffffff",
         logging: false,
-        width: el.offsetWidth,
-        height: el.offsetHeight,
-        windowWidth: document.documentElement.clientWidth,
-        windowHeight: document.documentElement.clientHeight,
         ignoreElements: (node) => node.tagName === "SCRIPT" || node.tagName === "IFRAME",
       });
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.85));
+      let blob: Blob | null = null;
+      try {
+        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.85));
+      } catch {
+        // Canvas tainted — retry with no image loading
+        const canvas2 = await html2canvas(el, { scale: 1, backgroundColor: "#ffffff", logging: false, allowTaint: false, useCORS: false });
+        blob = await new Promise<Blob | null>((resolve) => canvas2.toBlob((b) => resolve(b), "image/jpeg", 0.85));
+      }
       if (!blob) {
-        toast({ title: "Capture failed", description: "Canvas could not be exported. Try scrolling to a text-only section.", variant: "destructive" });
+        toast({ title: "Capture failed", description: "Canvas could not be exported. Try a text-only section.", variant: "destructive" });
         return;
       }
       const fd = new FormData();

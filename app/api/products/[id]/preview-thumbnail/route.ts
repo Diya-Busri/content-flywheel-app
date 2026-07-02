@@ -4,9 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
-import { getSupabaseAdmin } from "@/lib/supabase/server";
-
-const BUCKET = "product-images";
+import { upload } from "@/lib/storage";
 
 /**
  * POST: Upload a content-page preview screenshot and save URL to marketingAssets.previewPageUrl.
@@ -38,28 +36,9 @@ export async function POST(
     if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
     const ext = contentType === "image/jpeg" ? "jpg" : "png";
-    const path = `thumbnails/${productId}/preview.${ext}`;
+    const key = `products/${userId}/thumbnails/${productId}/preview.${ext}`;
 
-    const supabase = getSupabaseAdmin();
-    if (!supabase) return NextResponse.json({ error: "Storage not configured" }, { status: 503 });
-
-    let uploadResult = await supabase.storage.from(BUCKET).upload(path, buffer, { contentType, upsert: true });
-
-    if (uploadResult.error) {
-      const errMsg = String(uploadResult.error.message || uploadResult.error).toLowerCase();
-      if (errMsg.includes("bucket") || errMsg.includes("not found") || errMsg.includes("does not exist")) {
-        await supabase.storage.createBucket(BUCKET, { public: true });
-        uploadResult = await supabase.storage.from(BUCKET).upload(path, buffer, { contentType, upsert: true });
-      }
-    }
-
-    if (uploadResult.error) {
-      console.error("[preview-thumbnail] Supabase upload failed:", uploadResult.error);
-      return NextResponse.json({ error: "Failed to upload to storage" }, { status: 500 });
-    }
-
-    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    const url = urlData.publicUrl;
+    const { url } = await upload(key, buffer, { contentType });
 
     const updatedAssets = { ...((product.marketingAssets ?? {}) as Record<string, unknown>), previewPageUrl: url };
     await db.update(productsTable)
