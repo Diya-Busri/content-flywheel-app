@@ -265,7 +265,7 @@ function VideoCreditsContent() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
         {[
           { icon: "🎁", title: "100 free on signup", desc: "Every new account starts with 100 free credits — no card needed" },
-          { icon: "🎬", title: "Generate anything", desc: "Brand Story, Cooking, TikTok Shop videos, AI Design, UGC avatars" },
+          { icon: "🎬", title: "Generate anything", desc: "Faceless voiceover videos, Brand Story, Cooking, TikTok Shop, AI Design, UGC avatars" },
           { icon: "⚡", title: "10 credits per use", desc: "Most features cost 10 credits. UGC avatar videos cost 20. Credits never expire." },
         ].map((step) => (
           <div key={step.title} className="p-4 rounded-xl border border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] text-center">

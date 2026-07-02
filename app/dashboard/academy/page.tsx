@@ -75,27 +75,29 @@ export default async function AcademyHomePage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <CheckCircle2 className="h-4 w-4" /> <span className="text-xs">Lessons completed</span>
+      {/* Stats — only show once there are courses to learn from */}
+      {courses.length > 0 && (
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border bg-card p-4">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4" /> <span className="text-xs">Lessons completed</span>
+            </div>
+            <p className="mt-1 text-2xl font-bold text-foreground">{totalCompleted}</p>
           </div>
-          <p className="mt-1 text-2xl font-bold text-foreground">{totalCompleted}</p>
-        </div>
-        <div className="rounded-xl border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <BookOpen className="h-4 w-4" /> <span className="text-xs">Courses in progress</span>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <BookOpen className="h-4 w-4" /> <span className="text-xs">Courses in progress</span>
+            </div>
+            <p className="mt-1 text-2xl font-bold text-foreground">{inProgressCount}</p>
           </div>
-          <p className="mt-1 text-2xl font-bold text-foreground">{inProgressCount}</p>
-        </div>
-        <div className="rounded-xl border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <GraduationCap className="h-4 w-4" /> <span className="text-xs">Available courses</span>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <GraduationCap className="h-4 w-4" /> <span className="text-xs">Available courses</span>
+            </div>
+            <p className="mt-1 text-2xl font-bold text-foreground">{courses.length}</p>
           </div>
-          <p className="mt-1 text-2xl font-bold text-foreground">{courses.length}</p>
         </div>
-      </div>
+      )}
 
       {/* Continue learning */}
       {continueCourse && continueLessonId && (
@@ -131,9 +133,12 @@ export default async function AcademyHomePage() {
       {/* Course grid */}
       <h2 className="mb-3 text-lg font-semibold text-foreground">All courses</h2>
       {courses.length === 0 ? (
-        <div className="rounded-xl border bg-card p-10 text-center text-muted-foreground">
-          <GraduationCap className="mx-auto h-10 w-10 opacity-40" />
-          <p className="mt-3">No courses published yet. Check back soon!</p>
+        <div className="rounded-xl border bg-card p-12 text-center">
+          <GraduationCap className="mx-auto h-12 w-12 text-muted-foreground opacity-30" />
+          <p className="mt-4 text-base font-semibold text-foreground">Courses coming soon</p>
+          <p className="mt-2 text-sm text-muted-foreground max-w-sm mx-auto">
+            We&apos;re building step-by-step courses on creating digital products, growing an audience, and making your first sale. Check back soon.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

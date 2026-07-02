@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Palette, Trash2, MoreHorizontal, Clock, Zap, Layers, Sparkles, Package, Megaphone } from "lucide-react";
+import { Plus, Palette, Trash2, MoreHorizontal, Clock, Zap, Layers, Sparkles, Package, Megaphone, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PromoteThisSheet } from "@/components/PromoteThisSheet";
 import {
@@ -156,8 +156,29 @@ const STYLE_LABELS: Record<string, string> = {
   "quote-focus-style":  "Quote Focus",
 };
 
+const STYLE_GRADIENTS: Record<string, string> = {
+  "minimal-luxury":     "from-stone-200 to-amber-100 dark:from-stone-800 dark:to-amber-900",
+  "viral-storytelling": "from-rose-200 to-orange-100 dark:from-rose-900 dark:to-orange-900",
+  "educational-pro":    "from-blue-200 to-indigo-100 dark:from-blue-900 dark:to-indigo-900",
+  "bold-impact":        "from-red-200 to-pink-100 dark:from-red-900 dark:to-pink-900",
+  "soft-aesthetic":     "from-purple-200 to-pink-100 dark:from-purple-900 dark:to-pink-900",
+  "chaos-raw":          "from-zinc-300 to-gray-200 dark:from-zinc-700 dark:to-gray-800",
+  "quote-focus-style":  "from-emerald-200 to-teal-100 dark:from-emerald-900 dark:to-teal-900",
+};
+const STYLE_TEXT: Record<string, string> = {
+  "minimal-luxury":     "text-amber-700 dark:text-amber-300",
+  "viral-storytelling": "text-rose-700 dark:text-rose-300",
+  "educational-pro":    "text-blue-700 dark:text-blue-300",
+  "bold-impact":        "text-red-700 dark:text-red-300",
+  "soft-aesthetic":     "text-purple-700 dark:text-purple-300",
+  "chaos-raw":          "text-zinc-700 dark:text-zinc-300",
+  "quote-focus-style":  "text-emerald-700 dark:text-emerald-300",
+};
+
 function BundleCard({ bundle, onDelete }: { bundle: SelectBundle; onDelete: (id: string) => void }) {
   const router = useRouter();
+  const grad = STYLE_GRADIENTS[bundle.style] ?? "from-orange-200 to-purple-100 dark:from-orange-900 dark:to-purple-900";
+  const textCol = STYLE_TEXT[bundle.style] ?? "text-orange-600 dark:text-orange-300";
   return (
     <motion.div
       layout
@@ -168,14 +189,15 @@ function BundleCard({ bundle, onDelete }: { bundle: SelectBundle; onDelete: (id:
       onClick={() => router.push(`/dashboard/design-studio/bundle/${bundle.id}`)}
     >
       {/* Cover preview */}
-      <div className="w-full h-36 flex items-center justify-center overflow-hidden bg-gradient-to-br from-orange-500/20 to-purple-500/20 dark:from-orange-500/10 dark:to-purple-500/10">
+      <div className={`w-full h-36 flex items-center justify-center overflow-hidden bg-gradient-to-br ${grad}`}>
         {bundle.coverPreviewUrl
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={bundle.coverPreviewUrl} alt={bundle.title} className="w-full h-full object-cover" />
           : (
-            <div className="flex flex-col items-center gap-2 text-orange-400">
+            <div className={`flex flex-col items-center gap-2 ${textCol}`}>
               <Layers className="w-8 h-8" />
-              <span className="text-xs font-medium">{bundle.slideCount} slides</span>
+              <span className="text-xs font-semibold">{STYLE_LABELS[bundle.style] ?? bundle.style}</span>
+              <span className="text-[10px] opacity-70">{bundle.slideCount} slides</span>
             </div>
           )}
       </div>
@@ -227,6 +249,7 @@ export function DesignStudioLanding() {
   const [designs, setDesigns] = useState<SelectDesign[]>([]);
   const [bundles, setBundles] = useState<SelectBundle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bundleSearch, setBundleSearch] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -330,7 +353,7 @@ export function DesignStudioLanding() {
               <Palette className="w-5 h-5 md:w-6 md:h-6 text-orange-500 shrink-0" /> Design Studio
             </h1>
             <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-1 hidden sm:block">
-              Create posters, invitations, social posts, and more
+              AI-generated social posts, product covers, and branded content
             </p>
           </div>
           <Button
@@ -373,7 +396,7 @@ export function DesignStudioLanding() {
               Promote This <span className="text-xs font-semibold bg-purple-500 text-white px-2 py-0.5 rounded-full">NEW</span>
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-              Paste any URL → get a TikTok script, Instagram caption, email & Twitter thread instantly
+              Paste any URL → get a voiceover script, Instagram caption, email & X thread instantly
             </p>
           </div>
           <div className="shrink-0 text-purple-500 group-hover:translate-x-1 transition-transform">→</div>
@@ -393,16 +416,32 @@ export function DesignStudioLanding() {
           </div>
         ) : bundles.length > 0 ? (
           <div className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <Layers className="w-4 h-4 text-orange-500" />
-              <h2 className="text-base font-bold text-gray-900 dark:text-white">Content Bundles</h2>
-              <span className="text-xs text-gray-400 ml-1">{bundles.length} bundle{bundles.length !== 1 ? "s" : ""}</span>
+            <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-orange-500" />
+                <h2 className="text-base font-bold text-gray-900 dark:text-white">Content Bundles</h2>
+                <span className="text-xs text-gray-400 ml-1">{bundles.length} bundle{bundles.length !== 1 ? "s" : ""}</span>
+              </div>
+              {bundles.length > 6 && (
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={bundleSearch}
+                    onChange={e => setBundleSearch(e.target.value)}
+                    placeholder="Search bundles…"
+                    className="h-8 pl-8 pr-3 text-xs rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-orange-500 w-44"
+                  />
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
               <AnimatePresence>
-                {bundles.map((b) => (
-                  <BundleCard key={b.id} bundle={b} onDelete={deleteBundle} />
-                ))}
+                {bundles
+                  .filter(b => !bundleSearch || b.title?.toLowerCase().includes(bundleSearch.toLowerCase()) || (STYLE_LABELS[b.style] ?? b.style).toLowerCase().includes(bundleSearch.toLowerCase()))
+                  .map((b) => (
+                    <BundleCard key={b.id} bundle={b} onDelete={deleteBundle} />
+                  ))}
               </AnimatePresence>
             </div>
           </div>

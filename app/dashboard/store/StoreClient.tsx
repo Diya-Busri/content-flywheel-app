@@ -132,9 +132,9 @@ function FormatBadge({ format }: { format?: string }) {
 
 function StatCard({ label, value, accent }: { label: string; value: React.ReactNode; accent?: boolean }) {
   return (
-    <div className={`rounded-2xl border p-5 ${accent ? "bg-orange-50 border-orange-200" : "bg-white border-gray-200"}`}>
-      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">{label}</p>
-      <p className={`text-2xl font-bold ${accent ? "text-orange-600" : "text-gray-900"}`}>{value}</p>
+    <div className={`rounded-2xl border p-5 ${accent ? "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800/40" : "bg-white dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2A2A2A]"}`}>
+      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{label}</p>
+      <p className={`text-2xl font-bold ${accent ? "text-orange-600 dark:text-orange-400" : "text-gray-900 dark:text-white"}`}>{value}</p>
     </div>
   );
 }
@@ -210,13 +210,13 @@ function PublishedProductCard({ item, onRefresh }: { item: LibraryItem; onRefres
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-col gap-3 hover:border-orange-300 hover:bg-gray-100 transition-all">
+    <div className="bg-white dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] rounded-2xl p-5 flex flex-col gap-3 hover:border-orange-300 dark:hover:border-orange-700/50 hover:bg-gray-50 dark:hover:bg-[#1E1E1E] transition-all">
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-orange-100 border border-orange-200 flex items-center justify-center shrink-0">
-          <Package className="w-5 h-5 text-orange-600" />
+        <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/40 flex items-center justify-center shrink-0">
+          <Package className="w-5 h-5 text-orange-600 dark:text-orange-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-900 leading-tight truncate">{item.title}</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-white leading-tight truncate">{item.title}</p>
           <div className="flex items-center gap-2 mt-1.5">
             <Badge className="text-[10px] bg-green-50 text-green-700 border border-green-200 hover:bg-green-50 font-medium">Live</Badge>
             <FormatBadge format={item.format} />
@@ -310,14 +310,14 @@ function LibraryPickerRow({ item, publishing, onPublish }: {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-3.5">
+    <div className="bg-white dark:bg-[#1A1A1A] rounded-xl border border-gray-200 dark:border-[#2A2A2A] p-3.5">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200 flex items-center justify-center shrink-0">
-          <BookOpen className="w-4 h-4 text-orange-600" />
+        <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/40 flex items-center justify-center shrink-0">
+          <BookOpen className="w-4 h-4 text-orange-600 dark:text-orange-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
-          {item.format && <p className="text-xs text-gray-500 capitalize">{item.format}</p>}
+          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{item.title}</p>
+          {item.format && <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{item.format}</p>}
         </div>
         {!showPrice && (
           <Button size="sm" variant="outline" className="h-7 text-xs border-orange-300 text-orange-600 hover:bg-orange-50 shrink-0 gap-1" onClick={() => setShowPrice(true)}>
@@ -360,12 +360,12 @@ function RevenueChart({ data }: { data: DayRevenue[] }) {
         const hasRevenue = d.cents > 0;
         return (
           <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative">
-            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 border border-gray-200 text-gray-900 text-[10px] rounded-lg px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none shadow-lg">
+            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 border border-gray-700 text-white text-[10px] rounded-lg px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none shadow-lg">
               {formatPrice(d.cents)}
             </div>
             <div className="w-full flex items-end" style={{ height: "88px" }}>
               <div
-                className={`w-full rounded-t-lg transition-all ${hasRevenue ? "bg-orange-500 hover:bg-orange-400" : "bg-gray-100"}`}
+                className={`w-full rounded-t-lg transition-all ${hasRevenue ? "bg-orange-500 hover:bg-orange-400" : "bg-gray-100 dark:bg-[#2A2A2A]"}`}
                 style={{ height: `${Math.max(pct, hasRevenue ? 5 : 2)}%` }}
               />
             </div>
@@ -382,8 +382,8 @@ function SectionHeader({ title, subtitle, action }: { title: string; subtitle?: 
   return (
     <div className="flex items-start justify-between gap-4 mb-5">
       <div>
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-        {subtitle && <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>}
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h2>
+        {subtitle && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>}
       </div>
       {action}
     </div>
@@ -397,12 +397,12 @@ function EmptyState({ icon: Icon, title, subtitle, action }: {
   title: string; subtitle: string; action?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center">
-      <div className="w-12 h-12 rounded-2xl bg-gray-100 border border-gray-200 flex items-center justify-center mx-auto mb-4">
-        <Icon className="w-6 h-6 text-gray-500" />
+    <div className="rounded-2xl border border-dashed border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#1A1A1A] p-12 text-center">
+      <div className="w-12 h-12 rounded-2xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center mx-auto mb-4">
+        <Icon className="w-6 h-6 text-gray-500 dark:text-gray-400" />
       </div>
-      <p className="text-sm font-medium text-gray-800 mb-1.5">{title}</p>
-      <p className="text-sm text-gray-500 max-w-xs mx-auto mb-5">{subtitle}</p>
+      <p className="text-sm font-medium text-gray-800 dark:text-white mb-1.5">{title}</p>
+      <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs mx-auto mb-5">{subtitle}</p>
       {action}
     </div>
   );
@@ -537,19 +537,19 @@ export function StoreClient({ userId }: StoreClientProps) {
   const unpublished = items.filter((i) => !i.isNativePublished);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-transparent">
       <div className="p-6 md:p-8 max-w-5xl mx-auto">
 
         {/* ── Page Header ── */}
         <div className="flex items-start justify-between gap-4 flex-wrap mb-7">
           <div>
             <div className="flex items-center gap-2.5 mb-1.5">
-              <div className="w-8 h-8 rounded-xl bg-orange-100 border border-orange-200 flex items-center justify-center">
-                <Store className="w-4 h-4 text-orange-600" />
+              <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/40 flex items-center justify-center">
+                <Store className="w-4 h-4 text-orange-600 dark:text-orange-400" />
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">My Store</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">My Store</h1>
             </div>
-            <p className="text-sm text-gray-500">Sell your digital products directly to your audience.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Sell your digital products directly to your audience.</p>
           </div>
           <div className="flex items-center gap-2">
             <Link href="/dashboard/digital-products/upload">
@@ -566,11 +566,11 @@ export function StoreClient({ userId }: StoreClientProps) {
         </div>
 
         {/* ── Store URL Card ── */}
-        <div className="relative rounded-2xl overflow-hidden border border-orange-200 bg-orange-50 p-4 mb-6">
+        <div className="relative rounded-2xl overflow-hidden border border-orange-200 dark:border-orange-800/40 bg-orange-50 dark:bg-orange-950/20 p-4 mb-6">
           <div className="relative flex items-center gap-3 flex-wrap">
-            <p className="text-xs font-bold uppercase tracking-widest text-orange-600 shrink-0">Your Store</p>
-            <div className="flex-1 min-w-0 bg-gray-100 border border-gray-200 rounded-xl px-4 py-2.5">
-              <p className="text-sm text-gray-900 font-mono truncate">{storeUrl}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-orange-600 dark:text-orange-400 shrink-0">Your Store</p>
+            <div className="flex-1 min-w-0 bg-gray-100 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] rounded-xl px-4 py-2.5">
+              <p className="text-sm text-gray-900 dark:text-white font-mono truncate">{storeUrl}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Button size="sm" variant="outline" className="h-8 border-gray-300 text-gray-800 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-100 gap-2" onClick={handleCopy}>
@@ -593,15 +593,15 @@ export function StoreClient({ userId }: StoreClientProps) {
         </div>
 
         {/* ── Tab Nav ── */}
-        <div className="border-b border-gray-200 mb-7">
+        <div className="border-b border-gray-200 dark:border-[#2A2A2A] mb-7">
           <nav className="-mb-px flex gap-0 overflow-x-auto scrollbar-none">
             {TABS.map((tab) => (
               <button key={tab.id}
                 onClick={() => tab.href ? router.push(tab.href) : setActiveTab(tab.id as Tab)}
                 className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   activeTab === tab.id
-                    ? "border-orange-500 text-orange-600 bg-orange-50"
-                    : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300 hover:bg-gray-50"
+                    ? "border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/20"
+                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-white/5"
                 }`}
               >
                 {tab.icon}{tab.label}
@@ -631,9 +631,9 @@ export function StoreClient({ userId }: StoreClientProps) {
               <>
                 <section>
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-sm font-semibold text-gray-800 uppercase tracking-wider">Published Products</h2>
+                    <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wider">Published Products</h2>
                     {published.length > 0 && (
-                      <Badge className="bg-green-50 text-green-700 border border-green-200 hover:bg-green-50 text-xs font-medium">
+                      <Badge className="bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800/40 hover:bg-green-50 text-xs font-medium">
                         {published.length} live
                       </Badge>
                     )}
@@ -668,20 +668,20 @@ export function StoreClient({ userId }: StoreClientProps) {
                 {unpublished.length > 0 && (
                   <section>
                     <div className="flex items-center justify-between mb-3">
-                      <h2 className="text-sm font-semibold text-gray-800 uppercase tracking-wider">Unpublished</h2>
-                      <span className="text-xs text-gray-500">{unpublished.length} products</span>
+                      <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wider">Unpublished</h2>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{unpublished.length} products</span>
                     </div>
-                    <div className="rounded-2xl bg-gray-50 border border-gray-200 px-5 py-1">
+                    <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] px-5 py-1">
                       {unpublished.map((item) => <UnpublishedProductRow key={item.id} item={item} onRefresh={fetchLibrary} />)}
                     </div>
                   </section>
                 )}
 
                 {/* ── Add more products bar ── */}
-                <div className="rounded-2xl border border-gray-200 bg-white p-4 flex items-center gap-4 flex-wrap">
+                <div className="rounded-2xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-4 flex items-center gap-4 flex-wrap">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900">Add products to your store</p>
-                    <p className="text-xs text-gray-500 mt-0.5">Upload a file or pick something you&apos;ve already made in the app</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Add products to your store</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Upload a file or pick something you&apos;ve already made in the app</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     <Link href="/dashboard/digital-products/upload">
@@ -697,14 +697,14 @@ export function StoreClient({ userId }: StoreClientProps) {
 
                 {/* ── Library picker ── */}
                 {showLibraryPicker && (
-                  <div className="rounded-2xl border border-orange-200 bg-orange-50 p-5">
+                  <div className="rounded-2xl border border-orange-200 dark:border-orange-800/40 bg-orange-50 dark:bg-orange-950/20 p-5">
                     <div className="flex items-center gap-2 mb-4">
-                      <BookOpen className="w-4 h-4 text-orange-600" />
-                      <p className="text-sm font-semibold text-gray-900">Your library — click any item to publish it</p>
+                      <BookOpen className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">Your library — click any item to publish it</p>
                     </div>
                     {unpublished.length === 0 ? (
                       <div className="text-center py-8">
-                        <p className="text-sm text-gray-500 mb-3">Everything in your library is already published, or your library is empty.</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Everything in your library is already published, or your library is empty.</p>
                         <Link href="/dashboard/digital-products">
                           <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
                             <Plus className="w-3.5 h-3.5" />Create something with AI
@@ -759,34 +759,34 @@ export function StoreClient({ userId }: StoreClientProps) {
               }
             />
             {showBundleForm && (
-              <div className="rounded-2xl bg-white border border-gray-200 p-5 space-y-4">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Create bundle</p>
+              <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-5 space-y-4">
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Create bundle</p>
                 <div className="space-y-3">
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-gray-600">Title</p>
-                    <Input value={bundleTitle} onChange={(e) => setBundleTitle(e.target.value)} placeholder="Ultimate Creator Pack" className="h-9 text-sm bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-500" />
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Title</p>
+                    <Input value={bundleTitle} onChange={(e) => setBundleTitle(e.target.value)} placeholder="Ultimate Creator Pack" className="h-9 text-sm bg-gray-100 dark:bg-[#111] border-gray-300 dark:border-[#333] text-gray-900 dark:text-white placeholder:text-gray-500" />
                   </div>
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-gray-600">Description (optional)</p>
-                    <Input value={bundleDescription} onChange={(e) => setBundleDescription(e.target.value)} placeholder="Everything you need to get started..." className="h-9 text-sm bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-500" />
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Description (optional)</p>
+                    <Input value={bundleDescription} onChange={(e) => setBundleDescription(e.target.value)} placeholder="Everything you need to get started..." className="h-9 text-sm bg-gray-100 dark:bg-[#111] border-gray-300 dark:border-[#333] text-gray-900 dark:text-white placeholder:text-gray-500" />
                   </div>
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-gray-600">Bundle price</p>
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Bundle price</p>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 text-sm">\xa3</span>
-                      <Input type="number" min="1" step="0.01" value={bundlePrice} onChange={(e) => setBundlePrice(e.target.value)} placeholder="19.99" className="pl-7 h-9 text-sm bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-500" />
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-400 text-sm">\xa3</span>
+                      <Input type="number" min="1" step="0.01" value={bundlePrice} onChange={(e) => setBundlePrice(e.target.value)} placeholder="19.99" className="pl-7 h-9 text-sm bg-gray-100 dark:bg-[#111] border-gray-300 dark:border-[#333] text-gray-900 dark:text-white placeholder:text-gray-500" />
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-gray-600">Select products (at least 2)</p>
-                    <div className="rounded-xl border border-gray-200 divide-y divide-gray-200 max-h-48 overflow-y-auto bg-gray-50">
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Select products (at least 2)</p>
+                    <div className="rounded-xl border border-gray-200 dark:border-[#2A2A2A] divide-y divide-gray-200 dark:divide-[#2A2A2A] max-h-48 overflow-y-auto bg-gray-50 dark:bg-[#111]">
                       {items.filter((i) => i.isNativePublished).length === 0 ? (
-                        <p className="text-sm text-gray-500 p-4">No published products yet.</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 p-4">No published products yet.</p>
                       ) : items.filter((i) => i.isNativePublished).map((item) => (
-                        <label key={item.id} className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-100">
+                        <label key={item.id} className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-white/5">
                           <input type="checkbox" checked={bundleProductIds.includes(item.id)} onChange={(e) => { if (e.target.checked) setBundleProductIds((p) => [...p, item.id]); else setBundleProductIds((p) => p.filter((id) => id !== item.id)); }} className="accent-orange-500" />
-                          <span className="text-sm text-gray-900">{item.title}</span>
-                          {item.nativePrice != null && <span className="text-xs text-gray-500 ml-auto">{formatPrice(item.nativePrice)}</span>}
+                          <span className="text-sm text-gray-900 dark:text-white">{item.title}</span>
+                          {item.nativePrice != null && <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">{formatPrice(item.nativePrice)}</span>}
                         </label>
                       ))}
                     </div>
@@ -861,24 +861,24 @@ export function StoreClient({ userId }: StoreClientProps) {
               }
             />
             {showPromoForm && (
-              <div className="rounded-2xl bg-white border border-gray-200 p-5 space-y-4">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Create promo code</p>
+              <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-5 space-y-4">
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Create promo code</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-gray-600">Code</p>
-                    <Input value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} placeholder="SUMMER20" className="h-9 text-sm bg-gray-100 border-gray-300 text-gray-900 uppercase placeholder:text-gray-500" />
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Code</p>
+                    <Input value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} placeholder="SUMMER20" className="h-9 text-sm bg-gray-100 dark:bg-[#111] border-gray-300 dark:border-[#333] text-gray-900 dark:text-white uppercase placeholder:text-gray-500" />
                   </div>
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-gray-600">Discount %</p>
-                    <Input type="number" min="1" max="100" value={promoDiscount} onChange={(e) => setPromoDiscount(e.target.value)} placeholder="20" className="h-9 text-sm bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-500" />
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Discount %</p>
+                    <Input type="number" min="1" max="100" value={promoDiscount} onChange={(e) => setPromoDiscount(e.target.value)} placeholder="20" className="h-9 text-sm bg-gray-100 dark:bg-[#111] border-gray-300 dark:border-[#333] text-gray-900 dark:text-white placeholder:text-gray-500" />
                   </div>
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-gray-600">Max uses (blank = unlimited)</p>
-                    <Input type="number" min="1" value={promoMaxUses} onChange={(e) => setPromoMaxUses(e.target.value)} placeholder="Unlimited" className="h-9 text-sm bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-500" />
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Max uses (blank = unlimited)</p>
+                    <Input type="number" min="1" value={promoMaxUses} onChange={(e) => setPromoMaxUses(e.target.value)} placeholder="Unlimited" className="h-9 text-sm bg-gray-100 dark:bg-[#111] border-gray-300 dark:border-[#333] text-gray-900 dark:text-white placeholder:text-gray-500" />
                   </div>
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-gray-600">Expires (optional)</p>
-                    <Input type="date" value={promoExpiry} onChange={(e) => setPromoExpiry(e.target.value)} className="h-9 text-sm bg-gray-100 border-gray-300 text-gray-900" />
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Expires (optional)</p>
+                    <Input type="date" value={promoExpiry} onChange={(e) => setPromoExpiry(e.target.value)} className="h-9 text-sm bg-gray-100 dark:bg-[#111] border-gray-300 dark:border-[#333] text-gray-900 dark:text-white" />
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -906,14 +906,14 @@ export function StoreClient({ userId }: StoreClientProps) {
             ) : promoCodes.length === 0 ? (
               <EmptyState icon={Tag} title="No promo codes yet" subtitle="Create a code to offer discounts to your audience." />
             ) : (
-              <div className="rounded-2xl bg-gray-50 border border-gray-200 divide-y divide-gray-200">
+              <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] divide-y divide-gray-200 dark:divide-[#2A2A2A]">
                 {promoCodes.map((c) => (
                   <div key={c.id} className="flex items-center justify-between px-5 py-4 gap-3">
                     <div className="flex items-center gap-3 min-w-0 flex-wrap">
-                      <code className="text-sm font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-200">{c.code}</code>
-                      <span className="text-sm text-gray-800">{c.discountPercent ? `${c.discountPercent}% off` : c.discountAmount ? `\xa3${(c.discountAmount / 100).toFixed(2)} off` : ""}</span>
-                      {c.maxUses && <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{c.usedCount}/{c.maxUses} uses</span>}
-                      {c.expiresAt && <span className="text-xs text-gray-500">expires {new Date(c.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
+                      <code className="text-sm font-bold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30 px-2 py-0.5 rounded-lg border border-orange-200 dark:border-orange-800/40">{c.code}</code>
+                      <span className="text-sm text-gray-800 dark:text-gray-200">{c.discountPercent ? `${c.discountPercent}% off` : c.discountAmount ? `\xa3${(c.discountAmount / 100).toFixed(2)} off` : ""}</span>
+                      {c.maxUses && <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded-full">{c.usedCount}/{c.maxUses} uses</span>}
+                      {c.expiresAt && <span className="text-xs text-gray-500 dark:text-gray-400">expires {new Date(c.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
                     </div>
                     <button className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0" onClick={async () => { try { await fetch("/api/creator/promo-codes", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: c.id }) }); toast({ title: "Code deleted" }); fetchPromoCodes(); } catch { toast({ title: "Failed", variant: "destructive" }); } }}>
                       <X className="w-4 h-4" />
@@ -940,20 +940,20 @@ export function StoreClient({ userId }: StoreClientProps) {
               }
             />
             {showAffiliateForm && (
-              <div className="rounded-2xl bg-white border border-gray-200 p-5 space-y-4">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Create affiliate link</p>
+              <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-5 space-y-4">
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Create affiliate link</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-gray-600">Name</p>
-                    <Input value={affiliateName} onChange={(e) => setAffiliateName(e.target.value)} placeholder="Jane Smith" className="h-9 text-sm bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-500" />
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Name</p>
+                    <Input value={affiliateName} onChange={(e) => setAffiliateName(e.target.value)} placeholder="Jane Smith" className="h-9 text-sm bg-gray-100 dark:bg-[#111] border-gray-300 dark:border-[#333] text-gray-900 dark:text-white placeholder:text-gray-500" />
                   </div>
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-gray-600">Email (optional)</p>
-                    <Input value={affiliateEmail} onChange={(e) => setAffiliateEmail(e.target.value)} placeholder="jane@example.com" className="h-9 text-sm bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-500" />
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Email (optional)</p>
+                    <Input value={affiliateEmail} onChange={(e) => setAffiliateEmail(e.target.value)} placeholder="jane@example.com" className="h-9 text-sm bg-gray-100 dark:bg-[#111] border-gray-300 dark:border-[#333] text-gray-900 dark:text-white placeholder:text-gray-500" />
                   </div>
                   <div className="space-y-1.5 col-span-2">
-                    <p className="text-xs font-medium text-gray-600">Commission %</p>
-                    <Input type="number" min="1" max="100" value={affiliateCommission} onChange={(e) => setAffiliateCommission(e.target.value)} placeholder="20" className="h-9 text-sm bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-500" />
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Commission %</p>
+                    <Input type="number" min="1" max="100" value={affiliateCommission} onChange={(e) => setAffiliateCommission(e.target.value)} placeholder="20" className="h-9 text-sm bg-gray-100 dark:bg-[#111] border-gray-300 dark:border-[#333] text-gray-900 dark:text-white placeholder:text-gray-500" />
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -981,23 +981,23 @@ export function StoreClient({ userId }: StoreClientProps) {
             ) : affiliates.length === 0 ? (
               <EmptyState icon={Users} title="No affiliates yet" subtitle="Create a link to share with partners who promote your products." />
             ) : (
-              <div className="rounded-2xl bg-gray-50 border border-gray-200 divide-y divide-gray-200">
+              <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] divide-y divide-gray-200 dark:divide-[#2A2A2A]">
                 {affiliates.map((a) => (
                   <div key={a.id} className="px-5 py-4">
                     <div className="flex items-center justify-between gap-3 mb-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{a.affiliateName}</p>
-                        {a.affiliateEmail && <p className="text-xs text-gray-500">{a.affiliateEmail}</p>}
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{a.affiliateName}</p>
+                        {a.affiliateEmail && <p className="text-xs text-gray-500 dark:text-gray-400">{a.affiliateEmail}</p>}
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-lg">{a.salesCount} sales · {a.commissionPercent}%</span>
+                        <span className="text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-white/5 px-2 py-1 rounded-lg">{a.salesCount} sales · {a.commissionPercent}%</span>
                         <button className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors" onClick={async () => { try { await fetch("/api/affiliates", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: a.id }) }); toast({ title: "Affiliate removed" }); fetchAffiliates(); } catch { toast({ title: "Failed", variant: "destructive" }); } }}>
                           <X className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 bg-gray-100 border border-gray-200 rounded-xl px-3 py-2.5">
-                      <p className="text-xs text-gray-600 font-mono flex-1 truncate">{a.referralUrl}</p>
+                    <div className="flex items-center gap-2 bg-gray-100 dark:bg-[#111] border border-gray-200 dark:border-[#2A2A2A] rounded-xl px-3 py-2.5">
+                      <p className="text-xs text-gray-600 dark:text-gray-400 font-mono flex-1 truncate">{a.referralUrl}</p>
                       <button className="text-gray-500 hover:text-orange-600 transition-colors shrink-0" onClick={() => { navigator.clipboard.writeText(a.referralUrl); toast({ title: "Link copied!" }); }}>
                         <Copy className="w-3.5 h-3.5" />
                       </button>
@@ -1027,8 +1027,8 @@ export function StoreClient({ userId }: StoreClientProps) {
             />
 
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <Input value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} placeholder="Search by name or email..." className="pl-9 h-9 bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-orange-500/50" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400" />
+              <Input value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} placeholder="Search by name or email..." className="pl-9 h-9 bg-gray-100 dark:bg-[#1A1A1A] border-gray-300 dark:border-[#2A2A2A] text-gray-900 dark:text-white placeholder:text-gray-500 focus:border-orange-500/50" />
             </div>
 
             {analyticsLoading ? (
@@ -1038,25 +1038,25 @@ export function StoreClient({ userId }: StoreClientProps) {
             ) : (
               <>
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-xl bg-white border border-gray-200 p-4 text-center">
-                    <p className="text-xl font-bold text-gray-900">{customers.length}</p>
-                    <p className="text-xs text-gray-500 mt-1">Total customers</p>
+                  <div className="rounded-xl bg-white dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-4 text-center">
+                    <p className="text-xl font-bold text-gray-900 dark:text-white">{customers.length}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total customers</p>
                   </div>
-                  <div className="rounded-xl bg-orange-50 border border-orange-200 p-4 text-center">
-                    <p className="text-xl font-bold text-orange-600">{formatPrice(customers.reduce((s, c) => s + c.totalCents, 0))}</p>
-                    <p className="text-xs text-gray-500 mt-1">Total revenue</p>
+                  <div className="rounded-xl bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/40 p-4 text-center">
+                    <p className="text-xl font-bold text-orange-600 dark:text-orange-400">{formatPrice(customers.reduce((s, c) => s + c.totalCents, 0))}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total revenue</p>
                   </div>
-                  <div className="rounded-xl bg-white border border-gray-200 p-4 text-center">
-                    <p className="text-xl font-bold text-gray-900">{customers.length > 0 ? formatPrice(Math.round(customers.reduce((s, c) => s + c.totalCents, 0) / customers.length)) : "\xa30.00"}</p>
-                    <p className="text-xs text-gray-500 mt-1">Avg. LTV</p>
+                  <div className="rounded-xl bg-white dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-4 text-center">
+                    <p className="text-xl font-bold text-gray-900 dark:text-white">{customers.length > 0 ? formatPrice(Math.round(customers.reduce((s, c) => s + c.totalCents, 0) / customers.length)) : "\xa30.00"}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Avg. LTV</p>
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-gray-50 border border-gray-200 overflow-hidden">
-                  <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-5 py-3 border-b border-gray-200 bg-gray-50">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Customer</span>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 text-right">Orders</span>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 text-right">Spent</span>
+                <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] overflow-hidden">
+                  <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-5 py-3 border-b border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#111]">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Customer</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 text-right">Orders</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 text-right">Spent</span>
                     <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 text-right">Action</span>
                   </div>
                   <div className="divide-y divide-gray-200">
@@ -1102,13 +1102,13 @@ export function StoreClient({ userId }: StoreClientProps) {
           <div className="space-y-5">
             <SectionHeader title="Email Marketing" subtitle="Reach your buyers and subscribers directly from your store." />
 
-            <div className="rounded-2xl bg-orange-50 border border-orange-200 p-5 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-orange-100 border border-orange-300 flex items-center justify-center shrink-0">
-                <Mail className="w-6 h-6 text-orange-600" />
+            <div className="rounded-2xl bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/40 p-5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-orange-100 dark:bg-orange-950/40 border border-orange-300 dark:border-orange-800/40 flex items-center justify-center shrink-0">
+                <Mail className="w-6 h-6 text-orange-600 dark:text-orange-400" />
               </div>
               <div className="flex-1">
-                <p className="text-2xl font-bold text-gray-900">{analyticsLoading ? "—" : analytics?.subscriberCount ?? 0}</p>
-                <p className="text-sm text-gray-600">email subscribers</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{analyticsLoading ? "—" : analytics?.subscriberCount ?? 0}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">email subscribers</p>
               </div>
               <Link href="/dashboard/email-marketing">
                 <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-gray-900 gap-2 shrink-0">
@@ -1118,7 +1118,7 @@ export function StoreClient({ userId }: StoreClientProps) {
             </div>
 
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Quick Actions</p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Quick Actions</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
                   { href: "/dashboard/email-marketing?blast=buyers", icon: ShoppingBag, color: "blue", title: "Email All Buyers", desc: "Send to everyone who has purchased from your store" },
@@ -1135,13 +1135,13 @@ export function StoreClient({ userId }: StoreClientProps) {
                   };
                   return (
                     <Link key={item.href} href={item.href} className="group">
-                      <div className="rounded-2xl bg-gray-50 border border-gray-200 p-5 flex items-center gap-4 hover:border-gray-300 hover:bg-gray-100 transition-all cursor-pointer">
+                      <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-5 flex items-center gap-4 hover:border-gray-300 dark:hover:border-orange-700/40 hover:bg-gray-100 dark:hover:bg-[#1E1E1E] transition-all cursor-pointer">
                         <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${colorMap[item.color]}`}>
                           <Icon className="w-5 h-5" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900">{item.title}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">{item.title}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.desc}</p>
                         </div>
                         <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-orange-600 transition-colors shrink-0" />
                       </div>
@@ -1151,10 +1151,10 @@ export function StoreClient({ userId }: StoreClientProps) {
               </div>
             </div>
 
-            <div className="rounded-2xl bg-gray-50 border border-gray-200 p-5">
+            <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Star className="w-4 h-4 text-orange-600" />
-                <p className="text-sm font-semibold text-gray-900">Growth tips</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Growth tips</p>
               </div>
               <div className="space-y-3">
                 {[
@@ -1162,9 +1162,9 @@ export function StoreClient({ userId }: StoreClientProps) {
                   { tip: "Send a launch email to buyers whenever you release a new product", action: "/dashboard/email-marketing?blast=buyers" },
                   { tip: "Set up a welcome sequence to nurture new subscribers automatically", action: "/dashboard/email-marketing?new=sequence" },
                 ].map((item, i) => (
-                  <Link key={i} href={item.action} className="flex items-start gap-3 group p-2 rounded-xl hover:bg-gray-100 transition-colors">
+                  <Link key={i} href={item.action} className="flex items-start gap-3 group p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
                     <span className="text-orange-600 text-xs font-bold mt-0.5 shrink-0 w-4">{i + 1}.</span>
-                    <p className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors flex-1">{item.tip}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white transition-colors flex-1">{item.tip}</p>
                     <ArrowRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-orange-600 transition-colors shrink-0 mt-0.5" />
                   </Link>
                 ))}
@@ -1202,10 +1202,10 @@ export function StoreClient({ userId }: StoreClientProps) {
                 </div>
 
                 {analytics?.dailyRevenue && analytics.dailyRevenue.length > 0 && (
-                  <div className="rounded-2xl bg-gray-50 border border-gray-200 p-5">
+                  <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-5">
                     <div className="flex items-center justify-between mb-5">
-                      <p className="text-sm font-semibold text-gray-900">Revenue — Last 14 Days</p>
-                      <p className="text-xs text-gray-500">{formatPrice(analytics.last30DaysRevenueCents)} this month</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">Revenue — Last 14 Days</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{formatPrice(analytics.last30DaysRevenueCents)} this month</p>
                     </div>
                     <RevenueChart data={analytics.dailyRevenue} />
                     <div className="flex items-center justify-between mt-3">
@@ -1216,8 +1216,8 @@ export function StoreClient({ userId }: StoreClientProps) {
                 )}
 
                 {analytics?.topProducts && analytics.topProducts.length > 0 && (
-                  <div className="rounded-2xl bg-gray-50 border border-gray-200 p-5">
-                    <p className="text-sm font-semibold text-gray-900 mb-5">Top Products</p>
+                  <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-5">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white mb-5">Top Products</p>
                     <div className="space-y-4">
                       {analytics.topProducts.slice(0, 5).map((p, i) => {
                         const maxRev = analytics.topProducts[0].revenueCents;
@@ -1225,15 +1225,15 @@ export function StoreClient({ userId }: StoreClientProps) {
                         return (
                           <div key={p.productId}>
                             <div className="flex items-center justify-between mb-2">
-                              <p className="text-sm text-gray-900 truncate flex-1 mr-3">
+                              <p className="text-sm text-gray-900 dark:text-white truncate flex-1 mr-3">
                                 <span className="text-gray-400 mr-2 text-xs">#{i + 1}</span>{p.title}
                               </p>
                               <div className="flex items-center gap-3 shrink-0">
-                                <span className="text-xs text-gray-500">{p.orders} sale{p.orders !== 1 ? "s" : ""}</span>
-                                <span className="text-sm font-bold text-orange-600">{formatPrice(p.revenueCents)}</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">{p.orders} sale{p.orders !== 1 ? "s" : ""}</span>
+                                <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{formatPrice(p.revenueCents)}</span>
                               </div>
                             </div>
-                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-1.5 bg-gray-100 dark:bg-[#2A2A2A] rounded-full overflow-hidden">
                               <div className="h-full bg-orange-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                             </div>
                           </div>
@@ -1244,27 +1244,27 @@ export function StoreClient({ userId }: StoreClientProps) {
                 )}
 
                 {analytics?.recentOrders && analytics.recentOrders.length > 0 && (
-                  <div className="rounded-2xl bg-gray-50 border border-gray-200 overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-200">
-                      <p className="text-sm font-semibold text-gray-900">Recent Orders</p>
+                  <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-200 dark:border-[#2A2A2A]">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">Recent Orders</p>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="text-gray-500 text-xs uppercase tracking-wide border-b border-white/8 bg-gray-50">
+                          <tr className="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide border-b border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#111]">
                             <th className="text-left px-5 py-3 font-semibold">Date</th>
                             <th className="text-left px-5 py-3 font-semibold">Buyer</th>
                             <th className="text-left px-5 py-3 font-semibold hidden md:table-cell">Product</th>
                             <th className="text-right px-5 py-3 font-semibold">Amount</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-gray-100 dark:divide-[#2A2A2A]">
                           {analytics.recentOrders.slice(0, 10).map((o) => (
-                            <tr key={o.id} className="hover:bg-gray-50 transition-colors">
-                              <td className="px-5 py-3.5 text-gray-500 text-xs">{fmtDate(o.createdAt)}</td>
-                              <td className="px-5 py-3.5 text-gray-800">{maskEmail(o.buyerEmail)}</td>
-                              <td className="px-5 py-3.5 text-gray-600 hidden md:table-cell truncate max-w-[160px]">{o.productTitle}</td>
-                              <td className="px-5 py-3.5 text-right text-orange-600 font-semibold">{formatPrice(o.amountCents)}</td>
+                            <tr key={o.id} className="hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
+                              <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400 text-xs">{fmtDate(o.createdAt)}</td>
+                              <td className="px-5 py-3.5 text-gray-800 dark:text-gray-200">{maskEmail(o.buyerEmail)}</td>
+                              <td className="px-5 py-3.5 text-gray-600 dark:text-gray-400 hidden md:table-cell truncate max-w-[160px]">{o.productTitle}</td>
+                              <td className="px-5 py-3.5 text-right text-orange-600 dark:text-orange-400 font-semibold">{formatPrice(o.amountCents)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1287,12 +1287,12 @@ export function StoreClient({ userId }: StoreClientProps) {
         {activeTab === "payouts" && (
           <div className="space-y-4">
             <SectionHeader title="Payouts" subtitle="Connect Stripe to receive payments directly." />
-            <div className="rounded-2xl bg-gray-50 border border-gray-200 p-12 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center mx-auto mb-5">
-                <CreditCard className="w-7 h-7 text-orange-600" />
+            <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-12 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/40 flex items-center justify-center mx-auto mb-5">
+                <CreditCard className="w-7 h-7 text-orange-600 dark:text-orange-400" />
               </div>
-              <p className="text-base font-semibold text-gray-900 mb-2">Manage your payouts</p>
-              <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto">Connect Stripe, view your balance, and see your full transaction history.</p>
+              <p className="text-base font-semibold text-gray-900 dark:text-white mb-2">Manage your payouts</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-xs mx-auto">Connect Stripe, view your balance, and see your full transaction history.</p>
               <Link href="/dashboard/store/payouts">
                 <Button className="bg-orange-500 hover:bg-orange-600 text-gray-900 gap-2">
                   <CreditCard className="w-4 h-4" />Go to Payouts<ArrowRight className="w-4 h-4" />
@@ -1309,14 +1309,14 @@ export function StoreClient({ userId }: StoreClientProps) {
           <div className="space-y-6">
             <SectionHeader title="Store Settings" subtitle="Customise your store design and configure email branding." />
 
-            <div className="rounded-2xl bg-gray-50 border border-gray-200 p-5 flex items-center justify-between gap-4 flex-wrap">
+            <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-5 flex items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center shrink-0">
-                  <Paintbrush className="w-5 h-5 text-orange-600" />
+                <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/40 flex items-center justify-center shrink-0">
+                  <Paintbrush className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Store Design</p>
-                  <p className="text-sm text-gray-500 mt-0.5">Change banner, profile image, theme and layout.</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Store Design</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Change banner, profile image, theme and layout.</p>
                 </div>
               </div>
               <Link href="/dashboard/store/customize">
@@ -1326,31 +1326,31 @@ export function StoreClient({ userId }: StoreClientProps) {
               </Link>
             </div>
 
-            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6">
+            <div className="bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] rounded-2xl p-6">
               <div className="flex items-center gap-2 mb-1.5">
                 <Mail className="w-4 h-4 text-orange-600" />
-                <h3 className="text-sm font-semibold text-gray-900">Email Branding</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Email Branding</h3>
               </div>
-              <p className="text-sm text-gray-500 mb-5">Purchase confirmation emails are sent automatically when a buyer checks out.</p>
-              <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
-                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-200">
-                  <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 text-[10px] font-bold shrink-0">CF</div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">Purchase confirmation emails are sent automatically when a buyer checks out.</p>
+              <div className="bg-white dark:bg-[#111] border border-gray-200 dark:border-[#333] rounded-xl p-4 mb-4">
+                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-200 dark:border-[#2A2A2A]">
+                  <div className="w-6 h-6 rounded-full bg-orange-100 dark:bg-orange-950/40 flex items-center justify-center text-orange-600 text-[10px] font-bold shrink-0">CF</div>
                   <div>
-                    <p className="text-xs font-semibold text-gray-900 leading-none mb-0.5">Your Brand Name</p>
-                    <p className="text-[11px] text-gray-500 leading-none">via Content Flywheel · no-reply@contentflywheel.co.uk</p>
+                    <p className="text-xs font-semibold text-gray-900 dark:text-white leading-none mb-0.5">Your Brand Name</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-none">via Content Flywheel · no-reply@contentflywheel.co.uk</p>
                   </div>
                 </div>
-                <p className="text-xs font-semibold text-gray-900 mb-1.5">Your purchase is confirmed 🎉</p>
-                <p className="text-sm text-gray-600 leading-relaxed">Hi [Buyer name], thank you for your purchase of <span className="text-orange-600">[Product name]</span>. Here&apos;s your download link — it&apos;s valid for 7 days...</p>
-                <div className="mt-3 pt-3 border-t border-white/8">
+                <p className="text-xs font-semibold text-gray-900 dark:text-white mb-1.5">Your purchase is confirmed 🎉</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">Hi [Buyer name], thank you for your purchase of <span className="text-orange-600 dark:text-orange-400">[Product name]</span>. Here&apos;s your download link — it&apos;s valid for 7 days...</p>
+                <div className="mt-3 pt-3 border-t border-white/8 dark:border-white/5">
                   <p className="text-xs text-gray-400 italic">Your brand name from Brand Voice is used as the sender display name.</p>
                 </div>
               </div>
-              <div className="flex items-start gap-3 p-3.5 bg-orange-50 border border-orange-200 rounded-xl">
+              <div className="flex items-start gap-3 p-3.5 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/40 rounded-xl">
                 <span className="text-orange-600 text-sm shrink-0 mt-0.5">✏️</span>
                 <div>
-                  <p className="text-xs font-semibold text-orange-600 mb-0.5">Update your sender name</p>
-                  <p className="text-sm text-gray-500">Update it in <Link href="/dashboard/brand-voice" className="text-orange-600 hover:text-orange-600 underline underline-offset-2">Brand Voice settings</Link>.</p>
+                  <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 mb-0.5">Update your sender name</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Update it in <Link href="/dashboard/brand-voice" className="text-orange-600 dark:text-orange-400 hover:text-orange-600 underline underline-offset-2">Brand Voice settings</Link>.</p>
                 </div>
               </div>
             </div>

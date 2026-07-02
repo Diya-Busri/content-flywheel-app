@@ -171,20 +171,20 @@ const STARTER_CHIPS = [
 /** Empty state: 6 suggested prompts in 2x3 grid; click pre-fills and auto-sends */
 const EMPTY_STATE_PROMPTS: { title: string; description: string; icon: React.ReactNode }[] = [
   { title: "I'm new here — what should I do first?", description: "Get a personalised quick-start plan", icon: <Sparkles className="h-5 w-5" /> },
-  { title: "Give me a digital product idea for my audience", description: "Find something worth selling in your niche", icon: <Package className="h-5 w-5" /> },
-  { title: "Write a short TikTok script I can use today", description: "Ready-to-film hook + body + CTA", icon: <FileText className="h-5 w-5" /> },
-  { title: "What price should I sell my product at?", description: "Pricing strategy based on your market", icon: <Package className="h-5 w-5" /> },
-  { title: "Create a simple marketing plan for this week", description: "7-day content + promotion roadmap", icon: <FileText className="h-5 w-5" /> },
-  { title: "What should I focus on to grow my sales?", description: "Cut through the noise and prioritise", icon: <Sparkles className="h-5 w-5" /> },
+  { title: "Give me a digital product idea for my niche", description: "Find something worth selling to your audience", icon: <Package className="h-5 w-5" /> },
+  { title: "Write a faceless promo video script", description: "Voiceover-style script, no camera needed", icon: <FileText className="h-5 w-5" /> },
+  { title: "What price should I sell my product at?", description: "Pricing strategy based on your niche and market", icon: <Package className="h-5 w-5" /> },
+  { title: "Create a marketing plan for this week", description: "7-day content + promotion roadmap", icon: <FileText className="h-5 w-5" /> },
+  { title: "What should I focus on to get my first sale?", description: "Cut through the noise and take the right next step", icon: <Sparkles className="h-5 w-5" /> },
 ];
 
-/** 20 prompts for Prompts Library slide-out, by category */
+/** Prompts Library slide-out, by category */
 const PROMPTS_LIBRARY: { category: string; prompts: string[] }[] = [
   { category: "Product Creation", prompts: ["Generate a digital product idea for my niche", "Help me outline an ebook on [topic]", "Give me 5 workbook ideas for [audience]", "What format sells best for [niche]?"] },
-  { category: "Marketing", prompts: ["Create a marketing plan for this week", "Write 5 email subject lines for my launch", "Suggest a social content calendar for the next 7 days", "How do I market my ebook?"] },
-  { category: "TikTok", prompts: ["Write a TikTok script for my product", "Hook ideas for a 60-second product demo", "Script a before/after transformation video", "Caption ideas for a product unboxing"] },
+  { category: "Marketing", prompts: ["Create a marketing plan for this week", "Write 5 email subject lines for my launch", "Suggest a social content calendar for the next 7 days", "How do I market without showing my face?"] },
+  { category: "Video & Social", prompts: ["Write a faceless voiceover script for my product", "Hook ideas for a 60-second product promo", "Script a before/after transformation video", "Pinterest pin ideas for my digital product"] },
   { category: "Pricing", prompts: ["Help me price my digital product", "Should I offer a payment plan?", "Bundle pricing strategy for [product types]", "Compare one-time vs subscription for my product"] },
-  { category: "Strategy", prompts: ["What should I focus on today?", "Review my product description", "Prioritise my backlog: [list]", "Give me 3 next steps to grow my digital business"] },
+  { category: "Strategy", prompts: ["What should I focus on to get my first sale?", "How do I grow without an existing audience?", "Prioritise my backlog: [list]", "Give me 3 next steps to grow my digital business"] },
 ];
 
 function ChatListItem({
@@ -1980,10 +1980,12 @@ ${videoLines}`;
                 </span>
               )}
               {/* Coach mode selector */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline font-medium whitespace-nowrap">Focus:</span>
               <Select value={coachMode} onValueChange={onCoachModeChange}>
                 <SelectTrigger
-                  className="shrink-0 w-[130px] sm:w-[180px] gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20 h-9 text-xs sm:text-sm"
-                  aria-label="Coach mode"
+                  className="w-[130px] sm:w-[160px] gap-1.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-white/20 h-9 text-xs sm:text-sm"
+                  aria-label="Coach focus area"
                 >
                   <SelectValue placeholder="Coach Mode">
                     {coachModes.find((m) => m.id === coachMode)?.emoji}{" "}
@@ -2001,6 +2003,7 @@ ${videoLines}`;
                   ))}
                 </SelectContent>
               </Select>
+              </div>
               {/* ⋯ More dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

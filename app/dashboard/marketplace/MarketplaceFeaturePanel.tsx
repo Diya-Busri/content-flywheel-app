@@ -72,26 +72,26 @@ export default function MarketplaceFeaturePanel() {
     : null;
 
   return (
-    <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl p-5 mb-6 mx-6 mt-6">
+    <div className="bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20 border border-violet-200 dark:border-violet-800/40 rounded-xl p-5 mb-6 mx-6 mt-6">
       <div className="flex items-start gap-3">
         <div className="w-9 h-9 rounded-lg bg-violet-600 flex items-center justify-center flex-shrink-0 mt-0.5">
           <Sparkles size={16} className="text-white" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-sm font-bold text-gray-900">Feature your product</h3>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Feature your product</h3>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300">
               {credits} referral credit{credits !== 1 ? "s" : ""}
             </span>
           </div>
-          <p className="text-xs text-gray-500 mb-3">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
             Pin one product to the top of the marketplace for 7 days. Costs 1 referral credit.{" "}
-            <a href="/dashboard/referral" className="text-violet-600 font-semibold hover:underline">Earn credits by inviting creators →</a>
+            <a href="/dashboard/referral" className="text-violet-600 dark:text-violet-400 font-semibold hover:underline">Earn credits by inviting creators →</a>
           </p>
 
           {featured ? (
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-gray-700 dark:text-gray-300">
                 Currently featuring: <strong>{products.find((p) => p.id === featured.productId)?.title ?? "your product"}</strong>
                 {featuredUntilDate && <span className="text-gray-400 ml-1">until {featuredUntilDate}</span>}
               </span>
@@ -107,7 +107,7 @@ export default function MarketplaceFeaturePanel() {
               <select
                 value={selectedId}
                 onChange={(e) => setSelectedId(e.target.value)}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:border-violet-400"
+                className="text-sm border border-gray-200 dark:border-white/10 rounded-lg px-3 py-1.5 bg-white dark:bg-[#1A1A1A] text-gray-700 dark:text-gray-300 focus:outline-none focus:border-violet-400"
               >
                 <option value="">Choose a product…</option>
                 {products.map((p) => (
@@ -122,12 +122,12 @@ export default function MarketplaceFeaturePanel() {
                 {saving ? "Featuring…" : "Feature for 7 days"}
               </button>
               {credits < 1 && (
-                <span className="text-xs text-gray-400">No credits — <a href="/dashboard/referral" className="text-violet-600 font-semibold">invite a creator</a> to earn one</span>
+                <span className="text-xs text-gray-400">No credits — <a href="/dashboard/referral" className="text-violet-600 dark:text-violet-400 font-semibold">invite a creator</a> to earn one</span>
               )}
             </div>
           )}
 
-          {msg && <p className="text-xs mt-2 text-gray-600">{msg}</p>}
+          {msg && <p className="text-xs mt-2 text-gray-600 dark:text-gray-400">{msg}</p>}
         </div>
       </div>
     </div>
