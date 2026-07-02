@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Sparkles, X } from "lucide-react";
 
-type Product = { id: string; title: string; niche: string };
+type Product = { id: string; title: string; format?: string };
 
 export default function MarketplaceFeaturePanel() {
   const [products, setProducts]       = useState<Product[]>([]);
@@ -19,8 +19,7 @@ export default function MarketplaceFeaturePanel() {
     fetch("/api/products")
       .then((r) => r.json())
       .then((data) => {
-        const pub = (data.products ?? []).filter((p: { marketingAssets?: { isNativePublished?: boolean } }) => p.marketingAssets?.isNativePublished);
-        setProducts(pub);
+        setProducts(data.products ?? []);
       })
       .catch(() => {});
 
