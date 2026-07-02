@@ -18,9 +18,16 @@ type Status = {
 
 const STEPS = [
   {
+    key: "hasStripeConnect" as keyof Status,
+    label: "Set up payouts",
+    desc: "Connect Stripe so you can receive money when you make a sale",
+    href: "/dashboard/store/payouts",
+    cta: "Set up payouts →",
+  },
+  {
     key: "hasProduct" as keyof Status,
     label: "Create your first product",
-    desc: "Use AI to generate an eBook, guide, or template",
+    desc: "Use AI to generate an eBook, guide, or template in minutes",
     href: "/dashboard/digital-products",
     cta: "Create product →",
   },
@@ -32,30 +39,9 @@ const STEPS = [
     cta: "Go to store →",
   },
   {
-    key: "hasStripeConnect" as keyof Status,
-    label: "Set up payouts",
-    desc: "Connect Stripe to receive revenue directly to your bank",
-    href: "/dashboard/store/payouts",
-    cta: "Set up payouts →",
-  },
-  {
-    key: "hasBrandVoice" as keyof Status,
-    label: "Set up your brand voice",
-    desc: "Help AI write in your tone and style for all content",
-    href: "/dashboard/brand-builder",
-    cta: "Set up brand →",
-  },
-  {
-    key: "hasPromoCode" as keyof Status,
-    label: "Create a discount code",
-    desc: "Launch with a promo code to drive your first sales",
-    href: "/dashboard/discount-codes",
-    cta: "Create code →",
-  },
-  {
     key: "hasEmailSequence" as keyof Status,
     label: "Set up an email sequence",
-    desc: "Automatically follow up with buyers after purchase",
+    desc: "Automatically follow up with buyers after every purchase",
     href: "/dashboard/email-sequences",
     cta: "Create sequence →",
   },
@@ -64,7 +50,7 @@ const STEPS = [
     label: "Make your first sale 🎉",
     desc: "Share your store link and watch the revenue roll in",
     href: "/dashboard/store",
-    cta: "View store →",
+    cta: "Share store →",
   },
 ];
 

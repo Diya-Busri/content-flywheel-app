@@ -18,7 +18,7 @@ import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { brandProfilesTable } from "@/db/schema/brand-profiles-schema";
 import {
   Package, Video, AlertCircle,
-  ArrowRight, Film, Clapperboard,
+  ArrowRight, Film, Users, ShoppingBag, PoundSterling,
 } from "lucide-react";
 import { SyncOnboardingSteps } from "@/components/onboarding/sync-onboarding-steps";
 import { ReferralCapture } from "@/components/ReferralCapture";
@@ -28,6 +28,7 @@ import { DailyStreakTracker } from "@/components/dashboard/DailyStreakTracker";
 import { ContinueLearningCard } from "@/components/dashboard/ContinueLearningCard";
 import { RevenueGoalWidget } from "@/components/dashboard/RevenueGoalWidget";
 import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
+import { ShareStoreBar } from "@/components/dashboard/ShareStoreBar";
 
 export const metadata: Metadata = {
   title: "Dashboard | Content Flywheel",
@@ -289,7 +290,10 @@ export default async function DashboardPage() {
       ];
 
   const videoCredits = (profileRow as { videoCredits?: number | null } | null)?.videoCredits ?? 0;
-  const { totalOrders } = revenue as { totalCents: number; totalOrders: number };
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://contentflywheel.co.uk";
+  const storeUrl = userId ? `${baseUrl}/c/${userId}` : "";
+  const { totalCents, totalOrders } = revenue as { totalCents: number; totalOrders: number };
+  const revenueGBP = (totalCents / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -334,22 +338,25 @@ export default async function DashboardPage() {
         {/* Stats row — float up over the banner */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           {[
-            { label: "Products",        value: videoStats.digitalProductsCount, href: "/dashboard/digital-products", icon: Package,    grad: "from-blue-500 to-indigo-500"  },
-            { label: "Library Items",   value: videoStats.totalLibraryVideos,   href: "/dashboard/library",          icon: Film,       grad: "from-orange-500 to-amber-500" },
-            { label: "Videos This Week",value: videosThisWeek,                  href: "/dashboard/library",          icon: Clapperboard, grad: "from-violet-500 to-purple-600" },
-            { label: "Video Credits",   value: videoCredits,                    href: "/dashboard/video-credits",    icon: Film,       grad: "from-emerald-500 to-teal-500" },
-          ].map(({ label, value, href, icon: Icon, grad }) => (
+            { label: "Products",          display: videoStats.digitalProductsCount.toLocaleString(), href: "/dashboard/store",          icon: Package,        grad: "from-blue-500 to-indigo-500"    },
+            { label: "All-time Revenue",  display: `£${revenueGBP}`,                                 href: "/dashboard/store",          icon: PoundSterling,  grad: "from-emerald-500 to-teal-500"  },
+            { label: "Subscribers",       display: emailSubscribers.toLocaleString(),                href: "/dashboard/email-marketing", icon: Users,          grad: "from-violet-500 to-purple-600" },
+            { label: "Total Orders",      display: totalOrders.toLocaleString(),                     href: "/dashboard/orders",         icon: ShoppingBag,    grad: "from-orange-500 to-amber-500"  },
+          ].map(({ label, display, href, icon: Icon, grad }) => (
             <Link key={label} href={href} className="group">
               <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-[#2A2A2A] shadow-lg p-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-150">
                 <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center mb-3 shadow-sm`}>
                   <Icon className="w-5 h-5 text-white" />
                 </div>
-                <p className="text-3xl font-black text-gray-900 dark:text-white leading-none tabular-nums">{value.toLocaleString()}</p>
+                <p className="text-3xl font-black text-gray-900 dark:text-white leading-none tabular-nums">{display}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1.5">{label}</p>
               </div>
             </Link>
           ))}
         </div>
+
+        {/* Share store */}
+        {storeUrl && <ShareStoreBar storeUrl={storeUrl} />}
 
         {/* Revenue goal */}
         <RevenueGoalWidget />

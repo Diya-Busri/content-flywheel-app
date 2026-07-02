@@ -124,8 +124,8 @@ export function DailyStreakTracker() {
 
         <p className="text-xs text-gray-400 mt-1">
           {goalHit
-            ? "You've hit today's goal. Come back tomorrow to keep the streak."
-            : `${remaining} min left to complete today's streak`}
+            ? "You've hit today's 30 min creating goal. Come back tomorrow to keep the streak going."
+            : `${remaining} min of creating time left today — time spent in Content Flywheel counts`}
         </p>
       </div>
 
