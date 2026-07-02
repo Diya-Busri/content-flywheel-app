@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { eq, and, ne } from "drizzle-orm";
@@ -50,7 +50,19 @@ export async function GET() {
       .where(eq(storeSettingsTable.userId, userId))
       .limit(1);
 
-    return NextResponse.json(settings ?? getDefaults(userId));
+    const data = settings ?? getDefaults(userId);
+
+    // Admin always has custom domain unlocked
+    const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
+    if (adminEmail) {
+      const user = await currentUser();
+      const email = user?.emailAddresses?.[0]?.emailAddress?.trim().toLowerCase() ?? "";
+      if (email === adminEmail) {
+        return NextResponse.json({ ...data, customDomainActive: true });
+      }
+    }
+
+    return NextResponse.json(data);
   } catch (err) {
     console.error("[store-settings GET]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
