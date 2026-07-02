@@ -1,21 +1,29 @@
 export const dynamic = "force-dynamic";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { emailContactsTable } from "@/db/schema/email-marketing-schema";
-import { eq, and, gte, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 
-export async function GET() {
+function daysAgo(n: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export async function GET(req: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    // Period param: 7 | 30 | 90 | all (default 30)
+    const periodParam = req.nextUrl.searchParams.get("period") ?? "30";
+    const periodDays = periodParam === "all" ? null : parseInt(periodParam, 10) || 30;
 
     // All-time completed orders for this creator
     const allOrders = await db
@@ -37,26 +45,50 @@ export async function GET() {
       )
       .orderBy(desc(productOrdersTable.createdAt));
 
-    // Compute totals
-    const totalRevenueCents = allOrders.reduce((sum, o) => sum + o.amountCents, 0);
+    // All-time totals
+    const totalRevenueCents = allOrders.reduce((s, o) => s + o.amountCents, 0);
     const totalOrders = allOrders.length;
 
-    // Last 30 days
-    const last30Orders = allOrders.filter(
-      (o) => new Date(o.createdAt) >= thirtyDaysAgo
-    );
-    const last30DaysRevenueCents = last30Orders.reduce((sum, o) => sum + o.amountCents, 0);
-    const last30DaysOrders = last30Orders.length;
+    // Period boundaries
+    const periodStart = periodDays ? daysAgo(periodDays) : null;
+    const prevPeriodStart = periodDays ? daysAgo(periodDays * 2) : null;
 
-    // Daily revenue for last 30 days
+    const periodOrders = periodStart
+      ? allOrders.filter((o) => new Date(o.createdAt) >= periodStart)
+      : allOrders;
+
+    const prevPeriodOrders =
+      periodStart && prevPeriodStart
+        ? allOrders.filter((o) => {
+            const d = new Date(o.createdAt);
+            return d >= prevPeriodStart && d < periodStart;
+          })
+        : [];
+
+    const periodRevenueCents = periodOrders.reduce((s, o) => s + o.amountCents, 0);
+    const periodOrdersCount = periodOrders.length;
+    const prevPeriodRevenueCents = prevPeriodOrders.reduce((s, o) => s + o.amountCents, 0);
+
+    const avgOrderCents =
+      periodOrdersCount > 0 ? Math.round(periodRevenueCents / periodOrdersCount) : 0;
+
+    // Revenue trend: % change vs previous period
+    const revenueTrend =
+      prevPeriodRevenueCents > 0
+        ? Math.round(((periodRevenueCents - prevPeriodRevenueCents) / prevPeriodRevenueCents) * 100)
+        : periodRevenueCents > 0
+        ? 100
+        : 0;
+
+    // Daily revenue for the selected period
+    const numDays = periodDays ?? 90;
     const dailyMap = new Map<string, { cents: number; orders: number }>();
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < numDays; i++) {
       const d = new Date();
-      d.setDate(d.getDate() - (29 - i));
-      const key = d.toISOString().slice(0, 10);
-      dailyMap.set(key, { cents: 0, orders: 0 });
+      d.setDate(d.getDate() - (numDays - 1 - i));
+      dailyMap.set(d.toISOString().slice(0, 10), { cents: 0, orders: 0 });
     }
-    for (const o of last30Orders) {
+    for (const o of periodOrders) {
       const key = new Date(o.createdAt).toISOString().slice(0, 10);
       if (dailyMap.has(key)) {
         const entry = dailyMap.get(key)!;
@@ -70,29 +102,23 @@ export async function GET() {
       orders: v.orders,
     }));
 
-    // Top products
-    const productTotals = new Map<
-      string,
-      { orders: number; revenueCents: number }
-    >();
-    for (const o of allOrders) {
+    // Top products (from period orders)
+    const productTotals = new Map<string, { orders: number; revenueCents: number }>();
+    for (const o of periodOrders) {
       const existing = productTotals.get(o.productId) ?? { orders: 0, revenueCents: 0 };
       existing.orders += 1;
       existing.revenueCents += o.amountCents;
       productTotals.set(o.productId, existing);
     }
 
-    // Fetch product titles for top products
     const productIds = Array.from(productTotals.keys());
-    let productTitleMap = new Map<string, string>();
+    const productTitleMap = new Map<string, string>();
     if (productIds.length > 0) {
       const products = await db
         .select({ id: productsTable.id, title: productsTable.title })
         .from(productsTable)
         .where(sql`${productsTable.id} = ANY(${productIds})`);
-      for (const p of products) {
-        productTitleMap.set(p.id, p.title);
-      }
+      for (const p of products) productTitleMap.set(p.id, p.title);
     }
 
     const topProducts = Array.from(productTotals.entries())
@@ -105,8 +131,8 @@ export async function GET() {
       .sort((a, b) => b.revenueCents - a.revenueCents)
       .slice(0, 10);
 
-    // Recent orders (last 20) with product titles
-    const recentOrders = allOrders.slice(0, 20).map((o) => ({
+    // Orders for CSV export + recent display
+    const allOrdersMapped = periodOrders.map((o) => ({
       id: o.id,
       buyerEmail: o.buyerEmail,
       buyerName: o.buyerName,
@@ -115,6 +141,8 @@ export async function GET() {
       createdAt: o.createdAt.toISOString(),
       productTitle: productTitleMap.get(o.productId) ?? "Unknown Product",
     }));
+
+    const recentOrders = allOrdersMapped.slice(0, 20);
 
     // Subscriber count
     let subscriberCount = 0;
@@ -130,18 +158,27 @@ export async function GET() {
         );
       subscriberCount = countRow?.count ?? 0;
     } catch {
-      // email_contacts table might not exist yet
       subscriberCount = 0;
     }
 
     return NextResponse.json({
+      // All-time
       totalRevenueCents,
       totalOrders,
-      last30DaysRevenueCents,
-      last30DaysOrders,
+      // Period
+      periodRevenueCents,
+      periodOrdersCount,
+      avgOrderCents,
+      revenueTrend,
+      prevPeriodRevenueCents,
+      // Legacy fields for backwards compat
+      last30DaysRevenueCents: periodRevenueCents,
+      last30DaysOrders: periodOrdersCount,
+      // Chart + tables
       dailyRevenue,
       topProducts,
       recentOrders,
+      allOrdersForExport: allOrdersMapped,
       subscriberCount,
     });
   } catch (err) {
