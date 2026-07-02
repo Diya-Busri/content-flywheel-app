@@ -27,6 +27,7 @@ export const storeSettingsTable = pgTable("store_settings", {
   fontFamily: text("font_family").default("inter"), // inter | poppins | playfair | montserrat | dm-sans
   productSort: text("product_sort").default("newest"), // newest | oldest | price-asc | price-desc
   showTrustBadges: boolean("show_trust_badges").default(true),
+  showSalesCount: boolean("show_sales_count").default(false), // opt-in: show public sales count on marketplace
   // Custom domain (e.g. "store.mysite.com" — creator adds a CNAME to this platform)
   customDomain: text("custom_domain"),
   // Tax / VAT

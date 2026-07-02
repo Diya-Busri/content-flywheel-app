@@ -39,6 +39,7 @@ interface StoreSettings {
   fontFamily: string;
   productSort: string;
   showTrustBadges: boolean;
+  showSalesCount: boolean;
   customDomain: string | null;
 }
 
@@ -321,6 +322,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
     fontFamily: "inter",
     productSort: "newest",
     showTrustBadges: true,
+    showSalesCount: false,
     customDomain: null,
   });
 
@@ -404,6 +406,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
             fontFamily: data.fontFamily ?? "inter",
             productSort: data.productSort ?? "newest",
             showTrustBadges: data.showTrustBadges ?? true,
+            showSalesCount: data.showSalesCount ?? false,
             customDomain: data.customDomain ?? null,
           });
         }
@@ -939,6 +942,11 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                   checked={settings.showTrustBadges}
                   onChange={(v) => set("showTrustBadges", v)}
                   label="Show trust badges (Secure checkout, Instant download…)"
+                />
+                <Toggle
+                  checked={settings.showSalesCount}
+                  onChange={(v) => set("showSalesCount", v)}
+                  label="Show sales count publicly on the Marketplace (e.g. '12 sales')"
                 />
               </div>
             </div>
