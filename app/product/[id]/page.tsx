@@ -247,7 +247,9 @@ export default async function ProductSalesPage({
         .desc-para { margin: 0 0 16px; font-size: 15px; color: #374151; line-height: 1.75; }
         .desc-para:last-child { margin-bottom: 0; }
         @media (max-width: 767px) { .purchase-card { position: static; } }
-        @media (max-width: 480px) { .purchase-card { padding: 20px; border-radius: 16px; } .product-grid { gap: 20px; padding: 16px 12px 60px; } }
+        @media (max-width: 480px) { .purchase-card { padding: 20px; border-radius: 16px; } .product-grid { gap: 20px; padding: 16px 12px 80px; } }
+        .mobile-buy-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: #fff; border-top: 1px solid #e5e7eb; padding: 12px 16px env(safe-area-inset-bottom, 0px); box-shadow: 0 -4px 20px rgba(0,0,0,0.08); }
+        @media (min-width: 768px) { .mobile-buy-bar { display: none !important; } }
       `}</style>
 
       {/* JSON-LD structured data — lets Google show price/rating rich snippets */}
@@ -747,6 +749,41 @@ export default async function ProductSalesPage({
             );
           })}
         </div>
+      </div>
+    )}
+
+    {/* Mobile sticky buy bar — hidden on desktop, visible on mobile only */}
+    {!purchased && !isComingSoon && (isNativePublished || checkoutUrl) && (
+      <div className="mobile-buy-bar">
+        <div>
+          {hasSalePrice ? (
+            <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+              <span style={{ fontSize: "18px", fontWeight: 800, color: "#f97316", letterSpacing: "-0.5px" }}>{salePriceLabel}</span>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "#9ca3af", textDecoration: "line-through" }}>{nativePriceLabel}</span>
+            </div>
+          ) : (
+            <span style={{ fontSize: "18px", fontWeight: 800, color: "#111827", letterSpacing: "-0.5px" }}>
+              {nativePriceLabel ?? priceLabel ?? "Get it"}
+            </span>
+          )}
+          <p style={{ margin: 0, fontSize: "11px", color: "#9ca3af", fontWeight: 500 }}>one-time · instant download</p>
+        </div>
+        {isNativePublished ? (
+          <BuyButton
+            productId={product.id}
+            priceLabel={hasSalePrice ? salePriceLabel! : nativePriceLabel!}
+            creatorUserId={product.userId}
+            isFree={ma.nativePrice === 0}
+            refCode={refCode}
+            autoCoupon={autoCoupon}
+            payWhatYouWant={(ma as { payWhatYouWant?: boolean }).payWhatYouWant ?? false}
+            minPrice={(ma as { minPrice?: number | null }).minPrice ?? null}
+          />
+        ) : (
+          <a href={checkoutUrl!} target="_blank" rel="noopener noreferrer" className="buy-btn" style={{ width: "auto", padding: "13px 24px", fontSize: "15px" }}>
+            Buy now
+          </a>
+        )}
       </div>
     )}
 
