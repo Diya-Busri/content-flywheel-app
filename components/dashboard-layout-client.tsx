@@ -13,6 +13,7 @@ import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { BundleProgressBanner } from "@/components/dashboard/BundleProgressBanner";
 import { DevOnboardingReset } from "@/components/dev/DevOnboardingReset";
 import { AnalyticsTracker } from "@/components/analytics-tracker";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { SelectProfile } from "@/db/schema/profiles-schema";
 
 interface DashboardLayoutClientProps {
@@ -35,6 +36,7 @@ export function DashboardLayoutClient({ profile, userEmail, disabledFeatures = [
       style={{ display: "flex", flexDirection: "row", height: "100dvh", minHeight: 0 }}
     >
       <SidebarProvider>
+        <ServiceWorkerRegister />
         <VideoNotificationWatcher />
         <OnboardingProvider markDashboardSeen hasActiveSubscription={isAdmin || !!(profile?.stripeSubscriptionId || profile?.whopMembershipId)}>
           <DashboardReviewPopup

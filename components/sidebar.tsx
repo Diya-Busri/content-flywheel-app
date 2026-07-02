@@ -8,6 +8,7 @@
 import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen, GraduationCap, UserPlus, ChevronDown, ChevronRight } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NotificationBell } from "@/components/NotificationBell";
+import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -307,6 +308,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
 
         {/* Bottom Section - Settings, Leave a review, Dark mode, Billing, Account */}
         <div className="mt-auto pt-4 relative z-10">
+          <PushNotificationPrompt />
           <div className="px-3 mb-3 flex items-center gap-2">
             <div className="flex-1 min-w-0">
               {renderNavItem(settingsItem)}
