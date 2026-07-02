@@ -1,5 +1,11 @@
 "use client";
+
 import { useState } from "react";
+import { Link2, Copy, Check, Users, TrendingUp, PoundSterling, Plus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 type AffiliateLink = {
   id: string;
@@ -14,6 +20,21 @@ type AffiliateLink = {
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+      className={cn("flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all",
+        copied ? "border-green-500/40 bg-green-500/10 text-green-500" : "border-border bg-background text-muted-foreground hover:text-foreground hover:border-orange-500/40"
+      )}
+    >
+      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+      {copied ? "Copied!" : "Copy"}
+    </button>
+  );
+}
+
 export default function AffiliatesClient({
   initialLinks,
   creatorUserId,
@@ -25,9 +46,11 @@ export default function AffiliatesClient({
   const [form, setForm] = useState({ affiliateName: "", affiliateEmail: "", commissionPercent: "20" });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
 
   const storeUrl = `${BASE_URL}/c/${creatorUserId}`;
+  const totalCommissionCents = links.reduce((s, l) => s + (l.totalEarnedCents ?? 0), 0);
+  const activeCount = links.filter(l => l.active).length;
 
   async function create() {
     if (!form.affiliateName.trim()) { setError("Name is required"); return; }
@@ -44,8 +67,9 @@ export default function AffiliatesClient({
     });
     if (res.ok) {
       const created = await res.json();
-      setLinks((l) => [created, ...l]);
+      setLinks(l => [created, ...l]);
       setForm({ affiliateName: "", affiliateEmail: "", commissionPercent: "20" });
+      setShowForm(false);
     } else {
       setError("Failed to create link.");
     }
@@ -54,151 +78,137 @@ export default function AffiliatesClient({
 
   async function deactivate(id: string) {
     await fetch(`/api/affiliate-links/${id}`, { method: "DELETE" });
-    setLinks((l) => l.map((link) => link.id === id ? { ...link, active: false } : link));
+    setLinks(l => l.map(link => link.id === id ? { ...link, active: false } : link));
   }
-
-  function copyLink(code: string) {
-    const url = `${storeUrl}?ref=${code}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(code);
-      setTimeout(() => setCopied(null), 2000);
-    });
-  }
-
-  const totalCommissionCents = links.reduce((s, l) => s + (l.totalEarnedCents ?? 0), 0);
 
   return (
-    <div style={{ padding: "32px 24px", maxWidth: "960px" }}>
-      <h1 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: 800, color: "#111827" }}>🔗 Affiliates</h1>
-      <p style={{ margin: "0 0 20px", fontSize: "14px", color: "#6b7280" }}>
-        Create referral links for partners. They earn a commission on every sale they refer.
-      </p>
+    <div className="min-h-screen bg-background p-6 md:p-8">
+      <div className="max-w-4xl mx-auto space-y-7">
 
-      {/* Summary stats */}
-      {links.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginBottom: "28px" }}>
-          {[
-            { label: "Active affiliates", value: links.filter(l => l.active).length.toString() },
-            { label: "Total affiliates", value: links.length.toString() },
-            { label: "Total commissions earned", value: `£${(totalCommissionCents / 100).toFixed(2)}` },
-          ].map((s) => (
-            <div key={s.label} style={{ background: "#fff", borderRadius: "12px", padding: "16px 20px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", border: "1px solid #f3f4f6" }}>
-              <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.label}</p>
-              <p style={{ margin: 0, fontSize: "22px", fontWeight: 800, color: "#111827" }}>{s.value}</p>
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2.5 mb-1">
+              <Link2 className="w-5 h-5 text-orange-400" />
+              <h1 className="text-2xl font-bold text-foreground">Affiliates</h1>
             </div>
-          ))}
+            <p className="text-sm text-muted-foreground">Create referral links for partners — they earn a commission on every sale they refer.</p>
+          </div>
+          <Button onClick={() => setShowForm(v => !v)} size="sm"
+            className={cn("gap-1.5 text-xs", showForm ? "bg-muted text-foreground hover:bg-muted" : "bg-orange-500 hover:bg-orange-600 text-white")}>
+            {showForm ? <><X className="w-3.5 h-3.5" />Cancel</> : <><Plus className="w-3.5 h-3.5" />Add affiliate</>}
+          </Button>
         </div>
-      )}
 
-      {/* How it works */}
-      <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "10px", padding: "12px 16px", marginBottom: "28px" }}>
-        <p style={{ margin: 0, fontSize: "13px", color: "#92400e" }}>
-          💡 <strong>How it works:</strong> Affiliates share your store link with their unique code
-          (e.g. <code style={{ background: "#fef3c7", padding: "1px 4px", borderRadius: "4px" }}>{storeUrl}?ref=their-code</code>).
-          When someone clicks and buys, the commission is recorded automatically.
-        </p>
-      </div>
+        {/* Stats */}
+        {links.length > 0 && (
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { label: "Active affiliates", value: activeCount.toString(), icon: Users, color: "text-blue-400", grad: "from-blue-500 to-blue-600" },
+              { label: "Total affiliates", value: links.length.toString(), icon: Link2, color: "text-purple-400", grad: "from-purple-500 to-purple-600" },
+              { label: "Total commissions", value: `£${(totalCommissionCents / 100).toFixed(2)}`, icon: PoundSterling, color: "text-orange-400", grad: "from-orange-500 to-amber-500" },
+            ].map(s => (
+              <div key={s.label} className="bg-card border border-border rounded-2xl p-5">
+                <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${s.grad} flex items-center justify-center mb-3`}>
+                  <s.icon className="w-4 h-4 text-white" />
+                </div>
+                <p className="text-2xl font-black text-foreground leading-none mb-1">{s.value}</p>
+                <p className="text-xs text-muted-foreground font-medium">{s.label}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
-      {/* Create form */}
-      <div style={{ background: "#fff", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", marginBottom: "32px" }}>
-        <h2 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: 700, color: "#111827" }}>Add affiliate</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: "12px", marginBottom: "16px" }}>
-          <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Name</label>
-            <input
-              value={form.affiliateName}
-              onChange={(e) => setForm((f) => ({ ...f, affiliateName: e.target.value }))}
-              placeholder="Jane Smith"
-              style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box" }}
-            />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Email (optional)</label>
-            <input
-              value={form.affiliateEmail}
-              onChange={(e) => setForm((f) => ({ ...f, affiliateEmail: e.target.value }))}
-              placeholder="jane@example.com"
-              type="email"
-              style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box" }}
-            />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Commission %</label>
-            <input
-              type="number"
-              value={form.commissionPercent}
-              onChange={(e) => setForm((f) => ({ ...f, commissionPercent: e.target.value }))}
-              min="0" max="100"
-              style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box" }}
-            />
+        {/* How it works */}
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-orange-500/8 border border-orange-500/20">
+          <TrendingUp className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+          <div className="text-sm text-foreground/80">
+            <strong className="font-semibold text-foreground">How it works:</strong> Affiliates share your store with their unique link{" "}
+            <code className="text-xs bg-orange-500/10 px-1.5 py-0.5 rounded font-mono text-orange-400">{storeUrl}?ref=code</code>.
+            {" "}When someone buys, their commission is recorded automatically.
           </div>
         </div>
-        {error && <p style={{ color: "#dc2626", fontSize: "13px", marginBottom: "12px" }}>{error}</p>}
-        <button onClick={create} disabled={creating}
-          style={{ padding: "10px 24px", borderRadius: "10px", background: "linear-gradient(135deg,#f97316,#ea580c)", color: "#fff", fontWeight: 700, fontSize: "14px", border: "none", cursor: "pointer" }}>
-          {creating ? "Creating…" : "Create Link"}
-        </button>
-      </div>
 
-      {/* Links table */}
-      {links.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "48px", color: "#9ca3af", fontSize: "14px" }}>
-          No affiliate links yet. Create one above to get started.
-        </div>
-      ) : (
-        <div style={{ background: "#fff", borderRadius: "16px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
-                {["Affiliate", "Referral Link", "Commission", "Earned", "Status", ""].map((h) => (
-                  <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {links.map((l) => (
-                <tr key={l.id} style={{ borderBottom: "1px solid #f9fafb" }}>
-                  <td style={{ padding: "14px 16px" }}>
-                    <div style={{ fontWeight: 600, fontSize: "14px", color: "#111827" }}>{l.affiliateName}</div>
-                    {l.affiliateEmail && <div style={{ fontSize: "12px", color: "#9ca3af" }}>{l.affiliateEmail}</div>}
-                  </td>
-                  <td style={{ padding: "14px 16px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <code style={{ fontSize: "12px", background: "#f3f4f6", padding: "3px 8px", borderRadius: "6px", color: "#374151" }}>
-                        ?ref={l.code}
-                      </code>
-                      <button onClick={() => copyLink(l.code)}
-                        style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", background: "#fff", fontSize: "12px", cursor: "pointer", color: copied === l.code ? "#16a34a" : "#6b7280", fontWeight: 600 }}>
-                        {copied === l.code ? "✓ Copied" : "Copy"}
-                      </button>
-                    </div>
-                  </td>
-                  <td style={{ padding: "14px 16px", fontSize: "14px", fontWeight: 600, color: "#f97316" }}>{l.commissionPercent}%</td>
-                  <td style={{ padding: "14px 16px", fontSize: "14px", color: "#374151" }}>
-                    £{((l.totalEarnedCents ?? 0) / 100).toFixed(2)}
-                  </td>
-                  <td style={{ padding: "14px 16px" }}>
-                    <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700,
-                      background: l.active ? "#f0fdf4" : "#f9fafb",
-                      color: l.active ? "#16a34a" : "#9ca3af",
-                      border: `1px solid ${l.active ? "#86efac" : "#e5e7eb"}` }}>
+        {/* Create form */}
+        {showForm && (
+          <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+            <h3 className="text-sm font-bold text-foreground">New affiliate link</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Name</Label>
+                <Input value={form.affiliateName} onChange={e => setForm(f => ({ ...f, affiliateName: e.target.value }))}
+                  placeholder="Jane Smith" onKeyDown={e => e.key === "Enter" && create()} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Email (optional)</Label>
+                <Input type="email" value={form.affiliateEmail} onChange={e => setForm(f => ({ ...f, affiliateEmail: e.target.value }))}
+                  placeholder="jane@example.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Commission %</Label>
+                <Input type="number" value={form.commissionPercent} onChange={e => setForm(f => ({ ...f, commissionPercent: e.target.value }))}
+                  min="0" max="100" />
+              </div>
+            </div>
+            {error && <p className="text-sm text-red-500">{error}</p>}
+            <Button onClick={create} disabled={creating} className="bg-orange-500 hover:bg-orange-600 text-white gap-2 h-9">
+              {creating ? "Creating…" : "Create Link"}
+            </Button>
+          </div>
+        )}
+
+        {/* Links list */}
+        {links.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border p-12 text-center">
+            <Link2 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground font-medium">No affiliate links yet</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">Click "Add affiliate" above to create your first referral link.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {links.map(l => (
+              <div key={l.id} className={cn("bg-card border rounded-xl p-4 flex items-center gap-4 flex-wrap", l.active ? "border-border" : "border-border opacity-50")}>
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-sm text-foreground">{l.affiliateName}</p>
+                    <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold border", l.active ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-muted text-muted-foreground border-border")}>
                       {l.active ? "Active" : "Inactive"}
                     </span>
-                  </td>
-                  <td style={{ padding: "14px 16px" }}>
-                    {l.active && (
-                      <button onClick={() => deactivate(l.id)}
-                        style={{ padding: "6px 12px", borderRadius: "8px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#dc2626", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
-                        Deactivate
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  </div>
+                  {l.affiliateEmail && <p className="text-xs text-muted-foreground mt-0.5">{l.affiliateEmail}</p>}
+                </div>
+
+                {/* Code */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <code className="text-xs bg-muted px-2.5 py-1.5 rounded-lg font-mono text-foreground/70">?ref={l.code}</code>
+                  <CopyButton text={`${storeUrl}?ref=${l.code}`} />
+                </div>
+
+                {/* Stats */}
+                <div className="flex items-center gap-4 shrink-0">
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-orange-400">{l.commissionPercent}%</p>
+                    <p className="text-[10px] text-muted-foreground">commission</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-foreground">£{((l.totalEarnedCents ?? 0) / 100).toFixed(2)}</p>
+                    <p className="text-[10px] text-muted-foreground">earned</p>
+                  </div>
+                </div>
+
+                {/* Deactivate */}
+                {l.active && (
+                  <button onClick={() => deactivate(l.id)}
+                    className="shrink-0 text-xs font-semibold text-muted-foreground hover:text-red-500 border border-border hover:border-red-500/30 px-2.5 py-1.5 rounded-lg transition-all">
+                    Deactivate
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
