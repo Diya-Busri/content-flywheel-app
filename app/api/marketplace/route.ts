@@ -23,6 +23,9 @@ export async function GET(request: NextRequest) {
   const sort          = searchParams.get("sort") ?? "newest";
   const page          = Math.max(1, parseInt(searchParams.get("page") ?? "1") || 1);
   const newThisWeek   = searchParams.get("newThisWeek") === "1";
+  const minPrice      = searchParams.get("minPrice") ? parseInt(searchParams.get("minPrice")!) * 100 : null; // convert £ → pence
+  const maxPrice      = searchParams.get("maxPrice") ? parseInt(searchParams.get("maxPrice")!) * 100 : null;
+  const minRating     = searchParams.get("minRating") ? parseFloat(searchParams.get("minRating")!) : null;
   const PAGE_SIZE     = newThisWeek ? 12 : 24;
 
   type MA = {
@@ -83,6 +86,12 @@ export async function GET(request: NextRequest) {
     const ma = (r.marketingAssets ?? {}) as MA;
     if (newThisWeek && new Date(r.createdAt) < sevenDaysAgo) return false;
     if (sort === "free" && (ma.nativePrice ?? 0) !== 0) return false;
+    if (minPrice !== null && (ma.nativePrice ?? 0) < minPrice) return false;
+    if (maxPrice !== null && (ma.nativePrice ?? 0) > maxPrice) return false;
+    if (minRating !== null) {
+      const rating = ratingsMap[r.id]?.avgRating ?? null;
+      if (rating === null || rating < minRating) return false;
+    }
     if (q) {
       const searchable = [r.title, r.niche, r.format, ma.productDescription ?? ""].join(" ").toLowerCase();
       if (!searchable.includes(q)) return false;

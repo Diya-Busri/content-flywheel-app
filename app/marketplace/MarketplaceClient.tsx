@@ -53,19 +53,46 @@ export default function MarketplaceClient() {
   const [inputValue, setInputValue] = useState("");
   const [quickView, setQuickView]   = useState<MarketplaceItem | null>(null);
   const [newItems, setNewItems]     = useState<MarketplaceItem[]>([]);
+  const [minPrice, setMinPrice]     = useState("");
+  const [maxPrice, setMaxPrice]     = useState("");
+  const [minRating, setMinRating]   = useState("");
+  const [wishlist, setWishlist]     = useState<Set<string>>(new Set());
+
+  // Load wishlist from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("cf_wishlist") ?? "[]") as string[];
+      setWishlist(new Set(saved));
+    } catch { /* ignore */ }
+  }, []);
+
+  const toggleWishlist = (itemId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setWishlist((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      try { localStorage.setItem("cf_wishlist", JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
-    if (q)      params.set("q", q);
-    if (niche)  params.set("niche", niche);
-    if (format) params.set("format", format);
+    if (q)         params.set("q", q);
+    if (niche)     params.set("niche", niche);
+    if (format)    params.set("format", format);
+    if (minPrice)  params.set("minPrice", minPrice);
+    if (maxPrice)  params.set("maxPrice", maxPrice);
+    if (minRating) params.set("minRating", minRating);
     params.set("sort", sort);
     params.set("page", String(page));
     const res = await fetch(`/api/marketplace?${params.toString()}`);
     if (res.ok) setData(await res.json());
     setLoading(false);
-  }, [q, niche, format, sort, page]);
+  }, [q, niche, format, sort, page, minPrice, maxPrice, minRating]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
@@ -104,9 +131,20 @@ export default function MarketplaceClient() {
     <div style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "'Helvetica Neue', Arial, sans-serif" }}>
       {/* Hero header */}
       <div style={{ background: "#0B0B0F", padding: "64px 24px 48px", textAlign: "center" }}>
-        <a href="/" style={{ display: "inline-block", marginBottom: "32px" }}>
-          <img src="/logo.png" alt="Content Flywheel" style={{ height: "56px", objectFit: "contain" }} />
-        </a>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "32px", position: "relative" }}>
+          <a href="/">
+            <img src="/logo.png" alt="Content Flywheel" style={{ height: "56px", objectFit: "contain" }} />
+          </a>
+          {wishlist.size > 0 && (
+            <button
+              onClick={() => setSort("trending")}
+              title={`${wishlist.size} saved product${wishlist.size !== 1 ? "s" : ""}`}
+              style={{ position: "absolute", right: "-48px", top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.1)", border: "none", borderRadius: "999px", padding: "6px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", color: "#f9a8d4", fontSize: "13px", fontWeight: 700 }}
+            >
+              ❤️ {wishlist.size}
+            </button>
+          )}
+        </div>
         <h1 style={{ margin: "0 0 12px", fontSize: "clamp(28px,5vw,48px)", fontWeight: 800, color: "#fff", letterSpacing: "-0.03em" }}>
           Digital Product Marketplace
         </h1>
@@ -126,8 +164,15 @@ export default function MarketplaceClient() {
           />
         </div>
 
+        {/* Leaderboard link */}
+        <div style={{ marginBottom: "12px" }}>
+          <a href="/marketplace/leaderboard" style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 700, color: "#fbbf24", textDecoration: "none", background: "rgba(251,191,36,0.12)", padding: "6px 14px", borderRadius: "999px", border: "1px solid rgba(251,191,36,0.25)" }}>
+            🏆 Top Sellers This Month →
+          </a>
+        </div>
+
         {/* Sort tabs */}
-        <div style={{ display: "flex", justifyContent: "center", gap: "8px", flexWrap: "wrap", marginTop: "24px" }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
           {SORT_TABS.map((tab) => (
             <button
               key={tab.id}
@@ -160,8 +205,38 @@ export default function MarketplaceClient() {
             <option value="">All formats</option>
             {(data?.formats ?? []).map((f) => <option key={f} value={f.toLowerCase()}>{f}</option>)}
           </select>
-          {(niche || format || q) && (
-            <button onClick={() => { setNiche(""); setFormat(""); setInputValue(""); setQ(""); setPage(1); }}
+          {/* Price range */}
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: "13px", color: "#6b7280" }}>£</span>
+            <input
+              type="number"
+              value={minPrice}
+              onChange={(e) => { setMinPrice(e.target.value); setPage(1); }}
+              placeholder="Min"
+              min={0}
+              style={{ width: "60px", padding: "7px 8px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", background: "#fff", color: "#374151" }}
+            />
+            <span style={{ fontSize: "13px", color: "#6b7280" }}>–</span>
+            <input
+              type="number"
+              value={maxPrice}
+              onChange={(e) => { setMaxPrice(e.target.value); setPage(1); }}
+              placeholder="Max"
+              min={0}
+              style={{ width: "60px", padding: "7px 8px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", background: "#fff", color: "#374151" }}
+            />
+          </div>
+
+          {/* Min rating */}
+          <select value={minRating} onChange={(e) => { setMinRating(e.target.value); setPage(1); }}
+            style={{ padding: "7px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", background: "#fff", color: "#374151", cursor: "pointer" }}>
+            <option value="">All ratings</option>
+            <option value="4">⭐ 4.0+</option>
+            <option value="3">⭐ 3.0+</option>
+          </select>
+
+          {(niche || format || q || minPrice || maxPrice || minRating) && (
+            <button onClick={() => { setNiche(""); setFormat(""); setInputValue(""); setQ(""); setMinPrice(""); setMaxPrice(""); setMinRating(""); setPage(1); }}
               style={{ padding: "7px 12px", borderRadius: "8px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#dc2626", fontSize: "13px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
               Clear filters
             </button>
@@ -265,10 +340,18 @@ export default function MarketplaceClient() {
                         </span>
                         {/* Social proof badge */}
                         {badge && (
-                          <span style={{ position: "absolute", top: "10px", right: "10px", background: badge.color, color: "#fff", fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "999px" }}>
+                          <span style={{ position: "absolute", top: "10px", right: "44px", background: badge.color, color: "#fff", fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "999px" }}>
                             {badge.label}
                           </span>
                         )}
+                        {/* Wishlist heart */}
+                        <button
+                          onClick={(e) => toggleWishlist(item.id, e)}
+                          style={{ position: "absolute", top: "8px", right: "8px", background: wishlist.has(item.id) ? "rgba(244,63,94,0.9)" : "rgba(0,0,0,0.45)", border: "none", borderRadius: "50%", width: "30px", height: "30px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", transition: "background 0.15s", zIndex: 2 }}
+                          title={wishlist.has(item.id) ? "Remove from wishlist" : "Save to wishlist"}
+                        >
+                          {wishlist.has(item.id) ? "❤️" : "🤍"}
+                        </button>
                         {/* Free ribbon */}
                         {isFree && (
                           <span style={{ position: "absolute", bottom: "10px", right: "10px", background: "#10b981", color: "#fff", fontSize: "11px", fontWeight: 800, padding: "4px 10px", borderRadius: "999px" }}>

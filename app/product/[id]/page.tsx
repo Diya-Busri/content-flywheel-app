@@ -1,8 +1,9 @@
+import React from "react";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { productReviewsTable } from "@/db/schema/product-reviews-schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, ne, desc } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { auth } from "@clerk/nextjs/server";
@@ -61,13 +62,21 @@ export async function generateMetadata({
     if (!product) return { title: "Product not found" };
     const ma = (product.marketingAssets ?? {}) as MarketingAssets;
     const title = ma.productTitle || product.title;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
+    const ogImageUrl = `${appUrl}/api/og/product/${id}`;
     return {
       title: `${title} — Digital Product`,
       description: ma.productDescription ?? undefined,
       openGraph: {
         title: `${title} — Digital Product`,
         description: ma.productDescription ?? undefined,
-        images: ma.bookMockupUrl ? [ma.bookMockupUrl] : ma.coverThumbnailUrl ? [ma.coverThumbnailUrl] : [],
+        images: [{ url: ogImageUrl, width: 1200, height: 630, alt: title }],
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: `${title} — Digital Product`,
+        description: ma.productDescription ?? undefined,
+        images: [ogImageUrl],
       },
     };
   } catch {
@@ -164,6 +173,27 @@ export default async function ProductSalesPage({
   } catch { upsellProducts = []; }
 
   const upsellBundles: { id: string; title: string; bundlePrice: number; productIds: string[] }[] = [];
+
+  // ── "People also viewed" — same niche, different creator, published ────────
+  type RelatedProduct = { id: string; title: string; niche: string; format: string; marketingAssets: unknown };
+  let relatedProducts: RelatedProduct[] = [];
+  if (product.niche) {
+    try {
+      const related = await db
+        .select({ id: productsTable.id, title: productsTable.title, niche: productsTable.niche, format: productsTable.format, marketingAssets: productsTable.marketingAssets })
+        .from(productsTable)
+        .where(and(eq(productsTable.niche, product.niche), ne(productsTable.userId, product.userId), isNull(productsTable.deletedAt)))
+        .orderBy(desc(productsTable.createdAt))
+        .limit(12);
+      relatedProducts = related
+        .filter((r) => {
+          const rma = (r.marketingAssets ?? {}) as MarketingAssets;
+          return rma.isNativePublished === true && !rma.comingSoon;
+        })
+        .filter((r) => r.id !== id)
+        .slice(0, 4);
+    } catch { relatedProducts = []; }
+  }
 
   const content = (product.content ?? {}) as ProductContent;
   const sections = (content.sections ?? []).sort((a, b) => a.order - b.order);
@@ -689,6 +719,37 @@ export default async function ProductSalesPage({
           </div>
         </div>
       )}
+    {/* People also viewed */}
+    {relatedProducts.length > 0 && (
+      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 16px 60px" }}>
+        <h2 style={{ margin: "0 0 20px", fontSize: "20px", fontWeight: 800, color: "#111827" }}>People also viewed</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "16px" }}>
+          {relatedProducts.map((r) => {
+            const rma = (r.marketingAssets ?? {}) as MarketingAssets;
+            const thumb = rma.coverThumbnailUrl ?? rma.bookMockupUrl ?? rma.thumbnailUrl ?? null;
+            const price = rma.nativePrice === 0 ? "Free" : rma.nativePrice ? `£${(rma.nativePrice / 100).toFixed(2)}` : rma.priceLabel ?? null;
+            return (
+              <a key={r.id} href={`/product/${r.id}`} style={{ display: "block", background: "#fff", border: "1px solid #e5e7eb", borderRadius: "16px", overflow: "hidden", textDecoration: "none", transition: "box-shadow 0.2s" }}>
+                <div style={{ aspectRatio: "4/3", background: "linear-gradient(135deg,#f97316,#ea580c)", overflow: "hidden" }}>
+                  {thumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={thumb} alt={r.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: "36px" }}>📦</div>
+                  )}
+                </div>
+                <div style={{ padding: "14px 16px" }}>
+                  <p style={{ margin: "0 0 2px", fontSize: "10px", color: "#f97316", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{r.niche}</p>
+                  <p style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: 700, color: "#111827", lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } as React.CSSProperties}>{r.title}</p>
+                  {price && <p style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: rma.nativePrice === 0 ? "#10b981" : "#111827" }}>{price}</p>}
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      </div>
+    )}
+
     {/* Exit-intent modal — only for non-buyers on paid products */}
     {!purchased && isNativePublished && (
       <ExitIntentModal

@@ -13,6 +13,7 @@ export const productOrdersTable = pgTable("product_orders", {
   downloadToken: text("download_token"),
   downloadExpiresAt: timestamp("download_expires_at"),
   emailSent: boolean("email_sent").default(false),
+  reviewRequestSent: boolean("review_request_sent").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
