@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen, GraduationCap, UserPlus } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen, GraduationCap, UserPlus, ChevronDown, ChevronRight } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NotificationBell } from "@/components/NotificationBell";
 import Link from "next/link";
@@ -40,10 +40,19 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
   const toggleCollapsed = sidebar?.toggleCollapsed ?? (() => {});
   const { theme, toggleTheme } = useDashboardTheme();
   const [unreadCount, setUnreadCount] = useState(0);
+  const storePages = ["/dashboard/store", "/dashboard/bundles", "/dashboard/reviews", "/dashboard/webhooks", "/dashboard/referral"];
+  const [storeExpanded, setStoreExpanded] = useState(() => storePages.some((p) => pathname.startsWith(p)));
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Auto-expand My Store group when navigating to a store-related page
+  useEffect(() => {
+    if (storePages.some((p) => pathname.startsWith(p))) {
+      setStoreExpanded(true);
+    }
+  }, [pathname]);
 
   // Poll unread message count for the Messages badge.
   useEffect(() => {
@@ -62,7 +71,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
   const isActive = (path: string, activeWhenStartsWith?: boolean) =>
     activeWhenStartsWith ? pathname.startsWith(path) : pathname === path;
 
-  type NavItem = { href: string; icon: React.ReactNode; label: string; emoji: string; subItem?: boolean; badge?: string; activeWhenStartsWith?: boolean; featureKey?: string };
+  type NavItem = { href: string; icon: React.ReactNode; label: string; emoji: string; subItem?: boolean; badge?: string; activeWhenStartsWith?: boolean; featureKey?: string; parentToggle?: string; parentKey?: string };
   type NavGroup = { label: string; items: NavItem[] };
 
   const navGroups: NavGroup[] = [
@@ -95,14 +104,13 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
     {
       label: "Sell",
       items: [
-        { href: "/dashboard/store", icon: <Store size={18} />, label: "My Store", emoji: "🛒", activeWhenStartsWith: true },
-        { href: "/dashboard/bundles", icon: <Package size={18} />, label: "Bundles", emoji: "📦", activeWhenStartsWith: true },
-        { href: "/dashboard/marketplace", icon: <ShoppingBag size={18} />, label: "Marketplace", emoji: "🛍️", activeWhenStartsWith: true },
+        { href: "/dashboard/store", icon: <Store size={18} />, label: "My Store", emoji: "🛒", activeWhenStartsWith: true, parentToggle: "store" },
+        { href: "/dashboard/bundles", icon: <Package size={18} />, label: "Bundles", emoji: "📦", activeWhenStartsWith: true, subItem: true, parentKey: "store" },
+        { href: "/dashboard/reviews", icon: <Star size={18} />, label: "Reviews", emoji: "⭐", activeWhenStartsWith: true, subItem: true, parentKey: "store" },
+        { href: "/dashboard/webhooks", icon: <Zap size={18} />, label: "Webhooks", emoji: "⚡", activeWhenStartsWith: true, subItem: true, parentKey: "store" },
+        { href: "/dashboard/referral", icon: <UserPlus size={18} />, label: "Invite Creators", emoji: "🤝", activeWhenStartsWith: true, subItem: true, parentKey: "store" },
         { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", emoji: "👕", activeWhenStartsWith: true, featureKey: "print_on_demand" },
         { href: "/dashboard/drop-campaign", icon: <Gift size={18} />, label: "Drop Campaign", emoji: "🎁", activeWhenStartsWith: true, featureKey: "drop_campaign" },
-        { href: "/dashboard/reviews", icon: <Star size={18} />, label: "Reviews", emoji: "⭐", activeWhenStartsWith: true },
-        { href: "/dashboard/webhooks", icon: <Zap size={18} />, label: "Webhooks", emoji: "⚡", activeWhenStartsWith: true },
-        { href: "/dashboard/referral", icon: <UserPlus size={18} />, label: "Invite Creators", emoji: "🤝", activeWhenStartsWith: true },
       ],
     },
     {
@@ -145,37 +153,65 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
 
   const settingsItem: NavItem = { href: "/dashboard/settings", icon: <Settings size={18} />, label: "Settings", emoji: "⚙️" };
 
-  const renderNavItem = (item: NavItem) => {
+  const renderNavItem = (item: NavItem, onToggle?: () => void, isExpanded?: boolean) => {
     const isSub = "subItem" in item && item.subItem;
     const active = isActive(item.href, item.activeWhenStartsWith);
+    const hasToggle = !!item.parentToggle && !!onToggle;
     return (
-      <Link key={item.href} href={item.href} className="block">
-        <motion.div
-          className={`flex items-center py-2 px-3 rounded-lg cursor-pointer transition-all ${isSub ? "pl-4 md:pl-5" : ""} ${
-            active
-              ? "bg-orange-500 text-white shadow-sm"
-              : "text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
-          }`}
-          whileHover={{
-            scale: 1.03,
-            x: 4,
-            transition: { duration: 0.2 }
-          }}
-          whileTap={{ scale: 0.98 }}
-          transition={{ duration: 0.2 }}
-        >
-          <div className="flex items-center justify-center">
-            {item.icon}
-          </div>
-          <span className="ml-3 text-sm font-medium hidden md:block flex-1 min-w-0 truncate">
-            {item.emoji} {item.label}
-          </span>
-          {item.badge && (
-            <span className={`hidden md:inline-flex shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${active ? "bg-white/20 text-white" : "bg-orange-500 text-white"}`}>
-              {item.badge}
+      <div key={item.href} className={isSub ? "relative pl-3 hidden md:block" : ""}>
+        {isSub && (
+          <span className="absolute left-3 top-0 bottom-0 w-px bg-gray-200 dark:bg-white/10" />
+        )}
+        <Link href={item.href} className={`block ${isSub ? "pl-3" : ""}`}>
+          <motion.div
+            className={`flex items-center py-2 px-3 rounded-lg cursor-pointer transition-all ${
+              active
+                ? "bg-orange-500 text-white shadow-sm"
+                : "text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+            }`}
+            whileHover={{
+              scale: 1.03,
+              x: 4,
+              transition: { duration: 0.2 }
+            }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="flex items-center justify-center">
+              {item.icon}
+            </div>
+            <span className="ml-3 text-sm font-medium hidden md:block flex-1 min-w-0 truncate">
+              {item.emoji} {item.label}
             </span>
-          )}
-        </motion.div>
+            {item.badge && (
+              <span className={`hidden md:inline-flex shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${active ? "bg-white/20 text-white" : "bg-orange-500 text-white"}`}>
+                {item.badge}
+              </span>
+            )}
+            {hasToggle && (
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle!(); }}
+                className={`hidden md:flex items-center justify-center w-5 h-5 rounded shrink-0 transition-colors ${active ? "text-white/70 hover:text-white" : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                aria-label={isExpanded ? "Collapse" : "Expand"}
+              >
+                {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              </button>
+            )}
+          </motion.div>
+        </Link>
+      </div>
+    );
+  };
+
+  const renderNavItemMobile = (item: NavItem) => {
+    const active = isActive(item.href, item.activeWhenStartsWith);
+    return (
+      <Link key={item.href} href={item.href} onClick={() => setMobileNavOpen(false)} className="block">
+        <div className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${active ? "bg-orange-500 text-white" : "text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10"}`}>
+          {item.icon}
+          <span className="text-sm font-medium">{item.emoji} {item.label}</span>
+        </div>
       </Link>
     );
   };
@@ -251,7 +287,13 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
                   {group.label}
                 </p>
                 <div className="space-y-0.5">
-                  {group.items.map(renderNavItem)}
+                  {group.items
+                    .filter((item) => !item.parentKey || (item.parentKey === "store" && storeExpanded))
+                    .map((item) =>
+                      item.parentToggle === "store"
+                        ? renderNavItem(item, () => setStoreExpanded((v) => !v), storeExpanded)
+                        : renderNavItem(item)
+                    )}
                 </div>
               </div>
             ))}
@@ -423,17 +465,9 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
                   <div key={group.label}>
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-600 px-2 mb-1.5">{group.label}</p>
                     <div className="space-y-0.5">
-                      {group.items.map((item) => {
-                        const active = isActive(item.href, item.activeWhenStartsWith);
-                        return (
-                          <Link key={item.href} href={item.href} onClick={() => setMobileNavOpen(false)} className="block">
-                            <div className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${active ? "bg-orange-500 text-white" : "text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10"}`}>
-                              {item.icon}
-                              <span className="text-sm font-medium">{item.emoji} {item.label}</span>
-                            </div>
-                          </Link>
-                        );
-                      })}
+                      {group.items
+                        .filter((item) => !item.parentKey || (item.parentKey === "store" && storeExpanded))
+                        .map(renderNavItemMobile)}
                     </div>
                   </div>
                 ))}
