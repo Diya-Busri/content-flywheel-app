@@ -1,5 +1,10 @@
 "use client";
 import { useState } from "react";
+import { Tag, Zap, Download, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type PromoCode = {
   id: string;
@@ -24,21 +29,17 @@ function downloadCsv(codes: PromoCode[]) {
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
-  a.download = `promo-codes-${Date.now()}.csv`;
-  a.click();
+  a.href = url; a.download = `promo-codes-${Date.now()}.csv`; a.click();
   URL.revokeObjectURL(url);
 }
 
+const inputCls = "w-full rounded-lg border border-input bg-background text-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-orange-500 text-foreground placeholder:text-muted-foreground";
+
 export default function DiscountCodesClient({ initialCodes }: { initialCodes: PromoCode[] }) {
   const [codes, setCodes] = useState<PromoCode[]>(initialCodes);
-
-  // Single code form
   const [form, setForm] = useState({ code: "", type: "percent", value: "", maxUses: "", expiresAt: "" });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-
-  // Bulk form
   const [showBulk, setShowBulk] = useState(false);
   const [bulk, setBulk] = useState({ prefix: "LAUNCH", count: "10", type: "percent", value: "", maxUses: "", expiresAt: "" });
   const [bulkGenerating, setBulkGenerating] = useState(false);
@@ -47,8 +48,7 @@ export default function DiscountCodesClient({ initialCodes }: { initialCodes: Pr
 
   async function create() {
     if (!form.code || !form.value) { setError("Code and discount value are required"); return; }
-    setCreating(true);
-    setError("");
+    setCreating(true); setError("");
     const body: Record<string, unknown> = {
       code: form.code.toUpperCase().trim(),
       discountPercent: form.type === "percent" ? parseInt(form.value) : null,
@@ -56,18 +56,9 @@ export default function DiscountCodesClient({ initialCodes }: { initialCodes: Pr
       maxUses: form.maxUses ? parseInt(form.maxUses) : null,
       expiresAt: form.expiresAt || null,
     };
-    const res = await fetch("/api/creator/promo-codes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      const created = await res.json();
-      setCodes((c) => [created, ...c]);
-      setForm({ code: "", type: "percent", value: "", maxUses: "", expiresAt: "" });
-    } else {
-      setError("Failed to create code. The code may already exist.");
-    }
+    const res = await fetch("/api/creator/promo-codes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (res.ok) { const created = await res.json(); setCodes((c) => [created, ...c]); setForm({ code: "", type: "percent", value: "", maxUses: "", expiresAt: "" }); }
+    else { setError("Failed to create code. The code may already exist."); }
     setCreating(false);
   }
 
@@ -75,38 +66,23 @@ export default function DiscountCodesClient({ initialCodes }: { initialCodes: Pr
     if (!bulk.value) { setBulkError("Discount value is required"); return; }
     const count = parseInt(bulk.count) || 10;
     if (count < 1 || count > 100) { setBulkError("Count must be 1–100"); return; }
-    setBulkGenerating(true);
-    setBulkError("");
-    setLastBatch([]);
+    setBulkGenerating(true); setBulkError(""); setLastBatch([]);
     const body: Record<string, unknown> = {
-      prefix: bulk.prefix.trim() || "CODE",
-      count,
+      prefix: bulk.prefix.trim() || "CODE", count,
       discountPercent: bulk.type === "percent" ? parseInt(bulk.value) : null,
       discountAmount: bulk.type === "fixed" ? parseFloat(bulk.value) : null,
       maxUses: bulk.maxUses ? parseInt(bulk.maxUses) : null,
       expiresAt: bulk.expiresAt || null,
     };
-    const res = await fetch("/api/creator/promo-codes/bulk", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const res = await fetch("/api/creator/promo-codes/bulk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await res.json();
-    if (res.ok && data.codes) {
-      setCodes((c) => [...data.codes, ...c]);
-      setLastBatch(data.codes);
-    } else {
-      setBulkError(data.error ?? "Failed to generate codes");
-    }
+    if (res.ok && data.codes) { setCodes((c) => [...data.codes, ...c]); setLastBatch(data.codes); }
+    else { setBulkError(data.error ?? "Failed to generate codes"); }
     setBulkGenerating(false);
   }
 
   async function deactivate(id: string) {
-    await fetch("/api/creator/promo-codes", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
+    await fetch("/api/creator/promo-codes", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
     setCodes((c) => c.map((code) => code.id === id ? { ...code, active: false } : code));
   }
 
@@ -117,261 +93,200 @@ export default function DiscountCodesClient({ initialCodes }: { initialCodes: Pr
   };
 
   return (
-    <div style={{ padding: "32px 24px", maxWidth: "900px" }}>
-      <h1 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: 800, color: "#111827" }}>🎟️ Store Discount Codes</h1>
-      <p style={{ margin: "0 0 32px", fontSize: "14px", color: "#6b7280" }}>Create discount codes your customers use at checkout — e.g. <strong>LAUNCH50</strong> for 50% off.</p>
+    <div className="min-h-screen bg-background p-6 md:p-8">
+      <div className="max-w-4xl mx-auto space-y-6">
 
-      {/* Single code form */}
-      <div style={{ background: "#fff", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", marginBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-          <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#111827" }}>Create single code</h2>
-          <button
-            onClick={() => { setShowBulk((v) => !v); setBulkError(""); setLastBatch([]); }}
-            style={{ padding: "7px 16px", borderRadius: "8px", border: "1px solid #e5e7eb", background: showBulk ? "#fff7ed" : "#fff", color: showBulk ? "#f97316" : "#374151", fontWeight: 600, fontSize: "13px", cursor: "pointer" }}
-          >
-            {showBulk ? "✕ Close bulk" : "⚡ Bulk generate"}
-          </button>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-          <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Code</label>
-            <input
-              value={form.code}
-              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
-              placeholder="LAUNCH50"
-              style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", fontWeight: 600, letterSpacing: "0.06em", boxSizing: "border-box" }}
-            />
+        {/* Header */}
+        <div>
+          <div className="flex items-center gap-2.5 mb-1">
+            <Tag className="w-5 h-5 text-orange-400" />
+            <h1 className="text-2xl font-bold text-foreground">Discount Codes</h1>
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Type</label>
-            <select
-              value={form.type}
-              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-              style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box", background: "#fff" }}
+          <p className="text-sm text-muted-foreground">Create codes customers use at checkout — e.g. <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">LAUNCH50</code> for 50% off.</p>
+        </div>
+
+        {/* Single code form */}
+        <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-foreground">Create single code</h2>
+            <button
+              onClick={() => { setShowBulk((v) => !v); setBulkError(""); setLastBatch([]); }}
+              className={cn("flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors",
+                showBulk ? "border-orange-500/30 bg-orange-500/10 text-orange-400" : "border-border text-muted-foreground hover:text-foreground"
+              )}
             >
-              <option value="percent">% Off</option>
-              <option value="fixed">£ Off</option>
-            </select>
+              {showBulk ? <><X className="w-3 h-3" />Close bulk</> : <><Zap className="w-3 h-3" />Bulk generate</>}
+            </button>
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>
-              {form.type === "percent" ? "Percent (%)" : "Amount (£)"}
-            </label>
-            <input
-              type="number"
-              value={form.value}
-              onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
-              placeholder={form.type === "percent" ? "20" : "5.00"}
-              min="0"
-              max={form.type === "percent" ? "100" : undefined}
-              style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box" }}
-            />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Max Uses</label>
-            <input
-              type="number"
-              value={form.maxUses}
-              onChange={(e) => setForm((f) => ({ ...f, maxUses: e.target.value }))}
-              placeholder="Unlimited"
-              min="1"
-              style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box" }}
-            />
-          </div>
-        </div>
-        <div style={{ marginBottom: "16px" }}>
-          <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Expiry Date (optional)</label>
-          <input
-            type="date"
-            value={form.expiresAt}
-            onChange={(e) => setForm((f) => ({ ...f, expiresAt: e.target.value }))}
-            style={{ padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px" }}
-          />
-        </div>
-        {error && <p style={{ color: "#dc2626", fontSize: "13px", marginBottom: "12px" }}>{error}</p>}
-        <button
-          onClick={create}
-          disabled={creating}
-          style={{ padding: "10px 24px", borderRadius: "10px", background: "linear-gradient(135deg,#f97316,#ea580c)", color: "#fff", fontWeight: 700, fontSize: "14px", border: "none", cursor: "pointer", opacity: creating ? 0.7 : 1 }}
-        >
-          {creating ? "Creating…" : "Create Code"}
-        </button>
-      </div>
 
-      {/* Bulk generator */}
-      {showBulk && (
-        <div style={{ background: "#fff7ed", borderRadius: "16px", padding: "24px", border: "1px solid #fed7aa", marginBottom: "20px" }}>
-          <h2 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: "#c2410c" }}>⚡ Bulk code generator</h2>
-          <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#9a3412" }}>Generate up to 100 unique codes at once. Download as CSV to share with your audience.</p>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Prefix</label>
-              <input
-                value={bulk.prefix}
-                onChange={(e) => setBulk((b) => ({ ...b, prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") }))}
-                placeholder="LAUNCH"
-                maxLength={16}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #fed7aa", background: "#fff", fontSize: "13px", fontWeight: 600, letterSpacing: "0.05em", boxSizing: "border-box" }}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Code</Label>
+              <Input
+                value={form.code}
+                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+                placeholder="LAUNCH50"
+                className="font-mono tracking-wider text-sm"
               />
             </div>
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Count (1–100)</label>
-              <input
-                type="number"
-                value={bulk.count}
-                onChange={(e) => setBulk((b) => ({ ...b, count: e.target.value }))}
-                min="1"
-                max="100"
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #fed7aa", background: "#fff", fontSize: "13px", boxSizing: "border-box" }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Type</label>
-              <select
-                value={bulk.type}
-                onChange={(e) => setBulk((b) => ({ ...b, type: e.target.value }))}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #fed7aa", background: "#fff", fontSize: "13px", boxSizing: "border-box" }}
-              >
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Type</Label>
+              <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} className={inputCls}>
                 <option value="percent">% Off</option>
                 <option value="fixed">£ Off</option>
               </select>
             </div>
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>
-                {bulk.type === "percent" ? "Percent (%)" : "Amount (£)"}
-              </label>
-              <input
-                type="number"
-                value={bulk.value}
-                onChange={(e) => setBulk((b) => ({ ...b, value: e.target.value }))}
-                placeholder={bulk.type === "percent" ? "20" : "5.00"}
-                min="0"
-                max={bulk.type === "percent" ? "100" : undefined}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #fed7aa", background: "#fff", fontSize: "13px", boxSizing: "border-box" }}
-              />
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{form.type === "percent" ? "Percent (%)" : "Amount (£)"}</Label>
+              <Input type="number" value={form.value} onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+                placeholder={form.type === "percent" ? "20" : "5.00"} min="0" max={form.type === "percent" ? "100" : undefined} />
             </div>
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Max Uses/Code</label>
-              <input
-                type="number"
-                value={bulk.maxUses}
-                onChange={(e) => setBulk((b) => ({ ...b, maxUses: e.target.value }))}
-                placeholder="1 (recommended)"
-                min="1"
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #fed7aa", background: "#fff", fontSize: "13px", boxSizing: "border-box" }}
-              />
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Max uses</Label>
+              <Input type="number" value={form.maxUses} onChange={(e) => setForm((f) => ({ ...f, maxUses: e.target.value }))}
+                placeholder="Unlimited" min="1" />
             </div>
           </div>
 
-          <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Expiry Date (optional)</label>
-            <input
-              type="date"
-              value={bulk.expiresAt}
-              onChange={(e) => setBulk((b) => ({ ...b, expiresAt: e.target.value }))}
-              style={{ padding: "9px 12px", borderRadius: "8px", border: "1px solid #fed7aa", background: "#fff", fontSize: "13px" }}
-            />
+          <div className="flex items-end gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Expiry (optional)</Label>
+              <Input type="date" value={form.expiresAt} onChange={(e) => setForm((f) => ({ ...f, expiresAt: e.target.value }))} className="w-44" />
+            </div>
           </div>
 
-          {bulkError && <p style={{ color: "#dc2626", fontSize: "13px", marginBottom: "12px" }}>{bulkError}</p>}
+          {error && <p className="text-sm text-red-500">{error}</p>}
+          <Button onClick={create} disabled={creating} className="bg-orange-500 hover:bg-orange-600 text-white h-9 text-xs font-semibold">
+            {creating ? "Creating…" : "Create Code"}
+          </Button>
+        </div>
 
-          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <button
-              onClick={bulkGenerate}
-              disabled={bulkGenerating}
-              style={{ padding: "10px 24px", borderRadius: "10px", background: "linear-gradient(135deg,#f97316,#ea580c)", color: "#fff", fontWeight: 700, fontSize: "14px", border: "none", cursor: "pointer", opacity: bulkGenerating ? 0.7 : 1 }}
-            >
-              {bulkGenerating ? "Generating…" : `Generate ${bulk.count || 10} codes`}
-            </button>
+        {/* Bulk generator */}
+        {showBulk && (
+          <div className="bg-orange-500/5 border border-orange-500/20 rounded-2xl p-5 space-y-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Zap className="w-4 h-4 text-orange-400" />
+                <h2 className="text-sm font-bold text-orange-400">Bulk code generator</h2>
+              </div>
+              <p className="text-xs text-muted-foreground">Generate up to 100 unique codes at once. Download as CSV to share with your audience.</p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {[
+                { label: "Prefix", field: "prefix", type: "text", placeholder: "LAUNCH", max: 16 },
+                { label: "Count (1–100)", field: "count", type: "number", placeholder: "10" },
+                { label: "Type", field: "type", type: "select" },
+                { label: bulk.type === "percent" ? "Percent (%)" : "Amount (£)", field: "value", type: "number", placeholder: bulk.type === "percent" ? "20" : "5.00" },
+                { label: "Max uses/code", field: "maxUses", type: "number", placeholder: "1" },
+              ].map(({ label, field, type, placeholder, max }) => (
+                <div key={field} className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">{label}</Label>
+                  {type === "select" ? (
+                    <select value={bulk.type} onChange={(e) => setBulk((b) => ({ ...b, type: e.target.value }))} className={inputCls}>
+                      <option value="percent">% Off</option>
+                      <option value="fixed">£ Off</option>
+                    </select>
+                  ) : (
+                    <Input
+                      type={type}
+                      value={bulk[field as keyof typeof bulk]}
+                      onChange={(e) => {
+                        let v = e.target.value;
+                        if (field === "prefix") v = v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                        setBulk((b) => ({ ...b, [field]: v }));
+                      }}
+                      placeholder={placeholder}
+                      maxLength={max}
+                      min={type === "number" ? "0" : undefined}
+                      className={field === "prefix" ? "font-mono tracking-wider" : ""}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Expiry date (optional)</Label>
+              <Input type="date" value={bulk.expiresAt} onChange={(e) => setBulk((b) => ({ ...b, expiresAt: e.target.value }))} className="w-44" />
+            </div>
+
+            {bulkError && <p className="text-sm text-red-500">{bulkError}</p>}
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button onClick={bulkGenerate} disabled={bulkGenerating} className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5 h-9 text-xs font-semibold">
+                <Zap className="w-3.5 h-3.5" />{bulkGenerating ? "Generating…" : `Generate ${bulk.count || 10} codes`}
+              </Button>
+              {lastBatch.length > 0 && (
+                <Button variant="outline" onClick={() => downloadCsv(lastBatch)} className="gap-1.5 h-9 text-xs border-orange-500/30 text-orange-400 hover:bg-orange-500/10">
+                  <Download className="w-3.5 h-3.5" />Download CSV ({lastBatch.length} codes)
+                </Button>
+              )}
+            </div>
+
             {lastBatch.length > 0 && (
-              <button
-                onClick={() => downloadCsv(lastBatch)}
-                style={{ padding: "10px 20px", borderRadius: "10px", border: "1px solid #f97316", background: "#fff", color: "#f97316", fontWeight: 700, fontSize: "14px", cursor: "pointer" }}
-              >
-                ⬇ Download CSV ({lastBatch.length} codes)
-              </button>
+              <div className="bg-card border border-border rounded-xl p-4 max-h-36 overflow-y-auto">
+                <p className="text-xs font-semibold text-muted-foreground mb-2">Generated codes preview</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {lastBatch.map((c) => (
+                    <span key={c.id} className="font-mono text-xs font-bold bg-muted px-2 py-0.5 rounded-md text-foreground">{c.code}</span>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
+        )}
 
-          {lastBatch.length > 0 && (
-            <div style={{ marginTop: "16px", background: "#fff", borderRadius: "10px", border: "1px solid #fed7aa", padding: "12px 16px", maxHeight: "160px", overflowY: "auto" }}>
-              <p style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: 600, color: "#374151" }}>Generated codes preview:</p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                {lastBatch.map((c) => (
-                  <span key={c.id} style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 700, background: "#f3f4f6", padding: "3px 8px", borderRadius: "6px", color: "#111827" }}>
-                    {c.code}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Codes table */}
-      {codes.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "48px", color: "#9ca3af", fontSize: "14px" }}>
-          No codes yet. Create your first discount code above.
-        </div>
-      ) : (
-        <div style={{ background: "#fff", borderRadius: "16px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #f3f4f6" }}>
-            <span style={{ fontSize: "14px", fontWeight: 600, color: "#374151" }}>{codes.filter((c) => c.active).length} active codes</span>
-            <button
-              onClick={() => downloadCsv(codes.filter((c) => c.active))}
-              style={{ padding: "6px 14px", borderRadius: "8px", border: "1px solid #e5e7eb", background: "#fff", color: "#374151", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}
-            >
-              ⬇ Export all active
-            </button>
+        {/* Codes table */}
+        {codes.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border p-14 text-center">
+            <Tag className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground font-medium">No codes yet</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">Create your first discount code above.</p>
           </div>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
-                {["Code", "Discount", "Used", "Status", "Expires", ""].map((h) => (
-                  <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
+        ) : (
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+              <span className="text-sm font-semibold text-foreground">{codes.filter((c) => c.active).length} active codes</span>
+              <Button variant="outline" size="sm" onClick={() => downloadCsv(codes.filter((c) => c.active))}
+                className="gap-1.5 h-7 text-xs border-border text-muted-foreground hover:text-foreground">
+                <Download className="w-3 h-3" />Export active
+              </Button>
+            </div>
+
+            {/* Header row */}
+            <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto] gap-3 px-5 py-2.5 border-b border-border text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <span>Code</span><span>Discount</span><span>Used</span><span>Status</span><span>Expires</span><span></span>
+            </div>
+
+            {/* Rows */}
+            <div className="divide-y divide-border">
               {codes.map((c) => (
-                <tr key={c.id} style={{ borderBottom: "1px solid #f9fafb" }}>
-                  <td style={{ padding: "14px 16px" }}>
-                    <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: "14px", color: "#111827", background: "#f3f4f6", padding: "3px 8px", borderRadius: "6px" }}>
-                      {c.code}
-                    </span>
-                  </td>
-                  <td style={{ padding: "14px 16px", fontSize: "14px", fontWeight: 600, color: "#f97316" }}>{labelFor(c)}</td>
-                  <td style={{ padding: "14px 16px", fontSize: "14px", color: "#374151" }}>
-                    {c.usedCount}{c.maxUses ? ` / ${c.maxUses}` : ""}
-                  </td>
-                  <td style={{ padding: "14px 16px" }}>
-                    <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700,
-                      background: c.active ? "#f0fdf4" : "#f9fafb",
-                      color: c.active ? "#16a34a" : "#9ca3af",
-                      border: `1px solid ${c.active ? "#86efac" : "#e5e7eb"}` }}>
-                      {c.active ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td style={{ padding: "14px 16px", fontSize: "13px", color: "#6b7280" }}>
+                <div key={c.id} className="grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto] gap-3 px-5 py-3.5 items-center hover:bg-muted/30 transition-colors">
+                  <span className="font-mono text-sm font-bold bg-muted px-2.5 py-1 rounded-lg text-foreground inline-block">{c.code}</span>
+                  <span className="text-sm font-semibold text-orange-400">{labelFor(c)}</span>
+                  <span className="text-sm text-foreground">{c.usedCount}{c.maxUses ? ` / ${c.maxUses}` : ""}</span>
+                  <span className={cn("text-[10px] px-2.5 py-0.5 rounded-full font-bold border w-fit",
+                    c.active ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-muted text-muted-foreground border-border")}>
+                    {c.active ? "Active" : "Inactive"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
                     {c.expiresAt ? new Date(c.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Never"}
-                  </td>
-                  <td style={{ padding: "14px 16px" }}>
+                  </span>
+                  <div>
                     {c.active && (
-                      <button
-                        onClick={() => deactivate(c.id)}
-                        style={{ padding: "6px 12px", borderRadius: "8px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#dc2626", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                      >
+                      <button onClick={() => deactivate(c.id)}
+                        className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-border text-muted-foreground hover:border-red-500/30 hover:text-red-500 hover:bg-red-500/5 transition-colors">
                         Deactivate
                       </button>
                     )}
-                  </td>
-                </tr>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

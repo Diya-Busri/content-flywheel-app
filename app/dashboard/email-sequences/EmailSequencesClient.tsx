@@ -1,5 +1,10 @@
 "use client";
 import { useState } from "react";
+import { Mail, Plus, X, Play, Pause, Trash2, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type Step = {
   id: string;
@@ -97,171 +102,204 @@ export default function EmailSequencesClient({ initialSequences }: { initialSequ
   }
 
   return (
-    <div style={{ padding: "32px 24px", maxWidth: "1100px" }}>
-      <h1 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: 800, color: "#111827" }}>📨 Email Sequences</h1>
-      <p style={{ margin: "0 0 28px", fontSize: "14px", color: "#6b7280" }}>Build automated drip campaigns. Create a sequence, add steps with delays, enrol subscribers.</p>
+    <div className="min-h-screen bg-background p-6 md:p-8">
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="mb-7">
+          <div className="flex items-center gap-2.5 mb-1">
+            <Mail className="w-5 h-5 text-orange-400" />
+            <h1 className="text-2xl font-bold text-foreground">Email Sequences</h1>
+          </div>
+          <p className="text-sm text-muted-foreground">Build automated drip campaigns. Create a sequence, add steps with delays, enrol subscribers.</p>
+        </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: "24px", alignItems: "start" }}>
-        {/* Left panel — sequence list */}
-        <div>
-          {/* New sequence */}
-          <div style={{ background: "#fff", borderRadius: "14px", padding: "16px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", marginBottom: "16px" }}>
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && createSequence()}
-              placeholder="New sequence name…"
-              style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box", marginBottom: "10px" }}
-            />
-            <button onClick={createSequence} disabled={creating || !newName.trim()}
-              style={{ width: "100%", padding: "9px", borderRadius: "8px", background: "linear-gradient(135deg,#f97316,#ea580c)", color: "#fff", fontWeight: 700, fontSize: "13px", border: "none", cursor: "pointer" }}>
-              {creating ? "Creating…" : "+ New Sequence"}
-            </button>
+        <div className="grid grid-cols-[260px_1fr] gap-6 items-start">
+          {/* Left panel — sequence list */}
+          <div className="space-y-3">
+            {/* Create new */}
+            <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && createSequence()}
+                placeholder="New sequence name…"
+                className="text-sm"
+              />
+              <Button
+                onClick={createSequence}
+                disabled={creating || !newName.trim()}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-1.5 h-9 text-xs font-semibold"
+              >
+                <Plus className="w-3.5 h-3.5" />{creating ? "Creating…" : "New Sequence"}
+              </Button>
+            </div>
+
+            {sequences.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">No sequences yet</p>
+            ) : (
+              <div className="space-y-2">
+                {sequences.map((seq) => (
+                  <button
+                    key={seq.id}
+                    onClick={() => setSelected(seq)}
+                    className={cn("w-full text-left px-4 py-3 rounded-xl border transition-all",
+                      selected?.id === seq.id
+                        ? "border-orange-500/50 bg-orange-500/8"
+                        : "border-border bg-card hover:border-orange-500/30"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-foreground truncate">{seq.name}</p>
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-muted-foreground">{seq.steps.length} step{seq.steps.length !== 1 ? "s" : ""}</span>
+                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold border",
+                        seq.active ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-muted text-muted-foreground border-border")}>
+                        {seq.active ? "Active" : "Paused"}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {sequences.length === 0 ? (
-            <p style={{ fontSize: "13px", color: "#9ca3af", textAlign: "center", padding: "16px" }}>No sequences yet</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {sequences.map((seq) => (
-                <button
-                  key={seq.id}
-                  onClick={() => setSelected(seq)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 14px",
-                    borderRadius: "10px",
-                    border: `2px solid ${selected?.id === seq.id ? "#f97316" : "transparent"}`,
-                    background: selected?.id === seq.id ? "#fff7ed" : "#fff",
-                    boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
-                    textAlign: "left",
-                    cursor: "pointer",
-                  }}
-                >
-                  <div style={{ fontWeight: 600, fontSize: "13px", color: "#111827", marginBottom: "4px" }}>{seq.name}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontSize: "11px", color: "#9ca3af" }}>{seq.steps.length} step{seq.steps.length !== 1 ? "s" : ""}</span>
-                    <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: "999px", fontSize: "10px", fontWeight: 700,
-                      background: seq.active ? "#f0fdf4" : "#f9fafb",
-                      color: seq.active ? "#16a34a" : "#9ca3af",
-                      border: `1px solid ${seq.active ? "#86efac" : "#e5e7eb"}` }}>
-                      {seq.active ? "Active" : "Paused"}
-                    </span>
+          {/* Right panel — steps */}
+          {selected ? (
+            <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
+              {/* Sequence header */}
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h2 className="text-base font-bold text-foreground">{selected.name}</h2>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => toggleActive(selected)}
+                    className={cn("flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors",
+                      selected.active
+                        ? "border-border text-muted-foreground hover:text-foreground"
+                        : "border-green-500/30 bg-green-500/10 text-green-500 hover:bg-green-500/20"
+                    )}
+                  >
+                    {selected.active ? <><Pause className="w-3 h-3" />Pause</> : <><Play className="w-3 h-3" />Activate</>}
+                  </button>
+                  <button
+                    onClick={() => deleteSequence(selected)}
+                    className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:border-red-500/30 hover:text-red-500 hover:bg-red-500/5 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Timeline */}
+              {selected.steps.length === 0 && !showStepForm && (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  No steps yet. Add your first email below.
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {selected.steps.map((step, i) => (
+                  <div key={step.id} className="flex gap-4">
+                    {/* Timeline connector */}
+                    <div className="flex flex-col items-center shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-orange-500/10 border-2 border-orange-500/30 flex items-center justify-center text-xs font-bold text-orange-400">
+                        {i + 1}
+                      </div>
+                      {i < selected.steps.length - 1 && (
+                        <div className="w-0.5 flex-1 bg-border my-1" />
+                      )}
+                    </div>
+                    {/* Step card */}
+                    <div className="flex-1 bg-background border border-border rounded-xl p-4 mb-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted text-muted-foreground mb-2">
+                            {step.delayDays === 0 ? "Immediately" : `Day ${step.delayDays}`}
+                          </span>
+                          <p className="text-sm font-semibold text-foreground mb-1">{step.subject}</p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            {step.body.slice(0, 120)}{step.body.length > 120 ? "…" : ""}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => deleteStep(step.id)}
+                          className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/5 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
+                ))}
+              </div>
+
+              {/* Add step form */}
+              {showStepForm ? (
+                <div className="border border-dashed border-border rounded-xl p-5 space-y-4 bg-muted/30">
+                  <h3 className="text-sm font-bold text-foreground">Add Email Step</h3>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Send after (days from subscribe)</Label>
+                    <Input
+                      type="number"
+                      value={stepForm.delayDays}
+                      onChange={(e) => setStepForm((f) => ({ ...f, delayDays: e.target.value }))}
+                      min="0" placeholder="0 = immediately"
+                      className="w-40 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Subject line</Label>
+                    <Input
+                      value={stepForm.subject}
+                      onChange={(e) => setStepForm((f) => ({ ...f, subject: e.target.value }))}
+                      placeholder="Welcome to the community!"
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Email body</Label>
+                    <textarea
+                      value={stepForm.body}
+                      onChange={(e) => setStepForm((f) => ({ ...f, body: e.target.value }))}
+                      rows={5}
+                      placeholder="Hi {{first_name}}, thanks for joining…"
+                      className="w-full rounded-lg border border-input bg-background text-sm px-3 py-2 placeholder:text-muted-foreground resize-vertical focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={addStep}
+                      disabled={addingStep || !stepForm.subject || !stepForm.body}
+                      className="bg-orange-500 hover:bg-orange-600 text-white h-9 text-xs font-semibold"
+                    >
+                      {addingStep ? "Adding…" : "Add Step"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => { setShowStepForm(false); setStepForm({ delayDays: "0", subject: "", body: "" }); }}
+                      className="h-9 text-xs"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowStepForm(true)}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-border text-sm font-semibold text-muted-foreground hover:border-orange-500/40 hover:text-orange-400 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />Add Email Step
                 </button>
-              ))}
+              )}
+            </div>
+          ) : (
+            <div className="bg-card border border-border rounded-2xl p-14 text-center">
+              <Mail className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">Select or create a sequence to get started</p>
             </div>
           )}
         </div>
-
-        {/* Right panel — steps */}
-        {selected ? (
-          <div style={{ background: "#fff", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
-              <h2 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: "#111827" }}>{selected.name}</h2>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={() => toggleActive(selected)}
-                  style={{ padding: "7px 14px", borderRadius: "8px", border: `1px solid ${selected.active ? "#e5e7eb" : "#86efac"}`, background: selected.active ? "#f9fafb" : "#f0fdf4", color: selected.active ? "#6b7280" : "#16a34a", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-                  {selected.active ? "⏸ Pause" : "▶ Activate"}
-                </button>
-                <button onClick={() => deleteSequence(selected)}
-                  style={{ padding: "7px 14px", borderRadius: "8px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#dc2626", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-                  Delete
-                </button>
-              </div>
-            </div>
-
-            {/* Timeline */}
-            {selected.steps.length === 0 && !showStepForm && (
-              <div style={{ textAlign: "center", padding: "32px", color: "#9ca3af", fontSize: "14px" }}>
-                No steps yet. Add your first email below.
-              </div>
-            )}
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
-              {selected.steps.map((step, i) => (
-                <div key={step.id} style={{ display: "flex", gap: "14px" }}>
-                  {/* Timeline dot */}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-                    <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#fff7ed", border: "2px solid #fed7aa", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700, color: "#f97316" }}>
-                      {i + 1}
-                    </div>
-                    {i < selected.steps.length - 1 && (
-                      <div style={{ width: "2px", flex: 1, background: "#f3f4f6", margin: "4px 0" }} />
-                    )}
-                  </div>
-                  <div style={{ flex: 1, background: "#fafafa", borderRadius: "12px", padding: "14px 16px", border: "1px solid #f3f4f6", marginBottom: i < selected.steps.length - 1 ? "0" : "0" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
-                      <div style={{ flex: 1 }}>
-                        <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "6px", background: "#f3f4f6", fontSize: "11px", fontWeight: 600, color: "#6b7280", marginBottom: "6px" }}>
-                          {step.delayDays === 0 ? "Immediately" : `Day ${step.delayDays}`}
-                        </span>
-                        <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: "14px", color: "#111827" }}>{step.subject}</p>
-                        <p style={{ margin: 0, fontSize: "13px", color: "#6b7280", lineHeight: 1.5 }}>
-                          {step.body.slice(0, 120)}{step.body.length > 120 ? "…" : ""}
-                        </p>
-                      </div>
-                      <button onClick={() => deleteStep(step.id)}
-                        style={{ padding: "5px 10px", borderRadius: "6px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#dc2626", fontSize: "12px", cursor: "pointer", flexShrink: 0 }}>
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Add step form */}
-            {showStepForm ? (
-              <div style={{ background: "#f9fafb", borderRadius: "14px", padding: "20px", border: "1px dashed #d1d5db" }}>
-                <h3 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: 700, color: "#111827" }}>Add Email Step</h3>
-                <div style={{ marginBottom: "12px" }}>
-                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>
-                    Send after (days from subscribe)
-                  </label>
-                  <input type="number" value={stepForm.delayDays} onChange={(e) => setStepForm((f) => ({ ...f, delayDays: e.target.value }))}
-                    min="0" placeholder="0 = immediately"
-                    style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", width: "160px" }}
-                  />
-                </div>
-                <div style={{ marginBottom: "12px" }}>
-                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Subject line</label>
-                  <input value={stepForm.subject} onChange={(e) => setStepForm((f) => ({ ...f, subject: e.target.value }))}
-                    placeholder="Welcome to the community!"
-                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", boxSizing: "border-box" }}
-                  />
-                </div>
-                <div style={{ marginBottom: "16px" }}>
-                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Email body</label>
-                  <textarea value={stepForm.body} onChange={(e) => setStepForm((f) => ({ ...f, body: e.target.value }))}
-                    rows={5} placeholder="Hi {{first_name}}, thanks for joining…"
-                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", resize: "vertical", boxSizing: "border-box" }}
-                  />
-                </div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button onClick={addStep} disabled={addingStep || !stepForm.subject || !stepForm.body}
-                    style={{ padding: "9px 20px", borderRadius: "8px", background: "linear-gradient(135deg,#f97316,#ea580c)", color: "#fff", fontWeight: 700, fontSize: "13px", border: "none", cursor: "pointer" }}>
-                    {addingStep ? "Adding…" : "Add Step"}
-                  </button>
-                  <button onClick={() => { setShowStepForm(false); setStepForm({ delayDays: "0", subject: "", body: "" }); }}
-                    style={{ padding: "9px 16px", borderRadius: "8px", border: "1px solid #e5e7eb", background: "#fff", color: "#6b7280", fontSize: "13px", cursor: "pointer", fontWeight: 600 }}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button onClick={() => setShowStepForm(true)}
-                style={{ width: "100%", padding: "12px", borderRadius: "10px", border: "2px dashed #e5e7eb", background: "transparent", color: "#6b7280", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>
-                + Add Email Step
-              </button>
-            )}
-          </div>
-        ) : (
-          <div style={{ background: "#fff", borderRadius: "16px", padding: "48px 24px", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", textAlign: "center", color: "#9ca3af" }}>
-            <div style={{ fontSize: "40px", marginBottom: "12px" }}>📨</div>
-            <p style={{ margin: 0, fontSize: "14px" }}>Select or create a sequence to get started</p>
-          </div>
-        )}
       </div>
     </div>
   );
