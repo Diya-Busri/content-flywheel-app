@@ -73,8 +73,8 @@ export async function POST(
       });
       stripeProductId = stripeProduct.id;
     } else {
-      // Update product name in case title changed
-      await stripe.products.update(stripeProductId, { name: product.title }).catch(() => {});
+      // Update product name and reactivate in case it was archived by a previous unpublish
+      await stripe.products.update(stripeProductId, { name: product.title, active: true }).catch(() => {});
     }
 
     // Always create a new price (Stripe prices are immutable)
