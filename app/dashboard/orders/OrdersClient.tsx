@@ -14,6 +14,9 @@ import {
   TrendingUp,
   Package,
   Calendar,
+  Download,
+  Copy,
+  Check,
 } from "lucide-react";
 
 type Order = {
@@ -43,6 +46,38 @@ function formatPrice(cents: number) {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function exportOrdersCSV(orders: Order[]) {
+  const rows = [
+    ["Date","Buyer Name","Buyer Email","Product","Amount (£)","Status"],
+    ...orders.map(o => [
+      formatDate(o.createdAt),
+      o.buyerName ?? "",
+      o.buyerEmail,
+      o.productTitle ?? "",
+      (o.amountCents / 100).toFixed(2),
+      o.status,
+    ]),
+  ];
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = `orders-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function CopyEmailButton({ email }: { email: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(email).catch(()=>{}); setCopied(true); setTimeout(()=>setCopied(false),2000); }}
+      className="p-1 rounded text-gray-600 hover:text-gray-300 transition-colors"
+      title="Copy email"
+    >
+      {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+    </button>
+  );
 }
 
 export function OrdersClient() {
@@ -131,12 +166,25 @@ export function OrdersClient() {
   return (
     <div className="min-h-screen bg-background p-6 md:p-8 max-w-5xl mx-auto space-y-8">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2.5 mb-1">
-          <ShoppingBag className="w-5 h-5 text-orange-400" />
-          <h1 className="text-2xl font-bold text-white tracking-tight">Orders</h1>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2.5 mb-1">
+            <ShoppingBag className="w-5 h-5 text-orange-400" />
+            <h1 className="text-2xl font-bold text-white tracking-tight">Orders</h1>
+            {!loading && orders.length > 0 && (
+              <span className="text-xs font-semibold bg-white/10 text-gray-300 px-2 py-0.5 rounded-full">{orders.length}</span>
+            )}
+          </div>
+          <p className="text-sm text-gray-400">All sales from your digital products store.</p>
         </div>
-        <p className="text-sm text-gray-400">All sales from your digital products store.</p>
+        {!loading && orders.length > 0 && (
+          <button
+            onClick={() => exportOrdersCSV(filtered)}
+            className="flex items-center gap-1.5 h-9 px-3 text-xs font-semibold text-gray-400 hover:text-white border border-white/10 rounded-xl transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />Export CSV
+          </button>
+        )}
       </div>
 
       {/* Revenue stats */}
@@ -259,7 +307,10 @@ export function OrdersClient() {
                 {/* Buyer */}
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-white truncate">{order.buyerName || "—"}</p>
-                  <p className="text-xs text-gray-500 truncate">{order.buyerEmail}</p>
+                  <div className="flex items-center gap-1">
+                    <p className="text-xs text-gray-500 truncate">{order.buyerEmail}</p>
+                    <CopyEmailButton email={order.buyerEmail} />
+                  </div>
                   <p className="text-xs text-gray-600 mt-0.5 flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
                     {formatDate(order.createdAt)}
