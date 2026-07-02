@@ -5,7 +5,9 @@ import { profilesTable } from "@/db/schema/profiles-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
-import { isNull, inArray, desc, gte, eq, sql } from "drizzle-orm";
+import { productReviewsTable } from "@/db/schema/product-reviews-schema";
+import { featuredProductsTable } from "@/db/schema/featured-products-schema";
+import { isNull, inArray, desc, gte, eq, sql, and, gt } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +22,8 @@ export async function GET(request: NextRequest) {
   const formatFilter  = searchParams.get("format")?.trim().toLowerCase() ?? "";
   const sort          = searchParams.get("sort") ?? "newest";
   const page          = Math.max(1, parseInt(searchParams.get("page") ?? "1") || 1);
-  const PAGE_SIZE     = 24;
+  const newThisWeek   = searchParams.get("newThisWeek") === "1";
+  const PAGE_SIZE     = newThisWeek ? 12 : 24;
 
   type MA = {
     isNativePublished?: boolean;
@@ -45,8 +48,8 @@ export async function GET(request: NextRequest) {
     return ma.isNativePublished === true && !ma.comingSoon;
   });
 
-  // ── Fetch sales counts (all-time + last 7 days) ───────────────────────────
-  const [allTimeSales, trendingSales] = await Promise.all([
+  // ── Fetch sales counts (all-time + last 7 days) + ratings ─────────────────
+  const [allTimeSales, trendingSales, ratingsRows] = await Promise.all([
     db.select({ productId: productOrdersTable.productId, count: sql<number>`count(*)::int` })
       .from(productOrdersTable)
       .where(eq(productOrdersTable.status, "completed"))
@@ -56,16 +59,29 @@ export async function GET(request: NextRequest) {
       .from(productOrdersTable)
       .where(gte(productOrdersTable.createdAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)))
       .groupBy(productOrdersTable.productId),
+
+    db.select({
+      productId: productReviewsTable.productId,
+      avgRating: sql<number>`round(avg(${productReviewsTable.rating})::numeric, 1)::float`,
+      reviewCount: sql<number>`count(*)::int`,
+    })
+      .from(productReviewsTable)
+      .where(eq(productReviewsTable.approved, true))
+      .groupBy(productReviewsTable.productId),
   ]);
 
   const salesMap:    Record<string, number> = {};
   const trendingMap: Record<string, number> = {};
+  const ratingsMap:  Record<string, { avgRating: number; reviewCount: number }> = {};
   for (const r of allTimeSales)  salesMap[r.productId]    = r.count;
   for (const r of trendingSales) trendingMap[r.productId] = r.count;
+  for (const r of ratingsRows)   ratingsMap[r.productId]  = { avgRating: r.avgRating, reviewCount: r.reviewCount };
 
-  // ── Text / niche / format / free filter ──────────────────────────────────
+  // ── Text / niche / format / free / newThisWeek filter ───────────────────
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   let filtered = published.filter((r) => {
     const ma = (r.marketingAssets ?? {}) as MA;
+    if (newThisWeek && new Date(r.createdAt) < sevenDaysAgo) return false;
     if (sort === "free" && (ma.nativePrice ?? 0) !== 0) return false;
     if (q) {
       const searchable = [r.title, r.niche, r.format, ma.productDescription ?? ""].join(" ").toLowerCase();
@@ -99,6 +115,27 @@ export async function GET(request: NextRequest) {
   // ── Filter lists for dropdowns ────────────────────────────────────────────
   const allNiches  = Array.from(new Set(published.map((r) => r.niche))).sort();
   const allFormats = Array.from(new Set(published.map((r) => r.format))).sort();
+
+  // ── Featured products (pin to top on page 1) ──────────────────────────────
+  const now = new Date();
+  const featuredRows = await db
+    .select({ productId: featuredProductsTable.productId })
+    .from(featuredProductsTable)
+    .where(
+      and(
+        eq(featuredProductsTable.active, true),
+        gt(featuredProductsTable.featuredUntil, now)
+      )
+    );
+  const featuredIds = new Set(featuredRows.map((r) => r.productId));
+
+  // On page 1, sort featured items to the front
+  if (page === 1 && featuredIds.size > 0) {
+    filtered = [
+      ...filtered.filter((r) => featuredIds.has(r.id)),
+      ...filtered.filter((r) => !featuredIds.has(r.id)),
+    ];
+  }
 
   // ── Paginate ──────────────────────────────────────────────────────────────
   const total     = filtered.length;
@@ -135,6 +172,9 @@ export async function GET(request: NextRequest) {
       creatorUserId: r.userId,
       salesCount:    showSalesCountMap[r.userId] ? (salesMap[r.id] ?? 0) : null,
       trendingCount: trendingMap[r.id] ?? 0,
+      avgRating:     ratingsMap[r.id]?.avgRating ?? null,
+      reviewCount:   ratingsMap[r.id]?.reviewCount ?? 0,
+      featured:      featuredIds.has(r.id),
     };
   });
 
