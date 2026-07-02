@@ -106,10 +106,6 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       items: [
         { href: "/dashboard/store", icon: <Store size={18} />, label: "My Store", emoji: "🛒", activeWhenStartsWith: true },
         { href: "/dashboard/orders", icon: <Receipt size={18} />, label: "Orders", emoji: "📋", activeWhenStartsWith: true },
-        { href: "/dashboard/analytics", icon: <BarChart2 size={18} />, label: "Analytics", emoji: "📊", activeWhenStartsWith: true },
-        { href: "/dashboard/affiliates", icon: <Link2 size={18} />, label: "Affiliates", emoji: "🔗", activeWhenStartsWith: true },
-        { href: "/dashboard/discount-codes", icon: <Tag size={18} />, label: "Discount Codes", emoji: "🏷️", activeWhenStartsWith: true },
-        { href: "/dashboard/reviews", icon: <Star size={18} />, label: "Reviews", emoji: "⭐", activeWhenStartsWith: true },
         { href: "/dashboard/marketplace", icon: <ShoppingBag size={18} />, label: "Marketplace", emoji: "🛍️", activeWhenStartsWith: true },
         { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", emoji: "👕", activeWhenStartsWith: true, featureKey: "print_on_demand" },
         { href: "/dashboard/drop-campaign", icon: <Gift size={18} />, label: "Drop Campaign", emoji: "🎁", activeWhenStartsWith: true, featureKey: "drop_campaign" },
