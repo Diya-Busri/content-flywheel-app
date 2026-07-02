@@ -54,13 +54,6 @@ export const USE_CASES: UseCase[] = [
     emoji: "🎯",
     featureKeys: ["goal_tracker", "invite_creators"],
   },
-  {
-    id: "physical_products",
-    label: "Physical Products",
-    description: "Print on demand clothing & merch with Printify",
-    emoji: "👕",
-    featureKeys: ["print_on_demand"],
-  },
 ];
 
 /** All feature keys that can be hidden by use-case preferences */
