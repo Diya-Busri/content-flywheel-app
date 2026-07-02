@@ -12,6 +12,7 @@ interface TopProduct   { productId: string; title: string; orders: number; reven
 interface RecentOrder  { id: string; buyerEmail: string; buyerName: string | null; amountCents: number; currency: string; createdAt: string; productTitle: string; }
 
 interface FunnelProduct { productId: string; title: string; views: number; orders: number; revenueCents: number; }
+interface TrafficSource { name: string; views: number; pct: number; }
 
 interface AnalyticsData {
   totalRevenueCents: number;
@@ -135,12 +136,42 @@ const PERIODS: { id: Period; label: string }[] = [
   { id: "all", label: "All time" },
 ];
 
+// Source icon map
+const SOURCE_ICONS: Record<string, string> = {
+  "TikTok": "🎵",
+  "YouTube": "▶️",
+  "Instagram": "📸",
+  "Twitter / X": "𝕏",
+  "Facebook": "📘",
+  "LinkedIn": "💼",
+  "Pinterest": "📌",
+  "Threads": "🧵",
+  "Snapchat": "👻",
+  "Reddit": "🤖",
+  "Link in Bio": "🔗",
+  "Google": "🔍",
+  "Bing": "🔍",
+  "Direct / Unknown": "🌐",
+};
+
 export default function AnalyticsClient() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>("30");
+  const [traffic, setTraffic] = useState<TrafficSource[]>([]);
+  const [trafficLoading, setTrafficLoading] = useState(false);
+
+  const loadTraffic = useCallback(async (p: Period) => {
+    setTrafficLoading(true);
+    try {
+      const r = await fetch(`/api/analytics/traffic?period=${p}`);
+      const d = await r.json();
+      if (!d.error) setTraffic(d.sources ?? []);
+    } catch { /* non-fatal */ }
+    finally { setTrafficLoading(false); }
+  }, []);
 
   const load = useCallback(async (p: Period, isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -155,7 +186,8 @@ export default function AnalyticsClient() {
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, []);
+    loadTraffic(p);
+  }, [loadTraffic]);
 
   useEffect(() => { load(period); }, [period, load]);
 
@@ -310,7 +342,7 @@ export default function AnalyticsClient() {
           </div>
         )}
 
-        {/* Top products + Recent orders — side by side on wide screens */}
+        {/* Top products + Recent orders + Traffic — grid */}
         <div className="grid lg:grid-cols-2 gap-6">
 
           {/* Top products */}
@@ -370,6 +402,39 @@ export default function AnalyticsClient() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Traffic sources */}
+        <div className="bg-card border border-border rounded-xl p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-base font-semibold text-foreground">Traffic Sources</h2>
+            {trafficLoading && <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />}
+          </div>
+          {!trafficLoading && traffic.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-muted-foreground text-sm">No page view data yet in this period.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {traffic.map((s) => (
+                <div key={s.name} className="space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base leading-none shrink-0">{SOURCE_ICONS[s.name] ?? "🌐"}</span>
+                      <p className="text-sm text-foreground font-medium truncate">{s.name}</p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-xs text-muted-foreground">{s.views.toLocaleString()} views</span>
+                      <span className="text-sm font-bold text-orange-400">{s.pct}%</span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all duration-500" style={{ width: `${s.pct}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
       </div>
