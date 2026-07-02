@@ -28,6 +28,8 @@ const nextConfig = {
       { protocol: "https", hostname: "images.printify.com" },
       // Unsplash (used elsewhere in the app)
       { protocol: "https", hostname: "images.unsplash.com" },
+      // Supabase Storage — product thumbnails, cover images, etc.
+      { protocol: "https", hostname: "*.supabase.co" },
     ],
   },
   async rewrites() {

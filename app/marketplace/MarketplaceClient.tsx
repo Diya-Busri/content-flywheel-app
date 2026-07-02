@@ -162,7 +162,8 @@ export default function MarketplaceClient() {
                     {/* Thumbnail */}
                     <div style={{ aspectRatio: "4/3", background: "linear-gradient(135deg,#f97316 0%,#ea580c 100%)", position: "relative", overflow: "hidden" }}>
                       {item.thumbnailUrl ? (
-                        <Image src={item.thumbnailUrl} alt={item.title} fill style={{ objectFit: "cover" }} sizes="280px" />
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.thumbnailUrl} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                       ) : (
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
                           <span style={{ fontSize: "48px" }}>📦</span>
