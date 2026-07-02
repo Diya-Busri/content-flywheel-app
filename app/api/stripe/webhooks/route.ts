@@ -4,10 +4,12 @@ import { headers } from "next/headers";
 import Stripe from "stripe";
 import { updateProfile, updateProfileByStripeCustomerId, getProfileByUserId } from "@/db/queries/profiles-queries";
 import { VIDEO_CREDITS_METADATA_KEY, SUBSCRIPTION_VIDEO_CREDITS } from "@/lib/video-credits";
+import { CUSTOM_DOMAIN_METADATA_KEY } from "@/app/api/custom-domain/checkout/route";
 import { db } from "@/db/db";
 import { videoCreditTransactionsTable } from "@/db/schema/video-credit-transactions-schema";
 import { promoCodesTable, promoCodeUsesTable } from "@/db/schema/promo-codes-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
+import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { eq, sql } from "drizzle-orm";
 
 /**
@@ -151,6 +153,29 @@ async function handleCheckoutSession(event: Stripe.Event) {
       }
     }
     return; // Don't fall through to subscription handling
+  }
+
+  // ── Custom domain activation ────────────────────────────────────────────────
+  if (
+    checkoutSession.mode === "payment" &&
+    checkoutSession.metadata?.[CUSTOM_DOMAIN_METADATA_KEY] === "true"
+  ) {
+    const userId = checkoutSession.client_reference_id ?? checkoutSession.metadata?.userId;
+    if (userId) {
+      try {
+        await db
+          .insert(storeSettingsTable)
+          .values({ userId, customDomainActive: true, updatedAt: new Date() })
+          .onConflictDoUpdate({
+            target: storeSettingsTable.userId,
+            set: { customDomainActive: true, updatedAt: new Date() },
+          });
+        console.log(`[custom-domain] Activated custom domain for user ${userId}`);
+      } catch (err) {
+        console.error("[custom-domain] Failed to activate:", err);
+      }
+    }
+    return;
   }
 
   if (checkoutSession.mode === "subscription") {

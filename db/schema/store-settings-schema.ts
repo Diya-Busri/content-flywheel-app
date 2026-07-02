@@ -30,6 +30,7 @@ export const storeSettingsTable = pgTable("store_settings", {
   showSalesCount: boolean("show_sales_count").default(false), // opt-in: show public sales count on marketplace
   // Custom domain (e.g. "store.mysite.com" — creator adds a CNAME to this platform)
   customDomain: text("custom_domain"),
+  customDomainActive: boolean("custom_domain_active").notNull().default(false), // unlocked via £9.99 one-time purchase
   // Tax / VAT
   vatEnabled: boolean("vat_enabled").default(false),
   vatRate: integer("vat_rate").default(20), // percentage e.g. 20 for 20%

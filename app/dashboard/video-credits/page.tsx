@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Film, Sparkles, CheckCircle2, Zap, ShoppingBag, TrendingDown, History, RefreshCw } from "lucide-react";
+import { Loader2, Film, Sparkles, CheckCircle2, Zap, ShoppingBag, TrendingDown, History, RefreshCw, Globe, Lock } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { VIDEO_CREDIT_PACKS } from "@/lib/video-credits";
 
@@ -33,10 +33,13 @@ function VideoCreditsContent() {
   const [balance, setBalance] = useState<number | null>(null);
   const [history, setHistory] = useState<{ transactions: Transaction[]; totalPurchased: number; totalUsed: number } | null>(null);
   const [loadingPackId, setLoadingPackId] = useState<string | null>(null);
+  const [domainActive, setDomainActive] = useState<boolean | null>(null);
+  const [loadingDomain, setLoadingDomain] = useState(false);
   const { toast } = useToast();
 
   const justPurchased = searchParams.get("success") === "1";
   const creditsAdded = searchParams.get("credits");
+  const domainJustActivated = searchParams.get("domain_activated") === "1";
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(async (showSpinner = false) => {
@@ -51,6 +54,10 @@ function VideoCreditsContent() {
           .then((r) => r.ok ? r.json() : null)
           .then((data) => setHistory(data))
           .catch(() => {}),
+        fetch("/api/store-settings", { cache: "no-store" })
+          .then((r) => r.ok ? r.json() : null)
+          .then((data) => setDomainActive(data?.customDomainActive ?? false))
+          .catch(() => setDomainActive(false)),
       ]);
     } finally {
       if (showSpinner) setRefreshing(false);
@@ -59,12 +66,26 @@ function VideoCreditsContent() {
 
   useEffect(() => {
     if (justPurchased && creditsAdded) {
-      toast({
-        title: `🎉 ${creditsAdded} credits added!`,
-        description: "Your credits are ready to use. Start generating.",
-      });
+      toast({ title: `🎉 ${creditsAdded} credits added!`, description: "Your credits are ready to use. Start generating." });
     }
-  }, [justPurchased, creditsAdded, toast]);
+    if (domainJustActivated) {
+      toast({ title: "🌐 Custom domain activated!", description: "Go to Store Settings to connect your domain." });
+    }
+  }, [justPurchased, creditsAdded, domainJustActivated, toast]);
+
+  const handleBuyDomain = async () => {
+    setLoadingDomain(true);
+    try {
+      const res = await fetch("/api/custom-domain/checkout", { method: "POST" });
+      const data = await res.json() as { url?: string; error?: string };
+      if (data.url) { window.location.href = data.url; }
+      else { toast({ title: "Payment error", description: data.error ?? "Please try again.", variant: "destructive" }); }
+    } catch {
+      toast({ title: "Network error", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setLoadingDomain(false);
+    }
+  };
 
   // Initial fetch
   useEffect(() => { void fetchData(); }, [fetchData]);
@@ -310,6 +331,50 @@ function VideoCreditsContent() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Custom Domain add-on */}
+      <div className="mt-8">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Add-ons</h2>
+        <div className={`relative rounded-xl border p-5 flex items-center gap-4 ${
+          domainActive
+            ? "border-green-300 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20"
+            : "border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]"
+        }`}>
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+            domainActive ? "bg-green-100 dark:bg-green-900/40" : "bg-gray-100 dark:bg-gray-800"
+          }`}>
+            <Globe className={`w-6 h-6 ${domainActive ? "text-green-600 dark:text-green-400" : "text-gray-500"}`} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <p className="text-sm font-bold text-gray-900 dark:text-white">Custom Domain</p>
+              {domainActive
+                ? <span className="text-[11px] font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-1.5 py-0.5 rounded">Active</span>
+                : <span className="text-[11px] font-semibold text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded flex items-center gap-1"><Lock className="w-2.5 h-2.5" /> Locked</span>
+              }
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {domainActive
+                ? "Your custom domain is active. Configure it in Store Settings."
+                : "Connect your own domain to your store. e.g. store.yourbrand.com — one-time activation."}
+            </p>
+          </div>
+          <div className="shrink-0">
+            {domainActive ? (
+              <Button size="sm" variant="outline" asChild>
+                <a href="/dashboard/store/customize">Go to Settings →</a>
+              </Button>
+            ) : (
+              <div className="text-right">
+                <p className="text-xl font-bold text-gray-900 dark:text-white mb-1.5">£9.99</p>
+                <Button size="sm" onClick={() => void handleBuyDomain()} disabled={loadingDomain} className="bg-orange-500 hover:bg-orange-600 text-white">
+                  {loadingDomain ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Activate"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Footer note */}

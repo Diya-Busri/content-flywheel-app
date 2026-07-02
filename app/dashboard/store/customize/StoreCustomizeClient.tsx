@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Loader2, Save, ArrowLeft, Palette, Layout, User, Image as ImageIcon,
-  Upload, X, Megaphone, Settings2, Share2, Sparkles, ChevronDown, ChevronUp, Globe,
+  Upload, X, Megaphone, Settings2, Share2, Sparkles, ChevronDown, ChevronUp, Globe, Lock,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -41,6 +41,7 @@ interface StoreSettings {
   showTrustBadges: boolean;
   showSalesCount: boolean;
   customDomain: string | null;
+  customDomainActive: boolean;
 }
 
 interface StoreCustomizeClientProps {
@@ -324,6 +325,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
     showTrustBadges: true,
     showSalesCount: false,
     customDomain: null,
+    customDomainActive: false,
   });
 
   // Parse / serialise social links
@@ -408,6 +410,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
             showTrustBadges: data.showTrustBadges ?? true,
             showSalesCount: data.showSalesCount ?? false,
             customDomain: data.customDomain ?? null,
+            customDomainActive: data.customDomainActive ?? false,
           });
         }
       })
@@ -954,28 +957,46 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
             {/* Custom Domain */}
             <div className="space-y-3 border-t border-gray-200 pt-4">
               <SectionHeader icon={<Globe size={14} />} label="Custom Domain" />
-              <div className="space-y-3">
-                <p className="text-xs text-gray-500">
-                  Point your own domain to your Content Flywheel store. Add a <strong>CNAME</strong> record in your DNS settings:
-                </p>
-                <div className="rounded-lg bg-gray-900 text-green-400 text-xs font-mono px-3 py-2 space-y-0.5 select-all">
-                  <div><span className="text-gray-500">Type:</span> CNAME</div>
-                  <div><span className="text-gray-500">Name:</span> store (or @)</div>
-                  <div><span className="text-gray-500">Value:</span> cname.contentflywheel.co.uk</div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Your domain</label>
-                  <Input
-                    value={settings.customDomain ?? ""}
-                    onChange={(e) => set("customDomain", e.target.value.trim().toLowerCase() || null)}
-                    placeholder="store.yourdomain.com"
-                    className="h-9 text-sm border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 focus:border-orange-500"
-                  />
-                  <p className="text-[11px] text-gray-400 mt-1">
-                    After saving, visits to this domain will show your store automatically.
+              {settings.customDomainActive ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-gray-500">
+                    Point your own domain to your Content Flywheel store. Add a <strong>CNAME</strong> record in your DNS settings:
                   </p>
+                  <div className="rounded-lg bg-gray-900 text-green-400 text-xs font-mono px-3 py-2 space-y-0.5 select-all">
+                    <div><span className="text-gray-500">Type:</span> CNAME</div>
+                    <div><span className="text-gray-500">Name:</span> store (or @)</div>
+                    <div><span className="text-gray-500">Value:</span> cname.contentflywheel.co.uk</div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Your domain</label>
+                    <Input
+                      value={settings.customDomain ?? ""}
+                      onChange={(e) => set("customDomain", e.target.value.trim().toLowerCase() || null)}
+                      placeholder="store.yourdomain.com"
+                      className="h-9 text-sm border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 focus:border-orange-500"
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      After saving, visits to this domain will show your store automatically.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-gray-200 flex items-center justify-center shrink-0">
+                    <Lock size={14} className="text-gray-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-700 mb-0.5">Custom domain not activated</p>
+                    <p className="text-[11px] text-gray-400">Connect your own domain (e.g. store.yourbrand.com) for a one-time fee.</p>
+                  </div>
+                  <a
+                    href="/dashboard/video-credits"
+                    className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors whitespace-nowrap"
+                  >
+                    Activate — £9.99
+                  </a>
+                </div>
+              )}
             </div>
 
             {/* Save */}
