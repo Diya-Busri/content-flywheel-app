@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
     priceLabel?: string;
     thumbnailUrl?: string | null;
     coverThumbnailUrl?: string | null;
+    bookMockupUrl?: string | null;
     productDescription?: string;
     comingSoon?: boolean;
   };
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
       format: r.format,
       priceLabel: ma.priceLabel ?? null,
       nativePrice: ma.nativePrice ?? null,
-      thumbnailUrl: ma.coverThumbnailUrl ?? ma.thumbnailUrl ?? null,
+      thumbnailUrl: ma.coverThumbnailUrl ?? ma.bookMockupUrl ?? ma.thumbnailUrl ?? null,
       description: (ma.productDescription ?? "").slice(0, 160),
       creatorName: profileMap[r.userId] ?? "Creator",
       creatorUserId: r.userId,
