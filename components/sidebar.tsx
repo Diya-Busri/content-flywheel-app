@@ -105,6 +105,8 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       label: "Sell",
       items: [
         { href: "/dashboard/store", icon: <Store size={18} />, label: "My Store", emoji: "🛒", activeWhenStartsWith: true },
+        { href: "/dashboard/orders", icon: <Receipt size={18} />, label: "Orders", emoji: "📋", activeWhenStartsWith: true },
+        { href: "/dashboard/analytics", icon: <BarChart2 size={18} />, label: "Analytics", emoji: "📊", activeWhenStartsWith: true },
         { href: "/dashboard/marketplace", icon: <ShoppingBag size={18} />, label: "Marketplace", emoji: "🛍️", activeWhenStartsWith: true },
         { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", emoji: "👕", activeWhenStartsWith: true, featureKey: "print_on_demand" },
         { href: "/dashboard/drop-campaign", icon: <Gift size={18} />, label: "Drop Campaign", emoji: "🎁", activeWhenStartsWith: true, featureKey: "drop_campaign" },
@@ -113,6 +115,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
     {
       label: "Grow",
       items: [
+        { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧", activeWhenStartsWith: true, featureKey: "email_marketing" },
         { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯", activeWhenStartsWith: true, featureKey: "goal_tracker" },
         { href: "/dashboard/campaign-mode", icon: <Zap size={18} />, label: "Campaign Mode", emoji: "⚡", activeWhenStartsWith: true, featureKey: "campaign_mode" },
         { href: "/dashboard/grow", icon: <TrendingUp size={18} />, label: "Grow Hub", emoji: "📈", featureKey: "grow_hub" },
