@@ -1902,15 +1902,20 @@ export default function ProductEditor({ productId }: { productId: string }) {
         const canvas = await html2canvas(el, {
           useCORS: true,
           allowTaint: true,
-          scale: 2,
+          scale: 1,                  // scale:2 produced 8-15MB PNGs → Vercel 413
           backgroundColor: "#ffffff",
           logging: false,
         });
-        const dataUrl = canvas.toDataURL("image/png");
+        // JPEG at 0.8 quality ≈ 200-600KB — well within Vercel's 4.5MB limit
+        const blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob((b) => resolve(b), "image/jpeg", 0.8)
+        );
+        if (!blob) throw new Error("Canvas blob export failed");
+        const fd = new FormData();
+        fd.append("file", blob, "cover.jpg");
         const res = await fetch(`/api/products/${productId}/cover-thumbnail`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: dataUrl }),
+          body: fd,
         });
         if (res.ok) {
           const data = (await res.json()) as { url?: string };
@@ -1929,7 +1934,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
           }
         }
       } catch {
-        // ignore
+        // ignore — auto-capture is best-effort
       } finally {
         if (restorePage != null) setCurrentPageIndex(restorePage);
         savedPageIndexRef.current = null;
@@ -4191,18 +4196,24 @@ export default function ProductEditor({ productId }: { productId: string }) {
       toast({ title: "Image files only", variant: "destructive" });
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "Max 5MB", variant: "destructive" });
-      return;
-    }
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("type", "product-cover");
-      const res = await fetch("/api/upload/store-image", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Upload failed");
-      saveMarketingEdits({ coverThumbnailUrl: data.url });
+      // Use presigned URL so the file goes directly to R2 — bypasses Vercel's 4.5MB body limit
+      const presignRes = await fetch("/api/upload/store-image-presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, contentType: file.type, uploadType: "product-cover" }),
+      });
+      const presignData = await presignRes.json() as { uploadUrl?: string; publicUrl?: string; error?: string };
+      if (!presignRes.ok || !presignData.uploadUrl) throw new Error(presignData.error ?? "Failed to get upload URL");
+
+      const uploadRes = await fetch(presignData.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!uploadRes.ok) throw new Error(`Upload failed (HTTP ${uploadRes.status})`);
+
+      saveMarketingEdits({ coverThumbnailUrl: presignData.publicUrl! });
       toast({ title: "Cover image uploaded!" });
     } catch (err) {
       toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
