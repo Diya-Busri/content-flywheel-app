@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * Stock photos via Pexels (free API key at https://www.pexels.com/api/)
  * Keeps same response shape as before for the Graphics tab.

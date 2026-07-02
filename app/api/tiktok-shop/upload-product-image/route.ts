@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * POST: Upload a product image (data URL base64) for TikTok Affiliate video compile.
  * Blob first, then Supabase timeline-media. Returns { url } for FFmpeg / saved-scripts.

@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * GET /api/proxy-thumbnail?url=<encoded-image-url>
  *

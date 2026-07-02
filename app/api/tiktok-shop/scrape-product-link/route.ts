@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * TikTok Shop — Product link scraper
  *

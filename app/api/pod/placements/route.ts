@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { podProductsTable } from "@/db/schema/pod-products-schema";

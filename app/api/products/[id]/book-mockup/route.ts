@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * Book Mockup Generator
  * POST /api/products/[id]/book-mockup

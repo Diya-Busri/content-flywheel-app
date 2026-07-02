@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { auth } from "@clerk/nextjs/server";
 import { getPresignedUploadUrl } from "@/lib/storage";
 import { NextResponse } from "next/server";

@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * UGC Lab — Product URL scraper
  * Supports: Amazon, Shopify, TikTok Shop

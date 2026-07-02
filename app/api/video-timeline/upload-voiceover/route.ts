@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * POST: Upload voiceover audio for a timeline (e.g. after generating from guide).
  * Uses Supabase Storage with the service_role key (not anon). Bucket: timeline-media.

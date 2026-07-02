@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/is-admin";
 import { clerkClient } from "@clerk/nextjs/server";

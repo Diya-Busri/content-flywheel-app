@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * Avatar Promo Video — Poll Status
  * GET /api/products/[id]/avatar-video/status?videoId=xxx&provider=falai|did|heygen

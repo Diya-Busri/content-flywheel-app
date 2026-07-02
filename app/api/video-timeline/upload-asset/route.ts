@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * POST: Upload a media file (music, voiceover, etc.) to Supabase Storage.
  * FormData: file (required).

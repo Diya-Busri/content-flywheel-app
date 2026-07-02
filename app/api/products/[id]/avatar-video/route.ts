@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * Avatar Promo Video — Start Generation
  * POST /api/products/[id]/avatar-video

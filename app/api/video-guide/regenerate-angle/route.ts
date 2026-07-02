@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * POST: Regenerate a single script angle for a video guide loaded from library (no productId).
  * Body: { libraryScriptId: string, angle: string }

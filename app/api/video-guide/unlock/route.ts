@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * POST /api/video-guide/unlock
  * Upload screenshot of finished content → store in Supabase → generate platform-specific posting assets.

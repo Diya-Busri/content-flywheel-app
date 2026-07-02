@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * POST: Upload a video or image file for a timeline scene slot.
  * FormData: file (required), libraryScriptId (required), sceneIndex (required, number).

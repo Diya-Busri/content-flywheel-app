@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * POST /api/video-guide/character-seed
  * One GPT-4o call to derive a locked character description from Scene 1's visual/AI image prompt

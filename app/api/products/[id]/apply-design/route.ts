@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * POST /api/products/[id]/apply-design
  * Apply auto-design to a product (used after bundle generation).

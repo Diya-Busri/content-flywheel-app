@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 /**
  * POST /api/auto-design
  * Given product title and niche, use OpenAI to suggest:
