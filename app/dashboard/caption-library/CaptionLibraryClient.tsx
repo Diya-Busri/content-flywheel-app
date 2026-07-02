@@ -11,6 +11,10 @@ import {
   Home,
   ChevronRight,
   X,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Hash,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,13 +33,14 @@ type Caption = {
 };
 
 const PLATFORM_LABELS: Record<string, { label: string; color: string }> = {
-  all: { label: "All Platforms", color: "bg-gray-100 dark:bg-[#2A2A2A] text-gray-500 dark:text-gray-400" },
-  tiktok: { label: "TikTok", color: "bg-pink-100 dark:bg-pink-950/30 text-pink-600 dark:text-pink-400" },
+  all:       { label: "All",       color: "bg-gray-100 dark:bg-[#2A2A2A] text-gray-500 dark:text-gray-400" },
+  tiktok:    { label: "TikTok",    color: "bg-pink-100 dark:bg-pink-950/30 text-pink-600 dark:text-pink-400" },
   instagram: { label: "Instagram", color: "bg-purple-100 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400" },
-  youtube: { label: "YouTube", color: "bg-red-100 dark:bg-red-950/30 text-red-600 dark:text-red-400" },
+  youtube:   { label: "YouTube",   color: "bg-red-100 dark:bg-red-950/30 text-red-600 dark:text-red-400" },
+  twitter:   { label: "X",         color: "bg-gray-100 dark:bg-gray-800/60 text-gray-700 dark:text-gray-300" },
 };
 
-function CopyButton({ text }: { text: string }) {
+function CopyButton({ text, title = "Copy" }: { text: string; title?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -45,7 +50,7 @@ function CopyButton({ text }: { text: string }) {
         setTimeout(() => setCopied(false), 2000);
       }}
       className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2A2A2A] transition-colors"
-      title="Copy caption + hashtags"
+      title={title}
     >
       {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
     </button>
@@ -56,9 +61,17 @@ export default function CaptionLibraryClient() {
   const [captions, setCaptions] = useState<Caption[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+
+  const toggleExpand = (id: string) => setExpandedIds(prev => {
+    const s = new Set(prev);
+    s.has(id) ? s.delete(id) : s.add(id);
+    return s;
+  });
 
   // Form state
   const [formTitle, setFormTitle] = useState("");
@@ -123,7 +136,7 @@ export default function CaptionLibraryClient() {
     }
   }, [toast]);
 
-  const tabs = ["all", "tiktok", "instagram", "youtube"];
+  const tabs = ["all", "tiktok", "instagram", "youtube", "twitter"];
 
   return (
     <main className="min-h-screen p-6 md:p-10">
@@ -181,11 +194,17 @@ export default function CaptionLibraryClient() {
                   <option value="tiktok">TikTok</option>
                   <option value="instagram">Instagram</option>
                   <option value="youtube">YouTube</option>
+                  <option value="twitter">X / Twitter</option>
                 </select>
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-gray-500">Caption</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-gray-500">Caption</Label>
+                <span className={`text-[10px] font-medium ${formPlatform === "twitter" && formCaption.length > 240 ? "text-red-500" : "text-gray-400"}`}>
+                  {formCaption.length}{formPlatform === "twitter" ? "/280" : " chars"}
+                </span>
+              </div>
               <Textarea
                 placeholder="Write your caption here..."
                 value={formCaption}
@@ -212,22 +231,34 @@ export default function CaptionLibraryClient() {
           </div>
         )}
 
-        {/* Filter tabs */}
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {tabs.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setFilter(t)}
-              className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                filter === t
-                  ? "bg-gray-900 dark:bg-white text-white dark:text-black border-gray-900 dark:border-white"
-                  : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500"
-              }`}
-            >
-              {PLATFORM_LABELS[t]?.label ?? t}
-            </button>
-          ))}
+        {/* Filter tabs + search */}
+        <div className="flex items-center gap-3 mb-6 flex-wrap">
+          <div className="flex gap-1.5 flex-wrap">
+            {tabs.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setFilter(t)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                  filter === t
+                    ? "bg-gray-900 dark:bg-white text-white dark:text-black border-gray-900 dark:border-white"
+                    : "border-gray-200 dark:border-[#2A2A2A] text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500"
+                }`}
+              >
+                {PLATFORM_LABELS[t]?.label ?? t}
+              </button>
+            ))}
+          </div>
+          <div className="relative ml-auto">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search captions…"
+              className="h-8 pl-8 pr-3 text-xs rounded-lg border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#111] text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-orange-500/40 w-48"
+            />
+            {search && <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X className="w-3 h-3" /></button>}
+          </div>
         </div>
 
         {/* Caption cards */}
@@ -241,54 +272,66 @@ export default function CaptionLibraryClient() {
             <p className="text-gray-500 dark:text-[#A0A0A0] text-sm">No captions saved yet.</p>
             <p className="text-gray-400 text-xs mt-1">
               Generate captions in the{" "}
-              <Link href="/dashboard/content-studio/faceless-planner" className="text-orange-500 hover:underline">
-                Faceless Planner
-              </Link>{" "}
+              <Link href="/dashboard/content-studio/faceless-planner" className="text-orange-500 hover:underline">Faceless Planner</Link>{" "}
               or{" "}
-              <Link href="/dashboard/content-studio" className="text-orange-500 hover:underline">
-                Content Studio
-              </Link>{" "}
+              <Link href="/dashboard/content-studio" className="text-orange-500 hover:underline">Content Studio</Link>{" "}
               and save them here.
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {captions.map((c) => {
-              const platformInfo = PLATFORM_LABELS[c.platform] ?? PLATFORM_LABELS.all;
-              const fullText = c.hashtags ? `${c.caption}\n\n${c.hashtags}` : c.caption;
+          <>
+            {(() => {
+              const filtered = captions.filter(c => {
+                if (!search.trim()) return true;
+                const q = search.toLowerCase();
+                return c.caption.toLowerCase().includes(q) || (c.title ?? "").toLowerCase().includes(q) || (c.hashtags ?? "").toLowerCase().includes(q);
+              });
+              if (filtered.length === 0) return (
+                <p className="text-center text-sm text-gray-400 py-8">No captions match &ldquo;{search}&rdquo;</p>
+              );
               return (
-                <div
-                  key={c.id}
-                  className="rounded-2xl border border-gray-100 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-4"
-                >
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {c.title && (
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white">{c.title}</span>
-                      )}
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${platformInfo.color}`}>
-                        {platformInfo.label}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <CopyButton text={fullText} />
-                      <button
-                        onClick={() => deleteCaption(c.id)}
-                        className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-700 dark:text-[#E0E0E0] line-clamp-3 mb-2">{c.caption}</p>
-                  {c.hashtags && (
-                    <p className="text-xs text-orange-500 leading-relaxed">{c.hashtags}</p>
-                  )}
+                <div className="space-y-3">
+                  {filtered.map((c) => {
+                    const platformInfo = PLATFORM_LABELS[c.platform] ?? PLATFORM_LABELS.all;
+                    const fullText = c.hashtags ? `${c.caption}\n\n${c.hashtags}` : c.caption;
+                    const isLong = c.caption.length > 200;
+                    const isExpanded = expandedIds.has(c.id);
+                    const hashCount = c.hashtags ? c.hashtags.split(/\s+/).filter(w => w.startsWith("#")).length : 0;
+                    return (
+                      <div key={c.id} className="rounded-2xl border border-gray-100 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-4">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            {c.title && <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">{c.title}</span>}
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ${platformInfo.color}`}>{platformInfo.label}</span>
+                            <span className="text-[10px] text-gray-400 shrink-0">{c.caption.length}c</span>
+                          </div>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <CopyButton text={c.caption} title="Copy caption only" />
+                            {c.hashtags && <CopyButton text={c.hashtags} title="Copy hashtags only" />}
+                            <CopyButton text={fullText} title="Copy all" />
+                            <button onClick={() => deleteCaption(c.id)} className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        </div>
+                        <p className={`text-sm text-gray-700 dark:text-[#E0E0E0] leading-relaxed ${isLong && !isExpanded ? "line-clamp-3" : ""}`}>{c.caption}</p>
+                        {isLong && (
+                          <button onClick={() => toggleExpand(c.id)} className="mt-1.5 flex items-center gap-1 text-xs text-orange-500 hover:text-orange-600 font-medium transition-colors">
+                            {isExpanded ? <><ChevronUp className="w-3 h-3" />Show less</> : <><ChevronDown className="w-3 h-3" />Show more</>}
+                          </button>
+                        )}
+                        {c.hashtags && (
+                          <div className="mt-2 flex items-start gap-1.5">
+                            <Hash className="w-3 h-3 text-orange-400 shrink-0 mt-0.5" />
+                            <p className="text-xs text-orange-500 leading-relaxed">{c.hashtags}</p>
+                            {hashCount > 0 && <span className="ml-auto text-[10px] text-gray-400 shrink-0">{hashCount} tags</span>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
-            })}
-          </div>
+            })()}
+          </>
         )}
       </div>
     </main>
