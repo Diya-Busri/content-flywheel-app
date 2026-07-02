@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db/db";
 import { productReviewsTable } from "@/db/schema/product-reviews-schema";
 import { productsTable } from "@/db/schema/products-schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import ReviewsClient from "./ReviewsClient";
 
 export const metadata = { title: "Reviews | Content Flywheel" };
@@ -25,7 +25,7 @@ export default async function ReviewsPage() {
       productTitle: productsTable.title,
     })
     .from(productReviewsTable)
-    .leftJoin(productsTable, eq(productReviewsTable.productId, productsTable.id))
+    .leftJoin(productsTable, sql`${productReviewsTable.productId}::uuid = ${productsTable.id}`)
     .where(eq(productReviewsTable.creatorUserId, userId))
     .orderBy(desc(productReviewsTable.createdAt));
 

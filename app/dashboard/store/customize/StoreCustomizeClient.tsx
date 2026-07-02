@@ -404,6 +404,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
             fontFamily: data.fontFamily ?? "inter",
             productSort: data.productSort ?? "newest",
             showTrustBadges: data.showTrustBadges ?? true,
+            customDomain: data.customDomain ?? null,
           });
         }
       })
