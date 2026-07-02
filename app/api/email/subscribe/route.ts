@@ -8,6 +8,7 @@ import { creatorEmailSettingsTable } from "@/db/schema/creator-email-settings-sc
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and } from "drizzle-orm";
 import { Resend } from "resend";
+import { notificationsTable } from "@/db/schema/notifications-schema";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +137,19 @@ export async function POST(request: NextRequest) {
       name: name ? String(name).trim() : null,
       tags: [],
     });
+
+    // --- Write in-app notification for creator ---
+    try {
+      await db.insert(notificationsTable).values({
+        userId,
+        title: "New subscriber",
+        message: `${name ? `${name} (${email})` : email} just joined your email list`,
+        type: "info",
+        read: false,
+        linkUrl: "/dashboard/store?tab=email",
+        metadata: { kind: "subscriber", email, name: name ?? null },
+      });
+    } catch { /* non-fatal */ }
 
     // --- Send welcome email via Resend ---
     // Fetch creator's brand name and check for custom welcome automation.

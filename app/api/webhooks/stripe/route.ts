@@ -15,6 +15,7 @@ import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
 import { productBundlesTable } from "@/db/schema/product-bundles-schema";
 import { affiliateLinksTable, affiliateCommissionsTable } from "@/db/schema/affiliate-links-schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
+import { notificationsTable } from "@/db/schema/notifications-schema";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -326,6 +327,20 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
   } catch (notifyErr) {
     console.error("[stripe-webhook] Failed to send creator notification:", notifyErr);
   }
+
+  // Write in-app notification for the creator
+  try {
+    const saleAmt = `£${(amountCents / 100).toFixed(2)}`;
+    await db.insert(notificationsTable).values({
+      userId: creatorUserId,
+      title: `New sale — ${saleAmt}`,
+      message: `${buyerName ?? buyerEmail} purchased ${productTitle}`,
+      type: "success",
+      read: false,
+      linkUrl: "/dashboard/orders",
+      metadata: { kind: "sale", amountCents, productTitle, buyerEmail, buyerName },
+    });
+  } catch { /* non-fatal */ }
 
   // Send creator's custom post-purchase email if configured
   try {

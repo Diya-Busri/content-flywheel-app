@@ -92,21 +92,22 @@ interface Customer {
 
 const STORE_BASE = "https://contentflywheel.co.uk/c";
 
-type Tab = "products" | "bundles" | "promo" | "affiliates" | "customers" | "email" | "analytics" | "payouts" | "settings";
+type Tab = "products" | "bundles" | "orders" | "promo" | "affiliates" | "customers" | "email" | "analytics" | "payouts" | "settings";
 
 const TABS: { id: string; label: string; icon: React.ReactNode; href?: string }[] = [
   { id: "products",   label: "Products",       icon: <ShoppingBag className="w-3.5 h-3.5" /> },
   { id: "bundles",    label: "Bundles",        icon: <Layers className="w-3.5 h-3.5" /> },
-  { id: "promo",      label: "Promo Codes",    icon: <Tag className="w-3.5 h-3.5" /> },
-  { id: "affiliates", label: "Affiliates",     icon: <Users className="w-3.5 h-3.5" /> },
+  { id: "orders",     label: "Orders",         icon: <Package className="w-3.5 h-3.5" />,  href: "/dashboard/orders" },
   { id: "customers",  label: "Customers",      icon: <UserCircle className="w-3.5 h-3.5" /> },
   { id: "email",      label: "Email",          icon: <Mail className="w-3.5 h-3.5" /> },
   { id: "analytics",  label: "Analytics",      icon: <TrendingUp className="w-3.5 h-3.5" /> },
+  { id: "promo",      label: "Promo Codes",    icon: <Tag className="w-3.5 h-3.5" /> },
+  { id: "affiliates", label: "Affiliates",     icon: <Users className="w-3.5 h-3.5" /> },
   { id: "payouts",    label: "Payouts",        icon: <CreditCard className="w-3.5 h-3.5" /> },
+  { id: "reviews",    label: "Reviews",        icon: <Star className="w-3.5 h-3.5" />,     href: "/dashboard/reviews" },
+  { id: "webhooks",   label: "Webhooks",       icon: <Zap className="w-3.5 h-3.5" />,      href: "/dashboard/webhooks" },
+  { id: "referral",   label: "Invite Creators",icon: <UserPlus className="w-3.5 h-3.5" />,  href: "/dashboard/referral" },
   { id: "settings",   label: "Settings",       icon: <Settings className="w-3.5 h-3.5" /> },
-  { id: "reviews",    label: "Reviews",        icon: <Star className="w-3.5 h-3.5" />,    href: "/dashboard/reviews" },
-  { id: "webhooks",   label: "Webhooks",       icon: <Zap className="w-3.5 h-3.5" />,     href: "/dashboard/webhooks" },
-  { id: "referral",   label: "Invite Creators",icon: <UserPlus className="w-3.5 h-3.5" />, href: "/dashboard/referral" },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
