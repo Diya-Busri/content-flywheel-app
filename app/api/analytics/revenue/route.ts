@@ -190,8 +190,9 @@ export async function GET(req: NextRequest) {
       // Non-fatal — funnel is a nice-to-have
     }
 
-    // Subscriber count
+    // Subscriber count + daily growth
     let subscriberCount = 0;
+    let dailySubscribers: Array<{ date: string; count: number }> = [];
     try {
       const [countRow] = await db
         .select({ count: sql<number>`count(*)::int` })
@@ -203,6 +204,32 @@ export async function GET(req: NextRequest) {
           )
         );
       subscriberCount = countRow?.count ?? 0;
+
+      // Daily new subscribers for the period
+      const subRows = await db
+        .select({
+          day: sql<string>`DATE(${emailContactsTable.subscribedAt})::text`,
+          cnt: sql<number>`count(*)::int`,
+        })
+        .from(emailContactsTable)
+        .where(
+          and(
+            eq(emailContactsTable.userId, userId),
+            sql`${emailContactsTable.unsubscribedAt} IS NULL`,
+            ...(periodStart ? [gte(emailContactsTable.subscribedAt, periodStart)] : [])
+          )
+        )
+        .groupBy(sql`DATE(${emailContactsTable.subscribedAt})`);
+
+      // Build a filled daily map for the period
+      const subMap = new Map(subRows.map((r) => [r.day, Number(r.cnt)]));
+      const numSubDays = periodDays ?? 90;
+      dailySubscribers = Array.from({ length: numSubDays }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (numSubDays - 1 - i));
+        const key = d.toISOString().slice(0, 10);
+        return { date: key, count: subMap.get(key) ?? 0 };
+      });
     } catch {
       subscriberCount = 0;
     }
@@ -226,6 +253,7 @@ export async function GET(req: NextRequest) {
       recentOrders,
       allOrdersForExport: allOrdersMapped,
       subscriberCount,
+      dailySubscribers,
       conversionFunnel,
     });
   } catch (err) {

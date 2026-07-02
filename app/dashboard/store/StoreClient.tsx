@@ -1182,8 +1182,8 @@ export function StoreClient({ userId }: StoreClientProps) {
               title="Store Analytics"
               subtitle="Revenue and performance overview."
               action={
-                <Link href="/dashboard/admin/revenue">
-                  <Button variant="outline" size="sm" className="h-8 text-xs border-gray-300 text-gray-800 hover:text-gray-900 hover:bg-gray-100 gap-1.5">
+                <Link href="/dashboard/analytics">
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
                     <BarChart2 className="w-3.5 h-3.5" />Full Analytics
                   </Button>
                 </Link>

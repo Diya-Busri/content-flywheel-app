@@ -13,6 +13,7 @@ interface RecentOrder  { id: string; buyerEmail: string; buyerName: string | nul
 
 interface FunnelProduct { productId: string; title: string; views: number; orders: number; revenueCents: number; }
 interface TrafficSource { name: string; views: number; pct: number; }
+interface DailySubscribers { date: string; count: number; }
 
 interface AnalyticsData {
   totalRevenueCents: number;
@@ -30,6 +31,7 @@ interface AnalyticsData {
   recentOrders: RecentOrder[];
   allOrdersForExport: RecentOrder[];
   subscriberCount: number;
+  dailySubscribers: DailySubscribers[];
   conversionFunnel: FunnelProduct[];
 }
 
@@ -306,6 +308,42 @@ export default function AnalyticsClient() {
             })}
           </div>
         </div>
+
+        {/* Subscriber growth chart */}
+        {data.dailySubscribers && data.dailySubscribers.some((d) => d.count > 0) && (
+          <div className="bg-card border border-border rounded-xl p-6">
+            <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
+              <h2 className="text-base font-semibold text-foreground">
+                Subscriber Growth — <span className="text-orange-400">{periodLabel}</span>
+              </h2>
+              <span className="text-xs text-muted-foreground font-medium">{data.subscriberCount.toLocaleString()} total active</span>
+            </div>
+            <div className="flex items-end gap-[2px] h-24 w-full">
+              {(() => {
+                const maxCount = Math.max(...data.dailySubscribers.map((d) => d.count), 1);
+                const n = data.dailySubscribers.length;
+                const step = n <= 14 ? 2 : n <= 31 ? 5 : 10;
+                return data.dailySubscribers.map((day, i) => {
+                  const h = day.count === 0 ? 2 : Math.max(4, Math.round((day.count / maxCount) * 100));
+                  const showLabel = i % step === 0;
+                  return (
+                    <div key={day.date} className="flex flex-col items-center flex-1 gap-1 group relative" title={`${day.date}: ${day.count} new subscribers`}>
+                      <div
+                        className={`w-full rounded-t-sm transition-all duration-300 ${day.count > 0 ? "bg-blue-500" : "bg-muted/40"}`}
+                        style={{ height: `${h}%` }}
+                      />
+                      {showLabel && <span className="text-[9px] text-muted-foreground/50 whitespace-nowrap hidden md:block">{day.date.slice(5)}</span>}
+                      <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover border border-border text-foreground text-[10px] px-2 py-1.5 rounded-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-xl">
+                        <p className="font-semibold">+{day.count} subscribers</p>
+                        <p className="text-muted-foreground">{day.date}</p>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        )}
 
         {/* Conversion funnel */}
         {data.conversionFunnel && data.conversionFunnel.length > 0 && (
