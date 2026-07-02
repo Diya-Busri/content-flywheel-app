@@ -126,6 +126,47 @@ async function getActualRevenue(userId: string): Promise<{ totalCents: number; t
   }
 }
 
+async function getTodayStats(userId: string): Promise<{ todayCents: number; todayOrders: number; todaySubscribers: number }> {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  try {
+    const [ordersRow, subRow] = await Promise.all([
+      db
+        .select({
+          todayCents: sql<number>`COALESCE(SUM(${productOrdersTable.amountCents}), 0)`,
+          todayOrders: sql<number>`COUNT(*)`,
+        })
+        .from(productOrdersTable)
+        .where(
+          and(
+            eq(productOrdersTable.creatorUserId, userId),
+            eq(productOrdersTable.status, "completed"),
+            gte(productOrdersTable.createdAt, todayStart)
+          )
+        )
+        .then((r) => r[0]),
+      db
+        .select({ cnt: sql<number>`COUNT(*)::int` })
+        .from(emailContactsTable)
+        .where(
+          and(
+            eq(emailContactsTable.userId, userId),
+            isNull(emailContactsTable.unsubscribedAt),
+            gte(emailContactsTable.subscribedAt, todayStart)
+          )
+        )
+        .then((r) => r[0]),
+    ]);
+    return {
+      todayCents: Number(ordersRow?.todayCents ?? 0),
+      todayOrders: Number(ordersRow?.todayOrders ?? 0),
+      todaySubscribers: Number(subRow?.cnt ?? 0),
+    };
+  } catch {
+    return { todayCents: 0, todayOrders: 0, todaySubscribers: 0 };
+  }
+}
+
 async function getCampaignsSentCount(userId: string): Promise<number> {
   try {
     const [row] = await db
@@ -270,7 +311,7 @@ async function getVideoStats(userId: string) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default async function DashboardPage() {
   const { userId } = await auth();
-  const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers, activeGoals, campaignsSent, profileRow, revenue] = userId
+  const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers, activeGoals, campaignsSent, profileRow, revenue, todayStats] = userId
     ? await Promise.all([
         getVideoStats(userId),
         getIncompleteProducts(userId),
@@ -281,12 +322,13 @@ export default async function DashboardPage() {
         getCampaignsSentCount(userId),
         db.select({ videoCredits: profilesTable.videoCredits }).from(profilesTable).where(eq(profilesTable.userId, userId)).limit(1).then(r => r[0] ?? null).catch(() => null),
         getActualRevenue(userId),
+        getTodayStats(userId),
       ])
     : [
         { digitalProductsCount: 0, tiktokShopCount: 0, totalLibraryVideos: 0, recent: [] as RecentVideoItem[] },
         [] as IncompleteProduct[],
         { hasBrandVoice: false, hasProduct: false, hasThumbnail: false, hasPromoVideo: false },
-        0, 0, 0, 0, null, { totalCents: 0, totalOrders: 0 },
+        0, 0, 0, 0, null, { totalCents: 0, totalOrders: 0 }, { todayCents: 0, todayOrders: 0, todaySubscribers: 0 },
       ];
 
   const videoCredits = (profileRow as { videoCredits?: number | null } | null)?.videoCredits ?? 0;
@@ -294,6 +336,9 @@ export default async function DashboardPage() {
   const storeUrl = userId ? `${baseUrl}/c/${userId}` : "";
   const { totalCents, totalOrders } = revenue as { totalCents: number; totalOrders: number };
   const revenueGBP = (totalCents / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const { todayCents, todayOrders, todaySubscribers } = todayStats as { todayCents: number; todayOrders: number; todaySubscribers: number };
+  const todayRevenueGBP = (todayCents / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const hasTodayActivity = todayCents > 0 || todayOrders > 0 || todaySubscribers > 0;
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -354,6 +399,34 @@ export default async function DashboardPage() {
             </Link>
           ))}
         </div>
+
+        {/* Today at a glance */}
+        {hasTodayActivity && (
+          <div className="rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 border border-emerald-500/20 dark:border-emerald-500/10 px-5 py-4 mb-4 flex flex-wrap items-center gap-x-6 gap-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Today</span>
+            </div>
+            {todayCents > 0 && (
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xl font-black text-gray-900 dark:text-white tabular-nums">£{todayRevenueGBP}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">revenue</span>
+              </div>
+            )}
+            {todayOrders > 0 && (
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xl font-black text-gray-900 dark:text-white tabular-nums">{todayOrders}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{todayOrders === 1 ? "order" : "orders"}</span>
+              </div>
+            )}
+            {todaySubscribers > 0 && (
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xl font-black text-gray-900 dark:text-white tabular-nums">+{todaySubscribers}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{todaySubscribers === 1 ? "subscriber" : "subscribers"}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Share store */}
         {storeUrl && <ShareStoreBar storeUrl={storeUrl} />}
