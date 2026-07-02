@@ -4291,10 +4291,10 @@ function VideoTimelineInner() {
 
   if (!selectedTemplate) {
     return (
-      <div className="flex flex-1 min-h-0 w-full items-center justify-center overflow-auto bg-muted/30 py-8">
-        <div className="max-w-4xl w-full p-8">
-          <h2 className="text-2xl font-bold text-foreground mb-2">Choose Your Video Format</h2>
-          <p className="text-muted-foreground mb-6">Select a template to get started, or build custom</p>
+      <div className="flex flex-1 min-h-0 w-full overflow-auto bg-muted/30">
+        <div className="max-w-4xl w-full p-8 pt-14 mx-auto">
+          <h2 className="text-2xl font-bold text-foreground mb-1">Choose Your Video Format</h2>
+          <p className="text-muted-foreground mb-7">Pick a format to get started — you can adjust duration and scenes next.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {VIDEO_TEMPLATES.map((template) => (
               <button
@@ -4305,13 +4305,18 @@ function VideoTimelineInner() {
                   e.stopPropagation();
                   handleTemplateSelect(template);
                 }}
-                className="p-6 bg-card rounded-lg border-2 border-border hover:border-primary transition-colors text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                className="p-6 bg-card rounded-xl border-2 border-border hover:border-orange-500 hover:bg-orange-500/5 transition-all text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 group"
               >
-                <div className="text-4xl mb-2 pointer-events-none">{template.icon}</div>
-                <h3 className="font-bold text-lg text-foreground pointer-events-none">{template.name}</h3>
-                <p className="text-sm text-muted-foreground pointer-events-none">{template.description}</p>
-                <p className="text-xs text-muted-foreground mt-2 pointer-events-none">
-                  {template.durationRange[0]}-{template.durationRange[1]}s • {template.sceneRange[0]}-{template.sceneRange[1]} scenes
+                <div className="flex items-start justify-between mb-3 pointer-events-none">
+                  <div className="text-3xl">{template.icon}</div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border group-hover:border-orange-500/30 group-hover:bg-orange-500/10 group-hover:text-orange-400 transition-colors">
+                    {template.aspectRatio}
+                  </span>
+                </div>
+                <h3 className="font-bold text-base text-foreground pointer-events-none">{template.name}</h3>
+                <p className="text-sm text-muted-foreground pointer-events-none mt-0.5">{template.description}</p>
+                <p className="text-xs text-muted-foreground mt-3 pointer-events-none">
+                  {template.durationRange[0]}–{template.durationRange[1]}s &nbsp;·&nbsp; {template.sceneRange[0]}–{template.sceneRange[1]} scenes
                 </p>
               </button>
             ))}
@@ -5410,7 +5415,15 @@ function VideoTimelineInner() {
                 </select>
               </label>
               {!scriptName && savedScripts.length === 0 && scripts.length === 0 && (
-                <p className="text-xs text-[#a0a0a0] mt-2">No scripts yet — use a template below or create one in AI Coach</p>
+                <div className="mt-2 p-2.5 rounded-lg bg-[#1f1f1f] border border-[#2a2a2a]">
+                  <p className="text-xs text-[#a0a0a0] mb-2">No scripts yet. Generate a voiceover script first, then load it here.</p>
+                  <a
+                    href="/dashboard/ai-coach"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-orange-400 hover:text-orange-300 transition-colors"
+                  >
+                    ✦ Create script in AI Coach →
+                  </a>
+                </div>
               )}
             </div>
 
