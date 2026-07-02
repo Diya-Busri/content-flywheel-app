@@ -131,7 +131,7 @@ function ProductCard({
   const bgColor  = avatarColor(item.creatorUserId);
 
   return (
-    <Link href={`/product/${item.id}`} style={{ textDecoration: "none", display: "block" }} className="mp-card-link">
+    <Link href={`/product/${item.id}`} style={{ textDecoration: "none", display: "flex", height: "100%" }} className="mp-card-link">
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -145,6 +145,9 @@ function ProductCard({
           boxShadow: hovered ? "0 12px 36px rgba(0,0,0,0.13)" : "0 1px 4px rgba(0,0,0,0.05)",
           transform: hovered ? "translateY(-4px)" : "none",
           borderColor: hovered ? "#f97316" : "#e5e7eb",
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
         }}
       >
         {/* Thumbnail */}
@@ -201,7 +204,7 @@ function ProductCard({
         </div>
 
         {/* Card body */}
-        <div style={{ padding: "14px 16px 16px" }}>
+        <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", flex: 1 }}>
           {/* Niche chip */}
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onNicheClick(item.niche.toLowerCase()); }}
@@ -215,14 +218,14 @@ function ProductCard({
             {item.title}
           </h3>
 
-          {/* Star rating */}
-          {item.avgRating !== null && item.reviewCount > 0 && (
-            <div style={{ marginBottom: "8px" }}>
+          {/* Star rating — always reserve height so cards align */}
+          <div style={{ minHeight: "24px", marginBottom: "8px" }}>
+            {item.avgRating !== null && item.reviewCount > 0 && (
               <StarRow rating={item.avgRating} count={item.reviewCount} />
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Price + creator row */}
+          {/* Price + creator row — pinned to bottom */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto" }}>
             <span style={{ fontSize: "17px", fontWeight: 800, color: isFree ? "#10b981" : "#111827", letterSpacing: "-0.02em" }}>
               {price}
@@ -719,6 +722,7 @@ export default function MarketplaceClient() {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
           gap: 18px;
+          align-items: stretch;
         }
         @media (max-width: 640px) {
           .mp-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
