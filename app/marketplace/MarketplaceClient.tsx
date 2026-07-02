@@ -399,7 +399,7 @@ export default function MarketplaceClient() {
                           <span style={{ fontSize: "16px", fontWeight: 800, color: isFree ? "#10b981" : "#111827" }}>{price}</span>
                           <div style={{ textAlign: "right" }}>
                             <a
-                              href={`/marketplace/creator/${item.creatorUserId}`}
+                              href={`/c/${item.creatorUserId}`}
                               onClick={(e) => e.stopPropagation()}
                               style={{ display: "block", fontSize: "12px", color: "#9ca3af", textDecoration: "none" }}
                               onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "#f97316"; }}

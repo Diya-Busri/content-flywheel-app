@@ -109,7 +109,6 @@ export default function MarketplaceFeaturePanel() {
                 value={selectedId}
                 onChange={(e) => setSelectedId(e.target.value)}
                 className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:border-violet-400"
-                disabled={credits < 1}
               >
                 <option value="">Choose a product…</option>
                 {products.map((p) => (
