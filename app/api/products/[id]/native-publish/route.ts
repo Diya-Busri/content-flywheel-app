@@ -75,7 +75,9 @@ export async function POST(
       stripeProductId = stripeProduct.id;
     } else {
       // Update product name and reactivate in case it was archived by a previous unpublish
-      await stripe.products.update(stripeProductId, { name: product.title, active: true }).catch(() => {});
+      await stripe.products.update(stripeProductId, { name: product.title, active: true }).catch((err) => {
+        console.error("[native-publish] Failed to reactivate Stripe product:", err?.message);
+      });
     }
 
     // Always create a new price (Stripe prices are immutable)

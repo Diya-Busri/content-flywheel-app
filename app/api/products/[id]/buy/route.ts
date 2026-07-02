@@ -18,6 +18,7 @@ const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.u
 type ExtendedMarketingAssets = {
   isNativePublished?: boolean;
   stripePriceId?: string;
+  stripeProductId?: string;
   nativePrice?: number;
   salePrice?: number;
   subscriptionInterval?: "month" | "year" | null;
@@ -109,6 +110,14 @@ export async function POST(
     }
 
     const platformFeePercent = PLATFORM_FEE_PERCENT;
+
+    // Ensure the Stripe product is active — it may have been archived during a
+    // previous unpublish cycle and the reactivation on re-publish can fail silently.
+    if (ma.stripeProductId) {
+      await stripe.products.update(ma.stripeProductId, { active: true }).catch((err) => {
+        console.warn("[buy] Could not reactivate Stripe product:", err?.message);
+      });
+    }
 
     // ── Subscription mode — use Stripe Subscriptions checkout ────────────
     if (ma.subscriptionInterval && ma.stripeSubscriptionPriceId) {
