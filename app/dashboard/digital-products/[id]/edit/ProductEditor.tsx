@@ -4228,7 +4228,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       }
       await new Promise((r) => setTimeout(r, 300));
       const canvas = await html2canvas(el, {
-        useCORS: true, allowTaint: false, scale: 1.5, backgroundColor: "#ffffff", logging: false,
+        useCORS: true, allowTaint: false, proxy: "/api/image-proxy", scale: 1.5, backgroundColor: "#ffffff", logging: false,
         width: el.offsetWidth, height: el.offsetHeight,
         windowWidth: document.documentElement.clientWidth, windowHeight: document.documentElement.clientHeight,
         ignoreElements: (node) => node.tagName === "SCRIPT" || node.tagName === "IFRAME",
@@ -4278,10 +4278,12 @@ export default function ProductEditor({ productId }: { productId: string }) {
       }
       await new Promise((r) => setTimeout(r, 300));
 
-      // allowTaint: false so cross-origin images don't taint the canvas (toBlob returns null on tainted canvas)
+      // proxy: images from Supabase/CDN are cross-origin — the proxy fetches them server-side
+      // so html2canvas can render them without tainting the canvas.
       const canvas = await html2canvas(el, {
         useCORS: true,
         allowTaint: false,
+        proxy: "/api/image-proxy",
         scale: 1.5,
         backgroundColor: "#ffffff",
         logging: false,

@@ -438,7 +438,7 @@ export default async function ProductSalesPage({
 
         {/* RIGHT COLUMN — Purchase card */}
         <div>
-          <div className="purchase-card">
+          <div className="purchase-card" id="buy">
             {/* Format badge */}
             <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: "999px", background: "#fff7ed", border: "1px solid #fed7aa", fontSize: "11px", fontWeight: 700, color: "#c2410c", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "14px" }}>
               {formatLabel}
